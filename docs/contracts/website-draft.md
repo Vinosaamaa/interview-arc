@@ -80,3 +80,5 @@ Published LeetCode letters show original agent-generated solution material. Publ
 Problem Banks is the reusable catalog for all three sources: LeetCode, system design, and behavioral. It provides independent question-type filters (`All`, `Coding`, `System design`, `Behavioral`) and progress filters (`All`, `To practice`, `Finished`). Finished uses the same green/yellow or published eligibility as Past; failed and merely planned work remains to practice. Every question has a `Practice today` action that adds it as standalone practice and returns to Today.
 
 SystemDesign.io entries link to their canonical question pages and label the availability of reference solutions. The specialist agent uses those sources to prepare; the website does not copy or embed third-party solution content.
+
+Bugfree.ai behavioral entries link to their canonical answer pages and label their expected answer format, frequency, and possible sign-in requirement. The behavioral specialist consults the current page when an answer is requested. If the page cannot be reached, it reports the exact URL instead of claiming the source was reviewed.

@@ -21,10 +21,14 @@
           "prompt": { "type": "string", "minLength": 1 },
           "url": { "type": "string", "format": "uri" },
           "source": { "type": "string", "minLength": 1 },
+          "difficulty": { "enum": ["easy", "medium", "hard"] },
+          "frequency": { "enum": ["low", "medium", "high"] },
+          "answerFormat": { "enum": ["SIMPLE", "STAR", "STARL", "PPF", "IFV"] },
           "complexity": {
             "enum": ["very_easy", "easy", "medium", "hard", "very_hard"]
           },
           "solutionReference": { "type": "boolean" },
+          "referenceAccess": { "enum": ["public", "may_require_sign_in"] },
           "topics": {
             "type": "array",
             "items": { "type": "string", "minLength": 1 },

@@ -48,6 +48,7 @@ The website must not imply that browser draft state has already been published t
 - Past is a date-grouped scrolling log with category color, filters, a calendar jump control, and a centered reading dialog.
 - Problem Banks combines all three versioned banks, offers independent category and progress filters, and sends every `Practice today` selection to standalone practice on Today. Progress has `All`, `To practice`, and `Finished`; failed or merely planned work remains `To practice`.
 - For imported system-design questions, show the source question link, listed complexity, and whether reference solutions are available.
+- For imported behavioral questions, show the expected answer format, frequency, and whether the Bugfree.ai reference may require sign-in. Link to the canonical answer page without copying third-party answer text into the site.
 - Journey owns cumulative totals and daily charts for coding, system design, behavioral, outcomes, and elapsed time.
 
 ## Implementation And Hosting

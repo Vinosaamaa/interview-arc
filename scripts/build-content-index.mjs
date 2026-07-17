@@ -195,6 +195,9 @@ export type QuestionBankItem = {
   acceptanceRate?: number;
   source?: string;
   solutionReference?: boolean;
+  frequency?: "low" | "medium" | "high";
+  answerFormat?: "SIMPLE" | "STAR" | "STARL" | "PPF" | "IFV";
+  referenceAccess?: "public" | "may_require_sign_in";
   companyTags?: string[];
   companySignals?: { company: string; window: string; frequencyScore: number; frequencyScale: number; capturedAt: string }[];
   topics: string[];

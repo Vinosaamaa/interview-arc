@@ -35,13 +35,35 @@ test("stores all SystemDesign.io questions with reference preparation metadata",
   );
 });
 
+test("stores all Bugfree.ai behavioral questions with canonical answer references", async () => {
+  const bank = await readJson("practice/behavioral/bank/questions.json");
+  assert.equal(bank.questions.length, 74);
+  assert.equal(new Set(bank.questions.map((question) => question.id)).size, 74);
+  assert.equal(new Set(bank.questions.map((question) => question.url)).size, 74);
+  assert.ok(bank.questions.every((question) => question.url.startsWith("https://bugfree.ai/behavior/")));
+  assert.ok(bank.questions.every((question) => question.source === "Bugfree.ai"));
+  assert.ok(bank.questions.every((question) => question.solutionReference === true));
+  assert.deepEqual(
+    Object.fromEntries(["SIMPLE", "STAR", "STARL", "PPF", "IFV"].map((format) => [
+      format,
+      bank.questions.filter((question) => question.answerFormat === format).length,
+    ])),
+    { SIMPLE: 3, STAR: 6, STARL: 54, PPF: 3, IFV: 8 },
+  );
+  assert.deepEqual(
+    Object.fromEntries(["public", "may_require_sign_in"].map((access) => [
+      access,
+      bank.questions.filter((question) => question.referenceAccess === access).length,
+    ])),
+    { public: 18, may_require_sign_in: 56 },
+  );
+});
+
 test("starts with no mock activity records while preserving the real system-design artifact", async () => {
   const journal = await readJson("data/daily/2026-07-17.json");
-  const behavioral = await readJson("practice/behavioral/bank/questions.json");
   assert.deepEqual(journal.sessions, []);
   assert.deepEqual(journal.timerGroups, []);
   assert.deepEqual(journal.activities, []);
-  assert.deepEqual(behavioral.questions, []);
 
   const artifact = await readFile(
     new URL("../practice/system-design/sessions/2026-07-08-design-tiktok-for-you-feed.md", import.meta.url),

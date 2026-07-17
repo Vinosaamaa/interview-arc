@@ -2,5 +2,1446 @@
   "schemaVersion": 1,
   "type": "behavioral",
   "updatedAt": "2026-07-17",
-  "questions": []
+  "questions": [
+    {
+      "id": "challenging-bug-fix",
+      "title": "Tell me about a challenging bug you fixed.",
+      "prompt": "Tell me about a challenging bug you fixed.",
+      "url": "https://bugfree.ai/behavior/challenging-bug-fix",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "public",
+      "topics": [
+        "Problem Solving & Decision Making",
+        "Perseverance",
+        "Unstructured Environment",
+        "Growth"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "leading-by-example",
+      "title": "Share an example of leading by example.",
+      "prompt": "Share an example of leading by example.",
+      "url": "https://bugfree.ai/behavior/leading-by-example",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "medium",
+      "answerFormat": "STAR",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Leadership, Mentorship & Influence",
+        "Proactivity",
+        "Motivation",
+        "Communication"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "tell-me-about-yourself",
+      "title": "Tell me about yourself.",
+      "prompt": "Tell me about yourself.",
+      "url": "https://bugfree.ai/behavior/tell-me-about-yourself",
+      "source": "Bugfree.ai",
+      "difficulty": "easy",
+      "frequency": "high",
+      "answerFormat": "PPF",
+      "solutionReference": true,
+      "referenceAccess": "public",
+      "topics": [
+        "Self-Awareness & Motivation",
+        "Communication",
+        "Motivation"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "biggest-strength",
+      "title": "What’s your biggest strength?",
+      "prompt": "What’s your biggest strength?",
+      "url": "https://bugfree.ai/behavior/biggest-strength",
+      "source": "Bugfree.ai",
+      "difficulty": "easy",
+      "frequency": "high",
+      "answerFormat": "STAR",
+      "solutionReference": true,
+      "referenceAccess": "public",
+      "topics": [
+        "Self-Awareness & Motivation",
+        "Communication",
+        "Motivation"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "biggest-weakness",
+      "title": "What’s your biggest weakness?",
+      "prompt": "What’s your biggest weakness?",
+      "url": "https://bugfree.ai/behavior/biggest-weakness",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "high",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "public",
+      "topics": [
+        "Self-Awareness & Motivation",
+        "Growth",
+        "Communication"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "reason-for-leaving",
+      "title": "Why are you looking to leave your current job?",
+      "prompt": "Why are you looking to leave your current job?",
+      "url": "https://bugfree.ai/behavior/reason-for-leaving",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "high",
+      "answerFormat": "IFV",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Self-Awareness & Motivation",
+        "Motivation",
+        "Growth"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "motivation-this-company",
+      "title": "Why do you want to work at this company?",
+      "prompt": "Why do you want to work at this company?",
+      "url": "https://bugfree.ai/behavior/motivation-this-company",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "high",
+      "answerFormat": "IFV",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Self-Awareness & Motivation",
+        "Motivation",
+        "Communication"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "firm-over-competitors",
+      "title": "Why have you chosen our firm over the competitors?",
+      "prompt": "Why have you chosen our firm over the competitors?",
+      "url": "https://bugfree.ai/behavior/firm-over-competitors",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "medium",
+      "answerFormat": "IFV",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Self-Awareness & Motivation",
+        "Motivation",
+        "Proactivity"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "attraction-to-role",
+      "title": "What attracted you to this role?",
+      "prompt": "What attracted you to this role?",
+      "url": "https://bugfree.ai/behavior/attraction-to-role",
+      "source": "Bugfree.ai",
+      "difficulty": "easy",
+      "frequency": "medium",
+      "answerFormat": "IFV",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Self-Awareness & Motivation",
+        "Motivation"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "seeking-next-position",
+      "title": "What are you seeking in your next position?",
+      "prompt": "What are you seeking in your next position?",
+      "url": "https://bugfree.ai/behavior/seeking-next-position",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "medium",
+      "answerFormat": "IFV",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Self-Awareness & Motivation",
+        "Motivation",
+        "Growth"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "enjoy-career-field",
+      "title": "What would you enjoy most about a career in this field?",
+      "prompt": "What would you enjoy most about a career in this field?",
+      "url": "https://bugfree.ai/behavior/enjoy-career-field",
+      "source": "Bugfree.ai",
+      "difficulty": "easy",
+      "frequency": "medium",
+      "answerFormat": "IFV",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Self-Awareness & Motivation",
+        "Motivation"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "long-term-career-goals",
+      "title": "What are your long-term career goals?",
+      "prompt": "What are your long-term career goals?",
+      "url": "https://bugfree.ai/behavior/long-term-career-goals",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "medium",
+      "answerFormat": "PPF",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Self-Awareness & Motivation",
+        "Growth"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "first-six-month-goals",
+      "title": "What are your goals for your first six months here?",
+      "prompt": "What are your goals for your first six months here?",
+      "url": "https://bugfree.ai/behavior/first-six-month-goals",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "medium",
+      "answerFormat": "IFV",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Self-Awareness & Motivation",
+        "Proactivity",
+        "Motivation"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "colleague-three-words",
+      "title": "How would your colleagues describe you in three words?",
+      "prompt": "How would your colleagues describe you in three words?",
+      "url": "https://bugfree.ai/behavior/colleague-three-words",
+      "source": "Bugfree.ai",
+      "difficulty": "easy",
+      "frequency": "low",
+      "answerFormat": "SIMPLE",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Self-Awareness & Motivation",
+        "Communication",
+        "Empathy"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "work-industry-excitement",
+      "title": "What excites you most about your work or industry?",
+      "prompt": "What excites you most about your work or industry?",
+      "url": "https://bugfree.ai/behavior/work-industry-excitement",
+      "source": "Bugfree.ai",
+      "difficulty": "easy",
+      "frequency": "medium",
+      "answerFormat": "IFV",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Self-Awareness & Motivation",
+        "Motivation"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "job-frustrations",
+      "title": "What aspects of your current job do you find frustrating?",
+      "prompt": "What aspects of your current job do you find frustrating?",
+      "url": "https://bugfree.ai/behavior/job-frustrations",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "low",
+      "answerFormat": "STAR",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Self-Awareness & Motivation",
+        "Growth",
+        "Communication"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "feedback-growth",
+      "title": "What feedback have you received that helped you improve?",
+      "prompt": "What feedback have you received that helped you improve?",
+      "url": "https://bugfree.ai/behavior/feedback-growth",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Self-Awareness & Motivation",
+        "Growth",
+        "Communication"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "project-leadership-example",
+      "title": "Tell me about a time you took a leadership role in a project.",
+      "prompt": "Tell me about a time you took a leadership role in a project.",
+      "url": "https://bugfree.ai/behavior/project-leadership-example",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "high",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "public",
+      "topics": [
+        "Leadership, Mentorship & Influence",
+        "Proactivity",
+        "Communication",
+        "Motivation"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "mentorship-example",
+      "title": "Describe a time you mentored someone.",
+      "prompt": "Describe a time you mentored someone.",
+      "url": "https://bugfree.ai/behavior/mentorship-example",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "public",
+      "topics": [
+        "Leadership, Mentorship & Influence",
+        "Empathy",
+        "Growth",
+        "Communication"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "supporting-growth",
+      "title": "How have you helped others grow professionally?",
+      "prompt": "How have you helped others grow professionally?",
+      "url": "https://bugfree.ai/behavior/supporting-growth",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Leadership, Mentorship & Influence",
+        "Growth",
+        "Empathy",
+        "Proactivity"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "motivating-team",
+      "title": "Describe a time you motivated a team.",
+      "prompt": "Describe a time you motivated a team.",
+      "url": "https://bugfree.ai/behavior/motivating-team",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Leadership, Mentorship & Influence",
+        "Motivation",
+        "Communication",
+        "Empathy"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "influence-without-authority",
+      "title": "Tell me about a time you influenced someone without authority.",
+      "prompt": "Tell me about a time you influenced someone without authority.",
+      "url": "https://bugfree.ai/behavior/influence-without-authority",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "high",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Leadership, Mentorship & Influence",
+        "Communication",
+        "Proactivity",
+        "Unstructured Environment"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "delegation-individual-strengths",
+      "title": "Describe how you matched tasks to individuals’ strengths when delegating.",
+      "prompt": "Describe how you matched tasks to individuals’ strengths when delegating.",
+      "url": "https://bugfree.ai/behavior/delegation-individual-strengths",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "low",
+      "answerFormat": "STAR",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Leadership, Mentorship & Influence",
+        "Empathy",
+        "Growth",
+        "Proactivity"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "unpopular-decision",
+      "title": "Tell me about a time you made an unpopular but necessary decision.",
+      "prompt": "Tell me about a time you made an unpopular but necessary decision.",
+      "url": "https://bugfree.ai/behavior/unpopular-decision",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Leadership, Mentorship & Influence",
+        "Proactivity",
+        "Perseverance",
+        "Communication"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "leadership-relevance",
+      "title": "How would your previous leadership experience help you succeed here?",
+      "prompt": "How would your previous leadership experience help you succeed here?",
+      "url": "https://bugfree.ai/behavior/leadership-relevance",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "low",
+      "answerFormat": "PPF",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Leadership, Mentorship & Influence",
+        "Growth",
+        "Communication",
+        "Motivation"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "diverse-team-collaboration",
+      "title": "Tell me about a time you worked with a diverse team.",
+      "prompt": "Tell me about a time you worked with a diverse team.",
+      "url": "https://bugfree.ai/behavior/diverse-team-collaboration",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "high",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "public",
+      "topics": [
+        "Teamwork & Collaboration",
+        "Empathy",
+        "Communication",
+        "Growth"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "difficult-coworker-collaboration",
+      "title": "Describe a time you worked with someone you didn’t like.",
+      "prompt": "Describe a time you worked with someone you didn’t like.",
+      "url": "https://bugfree.ai/behavior/difficult-coworker-collaboration",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "public",
+      "topics": [
+        "Teamwork & Collaboration",
+        "Conflict Resolution",
+        "Empathy",
+        "Communication"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "team-conflict-support",
+      "title": "Tell me about a time your team had a conflict but you supported their decision.",
+      "prompt": "Tell me about a time your team had a conflict but you supported their decision.",
+      "url": "https://bugfree.ai/behavior/team-conflict-support",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "low",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Teamwork & Collaboration",
+        "Conflict Resolution",
+        "Empathy",
+        "Communication"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "beyond-responsibility",
+      "title": "Describe a time you contributed to a project beyond your responsibilities.",
+      "prompt": "Describe a time you contributed to a project beyond your responsibilities.",
+      "url": "https://bugfree.ai/behavior/beyond-responsibility",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "high",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Teamwork & Collaboration",
+        "Proactivity",
+        "Communication",
+        "Motivation"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "underperforming-teammate",
+      "title": "Describe a time your team member wasn’t meeting expectations.",
+      "prompt": "Describe a time your team member wasn’t meeting expectations.",
+      "url": "https://bugfree.ai/behavior/underperforming-teammate",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Teamwork & Collaboration",
+        "Conflict Resolution",
+        "Communication",
+        "Empathy"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "helping-struggling-teammate",
+      "title": "Tell me how you helped a struggling teammate.",
+      "prompt": "Tell me how you helped a struggling teammate.",
+      "url": "https://bugfree.ai/behavior/helping-struggling-teammate",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Teamwork & Collaboration",
+        "Empathy",
+        "Proactivity",
+        "Growth"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "team-culture-impact",
+      "title": "Describe a time you contributed to shaping team culture.",
+      "prompt": "Describe a time you contributed to shaping team culture.",
+      "url": "https://bugfree.ai/behavior/team-culture-impact",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "low",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Teamwork & Collaboration",
+        "Motivation",
+        "Proactivity",
+        "Empathy"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "challenging-team-project",
+      "title": "Tell me about a time you worked on a challenging team project.",
+      "prompt": "Tell me about a time you worked on a challenging team project.",
+      "url": "https://bugfree.ai/behavior/challenging-team-project",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "high",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Teamwork & Collaboration",
+        "Perseverance",
+        "Communication",
+        "Unstructured Environment"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "coworker-disagreement-resolution",
+      "title": "Tell me about a disagreement with a coworker and how you resolved it.",
+      "prompt": "Tell me about a disagreement with a coworker and how you resolved it.",
+      "url": "https://bugfree.ai/behavior/coworker-disagreement-resolution",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "high",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "public",
+      "topics": [
+        "Conflict & Communication",
+        "Conflict Resolution",
+        "Communication",
+        "Empathy"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "client-misunderstanding-resolution",
+      "title": "Describe a misunderstanding with a client and how you handled it.",
+      "prompt": "Describe a misunderstanding with a client and how you handled it.",
+      "url": "https://bugfree.ai/behavior/client-misunderstanding-resolution",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "public",
+      "topics": [
+        "Conflict & Communication",
+        "Communication",
+        "Empathy",
+        "Conflict Resolution"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "disagreement-with-manager",
+      "title": "Tell me about a time you disagreed with your manager.",
+      "prompt": "Tell me about a time you disagreed with your manager.",
+      "url": "https://bugfree.ai/behavior/disagreement-with-manager",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Conflict & Communication",
+        "Conflict Resolution",
+        "Communication",
+        "Proactivity"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "constructive-feedback-example",
+      "title": "Describe a time you gave constructive feedback.",
+      "prompt": "Describe a time you gave constructive feedback.",
+      "url": "https://bugfree.ai/behavior/constructive-feedback-example",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "high",
+      "answerFormat": "STAR",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Conflict & Communication",
+        "Growth",
+        "Communication",
+        "Empathy"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "adapt-communication-style",
+      "title": "Share a time you had to adapt your communication style.",
+      "prompt": "Share a time you had to adapt your communication style.",
+      "url": "https://bugfree.ai/behavior/adapt-communication-style",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Conflict & Communication",
+        "Empathy",
+        "Communication",
+        "Unstructured Environment"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "negotiation-example",
+      "title": "Describe a time you had to negotiate with someone.",
+      "prompt": "Describe a time you had to negotiate with someone.",
+      "url": "https://bugfree.ai/behavior/negotiation-example",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Conflict & Communication",
+        "Communication",
+        "Conflict Resolution",
+        "Proactivity"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "persuading-others",
+      "title": "Share a time you persuaded others to go with your idea.",
+      "prompt": "Share a time you persuaded others to go with your idea.",
+      "url": "https://bugfree.ai/behavior/persuading-others",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "high",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Conflict & Communication",
+        "Communication",
+        "Proactivity"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "difficult-colleague-conflict",
+      "title": "Describe a time you handled conflict with a difficult colleague.",
+      "prompt": "Describe a time you handled conflict with a difficult colleague.",
+      "url": "https://bugfree.ai/behavior/difficult-colleague-conflict",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "high",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Conflict & Communication",
+        "Conflict Resolution",
+        "Empathy",
+        "Communication"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "delivering-bad-news",
+      "title": "Tell me about a time you had to deliver bad news.",
+      "prompt": "Tell me about a time you had to deliver bad news.",
+      "url": "https://bugfree.ai/behavior/delivering-bad-news",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "low",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Conflict & Communication",
+        "Communication",
+        "Empathy"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "refused-to-lower-standards",
+      "title": "Tell me about a time you refused to lower your standards despite pressure.",
+      "prompt": "Tell me about a time you refused to lower your standards despite pressure.",
+      "url": "https://bugfree.ai/behavior/refused-to-lower-standards",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "low",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Conflict & Communication",
+        "Perseverance",
+        "Communication",
+        "Conflict Resolution"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "tight-deadline",
+      "title": "Tell me about a time you had to meet a tight deadline.",
+      "prompt": "Tell me about a time you had to meet a tight deadline.",
+      "url": "https://bugfree.ai/behavior/tight-deadline",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "high",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "public",
+      "topics": [
+        "Project & Time Management",
+        "Perseverance",
+        "Proactivity",
+        "Communication"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "multiple-tasks-juggling",
+      "title": "Describe a time you juggled multiple important tasks.",
+      "prompt": "Describe a time you juggled multiple important tasks.",
+      "url": "https://bugfree.ai/behavior/multiple-tasks-juggling",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "high",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "public",
+      "topics": [
+        "Project & Time Management",
+        "Proactivity",
+        "Unstructured Environment"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "multiple-projects-management",
+      "title": "Share how you managed multiple projects simultaneously.",
+      "prompt": "Share how you managed multiple projects simultaneously.",
+      "url": "https://bugfree.ai/behavior/multiple-projects-management",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Project & Time Management",
+        "Proactivity",
+        "Unstructured Environment",
+        "Communication"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "high-pressure-situation",
+      "title": "Tell me about a high-pressure situation and how you handled it.",
+      "prompt": "Tell me about a high-pressure situation and how you handled it.",
+      "url": "https://bugfree.ai/behavior/high-pressure-situation",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "high",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Project & Time Management",
+        "Perseverance",
+        "Unstructured Environment"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "limited-resources-project",
+      "title": "Describe a time you delivered a project with limited resources.",
+      "prompt": "Describe a time you delivered a project with limited resources.",
+      "url": "https://bugfree.ai/behavior/limited-resources-project",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Project & Time Management",
+        "Proactivity",
+        "Perseverance"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "recover-delayed-project",
+      "title": "Share how you kept a delayed project on track.",
+      "prompt": "Share how you kept a delayed project on track.",
+      "url": "https://bugfree.ai/behavior/recover-delayed-project",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Project & Time Management",
+        "Proactivity",
+        "Perseverance",
+        "Communication"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "project-challenges-current",
+      "title": "Describe the most challenging part of your current project.",
+      "prompt": "Describe the most challenging part of your current project.",
+      "url": "https://bugfree.ai/behavior/project-challenges-current",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "low",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Project & Time Management",
+        "Perseverance",
+        "Growth"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "current-project-role",
+      "title": "Walk me through your role in your current project.",
+      "prompt": "Walk me through your role in your current project.",
+      "url": "https://bugfree.ai/behavior/current-project-role",
+      "source": "Bugfree.ai",
+      "difficulty": "easy",
+      "frequency": "high",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Project & Time Management",
+        "Communication",
+        "Proactivity"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "balance-responsibilities",
+      "title": "How do you balance multiple responsibilities effectively?",
+      "prompt": "How do you balance multiple responsibilities effectively?",
+      "url": "https://bugfree.ai/behavior/balance-responsibilities",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "high",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Project & Time Management",
+        "Proactivity",
+        "Unstructured Environment"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "long-term-project",
+      "title": "Describe how you managed a long-term project successfully.",
+      "prompt": "Describe how you managed a long-term project successfully.",
+      "url": "https://bugfree.ai/behavior/long-term-project",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Project & Time Management",
+        "Proactivity",
+        "Growth",
+        "Perseverance"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "data-solving-complex-problem",
+      "title": "Share a time you used data to solve a complex problem.",
+      "prompt": "Share a time you used data to solve a complex problem.",
+      "url": "https://bugfree.ai/behavior/data-solving-complex-problem",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "high",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "public",
+      "topics": [
+        "Problem Solving & Decision Making",
+        "Proactivity",
+        "Communication",
+        "Growth"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "approach-difficult-problem",
+      "title": "Walk me through your approach to solving a difficult problem.",
+      "prompt": "Walk me through your approach to solving a difficult problem.",
+      "url": "https://bugfree.ai/behavior/approach-difficult-problem",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "high",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "public",
+      "topics": [
+        "Problem Solving & Decision Making",
+        "Proactivity",
+        "Communication",
+        "Unstructured Environment"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "overcome-obstacle",
+      "title": "Tell me about a time you overcame a difficult obstacle.",
+      "prompt": "Tell me about a time you overcame a difficult obstacle.",
+      "url": "https://bugfree.ai/behavior/overcome-obstacle",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Problem Solving & Decision Making",
+        "Perseverance",
+        "Growth",
+        "Unstructured Environment"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "complex-technical-issue",
+      "title": "Describe a complex technical issue you solved.",
+      "prompt": "Describe a complex technical issue you solved.",
+      "url": "https://bugfree.ai/behavior/complex-technical-issue",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Problem Solving & Decision Making",
+        "Perseverance",
+        "Unstructured Environment"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "decision-without-info",
+      "title": "Tell me about a time you made a decision without full information.",
+      "prompt": "Tell me about a time you made a decision without full information.",
+      "url": "https://bugfree.ai/behavior/decision-without-info",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Problem Solving & Decision Making",
+        "Proactivity",
+        "Unstructured Environment"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "creative-solution",
+      "title": "Share an innovative or creative solution you came up with.",
+      "prompt": "Share an innovative or creative solution you came up with.",
+      "url": "https://bugfree.ai/behavior/creative-solution",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "low",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Problem Solving & Decision Making",
+        "Proactivity",
+        "Growth"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "dissatisfied-with-work",
+      "title": "Tell me about a time you were dissatisfied with your work and what you did.",
+      "prompt": "Tell me about a time you were dissatisfied with your work and what you did.",
+      "url": "https://bugfree.ai/behavior/dissatisfied-with-work",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "low",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Problem Solving & Decision Making",
+        "Growth",
+        "Motivation"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "process-improvement",
+      "title": "Describe how you improved a process.",
+      "prompt": "Describe how you improved a process.",
+      "url": "https://bugfree.ai/behavior/process-improvement",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Problem Solving & Decision Making",
+        "Proactivity",
+        "Growth"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "calculated-risk",
+      "title": "Tell me about a calculated risk you took.",
+      "prompt": "Tell me about a calculated risk you took.",
+      "url": "https://bugfree.ai/behavior/calculated-risk",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "low",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Problem Solving & Decision Making",
+        "Proactivity",
+        "Perseverance"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "ambiguity-example",
+      "title": "Share a time you had to work through ambiguity.",
+      "prompt": "Share a time you had to work through ambiguity.",
+      "url": "https://bugfree.ai/behavior/ambiguity-example",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "high",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Problem Solving & Decision Making",
+        "Unstructured Environment",
+        "Perseverance"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "disagreed-project-plan",
+      "title": "Tell me about a time you disagreed with a project plan or process.",
+      "prompt": "Tell me about a time you disagreed with a project plan or process.",
+      "url": "https://bugfree.ai/behavior/disagreed-project-plan",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Problem Solving & Decision Making",
+        "Communication",
+        "Proactivity"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "quickly-learned-skill",
+      "title": "Describe a time you quickly learned a skill for a task.",
+      "prompt": "Describe a time you quickly learned a skill for a task.",
+      "url": "https://bugfree.ai/behavior/quickly-learned-skill",
+      "source": "Bugfree.ai",
+      "difficulty": "easy",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Problem Solving & Decision Making",
+        "Growth",
+        "Proactivity"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "self-taught-performance-skill",
+      "title": "Share how you taught yourself a new skill to improve your performance.",
+      "prompt": "Share how you taught yourself a new skill to improve your performance.",
+      "url": "https://bugfree.ai/behavior/self-taught-performance-skill",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "low",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Problem Solving & Decision Making",
+        "Growth",
+        "Motivation"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "data-critical-decision",
+      "title": "Describe a time you gathered data to make a critical decision.",
+      "prompt": "Describe a time you gathered data to make a critical decision.",
+      "url": "https://bugfree.ai/behavior/data-critical-decision",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "high",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Problem Solving & Decision Making",
+        "Proactivity",
+        "Unstructured Environment"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "difficult-customer-handling",
+      "title": "Tell me about a time you handled a difficult customer.",
+      "prompt": "Tell me about a time you handled a difficult customer.",
+      "url": "https://bugfree.ai/behavior/difficult-customer-handling",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "high",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "public",
+      "topics": [
+        "Stakeholder Management",
+        "Empathy",
+        "Communication",
+        "Conflict Resolution"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "above-and-beyond-customer",
+      "title": "Describe a time you went above and beyond for a customer.",
+      "prompt": "Describe a time you went above and beyond for a customer.",
+      "url": "https://bugfree.ai/behavior/above-and-beyond-customer",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "medium",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "public",
+      "topics": [
+        "Stakeholder Management",
+        "Proactivity",
+        "Empathy",
+        "Motivation"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "above-and-beyond-employer",
+      "title": "Share a time you went above and beyond for your employer.",
+      "prompt": "Share a time you went above and beyond for your employer.",
+      "url": "https://bugfree.ai/behavior/above-and-beyond-employer",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "low",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Stakeholder Management",
+        "Proactivity",
+        "Motivation"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "conflicting-stakeholder-priorities",
+      "title": "Describe a time you managed stakeholders with conflicting priorities.",
+      "prompt": "Describe a time you managed stakeholders with conflicting priorities.",
+      "url": "https://bugfree.ai/behavior/conflicting-stakeholder-priorities",
+      "source": "Bugfree.ai",
+      "difficulty": "hard",
+      "frequency": "medium",
+      "answerFormat": "STAR",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Stakeholder Management",
+        "Conflict Resolution",
+        "Communication",
+        "Unstructured Environment"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "cross-functional-collaboration",
+      "title": "Tell me about a time you coordinated across multiple teams.",
+      "prompt": "Tell me about a time you coordinated across multiple teams.",
+      "url": "https://bugfree.ai/behavior/cross-functional-collaboration",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "high",
+      "answerFormat": "STARL",
+      "solutionReference": true,
+      "referenceAccess": "may_require_sign_in",
+      "topics": [
+        "Stakeholder Management",
+        "Communication",
+        "Proactivity",
+        "Unstructured Environment"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "salary-expectations",
+      "title": "What are your salary expectations?",
+      "prompt": "What are your salary expectations?",
+      "url": "https://bugfree.ai/behavior/salary-expectations",
+      "source": "Bugfree.ai",
+      "difficulty": "medium",
+      "frequency": "high",
+      "answerFormat": "SIMPLE",
+      "solutionReference": true,
+      "referenceAccess": "public",
+      "topics": [
+        "Others",
+        "Communication",
+        "Motivation"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    },
+    {
+      "id": "candidate-questions-for-interviewer",
+      "title": "What questions do you have for me?",
+      "prompt": "What questions do you have for me?",
+      "url": "https://bugfree.ai/behavior/candidate-questions-for-interviewer",
+      "source": "Bugfree.ai",
+      "difficulty": "easy",
+      "frequency": "high",
+      "answerFormat": "SIMPLE",
+      "solutionReference": true,
+      "referenceAccess": "public",
+      "topics": [
+        "Others",
+        "Motivation",
+        "Communication",
+        "Growth"
+      ],
+      "targetMinutes": 60,
+      "active": true
+    }
+  ]
 }

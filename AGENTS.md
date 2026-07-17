@@ -51,6 +51,8 @@ Do not crawl LeetCode, inspect authenticated/private endpoints or cookies, or co
 
 For a system-design bank question with `source: SystemDesign.io` and `solutionReference: true`, the system-design task must review the question page's current recommended solution links and design details before starting the mock. Those references form a private rubric; do not front-load or copy their answer before the user reasons.
 
+For a behavioral bank question with `source: Bugfree.ai` and `solutionReference: true`, open the stored `url` whenever the user asks for an answer or solution. Use the current Bugfree.ai answer as reference, summarize it in original language, and keep any personalized story truthful to user-provided facts. If the answer is hidden behind nested navigation, sign-in, subscription, or another inaccessible layer, do not claim it was reviewed: tell the user what failed and provide the exact stored URL so they can open it.
+
 ## Audio Boundary
 
 Raw recordings stay in `audio-answers/` and are ignored by Git. Commit the matching Markdown transcript/review. Reference audio by filename with `availability: local-only`; the deployed site cannot play a file that exists only on the user's computer.
