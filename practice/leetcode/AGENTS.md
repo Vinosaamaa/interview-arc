@@ -104,8 +104,11 @@ Clearly distinguish user work from generated coaching material.
 
 ## Content Boundary
 
-- Do not scrape LeetCode, authenticated pages, Premium company tags, editorials, or solutions.
-- Accept user-provided CSV/JSON exports or manual metadata entry.
+- Do not crawl LeetCode, authenticated pages, private endpoints, cookies, editorials, or solutions.
+- Accept manual metadata and user-provided CSV, JSON, PDF, or saved MHTML snapshots. A user-saved company page is an authorized input artifact, not permission to automate the live account.
+- For a saved MHTML company list, run `scripts/import_leetcode_company_mhtml.py` from the repository root. Import every complete visible table row, preserve the public problem number, title, URL, difficulty, acceptance rate, and structured company-frequency signal, then report source, imported, updated, and total counts.
+- Deduplicate in this order: canonical LeetCode URL slug, public displayed problem number, then normalized title. Merge company signals rather than creating another copy of a known problem.
+- Ignore account-specific solved/check icons during bank import. Website progress comes from Interview Arc activities and published artifacts, not from the company-list snapshot.
 - Never invent a LeetCode URL; use a validated URL from the bank or the URL the user supplied.
 - Link to the original problem for prompt reading and submission.
 - Do not copy protected statements or official solutions into this repository.

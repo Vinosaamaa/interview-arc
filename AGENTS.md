@@ -47,7 +47,9 @@ Leave unavailable fields empty or set their source to `unknown`. Never invent ti
 
 ## LeetCode Boundary
 
-Do not scrape LeetCode, Premium company-tag pages, authenticated/private endpoints, editorials, or solution content. Import only metadata the user deliberately supplies, or add public problem links manually. Do not invent LeetCode URLs. Label AI-generated coaching or solutions as generated material rather than official LeetCode content.
+Do not crawl LeetCode, inspect authenticated/private endpoints or cookies, or copy editorials or solution content. The user may deliberately provide a CSV, JSON, PDF, or saved MHTML snapshot of a company list. Parse only visible metadata and public problem URLs from that supplied artifact, deduplicate by canonical problem slug, and never treat solved icons in the snapshot as Interview Arc progress unless the user explicitly asks. Do not invent LeetCode URLs. Label AI-generated coaching or solutions as generated material rather than official LeetCode content.
+
+For a system-design bank question with `source: SystemDesign.io` and `solutionReference: true`, the system-design task must review the question page's current recommended solution links and design details before starting the mock. Those references form a private rubric; do not front-load or copy their answer before the user reasons.
 
 ## Audio Boundary
 

@@ -46,7 +46,8 @@ The website must not imply that browser draft state has already been published t
 - In the creation flow, search the matching bank first. For an unknown LeetCode URL, derive a title from its public problem slug without scraping the page. For unknown system-design or behavioral questions, accept a custom title with no URL.
 - Keep body and annotation text readable: normal supporting copy should be at least 14px and short utility labels at least 12px.
 - Past is a date-grouped scrolling log with category color, filters, a calendar jump control, and a centered reading dialog.
-- Problem Banks combines all three versioned banks, offers category filters, and sends every `Practice today` selection to standalone practice on Today.
+- Problem Banks combines all three versioned banks, offers independent category and progress filters, and sends every `Practice today` selection to standalone practice on Today. Progress has `All`, `To practice`, and `Finished`; failed or merely planned work remains `To practice`.
+- For imported system-design questions, show the source question link, listed complexity, and whether reference solutions are available.
 - Journey owns cumulative totals and daily charts for coding, system design, behavioral, outcomes, and elapsed time.
 
 ## Implementation And Hosting

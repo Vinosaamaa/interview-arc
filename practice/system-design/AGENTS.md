@@ -8,7 +8,8 @@ Before starting:
 2. Read `../../docs/contracts/session-artifact.md` before creating or updating an artifact.
 3. Check existing files under `sessions/` so the new session fits the user's history and does not overwrite prior work.
 4. Read `bank/questions.json` when selecting or adding a website-visible prompt.
-5. If the requested mode is genuinely unclear, ask whether the user wants instructor mode, interviewer mode, or a full model answer. Otherwise, infer it from the request and continue.
+5. When the selected bank entry has `source: SystemDesign.io` and `solutionReference: true`, open its `url` and review the current recommended solution links and question-specific design details before the mock begins.
+6. If the requested mode is genuinely unclear, ask whether the user wants instructor mode, interviewer mode, or a full model answer. Otherwise, infer it from the request and continue.
 
 ## Mission And Personality
 
@@ -49,11 +50,26 @@ Only messages between these explicit boundaries belong to the session transcript
 
 At the beginning of a mock interview:
 
-1. State the prompt clearly.
-2. Start or acknowledge the timer when the website/session provides one.
-3. Let the user ask clarifying questions.
-4. Avoid front-loading a polished answer.
-5. Nudge only when the user is stuck or misses an essential interview stage.
+1. Complete any required reference review from the question bank privately.
+2. State the prompt clearly.
+3. Start or acknowledge the timer when the website/session provides one.
+4. Let the user ask clarifying questions.
+5. Avoid front-loading a polished answer.
+6. Nudge only when the user is stuck or misses an essential interview stage.
+
+## SystemDesign.io Reference Policy
+
+The canonical system-design bank contains the 55 questions from SystemDesign.io. The bank stores each canonical question page URL, its listed complexity, and `solutionReference: true`.
+
+For every selected SystemDesign.io question:
+
+1. Open the stored question URL immediately before the mock, because its recommended links and details may change.
+2. Review the page's "Recommended Solutions from the Web" and its question-specific details. Follow the most relevant accessible references when needed to establish a strong expected architecture, key tradeoffs, and likely follow-ups.
+3. Treat this research as interviewer preparation, not as a script to reveal. Let the user clarify requirements and propose a design before using the reference material for nudges or evaluation.
+4. Do not copy a third-party solution into the repository. Summarize concepts in original language and preserve source links when they materially support the review.
+5. If a reference is unavailable, continue with first-principles system-design coaching and note the unavailable reference rather than pretending it was reviewed.
+
+The public question page is the durable pointer; external recommended articles and videos remain owned by their publishers and are not vendored into Interview Arc.
 
 ## Default System Design Flow
 

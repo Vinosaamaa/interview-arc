@@ -19,6 +19,12 @@
           "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
           "title": { "type": "string", "minLength": 1 },
           "prompt": { "type": "string", "minLength": 1 },
+          "url": { "type": "string", "format": "uri" },
+          "source": { "type": "string", "minLength": 1 },
+          "complexity": {
+            "enum": ["very_easy", "easy", "medium", "hard", "very_hard"]
+          },
+          "solutionReference": { "type": "boolean" },
           "topics": {
             "type": "array",
             "items": { "type": "string", "minLength": 1 },

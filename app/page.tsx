@@ -131,6 +131,14 @@ function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 52) || "practice";
 }
 
+function normalizedIdentity(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function displayComplexity(value?: QuestionBankItem["complexity"]) {
+  return value?.replace("_", " ");
+}
+
 function deriveLeetCodeFromUrl(value: string, bank: QuestionBankItem[]) {
   try {
     const url = new URL(value.trim());
@@ -285,11 +293,18 @@ export default function Home() {
   const [selectedEntry, setSelectedEntry] = useState<LogEntry | null>(null);
   const [libraryFilter, setLibraryFilter] = useState<"all" | ActivityType>("all");
   const [bankFilter, setBankFilter] = useState<"all" | ActivityType>("all");
-  const storageKey = `interview-arc-draft-${journal.date}`;
+  const [bankProgressFilter, setBankProgressFilter] = useState<"all" | "todo" | "finished">("all");
+  const storageKey = `interview-arc-draft-v2-${journal.date}`;
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       try {
+        for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+          const key = window.localStorage.key(index);
+          if (key?.startsWith("interview-arc-draft-") && key !== storageKey) {
+            window.localStorage.removeItem(key);
+          }
+        }
         const saved = window.localStorage.getItem(storageKey);
         if (saved) {
           const parsed = JSON.parse(saved) as Partial<LocalDraft>;
@@ -347,13 +362,7 @@ export default function Home() {
   }, [composer.open, selectedEntry]);
 
   const allTodayActivities = [...journal.activities, ...draft.extraActivities];
-  const versionedSessions = journal.sessions.length ? journal.sessions : [{
-    id: `${journal.date}-session-1`,
-    label: "Required session",
-    source: "daily" as const,
-    activityIds: journal.activities.map((activity) => activity.id),
-  }];
-  const allSessions: PracticeSession[] = [...versionedSessions, ...draft.sessions];
+  const allSessions: PracticeSession[] = [...journal.sessions, ...draft.sessions];
   const assignedExtraIds = new Set(draft.sessions.flatMap((session) => session.activityIds));
   const looseActivities = draft.extraActivities.filter((activity) => !assignedExtraIds.has(activity.id));
 
@@ -837,12 +846,12 @@ export default function Home() {
       <>
         <section className="today-masthead">
           <div className="date-poster"><strong>{journal.date.slice(-2)}</strong><span>{new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(new Date(`${journal.date}T12:00:00Z`))}</span></div>
-          <div className="today-thesis"><span className="eyebrow">TODAY · {journal.focus.toUpperCase()}</span><h1>Six hours. Eight activities.<br /><em>One honest record.</em></h1><p>{journal.note}</p></div>
+          <div className="today-thesis"><span className="eyebrow">TODAY · {journal.focus.toUpperCase()}</span><h1>{totalToday ? `${totalToday} activities.` : "A clean page."}<br /><em>One honest record.</em></h1><p>{journal.note}</p></div>
           <div className="today-tally"><div><strong>{completeToday}/{totalToday}</strong><span>activities finished</span></div><div><strong>{formatDuration(todaySeconds)}</strong><span>time recorded locally</span></div><div><strong>{allSessions.length}</strong><span>session{allSessions.length === 1 ? "" : "s"} today</span></div></div>
         </section>
 
         <div className="today-actions"><div><h2>Today&apos;s sessions</h2><p>Each session has one fixed six-hour countdown; activity stopwatches stay compact and independent.</p></div><div><button className="secondary-action" onClick={openNewActivity}>Add one activity</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
-        <section className="session-stack">{allSessions.map(renderSession)}</section>
+        <section className="session-stack">{allSessions.length ? allSessions.map(renderSession) : <div className="quiet-empty session-empty"><strong>No session planned yet.</strong><span>Add another session to choose up to six coding questions and one question from each available interview bank.</span></div>}</section>
 
         <section className="loose-section">
           <div className="section-title"><div><span className="eyebrow">STANDALONE PRACTICE</span><h2>Outside a full session</h2><p>Swipe a card left, or use its ••• control, to edit or remove it.</p></div></div>
@@ -909,12 +918,21 @@ export default function Home() {
   }
 
   function renderBanks() {
-    const bankEntries: { type: ActivityType; question: QuestionBankItem }[] = [
+    const bankEntries: { type: ActivityType; question: QuestionBankItem; finished: boolean }[] = [
       ...contentIndex.questionBanks.leetcode.map((question) => ({ type: "leetcode" as const, question })),
       ...contentIndex.questionBanks.systemDesign.map((question) => ({ type: "system_design" as const, question })),
       ...contentIndex.questionBanks.behavioral.map((question) => ({ type: "behavioral" as const, question })),
-    ];
-    const visibleEntries = bankEntries.filter((entry) => bankFilter === "all" || entry.type === bankFilter);
+    ].map((entry) => ({
+      ...entry,
+      finished: libraryEntries.some((record) => record.type === entry.type && (
+        Boolean(entry.question.url && record.url && entry.question.url.replace(/\/$/, "") === record.url.replace(/\/$/, "")) ||
+        normalizedIdentity(entry.question.title) === normalizedIdentity(record.title)
+      )),
+    }));
+    const visibleEntries = bankEntries.filter((entry) =>
+      (bankFilter === "all" || entry.type === bankFilter) &&
+      (bankProgressFilter === "all" || (bankProgressFilter === "finished" ? entry.finished : !entry.finished))
+    );
     return (
       <section className="view-page banks-page">
         <header className="view-masthead"><span className="eyebrow">PROBLEM BANKS · ALL PRACTICE SOURCES</span><h1>Choose the next thing<br /><em>worth practicing.</em></h1><p>Browse every coding, system-design, and behavioral prompt in one place. “Practice today” adds the question to standalone practice and takes you directly to Today.</p></header>
@@ -923,14 +941,15 @@ export default function Home() {
           <article className="system_design"><strong>{contentIndex.questionBanks.systemDesign.length}</strong><span>System designs</span></article>
           <article className="behavioral"><strong>{contentIndex.questionBanks.behavioral.length}</strong><span>Behavioral prompts</span></article>
         </div>
-        <div className="library-toolbar bank-toolbar"><div className="filter-row" role="group" aria-label="Filter problem banks">{(["all", "leetcode", "system_design", "behavioral"] as const).map((filter) => <button key={filter} className={bankFilter === filter ? "active" : ""} onClick={() => setBankFilter(filter)}>{filter === "all" ? "All" : typeLabel(filter)}</button>)}</div><span>{visibleEntries.length} questions shown</span></div>
+        <div className="library-toolbar bank-toolbar"><div className="bank-filter-groups"><div><span>Question type</span><div className="filter-row" role="group" aria-label="Filter problem banks by question type">{(["all", "leetcode", "system_design", "behavioral"] as const).map((filter) => <button key={filter} className={bankFilter === filter ? "active" : ""} onClick={() => setBankFilter(filter)}>{filter === "all" ? "All" : typeLabel(filter)}</button>)}</div></div><div><span>Progress</span><div className="filter-row" role="group" aria-label="Filter problem banks by progress">{(["all", "todo", "finished"] as const).map((filter) => <button key={filter} className={bankProgressFilter === filter ? "active" : ""} onClick={() => setBankProgressFilter(filter)}>{filter === "all" ? "All" : filter === "todo" ? "To practice" : "Finished"}</button>)}</div></div></div><span>{visibleEntries.length} questions shown</span></div>
         <div className="problem-bank-list">
-          {visibleEntries.map(({ type, question }) => <article className={`problem-bank-entry ${type}`} key={`${type}-${question.id}`}>
+          {visibleEntries.map(({ type, question, finished }) => <article className={`problem-bank-entry ${type}`} key={`${type}-${question.id}`}>
             <span className={`type-mark ${type}`}>{typeMark(type)}</span>
-            <div className="problem-bank-copy"><small>{typeLabel(type)}{question.difficulty ? ` · ${question.difficulty}` : ""}</small><strong>{question.title}</strong><p>{question.prompt ?? question.topics.join(" · ")}</p>{question.url && <a href={question.url} target="_blank" rel="noreferrer">Open problem ↗</a>}</div>
-            <div className="bank-entry-meta"><span>{question.targetMinutes} min estimate</span>{question.topics.length > 0 && <small>{question.topics.slice(0, 3).join(" · ")}</small>}</div>
+            <div className="problem-bank-copy"><small>{typeLabel(type)}{question.difficulty ? ` · ${question.difficulty}` : ""}{question.complexity ? ` · ${displayComplexity(question.complexity)}` : ""} · {finished ? "finished" : "to practice"}</small><strong>{question.title}</strong>{question.prompt && question.prompt !== question.title && <p>{question.prompt}</p>}{question.url && <a href={question.url} target="_blank" rel="noreferrer">{question.solutionReference ? "Open question & solution references ↗" : "Open problem ↗"}</a>}</div>
+            <div className="bank-entry-meta"><span>{question.targetMinutes} min estimate</span>{question.problemNumber && <small>#{question.problemNumber}{typeof question.acceptanceRate === "number" ? ` · ${question.acceptanceRate.toFixed(1)}% acceptance` : ""}</small>}{question.companySignals?.[0] && <small>{question.companySignals[0].company} frequency {question.companySignals[0].frequencyScore}/{question.companySignals[0].frequencyScale} · {question.companySignals[0].window}</small>}{question.solutionReference && <small>Reference solutions available</small>}{question.topics.length > 0 && <small>{question.topics.slice(0, 3).join(" · ")}</small>}</div>
             <button onClick={() => addBankQuestionToToday(question, type)}>Practice today</button>
           </article>)}
+          {!visibleEntries.length && <div className="quiet-empty bank-empty"><strong>No questions match these filters.</strong><span>Change either the question type or progress filter.</span></div>}
         </div>
       </section>
     );
@@ -961,7 +980,7 @@ export default function Home() {
 
       {composer.open && <div className="modal-backdrop" role="presentation" onMouseDown={() => setComposer(EMPTY_COMPOSER)}><section className="composer" role="dialog" aria-modal="true" aria-labelledby="composer-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setComposer(EMPTY_COMPOSER)} aria-label="Close">×</button><span className="eyebrow">BUILD TODAY&apos;S WORK</span><h2 id="composer-title">{composer.editingId ? "Edit this activity" : composer.mode === "session" ? "Add another full session" : "Add one activity"}</h2>
         {!composer.editingId && <div className="composer-mode"><button className={composer.mode === "session" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, mode: "session" }))}>Full session</button><button className={composer.mode === "activity" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, mode: "activity" }))}>Single activity</button></div>}
-        {composer.mode === "session" && !composer.editingId ? <div className="session-composer"><p>A full session adds six questions from your LeetCode bank, one system-design question, and one behavioral question under one fixed six-hour countdown. Each activity also keeps a compact elapsed-time stopwatch.</p><div className="session-recipe"><div><strong>6</strong><span>Coding problems</span></div><div><strong>1</strong><span>System design</span></div><div><strong>1</strong><span>Behavioral</span></div></div><small>Questions come from the three versioned banks. As you add your TikTok lists, new sessions will use that data.</small><button className="primary-action full-width" onClick={addFullSession}>Add {allSessions.length + 1 === 2 ? "second" : `session ${allSessions.length + 1}`}</button></div> : <form onSubmit={saveActivity}><div className="type-selector" role="group" aria-label="Practice type">{(["leetcode", "system_design", "behavioral"] as const).map((type) => <button type="button" key={type} className={`${type} ${composer.type === type ? "active" : ""}`} onClick={() => setComposer((current) => ({ ...current, type, query: "", selectedId: "", minutes: type === "leetcode" ? "30" : type === "system_design" ? "90" : "60" }))}>{typeLabel(type)}</button>)}</div><label className="search-field"><span>{composer.type === "leetcode" ? "Search the bank or paste a LeetCode URL" : `Search the ${typeLabel(composer.type).toLowerCase()} bank or type a new title`}</span><input autoFocus value={composer.query} onChange={(event) => setComposer((current) => ({ ...current, query: event.target.value, selectedId: "" }))} placeholder={composer.type === "leetcode" ? "Search titles and topics, or https://leetcode.com/problems/…" : "Search or enter a custom question"} /></label>
+        {composer.mode === "session" && !composer.editingId ? <div className="session-composer"><p>A full session uses up to six coding questions and one question from each available interview bank under one fixed six-hour countdown. Each activity also keeps a compact elapsed-time stopwatch.</p><div className="session-recipe"><div><strong>{Math.min(6, contentIndex.questionBanks.leetcode.filter((question) => question.active).length)}</strong><span>Coding problems</span></div><div><strong>{contentIndex.questionBanks.systemDesign.some((question) => question.active) ? 1 : 0}</strong><span>System design</span></div><div><strong>{contentIndex.questionBanks.behavioral.some((question) => question.active) ? 1 : 0}</strong><span>Behavioral</span></div></div><small>The current banks contain {contentIndex.questionBanks.leetcode.length} coding, {contentIndex.questionBanks.systemDesign.length} system-design, and {contentIndex.questionBanks.behavioral.length} behavioral questions.</small><button className="primary-action full-width" onClick={addFullSession}>Add session {allSessions.length + 1}</button></div> : <form onSubmit={saveActivity}><div className="type-selector" role="group" aria-label="Practice type">{(["leetcode", "system_design", "behavioral"] as const).map((type) => <button type="button" key={type} className={`${type} ${composer.type === type ? "active" : ""}`} onClick={() => setComposer((current) => ({ ...current, type, query: "", selectedId: "", minutes: type === "leetcode" ? "30" : type === "system_design" ? "90" : "60" }))}>{typeLabel(type)}</button>)}</div><label className="search-field"><span>{composer.type === "leetcode" ? "Search the bank or paste a LeetCode URL" : `Search the ${typeLabel(composer.type).toLowerCase()} bank or type a new title`}</span><input autoFocus value={composer.query} onChange={(event) => setComposer((current) => ({ ...current, query: event.target.value, selectedId: "" }))} placeholder={composer.type === "leetcode" ? "Search titles and topics, or https://leetcode.com/problems/…" : "Search or enter a custom question"} /></label>
         {derivedUrl && !composer.selectedId && <div className="derived-question"><span>Title extracted from URL</span><strong>{derivedUrl.title}</strong><small>{derivedUrl.url}</small></div>}
         {!derivedUrl && <div className="bank-results">{filteredQuestions.length ? filteredQuestions.map((question) => <button type="button" className={composer.selectedId === question.id ? "selected" : ""} key={question.id} onClick={() => selectBankQuestion(question)}><span className={`type-mark ${composer.type}`}>{typeMark(composer.type)}</span><div><strong>{question.title}</strong><small>{question.difficulty ? `${question.difficulty} · ` : ""}{question.topics.join(" · ")}</small></div><span>{composer.selectedId === question.id ? "Selected" : "Choose"}</span></button>) : <p className="no-results">{composer.type === "leetcode" ? "No bank match. Paste the public LeetCode problem URL and the title will be extracted automatically." : "No bank match. Your typed title will become a custom question."}</p>}</div>}
         <label className="minutes-field"><span>Planning estimate in minutes</span><input type="number" min="1" max="360" value={composer.minutes} onChange={(event) => setComposer((current) => ({ ...current, minutes: event.target.value }))} /></label><button className="primary-action full-width" type="submit" disabled={!canSaveActivity}>{composer.editingId ? "Save changes" : "Add to today"}</button></form>}

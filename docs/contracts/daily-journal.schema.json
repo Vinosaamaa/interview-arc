@@ -28,8 +28,7 @@
             "uniqueItems": true
           }
         }
-      },
-      "minItems": 1
+      }
     },
     "timerGroups": {
       "type": "array",
@@ -52,8 +51,7 @@
     },
     "activities": {
       "type": "array",
-      "items": { "$ref": "activity.schema.json" },
-      "minItems": 1
+      "items": { "$ref": "activity.schema.json" }
     }
   }
 }

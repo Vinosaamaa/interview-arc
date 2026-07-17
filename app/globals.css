@@ -291,7 +291,11 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .bank-totals article.behavioral::before { background: var(--behavior); }
 .bank-totals strong { font-family: var(--font-editorial); font-size: 3.2rem; line-height: .85; font-weight: 520; letter-spacing: -.05em; }
 .bank-totals span { color: var(--muted); font-size: .88rem; }
-.bank-toolbar { margin-top: 0; }
+.bank-toolbar { margin-top: 0; align-items: flex-end; }
+.bank-filter-groups { display: flex; gap: 22px; flex-wrap: wrap; }
+.bank-filter-groups > div { display: grid; gap: 7px; }
+.bank-filter-groups > div > span { color: var(--muted); font-size: .7rem; font-weight: 760; letter-spacing: .1em; text-transform: uppercase; }
+.bank-empty { margin-top: 18px; }
 .problem-bank-list { border-top: 1px solid #b9c2b8; }
 .problem-bank-entry { min-height: 128px; padding: 19px 4px 19px 14px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: auto minmax(260px, 1fr) minmax(175px, 260px) auto; gap: 18px; align-items: center; position: relative; transition: background .18s ease, transform .18s ease; }
 .problem-bank-entry::before { content: ""; position: absolute; inset: 13px auto 13px 0; width: 3px; border-radius: 99px; background: var(--coding); }
@@ -460,6 +464,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .time-plot > div { grid-template-columns: 82px 1fr; }
   .time-plot strong { grid-column: 2; text-align: left; }
   .library-toolbar { align-items: start; display: grid; }
+  .bank-filter-groups { display: grid; gap: 14px; }
   .log-entry { grid-template-columns: auto 1fr; }
   .log-entry-meta { grid-column: 2; grid-template-columns: auto 1fr; }
   .open-letter { grid-column: 2; text-align: left; }

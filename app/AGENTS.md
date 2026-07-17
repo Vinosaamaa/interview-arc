@@ -10,5 +10,6 @@ Before editing website code, read `../docs/agents/website.md` and the shared con
 - Keep realistic data in versioned files or durable storage; avoid duplicating canonical enums in components.
 - Treat browser state as an unpublished local draft and versioned daily/artifact files as the durable source.
 - Keep Today, Journey, Past, and Problem Banks as distinct information views; reveal full transcripts and code on demand.
+- Keep Problem Banks question-type and progress filters independent. A finished question must match Past eligibility; failed and planned questions remain to practice.
 - Preserve the vinext/Sites build architecture and root hosting configuration.
 - Verify website changes with `pnpm build`; also run `pnpm lint` for TypeScript or JavaScript changes.

@@ -50,10 +50,17 @@ export type DailyJournal = {
 
 export type QuestionBankItem = {
   id: string;
+  problemNumber?: number;
   title: string;
   prompt?: string;
   url?: string;
   difficulty?: "easy" | "medium" | "hard";
+  complexity?: "very_easy" | "easy" | "medium" | "hard" | "very_hard";
+  acceptanceRate?: number;
+  source?: string;
+  solutionReference?: boolean;
+  companyTags?: string[];
+  companySignals?: { company: string; window: string; frequencyScore: number; frequencyScale: number; capturedAt: string }[];
   topics: string[];
   targetMinutes: number;
   active: boolean;
@@ -86,175 +93,11 @@ export const contentIndex: ContentIndex = {
     {
       "schemaVersion": 1,
       "date": "2026-07-17",
-      "focus": "Graph fluency and clear interview stories",
-      "note": "Run the full practice set under one fixed six-hour countdown. Each activity also keeps a compact elapsed-time stopwatch for the record.",
-      "sessions": [
-        {
-          "id": "2026-07-17-session-1",
-          "label": "Required session",
-          "source": "daily",
-          "allocatedSeconds": 21600,
-          "activityIds": [
-            "2026-07-17-leetcode-number-of-islands",
-            "2026-07-17-leetcode-top-k-frequent-elements",
-            "2026-07-17-leetcode-merge-intervals",
-            "2026-07-17-leetcode-lru-cache",
-            "2026-07-17-leetcode-kth-largest-element",
-            "2026-07-17-leetcode-decode-string",
-            "2026-07-17-system-design-notification-system",
-            "2026-07-17-behavioral-disagree-and-commit"
-          ]
-        }
-      ],
-      "timerGroups": [
-        {
-          "id": "2026-07-17-coding-sprint",
-          "label": "Six-problem coding sprint",
-          "allocatedSeconds": 10800,
-          "activityIds": [
-            "2026-07-17-leetcode-number-of-islands",
-            "2026-07-17-leetcode-top-k-frequent-elements",
-            "2026-07-17-leetcode-merge-intervals",
-            "2026-07-17-leetcode-lru-cache",
-            "2026-07-17-leetcode-kth-largest-element",
-            "2026-07-17-leetcode-decode-string"
-          ]
-        },
-        {
-          "id": "2026-07-17-system-design",
-          "label": "System-design mock",
-          "allocatedSeconds": 5400,
-          "activityIds": [
-            "2026-07-17-system-design-notification-system"
-          ]
-        },
-        {
-          "id": "2026-07-17-behavioral",
-          "label": "Behavioral mock",
-          "allocatedSeconds": 3600,
-          "activityIds": [
-            "2026-07-17-behavioral-disagree-and-commit"
-          ]
-        }
-      ],
-      "activities": [
-        {
-          "schemaVersion": 2,
-          "id": "2026-07-17-leetcode-number-of-islands",
-          "date": "2026-07-17",
-          "source": "daily",
-          "type": "leetcode",
-          "recordKind": "attempt",
-          "title": "Number of Islands",
-          "url": "https://leetcode.com/problems/number-of-islands/",
-          "allocatedSeconds": 1500,
-          "timerGroupId": "2026-07-17-coding-sprint",
-          "timingSource": "unknown",
-          "status": "planned",
-          "notes": "Graph and depth-first search"
-        },
-        {
-          "schemaVersion": 2,
-          "id": "2026-07-17-leetcode-top-k-frequent-elements",
-          "date": "2026-07-17",
-          "source": "daily",
-          "type": "leetcode",
-          "recordKind": "attempt",
-          "title": "Top K Frequent Elements",
-          "url": "https://leetcode.com/problems/top-k-frequent-elements/",
-          "allocatedSeconds": 1500,
-          "timerGroupId": "2026-07-17-coding-sprint",
-          "timingSource": "unknown",
-          "status": "planned",
-          "notes": "Heap and bucket sort"
-        },
-        {
-          "schemaVersion": 2,
-          "id": "2026-07-17-leetcode-merge-intervals",
-          "date": "2026-07-17",
-          "source": "daily",
-          "type": "leetcode",
-          "recordKind": "attempt",
-          "title": "Merge Intervals",
-          "url": "https://leetcode.com/problems/merge-intervals/",
-          "allocatedSeconds": 1500,
-          "timerGroupId": "2026-07-17-coding-sprint",
-          "timingSource": "unknown",
-          "status": "planned",
-          "notes": "Intervals and sorting"
-        },
-        {
-          "schemaVersion": 2,
-          "id": "2026-07-17-leetcode-lru-cache",
-          "date": "2026-07-17",
-          "source": "daily",
-          "type": "leetcode",
-          "recordKind": "attempt",
-          "title": "LRU Cache",
-          "url": "https://leetcode.com/problems/lru-cache/",
-          "allocatedSeconds": 2400,
-          "timerGroupId": "2026-07-17-coding-sprint",
-          "timingSource": "unknown",
-          "status": "planned",
-          "notes": "Design, linked list, and hash table"
-        },
-        {
-          "schemaVersion": 2,
-          "id": "2026-07-17-leetcode-kth-largest-element",
-          "date": "2026-07-17",
-          "source": "daily",
-          "type": "leetcode",
-          "recordKind": "attempt",
-          "title": "Kth Largest Element in an Array",
-          "url": "https://leetcode.com/problems/kth-largest-element-in-an-array/",
-          "allocatedSeconds": 1800,
-          "timerGroupId": "2026-07-17-coding-sprint",
-          "timingSource": "unknown",
-          "status": "planned",
-          "notes": "Heap and quickselect"
-        },
-        {
-          "schemaVersion": 2,
-          "id": "2026-07-17-leetcode-decode-string",
-          "date": "2026-07-17",
-          "source": "daily",
-          "type": "leetcode",
-          "recordKind": "attempt",
-          "title": "Decode String",
-          "url": "https://leetcode.com/problems/decode-string/",
-          "allocatedSeconds": 1500,
-          "timerGroupId": "2026-07-17-coding-sprint",
-          "timingSource": "unknown",
-          "status": "planned",
-          "notes": "Stack and recursion"
-        },
-        {
-          "schemaVersion": 2,
-          "id": "2026-07-17-system-design-notification-system",
-          "date": "2026-07-17",
-          "source": "daily",
-          "type": "system_design",
-          "title": "Design a notification system",
-          "prompt": "Design a TikTok-style notification system from requirements through delivery, retries, and observability.",
-          "allocatedSeconds": 5400,
-          "timerGroupId": "2026-07-17-system-design",
-          "timingSource": "unknown",
-          "status": "planned"
-        },
-        {
-          "schemaVersion": 2,
-          "id": "2026-07-17-behavioral-disagree-and-commit",
-          "date": "2026-07-17",
-          "source": "daily",
-          "type": "behavioral",
-          "title": "Disagree and commit",
-          "prompt": "Tell me about a time you disagreed with a technical decision. What did you do, and what happened?",
-          "allocatedSeconds": 3600,
-          "timerGroupId": "2026-07-17-behavioral",
-          "timingSource": "unknown",
-          "status": "planned"
-        }
-      ]
+      "focus": "Start fresh from the imported problem banks",
+      "note": "Choose a full session or add one activity when you are ready. Only real practice should become part of the journey.",
+      "sessions": [],
+      "timerGroups": [],
+      "activities": []
     }
   ],
   "artifacts": [
@@ -371,118 +214,8718 @@ export const contentIndex: ContentIndex = {
   "questionBanks": {
     "leetcode": [
       {
-        "id": "number-of-islands",
-        "title": "Number of Islands",
-        "url": "https://leetcode.com/problems/number-of-islands/",
-        "difficulty": "medium",
-        "topics": [
-          "graph",
-          "depth-first search"
+        "id": "two-sum",
+        "problemNumber": 1,
+        "title": "Two Sum",
+        "url": "https://leetcode.com/problems/two-sum/",
+        "difficulty": "easy",
+        "acceptanceRate": 57.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
         ],
-        "targetMinutes": 25,
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
         "active": true
       },
       {
-        "id": "top-k-frequent-elements",
-        "title": "Top K Frequent Elements",
-        "url": "https://leetcode.com/problems/top-k-frequent-elements/",
+        "id": "add-two-numbers",
+        "problemNumber": 2,
+        "title": "Add Two Numbers",
+        "url": "https://leetcode.com/problems/add-two-numbers/",
         "difficulty": "medium",
-        "topics": [
-          "heap",
-          "bucket sort"
+        "acceptanceRate": 48.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
         ],
-        "targetMinutes": 25,
-        "active": true
-      },
-      {
-        "id": "merge-intervals",
-        "title": "Merge Intervals",
-        "url": "https://leetcode.com/problems/merge-intervals/",
-        "difficulty": "medium",
-        "topics": [
-          "intervals",
-          "sorting"
-        ],
-        "targetMinutes": 25,
-        "active": true
-      },
-      {
-        "id": "lru-cache",
-        "title": "LRU Cache",
-        "url": "https://leetcode.com/problems/lru-cache/",
-        "difficulty": "medium",
-        "topics": [
-          "design",
-          "linked list",
-          "hash table"
-        ],
-        "targetMinutes": 40,
-        "active": true
-      },
-      {
-        "id": "kth-largest-element-in-an-array",
-        "title": "Kth Largest Element in an Array",
-        "url": "https://leetcode.com/problems/kth-largest-element-in-an-array/",
-        "difficulty": "medium",
-        "topics": [
-          "heap",
-          "quickselect"
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
         ],
         "targetMinutes": 30,
         "active": true
       },
       {
+        "id": "longest-substring-without-repeating-characters",
+        "problemNumber": 3,
+        "title": "Longest Substring Without Repeating Characters",
+        "url": "https://leetcode.com/problems/longest-substring-without-repeating-characters/",
+        "difficulty": "medium",
+        "acceptanceRate": 39.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 7,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "median-of-two-sorted-arrays",
+        "problemNumber": 4,
+        "title": "Median of Two Sorted Arrays",
+        "url": "https://leetcode.com/problems/median-of-two-sorted-arrays/",
+        "difficulty": "hard",
+        "acceptanceRate": 47.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "longest-palindromic-substring",
+        "problemNumber": 5,
+        "title": "Longest Palindromic Substring",
+        "url": "https://leetcode.com/problems/longest-palindromic-substring/",
+        "difficulty": "medium",
+        "acceptanceRate": 38.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 6,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "regular-expression-matching",
+        "problemNumber": 10,
+        "title": "Regular Expression Matching",
+        "url": "https://leetcode.com/problems/regular-expression-matching/",
+        "difficulty": "hard",
+        "acceptanceRate": 31.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "container-with-most-water",
+        "problemNumber": 11,
+        "title": "Container With Most Water",
+        "url": "https://leetcode.com/problems/container-with-most-water/",
+        "difficulty": "medium",
+        "acceptanceRate": 60.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "integer-to-roman",
+        "problemNumber": 12,
+        "title": "Integer to Roman",
+        "url": "https://leetcode.com/problems/integer-to-roman/",
+        "difficulty": "medium",
+        "acceptanceRate": 71.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "longest-common-prefix",
+        "problemNumber": 14,
+        "title": "Longest Common Prefix",
+        "url": "https://leetcode.com/problems/longest-common-prefix/",
+        "difficulty": "easy",
+        "acceptanceRate": 47.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "3sum",
+        "problemNumber": 15,
+        "title": "3Sum",
+        "url": "https://leetcode.com/problems/3sum/",
+        "difficulty": "medium",
+        "acceptanceRate": 39.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 6,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "valid-parentheses",
+        "problemNumber": 20,
+        "title": "Valid Parentheses",
+        "url": "https://leetcode.com/problems/valid-parentheses/",
+        "difficulty": "easy",
+        "acceptanceRate": 44.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "merge-two-sorted-lists",
+        "problemNumber": 21,
+        "title": "Merge Two Sorted Lists",
+        "url": "https://leetcode.com/problems/merge-two-sorted-lists/",
+        "difficulty": "easy",
+        "acceptanceRate": 68.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "generate-parentheses",
+        "problemNumber": 22,
+        "title": "Generate Parentheses",
+        "url": "https://leetcode.com/problems/generate-parentheses/",
+        "difficulty": "medium",
+        "acceptanceRate": 78.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "merge-k-sorted-lists",
+        "problemNumber": 23,
+        "title": "Merge k Sorted Lists",
+        "url": "https://leetcode.com/problems/merge-k-sorted-lists/",
+        "difficulty": "hard",
+        "acceptanceRate": 60,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "swap-nodes-in-pairs",
+        "problemNumber": 24,
+        "title": "Swap Nodes in Pairs",
+        "url": "https://leetcode.com/problems/swap-nodes-in-pairs/",
+        "difficulty": "medium",
+        "acceptanceRate": 69.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "reverse-nodes-in-k-group",
+        "problemNumber": 25,
+        "title": "Reverse Nodes in k-Group",
+        "url": "https://leetcode.com/problems/reverse-nodes-in-k-group/",
+        "difficulty": "hard",
+        "acceptanceRate": 66.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "next-permutation",
+        "problemNumber": 31,
+        "title": "Next Permutation",
+        "url": "https://leetcode.com/problems/next-permutation/",
+        "difficulty": "medium",
+        "acceptanceRate": 45.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "longest-valid-parentheses",
+        "problemNumber": 32,
+        "title": "Longest Valid Parentheses",
+        "url": "https://leetcode.com/problems/longest-valid-parentheses/",
+        "difficulty": "hard",
+        "acceptanceRate": 39.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "search-in-rotated-sorted-array",
+        "problemNumber": 33,
+        "title": "Search in Rotated Sorted Array",
+        "url": "https://leetcode.com/problems/search-in-rotated-sorted-array/",
+        "difficulty": "medium",
+        "acceptanceRate": 45.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 6,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "find-first-and-last-position-of-element-in-sorted-array",
+        "problemNumber": 34,
+        "title": "Find First and Last Position of Element in Sorted Array",
+        "url": "https://leetcode.com/problems/find-first-and-last-position-of-element-in-sorted-array/",
+        "difficulty": "medium",
+        "acceptanceRate": 49.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "valid-sudoku",
+        "problemNumber": 36,
+        "title": "Valid Sudoku",
+        "url": "https://leetcode.com/problems/valid-sudoku/",
+        "difficulty": "medium",
+        "acceptanceRate": 64.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "combination-sum",
+        "problemNumber": 39,
+        "title": "Combination Sum",
+        "url": "https://leetcode.com/problems/combination-sum/",
+        "difficulty": "medium",
+        "acceptanceRate": 76.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "combination-sum-ii",
+        "problemNumber": 40,
+        "title": "Combination Sum II",
+        "url": "https://leetcode.com/problems/combination-sum-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 59.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "trapping-rain-water",
+        "problemNumber": 42,
+        "title": "Trapping Rain Water",
+        "url": "https://leetcode.com/problems/trapping-rain-water/",
+        "difficulty": "hard",
+        "acceptanceRate": 67.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 7,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "multiply-strings",
+        "problemNumber": 43,
+        "title": "Multiply Strings",
+        "url": "https://leetcode.com/problems/multiply-strings/",
+        "difficulty": "medium",
+        "acceptanceRate": 44.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "jump-game-ii",
+        "problemNumber": 45,
+        "title": "Jump Game II",
+        "url": "https://leetcode.com/problems/jump-game-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 43.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "permutations",
+        "problemNumber": 46,
+        "title": "Permutations",
+        "url": "https://leetcode.com/problems/permutations/",
+        "difficulty": "medium",
+        "acceptanceRate": 82.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "permutations-ii",
+        "problemNumber": 47,
+        "title": "Permutations II",
+        "url": "https://leetcode.com/problems/permutations-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 63.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "group-anagrams",
+        "problemNumber": 49,
+        "title": "Group Anagrams",
+        "url": "https://leetcode.com/problems/group-anagrams/",
+        "difficulty": "medium",
+        "acceptanceRate": 72.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "powx-n",
+        "problemNumber": 50,
+        "title": "Pow(x, n)",
+        "url": "https://leetcode.com/problems/powx-n/",
+        "difficulty": "medium",
+        "acceptanceRate": 39,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "n-queens",
+        "problemNumber": 51,
+        "title": "N-Queens",
+        "url": "https://leetcode.com/problems/n-queens/",
+        "difficulty": "hard",
+        "acceptanceRate": 76,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 6,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "maximum-subarray",
+        "problemNumber": 53,
+        "title": "Maximum Subarray",
+        "url": "https://leetcode.com/problems/maximum-subarray/",
+        "difficulty": "medium",
+        "acceptanceRate": 53.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "spiral-matrix",
+        "problemNumber": 54,
+        "title": "Spiral Matrix",
+        "url": "https://leetcode.com/problems/spiral-matrix/",
+        "difficulty": "medium",
+        "acceptanceRate": 57.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 6,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "jump-game",
+        "problemNumber": 55,
+        "title": "Jump Game",
+        "url": "https://leetcode.com/problems/jump-game/",
+        "difficulty": "medium",
+        "acceptanceRate": 41.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "merge-intervals",
+        "problemNumber": 56,
+        "title": "Merge Intervals",
+        "url": "https://leetcode.com/problems/merge-intervals/",
+        "difficulty": "medium",
+        "acceptanceRate": 52.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 7,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "spiral-matrix-ii",
+        "problemNumber": 59,
+        "title": "Spiral Matrix II",
+        "url": "https://leetcode.com/problems/spiral-matrix-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 75.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "insert-interval",
+        "problemNumber": 57,
+        "title": "Insert Interval",
+        "url": "https://leetcode.com/problems/insert-interval/",
+        "difficulty": "medium",
+        "acceptanceRate": 45.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "unique-paths",
+        "problemNumber": 62,
+        "title": "Unique Paths",
+        "url": "https://leetcode.com/problems/unique-paths/",
+        "difficulty": "medium",
+        "acceptanceRate": 67,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "minimum-path-sum",
+        "problemNumber": 64,
+        "title": "Minimum Path Sum",
+        "url": "https://leetcode.com/problems/minimum-path-sum/",
+        "difficulty": "medium",
+        "acceptanceRate": 68.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "plus-one",
+        "problemNumber": 66,
+        "title": "Plus One",
+        "url": "https://leetcode.com/problems/plus-one/",
+        "difficulty": "easy",
+        "acceptanceRate": 50.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "text-justification",
+        "problemNumber": 68,
+        "title": "Text Justification",
+        "url": "https://leetcode.com/problems/text-justification/",
+        "difficulty": "hard",
+        "acceptanceRate": 51.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 6,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "sqrtx",
+        "problemNumber": 69,
+        "title": "Sqrt(x)",
+        "url": "https://leetcode.com/problems/sqrtx/",
+        "difficulty": "easy",
+        "acceptanceRate": 42.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 6,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "climbing-stairs",
+        "problemNumber": 70,
+        "title": "Climbing Stairs",
+        "url": "https://leetcode.com/problems/climbing-stairs/",
+        "difficulty": "easy",
+        "acceptanceRate": 54.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "simplify-path",
+        "problemNumber": 71,
+        "title": "Simplify Path",
+        "url": "https://leetcode.com/problems/simplify-path/",
+        "difficulty": "medium",
+        "acceptanceRate": 51,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "edit-distance",
+        "problemNumber": 72,
+        "title": "Edit Distance",
+        "url": "https://leetcode.com/problems/edit-distance/",
+        "difficulty": "medium",
+        "acceptanceRate": 60.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "sort-colors",
+        "problemNumber": 75,
+        "title": "Sort Colors",
+        "url": "https://leetcode.com/problems/sort-colors/",
+        "difficulty": "medium",
+        "acceptanceRate": 70,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "minimum-window-substring",
+        "problemNumber": 76,
+        "title": "Minimum Window Substring",
+        "url": "https://leetcode.com/problems/minimum-window-substring/",
+        "difficulty": "hard",
+        "acceptanceRate": 48,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 6,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "subsets",
+        "problemNumber": 78,
+        "title": "Subsets",
+        "url": "https://leetcode.com/problems/subsets/",
+        "difficulty": "medium",
+        "acceptanceRate": 82.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "remove-duplicates-from-sorted-array-ii",
+        "problemNumber": 80,
+        "title": "Remove Duplicates from Sorted Array II",
+        "url": "https://leetcode.com/problems/remove-duplicates-from-sorted-array-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 65,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "word-search",
+        "problemNumber": 79,
+        "title": "Word Search",
+        "url": "https://leetcode.com/problems/word-search/",
+        "difficulty": "medium",
+        "acceptanceRate": 47.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 6,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "reverse-linked-list-ii",
+        "problemNumber": 92,
+        "title": "Reverse Linked List II",
+        "url": "https://leetcode.com/problems/reverse-linked-list-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 51.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "restore-ip-addresses",
+        "problemNumber": 93,
+        "title": "Restore IP Addresses",
+        "url": "https://leetcode.com/problems/restore-ip-addresses/",
+        "difficulty": "medium",
+        "acceptanceRate": 56.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "decode-ways",
+        "problemNumber": 91,
+        "title": "Decode Ways",
+        "url": "https://leetcode.com/problems/decode-ways/",
+        "difficulty": "medium",
+        "acceptanceRate": 38.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "unique-binary-search-trees",
+        "problemNumber": 96,
+        "title": "Unique Binary Search Trees",
+        "url": "https://leetcode.com/problems/unique-binary-search-trees/",
+        "difficulty": "medium",
+        "acceptanceRate": 63.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "binary-tree-zigzag-level-order-traversal",
+        "problemNumber": 103,
+        "title": "Binary Tree Zigzag Level Order Traversal",
+        "url": "https://leetcode.com/problems/binary-tree-zigzag-level-order-traversal/",
+        "difficulty": "medium",
+        "acceptanceRate": 64.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "construct-binary-tree-from-preorder-and-inorder-traversal",
+        "problemNumber": 105,
+        "title": "Construct Binary Tree from Preorder and Inorder Traversal",
+        "url": "https://leetcode.com/problems/construct-binary-tree-from-preorder-and-inorder-traversal/",
+        "difficulty": "medium",
+        "acceptanceRate": 69.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "path-sum",
+        "problemNumber": 112,
+        "title": "Path Sum",
+        "url": "https://leetcode.com/problems/path-sum/",
+        "difficulty": "easy",
+        "acceptanceRate": 55.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "path-sum-ii",
+        "problemNumber": 113,
+        "title": "Path Sum II",
+        "url": "https://leetcode.com/problems/path-sum-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 62.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "best-time-to-buy-and-sell-stock",
+        "problemNumber": 121,
+        "title": "Best Time to Buy and Sell Stock",
+        "url": "https://leetcode.com/problems/best-time-to-buy-and-sell-stock/",
+        "difficulty": "easy",
+        "acceptanceRate": 57.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "best-time-to-buy-and-sell-stock-ii",
+        "problemNumber": 122,
+        "title": "Best Time to Buy and Sell Stock II",
+        "url": "https://leetcode.com/problems/best-time-to-buy-and-sell-stock-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 71.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "best-time-to-buy-and-sell-stock-iii",
+        "problemNumber": 123,
+        "title": "Best Time to Buy and Sell Stock III",
+        "url": "https://leetcode.com/problems/best-time-to-buy-and-sell-stock-iii/",
+        "difficulty": "hard",
+        "acceptanceRate": 54.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "binary-tree-maximum-path-sum",
+        "problemNumber": 124,
+        "title": "Binary Tree Maximum Path Sum",
+        "url": "https://leetcode.com/problems/binary-tree-maximum-path-sum/",
+        "difficulty": "hard",
+        "acceptanceRate": 42.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "valid-palindrome",
+        "problemNumber": 125,
+        "title": "Valid Palindrome",
+        "url": "https://leetcode.com/problems/valid-palindrome/",
+        "difficulty": "easy",
+        "acceptanceRate": 53.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "word-ladder",
+        "problemNumber": 127,
+        "title": "Word Ladder",
+        "url": "https://leetcode.com/problems/word-ladder/",
+        "difficulty": "hard",
+        "acceptanceRate": 46,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "longest-consecutive-sequence",
+        "problemNumber": 128,
+        "title": "Longest Consecutive Sequence",
+        "url": "https://leetcode.com/problems/longest-consecutive-sequence/",
+        "difficulty": "medium",
+        "acceptanceRate": 47.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 6,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "parallel-courses-iii",
+        "problemNumber": 2050,
+        "title": "Parallel Courses III",
+        "url": "https://leetcode.com/problems/parallel-courses-iii/",
+        "difficulty": "hard",
+        "acceptanceRate": 66.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "word-break-ii",
+        "problemNumber": 140,
+        "title": "Word Break II",
+        "url": "https://leetcode.com/problems/word-break-ii/",
+        "difficulty": "hard",
+        "acceptanceRate": 55.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "reorder-list",
+        "problemNumber": 143,
+        "title": "Reorder List",
+        "url": "https://leetcode.com/problems/reorder-list/",
+        "difficulty": "medium",
+        "acceptanceRate": 65.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "word-break",
+        "problemNumber": 139,
+        "title": "Word Break",
+        "url": "https://leetcode.com/problems/word-break/",
+        "difficulty": "medium",
+        "acceptanceRate": 49.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "lru-cache",
+        "problemNumber": 146,
+        "title": "LRU Cache",
+        "url": "https://leetcode.com/problems/lru-cache/",
+        "difficulty": "medium",
+        "acceptanceRate": 47.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 8,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "sort-list",
+        "problemNumber": 148,
+        "title": "Sort List",
+        "url": "https://leetcode.com/problems/sort-list/",
+        "difficulty": "medium",
+        "acceptanceRate": 64.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "reverse-words-in-a-string",
+        "problemNumber": 151,
+        "title": "Reverse Words in a String",
+        "url": "https://leetcode.com/problems/reverse-words-in-a-string/",
+        "difficulty": "medium",
+        "acceptanceRate": 57.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "maximum-product-subarray",
+        "problemNumber": 152,
+        "title": "Maximum Product Subarray",
+        "url": "https://leetcode.com/problems/maximum-product-subarray/",
+        "difficulty": "medium",
+        "acceptanceRate": 36.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "find-minimum-in-rotated-sorted-array",
+        "problemNumber": 153,
+        "title": "Find Minimum in Rotated Sorted Array",
+        "url": "https://leetcode.com/problems/find-minimum-in-rotated-sorted-array/",
+        "difficulty": "medium",
+        "acceptanceRate": 55,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "longest-substring-with-at-most-two-distinct-characters",
+        "problemNumber": 159,
+        "title": "Longest Substring with At Most Two Distinct Characters",
+        "url": "https://leetcode.com/problems/longest-substring-with-at-most-two-distinct-characters/",
+        "difficulty": "medium",
+        "acceptanceRate": 57.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "intersection-of-two-linked-lists",
+        "problemNumber": 160,
+        "title": "Intersection of Two Linked Lists",
+        "url": "https://leetcode.com/problems/intersection-of-two-linked-lists/",
+        "difficulty": "easy",
+        "acceptanceRate": 64.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "find-peak-element",
+        "problemNumber": 162,
+        "title": "Find Peak Element",
+        "url": "https://leetcode.com/problems/find-peak-element/",
+        "difficulty": "medium",
+        "acceptanceRate": 47.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "compare-version-numbers",
+        "problemNumber": 165,
+        "title": "Compare Version Numbers",
+        "url": "https://leetcode.com/problems/compare-version-numbers/",
+        "difficulty": "medium",
+        "acceptanceRate": 46.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "step-by-step-directions-from-a-binary-tree-node-to-another",
+        "problemNumber": 2096,
+        "title": "Step-By-Step Directions From a Binary Tree Node to Another",
+        "url": "https://leetcode.com/problems/step-by-step-directions-from-a-binary-tree-node-to-another/",
+        "difficulty": "medium",
+        "acceptanceRate": 56.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "find-all-possible-recipes-from-given-supplies",
+        "problemNumber": 2115,
+        "title": "Find All Possible Recipes from Given Supplies",
+        "url": "https://leetcode.com/problems/find-all-possible-recipes-from-given-supplies/",
+        "difficulty": "medium",
+        "acceptanceRate": 57,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "largest-number",
+        "problemNumber": 179,
+        "title": "Largest Number",
+        "url": "https://leetcode.com/problems/largest-number/",
+        "difficulty": "medium",
+        "acceptanceRate": 43.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "best-time-to-buy-and-sell-stock-iv",
+        "problemNumber": 188,
+        "title": "Best Time to Buy and Sell Stock IV",
+        "url": "https://leetcode.com/problems/best-time-to-buy-and-sell-stock-iv/",
+        "difficulty": "hard",
+        "acceptanceRate": 50.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "rotate-array",
+        "problemNumber": 189,
+        "title": "Rotate Array",
+        "url": "https://leetcode.com/problems/rotate-array/",
+        "difficulty": "medium",
+        "acceptanceRate": 45.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "house-robber",
+        "problemNumber": 198,
+        "title": "House Robber",
+        "url": "https://leetcode.com/problems/house-robber/",
+        "difficulty": "medium",
+        "acceptanceRate": 53.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "binary-tree-right-side-view",
+        "problemNumber": 199,
+        "title": "Binary Tree Right Side View",
+        "url": "https://leetcode.com/problems/binary-tree-right-side-view/",
+        "difficulty": "medium",
+        "acceptanceRate": 70.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "number-of-islands",
+        "problemNumber": 200,
+        "title": "Number of Islands",
+        "url": "https://leetcode.com/problems/number-of-islands/",
+        "difficulty": "medium",
+        "acceptanceRate": 64.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 8,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "count-the-hidden-sequences",
+        "problemNumber": 2145,
+        "title": "Count the Hidden Sequences",
+        "url": "https://leetcode.com/problems/count-the-hidden-sequences/",
+        "difficulty": "medium",
+        "acceptanceRate": 56.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "happy-number",
+        "problemNumber": 202,
+        "title": "Happy Number",
+        "url": "https://leetcode.com/problems/happy-number/",
+        "difficulty": "easy",
+        "acceptanceRate": 60,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "reverse-linked-list",
+        "problemNumber": 206,
+        "title": "Reverse Linked List",
+        "url": "https://leetcode.com/problems/reverse-linked-list/",
+        "difficulty": "easy",
+        "acceptanceRate": 80.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "course-schedule",
+        "problemNumber": 207,
+        "title": "Course Schedule",
+        "url": "https://leetcode.com/problems/course-schedule/",
+        "difficulty": "medium",
+        "acceptanceRate": 51.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 7,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "minimum-size-subarray-sum",
+        "problemNumber": 209,
+        "title": "Minimum Size Subarray Sum",
+        "url": "https://leetcode.com/problems/minimum-size-subarray-sum/",
+        "difficulty": "medium",
+        "acceptanceRate": 52.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "course-schedule-ii",
+        "problemNumber": 210,
+        "title": "Course Schedule II",
+        "url": "https://leetcode.com/problems/course-schedule-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 55.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 7,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "implement-trie-prefix-tree",
+        "problemNumber": 208,
+        "title": "Implement Trie (Prefix Tree)",
+        "url": "https://leetcode.com/problems/implement-trie-prefix-tree/",
+        "difficulty": "medium",
+        "acceptanceRate": 69.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "house-robber-ii",
+        "problemNumber": 213,
+        "title": "House Robber II",
+        "url": "https://leetcode.com/problems/house-robber-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 45.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "kth-largest-element-in-an-array",
+        "problemNumber": 215,
+        "title": "Kth Largest Element in an Array",
+        "url": "https://leetcode.com/problems/kth-largest-element-in-an-array/",
+        "difficulty": "medium",
+        "acceptanceRate": 69.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "maximal-square",
+        "problemNumber": 221,
+        "title": "Maximal Square",
+        "url": "https://leetcode.com/problems/maximal-square/",
+        "difficulty": "medium",
+        "acceptanceRate": 50.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "basic-calculator",
+        "problemNumber": 224,
+        "title": "Basic Calculator",
+        "url": "https://leetcode.com/problems/basic-calculator/",
+        "difficulty": "hard",
+        "acceptanceRate": 47,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "basic-calculator-ii",
+        "problemNumber": 227,
+        "title": "Basic Calculator II",
+        "url": "https://leetcode.com/problems/basic-calculator-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 47,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "lowest-common-ancestor-of-a-binary-tree",
+        "problemNumber": 236,
+        "title": "Lowest Common Ancestor of a Binary Tree",
+        "url": "https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-tree/",
+        "difficulty": "medium",
+        "acceptanceRate": 69.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "sliding-window-maximum",
+        "problemNumber": 239,
+        "title": "Sliding Window Maximum",
+        "url": "https://leetcode.com/problems/sliding-window-maximum/",
+        "difficulty": "hard",
+        "acceptanceRate": 49,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "search-a-2d-matrix-ii",
+        "problemNumber": 240,
+        "title": "Search a 2D Matrix II",
+        "url": "https://leetcode.com/problems/search-a-2d-matrix-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 57.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "meeting-rooms",
+        "problemNumber": 252,
+        "title": "Meeting Rooms",
+        "url": "https://leetcode.com/problems/meeting-rooms/",
+        "difficulty": "easy",
+        "acceptanceRate": 59.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "meeting-rooms-ii",
+        "problemNumber": 253,
+        "title": "Meeting Rooms II",
+        "url": "https://leetcode.com/problems/meeting-rooms-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 52.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 7,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "3sum-smaller",
+        "problemNumber": 259,
+        "title": "3Sum Smaller",
+        "url": "https://leetcode.com/problems/3sum-smaller/",
+        "difficulty": "medium",
+        "acceptanceRate": 51.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "graph-valid-tree",
+        "problemNumber": 261,
+        "title": "Graph Valid Tree",
+        "url": "https://leetcode.com/problems/graph-valid-tree/",
+        "difficulty": "medium",
+        "acceptanceRate": 50.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "alien-dictionary",
+        "problemNumber": 269,
+        "title": "Alien Dictionary",
+        "url": "https://leetcode.com/problems/alien-dictionary/",
+        "difficulty": "hard",
+        "acceptanceRate": 37.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "expression-add-operators",
+        "problemNumber": 282,
+        "title": "Expression Add Operators",
+        "url": "https://leetcode.com/problems/expression-add-operators/",
+        "difficulty": "hard",
+        "acceptanceRate": 43.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "move-zeroes",
+        "problemNumber": 283,
+        "title": "Move Zeroes",
+        "url": "https://leetcode.com/problems/move-zeroes/",
+        "difficulty": "easy",
+        "acceptanceRate": 64.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "walls-and-gates",
+        "problemNumber": 286,
+        "title": "Walls and Gates",
+        "url": "https://leetcode.com/problems/walls-and-gates/",
+        "difficulty": "medium",
+        "acceptanceRate": 64.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "find-median-from-data-stream",
+        "problemNumber": 295,
+        "title": "Find Median from Data Stream",
+        "url": "https://leetcode.com/problems/find-median-from-data-stream/",
+        "difficulty": "hard",
+        "acceptanceRate": 54.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "serialize-and-deserialize-binary-tree",
+        "problemNumber": 297,
+        "title": "Serialize and Deserialize Binary Tree",
+        "url": "https://leetcode.com/problems/serialize-and-deserialize-binary-tree/",
+        "difficulty": "hard",
+        "acceptanceRate": 61.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "longest-increasing-subsequence",
+        "problemNumber": 300,
+        "title": "Longest Increasing Subsequence",
+        "url": "https://leetcode.com/problems/longest-increasing-subsequence/",
+        "difficulty": "medium",
+        "acceptanceRate": 59.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 7,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "remove-invalid-parentheses",
+        "problemNumber": 301,
+        "title": "Remove Invalid Parentheses",
+        "url": "https://leetcode.com/problems/remove-invalid-parentheses/",
+        "difficulty": "hard",
+        "acceptanceRate": 50,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "number-of-islands-ii",
+        "problemNumber": 305,
+        "title": "Number of Islands II",
+        "url": "https://leetcode.com/problems/number-of-islands-ii/",
+        "difficulty": "hard",
+        "acceptanceRate": 40.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "remove-duplicate-letters",
+        "problemNumber": 316,
+        "title": "Remove Duplicate Letters",
+        "url": "https://leetcode.com/problems/remove-duplicate-letters/",
+        "difficulty": "medium",
+        "acceptanceRate": 53.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "shortest-distance-from-all-buildings",
+        "problemNumber": 317,
+        "title": "Shortest Distance from All Buildings",
+        "url": "https://leetcode.com/problems/shortest-distance-from-all-buildings/",
+        "difficulty": "hard",
+        "acceptanceRate": 45,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "coin-change",
+        "problemNumber": 322,
+        "title": "Coin Change",
+        "url": "https://leetcode.com/problems/coin-change/",
+        "difficulty": "medium",
+        "acceptanceRate": 48.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 6,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "longest-increasing-path-in-a-matrix",
+        "problemNumber": 329,
+        "title": "Longest Increasing Path in a Matrix",
+        "url": "https://leetcode.com/problems/longest-increasing-path-in-a-matrix/",
+        "difficulty": "hard",
+        "acceptanceRate": 56.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "longest-substring-with-at-most-k-distinct-characters",
+        "problemNumber": 340,
+        "title": "Longest Substring with At Most K Distinct Characters",
+        "url": "https://leetcode.com/problems/longest-substring-with-at-most-k-distinct-characters/",
+        "difficulty": "medium",
+        "acceptanceRate": 50.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "top-k-frequent-elements",
+        "problemNumber": 347,
+        "title": "Top K Frequent Elements",
+        "url": "https://leetcode.com/problems/top-k-frequent-elements/",
+        "difficulty": "medium",
+        "acceptanceRate": 66.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 6,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "design-tic-tac-toe",
+        "problemNumber": 348,
+        "title": "Design Tic-Tac-Toe",
+        "url": "https://leetcode.com/problems/design-tic-tac-toe/",
+        "difficulty": "medium",
+        "acceptanceRate": 58.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "rearrange-string-k-distance-apart",
+        "problemNumber": 358,
+        "title": "Rearrange String k Distance Apart",
+        "url": "https://leetcode.com/problems/rearrange-string-k-distance-apart/",
+        "difficulty": "hard",
+        "acceptanceRate": 40,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "search-a-2d-matrix",
+        "problemNumber": 74,
+        "title": "Search a 2D Matrix",
+        "url": "https://leetcode.com/problems/search-a-2d-matrix/",
+        "difficulty": "medium",
+        "acceptanceRate": 54.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "kth-smallest-element-in-a-sorted-matrix",
+        "problemNumber": 378,
+        "title": "Kth Smallest Element in a Sorted Matrix",
+        "url": "https://leetcode.com/problems/kth-smallest-element-in-a-sorted-matrix/",
+        "difficulty": "medium",
+        "acceptanceRate": 64.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "insert-delete-getrandom-o1",
+        "problemNumber": 380,
+        "title": "Insert Delete GetRandom O(1)",
+        "url": "https://leetcode.com/problems/insert-delete-getrandom-o1/",
+        "difficulty": "medium",
+        "acceptanceRate": 55.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "insert-delete-getrandom-o1-duplicates-allowed",
+        "problemNumber": 381,
+        "title": "Insert Delete GetRandom O(1) - Duplicates allowed",
+        "url": "https://leetcode.com/problems/insert-delete-getrandom-o1-duplicates-allowed/",
+        "difficulty": "hard",
+        "acceptanceRate": 36.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
         "id": "decode-string",
+        "problemNumber": 394,
         "title": "Decode String",
         "url": "https://leetcode.com/problems/decode-string/",
         "difficulty": "medium",
-        "topics": [
-          "stack",
-          "recursion"
+        "acceptanceRate": 62.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
         ],
-        "targetMinutes": 25,
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 6,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "longest-substring-with-at-least-k-repeating-characters",
+        "problemNumber": 395,
+        "title": "Longest Substring with At Least K Repeating Characters",
+        "url": "https://leetcode.com/problems/longest-substring-with-at-least-k-repeating-characters/",
+        "difficulty": "medium",
+        "acceptanceRate": 46.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "evaluate-division",
+        "problemNumber": 399,
+        "title": "Evaluate Division",
+        "url": "https://leetcode.com/problems/evaluate-division/",
+        "difficulty": "medium",
+        "acceptanceRate": 64.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "remove-k-digits",
+        "problemNumber": 402,
+        "title": "Remove K Digits",
+        "url": "https://leetcode.com/problems/remove-k-digits/",
+        "difficulty": "medium",
+        "acceptanceRate": 37.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "frog-jump",
+        "problemNumber": 403,
+        "title": "Frog Jump",
+        "url": "https://leetcode.com/problems/frog-jump/",
+        "difficulty": "hard",
+        "acceptanceRate": 47.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "add-strings",
+        "problemNumber": 415,
+        "title": "Add Strings",
+        "url": "https://leetcode.com/problems/add-strings/",
+        "difficulty": "easy",
+        "acceptanceRate": 52.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "partition-equal-subset-sum",
+        "problemNumber": 416,
+        "title": "Partition Equal Subset Sum",
+        "url": "https://leetcode.com/problems/partition-equal-subset-sum/",
+        "difficulty": "medium",
+        "acceptanceRate": 49.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "pacific-atlantic-water-flow",
+        "problemNumber": 417,
+        "title": "Pacific Atlantic Water Flow",
+        "url": "https://leetcode.com/problems/pacific-atlantic-water-flow/",
+        "difficulty": "medium",
+        "acceptanceRate": 61.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "meeting-rooms-iii",
+        "problemNumber": 2402,
+        "title": "Meeting Rooms III",
+        "url": "https://leetcode.com/problems/meeting-rooms-iii/",
+        "difficulty": "hard",
+        "acceptanceRate": 51.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "non-overlapping-intervals",
+        "problemNumber": 435,
+        "title": "Non-overlapping Intervals",
+        "url": "https://leetcode.com/problems/non-overlapping-intervals/",
+        "difficulty": "medium",
+        "acceptanceRate": 57.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "string-compression",
+        "problemNumber": 443,
+        "title": "String Compression",
+        "url": "https://leetcode.com/problems/string-compression/",
+        "difficulty": "medium",
+        "acceptanceRate": 60.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "length-of-the-longest-alphabetical-continuous-substring",
+        "problemNumber": 2414,
+        "title": "Length of the Longest Alphabetical Continuous Substring",
+        "url": "https://leetcode.com/problems/length-of-the-longest-alphabetical-continuous-substring/",
+        "difficulty": "medium",
+        "acceptanceRate": 61,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "add-two-numbers-ii",
+        "problemNumber": 445,
+        "title": "Add Two Numbers II",
+        "url": "https://leetcode.com/problems/add-two-numbers-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 62.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "lfu-cache",
+        "problemNumber": 460,
+        "title": "LFU Cache",
+        "url": "https://leetcode.com/problems/lfu-cache/",
+        "difficulty": "hard",
+        "acceptanceRate": 49.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "validate-ip-address",
+        "problemNumber": 468,
+        "title": "Validate IP Address",
+        "url": "https://leetcode.com/problems/validate-ip-address/",
+        "difficulty": "medium",
+        "acceptanceRate": 28.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "heaters",
+        "problemNumber": 475,
+        "title": "Heaters",
+        "url": "https://leetcode.com/problems/heaters/",
+        "difficulty": "medium",
+        "acceptanceRate": 42.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "most-popular-video-creator",
+        "problemNumber": 2456,
+        "title": "Most Popular Video Creator",
+        "url": "https://leetcode.com/problems/most-popular-video-creator/",
+        "difficulty": "medium",
+        "acceptanceRate": 45.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "diagonal-traverse",
+        "problemNumber": 498,
+        "title": "Diagonal Traverse",
+        "url": "https://leetcode.com/problems/diagonal-traverse/",
+        "difficulty": "medium",
+        "acceptanceRate": 67.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "split-message-based-on-limit",
+        "problemNumber": 2468,
+        "title": "Split Message Based on Limit",
+        "url": "https://leetcode.com/problems/split-message-based-on-limit/",
+        "difficulty": "hard",
+        "acceptanceRate": 42.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "merge-operations-to-turn-array-into-a-palindrome",
+        "problemNumber": 2422,
+        "title": "Merge Operations to Turn Array Into a Palindrome",
+        "url": "https://leetcode.com/problems/merge-operations-to-turn-array-into-a-palindrome/",
+        "difficulty": "medium",
+        "acceptanceRate": 68.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "coin-change-ii",
+        "problemNumber": 518,
+        "title": "Coin Change II",
+        "url": "https://leetcode.com/problems/coin-change-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 59.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "contiguous-array",
+        "problemNumber": 525,
+        "title": "Contiguous Array",
+        "url": "https://leetcode.com/problems/contiguous-array/",
+        "difficulty": "medium",
+        "acceptanceRate": 51.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "count-pairs-of-similar-strings",
+        "problemNumber": 2506,
+        "title": "Count Pairs Of Similar Strings",
+        "url": "https://leetcode.com/problems/count-pairs-of-similar-strings/",
+        "difficulty": "easy",
+        "acceptanceRate": 73.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "subarray-sum-equals-k",
+        "problemNumber": 560,
+        "title": "Subarray Sum Equals K",
+        "url": "https://leetcode.com/problems/subarray-sum-equals-k/",
+        "difficulty": "medium",
+        "acceptanceRate": 47.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 6,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "closest-prime-numbers-in-range",
+        "problemNumber": 2523,
+        "title": "Closest Prime Numbers in Range",
+        "url": "https://leetcode.com/problems/closest-prime-numbers-in-range/",
+        "difficulty": "medium",
+        "acceptanceRate": 51.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "design-in-memory-file-system",
+        "problemNumber": 588,
+        "title": "Design In-Memory File System",
+        "url": "https://leetcode.com/problems/design-in-memory-file-system/",
+        "difficulty": "hard",
+        "acceptanceRate": 48.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "task-scheduler",
+        "problemNumber": 621,
+        "title": "Task Scheduler",
+        "url": "https://leetcode.com/problems/task-scheduler/",
+        "difficulty": "medium",
+        "acceptanceRate": 63.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "find-the-score-of-all-prefixes-of-an-array",
+        "problemNumber": 2640,
+        "title": "Find the Score of All Prefixes of an Array",
+        "url": "https://leetcode.com/problems/find-the-score-of-all-prefixes-of-an-array/",
+        "difficulty": "medium",
+        "acceptanceRate": 73,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "design-search-autocomplete-system",
+        "problemNumber": 642,
+        "title": "Design Search Autocomplete System",
+        "url": "https://leetcode.com/problems/design-search-autocomplete-system/",
+        "difficulty": "hard",
+        "acceptanceRate": 50,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "find-k-closest-elements",
+        "problemNumber": 658,
+        "title": "Find K Closest Elements",
+        "url": "https://leetcode.com/problems/find-k-closest-elements/",
+        "difficulty": "medium",
+        "acceptanceRate": 49.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "maximum-width-of-binary-tree",
+        "problemNumber": 662,
+        "title": "Maximum Width of Binary Tree",
+        "url": "https://leetcode.com/problems/maximum-width-of-binary-tree/",
+        "difficulty": "medium",
+        "acceptanceRate": 45.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "maximum-swap",
+        "problemNumber": 670,
+        "title": "Maximum Swap",
+        "url": "https://leetcode.com/problems/maximum-swap/",
+        "difficulty": "medium",
+        "acceptanceRate": 52.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "number-of-longest-increasing-subsequence",
+        "problemNumber": 673,
+        "title": "Number of Longest Increasing Subsequence",
+        "url": "https://leetcode.com/problems/number-of-longest-increasing-subsequence/",
+        "difficulty": "medium",
+        "acceptanceRate": 52.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "valid-parenthesis-string",
+        "problemNumber": 678,
+        "title": "Valid Parenthesis String",
+        "url": "https://leetcode.com/problems/valid-parenthesis-string/",
+        "difficulty": "medium",
+        "acceptanceRate": 40.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "valid-palindrome-ii",
+        "problemNumber": 680,
+        "title": "Valid Palindrome II",
+        "url": "https://leetcode.com/problems/valid-palindrome-ii/",
+        "difficulty": "easy",
+        "acceptanceRate": 44.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "stickers-to-spell-word",
+        "problemNumber": 691,
+        "title": "Stickers to Spell Word",
+        "url": "https://leetcode.com/problems/stickers-to-spell-word/",
+        "difficulty": "hard",
+        "acceptanceRate": 51,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "number-of-distinct-islands",
+        "problemNumber": 694,
+        "title": "Number of Distinct Islands",
+        "url": "https://leetcode.com/problems/number-of-distinct-islands/",
+        "difficulty": "medium",
+        "acceptanceRate": 62.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 7,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "max-area-of-island",
+        "problemNumber": 695,
+        "title": "Max Area of Island",
+        "url": "https://leetcode.com/problems/max-area-of-island/",
+        "difficulty": "medium",
+        "acceptanceRate": 74.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "best-time-to-buy-and-sell-stock-with-transaction-fee",
+        "problemNumber": 714,
+        "title": "Best Time to Buy and Sell Stock with Transaction Fee",
+        "url": "https://leetcode.com/problems/best-time-to-buy-and-sell-stock-with-transaction-fee/",
+        "difficulty": "medium",
+        "acceptanceRate": 72.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "number-of-atoms",
+        "problemNumber": 726,
+        "title": "Number of Atoms",
+        "url": "https://leetcode.com/problems/number-of-atoms/",
+        "difficulty": "hard",
+        "acceptanceRate": 65.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "asteroid-collision",
+        "problemNumber": 735,
+        "title": "Asteroid Collision",
+        "url": "https://leetcode.com/problems/asteroid-collision/",
+        "difficulty": "medium",
+        "acceptanceRate": 48.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "daily-temperatures",
+        "problemNumber": 739,
+        "title": "Daily Temperatures",
+        "url": "https://leetcode.com/problems/daily-temperatures/",
+        "difficulty": "medium",
+        "acceptanceRate": 68.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "open-the-lock",
+        "problemNumber": 752,
+        "title": "Open the Lock",
+        "url": "https://leetcode.com/problems/open-the-lock/",
+        "difficulty": "medium",
+        "acceptanceRate": 61.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "convert-binary-search-tree-to-sorted-doubly-linked-list",
+        "problemNumber": 426,
+        "title": "Convert Binary Search Tree to Sorted Doubly Linked List",
+        "url": "https://leetcode.com/problems/convert-binary-search-tree-to-sorted-doubly-linked-list/",
+        "difficulty": "medium",
+        "acceptanceRate": 65.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "reorganize-string",
+        "problemNumber": 767,
+        "title": "Reorganize String",
+        "url": "https://leetcode.com/problems/reorganize-string/",
+        "difficulty": "medium",
+        "acceptanceRate": 57.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "basic-calculator-iii",
+        "problemNumber": 772,
+        "title": "Basic Calculator III",
+        "url": "https://leetcode.com/problems/basic-calculator-iii/",
+        "difficulty": "hard",
+        "acceptanceRate": 53.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "is-graph-bipartite",
+        "problemNumber": 785,
+        "title": "Is Graph Bipartite?",
+        "url": "https://leetcode.com/problems/is-graph-bipartite/",
+        "difficulty": "medium",
+        "acceptanceRate": 59.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "count-complete-subarrays-in-an-array",
+        "problemNumber": 2799,
+        "title": "Count Complete Subarrays in an Array",
+        "url": "https://leetcode.com/problems/count-complete-subarrays-in-an-array/",
+        "difficulty": "medium",
+        "acceptanceRate": 76,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "champagne-tower",
+        "problemNumber": 799,
+        "title": "Champagne Tower",
+        "url": "https://leetcode.com/problems/champagne-tower/",
+        "difficulty": "medium",
+        "acceptanceRate": 64.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "design-hashmap",
+        "problemNumber": 706,
+        "title": "Design HashMap",
+        "url": "https://leetcode.com/problems/design-hashmap/",
+        "difficulty": "easy",
+        "acceptanceRate": 66.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "bus-routes",
+        "problemNumber": 815,
+        "title": "Bus Routes",
+        "url": "https://leetcode.com/problems/bus-routes/",
+        "difficulty": "hard",
+        "acceptanceRate": 47.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "making-a-large-island",
+        "problemNumber": 827,
+        "title": "Making A Large Island",
+        "url": "https://leetcode.com/problems/making-a-large-island/",
+        "difficulty": "hard",
+        "acceptanceRate": 56.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "score-of-parentheses",
+        "problemNumber": 856,
+        "title": "Score of Parentheses",
+        "url": "https://leetcode.com/problems/score-of-parentheses/",
+        "difficulty": "medium",
+        "acceptanceRate": 63.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "koko-eating-bananas",
+        "problemNumber": 875,
+        "title": "Koko Eating Bananas",
+        "url": "https://leetcode.com/problems/koko-eating-bananas/",
+        "difficulty": "medium",
+        "acceptanceRate": 50.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "random-pick-with-weight",
+        "problemNumber": 528,
+        "title": "Random Pick with Weight",
+        "url": "https://leetcode.com/problems/random-pick-with-weight/",
+        "difficulty": "medium",
+        "acceptanceRate": 49.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "possible-bipartition",
+        "problemNumber": 886,
+        "title": "Possible Bipartition",
+        "url": "https://leetcode.com/problems/possible-bipartition/",
+        "difficulty": "medium",
+        "acceptanceRate": 52.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "sum-of-subarray-minimums",
+        "problemNumber": 907,
+        "title": "Sum of Subarray Minimums",
+        "url": "https://leetcode.com/problems/sum-of-subarray-minimums/",
+        "difficulty": "medium",
+        "acceptanceRate": 38.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "minimize-malware-spread",
+        "problemNumber": 924,
+        "title": "Minimize Malware Spread",
+        "url": "https://leetcode.com/problems/minimize-malware-spread/",
+        "difficulty": "hard",
+        "acceptanceRate": 43.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "minimum-increment-to-make-array-unique",
+        "problemNumber": 945,
+        "title": "Minimum Increment to Make Array Unique",
+        "url": "https://leetcode.com/problems/minimum-increment-to-make-array-unique/",
+        "difficulty": "medium",
+        "acceptanceRate": 60.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "subarray-sums-divisible-by-k",
+        "problemNumber": 974,
+        "title": "Subarray Sums Divisible by K",
+        "url": "https://leetcode.com/problems/subarray-sums-divisible-by-k/",
+        "difficulty": "medium",
+        "acceptanceRate": 56.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "subarrays-with-k-different-integers",
+        "problemNumber": 992,
+        "title": "Subarrays with K Different Integers",
+        "url": "https://leetcode.com/problems/subarrays-with-k-different-integers/",
+        "difficulty": "hard",
+        "acceptanceRate": 68.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "rotting-oranges",
+        "problemNumber": 994,
+        "title": "Rotting Oranges",
+        "url": "https://leetcode.com/problems/rotting-oranges/",
+        "difficulty": "medium",
+        "acceptanceRate": 59.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "max-consecutive-ones-iii",
+        "problemNumber": 1004,
+        "title": "Max Consecutive Ones III",
+        "url": "https://leetcode.com/problems/max-consecutive-ones-iii/",
+        "difficulty": "medium",
+        "acceptanceRate": 68,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "pairs-of-songs-with-total-durations-divisible-by-60",
+        "problemNumber": 1010,
+        "title": "Pairs of Songs With Total Durations Divisible by 60",
+        "url": "https://leetcode.com/problems/pairs-of-songs-with-total-durations-divisible-by-60/",
+        "difficulty": "medium",
+        "acceptanceRate": 53.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "capacity-to-ship-packages-within-d-days",
+        "problemNumber": 1011,
+        "title": "Capacity To Ship Packages Within D Days",
+        "url": "https://leetcode.com/problems/capacity-to-ship-packages-within-d-days/",
+        "difficulty": "medium",
+        "acceptanceRate": 74.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "shortest-path-in-binary-matrix",
+        "problemNumber": 1091,
+        "title": "Shortest Path in Binary Matrix",
+        "url": "https://leetcode.com/problems/shortest-path-in-binary-matrix/",
+        "difficulty": "medium",
+        "acceptanceRate": 51.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "longest-common-subsequence",
+        "problemNumber": 1143,
+        "title": "Longest Common Subsequence",
+        "url": "https://leetcode.com/problems/longest-common-subsequence/",
+        "difficulty": "medium",
+        "acceptanceRate": 59.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "minimum-moves-to-pick-k-ones",
+        "problemNumber": 3086,
+        "title": "Minimum Moves to Pick K Ones",
+        "url": "https://leetcode.com/problems/minimum-moves-to-pick-k-ones/",
+        "difficulty": "hard",
+        "acceptanceRate": 21.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "longest-happy-string",
+        "problemNumber": 1405,
+        "title": "Longest Happy String",
+        "url": "https://leetcode.com/problems/longest-happy-string/",
+        "difficulty": "medium",
+        "acceptanceRate": 65.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "number-of-visible-people-in-a-queue",
+        "problemNumber": 1944,
+        "title": "Number of Visible People in a Queue",
+        "url": "https://leetcode.com/problems/number-of-visible-people-in-a-queue/",
+        "difficulty": "hard",
+        "acceptanceRate": 73.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "remove-all-adjacent-duplicates-in-string-ii",
+        "problemNumber": 1209,
+        "title": "Remove All Adjacent Duplicates in String II",
+        "url": "https://leetcode.com/problems/remove-all-adjacent-duplicates-in-string-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 61.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "minimum-remove-to-make-valid-parentheses",
+        "problemNumber": 1249,
+        "title": "Minimum Remove to Make Valid Parentheses",
+        "url": "https://leetcode.com/problems/minimum-remove-to-make-valid-parentheses/",
+        "difficulty": "medium",
+        "acceptanceRate": 71.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "search-suggestions-system",
+        "problemNumber": 1268,
+        "title": "Search Suggestions System",
+        "url": "https://leetcode.com/problems/search-suggestions-system/",
+        "difficulty": "medium",
+        "acceptanceRate": 65.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "shortest-path-in-a-grid-with-obstacles-elimination",
+        "problemNumber": 1293,
+        "title": "Shortest Path in a Grid with Obstacles Elimination",
+        "url": "https://leetcode.com/problems/shortest-path-in-a-grid-with-obstacles-elimination/",
+        "difficulty": "hard",
+        "acceptanceRate": 46.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "minimum-difficulty-of-a-job-schedule",
+        "problemNumber": 1335,
+        "title": "Minimum Difficulty of a Job Schedule",
+        "url": "https://leetcode.com/problems/minimum-difficulty-of-a-job-schedule/",
+        "difficulty": "hard",
+        "acceptanceRate": 59.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "maximum-points-you-can-obtain-from-cards",
+        "problemNumber": 1423,
+        "title": "Maximum Points You Can Obtain from Cards",
+        "url": "https://leetcode.com/problems/maximum-points-you-can-obtain-from-cards/",
+        "difficulty": "medium",
+        "acceptanceRate": 58,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "kth-missing-positive-number",
+        "problemNumber": 1539,
+        "title": "Kth Missing Positive Number",
+        "url": "https://leetcode.com/problems/kth-missing-positive-number/",
+        "difficulty": "easy",
+        "acceptanceRate": 63.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "number-of-good-leaf-nodes-pairs",
+        "problemNumber": 1530,
+        "title": "Number of Good Leaf Nodes Pairs",
+        "url": "https://leetcode.com/problems/number-of-good-leaf-nodes-pairs/",
+        "difficulty": "medium",
+        "acceptanceRate": 71.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "dot-product-of-two-sparse-vectors",
+        "problemNumber": 1570,
+        "title": "Dot Product of Two Sparse Vectors",
+        "url": "https://leetcode.com/problems/dot-product-of-two-sparse-vectors/",
+        "difficulty": "medium",
+        "acceptanceRate": 89.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "furthest-building-you-can-reach",
+        "problemNumber": 1642,
+        "title": "Furthest Building You Can Reach",
+        "url": "https://leetcode.com/problems/furthest-building-you-can-reach/",
+        "difficulty": "medium",
+        "acceptanceRate": 51,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "maximum-value-at-a-given-index-in-a-bounded-array",
+        "problemNumber": 1802,
+        "title": "Maximum Value at a Given Index in a Bounded Array",
+        "url": "https://leetcode.com/problems/maximum-value-at-a-given-index-in-a-bounded-array/",
+        "difficulty": "medium",
+        "acceptanceRate": 38.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "incremental-memory-leak",
+        "problemNumber": 1860,
+        "title": "Incremental Memory Leak",
+        "url": "https://leetcode.com/problems/incremental-memory-leak/",
+        "difficulty": "medium",
+        "acceptanceRate": 72.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "remove-nth-node-from-end-of-list",
+        "problemNumber": 19,
+        "title": "Remove Nth Node From End of List",
+        "url": "https://leetcode.com/problems/remove-nth-node-from-end-of-list/",
+        "difficulty": "medium",
+        "acceptanceRate": 52.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "find-the-length-of-the-longest-common-prefix",
+        "problemNumber": 3043,
+        "title": "Find the Length of the Longest Common Prefix",
+        "url": "https://leetcode.com/problems/find-the-length-of-the-longest-common-prefix/",
+        "difficulty": "medium",
+        "acceptanceRate": 62.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "minimum-moves-to-spread-stones-over-grid",
+        "problemNumber": 2850,
+        "title": "Minimum Moves to Spread Stones Over Grid",
+        "url": "https://leetcode.com/problems/minimum-moves-to-spread-stones-over-grid/",
+        "difficulty": "medium",
+        "acceptanceRate": 45.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "combinations",
+        "problemNumber": 77,
+        "title": "Combinations",
+        "url": "https://leetcode.com/problems/combinations/",
+        "difficulty": "medium",
+        "acceptanceRate": 74.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "subarray-with-elements-greater-than-varying-threshold",
+        "problemNumber": 2334,
+        "title": "Subarray With Elements Greater Than Varying Threshold",
+        "url": "https://leetcode.com/problems/subarray-with-elements-greater-than-varying-threshold/",
+        "difficulty": "hard",
+        "acceptanceRate": 45.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 7,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "concatenated-words",
+        "problemNumber": 472,
+        "title": "Concatenated Words",
+        "url": "https://leetcode.com/problems/concatenated-words/",
+        "difficulty": "hard",
+        "acceptanceRate": 49.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "minimum-swaps-to-group-all-1s-together-ii",
+        "problemNumber": 2134,
+        "title": "Minimum Swaps to Group All 1's Together II",
+        "url": "https://leetcode.com/problems/minimum-swaps-to-group-all-1s-together-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 65.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "minimum-swaps-to-group-all-1s-together",
+        "problemNumber": 1151,
+        "title": "Minimum Swaps to Group All 1's Together",
+        "url": "https://leetcode.com/problems/minimum-swaps-to-group-all-1s-together/",
+        "difficulty": "medium",
+        "acceptanceRate": 61.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 6,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "valid-word-abbreviation",
+        "problemNumber": 408,
+        "title": "Valid Word Abbreviation",
+        "url": "https://leetcode.com/problems/valid-word-abbreviation/",
+        "difficulty": "easy",
+        "acceptanceRate": 37,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "matchsticks-to-square",
+        "problemNumber": 473,
+        "title": "Matchsticks to Square",
+        "url": "https://leetcode.com/problems/matchsticks-to-square/",
+        "difficulty": "medium",
+        "acceptanceRate": 42.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "tree-diameter",
+        "problemNumber": 1245,
+        "title": "Tree Diameter",
+        "url": "https://leetcode.com/problems/tree-diameter/",
+        "difficulty": "medium",
+        "acceptanceRate": 61.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "gas-station",
+        "problemNumber": 134,
+        "title": "Gas Station",
+        "url": "https://leetcode.com/problems/gas-station/",
+        "difficulty": "medium",
+        "acceptanceRate": 48.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "find-all-duplicates-in-an-array",
+        "problemNumber": 442,
+        "title": "Find All Duplicates in an Array",
+        "url": "https://leetcode.com/problems/find-all-duplicates-in-an-array/",
+        "difficulty": "medium",
+        "acceptanceRate": 77,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "word-search-ii",
+        "problemNumber": 212,
+        "title": "Word Search II",
+        "url": "https://leetcode.com/problems/word-search-ii/",
+        "difficulty": "hard",
+        "acceptanceRate": 38.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "my-calendar-i",
+        "problemNumber": 729,
+        "title": "My Calendar I",
+        "url": "https://leetcode.com/problems/my-calendar-i/",
+        "difficulty": "medium",
+        "acceptanceRate": 58.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "combination-sum-iv",
+        "problemNumber": 377,
+        "title": "Combination Sum IV",
+        "url": "https://leetcode.com/problems/combination-sum-iv/",
+        "difficulty": "medium",
+        "acceptanceRate": 55.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "maximum-product-of-three-numbers",
+        "problemNumber": 628,
+        "title": "Maximum Product of Three Numbers",
+        "url": "https://leetcode.com/problems/maximum-product-of-three-numbers/",
+        "difficulty": "easy",
+        "acceptanceRate": 46.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "greatest-common-divisor-of-strings",
+        "problemNumber": 1071,
+        "title": "Greatest Common Divisor of Strings",
+        "url": "https://leetcode.com/problems/greatest-common-divisor-of-strings/",
+        "difficulty": "easy",
+        "acceptanceRate": 54.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "water-and-jug-problem",
+        "problemNumber": 365,
+        "title": "Water and Jug Problem",
+        "url": "https://leetcode.com/problems/water-and-jug-problem/",
+        "difficulty": "medium",
+        "acceptanceRate": 46,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "snakes-and-ladders",
+        "problemNumber": 909,
+        "title": "Snakes and Ladders",
+        "url": "https://leetcode.com/problems/snakes-and-ladders/",
+        "difficulty": "medium",
+        "acceptanceRate": 48.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "maximal-score-after-applying-k-operations",
+        "problemNumber": 2530,
+        "title": "Maximal Score After Applying K Operations",
+        "url": "https://leetcode.com/problems/maximal-score-after-applying-k-operations/",
+        "difficulty": "medium",
+        "acceptanceRate": 64.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "number-of-connected-components-in-an-undirected-graph",
+        "problemNumber": 323,
+        "title": "Number of Connected Components in an Undirected Graph",
+        "url": "https://leetcode.com/problems/number-of-connected-components-in-an-undirected-graph/",
+        "difficulty": "medium",
+        "acceptanceRate": 65.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "permutation-in-string",
+        "problemNumber": 567,
+        "title": "Permutation in String",
+        "url": "https://leetcode.com/problems/permutation-in-string/",
+        "difficulty": "medium",
+        "acceptanceRate": 49.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "min-cost-to-connect-all-points",
+        "problemNumber": 1584,
+        "title": "Min Cost to Connect All Points",
+        "url": "https://leetcode.com/problems/min-cost-to-connect-all-points/",
+        "difficulty": "medium",
+        "acceptanceRate": 71.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "find-the-celebrity",
+        "problemNumber": 277,
+        "title": "Find the Celebrity",
+        "url": "https://leetcode.com/problems/find-the-celebrity/",
+        "difficulty": "medium",
+        "acceptanceRate": 49,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "insert-into-a-sorted-circular-linked-list",
+        "problemNumber": 708,
+        "title": "Insert into a Sorted Circular Linked List",
+        "url": "https://leetcode.com/problems/insert-into-a-sorted-circular-linked-list/",
+        "difficulty": "medium",
+        "acceptanceRate": 38.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "2-keys-keyboard",
+        "problemNumber": 650,
+        "title": "2 Keys Keyboard",
+        "url": "https://leetcode.com/problems/2-keys-keyboard/",
+        "difficulty": "medium",
+        "acceptanceRate": 59.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "minimum-number-of-operations-to-move-all-balls-to-each-box",
+        "problemNumber": 1769,
+        "title": "Minimum Number of Operations to Move All Balls to Each Box",
+        "url": "https://leetcode.com/problems/minimum-number-of-operations-to-move-all-balls-to-each-box/",
+        "difficulty": "medium",
+        "acceptanceRate": 90.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "replace-words",
+        "problemNumber": 648,
+        "title": "Replace Words",
+        "url": "https://leetcode.com/problems/replace-words/",
+        "difficulty": "medium",
+        "acceptanceRate": 68.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "copy-list-with-random-pointer",
+        "problemNumber": 138,
+        "title": "Copy List with Random Pointer",
+        "url": "https://leetcode.com/problems/copy-list-with-random-pointer/",
+        "difficulty": "medium",
+        "acceptanceRate": 63.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "candy",
+        "problemNumber": 135,
+        "title": "Candy",
+        "url": "https://leetcode.com/problems/candy/",
+        "difficulty": "hard",
+        "acceptanceRate": 48.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "shortest-bridge",
+        "problemNumber": 934,
+        "title": "Shortest Bridge",
+        "url": "https://leetcode.com/problems/shortest-bridge/",
+        "difficulty": "medium",
+        "acceptanceRate": 59.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "reorder-routes-to-make-all-paths-lead-to-the-city-zero",
+        "problemNumber": 1466,
+        "title": "Reorder Routes to Make All Paths Lead to the City Zero",
+        "url": "https://leetcode.com/problems/reorder-routes-to-make-all-paths-lead-to-the-city-zero/",
+        "difficulty": "medium",
+        "acceptanceRate": 66,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "sentence-similarity-iii",
+        "problemNumber": 1813,
+        "title": "Sentence Similarity III",
+        "url": "https://leetcode.com/problems/sentence-similarity-iii/",
+        "difficulty": "medium",
+        "acceptanceRate": 48.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "the-maze-ii",
+        "problemNumber": 505,
+        "title": "The Maze II",
+        "url": "https://leetcode.com/problems/the-maze-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 55.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "top-k-frequent-words",
+        "problemNumber": 692,
+        "title": "Top K Frequent Words",
+        "url": "https://leetcode.com/problems/top-k-frequent-words/",
+        "difficulty": "medium",
+        "acceptanceRate": 60.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "delete-and-earn",
+        "problemNumber": 740,
+        "title": "Delete and Earn",
+        "url": "https://leetcode.com/problems/delete-and-earn/",
+        "difficulty": "medium",
+        "acceptanceRate": 57.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "max-stack",
+        "problemNumber": 716,
+        "title": "Max Stack",
+        "url": "https://leetcode.com/problems/max-stack/",
+        "difficulty": "hard",
+        "acceptanceRate": 46,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "house-robber-iii",
+        "problemNumber": 337,
+        "title": "House Robber III",
+        "url": "https://leetcode.com/problems/house-robber-iii/",
+        "difficulty": "medium",
+        "acceptanceRate": 56.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "valid-palindrome-iii",
+        "problemNumber": 1216,
+        "title": "Valid Palindrome III",
+        "url": "https://leetcode.com/problems/valid-palindrome-iii/",
+        "difficulty": "hard",
+        "acceptanceRate": 49.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "time-based-key-value-store",
+        "problemNumber": 981,
+        "title": "Time Based Key-Value Store",
+        "url": "https://leetcode.com/problems/time-based-key-value-store/",
+        "difficulty": "medium",
+        "acceptanceRate": 50,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "diameter-of-binary-tree",
+        "problemNumber": 543,
+        "title": "Diameter of Binary Tree",
+        "url": "https://leetcode.com/problems/diameter-of-binary-tree/",
+        "difficulty": "easy",
+        "acceptanceRate": 65.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "maximum-width-ramp",
+        "problemNumber": 962,
+        "title": "Maximum Width Ramp",
+        "url": "https://leetcode.com/problems/maximum-width-ramp/",
+        "difficulty": "medium",
+        "acceptanceRate": 55.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "find-the-duplicate-number",
+        "problemNumber": 287,
+        "title": "Find the Duplicate Number",
+        "url": "https://leetcode.com/problems/find-the-duplicate-number/",
+        "difficulty": "medium",
+        "acceptanceRate": 64.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "arithmetic-slices",
+        "problemNumber": 413,
+        "title": "Arithmetic Slices",
+        "url": "https://leetcode.com/problems/arithmetic-slices/",
+        "difficulty": "medium",
+        "acceptanceRate": 64.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "unique-paths-ii",
+        "problemNumber": 63,
+        "title": "Unique Paths II",
+        "url": "https://leetcode.com/problems/unique-paths-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 44.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "minimum-operations-to-make-character-frequencies-equal",
+        "problemNumber": 3389,
+        "title": "Minimum Operations to Make Character Frequencies Equal",
+        "url": "https://leetcode.com/problems/minimum-operations-to-make-character-frequencies-equal/",
+        "difficulty": "hard",
+        "acceptanceRate": 26.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "find-positive-integer-solution-for-a-given-equation",
+        "problemNumber": 1237,
+        "title": "Find Positive Integer Solution for a Given Equation",
+        "url": "https://leetcode.com/problems/find-positive-integer-solution-for-a-given-equation/",
+        "difficulty": "medium",
+        "acceptanceRate": 70.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "maximum-spending-after-buying-items",
+        "problemNumber": 2931,
+        "title": "Maximum Spending After Buying Items",
+        "url": "https://leetcode.com/problems/maximum-spending-after-buying-items/",
+        "difficulty": "hard",
+        "acceptanceRate": 61.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "k-th-smallest-in-lexicographical-order",
+        "problemNumber": 440,
+        "title": "K-th Smallest in Lexicographical Order",
+        "url": "https://leetcode.com/problems/k-th-smallest-in-lexicographical-order/",
+        "difficulty": "hard",
+        "acceptanceRate": 46.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "all-nodes-distance-k-in-binary-tree",
+        "problemNumber": 863,
+        "title": "All Nodes Distance K in Binary Tree",
+        "url": "https://leetcode.com/problems/all-nodes-distance-k-in-binary-tree/",
+        "difficulty": "medium",
+        "acceptanceRate": 67.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "numbers-at-most-n-given-digit-set",
+        "problemNumber": 902,
+        "title": "Numbers At Most N Given Digit Set",
+        "url": "https://leetcode.com/problems/numbers-at-most-n-given-digit-set/",
+        "difficulty": "hard",
+        "acceptanceRate": 45.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "design-add-and-search-words-data-structure",
+        "problemNumber": 211,
+        "title": "Design Add and Search Words Data Structure",
+        "url": "https://leetcode.com/problems/design-add-and-search-words-data-structure/",
+        "difficulty": "medium",
+        "acceptanceRate": 48.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "minimum-cost-good-caption",
+        "problemNumber": 3441,
+        "title": "Minimum Cost Good Caption",
+        "url": "https://leetcode.com/problems/minimum-cost-good-caption/",
+        "difficulty": "hard",
+        "acceptanceRate": 21.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "best-time-to-buy-and-sell-stock-with-cooldown",
+        "problemNumber": 309,
+        "title": "Best Time to Buy and Sell Stock with Cooldown",
+        "url": "https://leetcode.com/problems/best-time-to-buy-and-sell-stock-with-cooldown/",
+        "difficulty": "medium",
+        "acceptanceRate": 62.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "make-costs-of-paths-equal-in-a-binary-tree",
+        "problemNumber": 2673,
+        "title": "Make Costs of Paths Equal in a Binary Tree",
+        "url": "https://leetcode.com/problems/make-costs-of-paths-equal-in-a-binary-tree/",
+        "difficulty": "medium",
+        "acceptanceRate": 58.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "rearranging-fruits",
+        "problemNumber": 2561,
+        "title": "Rearranging Fruits",
+        "url": "https://leetcode.com/problems/rearranging-fruits/",
+        "difficulty": "hard",
+        "acceptanceRate": 57.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "parallel-courses",
+        "problemNumber": 1136,
+        "title": "Parallel Courses",
+        "url": "https://leetcode.com/problems/parallel-courses/",
+        "difficulty": "medium",
+        "acceptanceRate": 62.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "minimum-cost-for-tickets",
+        "problemNumber": 983,
+        "title": "Minimum Cost For Tickets",
+        "url": "https://leetcode.com/problems/minimum-cost-for-tickets/",
+        "difficulty": "medium",
+        "acceptanceRate": 67.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "letter-case-permutation",
+        "problemNumber": 784,
+        "title": "Letter Case Permutation",
+        "url": "https://leetcode.com/problems/letter-case-permutation/",
+        "difficulty": "medium",
+        "acceptanceRate": 75.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "convert-sorted-array-to-binary-search-tree",
+        "problemNumber": 108,
+        "title": "Convert Sorted Array to Binary Search Tree",
+        "url": "https://leetcode.com/problems/convert-sorted-array-to-binary-search-tree/",
+        "difficulty": "easy",
+        "acceptanceRate": 75.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "minimum-number-of-arrows-to-burst-balloons",
+        "problemNumber": 452,
+        "title": "Minimum Number of Arrows to Burst Balloons",
+        "url": "https://leetcode.com/problems/minimum-number-of-arrows-to-burst-balloons/",
+        "difficulty": "medium",
+        "acceptanceRate": 61.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "maximum-performance-of-a-team",
+        "problemNumber": 1383,
+        "title": "Maximum Performance of a Team",
+        "url": "https://leetcode.com/problems/maximum-performance-of-a-team/",
+        "difficulty": "hard",
+        "acceptanceRate": 47.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "two-sum-ii-input-array-is-sorted",
+        "problemNumber": 167,
+        "title": "Two Sum II - Input Array Is Sorted",
+        "url": "https://leetcode.com/problems/two-sum-ii-input-array-is-sorted/",
+        "difficulty": "medium",
+        "acceptanceRate": 65.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "maximum-profit-in-job-scheduling",
+        "problemNumber": 1235,
+        "title": "Maximum Profit in Job Scheduling",
+        "url": "https://leetcode.com/problems/maximum-profit-in-job-scheduling/",
+        "difficulty": "hard",
+        "acceptanceRate": 54.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "lexicographically-smallest-generated-string",
+        "problemNumber": 3474,
+        "title": "Lexicographically Smallest Generated String",
+        "url": "https://leetcode.com/problems/lexicographically-smallest-generated-string/",
+        "difficulty": "hard",
+        "acceptanceRate": 53.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "kth-smallest-element-in-a-bst",
+        "problemNumber": 230,
+        "title": "Kth Smallest Element in a BST",
+        "url": "https://leetcode.com/problems/kth-smallest-element-in-a-bst/",
+        "difficulty": "medium",
+        "acceptanceRate": 77.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "construct-string-from-binary-tree",
+        "problemNumber": 606,
+        "title": "Construct String from Binary Tree",
+        "url": "https://leetcode.com/problems/construct-string-from-binary-tree/",
+        "difficulty": "medium",
+        "acceptanceRate": 70.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "add-two-integers",
+        "problemNumber": 2235,
+        "title": "Add Two Integers",
+        "url": "https://leetcode.com/problems/add-two-integers/",
+        "difficulty": "easy",
+        "acceptanceRate": 88,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "put-marbles-in-bags",
+        "problemNumber": 2551,
+        "title": "Put Marbles in Bags",
+        "url": "https://leetcode.com/problems/put-marbles-in-bags/",
+        "difficulty": "hard",
+        "acceptanceRate": 72.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "remove-duplicates-from-sorted-list-ii",
+        "problemNumber": 82,
+        "title": "Remove Duplicates from Sorted List II",
+        "url": "https://leetcode.com/problems/remove-duplicates-from-sorted-list-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 52.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "valid-mountain-array",
+        "problemNumber": 941,
+        "title": "Valid Mountain Array",
+        "url": "https://leetcode.com/problems/valid-mountain-array/",
+        "difficulty": "easy",
+        "acceptanceRate": 35.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "add-bold-tag-in-string",
+        "problemNumber": 616,
+        "title": "Add Bold Tag in String",
+        "url": "https://leetcode.com/problems/add-bold-tag-in-string/",
+        "difficulty": "medium",
+        "acceptanceRate": 51.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "human-traffic-of-stadium",
+        "problemNumber": 601,
+        "title": "Human Traffic of Stadium",
+        "url": "https://leetcode.com/problems/human-traffic-of-stadium/",
+        "difficulty": "hard",
+        "acceptanceRate": 51.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "longest-duplicate-substring",
+        "problemNumber": 1044,
+        "title": "Longest Duplicate Substring",
+        "url": "https://leetcode.com/problems/longest-duplicate-substring/",
+        "difficulty": "hard",
+        "acceptanceRate": 31.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "binary-tree-longest-consecutive-sequence",
+        "problemNumber": 298,
+        "title": "Binary Tree Longest Consecutive Sequence",
+        "url": "https://leetcode.com/problems/binary-tree-longest-consecutive-sequence/",
+        "difficulty": "medium",
+        "acceptanceRate": 54.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "sparse-matrix-multiplication",
+        "problemNumber": 311,
+        "title": "Sparse Matrix Multiplication",
+        "url": "https://leetcode.com/problems/sparse-matrix-multiplication/",
+        "difficulty": "medium",
+        "acceptanceRate": 69.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "event-emitter",
+        "problemNumber": 2694,
+        "title": "Event Emitter",
+        "url": "https://leetcode.com/problems/event-emitter/",
+        "difficulty": "medium",
+        "acceptanceRate": 75.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "snapshot-array",
+        "problemNumber": 1146,
+        "title": "Snapshot Array",
+        "url": "https://leetcode.com/problems/snapshot-array/",
+        "difficulty": "medium",
+        "acceptanceRate": 36.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 5,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "roman-to-integer",
+        "problemNumber": 13,
+        "title": "Roman to Integer",
+        "url": "https://leetcode.com/problems/roman-to-integer/",
+        "difficulty": "easy",
+        "acceptanceRate": 66.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "deepest-leaves-sum",
+        "problemNumber": 1302,
+        "title": "Deepest Leaves Sum",
+        "url": "https://leetcode.com/problems/deepest-leaves-sum/",
+        "difficulty": "medium",
+        "acceptanceRate": 86.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "minesweeper",
+        "problemNumber": 529,
+        "title": "Minesweeper",
+        "url": "https://leetcode.com/problems/minesweeper/",
+        "difficulty": "medium",
+        "acceptanceRate": 68.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "valid-square",
+        "problemNumber": 593,
+        "title": "Valid Square",
+        "url": "https://leetcode.com/problems/valid-square/",
+        "difficulty": "medium",
+        "acceptanceRate": 45.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "count-number-of-nice-subarrays",
+        "problemNumber": 1248,
+        "title": "Count Number of Nice Subarrays",
+        "url": "https://leetcode.com/problems/count-number-of-nice-subarrays/",
+        "difficulty": "medium",
+        "acceptanceRate": 75.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "symmetric-tree",
+        "problemNumber": 101,
+        "title": "Symmetric Tree",
+        "url": "https://leetcode.com/problems/symmetric-tree/",
+        "difficulty": "easy",
+        "acceptanceRate": 61.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "find-maximum-non-decreasing-array-length",
+        "problemNumber": 2945,
+        "title": "Find Maximum Non-decreasing Array Length",
+        "url": "https://leetcode.com/problems/find-maximum-non-decreasing-array-length/",
+        "difficulty": "hard",
+        "acceptanceRate": 19.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "largest-rectangle-in-histogram",
+        "problemNumber": 84,
+        "title": "Largest Rectangle in Histogram",
+        "url": "https://leetcode.com/problems/largest-rectangle-in-histogram/",
+        "difficulty": "hard",
+        "acceptanceRate": 50.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "candy-crush",
+        "problemNumber": 723,
+        "title": "Candy Crush",
+        "url": "https://leetcode.com/problems/candy-crush/",
+        "difficulty": "medium",
+        "acceptanceRate": 77.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "brightest-position-on-street",
+        "problemNumber": 2021,
+        "title": "Brightest Position on Street",
+        "url": "https://leetcode.com/problems/brightest-position-on-street/",
+        "difficulty": "medium",
+        "acceptanceRate": 60.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "shortest-subarray-to-be-removed-to-make-array-sorted",
+        "problemNumber": 1574,
+        "title": "Shortest Subarray to be Removed to Make Array Sorted",
+        "url": "https://leetcode.com/problems/shortest-subarray-to-be-removed-to-make-array-sorted/",
+        "difficulty": "medium",
+        "acceptanceRate": 51.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "regions-cut-by-slashes",
+        "problemNumber": 959,
+        "title": "Regions Cut By Slashes",
+        "url": "https://leetcode.com/problems/regions-cut-by-slashes/",
+        "difficulty": "medium",
+        "acceptanceRate": 77.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "design-memory-allocator",
+        "problemNumber": 2502,
+        "title": "Design Memory Allocator",
+        "url": "https://leetcode.com/problems/design-memory-allocator/",
+        "difficulty": "medium",
+        "acceptanceRate": 50.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "count-the-number-of-good-subarrays",
+        "problemNumber": 2537,
+        "title": "Count the Number of Good Subarrays",
+        "url": "https://leetcode.com/problems/count-the-number-of-good-subarrays/",
+        "difficulty": "medium",
+        "acceptanceRate": 65.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "consecutive-numbers-sum",
+        "problemNumber": 829,
+        "title": "Consecutive Numbers Sum",
+        "url": "https://leetcode.com/problems/consecutive-numbers-sum/",
+        "difficulty": "hard",
+        "acceptanceRate": 42.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "recover-binary-search-tree",
+        "problemNumber": 99,
+        "title": "Recover Binary Search Tree",
+        "url": "https://leetcode.com/problems/recover-binary-search-tree/",
+        "difficulty": "medium",
+        "acceptanceRate": 60.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "shortest-unsorted-continuous-subarray",
+        "problemNumber": 581,
+        "title": "Shortest Unsorted Continuous Subarray",
+        "url": "https://leetcode.com/problems/shortest-unsorted-continuous-subarray/",
+        "difficulty": "medium",
+        "acceptanceRate": 38.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "robot-room-cleaner",
+        "problemNumber": 489,
+        "title": "Robot Room Cleaner",
+        "url": "https://leetcode.com/problems/robot-room-cleaner/",
+        "difficulty": "hard",
+        "acceptanceRate": 78,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "wiggle-sort",
+        "problemNumber": 280,
+        "title": "Wiggle Sort",
+        "url": "https://leetcode.com/problems/wiggle-sort/",
+        "difficulty": "medium",
+        "acceptanceRate": 68.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "minimum-operations-to-write-the-letter-y-on-a-grid",
+        "problemNumber": 3071,
+        "title": "Minimum Operations to Write the Letter Y on a Grid",
+        "url": "https://leetcode.com/problems/minimum-operations-to-write-the-letter-y-on-a-grid/",
+        "difficulty": "medium",
+        "acceptanceRate": 64.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "implement-queue-using-stacks",
+        "problemNumber": 232,
+        "title": "Implement Queue using Stacks",
+        "url": "https://leetcode.com/problems/implement-queue-using-stacks/",
+        "difficulty": "easy",
+        "acceptanceRate": 70.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "next-greater-element-i",
+        "problemNumber": 496,
+        "title": "Next Greater Element I",
+        "url": "https://leetcode.com/problems/next-greater-element-i/",
+        "difficulty": "easy",
+        "acceptanceRate": 76.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "super-egg-drop",
+        "problemNumber": 887,
+        "title": "Super Egg Drop",
+        "url": "https://leetcode.com/problems/super-egg-drop/",
+        "difficulty": "hard",
+        "acceptanceRate": 30.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "encode-and-decode-strings",
+        "problemNumber": 271,
+        "title": "Encode and Decode Strings",
+        "url": "https://leetcode.com/problems/encode-and-decode-strings/",
+        "difficulty": "medium",
+        "acceptanceRate": 51.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "verify-preorder-sequence-in-binary-search-tree",
+        "problemNumber": 255,
+        "title": "Verify Preorder Sequence in Binary Search Tree",
+        "url": "https://leetcode.com/problems/verify-preorder-sequence-in-binary-search-tree/",
+        "difficulty": "medium",
+        "acceptanceRate": 51.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "number-of-adjacent-elements-with-the-same-color",
+        "problemNumber": 2672,
+        "title": "Number of Adjacent Elements With the Same Color",
+        "url": "https://leetcode.com/problems/number-of-adjacent-elements-with-the-same-color/",
+        "difficulty": "medium",
+        "acceptanceRate": 59.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "course-schedule-iv",
+        "problemNumber": 1462,
+        "title": "Course Schedule IV",
+        "url": "https://leetcode.com/problems/course-schedule-iv/",
+        "difficulty": "medium",
+        "acceptanceRate": 60,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "24-game",
+        "problemNumber": 679,
+        "title": "24 Game",
+        "url": "https://leetcode.com/problems/24-game/",
+        "difficulty": "hard",
+        "acceptanceRate": 59.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "flatten-deeply-nested-array",
+        "problemNumber": 2625,
+        "title": "Flatten Deeply Nested Array",
+        "url": "https://leetcode.com/problems/flatten-deeply-nested-array/",
+        "difficulty": "medium",
+        "acceptanceRate": 66.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "merge-in-between-linked-lists",
+        "problemNumber": 1669,
+        "title": "Merge In Between Linked Lists",
+        "url": "https://leetcode.com/problems/merge-in-between-linked-lists/",
+        "difficulty": "medium",
+        "acceptanceRate": 83.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "count-binary-substrings",
+        "problemNumber": 696,
+        "title": "Count Binary Substrings",
+        "url": "https://leetcode.com/problems/count-binary-substrings/",
+        "difficulty": "easy",
+        "acceptanceRate": 70.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "maximum-size-subarray-sum-equals-k",
+        "problemNumber": 325,
+        "title": "Maximum Size Subarray Sum Equals k",
+        "url": "https://leetcode.com/problems/maximum-size-subarray-sum-equals-k/",
+        "difficulty": "medium",
+        "acceptanceRate": 50.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "accounts-merge",
+        "problemNumber": 721,
+        "title": "Accounts Merge",
+        "url": "https://leetcode.com/problems/accounts-merge/",
+        "difficulty": "medium",
+        "acceptanceRate": 61.7,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "longest-mountain-in-array",
+        "problemNumber": 845,
+        "title": "Longest Mountain in Array",
+        "url": "https://leetcode.com/problems/longest-mountain-in-array/",
+        "difficulty": "medium",
+        "acceptanceRate": 42.3,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "employee-free-time",
+        "problemNumber": 759,
+        "title": "Employee Free Time",
+        "url": "https://leetcode.com/problems/employee-free-time/",
+        "difficulty": "hard",
+        "acceptanceRate": 73,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "minimum-operations-to-make-the-array-increasing",
+        "problemNumber": 1827,
+        "title": "Minimum Operations to Make the Array Increasing",
+        "url": "https://leetcode.com/problems/minimum-operations-to-make-the-array-increasing/",
+        "difficulty": "easy",
+        "acceptanceRate": 82.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 20,
+        "active": true
+      },
+      {
+        "id": "nth-digit",
+        "problemNumber": 400,
+        "title": "Nth Digit",
+        "url": "https://leetcode.com/problems/nth-digit/",
+        "difficulty": "medium",
+        "acceptanceRate": 38.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "valid-tic-tac-toe-state",
+        "problemNumber": 794,
+        "title": "Valid Tic-Tac-Toe State",
+        "url": "https://leetcode.com/problems/valid-tic-tac-toe-state/",
+        "difficulty": "medium",
+        "acceptanceRate": 34.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "robot-bounded-in-circle",
+        "problemNumber": 1041,
+        "title": "Robot Bounded In Circle",
+        "url": "https://leetcode.com/problems/robot-bounded-in-circle/",
+        "difficulty": "medium",
+        "acceptanceRate": 56.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "find-all-anagrams-in-a-string",
+        "problemNumber": 438,
+        "title": "Find All Anagrams in a String",
+        "url": "https://leetcode.com/problems/find-all-anagrams-in-a-string/",
+        "difficulty": "medium",
+        "acceptanceRate": 54.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "word-pattern-ii",
+        "problemNumber": 291,
+        "title": "Word Pattern II",
+        "url": "https://leetcode.com/problems/word-pattern-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 49.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "cheapest-flights-within-k-stops",
+        "problemNumber": 787,
+        "title": "Cheapest Flights Within K Stops",
+        "url": "https://leetcode.com/problems/cheapest-flights-within-k-stops/",
+        "difficulty": "medium",
+        "acceptanceRate": 42.2,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "product-of-the-last-k-numbers",
+        "problemNumber": 1352,
+        "title": "Product of the Last K Numbers",
+        "url": "https://leetcode.com/problems/product-of-the-last-k-numbers/",
+        "difficulty": "medium",
+        "acceptanceRate": 63,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "partition-to-k-equal-sum-subsets",
+        "problemNumber": 698,
+        "title": "Partition to K Equal Sum Subsets",
+        "url": "https://leetcode.com/problems/partition-to-k-equal-sum-subsets/",
+        "difficulty": "medium",
+        "acceptanceRate": 38.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "minimum-absolute-difference-between-elements-with-constraint",
+        "problemNumber": 2817,
+        "title": "Minimum Absolute Difference Between Elements With Constraint",
+        "url": "https://leetcode.com/problems/minimum-absolute-difference-between-elements-with-constraint/",
+        "difficulty": "medium",
+        "acceptanceRate": 37.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "department-top-three-salaries",
+        "problemNumber": 185,
+        "title": "Department Top Three Salaries",
+        "url": "https://leetcode.com/problems/department-top-three-salaries/",
+        "difficulty": "hard",
+        "acceptanceRate": 61,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "construct-binary-tree-from-inorder-and-postorder-traversal",
+        "problemNumber": 106,
+        "title": "Construct Binary Tree from Inorder and Postorder Traversal",
+        "url": "https://leetcode.com/problems/construct-binary-tree-from-inorder-and-postorder-traversal/",
+        "difficulty": "medium",
+        "acceptanceRate": 69.1,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "fruit-into-baskets",
+        "problemNumber": 904,
+        "title": "Fruit Into Baskets",
+        "url": "https://leetcode.com/problems/fruit-into-baskets/",
+        "difficulty": "medium",
+        "acceptanceRate": 51.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "implement-rand10-using-rand7",
+        "problemNumber": 470,
+        "title": "Implement Rand10() Using Rand7()",
+        "url": "https://leetcode.com/problems/implement-rand10-using-rand7/",
+        "difficulty": "medium",
+        "acceptanceRate": 46.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "rotate-image",
+        "problemNumber": 48,
+        "title": "Rotate Image",
+        "url": "https://leetcode.com/problems/rotate-image/",
+        "difficulty": "medium",
+        "acceptanceRate": 80.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "flip-game-ii",
+        "problemNumber": 294,
+        "title": "Flip Game II",
+        "url": "https://leetcode.com/problems/flip-game-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 52.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "lowest-common-ancestor-of-a-binary-tree-iv",
+        "problemNumber": 1676,
+        "title": "Lowest Common Ancestor of a Binary Tree IV",
+        "url": "https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-tree-iv/",
+        "difficulty": "medium",
+        "acceptanceRate": 79.6,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "path-sum-iii",
+        "problemNumber": 437,
+        "title": "Path Sum III",
+        "url": "https://leetcode.com/problems/path-sum-iii/",
+        "difficulty": "medium",
+        "acceptanceRate": 46.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "serialize-and-deserialize-n-ary-tree",
+        "problemNumber": 428,
+        "title": "Serialize and Deserialize N-ary Tree",
+        "url": "https://leetcode.com/problems/serialize-and-deserialize-n-ary-tree/",
+        "difficulty": "hard",
+        "acceptanceRate": 68.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "surrounded-regions",
+        "problemNumber": 130,
+        "title": "Surrounded Regions",
+        "url": "https://leetcode.com/problems/surrounded-regions/",
+        "difficulty": "medium",
+        "acceptanceRate": 45.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "next-greater-element-ii",
+        "problemNumber": 503,
+        "title": "Next Greater Element II",
+        "url": "https://leetcode.com/problems/next-greater-element-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 68.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "all-oone-data-structure",
+        "problemNumber": 432,
+        "title": "All O`one Data Structure",
+        "url": "https://leetcode.com/problems/all-oone-data-structure/",
+        "difficulty": "hard",
+        "acceptanceRate": 44.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 4,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 45,
+        "active": true
+      },
+      {
+        "id": "unit-conversion-ii",
+        "problemNumber": 3535,
+        "title": "Unit Conversion II",
+        "url": "https://leetcode.com/problems/unit-conversion-ii/",
+        "difficulty": "medium",
+        "acceptanceRate": 65.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "maximum-number-of-events-that-can-be-attended",
+        "problemNumber": 1353,
+        "title": "Maximum Number of Events That Can Be Attended",
+        "url": "https://leetcode.com/problems/maximum-number-of-events-that-can-be-attended/",
+        "difficulty": "medium",
+        "acceptanceRate": 39,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "maximum-sum-circular-subarray",
+        "problemNumber": 918,
+        "title": "Maximum Sum Circular Subarray",
+        "url": "https://leetcode.com/problems/maximum-sum-circular-subarray/",
+        "difficulty": "medium",
+        "acceptanceRate": 50.8,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "partition-array-for-maximum-sum",
+        "problemNumber": 1043,
+        "title": "Partition Array for Maximum Sum",
+        "url": "https://leetcode.com/problems/partition-array-for-maximum-sum/",
+        "difficulty": "medium",
+        "acceptanceRate": 77.5,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 3,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "as-far-from-land-as-possible",
+        "problemNumber": 1162,
+        "title": "As Far from Land as Possible",
+        "url": "https://leetcode.com/problems/as-far-from-land-as-possible/",
+        "difficulty": "medium",
+        "acceptanceRate": 52.4,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "sort-an-array",
+        "problemNumber": 912,
+        "title": "Sort an Array",
+        "url": "https://leetcode.com/problems/sort-an-array/",
+        "difficulty": "medium",
+        "acceptanceRate": 55.9,
+        "topics": [],
+        "companyTags": [
+          "TikTok"
+        ],
+        "companySignals": [
+          {
+            "company": "TikTok",
+            "window": "all",
+            "frequencyScore": 2,
+            "frequencyScale": 8,
+            "capturedAt": "2026-07-17"
+          }
+        ],
+        "targetMinutes": 30,
         "active": true
       }
     ],
     "systemDesign": [
       {
-        "id": "notification-system",
-        "title": "Design a notification system",
-        "prompt": "Design a TikTok-style notification system from requirements through delivery, retries, and observability.",
-        "topics": [
-          "messaging",
-          "queues",
-          "reliability"
-        ],
+        "id": "design-url-shortening-service-like-tinyurl",
+        "title": "Design a URL Shortening service like TinyURL",
+        "prompt": "Design a URL Shortening service like TinyURL",
+        "url": "https://systemdesign.io/question/design-url-shortening-service-like-tinyurl",
+        "source": "SystemDesign.io",
+        "complexity": "easy",
+        "solutionReference": true,
+        "topics": [],
         "targetMinutes": 90,
         "active": true
       },
       {
-        "id": "tiktok-for-you-feed",
-        "title": "Design a TikTok-style For You feed",
-        "prompt": "Design the personalized short-video feed for a TikTok-like application.",
-        "topics": [
-          "recommendations",
-          "feed",
-          "media delivery"
-        ],
+        "id": "design-pastebin",
+        "title": "Design Pastebin",
+        "prompt": "Design Pastebin",
+        "url": "https://systemdesign.io/question/design-pastebin",
+        "source": "SystemDesign.io",
+        "complexity": "easy",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-instagram",
+        "title": "Design Instagram",
+        "prompt": "Design Instagram",
+        "url": "https://systemdesign.io/question/design-instagram",
+        "source": "SystemDesign.io",
+        "complexity": "easy",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-dropbox-or-google-drive",
+        "title": "Design Dropbox or Google Drive",
+        "prompt": "Design Dropbox or Google Drive",
+        "url": "https://systemdesign.io/question/design-dropbox-or-google-drive",
+        "source": "SystemDesign.io",
+        "complexity": "medium",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-facebook-messenger-or-whatsapp",
+        "title": "Design Facebook Messenger or WhatsApp",
+        "prompt": "Design Facebook Messenger or WhatsApp",
+        "url": "https://systemdesign.io/question/design-facebook-messenger-or-whatsapp",
+        "source": "SystemDesign.io",
+        "complexity": "medium",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-twitter-for-millions-of-users",
+        "title": "Design Twitter for millions of users",
+        "prompt": "Design Twitter for millions of users",
+        "url": "https://systemdesign.io/question/design-twitter-for-millions-of-users",
+        "source": "SystemDesign.io",
+        "complexity": "easy",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-youtube-or-netflix",
+        "title": "Design Youtube or Netflix",
+        "prompt": "Design Youtube or Netflix",
+        "url": "https://systemdesign.io/question/design-youtube-or-netflix",
+        "source": "SystemDesign.io",
+        "complexity": "medium",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-typeahead-suggestion-autocomplete",
+        "title": "Design Typeahead Suggestion/Autocomplete",
+        "prompt": "Design Typeahead Suggestion/Autocomplete",
+        "url": "https://systemdesign.io/question/design-typeahead-suggestion-autocomplete",
+        "source": "SystemDesign.io",
+        "complexity": "hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-an-api-rate-limiter",
+        "title": "Design an API Rate Limiter",
+        "prompt": "Design an API Rate Limiter",
+        "url": "https://systemdesign.io/question/design-an-api-rate-limiter",
+        "source": "SystemDesign.io",
+        "complexity": "hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-metrics-logging-and-aggregation-system",
+        "title": "Design a Distributed Metrics Logging and Aggregation System",
+        "prompt": "Design a Distributed Metrics Logging and Aggregation System",
+        "url": "https://systemdesign.io/question/design-a-metrics-logging-and-aggregation-system",
+        "source": "SystemDesign.io",
+        "complexity": "very_hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-stream-processing-system-like-kafka",
+        "title": "Design a Distributed Stream Processing System like Kafka",
+        "prompt": "Design a Distributed Stream Processing System like Kafka",
+        "url": "https://systemdesign.io/question/design-a-stream-processing-system-like-kafka",
+        "source": "SystemDesign.io",
+        "complexity": "very_hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-keyvalue-store",
+        "title": "Design a Key-Value Store",
+        "prompt": "Design a Key-Value Store",
+        "url": "https://systemdesign.io/question/design-a-keyvalue-store",
+        "source": "SystemDesign.io",
+        "complexity": "medium",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "identify-k-most-shared-articles-in-time-windows",
+        "title": "Identify the K Most Shared Articles in Various Time Windows (24 hours, 1 hour, 5 minutes)",
+        "prompt": "Identify the K Most Shared Articles in Various Time Windows (24 hours, 1 hour, 5 minutes)",
+        "url": "https://systemdesign.io/question/identify-k-most-shared-articles-in-time-windows",
+        "source": "SystemDesign.io",
+        "complexity": "hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-web-crawler",
+        "title": "Design Web Crawler",
+        "prompt": "Design Web Crawler",
+        "url": "https://systemdesign.io/question/design-web-crawler",
+        "source": "SystemDesign.io",
+        "complexity": "medium",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-facebooks-news-feed",
+        "title": "Design Facebook's News Feed",
+        "prompt": "Design Facebook's News Feed",
+        "url": "https://systemdesign.io/question/design-facebooks-news-feed",
+        "source": "SystemDesign.io",
+        "complexity": "medium",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-yelp-or-nearby-friends",
+        "title": "Design Yelp or Nearby Friends",
+        "prompt": "Design Yelp or Nearby Friends",
+        "url": "https://systemdesign.io/question/design-yelp-or-nearby-friends",
+        "source": "SystemDesign.io",
+        "complexity": "very_hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "system-to-collect-metrics-from-thousands-of-servers",
+        "title": "System to Collect Performance Metrics from Thousands of Servers",
+        "prompt": "System to Collect Performance Metrics from Thousands of Servers",
+        "url": "https://systemdesign.io/question/system-to-collect-metrics-from-thousands-of-servers",
+        "source": "SystemDesign.io",
+        "complexity": "hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-google-calendar",
+        "title": "Design Google Calendar",
+        "prompt": "Design Google Calendar",
+        "url": "https://systemdesign.io/question/design-google-calendar",
+        "source": "SystemDesign.io",
+        "complexity": "medium",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-distributed-queue-like-rabbitmq",
+        "title": "Design a Distributed Queue like RabbitMQ",
+        "prompt": "Design a Distributed Queue like RabbitMQ",
+        "url": "https://systemdesign.io/question/design-a-distributed-queue-like-rabbitmq",
+        "source": "SystemDesign.io",
+        "complexity": "hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-google-analytics-dashboard-and-pipeline",
+        "title": "Design Google Analytics - User Analytics Dashboard and Pipeline",
+        "prompt": "Design Google Analytics - User Analytics Dashboard and Pipeline",
+        "url": "https://systemdesign.io/question/design-google-analytics-dashboard-and-pipeline",
+        "source": "SystemDesign.io",
+        "complexity": "hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-system-for-sorting-large-data-sets",
+        "title": "Design a System for Sorting Large Data Sets",
+        "prompt": "Design a System for Sorting Large Data Sets",
+        "url": "https://systemdesign.io/question/design-a-system-for-sorting-large-data-sets",
+        "source": "SystemDesign.io",
+        "complexity": "easy",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "top-k-elements-app-store-rankings-amazon-bestsellers",
+        "title": "Top K Elements: App Store Rankings, Amazon Bestsellers, etc.",
+        "prompt": "Top K Elements: App Store Rankings, Amazon Bestsellers, etc.",
+        "url": "https://systemdesign.io/question/top-k-elements-app-store-rankings-amazon-bestsellers",
+        "source": "SystemDesign.io",
+        "complexity": "easy",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-job-scheduler",
+        "title": "Design a Job Scheduler",
+        "prompt": "Design a Job Scheduler",
+        "url": "https://systemdesign.io/question/design-a-job-scheduler",
+        "source": "SystemDesign.io",
+        "complexity": "easy",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-notification-service-at-scale",
+        "title": "Design a Notification Service at Scale",
+        "prompt": "Design a Notification Service at Scale",
+        "url": "https://systemdesign.io/question/design-a-notification-service-at-scale",
+        "source": "SystemDesign.io",
+        "complexity": "hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "surge-pricing-system-uber",
+        "title": "Surge Pricing System: Uber - Stream Processing, etc.",
+        "prompt": "Surge Pricing System: Uber - Stream Processing, etc.",
+        "url": "https://systemdesign.io/question/surge-pricing-system-uber",
+        "source": "SystemDesign.io",
+        "complexity": "very_hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "netflix-limit-the-number-of-screens-each-user-can-watch",
+        "title": "Netflix: Limit the Number of Screens Each User Can Watch",
+        "prompt": "Netflix: Limit the Number of Screens Each User Can Watch",
+        "url": "https://systemdesign.io/question/netflix-limit-the-number-of-screens-each-user-can-watch",
+        "source": "SystemDesign.io",
+        "complexity": "hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-eta-and-location-sharing-between-uber-driver-and-rider",
+        "title": "Design an ETA Service and Location Sharing Between Driver and Rider",
+        "prompt": "Design an ETA Service and Location Sharing Between Driver and Rider",
+        "url": "https://systemdesign.io/question/design-eta-and-location-sharing-between-uber-driver-and-rider",
+        "source": "SystemDesign.io",
+        "complexity": "very_hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-hotel-booking-system",
+        "title": "Design a Hotel Booking System: Room Availability, Reservation, Booking",
+        "prompt": "Design a Hotel Booking System: Room Availability, Reservation, Booking",
+        "url": "https://systemdesign.io/question/design-a-hotel-booking-system",
+        "source": "SystemDesign.io",
+        "complexity": "medium",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-an-ab-testing-system-like-optimizely",
+        "title": "Design an A/B Testing System (like Optimizely)",
+        "prompt": "Design an A/B Testing System (like Optimizely)",
+        "url": "https://systemdesign.io/question/design-an-ab-testing-system-like-optimizely",
+        "source": "SystemDesign.io",
+        "complexity": "hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-price-alert-system-for-amazon-or-stock-prices",
+        "title": "Design a Price Alert System for Amazon (or for Stock prices)",
+        "prompt": "Design a Price Alert System for Amazon (or for Stock prices)",
+        "url": "https://systemdesign.io/question/design-a-price-alert-system-for-amazon-or-stock-prices",
+        "source": "SystemDesign.io",
+        "complexity": "easy",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-an-ioc-or-dependency-injection-framework",
+        "title": "Design an IoC/Dependency Injection Framework",
+        "prompt": "Design an IoC/Dependency Injection Framework",
+        "url": "https://systemdesign.io/question/design-an-ioc-or-dependency-injection-framework",
+        "source": "SystemDesign.io",
+        "complexity": "very_hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-credit-card-processing-system",
+        "title": "Design a Credit Card Processing System",
+        "prompt": "Design a Credit Card Processing System",
+        "url": "https://systemdesign.io/question/design-a-credit-card-processing-system",
+        "source": "SystemDesign.io",
+        "complexity": "very_hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "count-facebook-likes-especially-for-popular-users",
+        "title": "Count Facebook Likes, Especially for High-Profile Users",
+        "prompt": "Count Facebook Likes, Especially for High-Profile Users",
+        "url": "https://systemdesign.io/question/count-facebook-likes-especially-for-popular-users",
+        "source": "SystemDesign.io",
+        "complexity": "medium",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-control-plane-for-a-distributed-database",
+        "title": "Design a Control Plane for a Distributed Database",
+        "prompt": "Design a Control Plane for a Distributed Database",
+        "url": "https://systemdesign.io/question/design-a-control-plane-for-a-distributed-database",
+        "source": "SystemDesign.io",
+        "complexity": "very_hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-user-login-and-authentication-system",
+        "title": "Design a User Login and Authentication System for a Website",
+        "prompt": "Design a User Login and Authentication System for a Website",
+        "url": "https://systemdesign.io/question/design-a-user-login-and-authentication-system",
+        "source": "SystemDesign.io",
+        "complexity": "medium",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-weather-application",
+        "title": "Develop a Weather Application",
+        "prompt": "Develop a Weather Application",
+        "url": "https://systemdesign.io/question/design-a-weather-application",
+        "source": "SystemDesign.io",
+        "complexity": "easy",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "create-a-document-management-system-like-wikipedia-or-notion",
+        "title": "Create a Document Management System like Wikipedia, Notion or Google Docs",
+        "prompt": "Create a Document Management System like Wikipedia, Notion or Google Docs",
+        "url": "https://systemdesign.io/question/create-a-document-management-system-like-wikipedia-or-notion",
+        "source": "SystemDesign.io",
+        "complexity": "easy",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "build-a-marketplace-feature-for-facebook",
+        "title": "Build a Marketplace Feature for Facebook",
+        "prompt": "Build a Marketplace Feature for Facebook",
+        "url": "https://systemdesign.io/question/build-a-marketplace-feature-for-facebook",
+        "source": "SystemDesign.io",
+        "complexity": "easy",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-system-to-monitor-the-health-of-a-cluster",
+        "title": "Design a System to Monitor the Health of a Cluster",
+        "prompt": "Design a System to Monitor the Health of a Cluster",
+        "url": "https://systemdesign.io/question/design-a-system-to-monitor-the-health-of-a-cluster",
+        "source": "SystemDesign.io",
+        "complexity": "medium",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "find-a-rider-for-uber-or-uber-eats",
+        "title": "Find a Rider for Uber or Uber Eats",
+        "prompt": "Find a Rider for Uber or Uber Eats",
+        "url": "https://systemdesign.io/question/find-a-rider-for-uber-or-uber-eats",
+        "source": "SystemDesign.io",
+        "complexity": "hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-distributed-tracing-system",
+        "title": "Design a Distributed Tracing System",
+        "prompt": "Design a Distributed Tracing System",
+        "url": "https://systemdesign.io/question/design-a-distributed-tracing-system",
+        "source": "SystemDesign.io",
+        "complexity": "very_hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-backend-to-distribute-6-million-burgers-in-one-hour",
+        "title": "Design Backend for an App to Distribute 6 Million Free Burgers in One Hour",
+        "prompt": "Design Backend for an App to Distribute 6 Million Free Burgers in One Hour",
+        "url": "https://systemdesign.io/question/design-backend-to-distribute-6-million-burgers-in-one-hour",
+        "source": "SystemDesign.io",
+        "complexity": "medium",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-file-downloader-library",
+        "title": "Design a File Downloader Library from Frontend to Backend",
+        "prompt": "Design a File Downloader Library from Frontend to Backend",
+        "url": "https://systemdesign.io/question/design-a-file-downloader-library",
+        "source": "SystemDesign.io",
+        "complexity": "hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-system-to-view-latest-stock-prices",
+        "title": "Design a System to View Latest Stock Prices Worldwide",
+        "prompt": "Design a System to View Latest Stock Prices Worldwide",
+        "url": "https://systemdesign.io/question/design-a-system-to-view-latest-stock-prices",
+        "source": "SystemDesign.io",
+        "complexity": "easy",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "develop-a-photo-sharing-platform-like-flickr-or-google-photos",
+        "title": "Develop a Photo Sharing Platform like Flickr or Google Photos",
+        "prompt": "Develop a Photo Sharing Platform like Flickr or Google Photos",
+        "url": "https://systemdesign.io/question/develop-a-photo-sharing-platform-like-flickr-or-google-photos",
+        "source": "SystemDesign.io",
+        "complexity": "medium",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-an-oncall-escalation-system",
+        "title": "Design an On-Call Escalation System",
+        "prompt": "Design an On-Call Escalation System",
+        "url": "https://systemdesign.io/question/design-an-oncall-escalation-system",
+        "source": "SystemDesign.io",
+        "complexity": "medium",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-and-implement-a-wire-transfer-api",
+        "title": "Design and Implement a Wire Transfer API",
+        "prompt": "Design and Implement a Wire Transfer API",
+        "url": "https://systemdesign.io/question/design-and-implement-a-wire-transfer-api",
+        "source": "SystemDesign.io",
+        "complexity": "hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-live-comments-feature-for-facebook",
+        "title": "Design a Live Comments Feature for Facebook",
+        "prompt": "Design a Live Comments Feature for Facebook",
+        "url": "https://systemdesign.io/question/design-a-live-comments-feature-for-facebook",
+        "source": "SystemDesign.io",
+        "complexity": "hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-feature-to-show-the-number-of-users-viewing-a-page",
+        "title": "Design a Feature to Show the Number of Users Viewing a Page",
+        "prompt": "Design a Feature to Show the Number of Users Viewing a Page",
+        "url": "https://systemdesign.io/question/design-a-feature-to-show-the-number-of-users-viewing-a-page",
+        "source": "SystemDesign.io",
+        "complexity": "easy",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-facebook-likes-feature-with-live-updates",
+        "title": "Design Facebook Likes Feature with Live Updates",
+        "prompt": "Design Facebook Likes Feature with Live Updates",
+        "url": "https://systemdesign.io/question/design-facebook-likes-feature-with-live-updates",
+        "source": "SystemDesign.io",
+        "complexity": "easy",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "create-a-system-to-migrate-large-data-to-google-cloud",
+        "title": "Create a System to Migrate Large Data to Google Cloud",
+        "prompt": "Create a System to Migrate Large Data to Google Cloud",
+        "url": "https://systemdesign.io/question/create-a-system-to-migrate-large-data-to-google-cloud",
+        "source": "SystemDesign.io",
+        "complexity": "very_hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-distributed-botnet",
+        "title": "Design a Distributed Botnet",
+        "prompt": "Design a Distributed Botnet",
+        "url": "https://systemdesign.io/question/design-a-distributed-botnet",
+        "source": "SystemDesign.io",
+        "complexity": "hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "create-a-distributed-file-transfer-system-like-bittorrent",
+        "title": "Create a Distributed File Transfer System like Bittorrent",
+        "prompt": "Create a Distributed File Transfer System like Bittorrent",
+        "url": "https://systemdesign.io/question/create-a-distributed-file-transfer-system-like-bittorrent",
+        "source": "SystemDesign.io",
+        "complexity": "hard",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "design-a-parts-compatibility-feature-for-ecommerce-site",
+        "title": "Design a Parts Compatibility Feature for an eCommerce Site",
+        "prompt": "Design a Parts Compatibility Feature for an eCommerce Site",
+        "url": "https://systemdesign.io/question/design-a-parts-compatibility-feature-for-ecommerce-site",
+        "source": "SystemDesign.io",
+        "complexity": "easy",
+        "solutionReference": true,
+        "topics": [],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "develop-ads-management-and-display-system-for-social-feed",
+        "title": "Develop an Ads Management and Display System for a Social Feed",
+        "prompt": "Develop an Ads Management and Display System for a Social Feed",
+        "url": "https://systemdesign.io/question/develop-ads-management-and-display-system-for-social-feed",
+        "source": "SystemDesign.io",
+        "complexity": "very_hard",
+        "solutionReference": true,
+        "topics": [],
         "targetMinutes": 90,
         "active": true
       }
     ],
-    "behavioral": [
-      {
-        "id": "disagree-and-commit",
-        "title": "Disagree and commit",
-        "prompt": "Tell me about a time you disagreed with a technical decision. What did you do, and what happened?",
-        "topics": [
-          "conflict",
-          "influence",
-          "decision-making"
-        ],
-        "targetMinutes": 60,
-        "active": true
-      }
-    ]
+    "behavioral": []
   }
 };

@@ -17,6 +17,7 @@
         "properties": {
           "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
           "title": { "type": "string", "minLength": 1 },
+          "problemNumber": { "type": "integer", "minimum": 1 },
           "url": {
             "type": "string",
             "pattern": "^https://leetcode\\.com/problems/[a-z0-9-]+/?$"
@@ -31,6 +32,22 @@
             "type": "array",
             "items": { "type": "string", "minLength": 1 },
             "uniqueItems": true
+          },
+          "acceptanceRate": { "type": "number", "minimum": 0, "maximum": 100 },
+          "companySignals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["company", "window", "frequencyScore", "frequencyScale", "capturedAt"],
+              "properties": {
+                "company": { "type": "string", "minLength": 1 },
+                "window": { "type": "string", "minLength": 1 },
+                "frequencyScore": { "type": "integer", "minimum": 0 },
+                "frequencyScale": { "type": "integer", "minimum": 1 },
+                "capturedAt": { "type": "string", "format": "date" }
+              }
+            }
           },
           "frequencyWindow": { "type": "string" },
           "targetMinutes": { "type": "integer", "minimum": 5 },

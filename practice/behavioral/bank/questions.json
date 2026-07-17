@@ -2,14 +2,5 @@
   "schemaVersion": 1,
   "type": "behavioral",
   "updatedAt": "2026-07-17",
-  "questions": [
-    {
-      "id": "disagree-and-commit",
-      "title": "Disagree and commit",
-      "prompt": "Tell me about a time you disagreed with a technical decision. What did you do, and what happened?",
-      "topics": ["conflict", "influence", "decision-making"],
-      "targetMinutes": 60,
-      "active": true
-    }
-  ]
+  "questions": []
 }

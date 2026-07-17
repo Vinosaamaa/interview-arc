@@ -62,7 +62,7 @@ See `docs/architecture/single-project-practice-workflow.md` for the full ownersh
 
 ## LeetCode Data Policy
 
-Question metadata is added manually or imported from a user-provided CSV or JSON file. Do not scrape LeetCode pages, Premium company tags, private endpoints, editorials, or solution content.
+Question metadata is added manually or imported from a user-provided CSV, JSON, or saved MHTML snapshot. A saved snapshot is user-supplied input: parse only its visible company-table metadata and public problem URLs. Do not crawl the live authenticated account, inspect cookies or private endpoints, or import problem statements, editorials, or solution content.
 
 The bank may store titles, public URLs, difficulty, topics, user-supplied company tags, and planning metadata. Attempts should link to LeetCode for the original prompt and submission. Generated explanations must be labeled as original coaching material, not as official LeetCode answers.
 
@@ -123,6 +123,8 @@ The website reads three versioned banks:
 - `practice/leetcode/bank/questions.json`
 - `practice/system-design/bank/questions.json`
 - `practice/behavioral/bank/questions.json`
+
+The system-design bank currently mirrors the 55 questions listed by SystemDesign.io. Each stored question URL leads to that site's current curated solution references; the system-design task reviews those references before starting the corresponding mock.
 
 A normal session contains six coding problems, one system-design question, and one behavioral question under one fixed six-hour countdown. The user may add another full session or a standalone activity. Every activity also has a compact elapsed-time stopwatch.
 

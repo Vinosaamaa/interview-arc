@@ -94,10 +94,14 @@ const behavioralBank = await readJson("practice/behavioral/bank/questions.json")
 const questionBanks = {
   leetcode: leetcodeBank.questions.map((question) => ({
     id: question.id,
+    problemNumber: question.problemNumber,
     title: question.title,
     url: question.url,
     difficulty: question.difficulty,
+    acceptanceRate: question.acceptanceRate,
     topics: question.topics ?? [],
+    companyTags: question.companyTags ?? [],
+    companySignals: question.companySignals ?? [],
     targetMinutes: question.targetMinutes ?? 30,
     active: question.active ?? true,
   })),
@@ -182,10 +186,17 @@ export type DailyJournal = {
 
 export type QuestionBankItem = {
   id: string;
+  problemNumber?: number;
   title: string;
   prompt?: string;
   url?: string;
   difficulty?: "easy" | "medium" | "hard";
+  complexity?: "very_easy" | "easy" | "medium" | "hard" | "very_hard";
+  acceptanceRate?: number;
+  source?: string;
+  solutionReference?: boolean;
+  companyTags?: string[];
+  companySignals?: { company: string; window: string; frequencyScore: number; frequencyScale: number; capturedAt: string }[];
   topics: string[];
   targetMinutes: number;
   active: boolean;
