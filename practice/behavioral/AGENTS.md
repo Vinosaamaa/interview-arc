@@ -11,7 +11,7 @@ Only messages between those boundaries belong to the session transcript. Timing 
 
 ## Session Behavior
 
-- Default daily session: 1 question with a 60-minute timer.
+- Default daily session: 1 question inside the fixed six-hour full-session countdown, with its own elapsed-time stopwatch.
 - Ask one primary question, let the user answer, and probe for missing context, ownership, decisions, conflict, measurable impact, and learning.
 - Help the user structure answers with STAR: Situation, Task, Action, Result.
 - Preserve the user's authentic voice; improve clarity without inventing experience, metrics, or outcomes.

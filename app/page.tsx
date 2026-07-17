@@ -1,6 +1,8 @@
 "use client";
 
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   contentIndex,
   type ContentArtifact,
@@ -17,6 +19,7 @@ type ExtraActivity = JournalActivity & { timerGroupId: string };
 type LocalSession = PracticeSession & { source: "extra" };
 type LocalDraft = {
   timers: Record<string, TimerDraft>;
+  sessionTimers: Record<string, TimerDraft>;
   outcomes: Record<string, Outcome>;
   extraActivities: ExtraActivity[];
   sessions: LocalSession[];
@@ -44,7 +47,8 @@ type LogEntry = {
   artifact?: ContentArtifact;
 };
 
-const EMPTY_DRAFT: LocalDraft = { timers: {}, outcomes: {}, extraActivities: [], sessions: [] };
+const SESSION_SECONDS = 6 * 60 * 60;
+const EMPTY_DRAFT: LocalDraft = { timers: {}, sessionTimers: {}, outcomes: {}, extraActivities: [], sessions: [] };
 const EMPTY_COMPOSER: ComposerState = {
   open: false,
   mode: "activity",
@@ -54,11 +58,7 @@ const EMPTY_COMPOSER: ComposerState = {
   minutes: "30",
   editingId: "",
 };
-const OUTCOMES: { value: Outcome; label: string }[] = [
-  { value: "solved", label: "Solved" },
-  { value: "solved_after_reviewing_approach", label: "Solved after reviewing approach" },
-  { value: "failed", label: "Failed" },
-];
+const OUTCOME_ORDER: (Outcome | undefined)[] = [undefined, "solved", "solved_after_reviewing_approach", "failed"];
 
 function formatClock(seconds: number) {
   const safe = Math.max(0, Math.floor(seconds));
@@ -92,6 +92,10 @@ function elapsed(timer: TimerDraft | undefined, now: number) {
     (timer.runningSince ? Math.max(0, Math.floor((now - timer.runningSince) / 1000)) : 0);
 }
 
+function remaining(timer: TimerDraft | undefined, now: number, allocatedSeconds = SESSION_SECONDS) {
+  return Math.max(0, allocatedSeconds - elapsed(timer, now));
+}
+
 function typeLabel(type: ActivityType) {
   if (type === "leetcode") return "Coding";
   if (type === "system_design") return "System design";
@@ -106,7 +110,7 @@ function typeMark(type: ActivityType) {
 
 function outcomeLabel(outcome?: Outcome) {
   if (outcome === "solved") return "Solved";
-  if (outcome === "solved_after_reviewing_approach") return "Solved after review";
+  if (outcome === "solved_after_reviewing_approach") return "Solved after reviewing approach";
   if (outcome === "failed") return "Failed";
   return "No result yet";
 }
@@ -153,22 +157,102 @@ function ActivityTimer({
   const running = Boolean(timer?.runningSince);
   const complete = Boolean(timer?.completed);
   return (
-    <div className={`activity-timer ${running ? "running" : ""}`}>
+    <div className={`activity-timer ${running ? "running" : ""} ${complete ? "complete" : ""}`}>
       <div className="activity-time-copy">
-        <span>Time spent</span>
+        <span>{complete ? "Final time" : "Stopwatch"}</span>
         <strong>{formatClock(used)}</strong>
-        <small>{formatDuration(activity.allocatedSeconds)} target</small>
       </div>
       <div className="activity-time-actions">
-        <button className="start-timer" onClick={() => onToggle(activity.id)}>
-          {running ? "Pause" : used ? "Resume" : "Start"}
+        <button className="start-timer icon-control" onClick={() => onToggle(activity.id)} disabled={complete} aria-label={running ? `Pause ${activity.title}` : `Start ${activity.title}`} title={running ? "Pause stopwatch" : complete ? "Finished activities cannot be resumed" : "Start stopwatch"}>
+          <span aria-hidden="true">{running ? "Ⅱ" : "▶"}</span>
         </button>
-        <button className="finish-timer" onClick={() => onComplete(activity.id)} disabled={complete}>
-          {complete ? "Finished" : "Finish"}
+        <button className="finish-timer icon-control" onClick={() => onComplete(activity.id)} disabled={complete} aria-label={`Finish ${activity.title}`} title={complete ? "Activity finished" : "Finish and lock stopwatch"}>
+          <span aria-hidden="true">{complete ? "✓" : "■"}</span>
         </button>
       </div>
     </div>
   );
+}
+
+function SessionCountdown({
+  session,
+  timer,
+  now,
+  onToggle,
+  onComplete,
+}: {
+  session: PracticeSession;
+  timer?: TimerDraft;
+  now: number;
+  onToggle: (id: string) => void;
+  onComplete: (id: string) => void;
+}) {
+  const allocated = session.allocatedSeconds ?? SESSION_SECONDS;
+  const timeLeft = remaining(timer, now, allocated);
+  const running = Boolean(timer?.runningSince) && timeLeft > 0;
+  const complete = Boolean(timer?.completed) || timeLeft === 0;
+  const progress = Math.min(100, (elapsed(timer, now) / allocated) * 100);
+  return (
+    <div className={`session-countdown ${running ? "running" : ""} ${complete ? "complete" : ""}`}>
+      <div className="countdown-copy">
+        <span>Six-hour session countdown</span>
+        <strong>{formatClock(timeLeft)}</strong>
+        <small>{complete ? "Session finished" : running ? "Session in progress" : timer?.elapsedSeconds ? "Session paused" : "Ready when you are"}</small>
+      </div>
+      <div className="countdown-controls">
+        <button onClick={() => onToggle(session.id)} disabled={complete} aria-label={running ? `Pause ${session.label}` : `Start ${session.label}`} title={running ? "Pause session countdown" : "Start session countdown"}><span aria-hidden="true">{running ? "Ⅱ" : "▶"}</span></button>
+        <button onClick={() => onComplete(session.id)} disabled={complete} aria-label={`Finish ${session.label}`} title={complete ? "Session finished" : "Finish session now"}><span aria-hidden="true">{complete ? "✓" : "■"}</span></button>
+      </div>
+      <span className="countdown-track" aria-hidden="true"><i style={{ width: `${progress}%` }} /></span>
+    </div>
+  );
+}
+
+function ResultFlag({ outcome, onChange }: { outcome?: Outcome; onChange: (outcome?: Outcome) => void }) {
+  const currentIndex = OUTCOME_ORDER.indexOf(outcome);
+  const next = OUTCOME_ORDER[(currentIndex + 1) % OUTCOME_ORDER.length];
+  return (
+    <div className="result-flag-wrap">
+      <button className={`result-flag ${outcome ?? "unset"}`} onClick={() => onChange(next)} aria-label={`Result: ${outcomeLabel(outcome)}. Click for ${outcomeLabel(next)}.`} title={`Result: ${outcomeLabel(outcome)}`}>
+        <span aria-hidden="true">{outcome ? "⚑" : "⚐"}</span>
+      </button>
+      <div className="result-legend" role="tooltip">
+        <strong>Result flag</strong>
+        <span><i className="unset" /> Not set</span>
+        <span><i className="solved" /> Solved</span>
+        <span><i className="reviewed" /> Solved after reviewing approach</span>
+        <span><i className="failed" /> Failed</span>
+      </div>
+    </div>
+  );
+}
+
+function SwipeActivityCard({ children, title, onEdit, onRemove }: { children: ReactNode; title: string; onEdit: () => void; onRemove: () => void }) {
+  const [revealed, setRevealed] = useState(false);
+  const [pointerStart, setPointerStart] = useState<number | null>(null);
+  function finishGesture(event: ReactPointerEvent<HTMLDivElement>) {
+    if (pointerStart === null) return;
+    const distance = event.clientX - pointerStart;
+    if (distance < -42) setRevealed(true);
+    if (distance > 42) setRevealed(false);
+    setPointerStart(null);
+  }
+  return (
+    <article className={`swipe-activity-card ${revealed ? "revealed" : ""}`}>
+      <div className="swipe-actions" aria-hidden={!revealed}>
+        <button onClick={onEdit} tabIndex={revealed ? 0 : -1}>Edit</button>
+        <button onClick={onRemove} tabIndex={revealed ? 0 : -1}>Remove</button>
+      </div>
+      <div className="swipe-card-face" onPointerDown={(event) => setPointerStart(event.clientX)} onPointerUp={finishGesture} onPointerCancel={() => setPointerStart(null)}>
+        {children}
+        <button className="swipe-more" onClick={() => setRevealed((current) => !current)} aria-label={`${revealed ? "Hide" : "Show"} actions for ${title}`} title="Swipe left for actions">•••</button>
+      </div>
+    </article>
+  );
+}
+
+function MarkdownBody({ source }: { source: string }) {
+  return <div className="markdown-body"><Markdown remarkPlugins={[remarkGfm]}>{source}</Markdown></div>;
 }
 
 export default function Home() {
@@ -190,6 +274,7 @@ export default function Home() {
           const parsed = JSON.parse(saved) as Partial<LocalDraft>;
           setDraft({
             timers: parsed.timers ?? {},
+            sessionTimers: parsed.sessionTimers ?? {},
             outcomes: parsed.outcomes ?? {},
             extraActivities: parsed.extraActivities ?? [],
             sessions: parsed.sessions ?? [],
@@ -210,10 +295,23 @@ export default function Home() {
   }, [draft, hydrated, storageKey]);
 
   useEffect(() => {
-    if (!Object.values(draft.timers).some((timer) => timer.runningSince)) return;
-    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    if (![...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince)) return;
+    const interval = window.setInterval(() => {
+      const timestamp = Date.now();
+      setNow(timestamp);
+      setDraft((current) => {
+        const expiredIds = new Set(Object.entries(current.sessionTimers).filter(([, timer]) => timer.runningSince && elapsed(timer, timestamp) >= SESSION_SECONDS).map(([id]) => id));
+        if (!expiredIds.size) return current;
+        return {
+          ...current,
+          sessionTimers: Object.fromEntries(Object.entries(current.sessionTimers).map(([id, timer]) => expiredIds.has(id)
+            ? [id, { elapsedSeconds: SESSION_SECONDS, runningSince: null, completed: true }]
+            : [id, timer])),
+        };
+      });
+    }, 1000);
     return () => window.clearInterval(interval);
-  }, [draft.timers]);
+  }, [draft.sessionTimers, draft.timers]);
 
   useEffect(() => {
     if (!composer.open && !selectedEntry) return;
@@ -250,8 +348,9 @@ export default function Home() {
     setDraft((current) => {
       const timers = { ...current.timers };
       const prior = timers[activityId] ?? { elapsedSeconds: 0, runningSince: null, completed: false };
+      if (prior.completed) return current;
       if (prior.runningSince) {
-        timers[activityId] = { elapsedSeconds: elapsed(prior, timestamp), runningSince: null, completed: false };
+        timers[activityId] = { elapsedSeconds: elapsed(prior, timestamp), runningSince: null, completed: prior.completed };
       } else {
         for (const [id, active] of Object.entries(timers)) {
           if (active.runningSince) timers[id] = { ...active, elapsedSeconds: elapsed(active, timestamp), runningSince: null };
@@ -259,6 +358,39 @@ export default function Home() {
         timers[activityId] = { elapsedSeconds: prior.elapsedSeconds, runningSince: timestamp, completed: false };
       }
       return { ...current, timers };
+    });
+  }
+
+  function toggleSessionTimer(sessionId: string) {
+    const timestamp = Date.now();
+    setNow(timestamp);
+    setDraft((current) => {
+      const prior = current.sessionTimers[sessionId] ?? { elapsedSeconds: 0, runningSince: null, completed: false };
+      if (prior.completed || elapsed(prior, timestamp) >= SESSION_SECONDS) return current;
+      return {
+        ...current,
+        sessionTimers: {
+          ...current.sessionTimers,
+          [sessionId]: prior.runningSince
+            ? { elapsedSeconds: elapsed(prior, timestamp), runningSince: null, completed: false }
+            : { elapsedSeconds: prior.elapsedSeconds, runningSince: timestamp, completed: false },
+        },
+      };
+    });
+  }
+
+  function completeSessionTimer(sessionId: string) {
+    const timestamp = Date.now();
+    setNow(timestamp);
+    setDraft((current) => {
+      const prior = current.sessionTimers[sessionId] ?? { elapsedSeconds: 0, runningSince: null, completed: false };
+      return {
+        ...current,
+        sessionTimers: {
+          ...current.sessionTimers,
+          [sessionId]: { elapsedSeconds: Math.min(SESSION_SECONDS, elapsed(prior, timestamp)), runningSince: null, completed: true },
+        },
+      };
     });
   }
 
@@ -277,7 +409,7 @@ export default function Home() {
     });
   }
 
-  function setOutcome(activityId: string, outcome: Outcome | "") {
+  function setOutcome(activityId: string, outcome?: Outcome) {
     setDraft((current) => {
       const outcomes = { ...current.outcomes };
       if (outcome) outcomes[activityId] = outcome;
@@ -321,6 +453,28 @@ export default function Home() {
       query: question.title,
       minutes: String(question.targetMinutes),
     }));
+  }
+
+  function addBankQuestionToToday(question: QuestionBankItem, type: ActivityType) {
+    const id = `${journal.date}-extra-${slugify(question.title)}-${Date.now().toString(36)}`;
+    const activity: ExtraActivity = {
+      schemaVersion: 2,
+      id,
+      date: journal.date,
+      source: "extra",
+      type,
+      ...(type === "leetcode" ? { recordKind: "attempt" as const } : {}),
+      title: question.title,
+      ...(question.url ? { url: question.url } : {}),
+      ...(question.prompt ? { prompt: question.prompt } : {}),
+      allocatedSeconds: question.targetMinutes * 60,
+      timerGroupId: id,
+      timingSource: "website",
+      status: "planned",
+      ...(question.topics.length ? { notes: question.topics.join(", ") } : {}),
+    };
+    setDraft((current) => ({ ...current, extraActivities: [...current.extraActivities, activity] }));
+    setView("today");
   }
 
   function saveActivity(event: FormEvent<HTMLFormElement>) {
@@ -411,7 +565,7 @@ export default function Home() {
       status: "planned",
       notes: behaviorQuestion.topics.join(", "),
     });
-    const session: LocalSession = { id: sessionId, label: `Session ${sessionNumber}`, source: "extra", activityIds: activities.map((activity) => activity.id) };
+    const session: LocalSession = { id: sessionId, label: `Session ${sessionNumber}`, source: "extra", allocatedSeconds: SESSION_SECONDS, activityIds: activities.map((activity) => activity.id) };
     setDraft((current) => ({ ...current, extraActivities: [...current.extraActivities, ...activities], sessions: [...current.sessions, session] }));
     setComposer(EMPTY_COMPOSER);
   }
@@ -437,11 +591,14 @@ export default function Home() {
     const ids = new Set(session.activityIds);
     setDraft((current) => {
       const timers = { ...current.timers };
+      const sessionTimers = { ...current.sessionTimers };
       const outcomes = { ...current.outcomes };
       ids.forEach((id) => { delete timers[id]; delete outcomes[id]; });
+      delete sessionTimers[session.id];
       return {
         ...current,
         timers,
+        sessionTimers,
         outcomes,
         extraActivities: current.extraActivities.filter((activity) => !ids.has(activity.id)),
         sessions: current.sessions.filter((item) => item.id !== session.id),
@@ -450,14 +607,24 @@ export default function Home() {
   }
 
   function exportDraft() {
-    const timestamp = Date.now();
+    const timestamp = now;
     const timers = Object.fromEntries(Object.entries(draft.timers).map(([id, timer]) => [id, {
       elapsedSeconds: elapsed(timer, timestamp),
       running: Boolean(timer.runningSince),
       completed: timer.completed,
       timingSource: "website",
     }]));
-    const payload = { schemaVersion: 2, date: journal.date, exportedAt: new Date(timestamp).toISOString(), localDraft: true, timers, outcomes: draft.outcomes, sessions: draft.sessions, extraActivities: draft.extraActivities };
+    const sessionTimers = Object.fromEntries(Object.entries(draft.sessionTimers).map(([id, timer]) => [id, {
+      elapsedSeconds: Math.min(SESSION_SECONDS, elapsed(timer, timestamp)),
+      remainingSeconds: remaining(timer, timestamp),
+      running: Boolean(timer.runningSince),
+      completed: timer.completed,
+      timingSource: "website",
+    }]));
+    const publishQueueActivityIds = allTodayActivities.filter((activity) => activity.type === "leetcode"
+      ? ["solved", "solved_after_reviewing_approach"].includes(draft.outcomes[activity.id] ?? activity.outcome ?? "")
+      : activity.status === "completed" || Boolean(draft.timers[activity.id]?.completed)).map((activity) => activity.id);
+    const payload = { schemaVersion: 3, date: journal.date, exportedAt: new Date(timestamp).toISOString(), localDraft: true, sessionTimers, timers, outcomes: draft.outcomes, publishQueueActivityIds, sessions: draft.sessions, extraActivities: draft.extraActivities };
     const url = window.URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
     const link = document.createElement("a");
     link.href = url;
@@ -514,14 +681,19 @@ export default function Home() {
     return entries.sort((left, right) => right.date.localeCompare(left.date) || left.title.localeCompare(right.title));
   }, [draft, journal.date, now]);
 
+  const libraryEntries = useMemo(() => logEntries.filter((entry) => {
+    if (entry.type === "leetcode") return entry.outcome === "solved" || entry.outcome === "solved_after_reviewing_approach";
+    return entry.status === "completed" || entry.status === "published";
+  }), [logEntries]);
+
   const groupedLog = useMemo(() => {
     const groups = new Map<string, LogEntry[]>();
-    for (const entry of logEntries) {
+    for (const entry of libraryEntries) {
       if (libraryFilter !== "all" && entry.type !== libraryFilter) continue;
       groups.set(entry.date, [...(groups.get(entry.date) ?? []), entry]);
     }
     return [...groups.entries()].sort(([left], [right]) => right.localeCompare(left));
-  }, [libraryFilter, logEntries]);
+  }, [libraryEntries, libraryFilter]);
 
   const completedEntries = logEntries.filter((entry) => entry.status === "completed" || entry.status === "published");
   const codingSolved = completedEntries.filter((entry) => entry.type === "leetcode" && (entry.outcome === "solved" || entry.outcome === "solved_after_reviewing_approach")).length;
@@ -552,9 +724,9 @@ export default function Home() {
       const date = new Date(anchor);
       date.setUTCDate(anchor.getUTCDate() - (34 - index));
       const key = date.toISOString().slice(0, 10);
-      return { key, day: date.getUTCDate(), hasEntries: logEntries.some((entry) => entry.date === key) };
+      return { key, day: date.getUTCDate(), hasEntries: libraryEntries.some((entry) => entry.date === key) };
     });
-  }, [journal.date, logEntries]);
+  }, [journal.date, libraryEntries]);
 
   function sessionActivities(session: PracticeSession) {
     return allTodayActivities.filter((activity) => session.activityIds.includes(activity.id));
@@ -567,21 +739,21 @@ export default function Home() {
     const behavioral = activities.find((activity) => activity.type === "behavioral");
     const complete = activities.filter(isActivityComplete).length;
     const codingSeconds = coding.reduce((sum, activity) => sum + elapsed(draft.timers[activity.id], now), 0);
-    const targetSeconds = activities.reduce((sum, activity) => sum + activity.allocatedSeconds, 0);
     const localSession = draft.sessions.find((item) => item.id === session.id);
     return (
       <article className="session-sheet" key={session.id}>
         <header className="session-sheet-header">
           <div className="session-number"><span>{String(index + 1).padStart(2, "0")}</span><small>{session.source === "daily" ? "Required" : "Added"}</small></div>
-          <div className="session-heading-copy"><p>Practice session</p><h2>{session.label}</h2><span>{activities.length} activities · {formatDuration(targetSeconds)} planned</span></div>
+          <div className="session-heading-copy"><p>Practice session</p><h2>{session.label}</h2><span>{activities.length} activities · fixed six-hour window</span></div>
+          <SessionCountdown session={session} timer={draft.sessionTimers[session.id]} now={now} onToggle={toggleSessionTimer} onComplete={completeSessionTimer} />
           <div className="session-progress"><strong>{complete}/{activities.length}</strong><span>finished</span></div>
           {localSession && <button className="remove-session" onClick={() => removeSession(localSession)}>Remove session</button>}
         </header>
 
         <section className="coding-ledger">
           <div className="ledger-heading">
-            <div><span className="type-chip leetcode">Coding</span><h3>Six individually timed problems</h3><p>Only one timer runs at a time. The session total is the sum of these problem timers.</p></div>
-            <div className="coding-total"><span>Coding total</span><strong>{formatClock(codingSeconds)}</strong><small>of 03:00:00 budget</small></div>
+            <div><span className="type-chip leetcode">Coding</span><h3>Six problems inside one session clock</h3><p>The six-hour countdown owns the session. Each row keeps a compact stopwatch for your record.</p></div>
+            <div className="coding-total"><span>Problem stopwatches</span><strong>{formatClock(codingSeconds)}</strong><small>tracked inside this session</small></div>
           </div>
           <div className="problem-ledger">
             {coding.map((activity, problemIndex) => {
@@ -591,7 +763,7 @@ export default function Home() {
                   <span className={`row-count ${isActivityComplete(activity) ? "complete" : ""}`}>{isActivityComplete(activity) ? "✓" : problemIndex + 1}</span>
                   <div className="problem-title"><strong>{activity.title}</strong><span>{activity.notes ?? "Coding problem"}</span>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open on LeetCode ↗</a>}</div>
                   <ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} />
-                  <label className="outcome-field"><span>Result</span><select value={draft.outcomes[activity.id] ?? activity.outcome ?? ""} onChange={(event) => setOutcome(activity.id, event.target.value as Outcome | "")}><option value="">Choose result</option>{OUTCOMES.map((outcome) => <option key={outcome.value} value={outcome.value}>{outcome.label}</option>)}</select></label>
+                  <ResultFlag outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} />
                   {isExtra && <div className="row-edit-actions"><button onClick={() => openEditActivity(activity as ExtraActivity)}>Edit</button><button onClick={() => removeActivity(activity.id)}>Remove</button></div>}
                 </div>
               );
@@ -627,16 +799,16 @@ export default function Home() {
       <>
         <section className="today-masthead">
           <div className="date-poster"><strong>{journal.date.slice(-2)}</strong><span>{new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(new Date(`${journal.date}T12:00:00Z`))}</span></div>
-          <div className="today-thesis"><span className="eyebrow">TODAY · {journal.focus.toUpperCase()}</span><h1>One timer. One problem.<br /><em>One honest record.</em></h1><p>{journal.note}</p></div>
+          <div className="today-thesis"><span className="eyebrow">TODAY · {journal.focus.toUpperCase()}</span><h1>Six hours. Eight activities.<br /><em>One honest record.</em></h1><p>{journal.note}</p></div>
           <div className="today-tally"><div><strong>{completeToday}/{totalToday}</strong><span>activities finished</span></div><div><strong>{formatDuration(todaySeconds)}</strong><span>time recorded locally</span></div><div><strong>{allSessions.length}</strong><span>session{allSessions.length === 1 ? "" : "s"} today</span></div></div>
         </section>
 
-        <div className="today-actions"><div><h2>Today&apos;s sessions</h2><p>Every coding problem now keeps its own elapsed time.</p></div><div><button className="secondary-action" onClick={openNewActivity}>Add one activity</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
+        <div className="today-actions"><div><h2>Today&apos;s sessions</h2><p>Each session has one fixed six-hour countdown; activity stopwatches stay compact and independent.</p></div><div><button className="secondary-action" onClick={openNewActivity}>Add one activity</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
         <section className="session-stack">{allSessions.map(renderSession)}</section>
 
         <section className="loose-section">
-          <div className="section-title"><div><span className="eyebrow">STANDALONE PRACTICE</span><h2>Outside a full session</h2></div><button className="text-action" onClick={openNewActivity}>＋ Add activity</button></div>
-          {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Search any question bank or paste a public LeetCode problem URL.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <article key={activity.id}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div><small>{typeLabel(activity.type)} · local draft</small><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} /><div className="row-edit-actions"><button onClick={() => openEditActivity(activity)}>Edit</button><button onClick={() => removeActivity(activity.id)}>Remove</button></div></article>)}</div>}
+          <div className="section-title"><div><span className="eyebrow">STANDALONE PRACTICE</span><h2>Outside a full session</h2><p>Swipe a card left, or use its ••• control, to edit or remove it.</p></div></div>
+          {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add one activity” above to search a bank or paste a public LeetCode problem URL.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <SwipeActivityCard key={activity.id} title={activity.title} onEdit={() => openEditActivity(activity)} onRemove={() => removeActivity(activity.id)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><small>{typeLabel(activity.type)} · local draft</small><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} />{activity.type === "leetcode" && <ResultFlag outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} />}</SwipeActivityCard>)}</div>}
         </section>
       </>
     );
@@ -686,11 +858,11 @@ export default function Home() {
   function renderLibrary() {
     return (
       <section className="view-page library-page">
-        <header className="view-masthead"><span className="eyebrow">PRACTICE LIBRARY · DATE-ORDERED LOG</span><h1>Read the journey<br /><em>like a field journal.</em></h1><p>Every day stays together. Filter by practice type, jump from the calendar, and open any record as a centered reading letter.</p></header>
-        <div className="library-toolbar"><div className="filter-row" role="group" aria-label="Filter practice log">{(["all", "leetcode", "system_design", "behavioral"] as const).map((filter) => <button key={filter} className={libraryFilter === filter ? "active" : ""} onClick={() => setLibraryFilter(filter)}>{filter === "all" ? "All records" : typeLabel(filter)}</button>)}</div><span>{groupedLog.reduce((sum, [, entries]) => sum + entries.length, 0)} records shown</span></div>
+        <header className="view-masthead"><span className="eyebrow">PRACTICE LIBRARY · COMPLETED WORK ONLY</span><h1>Read the journey<br /><em>like a field journal.</em></h1><p>Solved coding problems and finished interview mocks appear here immediately. Planned, running, and failed coding attempts stay out of this reading library.</p></header>
+        <div className="library-toolbar"><div className="filter-row" role="group" aria-label="Filter practice log">{(["all", "leetcode", "system_design", "behavioral"] as const).map((filter) => <button key={filter} className={libraryFilter === filter ? "active" : ""} onClick={() => setLibraryFilter(filter)}>{filter === "all" ? "All finished" : typeLabel(filter)}</button>)}</div><span>{groupedLog.reduce((sum, [, entries]) => sum + entries.length, 0)} records shown</span></div>
         <div className="log-layout">
           <div className="dated-log">
-            {groupedLog.map(([date, entries]) => <section className="log-day" id={`log-date-${date}`} key={date}><header><time>{readableDate(date)}</time><span>{entries.length} record{entries.length === 1 ? "" : "s"}</span></header><div className="log-day-entries">{entries.map((entry) => <button className={`log-entry ${entry.type}`} key={entry.id} onClick={() => setSelectedEntry(entry)}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><div className="log-entry-copy"><small>{typeLabel(entry.type)} · {entry.status}</small><strong>{entry.title}</strong><span>{entry.subtitle}</span></div><div className="log-entry-meta"><strong>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "—"}</strong><span>{entry.type === "leetcode" ? outcomeLabel(entry.outcome) : entry.artifact ? "Published record" : entry.status}</span></div><span className="open-letter">Read →</span></button>)}</div></section>)}
+            {groupedLog.length ? groupedLog.map(([date, entries]) => <section className="log-day" id={`log-date-${date}`} key={date}><header><time>{readableDate(date)}</time><span>{entries.length} record{entries.length === 1 ? "" : "s"}</span></header><div className="log-day-entries">{entries.map((entry) => <button className={`log-entry ${entry.type}`} key={entry.id} onClick={() => setSelectedEntry(entry)}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><div className="log-entry-copy"><small>{typeLabel(entry.type)} · {entry.status}</small><strong>{entry.title}</strong><span>{entry.subtitle}</span></div><div className="log-entry-meta"><strong>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "—"}</strong><span>{entry.type === "leetcode" ? outcomeLabel(entry.outcome) : entry.artifact ? "Published record" : entry.status}</span></div><span className="open-letter">Read →</span></button>)}</div></section>) : <div className="quiet-empty library-empty"><strong>No finished work in this filter yet.</strong><span>Mark a coding result as solved, or finish a system-design or behavioral stopwatch, and it will appear here.</span></div>}
           </div>
           <aside className="log-calendar"><span className="eyebrow">JUMP TO A DAY</span><h2>{new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${journal.date}T12:00:00Z`))}</h2><div className="calendar-week"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div><div className="calendar-mini">{calendarDays.map((day) => day.hasEntries ? <button key={day.key} onClick={() => scrollToLogDate(day.key)} title={`Jump to ${day.key}`}>{day.day}<i /></button> : <span key={day.key}>{day.day}</span>)}</div><div className="calendar-dates">{groupedLog.map(([date]) => <button key={date} onClick={() => scrollToLogDate(date)}>{readableDate(date, true)} <span>↘</span></button>)}</div></aside>
         </div>
@@ -699,11 +871,13 @@ export default function Home() {
   }
 
   function renderStories() {
+    const starterQuestion = contentIndex.questionBanks.behavioral[0];
     return (
       <section className="view-page story-page">
-        <header className="view-masthead"><span className="eyebrow">STORY BANK · PROJECT EVIDENCE</span><h1>Begin with what<br /><em>actually happened.</em></h1><p>Projects hold the facts. Interview answers borrow those facts without inventing ownership, metrics, or impact.</p></header>
-        {contentIndex.stories.length ? <div className="project-shelf">{contentIndex.stories.map((story, index) => <button key={story.path} onClick={() => setSelectedEntry({ id: story.path, date: story.date, type: "behavioral", title: story.title, subtitle: `${story.sections.length} evidence sections`, status: "published", elapsedSeconds: 0, artifact: story })}><span>{String(index + 1).padStart(2, "0")}</span><div><small>Project source</small><h2>{story.title}</h2><p>{story.sections.length} evidence sections</p></div><strong>Open project letter →</strong></button>)}</div> : <div className="story-workbench"><div className="story-sequence"><span>Project</span><i /><span>Decision</span><i /><span>Result</span><i /><span>Story</span></div><div><span className="eyebrow">THE BANK IS READY</span><h2>Discover the evidence before polishing the answer.</h2><p>Use the behavioral task to walk through one real project. Publishing will create the first project source here and link future answers back to it.</p><button className="primary-action" onClick={() => { setView("today"); openNewActivity(); setComposer((current) => ({ ...current, type: "behavioral", minutes: "60" })); }}>Add a behavioral question</button></div></div>}
-        <section className="question-bank-preview"><div className="section-title"><div><span className="eyebrow">BEHAVIORAL QUESTION BANK</span><h2>Questions ready for a mock</h2></div></div>{contentIndex.questionBanks.behavioral.map((question) => <article key={question.id}><span className="type-mark behavioral">B</span><div><strong>{question.title}</strong><p>{question.prompt}</p></div><button onClick={() => { setView("today"); setComposer({ ...EMPTY_COMPOSER, open: true, mode: "activity", type: "behavioral", query: question.title, selectedId: question.id, minutes: String(question.targetMinutes) }); }}>Add to today</button></article>)}</section>
+        <header className="view-masthead"><span className="eyebrow">STORY BANK · REUSABLE PROJECT EVIDENCE</span><h1>Begin with what<br /><em>actually happened.</em></h1><p>This is not another daily task list. It is your durable source of project facts—decisions, conflict, recovery, leadership, and measurable results—that can support many behavioral answers.</p></header>
+        <div className="story-purpose"><article><span>01</span><strong>Discover</strong><p>Use the Behavioral task to unpack one real project without inventing ownership or impact.</p></article><article><span>02</span><strong>Publish</strong><p>The Behavioral task writes a project source and the full mock transcript into the repository.</p></article><article><span>03</span><strong>Reuse</strong><p>Open the project here later and shape the same verified evidence for different questions.</p></article></div>
+        {contentIndex.stories.length ? <div className="project-shelf">{contentIndex.stories.map((story, index) => <button key={story.path} onClick={() => setSelectedEntry({ id: story.path, date: story.date, type: "behavioral", title: story.title, subtitle: `${story.sections.length} evidence sections`, status: "published", elapsedSeconds: 0, artifact: story })}><span>{String(index + 1).padStart(2, "0")}</span><div><small>Project source</small><h2>{story.title}</h2><p>{story.sections.length} evidence sections</p></div><strong>Open project letter →</strong></button>)}</div> : <div className="story-workbench"><div className="story-sequence"><span>Project</span><i /><span>Decision</span><i /><span>Result</span><i /><span>Story</span></div><div><span className="eyebrow">NO PROJECT SOURCE PUBLISHED YET</span><h2>Your first story starts in the Behavioral task.</h2><p>Talk through one real project there, then say “Publish this session.” The project evidence will appear here after the site is rebuilt.</p>{starterQuestion && <button className="primary-action" onClick={() => addBankQuestionToToday(starterQuestion, "behavioral")}>Practice a behavioral question today</button>}</div></div>}
+        <section className="question-bank-preview"><div className="section-title"><div><span className="eyebrow">BEHAVIORAL QUESTION BANK</span><h2>Questions ready for a mock</h2><p>These are practice prompts. Adding one sends it directly to standalone practice on Today; it does not create a story by itself.</p></div></div>{contentIndex.questionBanks.behavioral.map((question) => <article key={question.id}><span className="type-mark behavioral">B</span><div><strong>{question.title}</strong><p>{question.prompt}</p></div><button onClick={() => addBankQuestionToToday(question, "behavioral")}>Practice today</button></article>)}</section>
       </section>
     );
   }
@@ -722,24 +896,24 @@ export default function Home() {
         <button className="brand" onClick={() => setView("today")}><span className="brand-mark">IA</span><span>Interview Arc</span></button>
         <nav className="primary-nav" aria-label="Primary navigation">{([[
           "today", "Today"], ["journey", "Journey"], ["library", "Practice library"], ["stories", "Story bank"]] as [View, string][]).map(([id, label], index) => <button key={id} className={view === id ? "active" : ""} onClick={() => setView(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
-        <div className="sidebar-status"><span className={Object.values(draft.timers).some((timer) => timer.runningSince) ? "live" : ""} /><div><strong>{Object.values(draft.timers).some((timer) => timer.runningSince) ? "Timer running" : hydrated ? "Draft saved locally" : "Loading draft"}</strong><small>One activity timer at a time</small></div></div>
+        <div className="sidebar-status"><span className={[...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "live" : ""} /><div><strong>{[...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "Timer running" : hydrated ? "Draft saved locally" : "Loading draft"}</strong><small>Session countdown + one activity stopwatch</small></div></div>
         <div className="profile"><span>WX</span><div><strong>Wenk Xu</strong><small>Interview journey · 2026</small></div></div>
       </aside>
 
       <section className="main-column">
-        <header className="topbar"><div><span>{readableDate(journal.date)}</span><strong>{view === "today" ? "Today’s work" : view === "journey" ? "Statistics" : view === "library" ? "Dated practice log" : "Project story sources"}</strong></div><div><button className="secondary-action" onClick={exportDraft}>Export today</button><button className="primary-action" onClick={openNewActivity}>＋ Add</button></div></header>
+        <header className="topbar"><div><span>{readableDate(journal.date)}</span><strong>{view === "today" ? "Today’s work" : view === "journey" ? "Statistics" : view === "library" ? "Dated practice log" : "Project story sources"}</strong></div><div><button className="secondary-action" onClick={exportDraft}>Export today</button></div></header>
         <div className="page-content">{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "library" && renderLibrary()}{view === "stories" && renderStories()}</div>
       </section>
 
       {composer.open && <div className="modal-backdrop" role="presentation" onMouseDown={() => setComposer(EMPTY_COMPOSER)}><section className="composer" role="dialog" aria-modal="true" aria-labelledby="composer-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setComposer(EMPTY_COMPOSER)} aria-label="Close">×</button><span className="eyebrow">BUILD TODAY&apos;S WORK</span><h2 id="composer-title">{composer.editingId ? "Edit this activity" : composer.mode === "session" ? "Add another full session" : "Add one activity"}</h2>
         {!composer.editingId && <div className="composer-mode"><button className={composer.mode === "session" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, mode: "session" }))}>Full session</button><button className={composer.mode === "activity" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, mode: "activity" }))}>Single activity</button></div>}
-        {composer.mode === "session" && !composer.editingId ? <div className="session-composer"><p>A full session adds six questions from your LeetCode bank, one system-design question, and one behavioral question. Every activity receives its own timer.</p><div className="session-recipe"><div><strong>6</strong><span>Coding problems</span></div><div><strong>1</strong><span>System design</span></div><div><strong>1</strong><span>Behavioral</span></div></div><small>Questions come from the three versioned banks. As you add your TikTok lists, new sessions will use that data.</small><button className="primary-action full-width" onClick={addFullSession}>Add {allSessions.length + 1 === 2 ? "second" : `session ${allSessions.length + 1}`}</button></div> : <form onSubmit={saveActivity}><div className="type-selector" role="group" aria-label="Practice type">{(["leetcode", "system_design", "behavioral"] as const).map((type) => <button type="button" key={type} className={`${type} ${composer.type === type ? "active" : ""}`} onClick={() => setComposer((current) => ({ ...current, type, query: "", selectedId: "", minutes: type === "leetcode" ? "30" : type === "system_design" ? "90" : "60" }))}>{typeLabel(type)}</button>)}</div><label className="search-field"><span>{composer.type === "leetcode" ? "Search the bank or paste a LeetCode URL" : `Search the ${typeLabel(composer.type).toLowerCase()} bank or type a new title`}</span><input autoFocus value={composer.query} onChange={(event) => setComposer((current) => ({ ...current, query: event.target.value, selectedId: "" }))} placeholder={composer.type === "leetcode" ? "Search titles and topics, or https://leetcode.com/problems/…" : "Search or enter a custom question"} /></label>
+        {composer.mode === "session" && !composer.editingId ? <div className="session-composer"><p>A full session adds six questions from your LeetCode bank, one system-design question, and one behavioral question under one fixed six-hour countdown. Each activity also keeps a compact elapsed-time stopwatch.</p><div className="session-recipe"><div><strong>6</strong><span>Coding problems</span></div><div><strong>1</strong><span>System design</span></div><div><strong>1</strong><span>Behavioral</span></div></div><small>Questions come from the three versioned banks. As you add your TikTok lists, new sessions will use that data.</small><button className="primary-action full-width" onClick={addFullSession}>Add {allSessions.length + 1 === 2 ? "second" : `session ${allSessions.length + 1}`}</button></div> : <form onSubmit={saveActivity}><div className="type-selector" role="group" aria-label="Practice type">{(["leetcode", "system_design", "behavioral"] as const).map((type) => <button type="button" key={type} className={`${type} ${composer.type === type ? "active" : ""}`} onClick={() => setComposer((current) => ({ ...current, type, query: "", selectedId: "", minutes: type === "leetcode" ? "30" : type === "system_design" ? "90" : "60" }))}>{typeLabel(type)}</button>)}</div><label className="search-field"><span>{composer.type === "leetcode" ? "Search the bank or paste a LeetCode URL" : `Search the ${typeLabel(composer.type).toLowerCase()} bank or type a new title`}</span><input autoFocus value={composer.query} onChange={(event) => setComposer((current) => ({ ...current, query: event.target.value, selectedId: "" }))} placeholder={composer.type === "leetcode" ? "Search titles and topics, or https://leetcode.com/problems/…" : "Search or enter a custom question"} /></label>
         {derivedUrl && !composer.selectedId && <div className="derived-question"><span>Title extracted from URL</span><strong>{derivedUrl.title}</strong><small>{derivedUrl.url}</small></div>}
         {!derivedUrl && <div className="bank-results">{filteredQuestions.length ? filteredQuestions.map((question) => <button type="button" className={composer.selectedId === question.id ? "selected" : ""} key={question.id} onClick={() => selectBankQuestion(question)}><span className={`type-mark ${composer.type}`}>{typeMark(composer.type)}</span><div><strong>{question.title}</strong><small>{question.difficulty ? `${question.difficulty} · ` : ""}{question.topics.join(" · ")}</small></div><span>{composer.selectedId === question.id ? "Selected" : "Choose"}</span></button>) : <p className="no-results">{composer.type === "leetcode" ? "No bank match. Paste the public LeetCode problem URL and the title will be extracted automatically." : "No bank match. Your typed title will become a custom question."}</p>}</div>}
-        <label className="minutes-field"><span>Timer in minutes</span><input type="number" min="1" max="360" value={composer.minutes} onChange={(event) => setComposer((current) => ({ ...current, minutes: event.target.value }))} /></label><button className="primary-action full-width" type="submit" disabled={!canSaveActivity}>{composer.editingId ? "Save changes" : "Add to today"}</button></form>}
+        <label className="minutes-field"><span>Planning estimate in minutes</span><input type="number" min="1" max="360" value={composer.minutes} onChange={(event) => setComposer((current) => ({ ...current, minutes: event.target.value }))} /></label><button className="primary-action full-width" type="submit" disabled={!canSaveActivity}>{composer.editingId ? "Save changes" : "Add to today"}</button></form>}
       </section></div>}
 
-      {selectedEntry && <div className="letter-backdrop" role="presentation" onMouseDown={() => setSelectedEntry(null)}><article className="reading-letter" role="dialog" aria-modal="true" aria-labelledby="letter-title" onMouseDown={(event) => event.stopPropagation()}><button className="letter-close" onClick={() => setSelectedEntry(null)} aria-label="Close letter">Close ×</button><header><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)}</time></div><h2 id="letter-title">{selectedEntry.title}</h2><p>{selectedEntry.subtitle}</p></header><div className="letter-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.type === "leetcode" && <div><span>Outcome</span><strong>{outcomeLabel(selectedEntry.outcome)}</strong></div>}</div>{selectedEntry.artifact ? <div className="letter-sections">{selectedEntry.artifact.sections.map((section) => /conversation transcript|generated code/i.test(section.title) ? <details key={section.title}><summary>{section.title}</summary><pre>{section.body}</pre></details> : <section key={section.title}><h3>{section.title}</h3><pre>{section.body}</pre></section>)}</div> : <div className="unpublished-letter"><span className="eyebrow">LOCAL OR PLANNED RECORD</span><h3>This entry does not have a published review yet.</h3><p>Complete the activity, export today&apos;s draft when needed, and say “Publish this session” in the matching specialist task. The finished artifact will appear inside this letter after the next site build.</p>{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}<footer>Interview Arc · {selectedEntry.id}</footer></article></div>}
+      {selectedEntry && <div className="letter-backdrop" role="presentation" onMouseDown={() => setSelectedEntry(null)}><article className="reading-letter" role="dialog" aria-modal="true" aria-labelledby="letter-title" onMouseDown={(event) => event.stopPropagation()}><button className="letter-close" onClick={() => setSelectedEntry(null)} aria-label="Close letter">Close ×</button><header><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)}</time></div><h2 id="letter-title">{selectedEntry.title}</h2><p>{selectedEntry.subtitle}</p></header><div className="letter-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.type === "leetcode" && <div><span>Outcome</span><strong>{outcomeLabel(selectedEntry.outcome)}</strong></div>}</div>{selectedEntry.artifact ? <div className="letter-sections">{selectedEntry.artifact.sections.map((section) => /conversation transcript|generated code|solution/i.test(section.title) ? <details key={section.title} open={/solution/i.test(section.title)}><summary>{section.title}</summary><MarkdownBody source={section.body} /></details> : <section key={section.title}><h3>{section.title}</h3><MarkdownBody source={section.body} /></section>)}</div> : <div className="unpublished-letter"><span className="eyebrow">LOCAL COMPLETION · NOT PUBLISHED YET</span><h3>The result is saved on this device, but its review is not in the repository yet.</h3><p>Export today&apos;s draft and ask the matching specialist task to publish. Coding records will show the generated solution and complexity; system-design and behavioral records will show the formatted conversation transcript and review.</p>{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}<footer>Interview Arc · {selectedEntry.id}</footer></article></div>}
     </main>
   );
 }

@@ -8,13 +8,12 @@ The website is the dashboard. The files in this repository are the long-term rec
 
 The default daily plan is:
 
-| Area | Daily work | Default timer |
+| Scope | Daily work | Clock |
 | --- | --- | ---: |
-| LeetCode | 6 problems | 3 hours total |
-| System design | 1 mock interview | 90 minutes |
-| Behavioral | 1 mock interview | 60 minutes |
+| Full session | 6 LeetCode + 1 system design + 1 behavioral | fixed 6-hour countdown |
+| Each activity | one problem or mock | elapsed-time stopwatch |
 
-Extra questions can be added in any category. Every extra question has its own timer and is recorded as an activity with `source: extra`.
+Extra questions can be added in any category. Every extra question has its own elapsed-time stopwatch and is recorded as an activity with `source: extra`.
 
 LeetCode attempts use exactly three outcomes:
 
@@ -74,7 +73,7 @@ Shared formats live under `docs/contracts/`:
 - `daily-journal.schema.json` defines the file the website ingests for each day.
 - `question-bank.schema.json` defines manually maintained LeetCode metadata.
 - `practice-question-bank.schema.json` defines system-design and behavioral prompt banks.
-- `website-draft.md` defines multiple sessions, per-activity timers, editable extras, and browser export.
+- `website-draft.md` defines six-hour session countdowns, activity stopwatches, editable extras, publish eligibility, and browser export.
 - `session-artifact.md` defines system-design and behavioral transcript files.
 
 System-design and behavioral sessions preserve the complete conversation transcript with speaker labels. Summaries and feedback are added after the transcript; they do not replace it.
@@ -123,4 +122,4 @@ The website reads three versioned banks:
 - `practice/system-design/bank/questions.json`
 - `practice/behavioral/bank/questions.json`
 
-A normal session contains six coding problems, one system-design question, and one behavioral question. The user may add another full session or a standalone activity. Every activity—including every LeetCode problem—has its own timer.
+A normal session contains six coding problems, one system-design question, and one behavioral question under one fixed six-hour countdown. The user may add another full session or a standalone activity. Every activity also has a compact elapsed-time stopwatch.

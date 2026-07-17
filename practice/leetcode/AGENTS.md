@@ -42,7 +42,7 @@ LeetCode uses a structured postmortem by default. Preserve a full two-sided tran
 
 ### Publish Today's LeetCode
 
-When the user says `Publish today's LeetCode`, scan the current date's daily manifest, existing attempt artifacts, and any website draft export the user has made available. Finalize every completed LeetCode activity in one pass, preserving each problem's own elapsed time and outcome.
+When the user says `Publish today's LeetCode`, scan the current date's daily manifest, existing attempt artifacts, and any website draft export the user has made available. Use `publishQueueActivityIds` when present and finalize every solved or solved-after-review LeetCode activity in one pass, preserving each problem's stopwatch time and outcome. The published reading record must include this task's original generated solution or walkthrough, time and space complexity, edge cases, and key lesson; it must not copy an official LeetCode solution.
 
 Do not scrape the user's LeetCode account, authenticated pages, or submission history. This task cannot read deployed browser storage directly. If the website draft is not available, publish only the facts present in repository files or explicitly supplied by the user and mark the rest unknown.
 
@@ -70,9 +70,9 @@ For `record_kind: walkthrough`, use `user_attempted: false` or `unknown`, assist
 
 ## Daily Shape
 
-- Select 6 problems for a 3-hour aggregate sprint, while recording a separate timer for every problem.
+- Select 6 problems inside the day's fixed six-hour full session, while recording a compact elapsed-time stopwatch for every problem.
 - Balance topic coverage and difficulty using only questions in the user's bank.
-- Extra questions use an independent timer and `source: extra`.
+- Extra questions use their own elapsed-time stopwatch and `source: extra`.
 - Avoid unnecessary recent repeats; schedule intentional reviews when a prior attempt needs reinforcement.
 
 ## Coaching Behavior

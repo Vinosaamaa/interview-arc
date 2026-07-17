@@ -23,9 +23,9 @@ System-design and behavioral transcripts are appended incrementally. LeetCode us
 
 The website owns live timer draft state. A specialist can use time only when it comes from the website export or the user. The user owns attempt outcome and any code or reasoning they did not share. The specialist owns only its generated explanation and observed coaching interaction. Every surface joins data through `activity_id`.
 
-Each activity owns its timer. For LeetCode, the three-hour session target is the sum of six individual problem timers. This makes per-problem elapsed time publishable without running an overlapping sprint clock.
+Each session owns one fixed six-hour countdown. Every activity also owns a compact elapsed-time stopwatch so per-problem time remains publishable. A session countdown may run alongside one activity stopwatch; only one activity stopwatch may run at a time. Finishing an activity locks its stopwatch permanently.
 
-The user may create multiple sessions in one day. A normal session contains six coding problems, one system-design question, and one behavioral question selected from their respective banks. Standalone extra activities remain supported and can be edited or removed before publication.
+The user may create multiple sessions in one day. A normal session contains six coding problems, one system-design question, and one behavioral question selected from their respective banks. Standalone extra activities remain supported and reveal edit/remove actions with a left swipe.
 
 ## LeetCode Records
 

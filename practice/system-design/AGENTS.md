@@ -33,8 +33,8 @@ The default role is not "answer generator." The default role is "coach plus inte
 
 ## Session Shape
 
-- Default daily practice is 1 system-design question with a 90-minute timer.
-- An extra system-design question uses its own timer and `source: extra`.
+- Default daily practice is 1 system-design question inside the fixed six-hour full-session countdown.
+- Every system-design question also keeps an elapsed-time stopwatch; an extra question uses `source: extra`.
 - Record allocated and elapsed time when known.
 - Keep activity lifecycle (`planned`, `running`, `completed`) separate from qualitative feedback.
 - Let the user reason before revealing a complete model answer unless they explicitly ask for the full answer first.

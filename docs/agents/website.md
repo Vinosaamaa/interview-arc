@@ -7,15 +7,18 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
 ## Product Behavior
 
 - Show today's required plan: 6 LeetCode, 1 system design, and 1 behavioral question.
-- Use a 3-hour aggregate LeetCode sprint, a 90-minute system-design timer, and a 60-minute behavioral timer.
-- Give every LeetCode problem its own timer. Derive the 3-hour coding total by summing those six timers; do not run a second overlapping sprint timer.
+- Give every full session one fixed six-hour countdown.
+- Give every activity a compact elapsed-time stopwatch. The session countdown may run alongside one activity stopwatch; only one activity stopwatch may run at a time.
+- Finishing an activity or session locks that timer. Never offer resume after finish.
 - Allow another complete session containing 6 coding problems, 1 system-design question, and 1 behavioral question.
-- Allow an extra activity in any category with its own configurable timer.
+- Allow an extra activity in any category with its own stopwatch and optional planning estimate.
 - Let locally added activities be edited and removed.
 - Store lifecycle separately from outcome.
-- For LeetCode completion, offer only the three outcomes in `docs/contracts/activity.schema.json`.
+- For LeetCode completion, use one cycling flag control for only the three outcomes in `docs/contracts/activity.schema.json`; its hover/focus legend must explain the colors.
 - Open the original LeetCode page for prompt reading and submission. Never imply that code was executed or accepted locally.
 - Show system-design and behavioral transcript/review artifacts when tracked files exist.
+- Practice Library contains only solved LeetCode work (`solved` or `solved_after_reviewing_approach`) and finished/published system-design or behavioral work. Never show planned or running activities there.
+- Render tracked artifact Markdown as formatted headings, lists, links, tables, quotes, and code blocks rather than raw source text.
 - For ignored audio, display the filename and `Local only`; never render a deployed playback control.
 
 ## Data Sources
@@ -37,7 +40,7 @@ The website must not imply that browser draft state has already been published t
 - Favor a focused journal/dashboard over contest theater.
 - Provide Today, Journey, Practice Library, and Story Bank views without placing every raw log on one page.
 - Activity detail should lead with summary, outcome, approach, lessons, and feedback; keep full transcript or code expandable.
-- Timers need start, pause, resume, and complete actions plus clear remaining/elapsed labels.
+- The session clock is a countdown. Activity clocks are stopwatches with compact icon controls for start/pause and finish.
 - A failed attempt should still feel like useful logged work.
 - Make extra-question creation a short modal or inline form: category, title or URL/prompt, and timer.
 - In the creation flow, search the matching bank first. For an unknown LeetCode URL, derive a title from its public problem slug without scraping the page. For unknown system-design or behavioral questions, accept a custom title with no URL.

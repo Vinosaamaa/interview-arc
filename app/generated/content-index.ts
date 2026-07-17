@@ -34,6 +34,7 @@ export type PracticeSession = {
   id: string;
   label: string;
   source: "daily" | "extra";
+  allocatedSeconds: number;
   activityIds: string[];
 };
 
@@ -86,12 +87,13 @@ export const contentIndex: ContentIndex = {
       "schemaVersion": 1,
       "date": "2026-07-17",
       "focus": "Graph fluency and clear interview stories",
-      "note": "Use the coding sprint as one three-hour block. System design and behavioral practice have independent timers.",
+      "note": "Run the full practice set under one fixed six-hour countdown. Each activity also keeps a compact elapsed-time stopwatch for the record.",
       "sessions": [
         {
           "id": "2026-07-17-session-1",
           "label": "Required session",
           "source": "daily",
+          "allocatedSeconds": 21600,
           "activityIds": [
             "2026-07-17-leetcode-number-of-islands",
             "2026-07-17-leetcode-top-k-frequent-elements",

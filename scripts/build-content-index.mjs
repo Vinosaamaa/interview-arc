@@ -166,6 +166,7 @@ export type PracticeSession = {
   id: string;
   label: string;
   source: "daily" | "extra";
+  allocatedSeconds: number;
   activityIds: string[];
 };
 
