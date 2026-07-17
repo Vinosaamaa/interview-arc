@@ -8,7 +8,10 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
 
 - Show today's required plan: 6 LeetCode, 1 system design, and 1 behavioral question.
 - Use a 3-hour aggregate LeetCode sprint, a 90-minute system-design timer, and a 60-minute behavioral timer.
+- Give every LeetCode problem its own timer. Derive the 3-hour coding total by summing those six timers; do not run a second overlapping sprint timer.
+- Allow another complete session containing 6 coding problems, 1 system-design question, and 1 behavioral question.
 - Allow an extra activity in any category with its own configurable timer.
+- Let locally added activities be edited and removed.
 - Store lifecycle separately from outcome.
 - For LeetCode completion, offer only the three outcomes in `docs/contracts/activity.schema.json`.
 - Open the original LeetCode page for prompt reading and submission. Never imply that code was executed or accepted locally.
@@ -19,6 +22,7 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
 
 - Treat `data/daily/YYYY-MM-DD.json` as the canonical daily plan and finalized activity summary.
 - Treat `practice/leetcode/bank/questions.json` as user-maintained metadata, not scraped data.
+- Treat `practice/system-design/bank/questions.json` and `practice/behavioral/bank/questions.json` as the matching prompt banks.
 - Treat `practice/*/sessions/*.md` and `audio-answers/*.md` as durable journal artifacts.
 - Use the contracts under `docs/contracts/` as the canonical field names.
 - Run `scripts/build-content-index.mjs` before development/build so the app consumes daily JSON, specialist artifacts, and behavioral story files through one generated index.
@@ -36,6 +40,10 @@ The website must not imply that browser draft state has already been published t
 - Timers need start, pause, resume, and complete actions plus clear remaining/elapsed labels.
 - A failed attempt should still feel like useful logged work.
 - Make extra-question creation a short modal or inline form: category, title or URL/prompt, and timer.
+- In the creation flow, search the matching bank first. For an unknown LeetCode URL, derive a title from its public problem slug without scraping the page. For unknown system-design or behavioral questions, accept a custom title with no URL.
+- Keep body and annotation text readable: normal supporting copy should be at least 14px and short utility labels at least 12px.
+- Practice Library is a date-grouped scrolling log with category color, filters, a calendar jump control, and a centered reading dialog.
+- Journey owns cumulative totals and daily charts for coding, system design, behavioral, outcomes, and elapsed time.
 
 ## Implementation And Hosting
 

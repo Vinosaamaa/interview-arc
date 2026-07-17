@@ -30,13 +30,38 @@ export type TimerGroup = {
   activityIds: string[];
 };
 
+export type PracticeSession = {
+  id: string;
+  label: string;
+  source: "daily" | "extra";
+  activityIds: string[];
+};
+
 export type DailyJournal = {
   schemaVersion: number;
   date: string;
   focus: string;
   note?: string;
+  sessions: PracticeSession[];
   timerGroups: TimerGroup[];
   activities: JournalActivity[];
+};
+
+export type QuestionBankItem = {
+  id: string;
+  title: string;
+  prompt?: string;
+  url?: string;
+  difficulty?: "easy" | "medium" | "hard";
+  topics: string[];
+  targetMinutes: number;
+  active: boolean;
+};
+
+export type QuestionBanks = {
+  leetcode: QuestionBankItem[];
+  systemDesign: QuestionBankItem[];
+  behavioral: QuestionBankItem[];
 };
 
 export type ContentSection = { title: string; body: string };
@@ -53,7 +78,7 @@ export type ContentArtifact = {
 };
 
 export type StoryProject = ContentArtifact & { projectId: string };
-export type ContentIndex = { journals: DailyJournal[]; artifacts: ContentArtifact[]; stories: StoryProject[] };
+export type ContentIndex = { journals: DailyJournal[]; artifacts: ContentArtifact[]; stories: StoryProject[]; questionBanks: QuestionBanks };
 
 export const contentIndex: ContentIndex = {
   "journals": [
@@ -62,6 +87,23 @@ export const contentIndex: ContentIndex = {
       "date": "2026-07-17",
       "focus": "Graph fluency and clear interview stories",
       "note": "Use the coding sprint as one three-hour block. System design and behavioral practice have independent timers.",
+      "sessions": [
+        {
+          "id": "2026-07-17-session-1",
+          "label": "Required session",
+          "source": "daily",
+          "activityIds": [
+            "2026-07-17-leetcode-number-of-islands",
+            "2026-07-17-leetcode-top-k-frequent-elements",
+            "2026-07-17-leetcode-merge-intervals",
+            "2026-07-17-leetcode-lru-cache",
+            "2026-07-17-leetcode-kth-largest-element",
+            "2026-07-17-leetcode-decode-string",
+            "2026-07-17-system-design-notification-system",
+            "2026-07-17-behavioral-disagree-and-commit"
+          ]
+        }
+      ],
       "timerGroups": [
         {
           "id": "2026-07-17-coding-sprint",
@@ -323,5 +365,122 @@ export const contentIndex: ContentIndex = {
       ]
     }
   ],
-  "stories": []
+  "stories": [],
+  "questionBanks": {
+    "leetcode": [
+      {
+        "id": "number-of-islands",
+        "title": "Number of Islands",
+        "url": "https://leetcode.com/problems/number-of-islands/",
+        "difficulty": "medium",
+        "topics": [
+          "graph",
+          "depth-first search"
+        ],
+        "targetMinutes": 25,
+        "active": true
+      },
+      {
+        "id": "top-k-frequent-elements",
+        "title": "Top K Frequent Elements",
+        "url": "https://leetcode.com/problems/top-k-frequent-elements/",
+        "difficulty": "medium",
+        "topics": [
+          "heap",
+          "bucket sort"
+        ],
+        "targetMinutes": 25,
+        "active": true
+      },
+      {
+        "id": "merge-intervals",
+        "title": "Merge Intervals",
+        "url": "https://leetcode.com/problems/merge-intervals/",
+        "difficulty": "medium",
+        "topics": [
+          "intervals",
+          "sorting"
+        ],
+        "targetMinutes": 25,
+        "active": true
+      },
+      {
+        "id": "lru-cache",
+        "title": "LRU Cache",
+        "url": "https://leetcode.com/problems/lru-cache/",
+        "difficulty": "medium",
+        "topics": [
+          "design",
+          "linked list",
+          "hash table"
+        ],
+        "targetMinutes": 40,
+        "active": true
+      },
+      {
+        "id": "kth-largest-element-in-an-array",
+        "title": "Kth Largest Element in an Array",
+        "url": "https://leetcode.com/problems/kth-largest-element-in-an-array/",
+        "difficulty": "medium",
+        "topics": [
+          "heap",
+          "quickselect"
+        ],
+        "targetMinutes": 30,
+        "active": true
+      },
+      {
+        "id": "decode-string",
+        "title": "Decode String",
+        "url": "https://leetcode.com/problems/decode-string/",
+        "difficulty": "medium",
+        "topics": [
+          "stack",
+          "recursion"
+        ],
+        "targetMinutes": 25,
+        "active": true
+      }
+    ],
+    "systemDesign": [
+      {
+        "id": "notification-system",
+        "title": "Design a notification system",
+        "prompt": "Design a TikTok-style notification system from requirements through delivery, retries, and observability.",
+        "topics": [
+          "messaging",
+          "queues",
+          "reliability"
+        ],
+        "targetMinutes": 90,
+        "active": true
+      },
+      {
+        "id": "tiktok-for-you-feed",
+        "title": "Design a TikTok-style For You feed",
+        "prompt": "Design the personalized short-video feed for a TikTok-like application.",
+        "topics": [
+          "recommendations",
+          "feed",
+          "media delivery"
+        ],
+        "targetMinutes": 90,
+        "active": true
+      }
+    ],
+    "behavioral": [
+      {
+        "id": "disagree-and-commit",
+        "title": "Disagree and commit",
+        "prompt": "Tell me about a time you disagreed with a technical decision. What did you do, and what happened?",
+        "topics": [
+          "conflict",
+          "influence",
+          "decision-making"
+        ],
+        "targetMinutes": 60,
+        "active": true
+      }
+    ]
+  }
 };

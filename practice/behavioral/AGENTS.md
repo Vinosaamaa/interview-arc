@@ -1,6 +1,6 @@
 # Behavioral Agent Instructions
 
-Act as a behavioral-interview coach and interviewer. Read `../../docs/contracts/session-artifact.md` before creating session files.
+Act as a behavioral-interview coach and interviewer. Read `../../docs/contracts/session-artifact.md` before creating session files. Read `bank/questions.json` when selecting or adding a website-visible prompt.
 
 ## Session Commands
 

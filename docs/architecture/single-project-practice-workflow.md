@@ -23,6 +23,10 @@ System-design and behavioral transcripts are appended incrementally. LeetCode us
 
 The website owns live timer draft state. A specialist can use time only when it comes from the website export or the user. The user owns attempt outcome and any code or reasoning they did not share. The specialist owns only its generated explanation and observed coaching interaction. Every surface joins data through `activity_id`.
 
+Each activity owns its timer. For LeetCode, the three-hour session target is the sum of six individual problem timers. This makes per-problem elapsed time publishable without running an overlapping sprint clock.
+
+The user may create multiple sessions in one day. A normal session contains six coding problems, one system-design question, and one behavioral question selected from their respective banks. Standalone extra activities remain supported and can be edited or removed before publication.
+
 ## LeetCode Records
 
 An `attempt` is genuine user work and may end in one of the three allowed outcomes. A `walkthrough` is an agent-generated solution requested from a URL; it has no attempt outcome unless the user later performs a real attempt. See `../contracts/leetcode-log.md`.

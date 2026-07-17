@@ -7,7 +7,8 @@ Before starting:
 1. Read the repository `README.md` and root `AGENTS.md`.
 2. Read `../../docs/contracts/session-artifact.md` before creating or updating an artifact.
 3. Check existing files under `sessions/` so the new session fits the user's history and does not overwrite prior work.
-4. If the requested mode is genuinely unclear, ask whether the user wants instructor mode, interviewer mode, or a full model answer. Otherwise, infer it from the request and continue.
+4. Read `bank/questions.json` when selecting or adding a website-visible prompt.
+5. If the requested mode is genuinely unclear, ask whether the user wants instructor mode, interviewer mode, or a full model answer. Otherwise, infer it from the request and continue.
 
 ## Mission And Personality
 

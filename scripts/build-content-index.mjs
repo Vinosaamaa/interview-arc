@@ -3,6 +3,10 @@ import path from "node:path";
 
 const root = process.cwd();
 
+async function readJson(relativePath) {
+  return JSON.parse(await readFile(path.join(root, relativePath), "utf8"));
+}
+
 async function filesIn(relativeDirectory, extension) {
   const directory = path.join(root, relativeDirectory);
   try {
@@ -80,9 +84,26 @@ function parseMarkdown(source, relativePath, fallbackType) {
 
 const dailyFiles = await filesIn("data/daily", ".json");
 const journals = await Promise.all(
-  dailyFiles.map(async (relativePath) => JSON.parse(await readFile(path.join(root, relativePath), "utf8"))),
+  dailyFiles.map((relativePath) => readJson(relativePath)),
 );
 journals.sort((left, right) => right.date.localeCompare(left.date));
+
+const leetcodeBank = await readJson("practice/leetcode/bank/questions.json");
+const systemDesignBank = await readJson("practice/system-design/bank/questions.json");
+const behavioralBank = await readJson("practice/behavioral/bank/questions.json");
+const questionBanks = {
+  leetcode: leetcodeBank.questions.map((question) => ({
+    id: question.id,
+    title: question.title,
+    url: question.url,
+    difficulty: question.difficulty,
+    topics: question.topics ?? [],
+    targetMinutes: question.targetMinutes ?? 30,
+    active: question.active ?? true,
+  })),
+  systemDesign: systemDesignBank.questions,
+  behavioral: behavioralBank.questions,
+};
 
 const artifactDirectories = [
   ["practice/leetcode/attempts", "leetcode"],
@@ -141,13 +162,38 @@ export type TimerGroup = {
   activityIds: string[];
 };
 
+export type PracticeSession = {
+  id: string;
+  label: string;
+  source: "daily" | "extra";
+  activityIds: string[];
+};
+
 export type DailyJournal = {
   schemaVersion: number;
   date: string;
   focus: string;
   note?: string;
+  sessions: PracticeSession[];
   timerGroups: TimerGroup[];
   activities: JournalActivity[];
+};
+
+export type QuestionBankItem = {
+  id: string;
+  title: string;
+  prompt?: string;
+  url?: string;
+  difficulty?: "easy" | "medium" | "hard";
+  topics: string[];
+  targetMinutes: number;
+  active: boolean;
+};
+
+export type QuestionBanks = {
+  leetcode: QuestionBankItem[];
+  systemDesign: QuestionBankItem[];
+  behavioral: QuestionBankItem[];
 };
 
 export type ContentSection = { title: string; body: string };
@@ -164,13 +210,13 @@ export type ContentArtifact = {
 };
 
 export type StoryProject = ContentArtifact & { projectId: string };
-export type ContentIndex = { journals: DailyJournal[]; artifacts: ContentArtifact[]; stories: StoryProject[] };
+export type ContentIndex = { journals: DailyJournal[]; artifacts: ContentArtifact[]; stories: StoryProject[]; questionBanks: QuestionBanks };
 
-export const contentIndex: ContentIndex = ${JSON.stringify({ journals, artifacts, stories }, null, 2)};
+export const contentIndex: ContentIndex = ${JSON.stringify({ journals, artifacts, stories, questionBanks }, null, 2)};
 `;
 
 const outputDirectory = path.join(root, "app/generated");
 await mkdir(outputDirectory, { recursive: true });
 await writeFile(path.join(outputDirectory, "content-index.ts"), output);
 
-console.log(`Indexed ${journals.length} journal(s), ${artifacts.length} artifact(s), and ${stories.length} story project(s).`);
+console.log(`Indexed ${journals.length} journal(s), ${artifacts.length} artifact(s), ${stories.length} story project(s), and ${questionBanks.leetcode.length + questionBanks.systemDesign.length + questionBanks.behavioral.length} bank question(s).`);

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "type": "system_design",
+  "updatedAt": "2026-07-17",
+  "questions": [
+    {
+      "id": "notification-system",
+      "title": "Design a notification system",
+      "prompt": "Design a TikTok-style notification system from requirements through delivery, retries, and observability.",
+      "topics": ["messaging", "queues", "reliability"],
+      "targetMinutes": 90,
+      "active": true
+    },
+    {
+      "id": "tiktok-for-you-feed",
+      "title": "Design a TikTok-style For You feed",
+      "prompt": "Design the personalized short-video feed for a TikTok-like application.",
+      "topics": ["recommendations", "feed", "media delivery"],
+      "targetMinutes": 90,
+      "active": true
+    }
+  ]
+}

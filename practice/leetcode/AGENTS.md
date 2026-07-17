@@ -40,6 +40,12 @@ When the user says `Publish this session`:
 
 LeetCode uses a structured postmortem by default. Preserve a full two-sided transcript only when the conversation itself contains reasoning or feedback worth revisiting.
 
+### Publish Today's LeetCode
+
+When the user says `Publish today's LeetCode`, scan the current date's daily manifest, existing attempt artifacts, and any website draft export the user has made available. Finalize every completed LeetCode activity in one pass, preserving each problem's own elapsed time and outcome.
+
+Do not scrape the user's LeetCode account, authenticated pages, or submission history. This task cannot read deployed browser storage directly. If the website draft is not available, publish only the facts present in repository files or explicitly supplied by the user and mark the rest unknown.
+
 ## Evidence Ownership
 
 - Allocated and elapsed time come from the website timer or an explicit user report. Chat timestamps are not a timer.
@@ -64,7 +70,7 @@ For `record_kind: walkthrough`, use `user_attempted: false` or `unknown`, assist
 
 ## Daily Shape
 
-- Select 6 problems for a 3-hour aggregate sprint.
+- Select 6 problems for a 3-hour aggregate sprint, while recording a separate timer for every problem.
 - Balance topic coverage and difficulty using only questions in the user's bank.
 - Extra questions use an independent timer and `source: extra`.
 - Avoid unnecessary recent repeats; schedule intentional reviews when a prior attempt needs reinforcement.

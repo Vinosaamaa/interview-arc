@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://interview-arc.local/schemas/practice-question-bank.schema.json",
+  "title": "Interview Arc Practice Question Bank",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "type", "updatedAt", "questions"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "type": { "enum": ["system_design", "behavioral"] },
+    "updatedAt": { "type": "string", "format": "date" },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "prompt", "targetMinutes", "active"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+          "title": { "type": "string", "minLength": 1 },
+          "prompt": { "type": "string", "minLength": 1 },
+          "topics": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          },
+          "targetMinutes": { "type": "integer", "minimum": 5 },
+          "active": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

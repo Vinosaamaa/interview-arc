@@ -20,11 +20,13 @@ test("server-renders the Interview Arc dashboard", async () => {
 
   const html = await response.text();
   assert.match(html, /<title>Interview Arc/);
-  assert.match(html, /Make the work/);
-  assert.match(html, /Six-problem sprint/);
+  assert.match(html, /One timer\. One problem/);
+  assert.match(html, /Six individually timed problems/);
+  assert.match(html, /Time spent/);
   assert.match(html, /Design a notification system/);
   assert.match(html, /Disagree and commit/);
-  assert.match(html, /Result not logged/);
+  assert.match(html, /Solved after reviewing approach/);
+  assert.match(html, /Add another session/);
   assert.match(html, /Story bank/);
   assert.doesNotMatch(html, /Test console|Submit attempt|solution\.py/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/);

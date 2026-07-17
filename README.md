@@ -73,6 +73,8 @@ Shared formats live under `docs/contracts/`:
 - `leetcode-log.md` and `leetcode-log.schema.json` define attempt and walkthrough records.
 - `daily-journal.schema.json` defines the file the website ingests for each day.
 - `question-bank.schema.json` defines manually maintained LeetCode metadata.
+- `practice-question-bank.schema.json` defines system-design and behavioral prompt banks.
+- `website-draft.md` defines multiple sessions, per-activity timers, editable extras, and browser export.
 - `session-artifact.md` defines system-design and behavioral transcript files.
 
 System-design and behavioral sessions preserve the complete conversation transcript with speaker labels. Summaries and feedback are added after the transcript; they do not replace it.
@@ -112,3 +114,13 @@ The existing hosted project configuration is stored in `.openai/hosting.json`. K
 - `Finish today's journal` creates one commit/pull request for the complete day.
 - Timer ticks and live UI state belong in application storage, not one Git commit per click.
 - End-of-day Markdown is the durable journal record.
+
+## Question Banks And Sessions
+
+The website reads three versioned banks:
+
+- `practice/leetcode/bank/questions.json`
+- `practice/system-design/bank/questions.json`
+- `practice/behavioral/bank/questions.json`
+
+A normal session contains six coding problems, one system-design question, and one behavioral question. The user may add another full session or a standalone activity. Every activity—including every LeetCode problem—has its own timer.
