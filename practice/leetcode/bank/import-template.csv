@@ -1,0 +1,2 @@
+id,title,url,difficulty,topics,company_tags,frequency_window,target_minutes,active
+two-sum,Two Sum,https://leetcode.com/problems/two-sum/,easy,array|hash-table,,user-supplied-window,20,true

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://interview-arc.local/schemas/question-bank.schema.json",
+  "title": "Interview Arc LeetCode Question Bank",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "updatedAt", "questions"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "updatedAt": { "type": "string", "format": "date" },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "url", "difficulty", "topics", "source"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+          "title": { "type": "string", "minLength": 1 },
+          "url": {
+            "type": "string",
+            "pattern": "^https://leetcode\\.com/problems/[a-z0-9-]+/?$"
+          },
+          "difficulty": { "enum": ["easy", "medium", "hard"] },
+          "topics": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          },
+          "companyTags": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          },
+          "frequencyWindow": { "type": "string" },
+          "targetMinutes": { "type": "integer", "minimum": 5 },
+          "source": { "enum": ["manual", "user_import"] },
+          "active": { "type": "boolean", "default": true }
+        }
+      }
+    }
+  }
+}

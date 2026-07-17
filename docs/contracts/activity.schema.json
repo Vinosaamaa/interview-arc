@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://interview-arc.local/schemas/activity.schema.json",
+  "title": "Interview Arc Activity",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "date",
+    "source",
+    "type",
+    "title",
+    "allocatedSeconds",
+    "status"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "date": { "type": "string", "format": "date" },
+    "source": { "enum": ["daily", "extra"] },
+    "type": { "enum": ["leetcode", "system_design", "behavioral"] },
+    "title": { "type": "string", "minLength": 1 },
+    "url": { "type": "string", "format": "uri" },
+    "prompt": { "type": "string" },
+    "allocatedSeconds": { "type": "integer", "minimum": 60 },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "endedAt": { "type": "string", "format": "date-time" },
+    "elapsedSeconds": { "type": "integer", "minimum": 0 },
+    "status": { "enum": ["planned", "running", "completed"] },
+    "outcome": {
+      "enum": ["solved", "solved_after_reviewing_approach", "failed"]
+    },
+    "artifactPath": { "type": "string", "minLength": 1 },
+    "notes": { "type": "string" },
+    "reviewDates": {
+      "type": "array",
+      "items": { "type": "string", "format": "date" },
+      "uniqueItems": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "type": { "const": "leetcode" } },
+        "required": ["type"]
+      },
+      "then": {
+        "anyOf": [
+          { "required": ["url"] },
+          { "properties": { "status": { "const": "planned" } } }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "completed" } },
+        "required": ["status"]
+      },
+      "then": { "required": ["endedAt", "elapsedSeconds"] }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": { "const": "leetcode" },
+          "status": { "const": "completed" }
+        },
+        "required": ["type", "status"]
+      },
+      "then": { "required": ["outcome"] }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": { "enum": ["system_design", "behavioral"] }
+        },
+        "required": ["type"]
+      },
+      "then": { "not": { "required": ["outcome"] } }
+    }
+  ]
+}

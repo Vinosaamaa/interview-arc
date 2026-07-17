@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-07-17",
+  "questions": [
+    {
+      "id": "number-of-islands",
+      "title": "Number of Islands",
+      "url": "https://leetcode.com/problems/number-of-islands/",
+      "difficulty": "medium",
+      "topics": ["graph", "depth-first search"],
+      "companyTags": [],
+      "targetMinutes": 25,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "top-k-frequent-elements",
+      "title": "Top K Frequent Elements",
+      "url": "https://leetcode.com/problems/top-k-frequent-elements/",
+      "difficulty": "medium",
+      "topics": ["heap", "bucket sort"],
+      "companyTags": [],
+      "targetMinutes": 25,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "merge-intervals",
+      "title": "Merge Intervals",
+      "url": "https://leetcode.com/problems/merge-intervals/",
+      "difficulty": "medium",
+      "topics": ["intervals", "sorting"],
+      "companyTags": [],
+      "targetMinutes": 25,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "lru-cache",
+      "title": "LRU Cache",
+      "url": "https://leetcode.com/problems/lru-cache/",
+      "difficulty": "medium",
+      "topics": ["design", "linked list", "hash table"],
+      "companyTags": [],
+      "targetMinutes": 40,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "kth-largest-element-in-an-array",
+      "title": "Kth Largest Element in an Array",
+      "url": "https://leetcode.com/problems/kth-largest-element-in-an-array/",
+      "difficulty": "medium",
+      "topics": ["heap", "quickselect"],
+      "companyTags": [],
+      "targetMinutes": 30,
+      "source": "manual",
+      "active": true
+    },
+    {
+      "id": "decode-string",
+      "title": "Decode String",
+      "url": "https://leetcode.com/problems/decode-string/",
+      "difficulty": "medium",
+      "topics": ["stack", "recursion"],
+      "companyTags": [],
+      "targetMinutes": 25,
+      "source": "manual",
+      "active": true
+    }
+  ]
+}
