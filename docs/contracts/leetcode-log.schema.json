@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://interview-arc.local/schemas/leetcode-log.schema.json",
+  "title": "Interview Arc LeetCode Log",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "activityId",
+    "date",
+    "recordKind",
+    "problem",
+    "timing",
+    "attempt",
+    "assistance",
+    "review"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "activityId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "date": { "type": "string", "format": "date" },
+    "recordKind": { "enum": ["attempt", "walkthrough"] },
+    "problem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "url"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "format": "uri" },
+        "difficulty": { "enum": ["easy", "medium", "hard", "unknown"] },
+        "topics": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      }
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source"],
+      "properties": {
+        "allocatedSeconds": { "type": "integer", "minimum": 60 },
+        "elapsedSeconds": { "type": "integer", "minimum": 0 },
+        "source": { "enum": ["website", "manual", "unknown"] }
+      }
+    },
+    "attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["userAttempted"],
+      "properties": {
+        "userAttempted": { "type": ["boolean", "null"] },
+        "outcome": { "enum": ["solved", "solved_after_reviewing_approach", "failed"] },
+        "initialApproach": { "type": "string" },
+        "userCodePath": { "type": "string" },
+        "blocker": { "type": "string" }
+      }
+    },
+    "assistance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level"],
+      "properties": {
+        "level": { "enum": ["none", "hint", "approach_review", "full_solution"] },
+        "agentApproach": { "type": "string" },
+        "generatedCodePath": { "type": "string" },
+        "timeComplexity": { "type": "string" },
+        "spaceComplexity": { "type": "string" },
+        "edgeCases": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["keyLessons", "mistakes", "needsReimplementation"],
+      "properties": {
+        "keyLessons": { "type": "array", "items": { "type": "string" } },
+        "mistakes": { "type": "array", "items": { "type": "string" } },
+        "followUpDate": { "type": "string", "format": "date" },
+        "needsReimplementation": { "type": "boolean" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "recordKind": { "const": "attempt" } } },
+      "then": {
+        "properties": {
+          "attempt": {
+            "required": ["userAttempted", "outcome"],
+            "properties": { "userAttempted": { "const": true } }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "recordKind": { "const": "walkthrough" } } },
+      "then": {
+        "properties": {
+          "attempt": {
+            "not": { "required": ["outcome"] },
+            "properties": { "userAttempted": { "enum": [false, null] } }
+          },
+          "assistance": { "properties": { "level": { "const": "full_solution" } } }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "timing": {
+            "properties": { "source": { "enum": ["website", "manual"] } }
+          }
+        }
+      },
+      "then": { "properties": { "timing": { "required": ["elapsedSeconds"] } } }
+    },
+    {
+      "if": {
+        "properties": {
+          "timing": {
+            "properties": { "source": { "const": "unknown" } }
+          }
+        }
+      },
+      "then": { "properties": { "timing": { "not": { "required": ["elapsedSeconds"] } } } }
+    }
+  ]
+}

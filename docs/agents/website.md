@@ -17,16 +17,22 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
 
 ## Data Sources
 
+- Treat `data/daily/YYYY-MM-DD.json` as the canonical daily plan and finalized activity summary.
 - Treat `practice/leetcode/bank/questions.json` as user-maintained metadata, not scraped data.
 - Treat `practice/*/sessions/*.md` and `audio-answers/*.md` as durable journal artifacts.
 - Use the contracts under `docs/contracts/` as the canonical field names.
-- Browser storage is acceptable for prototype-only device-local state. Durable multi-device activity history requires D1 or another explicitly approved backend.
+- Run `scripts/build-content-index.mjs` before development/build so the app consumes daily JSON, specialist artifacts, and behavioral story files through one generated index.
+- Browser storage is temporary timer, outcome, and extra-activity draft state only. Versioned daily/artifact files are the first version's durable record. Durable direct multi-device writes require D1 or another explicitly approved backend.
 - Never send private interview transcripts or local audio to an external service without explicit user authorization.
+
+The website must not imply that browser draft state has already been published to Git. Give the user a file export for transferring timer/outcome data when useful, and label committed artifacts separately from local drafts.
 
 ## UX Direction
 
 - Lead with today's practice and progress, then history and review queues.
 - Favor a focused journal/dashboard over contest theater.
+- Provide Today, Journey, Practice Library, and Story Bank views without placing every raw log on one page.
+- Activity detail should lead with summary, outcome, approach, lessons, and feedback; keep full transcript or code expandable.
 - Timers need start, pause, resume, and complete actions plus clear remaining/elapsed labels.
 - A failed attempt should still feel like useful logged work.
 - Make extra-question creation a short modal or inline form: category, title or URL/prompt, and timer.

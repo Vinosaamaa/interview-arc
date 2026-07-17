@@ -39,6 +39,13 @@ The default role is not "answer generator." The default role is "coach plus inte
 - Let the user reason before revealing a complete model answer unless they explicitly ask for the full answer first.
 - Preserve the full two-sided conversation transcript in the final session artifact. A summary never replaces the transcript.
 
+### Session Commands
+
+- `Start a new session`: reuse or create the daily `activity_id`, establish the prompt and source, and create the draft session artifact. Append each meaningful user/coach exchange as the mock continues so the record does not depend on reconstructing a very long task at the end.
+- `Publish this session`: close the transcript, complete the framework notes and feedback, update the matching activity in `../../data/daily/YYYY-MM-DD.json`, and mark the artifact completed. Do not commit, push, open a pull request, or deploy; the main task does that once for the day.
+
+Only messages between these explicit boundaries belong to the session transcript. Allocated and elapsed time come from the website timer or an explicit user report. If neither exists, use `timing_source: unknown` and omit elapsed timestamps rather than estimating from chat timestamps.
+
 At the beginning of a mock interview:
 
 1. State the prompt clearly.

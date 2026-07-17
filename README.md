@@ -45,16 +45,19 @@ interview-arc/
 
 The site remains at the Git repository root because the current Sites deployment expects the build output there. The interview-practice areas live beside the app, so all four specialist workflows share one repository without breaking hosting.
 
-## Working With Specialist Agents
+## Working With Specialist Tasks
 
-Start a new Codex task from the specialist directory when possible:
+Use four long-lived Codex tasks inside the same Interview Prep project: main/website, LeetCode, system design, and behavioral. They share this checkout and its files; they do not automatically share the private conversation history of another task.
 
-- `practice/leetcode/` for problem-bank curation and coding-attempt review
-- `practice/system-design/` for coached system-design mock interviews
-- `practice/behavioral/` for behavioral story practice
-- repository root or `app/` for website work
+The outer workspace instructions route a task to the right guide even when every task starts from the same Interview Prep folder. The user does not need separate projects or worktrees.
 
-Codex loads the root `AGENTS.md` and then the closest nested `AGENTS.md`. When an existing task predates an instruction change, start a new task so the updated instruction chain is loaded.
+Use three shared commands:
+
+- `Start a new session` creates or acknowledges a stable activity ID and draft artifact.
+- `Publish this session` finalizes one question's files and updates the daily manifest.
+- `Finish today's journal` asks the main task to validate, commit, push, and open one pull request for the day.
+
+See `docs/architecture/single-project-practice-workflow.md` for the full ownership and Git model.
 
 ## LeetCode Data Policy
 
@@ -66,7 +69,9 @@ The bank may store titles, public URLs, difficulty, topics, user-supplied compan
 
 Shared formats live under `docs/contracts/`:
 
-- `activity.schema.json` defines timed activities and outcomes.
+- `activity.schema.json` defines shared timed activity fields and outcomes.
+- `leetcode-log.md` and `leetcode-log.schema.json` define attempt and walkthrough records.
+- `daily-journal.schema.json` defines the file the website ingests for each day.
 - `question-bank.schema.json` defines manually maintained LeetCode metadata.
 - `session-artifact.md` defines system-design and behavioral transcript files.
 
@@ -102,5 +107,8 @@ The existing hosted project configuration is stored in `.openai/hosting.json`. K
 
 - Code, schemas, and agent-guide changes use a feature branch and pull request.
 - Generated interview artifacts can be grouped into one daily branch such as `journal/2026-07-17`.
+- All specialist tasks use the same daily branch sequentially in the same checkout.
+- `Publish this session` writes files only; it does not create a pull request or deploy by itself.
+- `Finish today's journal` creates one commit/pull request for the complete day.
 - Timer ticks and live UI state belong in application storage, not one Git commit per click.
 - End-of-day Markdown is the durable journal record.

@@ -15,6 +15,16 @@ Use the closest specialist guide and keep work in its owning area:
 
 If a task starts at the repository root, explicitly read the owning guide before changing files. Keep shared field names and enums in `docs/contracts/`; do not redefine incompatible versions inside specialist folders.
 
+The user may keep every specialist as a long-lived Codex task inside the same outer Interview Prep project. Do not require separate local projects or worktrees. Codex tasks share committed and working-tree files, not one another's unrecorded transcript, so write durable decisions and published results to the repository.
+
+## Session Commands
+
+- `Start a new session`: establish a stable `activity_id`, activity source, and draft artifact. Only the conversation after this boundary belongs to the session transcript.
+- `Publish this session`: finalize the current artifact and update the matching `data/daily/YYYY-MM-DD.json` entry. Do not open a pull request or deploy for an individual session.
+- `Finish today's journal`: in the main/website task, validate all daily files, commit them together on `journal/YYYY-MM-DD`, push, and open one pull request.
+
+Maintain long system-design and behavioral drafts incrementally. Do not rely on reconstructing an arbitrarily long task transcript only at publish time.
+
 ## Shared Product Rules
 
 - Default daily plan: 6 LeetCode problems in 3 hours, 1 system-design mock in 90 minutes, and 1 behavioral mock in 60 minutes.
@@ -25,6 +35,15 @@ If a task starts at the repository root, explicitly read the owning guide before
 - Preserve raw session evidence. Do not replace a full conversation transcript with only a summary.
 - Use ISO dates (`YYYY-MM-DD`) and stable, lowercase IDs.
 - Never commit secrets, API keys, local database files, model caches, or raw audio.
+
+## Evidence Ownership
+
+- Website timer or explicit user report: allocated and elapsed time.
+- User: LeetCode outcome, initial approach, unshared code, and blocker.
+- Specialist task: only the coaching, solution, complexity, feedback, and transcript it observed.
+- `activity_id`: joins website state to specialist artifacts.
+
+Leave unavailable fields empty or set their source to `unknown`. Never invent timer values, attempt results, code, personal experience, metrics, or transcript content.
 
 ## LeetCode Boundary
 

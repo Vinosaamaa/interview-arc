@@ -18,24 +18,24 @@ export async function generateMetadata(): Promise<Metadata> {
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
   const protocol = requestHeaders.get("x-forwarded-proto") ?? "https";
   const baseUrl = new URL(host ? `${protocol}://${host}` : "http://localhost:3000");
-  const socialImage = new URL("/og.png", baseUrl).toString();
+  const socialImage = new URL("/og-v2.png", baseUrl).toString();
 
   return {
     title: "Interview Arc — Your preparation journey",
-    description: "A focused daily practice space for coding, system design, behavioral stories, and visible progress.",
+    description: "A file-backed daily journal for coding, system design, behavioral stories, timers, and honest progress.",
     icons: {
       icon: "/og.png",
       shortcut: "/og.png",
     },
     openGraph: {
       title: "Interview Arc",
-      description: "Build fluency, not just streaks.",
-      images: [{ url: socialImage, width: 1536, height: 864 }],
+      description: "Make the work visible. Keep the journey honest.",
+      images: [{ url: socialImage, width: 1672, height: 941 }],
     },
     twitter: {
       card: "summary_large_image",
       title: "Interview Arc",
-      description: "Build fluency, not just streaks.",
+      description: "Make the work visible. Keep the journey honest.",
       images: [socialImage],
     },
   };
