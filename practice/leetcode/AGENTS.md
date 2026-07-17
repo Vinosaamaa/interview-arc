@@ -42,7 +42,17 @@ LeetCode uses a structured postmortem by default. Preserve a full two-sided tran
 
 ### Publish Today's LeetCode
 
-When the user says `Publish today's LeetCode`, scan the current date's daily manifest, existing attempt artifacts, and any website draft export the user has made available. Use `publishQueueActivityIds` when present and finalize every solved or solved-after-review LeetCode activity in one pass, preserving each problem's stopwatch time and outcome. The published reading record must include this task's original generated solution or walkthrough, time and space complexity, edge cases, and key lesson; it must not copy an official LeetCode solution.
+When the user says `Publish today's LeetCode` or `Publish the LeetCode session`, perform one end-of-day batch:
+
+1. Look for `../../data/drafts/journal-YYYY-MM-DD-draft.json`, or use the website export attached or otherwise explicitly provided by the user.
+2. Read `publishQueueActivityIds`, `outcomes`, `timers`, `extraActivities`, and the matching daily manifest.
+3. Select every queued LeetCode activity, including locally added activities that do not yet exist in the daily manifest.
+4. Preserve each website-provided stopwatch time and result. Do not use chat timestamps as a timer and do not upgrade a failed or unset result to solved.
+5. For every selected problem, generate an original coaching solution or walkthrough, reference code, time and space complexity, edge cases, and key lesson. Do this even when the user never discussed that problem in this task.
+6. Write one artifact per problem under `attempts/`, update or add the matching daily activity, and point it to `artifactPath`.
+7. Do not commit the local draft export. Do not commit, push, open a pull request, or deploy; the main task handles the daily journal integration.
+
+This command is the normal coding workflow. The user does not need to say `Publish this session` six times.
 
 Do not scrape the user's LeetCode account, authenticated pages, or submission history. This task cannot read deployed browser storage directly. If the website draft is not available, publish only the facts present in repository files or explicitly supplied by the user and mark the rest unknown.
 

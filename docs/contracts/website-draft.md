@@ -10,7 +10,7 @@ Every activity has its own elapsed-time stopwatch ID, including each LeetCode pr
 
 Finishing a session or activity sets `completed: true`, clears `runningSince`, and locks the timer permanently. A completed timer must never expose a resume action.
 
-## LeetCode Results
+## Result Flags
 
 The website uses one cycling flag control:
 
@@ -19,7 +19,9 @@ The website uses one cycling flag control:
 3. yellow: `solved_after_reviewing_approach`;
 4. red: `failed`.
 
-The control provides an accessible label and a hover/focus legend. Outcome remains separate from timer completion.
+The control appears on coding, system-design, and behavioral activities so all Today cards keep the same layout. For LeetCode, green and yellow retain their canonical outcome names. For system-design and behavioral work, the interface reads them as `finished` and `finished after reviewing approach`; those mock labels are local publishing signals and must not be written into the durable activity `outcome` field, which remains LeetCode-specific.
+
+The control provides an accessible label and a hover/focus legend. Its legend must escape the card visually rather than being clipped by the swipe container. A result flag and timer completion are separate signals; either can finish an activity locally, but red work is excluded from Past and from the publish queue.
 
 ## Sessions
 
@@ -47,13 +49,32 @@ Draft export schema version 3 contains session countdowns, activity stopwatches,
 `publishQueueActivityIds` contains:
 
 - LeetCode activities marked `solved` or `solved_after_reviewing_approach`;
-- completed system-design activities;
-- completed behavioral activities.
+- system-design activities marked green/yellow or finished with their stopwatch;
+- behavioral activities marked green/yellow or finished with their stopwatch.
 
-A specialist task may use an exported draft the user makes available, but it cannot read deployed browser storage directly.
+A specialist task may use an exported draft the user makes available, but it cannot read deployed browser storage directly. The standard local handoff path is `data/drafts/journal-YYYY-MM-DD-draft.json`. Draft JSON files are ignored by Git; `data/drafts/README.md` documents the workflow.
 
-## Practice Library
+## End-Of-Day LeetCode Publication
 
-The device-local Practice Library updates immediately from the same eligibility rules as `publishQueueActivityIds`. Planned and running records are excluded. Failed LeetCode attempts remain available to Journey statistics but do not appear in the reading library.
+The user exports Today once, makes the JSON available at the standard handoff path or attaches it to the LeetCode task, and says `Publish today's LeetCode`.
+
+The LeetCode task must:
+
+1. read `publishQueueActivityIds`, `outcomes`, `timers`, the daily manifest, and locally added activity metadata;
+2. select only queued LeetCode activities;
+3. preserve the website-provided outcome and elapsed time without inferring either from chat timestamps;
+4. generate an original coaching solution, code, complexity analysis, edge cases, and key lesson for every selected problem, even when that problem was never discussed earlier in the task;
+5. write one attempt artifact per problem and update the daily manifest;
+6. leave the draft file local and uncommitted.
+
+If no export is available, the task must not claim it knows what was finished. It may use durable manifest facts or ask the user to export or attach the draft.
+
+## Past
+
+The device-local Past view updates immediately from the same eligibility rules as `publishQueueActivityIds`. Planned, running, and red/failed records are excluded. Failed attempts remain available to Journey statistics but do not appear in the reading log.
 
 Published LeetCode letters show original agent-generated solution material. Published system-design and behavioral letters show the complete formatted conversation transcript and review. Markdown is rendered as a preview with headings, lists, tables, links, quotations, and fenced code blocks; raw Markdown source is not the default reading surface.
+
+## Problem Banks
+
+Problem Banks is the reusable catalog for all three sources: LeetCode, system design, and behavioral. It provides All/Coding/System design/Behavioral filters. Every question has a `Practice today` action that adds it as standalone practice and returns to Today.

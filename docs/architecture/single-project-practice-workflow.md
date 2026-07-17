@@ -19,6 +19,8 @@ Tasks share repository files but not hidden conversational context. Durable inst
 
 System-design and behavioral transcripts are appended incrementally. LeetCode uses a structured log by default; a full transcript is optional when the conversation itself is valuable.
 
+LeetCode also supports the day-level `Publish today's LeetCode` command. The user exports Today once and places the JSON under `data/drafts/` or attaches it to the LeetCode task. That task uses the publish queue to generate every eligible coding artifact in one batch, including problems that were never discussed in that task.
+
 ## Ownership
 
 The website owns live timer draft state. A specialist can use time only when it comes from the website export or the user. The user owns attempt outcome and any code or reasoning they did not share. The specialist owns only its generated explanation and observed coaching interaction. Every surface joins data through `activity_id`.
@@ -39,6 +41,7 @@ The first version uses build-time ingestion:
 - specialist Markdown artifacts contain transcript, solution, and review detail.
 - `scripts/build-content-index.mjs` generates the website's content index before development and production builds.
 - browser storage is temporary timer/draft state only; versioned files are the durable record.
+- `data/drafts/journal-YYYY-MM-DD-draft.json` is the ignored local bridge from browser state to specialist tasks.
 
 Immediate multi-device writes from the deployed site would require a separately scoped D1/API implementation. This file-backed version deliberately avoids adding authentication or a database before the journal workflow is proven.
 

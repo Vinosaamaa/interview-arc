@@ -9,6 +9,6 @@ Before editing website code, read `../docs/agents/website.md` and the shared con
 - Do not expose local-only audio as a playable deployed URL.
 - Keep realistic data in versioned files or durable storage; avoid duplicating canonical enums in components.
 - Treat browser state as an unpublished local draft and versioned daily/artifact files as the durable source.
-- Keep Today, Journey, Practice Library, and Story Bank as distinct information views; reveal full transcripts and code on demand.
+- Keep Today, Journey, Past, and Problem Banks as distinct information views; reveal full transcripts and code on demand.
 - Preserve the vinext/Sites build architecture and root hosting configuration.
 - Verify website changes with `pnpm build`; also run `pnpm lint` for TypeScript or JavaScript changes.

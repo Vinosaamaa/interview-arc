@@ -30,7 +30,10 @@ test("server-renders the Interview Arc dashboard", async () => {
   assert.match(html, /Finish and lock stopwatch/);
   assert.match(html, /Add another session/);
   assert.match(html, /Add one activity/);
-  assert.match(html, /Story bank/);
+  assert.match(html, />Past</);
+  assert.match(html, /Problem banks/);
+  assert.match(html, /Finished after reviewing approach/);
+  assert.doesNotMatch(html, /Practice library|Story bank|All finished/);
   assert.doesNotMatch(html, />＋ Add<\/button>/);
   assert.doesNotMatch(html, /＋ Add activity/);
   assert.doesNotMatch(html, /Test console|Submit attempt|solution\.py/);

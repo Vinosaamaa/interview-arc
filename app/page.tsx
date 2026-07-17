@@ -11,7 +11,7 @@ import {
   type QuestionBankItem,
 } from "./generated/content-index";
 
-type View = "today" | "journey" | "library" | "stories";
+type View = "today" | "journey" | "library" | "banks";
 type ActivityType = JournalActivity["type"];
 type Outcome = "solved" | "solved_after_reviewing_approach" | "failed";
 type TimerDraft = { elapsedSeconds: number; runningSince: number | null; completed: boolean };
@@ -115,6 +115,14 @@ function outcomeLabel(outcome?: Outcome) {
   return "No result yet";
 }
 
+function resultLabel(outcome: Outcome | undefined, activityType: ActivityType) {
+  if (activityType === "leetcode") return outcomeLabel(outcome);
+  if (outcome === "solved") return "Finished";
+  if (outcome === "solved_after_reviewing_approach") return "Finished after reviewing approach";
+  if (outcome === "failed") return "Failed";
+  return "No result yet";
+}
+
 function plainText(markdown: string) {
   return markdown.replace(/```[\s\S]*?```/g, "Code example").replace(/[*_`>#-]/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -208,19 +216,31 @@ function SessionCountdown({
   );
 }
 
-function ResultFlag({ outcome, onChange }: { outcome?: Outcome; onChange: (outcome?: Outcome) => void }) {
+function ResultFlag({
+  outcome,
+  activityType,
+  onChange,
+}: {
+  outcome?: Outcome;
+  activityType: ActivityType;
+  onChange: (outcome?: Outcome) => void;
+}) {
   const currentIndex = OUTCOME_ORDER.indexOf(outcome);
   const next = OUTCOME_ORDER[(currentIndex + 1) % OUTCOME_ORDER.length];
+  const isCoding = activityType === "leetcode";
+  const labels = isCoding
+    ? { solved: "Solved", reviewed: "Solved after reviewing approach" }
+    : { solved: "Finished", reviewed: "Finished after reviewing approach" };
   return (
     <div className="result-flag-wrap">
-      <button className={`result-flag ${outcome ?? "unset"}`} onClick={() => onChange(next)} aria-label={`Result: ${outcomeLabel(outcome)}. Click for ${outcomeLabel(next)}.`} title={`Result: ${outcomeLabel(outcome)}`}>
+      <button className={`result-flag ${outcome ?? "unset"}`} onClick={() => onChange(next)} aria-label={`Result: ${resultLabel(outcome, activityType)}. Select the next result.`} title="Change result">
         <span aria-hidden="true">{outcome ? "⚑" : "⚐"}</span>
       </button>
       <div className="result-legend" role="tooltip">
         <strong>Result flag</strong>
         <span><i className="unset" /> Not set</span>
-        <span><i className="solved" /> Solved</span>
-        <span><i className="reviewed" /> Solved after reviewing approach</span>
+        <span><i className="solved" /> {labels.solved}</span>
+        <span><i className="reviewed" /> {labels.reviewed}</span>
         <span><i className="failed" /> Failed</span>
       </div>
     </div>
@@ -264,6 +284,7 @@ export default function Home() {
   const [composer, setComposer] = useState<ComposerState>(EMPTY_COMPOSER);
   const [selectedEntry, setSelectedEntry] = useState<LogEntry | null>(null);
   const [libraryFilter, setLibraryFilter] = useState<"all" | ActivityType>("all");
+  const [bankFilter, setBankFilter] = useState<"all" | ActivityType>("all");
   const storageKey = `interview-arc-draft-${journal.date}`;
 
   useEffect(() => {
@@ -420,8 +441,7 @@ export default function Home() {
 
   function isActivityComplete(activity: JournalActivity) {
     if (activity.status === "completed") return true;
-    if (activity.type === "leetcode") return Boolean(draft.outcomes[activity.id] ?? activity.outcome);
-    return Boolean(draft.timers[activity.id]?.completed);
+    return Boolean(draft.outcomes[activity.id] ?? activity.outcome ?? draft.timers[activity.id]?.completed);
   }
 
   function openNewActivity() {
@@ -456,25 +476,36 @@ export default function Home() {
   }
 
   function addBankQuestionToToday(question: QuestionBankItem, type: ActivityType) {
-    const id = `${journal.date}-extra-${slugify(question.title)}-${Date.now().toString(36)}`;
-    const activity: ExtraActivity = {
-      schemaVersion: 2,
-      id,
-      date: journal.date,
-      source: "extra",
-      type,
-      ...(type === "leetcode" ? { recordKind: "attempt" as const } : {}),
-      title: question.title,
-      ...(question.url ? { url: question.url } : {}),
-      ...(question.prompt ? { prompt: question.prompt } : {}),
-      allocatedSeconds: question.targetMinutes * 60,
-      timerGroupId: id,
-      timingSource: "website",
-      status: "planned",
-      ...(question.topics.length ? { notes: question.topics.join(", ") } : {}),
-    };
-    setDraft((current) => ({ ...current, extraActivities: [...current.extraActivities, activity] }));
+    setDraft((current) => {
+      const baseId = `${journal.date}-extra-${slugify(question.title)}`;
+      let id = baseId;
+      let suffix = 2;
+      while (current.extraActivities.some((activity) => activity.id === id)) {
+        id = `${baseId}-${suffix}`;
+        suffix += 1;
+      }
+      const activity: ExtraActivity = {
+        schemaVersion: 2,
+        id,
+        date: journal.date,
+        source: "extra",
+        type,
+        ...(type === "leetcode" ? { recordKind: "attempt" as const } : {}),
+        title: question.title,
+        ...(question.url ? { url: question.url } : {}),
+        ...(question.prompt ? { prompt: question.prompt } : {}),
+        allocatedSeconds: question.targetMinutes * 60,
+        timerGroupId: id,
+        timingSource: "website",
+        status: "planned",
+        ...(question.topics.length ? { notes: question.topics.join(", ") } : {}),
+      };
+      return { ...current, extraActivities: [...current.extraActivities, activity] };
+    });
     setView("today");
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>(".loose-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   function saveActivity(event: FormEvent<HTMLFormElement>) {
@@ -621,9 +652,12 @@ export default function Home() {
       completed: timer.completed,
       timingSource: "website",
     }]));
-    const publishQueueActivityIds = allTodayActivities.filter((activity) => activity.type === "leetcode"
-      ? ["solved", "solved_after_reviewing_approach"].includes(draft.outcomes[activity.id] ?? activity.outcome ?? "")
-      : activity.status === "completed" || Boolean(draft.timers[activity.id]?.completed)).map((activity) => activity.id);
+    const publishQueueActivityIds = allTodayActivities.filter((activity) => {
+      const result = draft.outcomes[activity.id] ?? activity.outcome;
+      if (result === "failed") return false;
+      if (result === "solved" || result === "solved_after_reviewing_approach") return true;
+      return activity.type !== "leetcode" && (activity.status === "completed" || Boolean(draft.timers[activity.id]?.completed));
+    }).map((activity) => activity.id);
     const payload = { schemaVersion: 3, date: journal.date, exportedAt: new Date(timestamp).toISOString(), localDraft: true, sessionTimers, timers, outcomes: draft.outcomes, publishQueueActivityIds, sessions: draft.sessions, extraActivities: draft.extraActivities };
     const url = window.URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
     const link = document.createElement("a");
@@ -682,7 +716,8 @@ export default function Home() {
   }, [draft, journal.date, now]);
 
   const libraryEntries = useMemo(() => logEntries.filter((entry) => {
-    if (entry.type === "leetcode") return entry.outcome === "solved" || entry.outcome === "solved_after_reviewing_approach";
+    if (entry.outcome) return entry.outcome === "solved" || entry.outcome === "solved_after_reviewing_approach";
+    if (entry.type === "leetcode") return false;
     return entry.status === "completed" || entry.status === "published";
   }), [logEntries]);
 
@@ -763,7 +798,7 @@ export default function Home() {
                   <span className={`row-count ${isActivityComplete(activity) ? "complete" : ""}`}>{isActivityComplete(activity) ? "✓" : problemIndex + 1}</span>
                   <div className="problem-title"><strong>{activity.title}</strong><span>{activity.notes ?? "Coding problem"}</span>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open on LeetCode ↗</a>}</div>
                   <ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} />
-                  <ResultFlag outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} />
+                  <ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} />
                   {isExtra && <div className="row-edit-actions"><button onClick={() => openEditActivity(activity as ExtraActivity)}>Edit</button><button onClick={() => removeActivity(activity.id)}>Remove</button></div>}
                 </div>
               );
@@ -781,7 +816,10 @@ export default function Home() {
                 <div className="mock-topline"><span className={`type-chip ${item.type}`}>{typeLabel(item.type)}</span>{isExtra && <div className="row-edit-actions"><button onClick={() => openEditActivity(item as ExtraActivity)}>Edit</button><button onClick={() => removeActivity(item.id)}>Remove</button></div>}</div>
                 <h3>{item.title}</h3>
                 <p>{item.prompt}</p>
-                <ActivityTimer activity={item} timer={draft.timers[item.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} />
+                <div className="mock-controls">
+                  <ActivityTimer activity={item} timer={draft.timers[item.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} />
+                  <ResultFlag activityType={item.type} outcome={draft.outcomes[item.id] ?? item.outcome} onChange={(outcome) => setOutcome(item.id, outcome)} />
+                </div>
                 <div className="publish-instruction">After the mock, say <strong>“Publish this session”</strong> in the {item.type === "system_design" ? "system-design" : "behavioral"} task.</div>
               </section>
             );
@@ -808,7 +846,7 @@ export default function Home() {
 
         <section className="loose-section">
           <div className="section-title"><div><span className="eyebrow">STANDALONE PRACTICE</span><h2>Outside a full session</h2><p>Swipe a card left, or use its ••• control, to edit or remove it.</p></div></div>
-          {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add one activity” above to search a bank or paste a public LeetCode problem URL.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <SwipeActivityCard key={activity.id} title={activity.title} onEdit={() => openEditActivity(activity)} onRemove={() => removeActivity(activity.id)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><small>{typeLabel(activity.type)} · local draft</small><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} />{activity.type === "leetcode" && <ResultFlag outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} />}</SwipeActivityCard>)}</div>}
+          {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add one activity” above to search a bank or paste a public LeetCode problem URL.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <SwipeActivityCard key={activity.id} title={activity.title} onEdit={() => openEditActivity(activity)} onRemove={() => removeActivity(activity.id)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><small>{typeLabel(activity.type)} · local draft</small><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} /><ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} /></SwipeActivityCard>)}</div>}
         </section>
       </>
     );
@@ -858,8 +896,8 @@ export default function Home() {
   function renderLibrary() {
     return (
       <section className="view-page library-page">
-        <header className="view-masthead"><span className="eyebrow">PRACTICE LIBRARY · COMPLETED WORK ONLY</span><h1>Read the journey<br /><em>like a field journal.</em></h1><p>Solved coding problems and finished interview mocks appear here immediately. Planned, running, and failed coding attempts stay out of this reading library.</p></header>
-        <div className="library-toolbar"><div className="filter-row" role="group" aria-label="Filter practice log">{(["all", "leetcode", "system_design", "behavioral"] as const).map((filter) => <button key={filter} className={libraryFilter === filter ? "active" : ""} onClick={() => setLibraryFilter(filter)}>{filter === "all" ? "All finished" : typeLabel(filter)}</button>)}</div><span>{groupedLog.reduce((sum, [, entries]) => sum + entries.length, 0)} records shown</span></div>
+        <header className="view-masthead"><span className="eyebrow">PAST · COMPLETED WORK ONLY</span><h1>Read the journey<br /><em>like a field journal.</em></h1><p>Solved coding problems and finished interview mocks appear here immediately. Planned, running, and failed activities stay out of this reading log.</p></header>
+        <div className="library-toolbar"><div className="filter-row" role="group" aria-label="Filter past practice">{(["all", "leetcode", "system_design", "behavioral"] as const).map((filter) => <button key={filter} className={libraryFilter === filter ? "active" : ""} onClick={() => setLibraryFilter(filter)}>{filter === "all" ? "All" : typeLabel(filter)}</button>)}</div><span>{groupedLog.reduce((sum, [, entries]) => sum + entries.length, 0)} records shown</span></div>
         <div className="log-layout">
           <div className="dated-log">
             {groupedLog.length ? groupedLog.map(([date, entries]) => <section className="log-day" id={`log-date-${date}`} key={date}><header><time>{readableDate(date)}</time><span>{entries.length} record{entries.length === 1 ? "" : "s"}</span></header><div className="log-day-entries">{entries.map((entry) => <button className={`log-entry ${entry.type}`} key={entry.id} onClick={() => setSelectedEntry(entry)}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><div className="log-entry-copy"><small>{typeLabel(entry.type)} · {entry.status}</small><strong>{entry.title}</strong><span>{entry.subtitle}</span></div><div className="log-entry-meta"><strong>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "—"}</strong><span>{entry.type === "leetcode" ? outcomeLabel(entry.outcome) : entry.artifact ? "Published record" : entry.status}</span></div><span className="open-letter">Read →</span></button>)}</div></section>) : <div className="quiet-empty library-empty"><strong>No finished work in this filter yet.</strong><span>Mark a coding result as solved, or finish a system-design or behavioral stopwatch, and it will appear here.</span></div>}
@@ -870,14 +908,30 @@ export default function Home() {
     );
   }
 
-  function renderStories() {
-    const starterQuestion = contentIndex.questionBanks.behavioral[0];
+  function renderBanks() {
+    const bankEntries: { type: ActivityType; question: QuestionBankItem }[] = [
+      ...contentIndex.questionBanks.leetcode.map((question) => ({ type: "leetcode" as const, question })),
+      ...contentIndex.questionBanks.systemDesign.map((question) => ({ type: "system_design" as const, question })),
+      ...contentIndex.questionBanks.behavioral.map((question) => ({ type: "behavioral" as const, question })),
+    ];
+    const visibleEntries = bankEntries.filter((entry) => bankFilter === "all" || entry.type === bankFilter);
     return (
-      <section className="view-page story-page">
-        <header className="view-masthead"><span className="eyebrow">STORY BANK · REUSABLE PROJECT EVIDENCE</span><h1>Begin with what<br /><em>actually happened.</em></h1><p>This is not another daily task list. It is your durable source of project facts—decisions, conflict, recovery, leadership, and measurable results—that can support many behavioral answers.</p></header>
-        <div className="story-purpose"><article><span>01</span><strong>Discover</strong><p>Use the Behavioral task to unpack one real project without inventing ownership or impact.</p></article><article><span>02</span><strong>Publish</strong><p>The Behavioral task writes a project source and the full mock transcript into the repository.</p></article><article><span>03</span><strong>Reuse</strong><p>Open the project here later and shape the same verified evidence for different questions.</p></article></div>
-        {contentIndex.stories.length ? <div className="project-shelf">{contentIndex.stories.map((story, index) => <button key={story.path} onClick={() => setSelectedEntry({ id: story.path, date: story.date, type: "behavioral", title: story.title, subtitle: `${story.sections.length} evidence sections`, status: "published", elapsedSeconds: 0, artifact: story })}><span>{String(index + 1).padStart(2, "0")}</span><div><small>Project source</small><h2>{story.title}</h2><p>{story.sections.length} evidence sections</p></div><strong>Open project letter →</strong></button>)}</div> : <div className="story-workbench"><div className="story-sequence"><span>Project</span><i /><span>Decision</span><i /><span>Result</span><i /><span>Story</span></div><div><span className="eyebrow">NO PROJECT SOURCE PUBLISHED YET</span><h2>Your first story starts in the Behavioral task.</h2><p>Talk through one real project there, then say “Publish this session.” The project evidence will appear here after the site is rebuilt.</p>{starterQuestion && <button className="primary-action" onClick={() => addBankQuestionToToday(starterQuestion, "behavioral")}>Practice a behavioral question today</button>}</div></div>}
-        <section className="question-bank-preview"><div className="section-title"><div><span className="eyebrow">BEHAVIORAL QUESTION BANK</span><h2>Questions ready for a mock</h2><p>These are practice prompts. Adding one sends it directly to standalone practice on Today; it does not create a story by itself.</p></div></div>{contentIndex.questionBanks.behavioral.map((question) => <article key={question.id}><span className="type-mark behavioral">B</span><div><strong>{question.title}</strong><p>{question.prompt}</p></div><button onClick={() => addBankQuestionToToday(question, "behavioral")}>Practice today</button></article>)}</section>
+      <section className="view-page banks-page">
+        <header className="view-masthead"><span className="eyebrow">PROBLEM BANKS · ALL PRACTICE SOURCES</span><h1>Choose the next thing<br /><em>worth practicing.</em></h1><p>Browse every coding, system-design, and behavioral prompt in one place. “Practice today” adds the question to standalone practice and takes you directly to Today.</p></header>
+        <div className="bank-totals" aria-label="Question bank totals">
+          <article className="leetcode"><strong>{contentIndex.questionBanks.leetcode.length}</strong><span>Coding problems</span></article>
+          <article className="system_design"><strong>{contentIndex.questionBanks.systemDesign.length}</strong><span>System designs</span></article>
+          <article className="behavioral"><strong>{contentIndex.questionBanks.behavioral.length}</strong><span>Behavioral prompts</span></article>
+        </div>
+        <div className="library-toolbar bank-toolbar"><div className="filter-row" role="group" aria-label="Filter problem banks">{(["all", "leetcode", "system_design", "behavioral"] as const).map((filter) => <button key={filter} className={bankFilter === filter ? "active" : ""} onClick={() => setBankFilter(filter)}>{filter === "all" ? "All" : typeLabel(filter)}</button>)}</div><span>{visibleEntries.length} questions shown</span></div>
+        <div className="problem-bank-list">
+          {visibleEntries.map(({ type, question }) => <article className={`problem-bank-entry ${type}`} key={`${type}-${question.id}`}>
+            <span className={`type-mark ${type}`}>{typeMark(type)}</span>
+            <div className="problem-bank-copy"><small>{typeLabel(type)}{question.difficulty ? ` · ${question.difficulty}` : ""}</small><strong>{question.title}</strong><p>{question.prompt ?? question.topics.join(" · ")}</p>{question.url && <a href={question.url} target="_blank" rel="noreferrer">Open problem ↗</a>}</div>
+            <div className="bank-entry-meta"><span>{question.targetMinutes} min estimate</span>{question.topics.length > 0 && <small>{question.topics.slice(0, 3).join(" · ")}</small>}</div>
+            <button onClick={() => addBankQuestionToToday(question, type)}>Practice today</button>
+          </article>)}
+        </div>
       </section>
     );
   }
@@ -895,14 +949,14 @@ export default function Home() {
       <aside className="sidebar">
         <button className="brand" onClick={() => setView("today")}><span className="brand-mark">IA</span><span>Interview Arc</span></button>
         <nav className="primary-nav" aria-label="Primary navigation">{([[
-          "today", "Today"], ["journey", "Journey"], ["library", "Practice library"], ["stories", "Story bank"]] as [View, string][]).map(([id, label], index) => <button key={id} className={view === id ? "active" : ""} onClick={() => setView(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
+          "today", "Today"], ["journey", "Journey"], ["library", "Past"], ["banks", "Problem banks"]] as [View, string][]).map(([id, label], index) => <button key={id} className={view === id ? "active" : ""} onClick={() => setView(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
         <div className="sidebar-status"><span className={[...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "live" : ""} /><div><strong>{[...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "Timer running" : hydrated ? "Draft saved locally" : "Loading draft"}</strong><small>Session countdown + one activity stopwatch</small></div></div>
         <div className="profile"><span>WX</span><div><strong>Wenk Xu</strong><small>Interview journey · 2026</small></div></div>
       </aside>
 
       <section className="main-column">
-        <header className="topbar"><div><span>{readableDate(journal.date)}</span><strong>{view === "today" ? "Today’s work" : view === "journey" ? "Statistics" : view === "library" ? "Dated practice log" : "Project story sources"}</strong></div><div><button className="secondary-action" onClick={exportDraft}>Export today</button></div></header>
-        <div className="page-content">{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "library" && renderLibrary()}{view === "stories" && renderStories()}</div>
+        <header className="topbar"><div><span>{readableDate(journal.date)}</span><strong>{view === "today" ? "Today’s work" : view === "journey" ? "Statistics" : view === "library" ? "Dated practice log" : "Question sources"}</strong></div><div><button className="secondary-action" onClick={exportDraft}>Export today</button></div></header>
+        <div className="page-content">{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
       </section>
 
       {composer.open && <div className="modal-backdrop" role="presentation" onMouseDown={() => setComposer(EMPTY_COMPOSER)}><section className="composer" role="dialog" aria-modal="true" aria-labelledby="composer-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setComposer(EMPTY_COMPOSER)} aria-label="Close">×</button><span className="eyebrow">BUILD TODAY&apos;S WORK</span><h2 id="composer-title">{composer.editingId ? "Edit this activity" : composer.mode === "session" ? "Add another full session" : "Add one activity"}</h2>

@@ -56,6 +56,8 @@ Use three shared commands:
 - `Publish this session` finalizes one question's files and updates the daily manifest.
 - `Finish today's journal` asks the main task to validate, commit, push, and open one pull request for the day.
 
+For coding, there is also one batch command: export Today, make `journal-YYYY-MM-DD-draft.json` available under `data/drafts/` or attach it to the LeetCode task, then say `Publish today's LeetCode`. The task reads the queued activity IDs and produces every coding artifact in one pass; it does not need a separate conversation for every problem.
+
 See `docs/architecture/single-project-practice-workflow.md` for the full ownership and Git model.
 
 ## LeetCode Data Policy
@@ -123,3 +125,5 @@ The website reads three versioned banks:
 - `practice/behavioral/bank/questions.json`
 
 A normal session contains six coding problems, one system-design question, and one behavioral question under one fixed six-hour countdown. The user may add another full session or a standalone activity. Every activity also has a compact elapsed-time stopwatch.
+
+The site presents these sources in Problem Banks. Past is the completed-work reading log; Journey retains broader statistics, including failed attempts.

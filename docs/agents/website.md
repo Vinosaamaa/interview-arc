@@ -14,10 +14,10 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
 - Allow an extra activity in any category with its own stopwatch and optional planning estimate.
 - Let locally added activities be edited and removed.
 - Store lifecycle separately from outcome.
-- For LeetCode completion, use one cycling flag control for only the three outcomes in `docs/contracts/activity.schema.json`; its hover/focus legend must explain the colors.
+- Give coding, system-design, and behavioral activities the same cycling result-flag layout. The local mock labels are finished, finished after review, and failed; only LeetCode persists the canonical outcome field. The hover/focus legend must explain the colors and must not be clipped inside a swipe card.
 - Open the original LeetCode page for prompt reading and submission. Never imply that code was executed or accepted locally.
 - Show system-design and behavioral transcript/review artifacts when tracked files exist.
-- Practice Library contains only solved LeetCode work (`solved` or `solved_after_reviewing_approach`) and finished/published system-design or behavioral work. Never show planned or running activities there.
+- Past contains only green/yellow LeetCode work and green/yellow or otherwise finished/published system-design and behavioral work. Never show planned, running, or red/failed activities there.
 - Render tracked artifact Markdown as formatted headings, lists, links, tables, quotes, and code blocks rather than raw source text.
 - For ignored audio, display the filename and `Local only`; never render a deployed playback control.
 
@@ -38,14 +38,15 @@ The website must not imply that browser draft state has already been published t
 
 - Lead with today's practice and progress, then history and review queues.
 - Favor a focused journal/dashboard over contest theater.
-- Provide Today, Journey, Practice Library, and Story Bank views without placing every raw log on one page.
+- Provide Today, Journey, Past, and Problem Banks views without placing every raw log on one page.
 - Activity detail should lead with summary, outcome, approach, lessons, and feedback; keep full transcript or code expandable.
 - The session clock is a countdown. Activity clocks are stopwatches with compact icon controls for start/pause and finish.
 - A failed attempt should still feel like useful logged work.
 - Make extra-question creation a short modal or inline form: category, title or URL/prompt, and timer.
 - In the creation flow, search the matching bank first. For an unknown LeetCode URL, derive a title from its public problem slug without scraping the page. For unknown system-design or behavioral questions, accept a custom title with no URL.
 - Keep body and annotation text readable: normal supporting copy should be at least 14px and short utility labels at least 12px.
-- Practice Library is a date-grouped scrolling log with category color, filters, a calendar jump control, and a centered reading dialog.
+- Past is a date-grouped scrolling log with category color, filters, a calendar jump control, and a centered reading dialog.
+- Problem Banks combines all three versioned banks, offers category filters, and sends every `Practice today` selection to standalone practice on Today.
 - Journey owns cumulative totals and daily charts for coding, system design, behavioral, outcomes, and elapsed time.
 
 ## Implementation And Hosting

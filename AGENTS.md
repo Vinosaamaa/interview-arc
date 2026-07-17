@@ -27,8 +27,8 @@ Maintain long system-design and behavioral drafts incrementally. Do not rely on 
 
 ## Shared Product Rules
 
-- Default daily plan: 6 LeetCode problems in 3 hours, 1 system-design mock in 90 minutes, and 1 behavioral mock in 60 minutes.
-- Extra questions are allowed in every category and use independent timers.
+- Default daily plan: one fixed six-hour session containing 6 LeetCode problems, 1 system-design mock, and 1 behavioral mock.
+- The session owns the countdown; every activity also has a compact elapsed-time stopwatch. Extra questions are allowed in every category.
 - Activity lifecycle is `planned`, `running`, or `completed`.
 - LeetCode outcome is exactly `solved`, `solved_after_reviewing_approach`, or `failed`.
 - Lifecycle and outcome are separate. A failed attempt can still be completed and documented.

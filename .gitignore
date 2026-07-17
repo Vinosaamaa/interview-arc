@@ -53,3 +53,7 @@ __pycache__/
 /audio-answers/**/*.mp3
 /audio-answers/**/*.aac
 /audio-answers/**/*.flac
+
+# local website-to-agent handoff; keep the instructions only
+/data/drafts/*.json
+!/data/drafts/README.md
