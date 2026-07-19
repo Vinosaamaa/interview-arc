@@ -22,6 +22,14 @@
   "images": {
     "binding": "IMAGES"
   },
+  // Cloudflare Access (email / Google login) for the workers.dev URL. These are
+  // public identifiers (not secrets): the Access application's Audience tag and
+  // the Zero Trust team domain. When set, worker/index.ts verifies the Access
+  // JWT and the old passcode gate is bypassed.
+  "vars": {
+    "POLICY_AUD": "6433d219855664b983cad4b605a888d84c698d953b7222c7ef74da3930ca1d71",
+    "TEAM_DOMAIN": "https://hidden-frost-ab6e.cloudflareaccess.com"
+  },
   "d1_databases": [
     {
       "binding": "DB",
