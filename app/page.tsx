@@ -10,20 +10,20 @@ import {
   type PracticeSession,
   type QuestionBankItem,
 } from "./generated/content-index";
+import {
+  elapsed,
+  formatClock,
+  remaining,
+  SESSION_SECONDS,
+  type ActivityType,
+  type ExtraActivity,
+  type LocalSession,
+  type Outcome,
+  type TimerDraft,
+} from "./live-types";
+import { useLiveState } from "./live-sync";
 
 type View = "today" | "journey" | "library" | "banks";
-type ActivityType = JournalActivity["type"];
-type Outcome = "solved" | "solved_after_reviewing_approach" | "failed";
-type TimerDraft = { elapsedSeconds: number; runningSince: number | null; completed: boolean };
-type ExtraActivity = JournalActivity & { timerGroupId: string };
-type LocalSession = PracticeSession & { source: "extra" };
-type LocalDraft = {
-  timers: Record<string, TimerDraft>;
-  sessionTimers: Record<string, TimerDraft>;
-  outcomes: Record<string, Outcome>;
-  extraActivities: ExtraActivity[];
-  sessions: LocalSession[];
-};
 type ComposerMode = "session" | "activity";
 type ComposerState = {
   open: boolean;
@@ -47,8 +47,6 @@ type LogEntry = {
   artifact?: ContentArtifact;
 };
 
-const SESSION_SECONDS = 6 * 60 * 60;
-const EMPTY_DRAFT: LocalDraft = { timers: {}, sessionTimers: {}, outcomes: {}, extraActivities: [], sessions: [] };
 const EMPTY_COMPOSER: ComposerState = {
   open: false,
   mode: "activity",
@@ -59,14 +57,6 @@ const EMPTY_COMPOSER: ComposerState = {
   editingId: "",
 };
 const OUTCOME_ORDER: (Outcome | undefined)[] = [undefined, "solved", "solved_after_reviewing_approach", "failed"];
-
-function formatClock(seconds: number) {
-  const safe = Math.max(0, Math.floor(seconds));
-  const hours = Math.floor(safe / 3600);
-  const minutes = Math.floor((safe % 3600) / 60);
-  const remainder = safe % 60;
-  return [hours, minutes, remainder].map((value) => String(value).padStart(2, "0")).join(":");
-}
 
 function formatDuration(seconds: number) {
   const minutes = Math.round(seconds / 60);
@@ -84,16 +74,6 @@ function readableDate(date: string, compact = false) {
     ...(compact ? {} : { weekday: "long" as const }),
     timeZone: "UTC",
   }).format(new Date(`${date}T12:00:00Z`));
-}
-
-function elapsed(timer: TimerDraft | undefined, now: number) {
-  if (!timer) return 0;
-  return timer.elapsedSeconds +
-    (timer.runningSince ? Math.max(0, Math.floor((now - timer.runningSince) / 1000)) : 0);
-}
-
-function remaining(timer: TimerDraft | undefined, now: number, allocatedSeconds = SESSION_SECONDS) {
-  return Math.max(0, allocatedSeconds - elapsed(timer, now));
 }
 
 function typeLabel(type: ActivityType) {
@@ -286,68 +266,12 @@ function MarkdownBody({ source }: { source: string }) {
 export default function Home() {
   const journal = contentIndex.journals[0];
   const [view, setView] = useState<View>("today");
-  const [draft, setDraft] = useState<LocalDraft>(EMPTY_DRAFT);
-  const [hydrated, setHydrated] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
+  const { draft, setDraft, now, setNow, hydrated, enqueue } = useLiveState(journal.date);
   const [composer, setComposer] = useState<ComposerState>(EMPTY_COMPOSER);
   const [selectedEntry, setSelectedEntry] = useState<LogEntry | null>(null);
   const [libraryFilter, setLibraryFilter] = useState<"all" | ActivityType>("all");
   const [bankFilter, setBankFilter] = useState<"all" | ActivityType>("all");
   const [bankProgressFilter, setBankProgressFilter] = useState<"all" | "todo" | "finished">("all");
-  const storageKey = `interview-arc-draft-v2-${journal.date}`;
-
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      try {
-        for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
-          const key = window.localStorage.key(index);
-          if (key?.startsWith("interview-arc-draft-") && key !== storageKey) {
-            window.localStorage.removeItem(key);
-          }
-        }
-        const saved = window.localStorage.getItem(storageKey);
-        if (saved) {
-          const parsed = JSON.parse(saved) as Partial<LocalDraft>;
-          setDraft({
-            timers: parsed.timers ?? {},
-            sessionTimers: parsed.sessionTimers ?? {},
-            outcomes: parsed.outcomes ?? {},
-            extraActivities: parsed.extraActivities ?? [],
-            sessions: parsed.sessions ?? [],
-          });
-        }
-      } catch {
-        setDraft(EMPTY_DRAFT);
-      } finally {
-        setHydrated(true);
-      }
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [storageKey]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    window.localStorage.setItem(storageKey, JSON.stringify(draft));
-  }, [draft, hydrated, storageKey]);
-
-  useEffect(() => {
-    if (![...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince)) return;
-    const interval = window.setInterval(() => {
-      const timestamp = Date.now();
-      setNow(timestamp);
-      setDraft((current) => {
-        const expiredIds = new Set(Object.entries(current.sessionTimers).filter(([, timer]) => timer.runningSince && elapsed(timer, timestamp) >= SESSION_SECONDS).map(([id]) => id));
-        if (!expiredIds.size) return current;
-        return {
-          ...current,
-          sessionTimers: Object.fromEntries(Object.entries(current.sessionTimers).map(([id, timer]) => expiredIds.has(id)
-            ? [id, { elapsedSeconds: SESSION_SECONDS, runningSince: null, completed: true }]
-            : [id, timer])),
-        };
-      });
-    }, 1000);
-    return () => window.clearInterval(interval);
-  }, [draft.sessionTimers, draft.timers]);
 
   useEffect(() => {
     if (!composer.open && !selectedEntry) return;
@@ -375,6 +299,14 @@ export default function Home() {
   function toggleTimer(activityId: string) {
     const timestamp = Date.now();
     setNow(timestamp);
+    const priorTimer = draft.timers[activityId];
+    if (priorTimer?.completed) return;
+    enqueue({
+      type: "timer",
+      subjectId: activityId,
+      kind: "activity",
+      action: priorTimer?.runningSince ? "pause" : "start",
+    });
     setDraft((current) => {
       const timers = { ...current.timers };
       const prior = timers[activityId] ?? { elapsedSeconds: 0, runningSince: null, completed: false };
@@ -394,6 +326,14 @@ export default function Home() {
   function toggleSessionTimer(sessionId: string) {
     const timestamp = Date.now();
     setNow(timestamp);
+    const priorSession = draft.sessionTimers[sessionId];
+    if (priorSession?.completed || (priorSession && elapsed(priorSession, timestamp) >= SESSION_SECONDS)) return;
+    enqueue({
+      type: "timer",
+      subjectId: sessionId,
+      kind: "session",
+      action: priorSession?.runningSince ? "pause" : "start",
+    });
     setDraft((current) => {
       const prior = current.sessionTimers[sessionId] ?? { elapsedSeconds: 0, runningSince: null, completed: false };
       if (prior.completed || elapsed(prior, timestamp) >= SESSION_SECONDS) return current;
@@ -412,6 +352,7 @@ export default function Home() {
   function completeSessionTimer(sessionId: string) {
     const timestamp = Date.now();
     setNow(timestamp);
+    enqueue({ type: "timer", subjectId: sessionId, kind: "session", action: "finish" });
     setDraft((current) => {
       const prior = current.sessionTimers[sessionId] ?? { elapsedSeconds: 0, runningSince: null, completed: false };
       return {
@@ -427,6 +368,7 @@ export default function Home() {
   function completeTimer(activityId: string) {
     const timestamp = Date.now();
     setNow(timestamp);
+    enqueue({ type: "timer", subjectId: activityId, kind: "activity", action: "finish" });
     setDraft((current) => {
       const prior = current.timers[activityId] ?? { elapsedSeconds: 0, runningSince: null, completed: false };
       return {
@@ -440,6 +382,7 @@ export default function Home() {
   }
 
   function setOutcome(activityId: string, outcome?: Outcome) {
+    enqueue({ type: "outcome", activityId, outcome: outcome ?? null });
     setDraft((current) => {
       const outcomes = { ...current.outcomes };
       if (outcome) outcomes[activityId] = outcome;
@@ -485,32 +428,31 @@ export default function Home() {
   }
 
   function addBankQuestionToToday(question: QuestionBankItem, type: ActivityType) {
-    setDraft((current) => {
-      const baseId = `${journal.date}-extra-${slugify(question.title)}`;
-      let id = baseId;
-      let suffix = 2;
-      while (current.extraActivities.some((activity) => activity.id === id)) {
-        id = `${baseId}-${suffix}`;
-        suffix += 1;
-      }
-      const activity: ExtraActivity = {
-        schemaVersion: 2,
-        id,
-        date: journal.date,
-        source: "extra",
-        type,
-        ...(type === "leetcode" ? { recordKind: "attempt" as const } : {}),
-        title: question.title,
-        ...(question.url ? { url: question.url } : {}),
-        ...(question.prompt ? { prompt: question.prompt } : {}),
-        allocatedSeconds: question.targetMinutes * 60,
-        timerGroupId: id,
-        timingSource: "website",
-        status: "planned",
-        ...(question.topics.length ? { notes: question.topics.join(", ") } : {}),
-      };
-      return { ...current, extraActivities: [...current.extraActivities, activity] };
-    });
+    const baseId = `${journal.date}-extra-${slugify(question.title)}`;
+    let id = baseId;
+    let suffix = 2;
+    while (draft.extraActivities.some((activity) => activity.id === id)) {
+      id = `${baseId}-${suffix}`;
+      suffix += 1;
+    }
+    const activity: ExtraActivity = {
+      schemaVersion: 2,
+      id,
+      date: journal.date,
+      source: "extra",
+      type,
+      ...(type === "leetcode" ? { recordKind: "attempt" as const } : {}),
+      title: question.title,
+      ...(question.url ? { url: question.url } : {}),
+      ...(question.prompt ? { prompt: question.prompt } : {}),
+      allocatedSeconds: question.targetMinutes * 60,
+      timerGroupId: id,
+      timingSource: "website",
+      status: "planned",
+      ...(question.topics.length ? { notes: question.topics.join(", ") } : {}),
+    };
+    setDraft((current) => ({ ...current, extraActivities: [...current.extraActivities, activity] }));
+    enqueue({ type: "extra-upsert", activity });
     setView("today");
     window.requestAnimationFrame(() => {
       document.querySelector<HTMLElement>(".loose-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -550,6 +492,7 @@ export default function Home() {
         ? current.extraActivities.map((item) => item.id === activity.id ? activity : item)
         : [...current.extraActivities, activity],
     }));
+    enqueue({ type: "extra-upsert", activity });
     setComposer(EMPTY_COMPOSER);
   }
 
@@ -607,10 +550,15 @@ export default function Home() {
     });
     const session: LocalSession = { id: sessionId, label: `Session ${sessionNumber}`, source: "extra", allocatedSeconds: SESSION_SECONDS, activityIds: activities.map((activity) => activity.id) };
     setDraft((current) => ({ ...current, extraActivities: [...current.extraActivities, ...activities], sessions: [...current.sessions, session] }));
+    enqueue(
+      { type: "session-upsert", session },
+      ...activities.map((activity) => ({ type: "extra-upsert" as const, activity })),
+    );
     setComposer(EMPTY_COMPOSER);
   }
 
   function removeActivity(activityId: string) {
+    enqueue({ type: "extra-remove", id: activityId });
     setDraft((current) => {
       const timers = { ...current.timers };
       const outcomes = { ...current.outcomes };
@@ -629,6 +577,7 @@ export default function Home() {
   function removeSession(session: LocalSession) {
     if (!window.confirm(`Remove ${session.label} and its local activities?`)) return;
     const ids = new Set(session.activityIds);
+    enqueue({ type: "session-remove", id: session.id, activityIds: session.activityIds });
     setDraft((current) => {
       const timers = { ...current.timers };
       const sessionTimers = { ...current.sessionTimers };
