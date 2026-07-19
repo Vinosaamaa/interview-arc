@@ -10,7 +10,7 @@
   // `.openai/hosting.json` and provides its own bindings at runtime, ignoring
   // the `database_id` here.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "interview-arc",
+  "name": "limitless",
   "main": "./worker/index.ts",
   "compatibility_date": "2026-05-22",
   "compatibility_flags": ["nodejs_compat"],
