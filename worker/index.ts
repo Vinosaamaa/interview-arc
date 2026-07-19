@@ -17,6 +17,12 @@ interface Env {
   // needs no secrets.
   SITE_PASSCODE?: string;
   SESSION_SECRET?: string;
+  // Cloudflare Access (email / Google login). Set both to switch from the
+  // passcode to Access-verified email login. `POLICY_AUD` is the application's
+  // AUD tag; `TEAM_DOMAIN` is `https://<team>.cloudflareaccess.com`. Both are
+  // shown when you click "Enable Cloudflare Access" on the Worker.
+  POLICY_AUD?: string;
+  TEAM_DOMAIN?: string;
 }
 
 interface ExecutionContext {
@@ -172,9 +178,112 @@ async function passcodeGate(request: Request, env: Env): Promise<Response | null
   });
 }
 
+// ── Cloudflare Access (email / Google login) ────────────────────────────────
+// When Access protects the workers.dev URL, Cloudflare authenticates the user
+// at the edge and forwards a signed JWT. We independently verify that JWT so
+// the Worker only trusts real Access-issued identities (defense in depth).
+const ACCESS_COOKIE = "CF_Authorization";
+const JWT_HEADER = "Cf-Access-Jwt-Assertion";
+
+interface AccessJwk {
+  kid: string;
+  kty: string;
+  n: string;
+  e: string;
+}
+
+let jwksCache: { keys: AccessJwk[]; fetchedAt: number } | null = null;
+const JWKS_TTL_MS = 60 * 60 * 1000;
+
+function base64UrlToBytes(input: string): Uint8Array {
+  let s = input.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = s.length % 4;
+  if (pad) s += "=".repeat(4 - pad);
+  const binary = atob(s);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function base64UrlToString(input: string): string {
+  return new TextDecoder().decode(base64UrlToBytes(input));
+}
+
+async function getAccessKeys(teamDomain: string): Promise<AccessJwk[]> {
+  if (jwksCache && Date.now() - jwksCache.fetchedAt < JWKS_TTL_MS) return jwksCache.keys;
+  const res = await fetch(`${teamDomain.replace(/\/$/, "")}/cdn-cgi/access/certs`);
+  if (!res.ok) return jwksCache?.keys ?? [];
+  const data = (await res.json()) as { keys?: AccessJwk[] };
+  jwksCache = { keys: data.keys ?? [], fetchedAt: Date.now() };
+  return jwksCache.keys;
+}
+
+// Verifies an Access JWT (signature, audience, issuer, expiry). Returns the
+// authenticated email on success, or null when the token is missing/invalid.
+async function verifyAccessJwt(token: string, env: Env): Promise<string | null> {
+  try {
+    const [headerB64, payloadB64, signatureB64] = token.split(".");
+    if (!headerB64 || !payloadB64 || !signatureB64) return null;
+
+    const header = JSON.parse(base64UrlToString(headerB64)) as { kid?: string; alg?: string };
+    const payload = JSON.parse(base64UrlToString(payloadB64)) as {
+      aud?: string | string[];
+      iss?: string;
+      exp?: number;
+      email?: string;
+    };
+
+    const audiences = Array.isArray(payload.aud) ? payload.aud : payload.aud ? [payload.aud] : [];
+    if (!env.POLICY_AUD || !audiences.includes(env.POLICY_AUD)) return null;
+    if (payload.iss !== env.TEAM_DOMAIN?.replace(/\/$/, "")) return null;
+    if (!payload.exp || payload.exp * 1000 <= Date.now()) return null;
+
+    const jwk = (await getAccessKeys(env.TEAM_DOMAIN)).find((k) => k.kid === header.kid);
+    if (!jwk) return null;
+
+    const key = await crypto.subtle.importKey(
+      "jwk",
+      { kty: jwk.kty, n: jwk.n, e: jwk.e, alg: "RS256", ext: true },
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false,
+      ["verify"],
+    );
+    const valid = await crypto.subtle.verify(
+      "RSASSA-PKCS1-v1_5",
+      key,
+      base64UrlToBytes(signatureB64),
+      new TextEncoder().encode(`${headerB64}.${payloadB64}`),
+    );
+    if (!valid) return null;
+
+    return payload.email ?? "authenticated";
+  } catch {
+    return null;
+  }
+}
+
+// Prefers Cloudflare Access once configured (POLICY_AUD + TEAM_DOMAIN); falls
+// back to the passcode gate until then. Returns a Response to intercept the
+// request, or null when it is authorized to proceed.
+async function authGate(request: Request, env: Env): Promise<Response | null> {
+  if (env.POLICY_AUD && env.TEAM_DOMAIN) {
+    const token = request.headers.get(JWT_HEADER) ?? readCookie(request, ACCESS_COOKIE);
+    const email = token ? await verifyAccessJwt(token, env) : null;
+    if (email) return null;
+    // Access normally intercepts unauthenticated requests at the edge; reaching
+    // here means the token is missing/forged, so refuse.
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 403,
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    });
+  }
+
+  return passcodeGate(request, env);
+}
+
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const gated = await passcodeGate(request, env);
+    const gated = await authGate(request, env);
     if (gated) return gated;
 
     const url = new URL(request.url);
