@@ -1,9 +1,12 @@
-// Resolves a stable, non-PII owner id for the current request. On the deployed
-// (OpenAI Sites / Access-protected) site the authenticated email arrives in a
-// request header; we hash it so raw email never lands in the database. Local
-// development without the header falls back to a single shared owner.
+// Resolves a stable, non-PII owner id for the current request.
+//
+// The Cloudflare deployment is single-user (protected by a passcode gate in
+// `worker/index.ts`), so every request maps to one constant owner. The legacy
+// OpenAI Sites deployment still passes an authenticated email header while it
+// runs in parallel; when present we hash it so raw email never lands in the
+// database and that deployment keeps its own scoping.
 const USER_EMAIL_HEADER = "oai-authenticated-user-email";
-const LOCAL_OWNER_ID = "local-default";
+const LOCAL_OWNER_ID = "owner";
 
 async function sha256Hex(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value);

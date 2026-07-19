@@ -1,4 +1,4 @@
-import type { JournalActivity, PracticeSession } from "./generated/content-index";
+import type { JournalActivity, PracticeSession } from "./content-types";
 
 export type ActivityType = JournalActivity["type"];
 export type Outcome = "solved" | "solved_after_reviewing_approach" | "failed";

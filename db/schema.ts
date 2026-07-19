@@ -74,9 +74,54 @@ export const liveSessions = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.id] })],
 );
 
+// ── Published content, mirrored from Git into D1 by scripts/import-content.mjs
+// so the site renders the latest journals/artifacts/bank without a redeploy.
+// This is a single shared library (not owner-scoped). Each row stores the exact
+// JSON shape the client already consumes; columns that need sorting/filtering
+// are lifted out. `ord` preserves the source ordering where display depends on
+// it (bank question order, story file order).
+
+export const contentJournals = sqliteTable("content_journals", {
+  date: text("date").primaryKey(),
+  payload: text("payload", { mode: "json" }).notNull(),
+  updatedAt,
+});
+
+export const contentArtifacts = sqliteTable("content_artifacts", {
+  path: text("path").primaryKey(),
+  type: text("type").notNull(),
+  date: text("date").notNull(),
+  title: text("title").notNull(),
+  payload: text("payload", { mode: "json" }).notNull(),
+  updatedAt,
+});
+
+export const contentStories = sqliteTable("content_stories", {
+  projectId: text("project_id").primaryKey(),
+  ord: integer("ord").notNull().default(0),
+  payload: text("payload", { mode: "json" }).notNull(),
+  updatedAt,
+});
+
+export const contentBank = sqliteTable(
+  "content_bank",
+  {
+    category: text("category", { enum: ["leetcode", "systemDesign", "behavioral"] }).notNull(),
+    id: text("id").notNull(),
+    ord: integer("ord").notNull().default(0),
+    payload: text("payload", { mode: "json" }).notNull(),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.category, table.id] })],
+);
+
 export type TimerRow = typeof timers.$inferSelect;
 export type OutcomeRow = typeof outcomes.$inferSelect;
 export type ExtraActivityRow = typeof extraActivities.$inferSelect;
 export type LiveSessionRow = typeof liveSessions.$inferSelect;
+export type ContentJournalRow = typeof contentJournals.$inferSelect;
+export type ContentArtifactRow = typeof contentArtifacts.$inferSelect;
+export type ContentStoryRow = typeof contentStories.$inferSelect;
+export type ContentBankRow = typeof contentBank.$inferSelect;
 
 export const CURRENT_TIMESTAMP = sql`CURRENT_TIMESTAMP`;
