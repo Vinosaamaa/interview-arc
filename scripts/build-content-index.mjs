@@ -1,0 +1,237 @@
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+
+const root = process.cwd();
+
+async function readJson(relativePath) {
+  return JSON.parse(await readFile(path.join(root, relativePath), "utf8"));
+}
+
+async function filesIn(relativeDirectory, extension) {
+  const directory = path.join(root, relativeDirectory);
+  try {
+    const entries = await readdir(directory, { withFileTypes: true });
+    return entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith(extension))
+      .map((entry) => path.join(relativeDirectory, entry.name))
+      .sort();
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+function parseScalar(value) {
+  const clean = value.trim();
+  if (clean === "true") return true;
+  if (clean === "false") return false;
+  if (clean === "null") return null;
+  if (/^-?\d+$/.test(clean)) return Number(clean);
+  if (clean.startsWith("[") && clean.endsWith("]")) {
+    return clean
+      .slice(1, -1)
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return clean.replace(/^['"]|['"]$/g, "");
+}
+
+function parseMarkdown(source, relativePath, fallbackType) {
+  const normalized = source.replace(/\r\n/g, "\n");
+  const frontmatter = {};
+  let body = normalized;
+
+  if (normalized.startsWith("---\n")) {
+    const end = normalized.indexOf("\n---\n", 4);
+    if (end !== -1) {
+      for (const line of normalized.slice(4, end).split("\n")) {
+        const separator = line.indexOf(":");
+        if (separator === -1) continue;
+        frontmatter[line.slice(0, separator).trim()] = parseScalar(line.slice(separator + 1));
+      }
+      body = normalized.slice(end + 5).trim();
+    }
+  }
+
+  const firstHeading = body.match(/^#\s+(.+)$/m)?.[1]?.trim();
+  const sections = [];
+  const sectionPattern = /^##\s+(.+)$/gm;
+  const matches = [...body.matchAll(sectionPattern)];
+  for (let index = 0; index < matches.length; index += 1) {
+    const match = matches[index];
+    const start = (match.index ?? 0) + match[0].length;
+    const end = matches[index + 1]?.index ?? body.length;
+    sections.push({
+      title: match[1].trim(),
+      body: body.slice(start, end).trim(),
+    });
+  }
+
+  const filenameDate = path.basename(relativePath).match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+  return {
+    path: relativePath,
+    type: String(frontmatter.type ?? fallbackType),
+    title: String(frontmatter.title ?? firstHeading ?? path.basename(relativePath, ".md")),
+    date: String(frontmatter.date ?? filenameDate ?? "unknown"),
+    activityId: String(frontmatter.activity_id ?? ""),
+    status: String(frontmatter.status ?? "published"),
+    audioFile: String(frontmatter.audio_file ?? ""),
+    audioAvailability: String(frontmatter.audio_availability ?? ""),
+    sections,
+  };
+}
+
+const dailyFiles = await filesIn("data/daily", ".json");
+const journals = await Promise.all(
+  dailyFiles.map((relativePath) => readJson(relativePath)),
+);
+journals.sort((left, right) => right.date.localeCompare(left.date));
+
+const leetcodeBank = await readJson("practice/leetcode/bank/questions.json");
+const systemDesignBank = await readJson("practice/system-design/bank/questions.json");
+const behavioralBank = await readJson("practice/behavioral/bank/questions.json");
+const questionBanks = {
+  leetcode: leetcodeBank.questions.map((question) => ({
+    id: question.id,
+    problemNumber: question.problemNumber,
+    title: question.title,
+    url: question.url,
+    difficulty: question.difficulty,
+    acceptanceRate: question.acceptanceRate,
+    topics: question.topics ?? [],
+    companyTags: question.companyTags ?? [],
+    companySignals: question.companySignals ?? [],
+    targetMinutes: question.targetMinutes ?? 30,
+    active: question.active ?? true,
+  })),
+  systemDesign: systemDesignBank.questions,
+  behavioral: behavioralBank.questions,
+};
+
+const artifactDirectories = [
+  ["practice/leetcode/attempts", "leetcode"],
+  ["practice/system-design/sessions", "system_design"],
+  ["practice/behavioral/sessions", "behavioral"],
+  ["audio-answers", "audio_review"],
+];
+
+const artifacts = [];
+for (const [directory, type] of artifactDirectories) {
+  for (const relativePath of await filesIn(directory, ".md")) {
+    if (relativePath.endsWith("/README.md")) continue;
+    const source = await readFile(path.join(root, relativePath), "utf8");
+    artifacts.push(parseMarkdown(source, relativePath, type));
+  }
+}
+artifacts.sort((left, right) => right.date.localeCompare(left.date) || left.title.localeCompare(right.title));
+
+const storyFiles = await filesIn("practice/behavioral/story-bank/projects", ".md");
+const stories = await Promise.all(
+  storyFiles.map(async (relativePath) => {
+    const parsed = parseMarkdown(await readFile(path.join(root, relativePath), "utf8"), relativePath, "story");
+    return { ...parsed, projectId: path.basename(relativePath, ".md") };
+  }),
+);
+
+const output = `/* Generated by scripts/build-content-index.mjs. Do not edit directly. */
+
+export type JournalActivity = {
+  schemaVersion: number;
+  id: string;
+  date: string;
+  source: "daily" | "extra";
+  type: "leetcode" | "system_design" | "behavioral";
+  recordKind?: "attempt" | "walkthrough";
+  title: string;
+  url?: string;
+  prompt?: string;
+  allocatedSeconds: number;
+  timerGroupId?: string;
+  timingSource: "website" | "manual" | "unknown";
+  startedAt?: string;
+  endedAt?: string;
+  elapsedSeconds?: number;
+  status: "planned" | "running" | "completed";
+  outcome?: "solved" | "solved_after_reviewing_approach" | "failed";
+  artifactPath?: string;
+  notes?: string;
+  reviewDates?: string[];
+};
+
+export type TimerGroup = {
+  id: string;
+  label: string;
+  allocatedSeconds: number;
+  activityIds: string[];
+};
+
+export type PracticeSession = {
+  id: string;
+  label: string;
+  source: "daily" | "extra";
+  allocatedSeconds: number;
+  activityIds: string[];
+};
+
+export type DailyJournal = {
+  schemaVersion: number;
+  date: string;
+  focus: string;
+  note?: string;
+  sessions: PracticeSession[];
+  timerGroups: TimerGroup[];
+  activities: JournalActivity[];
+};
+
+export type QuestionBankItem = {
+  id: string;
+  problemNumber?: number;
+  title: string;
+  prompt?: string;
+  url?: string;
+  difficulty?: "easy" | "medium" | "hard";
+  complexity?: "very_easy" | "easy" | "medium" | "hard" | "very_hard";
+  acceptanceRate?: number;
+  source?: string;
+  solutionReference?: boolean;
+  frequency?: "low" | "medium" | "high";
+  answerFormat?: "SIMPLE" | "STAR" | "STARL" | "PPF" | "IFV";
+  referenceAccess?: "public" | "may_require_sign_in";
+  companyTags?: string[];
+  companySignals?: { company: string; window: string; frequencyScore: number; frequencyScale: number; capturedAt: string }[];
+  topics: string[];
+  targetMinutes: number;
+  active: boolean;
+};
+
+export type QuestionBanks = {
+  leetcode: QuestionBankItem[];
+  systemDesign: QuestionBankItem[];
+  behavioral: QuestionBankItem[];
+};
+
+export type ContentSection = { title: string; body: string };
+export type ContentArtifact = {
+  path: string;
+  type: string;
+  title: string;
+  date: string;
+  activityId: string;
+  status: string;
+  audioFile: string;
+  audioAvailability: string;
+  sections: ContentSection[];
+};
+
+export type StoryProject = ContentArtifact & { projectId: string };
+export type ContentIndex = { journals: DailyJournal[]; artifacts: ContentArtifact[]; stories: StoryProject[]; questionBanks: QuestionBanks };
+
+export const contentIndex: ContentIndex = ${JSON.stringify({ journals, artifacts, stories, questionBanks }, null, 2)};
+`;
+
+const outputDirectory = path.join(root, "app/generated");
+await mkdir(outputDirectory, { recursive: true });
+await writeFile(path.join(outputDirectory, "content-index.ts"), output);
+
+console.log(`Indexed ${journals.length} journal(s), ${artifacts.length} artifact(s), ${stories.length} story project(s), and ${questionBanks.leetcode.length + questionBanks.systemDesign.length + questionBanks.behavioral.length} bank question(s).`);

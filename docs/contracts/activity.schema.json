@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://interview-arc.local/schemas/activity.schema.json",
+  "title": "Interview Arc Activity",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "date",
+    "source",
+    "type",
+    "title",
+    "allocatedSeconds",
+    "timingSource",
+    "status"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "date": { "type": "string", "format": "date" },
+    "source": { "enum": ["daily", "extra"] },
+    "type": { "enum": ["leetcode", "system_design", "behavioral"] },
+    "recordKind": { "enum": ["attempt", "walkthrough"] },
+    "title": { "type": "string", "minLength": 1 },
+    "url": { "type": "string", "format": "uri" },
+    "prompt": { "type": "string" },
+    "allocatedSeconds": { "type": "integer", "minimum": 60 },
+    "timerGroupId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "timingSource": { "enum": ["website", "manual", "unknown"] },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "endedAt": { "type": "string", "format": "date-time" },
+    "elapsedSeconds": { "type": "integer", "minimum": 0 },
+    "status": { "enum": ["planned", "running", "completed"] },
+    "outcome": {
+      "enum": ["solved", "solved_after_reviewing_approach", "failed"]
+    },
+    "artifactPath": { "type": "string", "minLength": 1 },
+    "notes": { "type": "string" },
+    "reviewDates": {
+      "type": "array",
+      "items": { "type": "string", "format": "date" },
+      "uniqueItems": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "type": { "const": "leetcode" } },
+        "required": ["type"]
+      },
+      "then": {
+        "required": ["recordKind"],
+        "anyOf": [
+          { "required": ["url"] },
+          { "properties": { "status": { "const": "planned" } } }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": { "const": "completed" },
+          "timingSource": { "enum": ["website", "manual"] }
+        },
+        "required": ["status", "timingSource"]
+      },
+      "then": { "required": ["elapsedSeconds"] }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": { "const": "leetcode" },
+          "recordKind": { "const": "attempt" },
+          "status": { "const": "completed" }
+        },
+        "required": ["type", "recordKind", "status"]
+      },
+      "then": { "required": ["outcome"] }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": { "const": "leetcode" },
+          "recordKind": { "const": "walkthrough" }
+        },
+        "required": ["type", "recordKind"]
+      },
+      "then": { "not": { "required": ["outcome"] } }
+    },
+    {
+      "if": {
+        "properties": { "type": { "enum": ["system_design", "behavioral"] } },
+        "required": ["type"]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            { "required": ["recordKind"] },
+            { "required": ["outcome"] }
+          ]
+        }
+      }
+    }
+  ]
+}

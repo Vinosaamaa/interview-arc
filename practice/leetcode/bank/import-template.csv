@@ -1,0 +1,2 @@
+id,problem_number,title,url,difficulty,acceptance_rate,topics,company_tags,frequency_window,frequency_score,frequency_scale,captured_at,target_minutes,active
+two-sum,1,Two Sum,https://leetcode.com/problems/two-sum/,easy,57.8,array|hash-table,TikTok,all,5,8,2026-07-17,20,true

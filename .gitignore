@@ -40,3 +40,20 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# local Python and model caches
+/.venv/
+/.cache/
+__pycache__/
+*.py[cod]
+
+# local-only interview recordings; commit matching Markdown reviews
+/audio-answers/**/*.m4a
+/audio-answers/**/*.wav
+/audio-answers/**/*.mp3
+/audio-answers/**/*.aac
+/audio-answers/**/*.flac
+
+# local website-to-agent handoff; keep the instructions only
+/data/drafts/*.json
+!/data/drafts/README.md

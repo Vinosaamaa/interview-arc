@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://interview-arc.local/schemas/daily-journal.schema.json",
+  "title": "Interview Arc Daily Journal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "date", "focus", "sessions", "timerGroups", "activities"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "date": { "type": "string", "format": "date" },
+    "focus": { "type": "string", "minLength": 1 },
+    "note": { "type": "string" },
+    "sessions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "source", "allocatedSeconds", "activityIds"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+          "label": { "type": "string", "minLength": 1 },
+          "source": { "enum": ["daily", "extra"] },
+          "allocatedSeconds": { "const": 21600 },
+          "activityIds": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        }
+      }
+    },
+    "timerGroups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "allocatedSeconds", "activityIds"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+          "label": { "type": "string", "minLength": 1 },
+          "allocatedSeconds": { "type": "integer", "minimum": 60 },
+          "activityIds": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        }
+      }
+    },
+    "activities": {
+      "type": "array",
+      "items": { "$ref": "activity.schema.json" }
+    }
+  }
+}

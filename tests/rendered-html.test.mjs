@@ -20,9 +20,18 @@ test("server-renders the Interview Arc dashboard", async () => {
 
   const html = await response.text();
   assert.match(html, /<title>Interview Arc/);
-  assert.match(html, /Good morning, Wenk/);
-  assert.match(html, /Timed coding sprint/);
-  assert.match(html, /Design a notification system/);
-  assert.match(html, /Disagree &amp; commit/);
+  assert.match(html, /A clean page/);
+  assert.match(html, /No session planned yet/);
+  assert.match(html, /Add another session/);
+  assert.match(html, /Add one activity/);
+  assert.match(html, />Past</);
+  assert.match(html, /Problem banks/);
+  assert.doesNotMatch(html, /Design a notification system/);
+  assert.doesNotMatch(html, /Disagree and commit/);
+  assert.doesNotMatch(html, /Number of Islands/);
+  assert.doesNotMatch(html, /Practice library|Story bank|All finished/);
+  assert.doesNotMatch(html, />＋ Add<\/button>/);
+  assert.doesNotMatch(html, /＋ Add activity/);
+  assert.doesNotMatch(html, /Test console|Submit attempt|solution\.py/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/);
 });
