@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -25,6 +26,7 @@ import { useLiveState } from "./live-sync";
 
 type View = "today" | "journey" | "library" | "banks";
 type ComposerMode = "session" | "activity";
+type DocumentPiP = { requestWindow: (options?: { width?: number; height?: number }) => Promise<Window> };
 type ComposerState = {
   open: boolean;
   mode: ComposerMode;
@@ -272,6 +274,18 @@ export default function Home() {
   const [libraryFilter, setLibraryFilter] = useState<"all" | ActivityType>("all");
   const [bankFilter, setBankFilter] = useState<"all" | ActivityType>("all");
   const [bankProgressFilter, setBankProgressFilter] = useState<"all" | "todo" | "finished">("all");
+  const [pipWindow, setPipWindow] = useState<Window | null>(null);
+  const [pipSupported, setPipSupported] = useState(false);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setPipSupported("documentPictureInPicture" in window));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  // Close the pop-out if the dashboard unmounts so it never outlives its opener.
+  useEffect(() => {
+    return () => pipWindow?.close();
+  }, [pipWindow]);
 
   useEffect(() => {
     if (!composer.open && !selectedEntry) return;
@@ -289,6 +303,16 @@ export default function Home() {
   const allSessions: PracticeSession[] = [...journal.sessions, ...draft.sessions];
   const assignedExtraIds = new Set(draft.sessions.flatMap((session) => session.activityIds));
   const looseActivities = draft.extraActivities.filter((activity) => !assignedExtraIds.has(activity.id));
+
+  // The pop-out follows the running activity; when nothing runs it shows the first
+  // unfinished problem so the controls are still one click away.
+  const pipActivity =
+    allTodayActivities.find((activity) => draft.timers[activity.id]?.runningSince) ??
+    allTodayActivities.find((activity) => !draft.timers[activity.id]?.completed) ??
+    allTodayActivities[0] ??
+    null;
+  const pipSession =
+    allSessions.find((session) => draft.sessionTimers[session.id]?.runningSince) ?? allSessions[0] ?? null;
 
   function bankFor(type: ActivityType) {
     if (type === "leetcode") return contentIndex.questionBanks.leetcode;
@@ -625,6 +649,29 @@ export default function Home() {
     window.URL.revokeObjectURL(url);
   }
 
+  // Document Picture-in-Picture: an always-on-top "Now" window that stays visible
+  // over LeetCode or the desktop editor. It renders a React portal into the pop-out
+  // document, so it shares the exact same live state and controls as the dashboard.
+  async function openNowWindow() {
+    const dpip = (window as Window & { documentPictureInPicture?: DocumentPiP }).documentPictureInPicture;
+    if (!dpip) return;
+    if (pipWindow) {
+      pipWindow.focus();
+      return;
+    }
+    try {
+      const win = await dpip.requestWindow({ width: 320, height: 260 });
+      for (const node of Array.from(document.head.querySelectorAll('style, link[rel="stylesheet"]'))) {
+        win.document.head.appendChild(node.cloneNode(true));
+      }
+      win.document.body.classList.add("pip-body");
+      win.addEventListener("pagehide", () => setPipWindow(null), { once: true });
+      setPipWindow(win);
+    } catch {
+      // The request needs a user gesture and can be cancelled; ignore failures.
+    }
+  }
+
   const logEntries = useMemo(() => {
     const entries: LogEntry[] = [];
     const artifactByActivity = new Map(contentIndex.artifacts.filter((artifact) => artifact.activityId).map((artifact) => [artifact.activityId, artifact]));
@@ -923,7 +970,7 @@ export default function Home() {
       </aside>
 
       <section className="main-column">
-        <header className="topbar"><div><span>{readableDate(journal.date)}</span><strong>{view === "today" ? "Today’s work" : view === "journey" ? "Statistics" : view === "library" ? "Dated practice log" : "Question sources"}</strong></div><div><button className="secondary-action" onClick={exportDraft}>Export today</button></div></header>
+        <header className="topbar"><div><span>{readableDate(journal.date)}</span><strong>{view === "today" ? "Today’s work" : view === "journey" ? "Statistics" : view === "library" ? "Dated practice log" : "Question sources"}</strong></div><div>{view === "today" && pipSupported && <button className="secondary-action" onClick={openNowWindow}>{pipWindow ? "Now window open" : "Pop out timer"}</button>}<button className="secondary-action" onClick={exportDraft}>Export today</button></div></header>
         <div className="page-content">{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
       </section>
 
@@ -936,6 +983,26 @@ export default function Home() {
       </section></div>}
 
       {selectedEntry && <div className="letter-backdrop" role="presentation" onMouseDown={() => setSelectedEntry(null)}><article className="reading-letter" role="dialog" aria-modal="true" aria-labelledby="letter-title" onMouseDown={(event) => event.stopPropagation()}><button className="letter-close" onClick={() => setSelectedEntry(null)} aria-label="Close letter">Close ×</button><header><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)}</time></div><h2 id="letter-title">{selectedEntry.title}</h2><p>{selectedEntry.subtitle}</p></header><div className="letter-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.type === "leetcode" && <div><span>Outcome</span><strong>{outcomeLabel(selectedEntry.outcome)}</strong></div>}</div>{selectedEntry.artifact ? <div className="letter-sections">{selectedEntry.artifact.sections.map((section) => /conversation transcript|generated code|solution/i.test(section.title) ? <details key={section.title} open={/solution/i.test(section.title)}><summary>{section.title}</summary><MarkdownBody source={section.body} /></details> : <section key={section.title}><h3>{section.title}</h3><MarkdownBody source={section.body} /></section>)}</div> : <div className="unpublished-letter"><span className="eyebrow">LOCAL COMPLETION · NOT PUBLISHED YET</span><h3>The result is saved on this device, but its review is not in the repository yet.</h3><p>Export today&apos;s draft and ask the matching specialist task to publish. Coding records will show the generated solution and complexity; system-design and behavioral records will show the formatted conversation transcript and review.</p>{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}<footer>Interview Arc · {selectedEntry.id}</footer></article></div>}
+    {pipWindow && createPortal(
+      <div className="pip-now">
+        {pipSession && (
+          <SessionCountdown session={pipSession} timer={draft.sessionTimers[pipSession.id]} now={now} onToggle={toggleSessionTimer} onComplete={completeSessionTimer} />
+        )}
+        {pipActivity ? (
+          <div className="pip-active">
+            <div className="pip-heading"><span className={`type-mark ${pipActivity.type}`}>{typeMark(pipActivity.type)}</span><strong className="pip-title">{pipActivity.title}</strong></div>
+            <div className="pip-controls">
+              <ActivityTimer activity={pipActivity} timer={draft.timers[pipActivity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} />
+              <ResultFlag activityType={pipActivity.type} outcome={draft.outcomes[pipActivity.id] ?? pipActivity.outcome} onChange={(outcome) => setOutcome(pipActivity.id, outcome)} />
+            </div>
+            {pipActivity.url && <a className="pip-open" href={pipActivity.url} target="_blank" rel="noreferrer">Open problem ↗</a>}
+          </div>
+        ) : (
+          <p className="pip-empty">No active problem yet. Add or start one on Today.</p>
+        )}
+      </div>,
+      pipWindow.document.body,
+    )}
     </main>
   );
 }

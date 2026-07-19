@@ -487,3 +487,15 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
+
+/* Document Picture-in-Picture "Now" window */
+.pip-body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-geist-sans), Arial, sans-serif; }
+.pip-now { display: grid; gap: 10px; padding: 12px; }
+.pip-now .session-countdown { min-width: 0; }
+.pip-active { display: grid; gap: 9px; }
+.pip-heading { display: flex; align-items: center; gap: 8px; }
+.pip-title { font-size: .95rem; line-height: 1.25; }
+.pip-controls { display: flex; align-items: flex-start; gap: 8px; }
+.pip-controls .activity-timer { flex: 1; min-width: 0; }
+.pip-open { font-size: .8rem; color: var(--signal-dark); font-weight: 600; }
+.pip-empty { margin: 0; padding: 10px; font-size: .85rem; color: var(--muted); }
