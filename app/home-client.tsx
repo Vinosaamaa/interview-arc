@@ -117,6 +117,71 @@ function normalizedIdentity(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+function blockKeysForQuestion(question: QuestionBankItem) {
+  const keys = [`id:${question.id}`, `title:${normalizedIdentity(question.title)}`, `slug:${slugify(question.title)}`];
+  if (question.url) keys.push(`url:${question.url.replace(/\/$/, "").toLowerCase()}`);
+  return keys;
+}
+
+function addActivityToBlocked(blocked: Set<string>, activity: { id: string; title: string; url?: string }) {
+  blocked.add(`title:${normalizedIdentity(activity.title)}`);
+  blocked.add(`slug:${slugify(activity.title)}`);
+  if (activity.url) blocked.add(`url:${activity.url.replace(/\/$/, "").toLowerCase()}`);
+  // Session rows look like `YYYY-MM-DD-session-N-<stamp>-<questionId>`.
+  const withoutDate = activity.id.replace(/^\d{4}-\d{2}-\d{2}-/, "");
+  const sessionMatch = withoutDate.match(/^session-\d+-\d+-\d+-(.+)$/);
+  const extraMatch = withoutDate.match(/^extra-(.+?)(?:-\d+)?$/);
+  const questionId = sessionMatch?.[1] ?? extraMatch?.[1];
+  if (questionId) blocked.add(`id:${questionId}`);
+}
+
+function isQuestionBlocked(question: QuestionBankItem, blocked: Set<string>) {
+  return blockKeysForQuestion(question).some((key) => blocked.has(key));
+}
+
+// Higher is more frequent. Company frequency scores win when present; otherwise
+// map behavioral high/medium/low. Unknown frequency sorts last.
+function frequencyRank(question: QuestionBankItem) {
+  if (question.companySignals?.length) {
+    return Math.max(
+      ...question.companySignals.map((signal) => signal.frequencyScore / Math.max(1, signal.frequencyScale)),
+    );
+  }
+  if (question.frequency === "high") return 1;
+  if (question.frequency === "medium") return 0.5;
+  if (question.frequency === "low") return 0.25;
+  return -1;
+}
+
+function pickQuestionsByFrequency(pool: QuestionBankItem[], count: number, blocked: Set<string>, salt = "") {
+  if (count <= 0) return [] as QuestionBankItem[];
+  const candidates = pool
+    .filter((question) => question.active && !isQuestionBlocked(question, blocked))
+    .sort((left, right) => {
+      const rankDiff = frequencyRank(right) - frequencyRank(left);
+      if (rankDiff !== 0) return rankDiff;
+      const leftKey = `${salt}:${left.id}:${left.title}`;
+      const rightKey = `${salt}:${right.id}:${right.title}`;
+      return leftKey.localeCompare(rightKey);
+    });
+  return candidates.slice(0, count);
+}
+
+function questionLevel(question: QuestionBankItem): "easy" | "medium" | "hard" | null {
+  if (question.difficulty) return question.difficulty;
+  if (question.complexity === "very_easy" || question.complexity === "easy") return "easy";
+  if (question.complexity === "medium") return "medium";
+  if (question.complexity === "hard" || question.complexity === "very_hard") return "hard";
+  return null;
+}
+
+function recencyScore(question: QuestionBankItem) {
+  const stamps = (question.companySignals ?? [])
+    .map((signal) => Date.parse(signal.capturedAt))
+    .filter((value) => Number.isFinite(value));
+  return stamps.length ? Math.max(...stamps) : 0;
+}
+
 function displayComplexity(value?: QuestionBankItem["complexity"]) {
   return value?.replace("_", " ");
 }
@@ -237,6 +302,100 @@ function ResultFlag({
   );
 }
 
+function PipNowPanel({
+  activity,
+  activityTimer,
+  session,
+  sessionTimer,
+  outcome,
+  now,
+  onToggleActivity,
+  onCompleteActivity,
+  onToggleSession,
+  onCompleteSession,
+  onOutcome,
+}: {
+  activity?: JournalActivity | ExtraActivity | null;
+  activityTimer?: TimerDraft;
+  session?: PracticeSession | null;
+  sessionTimer?: TimerDraft;
+  outcome?: Outcome;
+  now: number;
+  onToggleActivity: (id: string) => void;
+  onCompleteActivity: (id: string) => void;
+  onToggleSession: (id: string) => void;
+  onCompleteSession: (id: string) => void;
+  onOutcome: (id: string, outcome?: Outcome) => void;
+}) {
+  const sessionAllocated = session?.allocatedSeconds ?? SESSION_SECONDS;
+  const sessionLeft = session ? remaining(sessionTimer, now, sessionAllocated) : 0;
+  const sessionRunning = Boolean(session && sessionTimer?.runningSince && sessionLeft > 0);
+  const sessionComplete = Boolean(session && (sessionTimer?.completed || sessionLeft === 0));
+  const sessionProgress = session ? Math.min(100, (elapsed(sessionTimer, now) / sessionAllocated) * 100) : 0;
+  const activityUsed = activity ? elapsed(activityTimer, now) : 0;
+  const activityRunning = Boolean(activityTimer?.runningSince);
+  const activityComplete = Boolean(activityTimer?.completed);
+  const live = sessionRunning || activityRunning;
+
+  return (
+    <div className={`pip-hud ${live ? "live" : ""}`}>
+      <header className="pip-hud-top">
+        <div>
+          <span className="pip-kicker">{live ? "Live now" : "Standby"}</span>
+          <strong>Interview Arc</strong>
+        </div>
+        <i className={`pip-pulse ${live ? "on" : ""}`} aria-hidden="true" />
+      </header>
+
+      {session ? (
+        <section className={`pip-clock session ${sessionRunning ? "running" : ""} ${sessionComplete ? "complete" : ""}`}>
+          <div className="pip-clock-copy">
+            <span>Session left</span>
+            <strong>{formatClock(sessionLeft)}</strong>
+            <small>{sessionComplete ? "Finished" : sessionRunning ? session.label : `${session.label} · paused`}</small>
+          </div>
+          <div className="pip-clock-actions">
+            <button type="button" className="pip-btn primary" onClick={() => onToggleSession(session.id)} disabled={sessionComplete} aria-label={sessionRunning ? `Pause ${session.label}` : `Start ${session.label}`}>
+              <span aria-hidden="true">{sessionRunning ? "Ⅱ" : "▶"}</span>
+            </button>
+            <button type="button" className="pip-btn" onClick={() => onCompleteSession(session.id)} disabled={sessionComplete} aria-label={`Finish ${session.label}`}>
+              <span aria-hidden="true">{sessionComplete ? "✓" : "■"}</span>
+            </button>
+          </div>
+          <span className="pip-track" aria-hidden="true"><i style={{ width: `${sessionProgress}%` }} /></span>
+        </section>
+      ) : null}
+
+      {activity ? (
+        <section className={`pip-clock activity ${activityRunning ? "running" : ""} ${activityComplete ? "complete" : ""}`}>
+          <div className="pip-problem">
+            <span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span>
+            <div>
+              <small>{typeLabel(activity.type)} stopwatch</small>
+              <strong className="pip-problem-title">{activity.title}</strong>
+            </div>
+          </div>
+          <div className="pip-clock-row">
+            <strong className="pip-elapsed">{formatClock(activityUsed)}</strong>
+            <div className="pip-clock-actions">
+              <button type="button" className="pip-btn primary" onClick={() => onToggleActivity(activity.id)} disabled={activityComplete} aria-label={activityRunning ? `Pause ${activity.title}` : `Start ${activity.title}`}>
+                <span aria-hidden="true">{activityRunning ? "Ⅱ" : "▶"}</span>
+              </button>
+              <button type="button" className="pip-btn" onClick={() => onCompleteActivity(activity.id)} disabled={activityComplete} aria-label={`Finish ${activity.title}`}>
+                <span aria-hidden="true">{activityComplete ? "✓" : "■"}</span>
+              </button>
+              <ResultFlag activityType={activity.type} outcome={outcome} onChange={(next) => onOutcome(activity.id, next)} />
+            </div>
+          </div>
+          {activity.url ? <a className="pip-open" href={activity.url} target="_blank" rel="noreferrer">Open problem ↗</a> : null}
+        </section>
+      ) : (
+        <p className="pip-empty">No active problem yet. Add or start one on Today.</p>
+      )}
+    </div>
+  );
+}
+
 function SwipeActivityCard({ children, title, onEdit, onRemove }: { children: ReactNode; title: string; onEdit: () => void; onRemove: () => void }) {
   const [revealed, setRevealed] = useState(false);
   const [pointerStart, setPointerStart] = useState<number | null>(null);
@@ -274,6 +433,10 @@ export default function HomeClient({ content }: { content: ContentIndex }) {
   const [libraryFilter, setLibraryFilter] = useState<"all" | ActivityType>("all");
   const [bankFilter, setBankFilter] = useState<"all" | ActivityType>("all");
   const [bankProgressFilter, setBankProgressFilter] = useState<"all" | "todo" | "finished">("all");
+  const [bankLevelFilter, setBankLevelFilter] = useState<"all" | "easy" | "medium" | "hard">("all");
+  const [bankSortKey, setBankSortKey] = useState<"frequency" | "recent" | "acceptance">("frequency");
+  const [bankSortDir, setBankSortDir] = useState<"asc" | "desc">("asc");
+  const [bankSearch, setBankSearch] = useState("");
   const [pipWindow, setPipWindow] = useState<Window | null>(null);
   const [pipSupported, setPipSupported] = useState(false);
 
@@ -521,14 +684,17 @@ export default function HomeClient({ content }: { content: ContentIndex }) {
   }
 
   function addFullSession() {
-    const stamp = Date.now().toString(36);
     const sessionNumber = allSessions.length + 1;
-    const sessionId = `${journal.date}-session-${sessionNumber}-${stamp}`;
-    const codingQuestions = content.questionBanks.leetcode.filter((question) => question.active).slice(0, 6);
-    const systemQuestions = content.questionBanks.systemDesign.filter((question) => question.active);
-    const behaviorQuestions = content.questionBanks.behavioral.filter((question) => question.active);
-    const systemQuestion = systemQuestions[(sessionNumber - 1) % Math.max(1, systemQuestions.length)];
-    const behaviorQuestion = behaviorQuestions[(sessionNumber - 1) % Math.max(1, behaviorQuestions.length)];
+    const sessionId = `${journal.date}-session-${sessionNumber}-${draft.extraActivities.length}-${draft.sessions.length}`;
+    // Skip anything already on today (planned or finished). Finished work from
+    // earlier days stays eligible so a new day can practice it again.
+    const blocked = new Set<string>();
+    for (const activity of allTodayActivities) addActivityToBlocked(blocked, activity);
+    const codingQuestions = pickQuestionsByFrequency(content.questionBanks.leetcode, 6, blocked, sessionId);
+    for (const question of codingQuestions) blockKeysForQuestion(question).forEach((key) => blocked.add(key));
+    const systemQuestion = pickQuestionsByFrequency(content.questionBanks.systemDesign, 1, blocked, sessionId)[0];
+    if (systemQuestion) blockKeysForQuestion(systemQuestion).forEach((key) => blocked.add(key));
+    const behaviorQuestion = pickQuestionsByFrequency(content.questionBanks.behavioral, 1, blocked, sessionId)[0];
     const activities: ExtraActivity[] = codingQuestions.map((question) => ({
       schemaVersion: 2,
       id: `${sessionId}-${question.id}`,
@@ -551,6 +717,7 @@ export default function HomeClient({ content }: { content: ContentIndex }) {
       source: "extra",
       type: "system_design",
       title: systemQuestion.title,
+      ...(systemQuestion.url ? { url: systemQuestion.url } : {}),
       prompt: systemQuestion.prompt,
       allocatedSeconds: systemQuestion.targetMinutes * 60,
       timerGroupId: `${sessionId}-system-design`,
@@ -565,6 +732,7 @@ export default function HomeClient({ content }: { content: ContentIndex }) {
       source: "extra",
       type: "behavioral",
       title: behaviorQuestion.title,
+      ...(behaviorQuestion.url ? { url: behaviorQuestion.url } : {}),
       prompt: behaviorQuestion.prompt,
       allocatedSeconds: behaviorQuestion.targetMinutes * 60,
       timerGroupId: `${sessionId}-behavioral`,
@@ -572,6 +740,10 @@ export default function HomeClient({ content }: { content: ContentIndex }) {
       status: "planned",
       notes: behaviorQuestion.topics.join(", "),
     });
+    if (activities.length === 0) {
+      window.alert("No unused bank questions are left for today. Finished or already planned problems stay out of new sessions until a new day.");
+      return;
+    }
     const session: LocalSession = { id: sessionId, label: `Session ${sessionNumber}`, source: "extra", allocatedSeconds: SESSION_SECONDS, activityIds: activities.map((activity) => activity.id) };
     setDraft((current) => ({ ...current, extraActivities: [...current.extraActivities, ...activities], sessions: [...current.sessions, session] }));
     enqueue(
@@ -660,7 +832,7 @@ export default function HomeClient({ content }: { content: ContentIndex }) {
       return;
     }
     try {
-      const win = await dpip.requestWindow({ width: 320, height: 260 });
+      const win = await dpip.requestWindow({ width: 360, height: 320 });
       for (const node of Array.from(document.head.querySelectorAll('style, link[rel="stylesheet"]'))) {
         win.document.head.appendChild(node.cloneNode(true));
       }
@@ -925,10 +1097,44 @@ export default function HomeClient({ content }: { content: ContentIndex }) {
         normalizedIdentity(entry.question.title) === normalizedIdentity(record.title)
       )),
     }));
-    const visibleEntries = bankEntries.filter((entry) =>
-      (bankFilter === "all" || entry.type === bankFilter) &&
-      (bankProgressFilter === "all" || (bankProgressFilter === "finished" ? entry.finished : !entry.finished))
-    );
+    const searchNeedle = bankSearch.toLowerCase().trim();
+    const filteredEntries = bankEntries.filter((entry) => {
+      const level = questionLevel(entry.question);
+      return (bankFilter === "all" || entry.type === bankFilter)
+        && (bankProgressFilter === "all" || (bankProgressFilter === "finished" ? entry.finished : !entry.finished))
+        && (bankLevelFilter === "all" || level === bankLevelFilter)
+        && (!searchNeedle
+          || entry.question.title.toLowerCase().includes(searchNeedle)
+          || (entry.question.prompt?.toLowerCase().includes(searchNeedle) ?? false)
+          || entry.question.topics.some((topic) => topic.toLowerCase().includes(searchNeedle))
+          || (entry.question.problemNumber !== undefined && String(entry.question.problemNumber).includes(searchNeedle))
+          || (entry.question.companyTags?.some((tag) => tag.toLowerCase().includes(searchNeedle)) ?? false));
+    });
+    const visibleEntries = [...filteredEntries].sort((left, right) => {
+      let cmp = 0;
+      if (bankSortKey === "frequency") {
+        cmp = frequencyRank(left.question) - frequencyRank(right.question);
+      } else if (bankSortKey === "acceptance") {
+        cmp = (left.question.acceptanceRate ?? -1) - (right.question.acceptanceRate ?? -1);
+      } else {
+        cmp = recencyScore(left.question) - recencyScore(right.question);
+      }
+      if (cmp === 0) cmp = left.question.title.localeCompare(right.question.title);
+      return bankSortDir === "asc" ? cmp : -cmp;
+    });
+    function toggleSort(key: typeof bankSortKey) {
+      if (bankSortKey === key) {
+        setBankSortDir((current) => (current === "asc" ? "desc" : "asc"));
+        return;
+      }
+      setBankSortKey(key);
+      setBankSortDir("asc");
+    }
+    const sortOptions = [
+      { key: "frequency" as const, label: "Frequency", icon: "freq" },
+      { key: "recent" as const, label: "Recent", icon: "recent" },
+      { key: "acceptance" as const, label: "Acceptance", icon: "accept" },
+    ];
     return (
       <section className="view-page banks-page">
         <header className="view-masthead"><span className="eyebrow">PROBLEM BANKS · ALL PRACTICE SOURCES</span><h1>Choose the next thing<br /><em>worth practicing.</em></h1><p>Browse every coding, system-design, and behavioral prompt in one place. “Practice today” adds the question to standalone practice and takes you directly to Today.</p></header>
@@ -937,15 +1143,89 @@ export default function HomeClient({ content }: { content: ContentIndex }) {
           <article className="system_design"><strong>{content.questionBanks.systemDesign.length}</strong><span>System designs</span></article>
           <article className="behavioral"><strong>{content.questionBanks.behavioral.length}</strong><span>Behavioral prompts</span></article>
         </div>
-        <div className="library-toolbar bank-toolbar"><div className="bank-filter-groups"><div><span>Question type</span><div className="filter-row" role="group" aria-label="Filter problem banks by question type">{(["all", "leetcode", "system_design", "behavioral"] as const).map((filter) => <button key={filter} className={bankFilter === filter ? "active" : ""} onClick={() => setBankFilter(filter)}>{filter === "all" ? "All" : typeLabel(filter)}</button>)}</div></div><div><span>Progress</span><div className="filter-row" role="group" aria-label="Filter problem banks by progress">{(["all", "todo", "finished"] as const).map((filter) => <button key={filter} className={bankProgressFilter === filter ? "active" : ""} onClick={() => setBankProgressFilter(filter)}>{filter === "all" ? "All" : filter === "todo" ? "To practice" : "Finished"}</button>)}</div></div></div><span>{visibleEntries.length} questions shown</span></div>
-        <div className="problem-bank-list">
+        <div className="bank-control-deck">
+          <label className="bank-search-bar">
+            <span className="bank-search-icon" aria-hidden="true">
+              <svg viewBox="0 0 20 20" width="16" height="16" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.8"/><path d="M12.8 12.8 17 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+            </span>
+            <input
+              type="search"
+              value={bankSearch}
+              onChange={(event) => setBankSearch(event.target.value)}
+              placeholder="Search title, topic, company, or #…"
+              aria-label="Search problem banks"
+            />
+            {bankSearch ? (
+              <button type="button" className="bank-search-clear" onClick={() => setBankSearch("")} aria-label="Clear search">×</button>
+            ) : <span className="bank-search-clear-spacer" aria-hidden="true" />}
+            <span className="bank-result-count" aria-live="polite">{visibleEntries.length} result{visibleEntries.length === 1 ? "" : "s"}</span>
+          </label>
+          <div className="library-toolbar bank-toolbar">
+            <div className="bank-filter-rail">
+              <div className="bank-filter-group">
+                <span>Type</span>
+                <div className="filter-row" role="group" aria-label="Filter problem banks by question type">
+                  {(["all", "leetcode", "system_design", "behavioral"] as const).map((filter) => (
+                    <button key={filter} className={bankFilter === filter ? "active" : ""} onClick={() => setBankFilter(filter)}>
+                      {filter === "all" ? "All" : typeLabel(filter)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="bank-filter-group">
+                <span>Progress</span>
+                <div className="filter-row" role="group" aria-label="Filter problem banks by progress">
+                  {(["all", "todo", "finished"] as const).map((filter) => (
+                    <button key={filter} className={bankProgressFilter === filter ? "active" : ""} onClick={() => setBankProgressFilter(filter)}>
+                      {filter === "all" ? "All" : filter === "todo" ? "To practice" : "Finished"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="bank-filter-group">
+                <span>Level</span>
+                <div className="filter-row" role="group" aria-label="Filter problem banks by level">
+                  {(["all", "easy", "medium", "hard"] as const).map((filter) => (
+                    <button key={filter} className={bankLevelFilter === filter ? "active" : ""} onClick={() => setBankLevelFilter(filter)}>
+                      {filter === "all" ? "All" : filter[0].toUpperCase() + filter.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="bank-filter-group">
+                <span>Order</span>
+                <div className="filter-row bank-sort-row" role="group" aria-label="Order problem banks">
+                  {sortOptions.map((option) => {
+                    const active = bankSortKey === option.key;
+                    const direction = active ? bankSortDir : null;
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        className={`bank-sort-pill ${active ? "active" : ""}`}
+                        onClick={() => toggleSort(option.key)}
+                        aria-pressed={active}
+                        aria-label={`${option.label}: ${active ? (direction === "asc" ? "low to high, click to reverse" : "high to low, click to reverse") : "sort low to high"}`}
+                        title={`${option.label} · ${active ? (direction === "asc" ? "↑ low→high" : "↓ high→low") : "click to sort"}`}
+                      >
+                        <span className={`bank-sort-glyph ${option.icon}`} aria-hidden="true" />
+                        <span className="bank-sort-dir" aria-hidden="true">{active ? (direction === "asc" ? "↑" : "↓") : "·"}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="problem-bank-list" tabIndex={0} aria-label="Problem bank results">
           {visibleEntries.map(({ type, question, finished }) => <article className={`problem-bank-entry ${type}`} key={`${type}-${question.id}`}>
             <span className={`type-mark ${type}`}>{typeMark(type)}</span>
             <div className="problem-bank-copy"><small>{typeLabel(type)}{question.difficulty ? ` · ${question.difficulty}` : ""}{question.complexity ? ` · ${displayComplexity(question.complexity)}` : ""} · {finished ? "finished" : "to practice"}</small><strong>{question.title}</strong>{question.prompt && question.prompt !== question.title && <p>{question.prompt}</p>}{question.url && <a href={question.url} target="_blank" rel="noreferrer">{question.solutionReference ? "Open question & solution references ↗" : "Open problem ↗"}</a>}</div>
             <div className="bank-entry-meta"><span>{question.targetMinutes} min estimate</span>{question.problemNumber && <small>#{question.problemNumber}{typeof question.acceptanceRate === "number" ? ` · ${question.acceptanceRate.toFixed(1)}% acceptance` : ""}</small>}{question.companySignals?.[0] && <small>{question.companySignals[0].company} frequency {question.companySignals[0].frequencyScore}/{question.companySignals[0].frequencyScale} · {question.companySignals[0].window}</small>}{question.answerFormat && <small>{question.answerFormat} answer · {question.frequency ?? "medium"} frequency</small>}{question.solutionReference && <small>Reference solution{question.referenceAccess === "may_require_sign_in" ? " may require sign-in" : " available"}</small>}{question.topics.length > 0 && <small>{question.topics.slice(0, 3).join(" · ")}</small>}</div>
             <button onClick={() => addBankQuestionToToday(question, type)}>Practice today</button>
           </article>)}
-          {!visibleEntries.length && <div className="quiet-empty bank-empty"><strong>No questions match these filters.</strong><span>Change either the question type or progress filter.</span></div>}
+          {!visibleEntries.length && <div className="quiet-empty bank-empty"><strong>No questions match these filters.</strong><span>Change type, progress, level, or search text.</span></div>}
         </div>
       </section>
     );
@@ -976,7 +1256,7 @@ export default function HomeClient({ content }: { content: ContentIndex }) {
 
       {composer.open && <div className="modal-backdrop" role="presentation" onMouseDown={() => setComposer(EMPTY_COMPOSER)}><section className="composer" role="dialog" aria-modal="true" aria-labelledby="composer-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setComposer(EMPTY_COMPOSER)} aria-label="Close">×</button><span className="eyebrow">BUILD TODAY&apos;S WORK</span><h2 id="composer-title">{composer.editingId ? "Edit this activity" : composer.mode === "session" ? "Add another full session" : "Add one activity"}</h2>
         {!composer.editingId && <div className="composer-mode"><button className={composer.mode === "session" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, mode: "session" }))}>Full session</button><button className={composer.mode === "activity" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, mode: "activity" }))}>Single activity</button></div>}
-        {composer.mode === "session" && !composer.editingId ? <div className="session-composer"><p>A full session uses up to six coding questions and one question from each available interview bank under one fixed six-hour countdown. Each activity also keeps a compact elapsed-time stopwatch.</p><div className="session-recipe"><div><strong>{Math.min(6, content.questionBanks.leetcode.filter((question) => question.active).length)}</strong><span>Coding problems</span></div><div><strong>{content.questionBanks.systemDesign.some((question) => question.active) ? 1 : 0}</strong><span>System design</span></div><div><strong>{content.questionBanks.behavioral.some((question) => question.active) ? 1 : 0}</strong><span>Behavioral</span></div></div><small>The current banks contain {content.questionBanks.leetcode.length} coding, {content.questionBanks.systemDesign.length} system-design, and {content.questionBanks.behavioral.length} behavioral questions.</small><button className="primary-action full-width" onClick={addFullSession}>Add session {allSessions.length + 1}</button></div> : <form onSubmit={saveActivity}><div className="type-selector" role="group" aria-label="Practice type">{(["leetcode", "system_design", "behavioral"] as const).map((type) => <button type="button" key={type} className={`${type} ${composer.type === type ? "active" : ""}`} onClick={() => setComposer((current) => ({ ...current, type, query: "", selectedId: "", minutes: type === "leetcode" ? "30" : type === "system_design" ? "90" : "60" }))}>{typeLabel(type)}</button>)}</div><label className="search-field"><span>{composer.type === "leetcode" ? "Search the bank or paste a LeetCode URL" : `Search the ${typeLabel(composer.type).toLowerCase()} bank or type a new title`}</span><input autoFocus value={composer.query} onChange={(event) => setComposer((current) => ({ ...current, query: event.target.value, selectedId: "" }))} placeholder={composer.type === "leetcode" ? "Search titles and topics, or https://leetcode.com/problems/…" : "Search or enter a custom question"} /></label>
+        {composer.mode === "session" && !composer.editingId ? <div className="session-composer"><p>A full session uses up to six coding questions and one question from each available interview bank under one fixed six-hour countdown. Picks prefer higher-frequency bank questions, skip anything already on today, and stay unique across sessions.</p><div className="session-recipe"><div><strong>{Math.min(6, content.questionBanks.leetcode.filter((question) => question.active).length)}</strong><span>Coding problems</span></div><div><strong>{content.questionBanks.systemDesign.some((question) => question.active) ? 1 : 0}</strong><span>System design</span></div><div><strong>{content.questionBanks.behavioral.some((question) => question.active) ? 1 : 0}</strong><span>Behavioral</span></div></div><small>The current banks contain {content.questionBanks.leetcode.length} coding, {content.questionBanks.systemDesign.length} system-design, and {content.questionBanks.behavioral.length} behavioral questions. Finished work from earlier days can be drawn again on a new day.</small><button className="primary-action full-width" onClick={addFullSession}>Add session {allSessions.length + 1}</button></div> : <form onSubmit={saveActivity}><div className="type-selector" role="group" aria-label="Practice type">{(["leetcode", "system_design", "behavioral"] as const).map((type) => <button type="button" key={type} className={`${type} ${composer.type === type ? "active" : ""}`} onClick={() => setComposer((current) => ({ ...current, type, query: "", selectedId: "", minutes: type === "leetcode" ? "30" : type === "system_design" ? "90" : "60" }))}>{typeLabel(type)}</button>)}</div><label className="search-field"><span>{composer.type === "leetcode" ? "Search the bank or paste a LeetCode URL" : `Search the ${typeLabel(composer.type).toLowerCase()} bank or type a new title`}</span><input autoFocus value={composer.query} onChange={(event) => setComposer((current) => ({ ...current, query: event.target.value, selectedId: "" }))} placeholder={composer.type === "leetcode" ? "Search titles and topics, or https://leetcode.com/problems/…" : "Search or enter a custom question"} /></label>
         {derivedUrl && !composer.selectedId && <div className="derived-question"><span>Title extracted from URL</span><strong>{derivedUrl.title}</strong><small>{derivedUrl.url}</small></div>}
         {!derivedUrl && <div className="bank-results">{filteredQuestions.length ? filteredQuestions.map((question) => <button type="button" className={composer.selectedId === question.id ? "selected" : ""} key={question.id} onClick={() => selectBankQuestion(question)}><span className={`type-mark ${composer.type}`}>{typeMark(composer.type)}</span><div><strong>{question.title}</strong><small>{question.difficulty ? `${question.difficulty} · ` : ""}{question.topics.join(" · ")}</small></div><span>{composer.selectedId === question.id ? "Selected" : "Choose"}</span></button>) : <p className="no-results">{composer.type === "leetcode" ? "No bank match. Paste the public LeetCode problem URL and the title will be extracted automatically." : "No bank match. Your typed title will become a custom question."}</p>}</div>}
         <label className="minutes-field"><span>Planning estimate in minutes</span><input type="number" min="1" max="360" value={composer.minutes} onChange={(event) => setComposer((current) => ({ ...current, minutes: event.target.value }))} /></label><button className="primary-action full-width" type="submit" disabled={!canSaveActivity}>{composer.editingId ? "Save changes" : "Add to today"}</button></form>}
@@ -984,23 +1264,19 @@ export default function HomeClient({ content }: { content: ContentIndex }) {
 
       {selectedEntry && <div className="letter-backdrop" role="presentation" onMouseDown={() => setSelectedEntry(null)}><article className="reading-letter" role="dialog" aria-modal="true" aria-labelledby="letter-title" onMouseDown={(event) => event.stopPropagation()}><button className="letter-close" onClick={() => setSelectedEntry(null)} aria-label="Close letter">Close ×</button><header><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)}</time></div><h2 id="letter-title">{selectedEntry.title}</h2><p>{selectedEntry.subtitle}</p></header><div className="letter-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.type === "leetcode" && <div><span>Outcome</span><strong>{outcomeLabel(selectedEntry.outcome)}</strong></div>}</div>{selectedEntry.artifact ? <div className="letter-sections">{selectedEntry.artifact.sections.map((section) => /conversation transcript|generated code|solution/i.test(section.title) ? <details key={section.title} open={/solution/i.test(section.title)}><summary>{section.title}</summary><MarkdownBody source={section.body} /></details> : <section key={section.title}><h3>{section.title}</h3><MarkdownBody source={section.body} /></section>)}</div> : <div className="unpublished-letter"><span className="eyebrow">LOCAL COMPLETION · NOT PUBLISHED YET</span><h3>The result is saved on this device, but its review is not in the repository yet.</h3><p>Export today&apos;s draft and ask the matching specialist task to publish. Coding records will show the generated solution and complexity; system-design and behavioral records will show the formatted conversation transcript and review.</p>{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}<footer>Interview Arc · {selectedEntry.id}</footer></article></div>}
     {pipWindow && createPortal(
-      <div className="pip-now">
-        {pipSession && (
-          <SessionCountdown session={pipSession} timer={draft.sessionTimers[pipSession.id]} now={now} onToggle={toggleSessionTimer} onComplete={completeSessionTimer} />
-        )}
-        {pipActivity ? (
-          <div className="pip-active">
-            <div className="pip-heading"><span className={`type-mark ${pipActivity.type}`}>{typeMark(pipActivity.type)}</span><strong className="pip-title">{pipActivity.title}</strong></div>
-            <div className="pip-controls">
-              <ActivityTimer activity={pipActivity} timer={draft.timers[pipActivity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} />
-              <ResultFlag activityType={pipActivity.type} outcome={draft.outcomes[pipActivity.id] ?? pipActivity.outcome} onChange={(outcome) => setOutcome(pipActivity.id, outcome)} />
-            </div>
-            {pipActivity.url && <a className="pip-open" href={pipActivity.url} target="_blank" rel="noreferrer">Open problem ↗</a>}
-          </div>
-        ) : (
-          <p className="pip-empty">No active problem yet. Add or start one on Today.</p>
-        )}
-      </div>,
+      <PipNowPanel
+        activity={pipActivity}
+        activityTimer={pipActivity ? draft.timers[pipActivity.id] : undefined}
+        session={pipSession}
+        sessionTimer={pipSession ? draft.sessionTimers[pipSession.id] : undefined}
+        outcome={pipActivity ? draft.outcomes[pipActivity.id] ?? pipActivity.outcome : undefined}
+        now={now}
+        onToggleActivity={toggleTimer}
+        onCompleteActivity={completeTimer}
+        onToggleSession={toggleSessionTimer}
+        onCompleteSession={completeSessionTimer}
+        onOutcome={setOutcome}
+      />,
       pipWindow.document.body,
     )}
     </main>

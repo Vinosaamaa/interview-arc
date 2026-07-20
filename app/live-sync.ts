@@ -189,8 +189,12 @@ export function useLiveState(date: string): LiveStateController {
   );
 
   // Hydrate from localStorage immediately, then reconcile with the server.
+  // The local paint must not run after the server merge: a fast /api/state
+  // response can land before rAF, and overwriting with the stale local draft
+  // would wipe timers/extras that only exist on the server.
   useEffect(() => {
     let cancelled = false;
+    let serverApplied = false;
     for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
       const key = window.localStorage.key(index);
       if (key?.startsWith("interview-arc-draft-") && key !== draftKey(date)) {
@@ -200,6 +204,7 @@ export function useLiveState(date: string): LiveStateController {
     const localDraft = readDraft(date);
     // Defer the initial state writes out of the synchronous effect body.
     const frame = window.requestAnimationFrame(() => {
+      if (cancelled || serverApplied) return;
       setDraft(() => localDraft);
       setHydrated(true);
     });
@@ -219,11 +224,17 @@ export function useLiveState(date: string): LiveStateController {
         offsetRef.current = state.serverNow - Date.now();
         const serverDraft = serverToDraft(state, offsetRef.current);
         const { merged, localOnly } = mergeDrafts(serverDraft, localDraft);
+        serverApplied = true;
         setDraft(() => merged);
+        setHydrated(true);
         if (localOnly.length > 0) enqueue(...localOnly);
         setSynced(true);
       } catch {
         // Offline or API unavailable: keep working from the local cache.
+        if (!cancelled && !serverApplied) {
+          setDraft(() => localDraft);
+          setHydrated(true);
+        }
       } finally {
         if (!cancelled) void flush();
       }
