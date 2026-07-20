@@ -29,6 +29,25 @@ type ServerLiveState = {
   sessions: LocalSession[];
 };
 
+export function useReadOnlyLiveState(date: string) {
+  const [state, setState] = useState<LocalDraft | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(`/api/state?date=${date}`);
+        if (!response.ok) return;
+        const server = (await response.json()) as ServerLiveState;
+        if (!cancelled) setState(serverToDraft(server, server.serverNow - Date.now()));
+      } catch {
+        // Yesterday's card can fall back to versioned journal data offline.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [date]);
+  return state;
+}
+
 export type Mutation =
   | { type: "timer"; subjectId: string; kind: "activity" | "session"; action: "start" | "pause" | "finish" }
   | { type: "outcome"; activityId: string; outcome: Outcome | null }

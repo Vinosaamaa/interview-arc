@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -26,7 +26,7 @@ import {
   type PublicationStatus,
   type TimerDraft,
 } from "./live-types";
-import { useLiveState } from "./live-sync";
+import { useLiveState, useReadOnlyLiveState } from "./live-sync";
 import { emptyJournal } from "./current-day";
 import { ArrivalRitual, PetalField } from "./arrival-ritual";
 import { useAmbientSound } from "./ambient-sound";
@@ -34,6 +34,8 @@ import { MusicPlaylist } from "./music-playlist";
 
 type View = "today" | "journey" | "library" | "banks";
 type ComposerMode = "session" | "activity";
+type JourneyRange = 30 | 90 | 365 | "all";
+type JourneyMetric = "activities" | "time";
 type DocumentPiP = { requestWindow: (options?: { width?: number; height?: number }) => Promise<Window> };
 type ComposerState = {
   open: boolean;
@@ -57,6 +59,8 @@ type LogEntry = {
   status: "planned" | "running" | "completed" | "published";
   outcome?: Outcome;
   elapsedSeconds: number;
+  allocatedSeconds: number;
+  reviewDates?: string[];
   url?: string;
   artifact?: ContentArtifact;
 };
@@ -98,6 +102,16 @@ function readableDate(date: string, compact = false) {
     ...(compact ? {} : { weekday: "long" as const }),
     timeZone: "UTC",
   }).format(new Date(`${date}T12:00:00Z`));
+}
+
+function shiftDate(date: string, days: number) {
+  const value = new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function daysBetween(left: string, right: string) {
+  return Math.round((Date.parse(`${right}T12:00:00Z`) - Date.parse(`${left}T12:00:00Z`)) / 86_400_000);
 }
 
 function typeLabel(type: ActivityType) {
@@ -503,6 +517,18 @@ function MarkdownBody({ source }: { source: string }) {
   return <div className="markdown-body"><Markdown remarkPlugins={[remarkGfm]}>{source}</Markdown></div>;
 }
 
+function MetricRing({ label, value, detail, color }: { label: string; value: number; detail: string; color: string }) {
+  const safeValue = Math.min(100, Math.max(0, Math.round(value)));
+  return (
+    <article className="metric-ring-card">
+      <div className="metric-ring" style={{ background: `conic-gradient(${color} ${safeValue}%, #e7ebe5 ${safeValue}% 100%)` }}>
+        <span><strong>{safeValue}%</strong><small>{label}</small></span>
+      </div>
+      <p>{detail}</p>
+    </article>
+  );
+}
+
 export default function HomeClient({ content, today }: { content: ContentIndex; today: string }) {
   const journal = useMemo(
     () => content.journals.find((candidate) => candidate.date === today) ?? emptyJournal(today),
@@ -510,6 +536,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   );
   const [view, setView] = useState<View>("today");
   const { draft, setDraft, now, setNow, hydrated, enqueue } = useLiveState(journal.date);
+  const yesterdayDate = shiftDate(journal.date, -1);
+  const yesterdayDraft = useReadOnlyLiveState(yesterdayDate);
   const [composer, setComposer] = useState<ComposerState>(EMPTY_COMPOSER);
   const [selectedEntry, setSelectedEntry] = useState<LogEntry | null>(null);
   const [libraryFilter, setLibraryFilter] = useState<"all" | ActivityType>("all");
@@ -519,6 +547,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [bankSortKey, setBankSortKey] = useState<"frequency" | "recent" | "acceptance">("frequency");
   const [bankSortDir, setBankSortDir] = useState<"asc" | "desc">("asc");
   const [bankSearch, setBankSearch] = useState("");
+  const [journeyRange, setJourneyRange] = useState<JourneyRange>(90);
+  const [journeyMetric, setJourneyMetric] = useState<JourneyMetric>("activities");
+  const [journeyDate, setJourneyDate] = useState("");
+  const [journeyTopic, setJourneyTopic] = useState("");
   const [pipWindow, setPipWindow] = useState<Window | null>(null);
   const [pipSupported, setPipSupported] = useState(false);
   const [arrivalState, setArrivalState] = useState<"show" | "leaving" | "entered">("show");
@@ -1190,8 +1222,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const artifactByActivity = new Map(content.artifacts.filter((artifact) => artifact.activityId).map((artifact) => [artifact.activityId, artifact]));
     for (const daily of content.journals) {
       for (const activity of daily.activities) {
-        const localTimer = daily.date === journal.date ? draft.timers[activity.id] : undefined;
-        const localOutcome = daily.date === journal.date ? draft.outcomes[activity.id] : undefined;
+        const liveDraft = daily.date === journal.date ? draft : daily.date === yesterdayDate ? yesterdayDraft : null;
+        const localTimer = liveDraft?.timers[activity.id];
+        const localOutcome = liveDraft?.outcomes[activity.id];
         const artifact = artifactByActivity.get(activity.id);
         const running = Boolean(localTimer?.runningSince);
         const complete = activity.status === "completed" || Boolean(localOutcome) || Boolean(localTimer?.completed) || Boolean(artifact);
@@ -1204,6 +1237,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           status: artifact ? "published" : complete ? "completed" : running ? "running" : "planned",
           outcome: localOutcome ?? activity.outcome,
           elapsedSeconds: localTimer ? elapsed(localTimer, now) : activity.elapsedSeconds ?? 0,
+          allocatedSeconds: activity.allocatedSeconds,
+          reviewDates: activity.reviewDates,
           url: activity.url,
           artifact,
         });
@@ -1221,6 +1256,26 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         status: outcome || timer?.completed ? "completed" : timer?.runningSince ? "running" : "planned",
         outcome,
         elapsedSeconds: elapsed(timer, now),
+        allocatedSeconds: activity.allocatedSeconds,
+        reviewDates: activity.reviewDates,
+        url: activity.url,
+      });
+    }
+    for (const activity of yesterdayDraft?.extraActivities ?? []) {
+      if (entries.some((entry) => entry.id === activity.id)) continue;
+      const timer = yesterdayDraft?.timers[activity.id];
+      const outcome = yesterdayDraft?.outcomes[activity.id];
+      entries.push({
+        id: activity.id,
+        date: activity.date,
+        type: activity.type,
+        title: activity.title,
+        subtitle: activity.notes ?? activity.prompt ?? "Website-created activity",
+        status: outcome || timer?.completed ? "completed" : timer?.runningSince ? "running" : "planned",
+        outcome,
+        elapsedSeconds: elapsed(timer, now),
+        allocatedSeconds: activity.allocatedSeconds,
+        reviewDates: activity.reviewDates,
         url: activity.url,
       });
     }
@@ -1228,10 +1283,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       if (artifact.activityId && entries.some((entry) => entry.id === artifact.activityId)) continue;
       const inferredType: ActivityType = artifact.type === "leetcode" || artifact.type === "behavioral" ? artifact.type : "system_design";
       const preview = artifact.sections.find((section) => /summary|short answer|question/i.test(section.title))?.body ?? "Published interview record";
-      entries.push({ id: artifact.path, date: artifact.date, type: inferredType, title: artifact.title, subtitle: plainText(preview).slice(0, 160), status: "published", elapsedSeconds: 0, artifact });
+      entries.push({ id: artifact.path, date: artifact.date, type: inferredType, title: artifact.title, subtitle: plainText(preview).slice(0, 160), status: "published", elapsedSeconds: 0, allocatedSeconds: 0, artifact });
     }
     return entries.sort((left, right) => right.date.localeCompare(left.date) || left.title.localeCompare(right.title));
-  }, [content.artifacts, content.journals, draft, journal.date, now]);
+  }, [content.artifacts, content.journals, draft, journal.date, now, yesterdayDate, yesterdayDraft]);
 
   const libraryEntries = useMemo(() => logEntries.filter((entry) => {
     if (entry.outcome) return entry.outcome === "solved" || entry.outcome === "solved_after_reviewing_approach";
@@ -1248,17 +1303,34 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return [...groups.entries()].sort(([left], [right]) => right.localeCompare(left));
   }, [libraryEntries, libraryFilter]);
 
-  const completedEntries = logEntries.filter((entry) => entry.status === "completed" || entry.status === "published");
+  const completedEntries = useMemo(
+    () => logEntries.filter((entry) => entry.status === "completed" || entry.status === "published"),
+    [logEntries],
+  );
   const codingSolved = completedEntries.filter((entry) => entry.type === "leetcode" && (entry.outcome === "solved" || entry.outcome === "solved_after_reviewing_approach")).length;
   const codingFailed = completedEntries.filter((entry) => entry.type === "leetcode" && entry.outcome === "failed").length;
   const systemCompleted = completedEntries.filter((entry) => entry.type === "system_design").length;
   const behaviorCompleted = completedEntries.filter((entry) => entry.type === "behavioral").length;
   const totalRecordedSeconds = completedEntries.reduce((sum, entry) => sum + entry.elapsedSeconds, 0);
+  const outcomeCounts = {
+    solved: completedEntries.filter((entry) => entry.type === "leetcode" && entry.outcome === "solved").length,
+    reviewed: completedEntries.filter((entry) => entry.type === "leetcode" && entry.outcome === "solved_after_reviewing_approach").length,
+    failed: codingFailed,
+  };
+  const codingAttemptCount = outcomeCounts.solved + outcomeCounts.reviewed + outcomeCounts.failed;
 
-  const dailyStats = useMemo(() => {
-    const dates = [...new Set(logEntries.map((entry) => entry.date))].sort().slice(-14);
-    return dates.map((date) => {
-      const complete = logEntries.filter((entry) => entry.date === date && (entry.status === "completed" || entry.status === "published"));
+  const journeyStartDate = useMemo(() => {
+    if (journeyRange !== "all") return shiftDate(journal.date, -(journeyRange - 1));
+    return completedEntries.length
+      ? completedEntries.reduce((earliest, entry) => entry.date < earliest ? entry.date : earliest, journal.date)
+      : shiftDate(journal.date, -29);
+  }, [completedEntries, journal.date, journeyRange]);
+
+  const journeyStats = useMemo(() => {
+    const dayCount = Math.max(1, daysBetween(journeyStartDate, journal.date) + 1);
+    return Array.from({ length: dayCount }, (_, index) => {
+      const date = shiftDate(journeyStartDate, index);
+      const complete = completedEntries.filter((entry) => entry.date === date);
       return {
         date,
         coding: complete.filter((entry) => entry.type === "leetcode").length,
@@ -1267,10 +1339,96 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         seconds: complete.reduce((sum, entry) => sum + entry.elapsedSeconds, 0),
       };
     });
-  }, [logEntries]);
+  }, [completedEntries, journal.date, journeyStartDate]);
 
-  const maxDailyCount = Math.max(1, ...dailyStats.map((day) => day.coding + day.system + day.behavioral));
-  const maxDailySeconds = Math.max(1, ...dailyStats.map((day) => day.seconds));
+  const heatmapDays = useMemo(() => {
+    let start = shiftDate(journal.date, -364);
+    const weekday = new Date(`${start}T12:00:00Z`).getUTCDay();
+    start = shiftDate(start, -((weekday + 6) % 7));
+    const dayCount = daysBetween(start, journal.date) + 1;
+    return Array.from({ length: dayCount }, (_, index) => {
+      const date = shiftDate(start, index);
+      const entries = completedEntries.filter((entry) => entry.date === date);
+      const finished = entries.filter((entry) => entry.type !== "leetcode" || entry.outcome === "solved" || entry.outcome === "solved_after_reviewing_approach");
+      return {
+        date,
+        count: finished.length,
+        coding: finished.filter((entry) => entry.type === "leetcode").length,
+        system: finished.filter((entry) => entry.type === "system_design").length,
+        behavioral: finished.filter((entry) => entry.type === "behavioral").length,
+        failed: entries.filter((entry) => entry.outcome === "failed").length,
+        seconds: entries.reduce((sum, entry) => sum + entry.elapsedSeconds, 0),
+      };
+    });
+  }, [completedEntries, journal.date]);
+
+  const activeDates = useMemo(
+    () => [...new Set(completedEntries.map((entry) => entry.date))].sort(),
+    [completedEntries],
+  );
+  const streaks = useMemo(() => {
+    const active = new Set(activeDates);
+    let current = 0;
+    let cursor = active.has(journal.date) ? journal.date : shiftDate(journal.date, -1);
+    while (active.has(cursor)) {
+      current += 1;
+      cursor = shiftDate(cursor, -1);
+    }
+    let longest = 0;
+    let run = 0;
+    let previous = "";
+    activeDates.forEach((date) => {
+      run = previous && daysBetween(previous, date) === 1 ? run + 1 : 1;
+      longest = Math.max(longest, run);
+      previous = date;
+    });
+    return { current, longest };
+  }, [activeDates, journal.date]);
+
+  const codingQuestionFor = useCallback((entry: LogEntry) => {
+    return content.questionBanks.leetcode.find((question) => (
+      Boolean(question.url && entry.url && question.url.replace(/\/$/, "") === entry.url.replace(/\/$/, "")) ||
+      normalizedIdentity(question.title) === normalizedIdentity(entry.title)
+    ));
+  }, [content.questionBanks.leetcode]);
+
+  const topicStats = useMemo(() => {
+    const topics = new Map<string, { count: number; entries: LogEntry[] }>();
+    libraryEntries.filter((entry) => entry.type === "leetcode").forEach((entry) => {
+      codingQuestionFor(entry)?.topics.forEach((topic) => {
+        const current = topics.get(topic) ?? { count: 0, entries: [] };
+        topics.set(topic, { count: current.count + 1, entries: [...current.entries, entry] });
+      });
+    });
+    return [...topics.entries()]
+      .map(([topic, value]) => ({ topic, ...value }))
+      .sort((left, right) => right.count - left.count || left.topic.localeCompare(right.topic))
+      .slice(0, 12);
+  }, [codingQuestionFor, libraryEntries]);
+
+  const difficultyStats = useMemo(() => {
+    const values = { easy: 0, medium: 0, hard: 0, unknown: 0 };
+    libraryEntries.filter((entry) => entry.type === "leetcode").forEach((entry) => {
+      const difficulty = codingQuestionFor(entry)?.difficulty ?? "unknown";
+      values[difficulty] += 1;
+    });
+    return values;
+  }, [codingQuestionFor, libraryEntries]);
+
+  const selectedJourneyEntries = journeyDate
+    ? completedEntries.filter((entry) => entry.date === journeyDate)
+    : [];
+  const selectedTopicEntries = topicStats.find((topic) => topic.topic === journeyTopic)?.entries ?? [];
+  const yesterdayEntries = logEntries.filter((entry) => entry.date === yesterdayDate);
+  const yesterdayCompleted = yesterdayEntries.filter((entry) => entry.status === "completed" || entry.status === "published");
+  const yesterdaySeconds = yesterdayCompleted.reduce((sum, entry) => sum + entry.elapsedSeconds, 0);
+  const yesterdaySessions = new Set([
+    ...(content.journals.find((entry) => entry.date === yesterdayDate)?.sessions.map((session) => session.id) ?? []),
+    ...(yesterdayDraft?.sessions.map((session) => session.id) ?? []),
+  ]).size;
+  const recentSeven = completedEntries.filter((entry) => entry.date >= shiftDate(journal.date, -6) && entry.date <= journal.date).length;
+  const priorSeven = completedEntries.filter((entry) => entry.date >= shiftDate(journal.date, -13) && entry.date <= shiftDate(journal.date, -7)).length;
+  const momentumDelta = priorSeven ? Math.round(((recentSeven - priorSeven) / priorSeven) * 100) : recentSeven ? 100 : 0;
   const calendarDays = useMemo(() => {
     const anchor = new Date(`${journal.date}T12:00:00Z`);
     return Array.from({ length: 35 }, (_, index) => {
@@ -1348,15 +1506,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function renderToday() {
-    const completeToday = allTodayActivities.filter(isActivityComplete).length;
     const totalToday = allTodayActivities.length;
-    const todaySeconds = Object.entries(draft.timers).reduce((sum, [, timer]) => sum + elapsed(timer, now), 0);
     return (
       <>
         <section className="today-masthead">
           <div className="date-poster"><strong>{journal.date.slice(-2)}</strong><span>{new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(new Date(`${journal.date}T12:00:00Z`))}</span></div>
           <div className="today-thesis"><span className="eyebrow">TODAY · {journal.focus.toUpperCase()}</span><h1>{totalToday ? `${totalToday} activities.` : "A clean page."}<br /><em>One honest record.</em></h1><p>{journal.note}</p></div>
-          <div className="today-tally"><div><strong>{completeToday}/{totalToday}</strong><span>activities finished</span></div><div><strong>{formatDuration(todaySeconds)}</strong><span>time recorded locally</span></div><div><strong>{allSessions.length}</strong><span>session{allSessions.length === 1 ? "" : "s"} today</span></div></div>
+          <div className="today-tally"><span className="yesterday-label">YESTERDAY · {readableDate(yesterdayDate, true)}</span><div><strong>{yesterdayCompleted.length}/{yesterdayEntries.length}</strong><span>activities finished</span></div><div><strong>{formatDuration(yesterdaySeconds)}</strong><span>time recorded</span></div><div><strong>{yesterdaySessions}</strong><span>session{yesterdaySessions === 1 ? "" : "s"} planned</span></div></div>
         </section>
 
         <div className="today-actions"><div><h2>Today&apos;s sessions</h2><p>Each session countdown follows its activity recipe; activity stopwatches stay compact and independent.</p></div><div><button className="secondary-action" onClick={openNewActivity}>Add one activity</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
@@ -1371,9 +1527,28 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function renderJourney() {
+    const metricValues = journeyStats.map((day) => journeyMetric === "activities"
+      ? day.coding + day.system + day.behavioral
+      : Math.round(day.seconds / 60));
+    const metricMax = Math.max(1, ...metricValues);
+    const plotPoints = journeyStats.map((day, index) => {
+      const x = journeyStats.length === 1 ? 400 : 42 + (index / (journeyStats.length - 1)) * 716;
+      const value = metricValues[index];
+      const y = 205 - (value / metricMax) * 155;
+      return { day, value, x, y };
+    });
+    const linePoints = plotPoints.map((point) => `${point.x},${point.y}`).join(" ");
+    const areaPath = plotPoints.length
+      ? `M ${plotPoints[0].x} 205 L ${plotPoints.map((point) => `${point.x} ${point.y}`).join(" L ")} L ${plotPoints.at(-1)!.x} 205 Z`
+      : "";
+    const activeDayAverage = activeDates.length ? completedEntries.length / activeDates.length : 0;
+    const maxTopicCount = Math.max(1, ...topicStats.map((topic) => topic.count));
+    const maxDifficulty = Math.max(1, difficultyStats.easy, difficultyStats.medium, difficultyStats.hard, difficultyStats.unknown);
+    const effortEntries = completedEntries.filter((entry) => entry.type === "leetcode" && entry.outcome && entry.elapsedSeconds > 0);
+    const maxEffortMinutes = Math.max(1, ...effortEntries.map((entry) => entry.elapsedSeconds / 60));
     return (
       <section className="view-page journey-page">
-        <header className="view-masthead"><span className="eyebrow">JOURNEY · PUBLISHED + TODAY&apos;S LOCAL DRAFT</span><h1>Progress you can<br /><em>actually count.</em></h1><p>Completed artifacts are permanent. Today&apos;s device-local work is included here so you can see the day taking shape before publication.</p></header>
+        <header className="view-masthead journey-masthead"><span className="eyebrow">JOURNEY · PUBLISHED + TODAY&apos;S LIVE RECORD</span><h1>Your practice,<br /><em>mapped over time.</em></h1><p>This page counts only recorded work. Explore consistency, outcomes, topic coverage, effort, and the exact days behind every trend.</p></header>
         <div className="stat-ledger">
           <article className="stat-block coding-stat"><span>Coding solved</span><strong>{codingSolved}</strong><small>{codingFailed} failed attempt{codingFailed === 1 ? "" : "s"}</small></article>
           <article className="stat-block system-stat"><span>System designs</span><strong>{systemCompleted}</strong><small>completed or published</small></article>
@@ -1381,26 +1556,83 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           <article className="stat-block time-stat"><span>Recorded time</span><strong>{formatDuration(totalRecordedSeconds)}</strong><small>from completed activity timers</small></article>
         </div>
 
-        <div className="analytics-grid">
-          <article className="chart-sheet activity-chart">
-            <div className="chart-heading"><div><span className="eyebrow">DAILY OUTPUT</span><h2>Completed activities by day</h2></div><div className="chart-legend"><span className="leetcode">Coding</span><span className="system_design">System</span><span className="behavioral">Behavioral</span></div></div>
-            <div className="bar-plot">{dailyStats.map((day) => {
-              const total = day.coding + day.system + day.behavioral;
-              return <div className="bar-row" key={day.date}><time>{readableDate(day.date, true)}</time><div className="bar-track" aria-label={`${total} completed activities`}><span className="leetcode" style={{ width: `${(day.coding / maxDailyCount) * 100}%` }} /><span className="system_design" style={{ width: `${(day.system / maxDailyCount) * 100}%` }} /><span className="behavioral" style={{ width: `${(day.behavioral / maxDailyCount) * 100}%` }} /></div><strong>{total}</strong></div>;
-            })}</div>
-            {dailyStats.every((day) => day.coding + day.system + day.behavioral === 0) && <p className="chart-empty">No completed activity has been recorded yet. Planned questions are not counted as solved.</p>}
+        <div className="journey-pulse" aria-label="Practice consistency summary">
+          <article><span>Current streak</span><strong>{streaks.current}</strong><small>day{streaks.current === 1 ? "" : "s"}</small></article>
+          <article><span>Longest streak</span><strong>{streaks.longest}</strong><small>consecutive days</small></article>
+          <article><span>Active days</span><strong>{activeDates.length}</strong><small>with completed work</small></article>
+          <article><span>Per active day</span><strong>{activeDayAverage.toFixed(1)}</strong><small>activities on average</small></article>
+          <article className={momentumDelta >= 0 ? "positive" : "negative"}><span>7-day momentum</span><strong>{momentumDelta > 0 ? "+" : ""}{momentumDelta}%</strong><small>{recentSeven} now · {priorSeven} prior</small></article>
+        </div>
+
+        <article className="chart-sheet heatmap-sheet">
+          <div className="chart-heading"><div><span className="eyebrow">365-DAY PRACTICE MAP</span><h2>Consistency at a glance</h2><p>Color measures finished coding and mock-interview work. Failed attempts remain visible in each day&apos;s detail without inflating the shade.</p></div><div className="heatmap-legend"><span>Less</span>{[0, 1, 2, 3, 4].map((level) => <i className={`level-${level}`} key={level} />)}<span>More</span></div></div>
+          <div className="heatmap-scroll">
+            <div className="heatmap-days"><span>M</span><span>W</span><span>F</span></div>
+            <div className="practice-heatmap" role="grid" aria-label="Completed practice during the last 365 days">
+              {heatmapDays.map((day) => {
+                const level = day.count === 0 ? 0 : Math.min(4, day.count);
+                return <button
+                  key={day.date}
+                  className={`heat-day level-${level} ${journeyDate === day.date ? "selected" : ""}`}
+                  onClick={() => setJourneyDate(day.date)}
+                  aria-label={`${readableDate(day.date)}: ${day.count} finished activities, ${day.failed} failed attempts`}
+                ><span role="tooltip"><strong>{readableDate(day.date, true)}</strong>{day.count} finished · {day.coding} coding · {day.system} system · {day.behavioral} behavioral{day.failed ? ` · ${day.failed} failed` : ""}<small>{formatDuration(day.seconds)} recorded</small></span></button>;
+              })}
+            </div>
+          </div>
+          <div className="heatmap-foot"><span>{readableDate(heatmapDays[0].date, true)}</span><span>Select a square to inspect the day</span><span>{readableDate(journal.date, true)}</span></div>
+          {journeyDate && <div className="journey-day-inspector">
+            <div><span className="eyebrow">SELECTED DAY</span><h3>{readableDate(journeyDate)}</h3><p>{selectedJourneyEntries.length ? `${selectedJourneyEntries.length} completed record${selectedJourneyEntries.length === 1 ? "" : "s"}.` : "No completed work was recorded on this day."}</p></div>
+            <div>{selectedJourneyEntries.map((entry) => <button key={entry.id} onClick={() => setSelectedEntry(entry)}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><i><strong>{entry.title}</strong><small>{typeLabel(entry.type)} · {entry.elapsedSeconds ? formatDuration(entry.elapsedSeconds) : "time not recorded"}</small></i><b>Read →</b></button>)}</div>
+          </div>}
+        </article>
+
+        <section className="metric-rings" aria-label="Coding outcome rates">
+          <MetricRing label="Independent" value={codingAttemptCount ? (outcomeCounts.solved / codingAttemptCount) * 100 : 0} detail={`${outcomeCounts.solved} coding attempt${outcomeCounts.solved === 1 ? "" : "s"} solved without an approach review.`} color="#91a72f" />
+          <MetricRing label="After review" value={codingAttemptCount ? (outcomeCounts.reviewed / codingAttemptCount) * 100 : 0} detail={`${outcomeCounts.reviewed} attempt${outcomeCounts.reviewed === 1 ? "" : "s"} completed after reviewing the approach.`} color="#6577d8" />
+          <MetricRing label="Failed" value={codingAttemptCount ? (outcomeCounts.failed / codingAttemptCount) * 100 : 0} detail={`${outcomeCounts.failed} recorded failure${outcomeCounts.failed === 1 ? "" : "s"}; these remain evidence for future review.`} color="#d46a52" />
+        </section>
+
+        <div className="analytics-grid journey-detail-grid">
+          <article className="chart-sheet trend-sheet">
+            <div className="chart-heading"><div><span className="eyebrow">PACE OVER TIME</span><h2>{journeyMetric === "activities" ? "Completed activities" : "Recorded minutes"}</h2></div><div className="journey-controls"><div role="group" aria-label="Journey date range">{([30, 90, 365, "all"] as const).map((range) => <button key={range} className={journeyRange === range ? "active" : ""} onClick={() => setJourneyRange(range)}>{range === "all" ? "All" : `${range}d`}</button>)}</div><div role="group" aria-label="Journey metric"><button className={journeyMetric === "activities" ? "active" : ""} onClick={() => setJourneyMetric("activities")}>Output</button><button className={journeyMetric === "time" ? "active" : ""} onClick={() => setJourneyMetric("time")}>Time</button></div></div></div>
+            <div className="trend-plot">
+              <svg viewBox="0 0 800 235" role="img" aria-label={`${journeyMetric} trend from ${journeyStartDate} through ${journal.date}`}>
+                <defs><linearGradient id="journey-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#9eb532" stopOpacity=".34"/><stop offset="1" stopColor="#9eb532" stopOpacity="0"/></linearGradient></defs>
+                {[50, 101.7, 153.3, 205].map((y) => <line key={y} x1="42" x2="758" y1={y} y2={y} className="plot-rule" />)}
+                <path d={areaPath} fill="url(#journey-area)" />
+                <polyline points={linePoints} className="trend-line" />
+                {plotPoints.filter((point) => point.value > 0).map((point) => <circle key={point.day.date} cx={point.x} cy={point.y} r={journeyDate === point.day.date ? 5.5 : 3.5} className={journeyDate === point.day.date ? "selected" : ""} tabIndex={0} role="button" onClick={() => setJourneyDate(point.day.date)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setJourneyDate(point.day.date); }} aria-label={`${readableDate(point.day.date)}: ${point.value} ${journeyMetric === "time" ? "minutes" : "activities"}`}><title>{readableDate(point.day.date, true)} · {point.value} {journeyMetric === "time" ? "min" : "finished"}</title></circle>)}
+                <text x="42" y="228">{readableDate(journeyStartDate, true)}</text><text x="758" y="228" textAnchor="end">{readableDate(journal.date, true)}</text><text x="42" y="43">{metricMax} {journeyMetric === "time" ? "min" : "max"}</text>
+              </svg>
+            </div>
+            <div className="chart-legend"><span className="leetcode">Coding</span><span className="system_design">System design</span><span className="behavioral">Behavioral</span></div>
           </article>
 
           <article className="chart-sheet outcome-chart">
-            <div className="chart-heading"><div><span className="eyebrow">CODING OUTCOMES</span><h2>How problems ended</h2></div></div>
-            <div className="outcome-numbers"><div><strong>{completedEntries.filter((entry) => entry.outcome === "solved").length}</strong><span>Solved</span></div><div><strong>{completedEntries.filter((entry) => entry.outcome === "solved_after_reviewing_approach").length}</strong><span>After review</span></div><div><strong>{codingFailed}</strong><span>Failed</span></div></div>
-            <div className="outcome-rule"><span className="solved" style={{ flex: completedEntries.filter((entry) => entry.outcome === "solved").length || .2 }} /><span className="reviewed" style={{ flex: completedEntries.filter((entry) => entry.outcome === "solved_after_reviewing_approach").length || .2 }} /><span className="failed" style={{ flex: codingFailed || .2 }} /></div>
-            <p>Walkthroughs without a real attempt are intentionally excluded from solved totals.</p>
+            <div className="chart-heading"><div><span className="eyebrow">CODING LADDER</span><h2>Difficulty mix</h2></div></div>
+            <div className="difficulty-bars">{(["easy", "medium", "hard", "unknown"] as const).map((level) => <div key={level}><span>{level}</span><i><b style={{ width: `${(difficultyStats[level] / maxDifficulty) * 100}%` }} /></i><strong>{difficultyStats[level]}</strong></div>)}</div>
+            <p>Difficulty comes from the question bank. Custom URLs stay “unknown” until bank metadata is added.</p>
           </article>
 
-          <article className="chart-sheet time-chart">
-            <div className="chart-heading"><div><span className="eyebrow">TIME TREND</span><h2>Recorded practice by day</h2></div></div>
-            <div className="time-plot">{dailyStats.map((day) => <div key={day.date}><time>{readableDate(day.date, true)}</time><span><i style={{ width: `${(day.seconds / maxDailySeconds) * 100}%` }} /></span><strong>{formatDuration(day.seconds)}</strong></div>)}</div>
+          <article className="chart-sheet effort-sheet">
+            <div className="chart-heading"><div><span className="eyebrow">EFFORT MAP</span><h2>Time spent versus outcome</h2><p>Each point is one coding attempt. Select a point to open its record.</p></div></div>
+            {effortEntries.length ? <svg className="effort-map" viewBox="0 0 800 245" role="img" aria-label="Coding attempts plotted by elapsed time and outcome">
+              {[{ label: "Solved", y: 52 }, { label: "After review", y: 122 }, { label: "Failed", y: 192 }].map((row) => <g key={row.label}><line x1="125" x2="760" y1={row.y} y2={row.y} /><text x="18" y={row.y + 4}>{row.label}</text></g>)}
+              {effortEntries.map((entry) => {
+                const minutes = entry.elapsedSeconds / 60;
+                const y = entry.outcome === "solved" ? 52 : entry.outcome === "solved_after_reviewing_approach" ? 122 : 192;
+                const x = 125 + (minutes / maxEffortMinutes) * 635;
+                return <circle key={entry.id} cx={x} cy={y} r="7" className={entry.outcome} tabIndex={0} role="button" onClick={() => setSelectedEntry(entry)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedEntry(entry); }} aria-label={`${entry.title}, ${Math.round(minutes)} minutes, ${outcomeLabel(entry.outcome)}`}><title>{entry.title} · {Math.round(minutes)} min · {outcomeLabel(entry.outcome)}</title></circle>;
+              })}
+              <text x="125" y="235">0 min</text><text x="760" y="235" textAnchor="end">{Math.ceil(maxEffortMinutes)} min</text>
+            </svg> : <div className="chart-empty rich-empty"><strong>Your effort map starts with a finished coding timer.</strong><span>Elapsed time and an outcome are both required; Interview Arc will not infer either.</span></div>}
+          </article>
+
+          <article className="chart-sheet topic-sheet">
+            <div className="chart-heading"><div><span className="eyebrow">SKILL COVERAGE</span><h2>Topics practiced</h2><p>Select a topic to see the records behind it.</p></div></div>
+            {topicStats.length ? <div className="topic-bars">{topicStats.map((topic) => <button key={topic.topic} className={journeyTopic === topic.topic ? "active" : ""} onClick={() => setJourneyTopic((current) => current === topic.topic ? "" : topic.topic)}><span>{topic.topic}</span><i><b style={{ width: `${(topic.count / maxTopicCount) * 100}%` }} /></i><strong>{topic.count}</strong></button>)}</div> : <div className="chart-empty rich-empty"><strong>No topic coverage yet.</strong><span>Finish bank-linked coding problems to build this map.</span></div>}
+            {journeyTopic && <div className="topic-records"><strong>{journeyTopic}</strong>{selectedTopicEntries.map((entry) => <button key={entry.id} onClick={() => setSelectedEntry(entry)}>{entry.title}<span>{readableDate(entry.date, true)} →</span></button>)}</div>}
           </article>
         </div>
       </section>

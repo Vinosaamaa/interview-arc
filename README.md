@@ -160,4 +160,4 @@ The behavioral bank mirrors the 74 questions listed by Bugfree.ai. Each entry st
 
 A session defaults to six coding problems, one system-design question, and one behavioral question, producing a six-hour countdown. Before work begins, the user may change any category count; the countdown is recalculated at 40 minutes per coding problem and 60 minutes per system-design or behavioral question. The user may add another session or a standalone activity. Every activity also has a compact elapsed-time stopwatch.
 
-The site presents these sources in Problem Banks. Past is the completed-work reading log; Journey retains broader statistics, including failed attempts.
+The site presents these sources in Problem Banks. Past is the completed-work reading log. Journey is an interactive practice atlas with a 365-day heatmap, streak and momentum measures, coding outcome rates, difficulty and topic coverage, pace controls, and an elapsed-time-versus-outcome map. Every point opens or filters to the records behind it; unsupported mastery or productivity claims are intentionally excluded.
