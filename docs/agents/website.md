@@ -103,5 +103,15 @@ The website must not imply that browser draft state has already been published t
   migrations and refreshes the content projection. It deploys the Worker only
   when the merge contains application/infrastructure code; content-only merges
   must not redeploy it.
+- Act as the branch coordinator. Before starting feature work, inspect the
+  working tree. If it contains only journal-owned changes, run `pnpm
+  journal:checkpoint -- --date YYYY-MM-DD --area practice`; if unrelated code
+  is also dirty, finish or explicitly separate that work instead of stashing or
+  mixing it automatically.
+- After a bug-fix PR is merged, return to an existing daily branch when more
+  practice publishing is requested. For `Finish today's journal`, fetch main,
+  switch to `journal/YYYY-MM-DD`, merge `origin/main`, resolve any actual
+  overlap deliberately, validate, push, and open the one daily PR. Never treat
+  “behind main” as a conflict by itself.
 - The old OpenAI Sites project remains a temporary fallback. Do not deploy to
   or retire it unless the user explicitly asks.

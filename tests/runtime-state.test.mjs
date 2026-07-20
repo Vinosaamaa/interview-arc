@@ -6,6 +6,7 @@ import { dateInTimeZone, emptyJournal } from "../app/current-day.ts";
 import { resolveOwnerId, TRUSTED_EMAIL_HEADER } from "../db/owner.ts";
 import { derivePublicationStatus } from "../db/publication-state.ts";
 import { foldElapsed, nextTimerState } from "../db/timer-state.ts";
+import { isJournalPath, journalBranch, parsePorcelain } from "../scripts/journal-branch.mjs";
 
 test("today follows the practice timezone instead of the Worker UTC date", () => {
   assert.equal(dateInTimeZone(new Date("2026-07-20T05:30:00Z")), "2026-07-19");
@@ -28,7 +29,21 @@ test("finished activities enter the journal queue without a second toggle", () =
   assert.equal(derivePublicationStatus({ hasArtifact: false, completed: true }), "ready");
   assert.equal(derivePublicationStatus({ hasArtifact: false, completed: false, storedPublication: "ready" }), "ready");
   assert.equal(derivePublicationStatus({ hasArtifact: true, completed: true }), "published");
-  assert.equal(derivePublicationStatus({ hasArtifact: false, completed: true, storedPublication: "published" }), "published");
+  assert.equal(derivePublicationStatus({ hasArtifact: false, completed: true, storedPublication: "published" }), "ready");
+  assert.equal(derivePublicationStatus({ hasArtifact: true, completed: true, storedPublication: "published" }), "published");
+});
+
+test("daily checkpoint guard recognizes only journal-owned changes", () => {
+  assert.equal(journalBranch("2026-07-20"), "journal/2026-07-20");
+  assert.throws(() => journalBranch("July-20"), /ISO date/);
+  assert.equal(isJournalPath("data/daily/2026-07-20.json", "2026-07-20"), true);
+  assert.equal(isJournalPath("practice/leetcode/attempts/2026-07-20-two-sum.md", "2026-07-20"), true);
+  assert.equal(isJournalPath("practice/system-design/sessions/2026-07-20-feed.md", "2026-07-20"), true);
+  assert.equal(isJournalPath("app/home-client.tsx", "2026-07-20"), false);
+  assert.deepEqual(parsePorcelain("?? data/daily/2026-07-20.json\n M app/home-client.tsx\n"), [
+    "data/daily/2026-07-20.json",
+    "app/home-client.tsx",
+  ]);
 });
 
 test("authenticated emails map to stable, non-PII owner ids", async () => {

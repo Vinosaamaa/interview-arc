@@ -36,7 +36,8 @@ When the user says `Publish this session`:
 1. Finalize `attempts/YYYY-MM-DD-<problem-id>.md` using the LeetCode log contract.
 2. Add only facts observed in this task or explicitly supplied by the user/website export.
 3. Update the matching activity in `../../data/daily/YYYY-MM-DD.json` with known durable fields and `artifactPath`.
-4. Do not commit, push, open a pull request, or deploy. The main task does that once for the day.
+4. Run `pnpm journal:checkpoint -- --date YYYY-MM-DD --area leetcode` from the repository root. This is the only Git commit this task may initiate; the guarded helper creates or reuses the daily branch and refuses unrelated dirty code.
+5. After the checkpoint succeeds, call `mark_activities_published` with the artifact path when the MCP bridge is available. Do not push, open a pull request, or deploy. The main task does that once for the day.
 
 LeetCode uses a structured postmortem by default. Preserve a full two-sided transcript only when the conversation itself contains reasoning or feedback worth revisiting.
 
@@ -50,7 +51,10 @@ When the user says `Publish today's LeetCode` or `Publish the LeetCode session`,
 4. Preserve each website-provided stopwatch time and result. Do not use chat timestamps as a timer and do not upgrade a failed or unset result to solved. A failed activity may be ready and should receive a postmortem.
 5. For every selected problem, generate an original coaching solution or walkthrough, reference code, time and space complexity, edge cases, and key lesson. Do this even when the user never discussed that problem in this task.
 6. Write one artifact per problem under `attempts/`, update or add the matching daily activity, and point it to `artifactPath`.
-7. After every artifact file exists, call `mark_activities_published` with its activity ID and repository-relative artifact path. If MCP is unavailable, leave publication state for the website task to reconcile from the artifact. Do not commit the local draft export. Do not commit, push, open a pull request, or deploy; the main task handles the daily journal integration.
+7. After every artifact file exists, run `pnpm journal:checkpoint -- --date YYYY-MM-DD --area leetcode` from the repository root. The helper makes one local checkpoint containing the batch and daily manifest; it must finish before D1 is marked.
+8. Call `mark_activities_published` with each activity ID and repository-relative artifact path. If MCP is unavailable, leave publication state for the website task to reconcile from the artifact. Do not commit the local draft export. Do not push, open a pull request, or deploy; the main task handles the daily journal integration.
+
+Never run raw branch-switching or commit commands in this task. Use only the checkpoint helper. If it reports unrelated uncommitted work, stop publishing and ask the coordinator to protect or finish that work; do not stash, discard, or absorb it into the journal commit.
 
 This command is the normal coding workflow. The user does not need to say `Publish this session` six times. The queue contains every finished, unpublished LeetCode activity: finishing its stopwatch or choosing its actual result makes it **Ready for journal** (internal state: `ready`) automatically. Do not include merely planned or running problems, and do not substitute every problem discussed in chat.
 

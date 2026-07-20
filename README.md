@@ -56,10 +56,16 @@ The outer workspace instructions route a task to the right guide even when every
 Use three shared commands:
 
 - `Start a new session` creates or acknowledges a stable activity ID and draft artifact.
-- `Publish this session` finalizes one question's files and updates the daily manifest.
-- `Finish today's journal` asks the main task to validate, commit, push, and open one pull request for the day.
+- `Publish this session` finalizes one question's files, updates the daily manifest, and makes a guarded local checkpoint commit on `journal/YYYY-MM-DD`.
+- `Finish today's journal` asks the main task to merge the latest `main`, validate, push, and open one pull request for the day.
 
 For coding, finish the stopwatch or choose the actual result, then say `Publish today's LeetCode`. Finished activities become **Ready for journal** automatically (internal state: `ready`). The project-scoped Interview Arc MCP bridge lets the LeetCode task read that authenticated D1 queue and produce every coding artifact in one pass; it does not need a separate conversation for every problem. Exporting `journal-YYYY-MM-DD-draft.json` remains the portable fallback.
+
+All specialist publications use the same guarded `journal/YYYY-MM-DD` branch.
+The checkpoint helper commits only journal-owned paths and refuses to cross a
+branch boundary while unrelated website changes are uncommitted. This keeps
+practice artifacts out of feature PRs while still allowing feature work between
+completed publication commands.
 
 See `docs/architecture/single-project-practice-workflow.md` for the full ownership and Git model.
 

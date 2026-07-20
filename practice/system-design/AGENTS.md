@@ -44,7 +44,9 @@ The default role is not "answer generator." The default role is "coach plus inte
 ### Session Commands
 
 - `Start a new session`: reuse or create the daily `activity_id`, establish the prompt and source, and create the draft session artifact. Append each meaningful user/coach exchange as the mock continues so the record does not depend on reconstructing a very long task at the end.
-- `Publish this session`: read the activity's live timer, result, note, and readiness through the Interview Arc MCP bridge when available; close the transcript, complete the framework notes and feedback, update the matching activity in `../../data/daily/YYYY-MM-DD.json`, and mark the artifact completed. After the file exists, call `mark_activities_published` with its repository-relative path. Do not commit, push, open a pull request, or deploy; the main task does that once for the day.
+- `Publish this session`: read the activity's live timer, result, note, and readiness through the Interview Arc MCP bridge when available; close the transcript, complete the framework notes and feedback, update the matching activity in `../../data/daily/YYYY-MM-DD.json`, and mark the artifact completed. Run `pnpm journal:checkpoint -- --date YYYY-MM-DD --area system-design` from the repository root. Only after that guarded local commit succeeds, call `mark_activities_published` with the repository-relative path. Do not push, open a pull request, or deploy; the main task does that once for the day.
+
+Never run raw branch-switching or commit commands in this task. If the checkpoint helper reports unrelated uncommitted work, stop publishing and ask the coordinator to protect or finish it; do not stash, discard, or include it.
 
 Only publish a dashboard activity whose effective publication state is `ready`, unless the user explicitly overrides that choice in this task. Finishing its timer or choosing a result makes it ready automatically. If MCP is unavailable, use a user-provided website export or ask for the activity ID and timing facts; never invent them.
 

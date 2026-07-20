@@ -77,7 +77,8 @@ The LeetCode task must:
 3. preserve the website-provided outcome and elapsed time without inferring either from chat timestamps;
 4. generate an original coaching solution, code, complexity analysis, edge cases, and key lesson for every selected problem, even when that problem was never discussed earlier in the task;
 5. write one attempt artifact per problem and update the daily manifest;
-6. after the artifact exists, call `mark_activities_published` with its repository path; when using the fallback export, leave the draft file local and uncommitted.
+6. checkpoint the artifact and daily manifest with the guarded daily-branch helper;
+7. after the checkpoint succeeds, call `mark_activities_published` with its repository path; when using the fallback export, leave the draft file local and uncommitted.
 
 If neither MCP nor an export is available, the task must not claim it knows what was finished. It may use durable manifest facts or ask the user to connect Interview Arc or attach the draft.
 
