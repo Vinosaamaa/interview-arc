@@ -24,6 +24,8 @@ import {
 } from "./live-types";
 import { useLiveState } from "./live-sync";
 import { emptyJournal } from "./current-day";
+import { ArrivalRitual, PetalField } from "./arrival-ritual";
+import { useAmbientSound } from "./ambient-sound";
 
 type View = "today" | "journey" | "library" | "banks";
 type ComposerMode = "session" | "activity";
@@ -443,6 +445,26 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [bankSearch, setBankSearch] = useState("");
   const [pipWindow, setPipWindow] = useState<Window | null>(null);
   const [pipSupported, setPipSupported] = useState(false);
+  const [arrivalState, setArrivalState] = useState<"checking" | "show" | "leaving" | "entered">("checking");
+  const [soundMuted, setSoundMuted] = useState(false);
+  const [petalsEnabled, setPetalsEnabled] = useState(true);
+  const { playing: ambientPlaying, start: startAmbient, stop: stopAmbient } = useAmbientSound();
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setSoundMuted(window.localStorage.getItem("interview-arc-sound-muted") === "true");
+      setPetalsEnabled(window.localStorage.getItem("interview-arc-petals-paused") !== "true");
+      setArrivalState(window.localStorage.getItem(`interview-arc-arrival-v1-${today}`) === "seen" ? "entered" : "show");
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [today]);
+
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    if (arrivalState !== "entered") document.body.style.overflow = "hidden";
+    else document.body.style.overflow = previous;
+    return () => { document.body.style.overflow = previous; };
+  }, [arrivalState]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => setPipSupported("documentPictureInPicture" in window));
@@ -465,6 +487,38 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     window.addEventListener("keydown", onEscape);
     return () => window.removeEventListener("keydown", onEscape);
   }, [composer.open, selectedEntry]);
+
+  function enterArc() {
+    window.localStorage.setItem(`interview-arc-arrival-v1-${today}`, "seen");
+    if (!soundMuted) startAmbient();
+    setArrivalState("leaving");
+    window.setTimeout(() => setArrivalState("entered"), 850);
+  }
+
+  function toggleArrivalSound() {
+    const nextMuted = !soundMuted;
+    setSoundMuted(nextMuted);
+    window.localStorage.setItem("interview-arc-sound-muted", String(nextMuted));
+  }
+
+  function toggleAmbientSound() {
+    if (ambientPlaying) {
+      stopAmbient();
+      setSoundMuted(true);
+      window.localStorage.setItem("interview-arc-sound-muted", "true");
+      return;
+    }
+    startAmbient();
+    setSoundMuted(false);
+    window.localStorage.setItem("interview-arc-sound-muted", "false");
+  }
+
+  function togglePetals() {
+    setPetalsEnabled((current) => {
+      window.localStorage.setItem("interview-arc-petals-paused", String(current));
+      return !current;
+    });
+  }
 
   const allTodayActivities = [...journal.activities, ...draft.extraActivities];
   const allSessions: PracticeSession[] = [...journal.sessions, ...draft.sessions];
@@ -1244,7 +1298,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const canSaveActivity = composer.type === "leetcode" ? Boolean(composer.selectedId || derivedUrl) : Boolean(composer.selectedId || composer.query.trim());
 
   return (
-    <main className="app-shell">
+    <>
+    <main className="app-shell" aria-hidden={arrivalState !== "entered"}>
       <aside className="sidebar">
         <button className="brand" onClick={() => setView("today")}><span className="brand-mark">IA</span><span>Interview Arc</span></button>
         <nav className="primary-nav" aria-label="Primary navigation">{([[
@@ -1254,7 +1309,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       </aside>
 
       <section className="main-column">
-        <header className="topbar"><div><span>{readableDate(journal.date)}</span><strong>{view === "today" ? "Today’s work" : view === "journey" ? "Statistics" : view === "library" ? "Dated practice log" : "Question sources"}</strong></div><div>{view === "today" && pipSupported && <button className="secondary-action" onClick={openNowWindow}>{pipWindow ? "Now window open" : "Pop out timer"}</button>}<button className="secondary-action" onClick={exportDraft}>Export today</button></div></header>
+        <header className="topbar"><div><span>{readableDate(journal.date)}</span><strong>{view === "today" ? "Today’s work" : view === "journey" ? "Statistics" : view === "library" ? "Dated practice log" : "Question sources"}</strong></div><div><button className={`atmosphere-toggle ${ambientPlaying ? "active" : ""}`} onClick={toggleAmbientSound} aria-pressed={ambientPlaying} title={ambientPlaying ? "Mute ambient sound" : "Play ambient sound"}><span aria-hidden="true">{ambientPlaying ? "♪" : "◌"}</span>{ambientPlaying ? "Sound on" : "Muted"}</button><button className={`atmosphere-toggle ${petalsEnabled ? "active" : ""}`} onClick={togglePetals} aria-pressed={petalsEnabled} title={petalsEnabled ? "Pause cherry blossoms" : "Resume cherry blossoms"}><span aria-hidden="true">✦</span>{petalsEnabled ? "Petals" : "Still"}</button>{view === "today" && pipSupported && <button className="secondary-action" onClick={openNowWindow}>{pipWindow ? "Now window open" : "Pop out timer"}</button>}<button className="secondary-action" onClick={exportDraft}>Export today</button></div></header>
         <div className="page-content">{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
       </section>
 
@@ -1284,5 +1339,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       pipWindow.document.body,
     )}
     </main>
+    <PetalField quiet={arrivalState === "entered"} paused={!petalsEnabled} />
+    <ArrivalRitual date={today} state={arrivalState} muted={soundMuted} onToggleMuted={toggleArrivalSound} onEnter={enterArc} />
+    </>
   );
 }

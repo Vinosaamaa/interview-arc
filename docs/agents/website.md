@@ -47,6 +47,15 @@ The website must not imply that browser draft state has already been published t
 
 ## UX Direction
 
+- Treat the once-daily arrival screen as the product's signature moment: show
+  one date-stable original encouragement, the dawn study artwork, and a single
+  explicit action into the dashboard. The click may start the procedural
+  ambient soundscape because browsers do not permit audible autoplay before a
+  user gesture.
+- Keep cherry-blossom motion abundant on arrival and sparse inside the working
+  dashboard. Provide persistent independent controls for sound and petals,
+  remember those preferences locally, and disable motion for
+  `prefers-reduced-motion`.
 - Lead with today's practice and progress, then history and review queues.
 - Favor a focused journal/dashboard over contest theater.
 - Provide Today, Journey, Past, and Problem Banks views without placing every raw log on one page.
