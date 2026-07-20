@@ -104,3 +104,7 @@ jobs:
       - name: Deploy Codex and Chrome bridge
         if: needs.validate.outputs.deploy_worker == 'true'
         run: pnpm exec wrangler deploy --config wrangler.mcp.jsonc
+
+      - name: Verify Codex and Chrome bridge
+        if: needs.validate.outputs.deploy_worker == 'true'
+        run: curl --fail --retry 5 --retry-all-errors --retry-delay 2 https://limitless-mcp.vinosama.workers.dev/health
