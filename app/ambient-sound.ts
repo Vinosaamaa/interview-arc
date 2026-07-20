@@ -2,16 +2,47 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+type LofiTrack = {
+  name: string;
+  bpm: number;
+  roots: number[];
+  color: "sine" | "triangle";
+};
+
+const PLAYLIST: LofiTrack[] = [
+  { name: "Rain on the Window", bpm: 68, roots: [130.81, 110, 146.83, 98], color: "sine" },
+  { name: "First Train Home", bpm: 72, roots: [146.83, 123.47, 164.81, 110], color: "triangle" },
+  { name: "Pines Before Sunrise", bpm: 64, roots: [110, 130.81, 98, 123.47], color: "sine" },
+  { name: "Sakura After Rain", bpm: 70, roots: [123.47, 146.83, 110, 130.81], color: "triangle" },
+  { name: "A Quiet Page", bpm: 66, roots: [98, 123.47, 110, 82.41], color: "sine" },
+];
+
 type SoundGraph = {
   context: AudioContext;
   master: GainNode;
   oscillators: OscillatorNode[];
+  chordVoices: OscillatorNode[];
   timers: number[];
+  trackIndex: number;
+  beat: number;
 };
 
-export function useAmbientSound() {
+function stableIndex(date: string, length: number) {
+  const value = date.split("").reduce((sum, character, index) => sum + character.charCodeAt(0) * (index + 3), 0);
+  return value % length;
+}
+
+function makeNoise(context: AudioContext, seconds: number) {
+  const buffer = context.createBuffer(1, context.sampleRate * seconds, context.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let index = 0; index < data.length; index += 1) data[index] = Math.random() * 2 - 1;
+  return buffer;
+}
+
+export function useAmbientSound(date: string) {
   const graphRef = useRef<SoundGraph | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [trackName, setTrackName] = useState(() => PLAYLIST[stableIndex(date, PLAYLIST.length)].name);
 
   const stop = useCallback(() => {
     const graph = graphRef.current;
@@ -40,61 +71,122 @@ export function useAmbientSound() {
     const master = context.createGain();
     const filter = context.createBiquadFilter();
     master.gain.setValueAtTime(0.0001, context.currentTime);
-    master.gain.exponentialRampToValueAtTime(0.032, context.currentTime + 1.8);
+    master.gain.exponentialRampToValueAtTime(0.045, context.currentTime + 1.8);
     filter.type = "lowpass";
-    filter.frequency.value = 1250;
-    filter.Q.value = 0.4;
+    filter.frequency.value = 1180;
+    filter.Q.value = 0.55;
     filter.connect(master);
     master.connect(context.destination);
 
+    const initialTrack = stableIndex(date, PLAYLIST.length);
+    const track = PLAYLIST[initialTrack];
+    const chordVoices: OscillatorNode[] = [];
     const oscillators: OscillatorNode[] = [];
-    [130.81, 196, 261.63].forEach((frequency, index) => {
+    [1, 1.5, 2, 2.5].forEach((ratio, index) => {
       const oscillator = context.createOscillator();
-      const voiceGain = context.createGain();
-      const lfo = context.createOscillator();
-      const lfoGain = context.createGain();
-      oscillator.type = index === 2 ? "triangle" : "sine";
-      oscillator.frequency.value = frequency;
-      oscillator.detune.value = index === 1 ? -7 : index === 2 ? 5 : 0;
-      voiceGain.gain.value = index === 0 ? 0.45 : index === 1 ? 0.2 : 0.07;
-      lfo.frequency.value = 0.035 + index * 0.014;
-      lfoGain.gain.value = index === 0 ? 0.1 : 0.045;
-      lfo.connect(lfoGain);
-      lfoGain.connect(voiceGain.gain);
-      oscillator.connect(voiceGain);
-      voiceGain.connect(filter);
+      const gain = context.createGain();
+      oscillator.type = index === 3 ? track.color : "sine";
+      oscillator.frequency.value = track.roots[0] * ratio;
+      oscillator.detune.value = [-8, 5, -3, 7][index];
+      gain.gain.value = [0.38, 0.15, 0.065, 0.025][index];
+      oscillator.connect(gain);
+      gain.connect(filter);
       oscillator.start();
-      lfo.start();
-      oscillators.push(oscillator, lfo);
+      chordVoices.push(oscillator);
+      oscillators.push(oscillator);
     });
 
-    const timers: number[] = [];
-    let chimeIndex = 0;
-    const chime = () => {
-      if (context.state === "closed") return;
-      const now = context.currentTime;
+    // A very low vinyl/rain bed makes the synthesized playlist feel tactile
+    // without downloading or licensing third-party music files.
+    const noise = context.createBufferSource();
+    const noiseFilter = context.createBiquadFilter();
+    const noiseGain = context.createGain();
+    noise.buffer = makeNoise(context, 3);
+    noise.loop = true;
+    noiseFilter.type = "bandpass";
+    noiseFilter.frequency.value = 1600;
+    noiseFilter.Q.value = 0.35;
+    noiseGain.gain.value = 0.022;
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(master);
+    noise.start();
+
+    const graph: SoundGraph = {
+      context,
+      master,
+      oscillators: [...oscillators, noise as unknown as OscillatorNode],
+      chordVoices,
+      timers: [],
+      trackIndex: initialTrack,
+      beat: 0,
+    };
+    graphRef.current = graph;
+
+    const playKick = (at: number) => {
       const oscillator = context.createOscillator();
       const gain = context.createGain();
       oscillator.type = "sine";
-      oscillator.frequency.value = [523.25, 659.25, 783.99, 659.25][chimeIndex % 4];
-      chimeIndex += 1;
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.018, now + 0.04);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.8);
+      oscillator.frequency.setValueAtTime(90, at);
+      oscillator.frequency.exponentialRampToValueAtTime(42, at + 0.13);
+      gain.gain.setValueAtTime(0.085, at);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.18);
       oscillator.connect(gain);
       gain.connect(master);
-      oscillator.start(now);
-      oscillator.stop(now + 3);
-      timers.push(window.setTimeout(chime, 8_000 + (chimeIndex % 3) * 1_700));
+      oscillator.start(at);
+      oscillator.stop(at + 0.2);
     };
-    timers.push(window.setTimeout(chime, 2_400));
 
-    graphRef.current = { context, master, oscillators, timers };
+    const playTick = (at: number) => {
+      const source = context.createBufferSource();
+      const tickFilter = context.createBiquadFilter();
+      const gain = context.createGain();
+      source.buffer = makeNoise(context, 0.08);
+      tickFilter.type = "highpass";
+      tickFilter.frequency.value = 1900;
+      gain.gain.setValueAtTime(0.025, at);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.07);
+      source.connect(tickFilter);
+      tickFilter.connect(gain);
+      gain.connect(master);
+      source.start(at);
+    };
+
+    const advance = () => {
+      if (graphRef.current !== graph || context.state === "closed") return;
+      const current = PLAYLIST[graph.trackIndex];
+      const beatMs = 60_000 / current.bpm;
+      const beatInBar = graph.beat % 4;
+      const bar = Math.floor(graph.beat / 4);
+      if (beatInBar === 0) {
+        const root = current.roots[bar % current.roots.length];
+        [1, 1.5, 2, 2.5].forEach((ratio, index) => {
+          graph.chordVoices[index].frequency.exponentialRampToValueAtTime(root * ratio, context.currentTime + 0.5);
+        });
+      }
+      if (beatInBar === 0 || beatInBar === 2) playKick(context.currentTime);
+      if (beatInBar === 1 || beatInBar === 3) playTick(context.currentTime);
+      graph.beat += 1;
+
+      // Eighty beats is one small track; advance through the playlist while the
+      // page remains open, starting from a different song each date.
+      if (graph.beat % 80 === 0) {
+        graph.trackIndex = (graph.trackIndex + 1) % PLAYLIST.length;
+        graph.beat = 0;
+        const nextTrack = PLAYLIST[graph.trackIndex];
+        graph.chordVoices.forEach((voice) => { voice.type = nextTrack.color; });
+        setTrackName(nextTrack.name);
+      }
+      graph.timers.push(window.setTimeout(advance, beatMs));
+    };
+    graph.timers.push(window.setTimeout(advance, 600));
+
     void context.resume();
+    setTrackName(track.name);
     setPlaying(true);
-  }, []);
+  }, [date]);
 
   useEffect(() => stop, [stop]);
 
-  return { playing, start, stop };
+  return { playing, trackName, start, stop };
 }

@@ -18,7 +18,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
   const protocol = requestHeaders.get("x-forwarded-proto") ?? "https";
   const baseUrl = new URL(host ? `${protocol}://${host}` : "http://localhost:3000");
-  const socialImage = new URL("/og-v4.png", baseUrl).toString();
+  const socialImage = new URL("/og-connected.png", baseUrl).toString();
 
   return {
     title: "Interview Arc — Your preparation journey",

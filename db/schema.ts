@@ -45,6 +45,48 @@ export const outcomes = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.activityId] })],
 );
 
+// Publication readiness is deliberately independent from the attempt result.
+// A failed attempt can still be marked ready and receive a useful postmortem.
+export const publicationStatuses = sqliteTable(
+  "publication_statuses",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    date: text("date").notNull(),
+    status: text("status", { enum: ["draft", "ready", "published"] }).notNull().default("draft"),
+    artifactPath: text("artifact_path"),
+    publishedAt: integer("published_at"),
+    revision: integer("revision").notNull().default(0),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.activityId] })],
+);
+
+// Short personal notes can be edited from the website or LeetCode companion.
+export const activityNotes = sqliteTable(
+  "activity_notes",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    date: text("date").notNull(),
+    note: text("note").notNull().default(""),
+    revision: integer("revision").notNull().default(0),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.activityId] })],
+);
+
+// Personal integration tokens map a bearer credential to the same opaque
+// owner id used by the dashboard. Only the SHA-256 digest is persisted.
+export const integrationTokens = sqliteTable("integration_tokens", {
+  tokenHash: text("token_hash").primaryKey(),
+  ownerId,
+  label: text("label").notNull().default("Personal integration"),
+  createdAt: integer("created_at").notNull(),
+  lastUsedAt: integer("last_used_at"),
+  revokedAt: integer("revoked_at"),
+});
+
 // Website-created activities (extras and full-session problems). Stored as a
 // JSON payload matching the client draft shape so the schema stays stable while
 // the UI model evolves; the columns that need indexing are lifted out.
@@ -118,6 +160,9 @@ export const contentBank = sqliteTable(
 
 export type TimerRow = typeof timers.$inferSelect;
 export type OutcomeRow = typeof outcomes.$inferSelect;
+export type PublicationStatusRow = typeof publicationStatuses.$inferSelect;
+export type ActivityNoteRow = typeof activityNotes.$inferSelect;
+export type IntegrationTokenRow = typeof integrationTokens.$inferSelect;
 export type ExtraActivityRow = typeof extraActivities.$inferSelect;
 export type LiveSessionRow = typeof liveSessions.$inferSelect;
 export type ContentJournalRow = typeof contentJournals.$inferSelect;

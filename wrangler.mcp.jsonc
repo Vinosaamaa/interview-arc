@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "limitless-mcp",
+  "main": "./mcp-worker/index.ts",
+  "compatibility_date": "2026-05-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "interview-arc",
+      "database_id": "28834aae-e412-4046-913b-02684f1e11cf",
+      "migrations_dir": "drizzle"
+    }
+  ]
+}

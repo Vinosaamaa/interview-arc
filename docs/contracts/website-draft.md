@@ -23,7 +23,17 @@ The website uses one cycling flag control:
 
 The control appears on coding, system-design, and behavioral activities so all Today cards keep the same layout. For LeetCode, green and yellow retain their canonical outcome names. For system-design and behavioral work, the interface reads them as `finished` and `finished after reviewing approach`; those mock labels are local publishing signals and must not be written into the durable activity `outcome` field, which remains LeetCode-specific.
 
-The control provides an accessible label and a hover/focus legend. Its legend must escape the card visually rather than being clipped by the swipe container. A result flag and timer completion are separate signals; either can finish an activity locally, but red work is excluded from Past and from the publish queue.
+The control provides an accessible label and a hover/focus legend. Its legend must escape the card visually rather than being clipped by the swipe container. A result flag and timer completion are separate signals. Red work is excluded from Past, but it may still be explicitly marked ready for publication so the specialist can write a useful postmortem.
+
+## Publication State
+
+Every activity has an owner-scoped publication state independent from lifecycle and outcome:
+
+- `draft`: not offered to a specialist task;
+- `ready`: explicitly included in the publication queue;
+- `published`: the specialist wrote the artifact and reported its path back to Interview Arc.
+
+Finishing a timer or choosing an outcome never silently changes publication state. The user marks an activity Ready. A specialist marks it Published only after the repository artifact actually exists. Failed attempts are eligible for Ready and Published.
 
 ## Sessions
 
@@ -46,33 +56,30 @@ Standalone cards reveal Edit and Remove by swiping left. A compact overflow cont
 
 ## Export
 
-Draft export schema version 3 contains session countdowns, activity stopwatches, outcomes, locally added sessions, locally added activities, and `publishQueueActivityIds`.
+Draft export schema version 4 contains session countdowns, activity stopwatches, outcomes, publication states, personal notes, locally added sessions, locally added activities, and `publishQueueActivityIds`.
 
-`publishQueueActivityIds` contains:
+`publishQueueActivityIds` contains exactly the activities whose independent publication state is `ready`, regardless of green, yellow, red, or unset outcome.
 
-- LeetCode activities marked `solved` or `solved_after_reviewing_approach`;
-- system-design activities marked green/yellow or finished with their stopwatch;
-- behavioral activities marked green/yellow or finished with their stopwatch.
-
-A specialist task may use an exported draft the user makes available, but it
-must not assume it can access the user's authenticated D1 records. The standard
-portable handoff path is `data/drafts/journal-YYYY-MM-DD-draft.json`. Draft JSON
-files are ignored by Git; `data/drafts/README.md` documents the workflow.
+A specialist task should use the authenticated Interview Arc MCP tool
+`get_publication_queue` when it is connected. The portable fallback remains an
+export the user makes available at
+`data/drafts/journal-YYYY-MM-DD-draft.json`. Draft JSON files are ignored by
+Git; `data/drafts/README.md` documents the fallback workflow.
 
 ## End-Of-Day LeetCode Publication
 
-The user exports Today once, makes the JSON available at the standard handoff path or attaches it to the LeetCode task, and says `Publish today's LeetCode`.
+The user marks the desired activities Ready and says `Publish today's LeetCode`.
 
 The LeetCode task must:
 
-1. read `publishQueueActivityIds`, `outcomes`, `timers`, the daily manifest, and locally added activity metadata;
+1. call `get_publication_queue` through the configured Interview Arc MCP bridge; if it is unavailable, read the exported `publishQueueActivityIds`, `outcomes`, `timers`, publication states, notes, daily manifest, and locally added activity metadata;
 2. select only queued LeetCode activities;
 3. preserve the website-provided outcome and elapsed time without inferring either from chat timestamps;
 4. generate an original coaching solution, code, complexity analysis, edge cases, and key lesson for every selected problem, even when that problem was never discussed earlier in the task;
 5. write one attempt artifact per problem and update the daily manifest;
-6. leave the draft file local and uncommitted.
+6. after the artifact exists, call `mark_activities_published` with its repository path; when using the fallback export, leave the draft file local and uncommitted.
 
-If no export is available, the task must not claim it knows what was finished. It may use durable manifest facts or ask the user to export or attach the draft.
+If neither MCP nor an export is available, the task must not claim it knows what was finished. It may use durable manifest facts or ask the user to connect Interview Arc or attach the draft.
 
 ## Past
 

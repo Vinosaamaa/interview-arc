@@ -48,10 +48,14 @@ The website must not imply that browser draft state has already been published t
 ## UX Direction
 
 - Treat the once-daily arrival screen as the product's signature moment: show
-  one date-stable original encouragement, the dawn study artwork, and a single
+  one date-stable original encouragement, one date-selected artwork from the
+  owned wallpaper pool, and a single
   explicit action into the dashboard. The click may start the procedural
   ambient soundscape because browsers do not permit audible autoplay before a
   user gesture.
+- Keep a small original procedural lo-fi playlist. Start from a different
+  date-stable track and rotate through the playlist during a long session;
+  never hotlink or ship unlicensed third-party music.
 - Keep cherry-blossom motion abundant on arrival and sparse inside the working
   dashboard. Provide persistent independent controls for sound and petals,
   remember those preferences locally, and disable motion for
@@ -77,6 +81,13 @@ The website must not imply that browser draft state has already been published t
   root `dist/`, `wrangler.jsonc`, and `drizzle/` migrations.
 - Preserve pnpm, vinext, Worker-compatible ESM output, D1, Cloudflare Access,
   and the existing lockfile.
+- Keep the token-authenticated `limitless-mcp` Worker as the bridge for Codex
+  and the Chrome companion. Integration tokens are generated only from an
+  authenticated dashboard session, stored in D1 as SHA-256 digests, and mapped
+  to the same opaque owner ID as browser state.
+- Keep the Chrome extension focused on public LeetCode problem URLs, the real
+  LeetCode editor, and Interview Arc-owned state. It must not read page content,
+  inspect submissions, or submit code.
 - Do not introduce code execution, LeetCode scraping, or embedded ChatGPT.
 - Use semantic HTML and accessible labels. Support mobile widths and `prefers-reduced-motion`.
 - Run `pnpm lint` and `pnpm test` after relevant code changes. For database or

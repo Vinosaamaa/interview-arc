@@ -25,7 +25,10 @@ test("the Cloudflare build contains the Interview Arc dashboard", async () => {
   assert.match(bundle, /Add one activity/);
   assert.match(bundle, /Problem banks/);
   assert.match(bundle, /Begin today’s work/);
-  assert.match(bundle, /Ambient sound on/);
+  assert.match(bundle, /Enter quietly/);
+  assert.match(bundle, /Ready to publish/);
+  assert.match(bundle, /Connect Codex and the LeetCode companion/);
+  assert.match(bundle, /Rain on the Window/);
   assert.doesNotMatch(bundle, /Practice library|Story bank|All finished/);
   assert.doesNotMatch(bundle, /Test console|Submit attempt|solution\.py/);
   assert.doesNotMatch(bundle, /codex-preview|react-loading-skeleton/);

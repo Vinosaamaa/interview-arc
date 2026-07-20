@@ -3,10 +3,13 @@ import {
   readLiveState,
   removeExtraActivity,
   removeLiveSession,
+  setActivityNote,
   setOutcome,
+  setPublicationStatus,
   upsertExtraActivity,
   upsertLiveSession,
   type OutcomeValue,
+  type PublicationStatusValue,
   type TimerAction,
   type TimerKind,
 } from "../../../db/live-state";
@@ -16,6 +19,8 @@ import { toRouteErrorMessage } from "../route-helpers";
 type Mutation =
   | { type: "timer"; subjectId: string; kind: TimerKind; action: TimerAction }
   | { type: "outcome"; activityId: string; outcome: OutcomeValue | null }
+  | { type: "publication-status"; activityId: string; status: PublicationStatusValue; artifactPath?: string }
+  | { type: "activity-note"; activityId: string; note: string }
   | { type: "extra-upsert"; activity: { id: string; date: string } & Record<string, unknown> }
   | { type: "extra-remove"; id: string }
   | { type: "session-upsert"; session: { id: string; date: string } & Record<string, unknown> }
@@ -23,6 +28,7 @@ type Mutation =
 
 const TIMER_ACTIONS: TimerAction[] = ["start", "pause", "finish"];
 const TIMER_KINDS: TimerKind[] = ["activity", "session"];
+const PUBLICATION_STATUSES: PublicationStatusValue[] = ["draft", "ready", "published"];
 
 export async function POST(request: Request) {
   try {
@@ -52,6 +58,27 @@ export async function POST(request: Request) {
           return Response.json({ error: "Invalid outcome mutation." }, { status: 400 });
         }
         await setOutcome(ownerId, mutation.activityId, mutation.outcome ?? null, now);
+        break;
+      }
+      case "publication-status": {
+        if (!mutation.activityId || !PUBLICATION_STATUSES.includes(mutation.status)) {
+          return Response.json({ error: "Invalid publication-status mutation." }, { status: 400 });
+        }
+        await setPublicationStatus(
+          ownerId,
+          mutation.activityId,
+          date,
+          mutation.status,
+          now,
+          mutation.artifactPath,
+        );
+        break;
+      }
+      case "activity-note": {
+        if (!mutation.activityId || typeof mutation.note !== "string" || mutation.note.length > 20_000) {
+          return Response.json({ error: "Invalid activity-note mutation." }, { status: 400 });
+        }
+        await setActivityNote(ownerId, mutation.activityId, date, mutation.note, now);
         break;
       }
       case "extra-upsert": {

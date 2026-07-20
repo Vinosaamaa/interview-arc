@@ -44,17 +44,17 @@ LeetCode uses a structured postmortem by default. Preserve a full two-sided tran
 
 When the user says `Publish today's LeetCode` or `Publish the LeetCode session`, perform one end-of-day batch:
 
-1. Look for `../../data/drafts/journal-YYYY-MM-DD-draft.json`, or use the website export attached or otherwise explicitly provided by the user.
-2. Read `publishQueueActivityIds`, `outcomes`, `timers`, `extraActivities`, and the matching daily manifest.
+1. Prefer the configured Interview Arc MCP tool `get_publication_queue` for the requested date. It reads the user's authenticated D1 state directly. If the MCP bridge is unavailable, look for `../../data/drafts/journal-YYYY-MM-DD-draft.json`, or use the website export attached or otherwise explicitly provided by the user.
+2. Read the ready activity IDs, outcomes, timers, publication states, personal notes, extra activities, and the matching daily manifest.
 3. Select every queued LeetCode activity, including locally added activities that do not yet exist in the daily manifest.
-4. Preserve each website-provided stopwatch time and result. Do not use chat timestamps as a timer and do not upgrade a failed or unset result to solved.
+4. Preserve each website-provided stopwatch time and result. Do not use chat timestamps as a timer and do not upgrade a failed or unset result to solved. A failed activity may be ready and should receive a postmortem.
 5. For every selected problem, generate an original coaching solution or walkthrough, reference code, time and space complexity, edge cases, and key lesson. Do this even when the user never discussed that problem in this task.
 6. Write one artifact per problem under `attempts/`, update or add the matching daily activity, and point it to `artifactPath`.
-7. Do not commit the local draft export. Do not commit, push, open a pull request, or deploy; the main task handles the daily journal integration.
+7. After every artifact file exists, call `mark_activities_published` with its activity ID and repository-relative artifact path. If MCP is unavailable, leave publication state for the website task to reconcile from the artifact. Do not commit the local draft export. Do not commit, push, open a pull request, or deploy; the main task handles the daily journal integration.
 
-This command is the normal coding workflow. The user does not need to say `Publish this session` six times.
+This command is the normal coding workflow. The user does not need to say `Publish this session` six times. The queue contains only activities the user explicitly marked Ready; never substitute every completed or every discussed problem.
 
-Do not scrape the user's LeetCode account, authenticated pages, or submission history. This task cannot read deployed browser storage directly. If the website draft is not available, publish only the facts present in repository files or explicitly supplied by the user and mark the rest unknown.
+Do not scrape the user's LeetCode account, authenticated pages, or submission history. Read live state only through the authenticated Interview Arc MCP bridge. If neither MCP nor a website draft is available, publish only the facts present in repository files or explicitly supplied by the user and mark the rest unknown.
 
 ## Evidence Ownership
 

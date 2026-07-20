@@ -7,6 +7,7 @@ import {
   type LocalDraft,
   type LocalSession,
   type Outcome,
+  type PublicationStatus,
   type TimerDraft,
 } from "./live-types";
 
@@ -24,6 +25,8 @@ type ServerLiveState = {
   timers: Record<string, ServerTimer>;
   sessionTimers: Record<string, ServerTimer>;
   outcomes: Record<string, Outcome>;
+  publicationStatuses: Record<string, PublicationStatus>;
+  notes: Record<string, string>;
   extraActivities: ExtraActivity[];
   sessions: LocalSession[];
 };
@@ -31,6 +34,8 @@ type ServerLiveState = {
 export type Mutation =
   | { type: "timer"; subjectId: string; kind: "activity" | "session"; action: "start" | "pause" | "finish" }
   | { type: "outcome"; activityId: string; outcome: Outcome | null }
+  | { type: "publication-status"; activityId: string; status: PublicationStatus; artifactPath?: string }
+  | { type: "activity-note"; activityId: string; note: string }
   | { type: "extra-upsert"; activity: ExtraActivity }
   | { type: "extra-remove"; id: string }
   | { type: "session-upsert"; session: LocalSession }
@@ -62,6 +67,8 @@ function serverToDraft(state: ServerLiveState, offset: number): LocalDraft {
     timers,
     sessionTimers,
     outcomes: state.outcomes ?? {},
+    publicationStatuses: state.publicationStatuses ?? {},
+    notes: state.notes ?? {},
     extraActivities: state.extraActivities ?? [],
     sessions: state.sessions ?? [],
   };
@@ -83,11 +90,21 @@ function mergeDrafts(server: LocalDraft, local: LocalDraft) {
   for (const [activityId, outcome] of Object.entries(local.outcomes)) {
     if (!(activityId in server.outcomes)) localOnly.push({ type: "outcome", activityId, outcome });
   }
+  for (const [activityId, status] of Object.entries(local.publicationStatuses)) {
+    if (!(activityId in server.publicationStatuses)) {
+      localOnly.push({ type: "publication-status", activityId, status });
+    }
+  }
+  for (const [activityId, note] of Object.entries(local.notes)) {
+    if (!(activityId in server.notes)) localOnly.push({ type: "activity-note", activityId, note });
+  }
 
   const merged: LocalDraft = {
     timers: { ...local.timers, ...server.timers },
     sessionTimers: { ...local.sessionTimers, ...server.sessionTimers },
     outcomes: { ...local.outcomes, ...server.outcomes },
+    publicationStatuses: { ...local.publicationStatuses, ...server.publicationStatuses },
+    notes: { ...local.notes, ...server.notes },
     extraActivities: [
       ...local.extraActivities.filter((activity) => !serverExtraIds.has(activity.id)),
       ...server.extraActivities,
@@ -109,6 +126,8 @@ function readDraft(date: string): LocalDraft {
       timers: parsed.timers ?? {},
       sessionTimers: parsed.sessionTimers ?? {},
       outcomes: parsed.outcomes ?? {},
+      publicationStatuses: parsed.publicationStatuses ?? {},
+      notes: parsed.notes ?? {},
       extraActivities: parsed.extraActivities ?? [],
       sessions: parsed.sessions ?? [],
     };

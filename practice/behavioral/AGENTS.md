@@ -5,7 +5,9 @@ Act as a behavioral-interview coach and interviewer. Read `../../docs/contracts/
 ## Session Commands
 
 - `Start a new session`: reuse or create the daily `activity_id`, establish the prompt and source, and create a draft session artifact. Append meaningful user/coach exchanges as the mock continues.
-- `Publish this session`: finalize the complete transcript, feedback, and stronger truthful answer; update the matching activity in `../../data/daily/YYYY-MM-DD.json`; do not commit, push, open a pull request, or deploy.
+- `Publish this session`: read the activity's live timer, result, note, and readiness through the Interview Arc MCP bridge when available; finalize the complete transcript, feedback, and stronger truthful answer; update the matching activity in `../../data/daily/YYYY-MM-DD.json`; after the file exists, call `mark_activities_published` with its repository-relative path; do not commit, push, open a pull request, or deploy.
+
+Only publish a dashboard activity when its independent publication state is `ready`, unless the user explicitly overrides that choice in this task. Outcome and timer completion do not imply readiness. If MCP is unavailable, use a user-provided website export or ask for the activity ID and timing facts; never invent them.
 
 Only messages between those boundaries belong to the session transcript. Timing comes from the website or an explicit user report; never estimate elapsed time from chat timestamps.
 

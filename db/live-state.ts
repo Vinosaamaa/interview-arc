@@ -1,9 +1,11 @@
-import { and, eq, isNotNull, ne } from "drizzle-orm";
+import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import {
+  activityNotes,
   extraActivities,
   liveSessions,
   outcomes,
+  publicationStatuses,
   timers,
   type ExtraActivityRow,
   type LiveSessionRow,
@@ -13,6 +15,7 @@ import { foldElapsed, nextTimerState } from "./timer-state";
 export type TimerKind = "activity" | "session";
 export type TimerAction = "start" | "pause" | "finish";
 export type OutcomeValue = "solved" | "solved_after_reviewing_approach" | "failed";
+export type PublicationStatusValue = "draft" | "ready" | "published";
 
 // Serialized clock as the client consumes it. `runningSince` is server epoch ms;
 // the client corrects for clock skew using `serverNow` from the state response.
@@ -28,6 +31,8 @@ export type LiveState = {
   timers: Record<string, TimerState>;
   sessionTimers: Record<string, TimerState>;
   outcomes: Record<string, OutcomeValue>;
+  publicationStatuses: Record<string, PublicationStatusValue>;
+  notes: Record<string, string>;
   extraActivities: unknown[];
   sessions: unknown[];
 };
@@ -50,9 +55,17 @@ function toTimerState(row: {
 
 export async function readLiveState(ownerId: string, date: string): Promise<LiveState> {
   const db = getDb();
-  const [timerRows, outcomeRows, extraRows, sessionRows] = await Promise.all([
+  const [timerRows, outcomeRows, publicationRows, noteRows, extraRows, sessionRows] = await Promise.all([
     db.select().from(timers).where(eq(timers.ownerId, ownerId)),
     db.select().from(outcomes).where(eq(outcomes.ownerId, ownerId)),
+    db
+      .select()
+      .from(publicationStatuses)
+      .where(and(eq(publicationStatuses.ownerId, ownerId), eq(publicationStatuses.date, date))),
+    db
+      .select()
+      .from(activityNotes)
+      .where(and(eq(activityNotes.ownerId, ownerId), eq(activityNotes.date, date))),
     db
       .select()
       .from(extraActivities)
@@ -72,11 +85,19 @@ export async function readLiveState(ownerId: string, date: string): Promise<Live
   const outcomeMap: Record<string, OutcomeValue> = {};
   for (const row of outcomeRows) outcomeMap[row.activityId] = row.outcome as OutcomeValue;
 
+  const publicationMap: Record<string, PublicationStatusValue> = {};
+  for (const row of publicationRows) publicationMap[row.activityId] = row.status as PublicationStatusValue;
+
+  const noteMap: Record<string, string> = {};
+  for (const row of noteRows) noteMap[row.activityId] = row.note;
+
   return {
     serverNow: Date.now(),
     timers: activityTimers,
     sessionTimers,
     outcomes: outcomeMap,
+    publicationStatuses: publicationMap,
+    notes: noteMap,
     extraActivities: extraRows.map((row: ExtraActivityRow) => row.payload),
     sessions: sessionRows.map((row: LiveSessionRow) => row.payload),
   };
@@ -197,6 +218,57 @@ export async function setOutcome(ownerId: string, activityId: string, outcome: O
     });
 }
 
+export async function setPublicationStatus(
+  ownerId: string,
+  activityId: string,
+  date: string,
+  status: PublicationStatusValue,
+  nowMs: number,
+  artifactPath?: string | null,
+) {
+  const db = getDb();
+  await db
+    .insert(publicationStatuses)
+    .values({
+      ownerId,
+      activityId,
+      date,
+      status,
+      artifactPath: artifactPath ?? null,
+      publishedAt: status === "published" ? nowMs : null,
+      revision: 1,
+      updatedAt: nowMs,
+    })
+    .onConflictDoUpdate({
+      target: [publicationStatuses.ownerId, publicationStatuses.activityId],
+      set: {
+        date,
+        status,
+        artifactPath: artifactPath ?? null,
+        publishedAt: status === "published" ? nowMs : null,
+        revision: sql`${publicationStatuses.revision} + 1`,
+        updatedAt: nowMs,
+      },
+    });
+}
+
+export async function setActivityNote(
+  ownerId: string,
+  activityId: string,
+  date: string,
+  note: string,
+  nowMs: number,
+) {
+  const db = getDb();
+  await db
+    .insert(activityNotes)
+    .values({ ownerId, activityId, date, note, revision: 1, updatedAt: nowMs })
+    .onConflictDoUpdate({
+      target: [activityNotes.ownerId, activityNotes.activityId],
+      set: { date, note, revision: sql`${activityNotes.revision} + 1`, updatedAt: nowMs },
+    });
+}
+
 export async function upsertExtraActivity(
   ownerId: string,
   activity: { id: string; date: string } & Record<string, unknown>,
@@ -216,6 +288,8 @@ export async function removeExtraActivity(ownerId: string, id: string) {
   const db = getDb();
   await db.delete(extraActivities).where(and(eq(extraActivities.ownerId, ownerId), eq(extraActivities.id, id)));
   await db.delete(outcomes).where(and(eq(outcomes.ownerId, ownerId), eq(outcomes.activityId, id)));
+  await db.delete(publicationStatuses).where(and(eq(publicationStatuses.ownerId, ownerId), eq(publicationStatuses.activityId, id)));
+  await db.delete(activityNotes).where(and(eq(activityNotes.ownerId, ownerId), eq(activityNotes.activityId, id)));
   await db.delete(timers).where(and(eq(timers.ownerId, ownerId), eq(timers.subjectId, id), eq(timers.kind, "activity")));
 }
 

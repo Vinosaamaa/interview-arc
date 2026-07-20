@@ -59,7 +59,7 @@ Use three shared commands:
 - `Publish this session` finalizes one question's files and updates the daily manifest.
 - `Finish today's journal` asks the main task to validate, commit, push, and open one pull request for the day.
 
-For coding, there is also one batch command: export Today, make `journal-YYYY-MM-DD-draft.json` available under `data/drafts/` or attach it to the LeetCode task, then say `Publish today's LeetCode`. The task reads the queued activity IDs and produces every coding artifact in one pass; it does not need a separate conversation for every problem.
+For coding, mark the desired problems **Ready to publish**, then say `Publish today's LeetCode`. The project-scoped Interview Arc MCP bridge lets the LeetCode task read that authenticated D1 queue and produce every coding artifact in one pass; it does not need a separate conversation for every problem. Exporting `journal-YYYY-MM-DD-draft.json` remains the portable fallback.
 
 See `docs/architecture/single-project-practice-workflow.md` for the full ownership and Git model.
 
@@ -112,7 +112,9 @@ pnpm test
 
 Production runs as the `limitless` Cloudflare Worker described by
 `wrangler.jsonc`, with shared published content and owner-scoped live state in
-D1. Cloudflare Access supplies verified identity. `.openai/hosting.json` is
+D1. Cloudflare Access supplies verified identity. The separate `limitless-mcp`
+Worker in `wrangler.mcp.jsonc` exposes authenticated Codex MCP tools and the
+Chrome companion API against that same database. `.openai/hosting.json` is
 retained only for the temporary legacy OpenAI Sites deployment; do not use it
 as the production architecture or remove it until the user explicitly retires
 that site.
