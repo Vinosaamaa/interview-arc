@@ -100,3 +100,7 @@ jobs:
       - name: Deploy Worker
         if: needs.validate.outputs.deploy_worker == 'true'
         run: pnpm exec wrangler deploy
+
+      - name: Deploy Codex and Chrome bridge
+        if: needs.validate.outputs.deploy_worker == 'true'
+        run: pnpm exec wrangler deploy --config wrangler.mcp.jsonc

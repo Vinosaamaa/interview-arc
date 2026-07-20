@@ -15,6 +15,13 @@
       "when": 1784468997677,
       "tag": "0001_high_nightmare",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784530544752,
+      "tag": "0002_chubby_the_hand",
+      "breakpoints": true
     }
   ]
 }

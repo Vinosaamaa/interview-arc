@@ -35,6 +35,7 @@ test("authenticated emails map to stable, non-PII owner ids", async () => {
 test("D1 migrations cover owner-scoped live state and shared published content", async () => {
   const live = await readFile(new URL("../drizzle/0000_nosy_legion.sql", import.meta.url), "utf8");
   const content = await readFile(new URL("../drizzle/0001_high_nightmare.sql", import.meta.url), "utf8");
+  const connected = await readFile(new URL("../drizzle/0002_chubby_the_hand.sql", import.meta.url), "utf8");
   for (const table of ["timers", "outcomes", "extra_activities", "live_sessions"]) {
     assert.match(live, new RegExp("CREATE TABLE `" + table + "`"));
   }
@@ -42,4 +43,19 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   for (const table of ["content_journals", "content_artifacts", "content_bank", "content_stories"]) {
     assert.match(content, new RegExp("CREATE TABLE `" + table + "`"));
   }
+  for (const table of ["publication_statuses", "activity_notes", "integration_tokens"]) {
+    assert.match(connected, new RegExp("CREATE TABLE `" + table + "`"));
+  }
+  assert.match(connected, /`token_hash` text PRIMARY KEY NOT NULL/);
+});
+
+test("the Chrome companion is scoped to public LeetCode pages and the bridge host", async () => {
+  const manifest = JSON.parse(await readFile(new URL("../extension/manifest.json", import.meta.url), "utf8"));
+  assert.equal(manifest.manifest_version, 3);
+  assert.ok(manifest.permissions.includes("sidePanel"));
+  assert.deepEqual(manifest.host_permissions, [
+    "https://leetcode.com/problems/*",
+    "https://limitless-mcp.vinosama.workers.dev/*",
+  ]);
+  assert.equal(manifest.content_scripts, undefined);
 });

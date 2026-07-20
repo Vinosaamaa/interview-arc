@@ -30,6 +30,8 @@ Maintain long system-design and behavioral drafts incrementally. Do not rely on 
 - Default daily plan: one fixed six-hour session containing 6 LeetCode problems, 1 system-design mock, and 1 behavioral mock.
 - The session owns the countdown; every activity also has a compact elapsed-time stopwatch. Extra questions are allowed in every category.
 - Activity lifecycle is `planned`, `running`, or `completed`.
+- Publication state is independently `draft`, `ready`, or `published`. Only
+  explicit `ready` activities enter an agent queue, including failed attempts.
 - LeetCode outcome is exactly `solved`, `solved_after_reviewing_approach`, or `failed`.
 - Lifecycle and outcome are separate. A failed attempt can still be completed and documented.
 - Preserve raw session evidence. Do not replace a full conversation transcript with only a summary.

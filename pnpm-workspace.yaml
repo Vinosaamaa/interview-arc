@@ -2,6 +2,7 @@ packages:
   - .
 
 allowBuilds:
+  core-js-pure: false
   esbuild: true
   sharp: true
   unrs-resolver: true

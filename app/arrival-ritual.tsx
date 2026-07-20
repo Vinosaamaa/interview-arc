@@ -15,6 +15,13 @@ const DAILY_LINES = [
   "Begin calmly. Finish honestly.",
 ];
 
+const WALLPAPER_POOL = [
+  { path: "/arrival-dawn.jpg", label: "Dawn study" },
+  { path: "/arrival-rain-city.jpg", label: "Rain on the window" },
+  { path: "/arrival-mountain-cabin.jpg", label: "Pines before sunrise" },
+  { path: "/arrival-sakura-study.jpg", label: "Sakura after rain" },
+];
+
 const PETALS = Array.from({ length: 26 }, (_, index) => ({
   left: (index * 37 + 11) % 101,
   delay: -((index * 1.73) % 15),
@@ -27,6 +34,11 @@ const PETALS = Array.from({ length: 26 }, (_, index) => ({
 function quoteFor(date: string) {
   const value = date.split("").reduce((sum, character) => sum + character.charCodeAt(0), 0);
   return DAILY_LINES[value % DAILY_LINES.length];
+}
+
+function wallpaperFor(date: string) {
+  const value = date.split("").reduce((sum, character, index) => sum + character.charCodeAt(0) * (index + 1), 0);
+  return WALLPAPER_POOL[value % WALLPAPER_POOL.length];
 }
 
 function displayDate(date: string) {
@@ -63,19 +75,22 @@ export function ArrivalRitual({
   date,
   state,
   muted,
+  trackName,
   onToggleMuted,
   onEnter,
 }: {
   date: string;
   state: "checking" | "show" | "leaving" | "entered";
   muted: boolean;
+  trackName: string;
   onToggleMuted: () => void;
   onEnter: () => void;
 }) {
   if (state === "entered") return null;
+  const wallpaper = wallpaperFor(date);
   return (
     <section className={`arrival-ritual ${state}`} aria-label="Daily arrival">
-      <div className="arrival-image" aria-hidden="true" />
+      <div className="arrival-image" style={{ "--arrival-wallpaper": `url(${wallpaper.path})` } as CSSProperties} aria-hidden="true" />
       <div className="arrival-shade" aria-hidden="true" />
       {state !== "checking" && (
         <div className="arrival-content">
@@ -86,12 +101,12 @@ export function ArrivalRitual({
             <button className="arrival-enter" onClick={onEnter}>Begin today’s work <span>↘</span></button>
             <button className="arrival-sound" onClick={onToggleMuted} aria-pressed={muted}>
               <span aria-hidden="true">{muted ? "◌" : "♪"}</span>
-              {muted ? "Enter quietly" : "Ambient sound on"}
+              {muted ? "Enter quietly" : trackName}
             </button>
           </div>
         </div>
       )}
-      <footer><span>ARRIVE</span><i /><span>BEGIN</span></footer>
+      <footer><span>{wallpaper.label.toUpperCase()}</span><i /><span>BEGIN</span></footer>
     </section>
   );
 }

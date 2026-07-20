@@ -20,6 +20,7 @@ import {
   type ExtraActivity,
   type LocalSession,
   type Outcome,
+  type PublicationStatus,
   type TimerDraft,
 } from "./live-types";
 import { useLiveState } from "./live-sync";
@@ -62,6 +63,12 @@ const EMPTY_COMPOSER: ComposerState = {
   editingId: "",
 };
 const OUTCOME_ORDER: (Outcome | undefined)[] = [undefined, "solved", "solved_after_reviewing_approach", "failed"];
+
+function publicationLabel(status: PublicationStatus) {
+  if (status === "ready") return "Ready to publish";
+  if (status === "published") return "Published";
+  return "Draft";
+}
 
 function formatDuration(seconds: number) {
   const minutes = Math.round(seconds / 60);
@@ -305,6 +312,30 @@ function ResultFlag({
   );
 }
 
+function PublicationControl({
+  status,
+  onChange,
+}: {
+  status: PublicationStatus;
+  onChange: (status: PublicationStatus) => void;
+}) {
+  const published = status === "published";
+  const next = status === "ready" ? "draft" : "ready";
+  return (
+    <button
+      type="button"
+      className={`publication-control ${status}`}
+      onClick={() => onChange(next)}
+      disabled={published}
+      aria-label={published ? "Published record" : `${publicationLabel(status)}. Change to ${publicationLabel(next)}.`}
+      title={published ? "The specialist task published this record" : status === "ready" ? "Remove from the publication queue" : "Add to the publication queue"}
+    >
+      <span aria-hidden="true">{status === "published" ? "✓" : status === "ready" ? "↑" : "◇"}</span>
+      {publicationLabel(status)}
+    </button>
+  );
+}
+
 function PipNowPanel({
   activity,
   activityTimer,
@@ -448,7 +479,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [arrivalState, setArrivalState] = useState<"checking" | "show" | "leaving" | "entered">("checking");
   const [soundMuted, setSoundMuted] = useState(false);
   const [petalsEnabled, setPetalsEnabled] = useState(true);
-  const { playing: ambientPlaying, start: startAmbient, stop: stopAmbient } = useAmbientSound();
+  const [integrationOpen, setIntegrationOpen] = useState(false);
+  const [integrationToken, setIntegrationToken] = useState("");
+  const [integrationBusy, setIntegrationBusy] = useState(false);
+  const { playing: ambientPlaying, trackName, start: startAmbient, stop: stopAmbient } = useAmbientSound(today);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -477,16 +511,17 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }, [pipWindow]);
 
   useEffect(() => {
-    if (!composer.open && !selectedEntry) return;
+    if (!composer.open && !selectedEntry && !integrationOpen) return;
     const onEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setComposer(EMPTY_COMPOSER);
         setSelectedEntry(null);
+        setIntegrationOpen(false);
       }
     };
     window.addEventListener("keydown", onEscape);
     return () => window.removeEventListener("keydown", onEscape);
-  }, [composer.open, selectedEntry]);
+  }, [composer.open, selectedEntry, integrationOpen]);
 
   function enterArc() {
     window.localStorage.setItem(`interview-arc-arrival-v1-${today}`, "seen");
@@ -634,6 +669,35 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       else delete outcomes[activityId];
       return { ...current, outcomes };
     });
+  }
+
+  function setPublication(activityId: string, status: PublicationStatus) {
+    enqueue({ type: "publication-status", activityId, status });
+    setDraft((current) => ({
+      ...current,
+      publicationStatuses: { ...current.publicationStatuses, [activityId]: status },
+    }));
+  }
+
+  async function createConnectionToken() {
+    setIntegrationBusy(true);
+    try {
+      const response = await fetch("/api/integrations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ label: "Codex and Chrome companion" }),
+      });
+      if (!response.ok) throw new Error("Unable to create token");
+      const payload = (await response.json()) as { token: string };
+      setIntegrationToken(payload.token);
+    } finally {
+      setIntegrationBusy(false);
+    }
+  }
+
+  async function copyConnectionToken() {
+    if (!integrationToken) return;
+    await navigator.clipboard.writeText(integrationToken);
   }
 
   function isActivityComplete(activity: JournalActivity) {
@@ -816,12 +880,18 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     setDraft((current) => {
       const timers = { ...current.timers };
       const outcomes = { ...current.outcomes };
+      const publicationStatuses = { ...current.publicationStatuses };
+      const notes = { ...current.notes };
       delete timers[activityId];
       delete outcomes[activityId];
+      delete publicationStatuses[activityId];
+      delete notes[activityId];
       return {
         ...current,
         timers,
         outcomes,
+        publicationStatuses,
+        notes,
         extraActivities: current.extraActivities.filter((activity) => activity.id !== activityId),
         sessions: current.sessions.map((session) => ({ ...session, activityIds: session.activityIds.filter((id) => id !== activityId) })),
       };
@@ -836,13 +906,22 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       const timers = { ...current.timers };
       const sessionTimers = { ...current.sessionTimers };
       const outcomes = { ...current.outcomes };
-      ids.forEach((id) => { delete timers[id]; delete outcomes[id]; });
+      const publicationStatuses = { ...current.publicationStatuses };
+      const notes = { ...current.notes };
+      ids.forEach((id) => {
+        delete timers[id];
+        delete outcomes[id];
+        delete publicationStatuses[id];
+        delete notes[id];
+      });
       delete sessionTimers[session.id];
       return {
         ...current,
         timers,
         sessionTimers,
         outcomes,
+        publicationStatuses,
+        notes,
         extraActivities: current.extraActivities.filter((activity) => !ids.has(activity.id)),
         sessions: current.sessions.filter((item) => item.id !== session.id),
       };
@@ -864,13 +943,23 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       completed: timer.completed,
       timingSource: "website",
     }]));
-    const publishQueueActivityIds = allTodayActivities.filter((activity) => {
-      const result = draft.outcomes[activity.id] ?? activity.outcome;
-      if (result === "failed") return false;
-      if (result === "solved" || result === "solved_after_reviewing_approach") return true;
-      return activity.type !== "leetcode" && (activity.status === "completed" || Boolean(draft.timers[activity.id]?.completed));
-    }).map((activity) => activity.id);
-    const payload = { schemaVersion: 3, date: journal.date, exportedAt: new Date(timestamp).toISOString(), localDraft: true, sessionTimers, timers, outcomes: draft.outcomes, publishQueueActivityIds, sessions: draft.sessions, extraActivities: draft.extraActivities };
+    const publishQueueActivityIds = allTodayActivities
+      .filter((activity) => draft.publicationStatuses[activity.id] === "ready")
+      .map((activity) => activity.id);
+    const payload = {
+      schemaVersion: 4,
+      date: journal.date,
+      exportedAt: new Date(timestamp).toISOString(),
+      localDraft: true,
+      sessionTimers,
+      timers,
+      outcomes: draft.outcomes,
+      publicationStatuses: draft.publicationStatuses,
+      notes: draft.notes,
+      publishQueueActivityIds,
+      sessions: draft.sessions,
+      extraActivities: draft.extraActivities,
+    };
     const url = window.URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
     const link = document.createElement("a");
     link.href = url;
@@ -1034,6 +1123,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                   <div className="problem-title"><strong>{activity.title}</strong><span>{activity.notes ?? "Coding problem"}</span>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open on LeetCode ↗</a>}</div>
                   <ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} />
                   <ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} />
+                  <PublicationControl status={draft.publicationStatuses[activity.id] ?? (activity.artifactPath ? "published" : "draft")} onChange={(status) => setPublication(activity.id, status)} />
                   {isExtra && <div className="row-edit-actions"><button onClick={() => openEditActivity(activity as ExtraActivity)}>Edit</button><button onClick={() => removeActivity(activity.id)}>Remove</button></div>}
                 </div>
               );
@@ -1054,8 +1144,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                 <div className="mock-controls">
                   <ActivityTimer activity={item} timer={draft.timers[item.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} />
                   <ResultFlag activityType={item.type} outcome={draft.outcomes[item.id] ?? item.outcome} onChange={(outcome) => setOutcome(item.id, outcome)} />
+                  <PublicationControl status={draft.publicationStatuses[item.id] ?? (item.artifactPath ? "published" : "draft")} onChange={(status) => setPublication(item.id, status)} />
                 </div>
-                <div className="publish-instruction">After the mock, say <strong>“Publish this session”</strong> in the {item.type === "system_design" ? "system-design" : "behavioral"} task.</div>
+                <div className="publish-instruction">Mark this <strong>Ready to publish</strong>, then say <strong>“Publish this session”</strong> in the {item.type === "system_design" ? "system-design" : "behavioral"} task.</div>
               </section>
             );
           })}
@@ -1081,7 +1172,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
         <section className="loose-section">
           <div className="section-title"><div><span className="eyebrow">STANDALONE PRACTICE</span><h2>Outside a full session</h2><p>Swipe a card left, or use its ••• control, to edit or remove it.</p></div></div>
-          {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add one activity” above to search a bank or paste a public LeetCode problem URL.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <SwipeActivityCard key={activity.id} title={activity.title} onEdit={() => openEditActivity(activity)} onRemove={() => removeActivity(activity.id)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><small>{typeLabel(activity.type)} · local draft</small><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} /><ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} /></SwipeActivityCard>)}</div>}
+          {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add one activity” above to search a bank or paste a public LeetCode problem URL.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <SwipeActivityCard key={activity.id} title={activity.title} onEdit={() => openEditActivity(activity)} onRemove={() => removeActivity(activity.id)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><small>{typeLabel(activity.type)} · local draft</small><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} /><ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} /><PublicationControl status={draft.publicationStatuses[activity.id] ?? "draft"} onChange={(status) => setPublication(activity.id, status)} /></SwipeActivityCard>)}</div>}
         </section>
       </>
     );
@@ -1309,7 +1400,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       </aside>
 
       <section className="main-column">
-        <header className="topbar"><div><span>{readableDate(journal.date)}</span><strong>{view === "today" ? "Today’s work" : view === "journey" ? "Statistics" : view === "library" ? "Dated practice log" : "Question sources"}</strong></div><div><button className={`atmosphere-toggle ${ambientPlaying ? "active" : ""}`} onClick={toggleAmbientSound} aria-pressed={ambientPlaying} title={ambientPlaying ? "Mute ambient sound" : "Play ambient sound"}><span aria-hidden="true">{ambientPlaying ? "♪" : "◌"}</span>{ambientPlaying ? "Sound on" : "Muted"}</button><button className={`atmosphere-toggle ${petalsEnabled ? "active" : ""}`} onClick={togglePetals} aria-pressed={petalsEnabled} title={petalsEnabled ? "Pause cherry blossoms" : "Resume cherry blossoms"}><span aria-hidden="true">✦</span>{petalsEnabled ? "Petals" : "Still"}</button>{view === "today" && pipSupported && <button className="secondary-action" onClick={openNowWindow}>{pipWindow ? "Now window open" : "Pop out timer"}</button>}<button className="secondary-action" onClick={exportDraft}>Export today</button></div></header>
+        <header className="topbar"><div><span>{readableDate(journal.date)}</span><strong>{view === "today" ? "Today’s work" : view === "journey" ? "Statistics" : view === "library" ? "Dated practice log" : "Question sources"}</strong></div><div><button className={`atmosphere-toggle ${ambientPlaying ? "active" : ""}`} onClick={toggleAmbientSound} aria-pressed={ambientPlaying} title={ambientPlaying ? `Playing ${trackName} · click to mute` : `Play today’s lo-fi mix · ${trackName}`}><span aria-hidden="true">{ambientPlaying ? "♪" : "◌"}</span>{ambientPlaying ? trackName : "Muted"}</button><button className={`atmosphere-toggle ${petalsEnabled ? "active" : ""}`} onClick={togglePetals} aria-pressed={petalsEnabled} title={petalsEnabled ? "Pause cherry blossoms" : "Resume cherry blossoms"}><span aria-hidden="true">✦</span>{petalsEnabled ? "Petals" : "Still"}</button>{view === "today" && pipSupported && <button className="secondary-action" onClick={openNowWindow}>{pipWindow ? "Now window open" : "Pop out timer"}</button>}<button className="secondary-action" onClick={() => setIntegrationOpen(true)}>Connect</button><button className="secondary-action" onClick={exportDraft}>Export today</button></div></header>
         <div className="page-content">{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
       </section>
 
@@ -1320,6 +1411,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         {!derivedUrl && <div className="bank-results">{filteredQuestions.length ? filteredQuestions.map((question) => <button type="button" className={composer.selectedId === question.id ? "selected" : ""} key={question.id} onClick={() => selectBankQuestion(question)}><span className={`type-mark ${composer.type}`}>{typeMark(composer.type)}</span><div><strong>{question.title}</strong><small>{question.difficulty ? `${question.difficulty} · ` : ""}{question.topics.join(" · ")}</small></div><span>{composer.selectedId === question.id ? "Selected" : "Choose"}</span></button>) : <p className="no-results">{composer.type === "leetcode" ? "No bank match. Paste the public LeetCode problem URL and the title will be extracted automatically." : "No bank match. Your typed title will become a custom question."}</p>}</div>}
         <label className="minutes-field"><span>Planning estimate in minutes</span><input type="number" min="1" max="360" value={composer.minutes} onChange={(event) => setComposer((current) => ({ ...current, minutes: event.target.value }))} /></label><button className="primary-action full-width" type="submit" disabled={!canSaveActivity}>{composer.editingId ? "Save changes" : "Add to today"}</button></form>}
       </section></div>}
+
+      {integrationOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setIntegrationOpen(false)}><section className="composer integration-dialog" role="dialog" aria-modal="true" aria-labelledby="integration-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setIntegrationOpen(false)} aria-label="Close">×</button><span className="eyebrow">ONE LIVE PRACTICE RECORD</span><h2 id="integration-title">Connect Codex and the LeetCode companion</h2><p>Create one personal token so both tools can read today&apos;s D1 state, control timers, and publish only activities you marked Ready. The token is shown once and stored as a secure digest.</p>{integrationToken ? <><label className="token-field"><span>Personal connection token</span><input readOnly value={integrationToken} onFocus={(event) => event.currentTarget.select()} /></label><button className="primary-action full-width" onClick={copyConnectionToken}>Copy token</button><div className="integration-steps"><strong>Use it in two places</strong><ol><li>Set <code>INTERVIEW_ARC_MCP_TOKEN</code> before opening Codex in this project.</li><li>Paste the same token into the Interview Arc Chrome companion after loading the extension.</li></ol></div></> : <button className="primary-action full-width" disabled={integrationBusy} onClick={createConnectionToken}>{integrationBusy ? "Creating…" : "Create personal connection token"}</button>}<small className="integration-warning">Treat this token like a password. Create a new one if it is ever shared accidentally.</small></section></div>}
 
       {selectedEntry && <div className="letter-backdrop" role="presentation" onMouseDown={() => setSelectedEntry(null)}><article className="reading-letter" role="dialog" aria-modal="true" aria-labelledby="letter-title" onMouseDown={(event) => event.stopPropagation()}><button className="letter-close" onClick={() => setSelectedEntry(null)} aria-label="Close letter">Close ×</button><header><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)}</time></div><h2 id="letter-title">{selectedEntry.title}</h2><p>{selectedEntry.subtitle}</p></header><div className="letter-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.type === "leetcode" && <div><span>Outcome</span><strong>{outcomeLabel(selectedEntry.outcome)}</strong></div>}</div>{selectedEntry.artifact ? <div className="letter-sections">{selectedEntry.artifact.sections.map((section) => /conversation transcript|generated code|solution/i.test(section.title) ? <details key={section.title} open={/solution/i.test(section.title)}><summary>{section.title}</summary><MarkdownBody source={section.body} /></details> : <section key={section.title}><h3>{section.title}</h3><MarkdownBody source={section.body} /></section>)}</div> : <div className="unpublished-letter"><span className="eyebrow">LOCAL COMPLETION · NOT PUBLISHED YET</span><h3>The result is saved on this device, but its review is not in the repository yet.</h3><p>Export today&apos;s draft and ask the matching specialist task to publish. Coding records will show the generated solution and complexity; system-design and behavioral records will show the formatted conversation transcript and review.</p>{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}<footer>Interview Arc · {selectedEntry.id}</footer></article></div>}
     {pipWindow && createPortal(
@@ -1340,7 +1433,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     )}
     </main>
     <PetalField quiet={arrivalState === "entered"} paused={!petalsEnabled} />
-    <ArrivalRitual date={today} state={arrivalState} muted={soundMuted} onToggleMuted={toggleArrivalSound} onEnter={enterArc} />
+    <ArrivalRitual date={today} state={arrivalState} muted={soundMuted} trackName={trackName} onToggleMuted={toggleArrivalSound} onEnter={enterArc} />
     </>
   );
 }

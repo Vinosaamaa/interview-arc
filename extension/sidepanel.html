@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Interview Arc</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <main class="panel-shell">
+      <header class="brand-line">
+        <span class="brand-mark">IA</span>
+        <div><strong>Interview Arc</strong><small>LEETCODE COMPANION</small></div>
+        <i id="sync-light" title="Connection status"></i>
+      </header>
+
+      <section id="connect-view" class="connect-view" hidden>
+        <span class="kicker">PRIVATE CONNECTION</span>
+        <h1>Bring today<br /><em>beside the problem.</em></h1>
+        <p>Create a personal token from <strong>Connect</strong> in Interview Arc, then paste it here once.</p>
+        <label><span>Connection token</span><input id="token-input" type="password" autocomplete="off" placeholder="ia_…" /></label>
+        <button id="connect-button" class="primary">Connect companion</button>
+        <a href="https://limitless.vinosama.workers.dev/" target="_blank">Open Interview Arc ↗</a>
+      </section>
+
+      <section id="practice-view" hidden>
+        <div class="problem-heading">
+          <span class="kicker">CURRENT PROBLEM</span>
+          <h1 id="problem-title">Reading LeetCode…</h1>
+          <a id="problem-link" target="_blank">Open problem ↗</a>
+        </div>
+
+        <div id="not-planned" class="not-planned" hidden>
+          <p>This problem is not in Today yet.</p>
+          <button id="add-button" class="primary">Add to Today</button>
+        </div>
+
+        <div id="activity-workspace" hidden>
+          <section class="clock-face">
+            <div><span id="clock-label">STOPWATCH</span><strong id="clock">00:00:00</strong></div>
+            <div class="clock-actions">
+              <button id="toggle-timer" class="round primary" aria-label="Start timer">▶</button>
+              <button id="finish-timer" class="round" aria-label="Finish timer">■</button>
+            </div>
+          </section>
+
+          <section class="status-rail">
+            <button id="outcome-button" class="status-button outcome unset"><span>⚐</span><div><small>RESULT</small><strong>Not set</strong></div></button>
+            <button id="publication-button" class="status-button publication draft"><span>◇</span><div><small>PUBLICATION</small><strong>Draft</strong></div></button>
+          </section>
+
+          <section class="notes-block">
+            <div><span class="kicker">SCRATCH NOTES</span><small id="note-state">Saved to Interview Arc</small></div>
+            <textarea id="notes" rows="8" placeholder="Approach, edge case, blocker, lesson…"></textarea>
+            <button id="save-note">Save note</button>
+          </section>
+        </div>
+      </section>
+
+      <footer>
+        <button id="open-dashboard">Today in Interview Arc ↗</button>
+        <button id="disconnect">Disconnect</button>
+      </footer>
+    </main>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

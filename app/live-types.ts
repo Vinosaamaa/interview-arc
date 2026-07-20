@@ -2,6 +2,7 @@ import type { JournalActivity, PracticeSession } from "./content-types";
 
 export type ActivityType = JournalActivity["type"];
 export type Outcome = "solved" | "solved_after_reviewing_approach" | "failed";
+export type PublicationStatus = "draft" | "ready" | "published";
 export type TimerDraft = { elapsedSeconds: number; runningSince: number | null; completed: boolean };
 export type ExtraActivity = JournalActivity & { timerGroupId: string };
 export type LocalSession = PracticeSession & { source: "extra" };
@@ -9,6 +10,8 @@ export type LocalDraft = {
   timers: Record<string, TimerDraft>;
   sessionTimers: Record<string, TimerDraft>;
   outcomes: Record<string, Outcome>;
+  publicationStatuses: Record<string, PublicationStatus>;
+  notes: Record<string, string>;
   extraActivities: ExtraActivity[];
   sessions: LocalSession[];
 };
@@ -18,6 +21,8 @@ export const EMPTY_DRAFT: LocalDraft = {
   timers: {},
   sessionTimers: {},
   outcomes: {},
+  publicationStatuses: {},
+  notes: {},
   extraActivities: [],
   sessions: [],
 };

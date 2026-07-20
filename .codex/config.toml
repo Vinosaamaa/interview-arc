@@ -1,0 +1,8 @@
+[mcp_servers.interview_arc]
+enabled = true
+required = false
+url = "https://limitless-mcp.vinosama.workers.dev/mcp"
+bearer_token_env_var = "INTERVIEW_ARC_MCP_TOKEN"
+enabled_tools = ["get_today_practice", "get_publication_queue", "mark_activities_published"]
+startup_timeout_sec = 15.0
+tool_timeout_sec = 60.0
