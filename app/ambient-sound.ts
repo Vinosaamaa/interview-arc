@@ -4,189 +4,118 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 type LofiTrack = {
   name: string;
-  bpm: number;
-  roots: number[];
-  color: "sine" | "triangle";
+  artist: string;
+  path: string;
 };
 
 const PLAYLIST: LofiTrack[] = [
-  { name: "Rain on the Window", bpm: 68, roots: [130.81, 110, 146.83, 98], color: "sine" },
-  { name: "First Train Home", bpm: 72, roots: [146.83, 123.47, 164.81, 110], color: "triangle" },
-  { name: "Pines Before Sunrise", bpm: 64, roots: [110, 130.81, 98, 123.47], color: "sine" },
-  { name: "Sakura After Rain", bpm: 70, roots: [123.47, 146.83, 110, 130.81], color: "triangle" },
-  { name: "A Quiet Page", bpm: 66, roots: [98, 123.47, 110, 82.41], color: "sine" },
+  { name: "Sweet September", artist: "Arulo", path: "/audio/sweet-september.mp3" },
+  { name: "Sleepy Cat", artist: "Alejandro Magaña", path: "/audio/sleepy-cat.mp3" },
+  { name: "Serene View", artist: "Arulo", path: "/audio/serene-view.mp3" },
+  { name: "Thinking About You", artist: "Arulo", path: "/audio/thinking-about-you.mp3" },
 ];
-
-type SoundGraph = {
-  context: AudioContext;
-  master: GainNode;
-  oscillators: OscillatorNode[];
-  chordVoices: OscillatorNode[];
-  timers: number[];
-  trackIndex: number;
-  beat: number;
-};
 
 function stableIndex(date: string, length: number) {
   const value = date.split("").reduce((sum, character, index) => sum + character.charCodeAt(0) * (index + 3), 0);
   return value % length;
 }
 
-function makeNoise(context: AudioContext, seconds: number) {
-  const buffer = context.createBuffer(1, context.sampleRate * seconds, context.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let index = 0; index < data.length; index += 1) data[index] = Math.random() * 2 - 1;
-  return buffer;
-}
-
 export function useAmbientSound(date: string) {
-  const graphRef = useRef<SoundGraph | null>(null);
+  const initialIndex = stableIndex(date, PLAYLIST.length);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const indexRef = useRef(initialIndex);
+  const playingRef = useRef(false);
+  const volumeRef = useRef(0.72);
+  const advanceRef = useRef<() => void>(() => undefined);
   const [playing, setPlaying] = useState(false);
-  const [trackName, setTrackName] = useState(() => PLAYLIST[stableIndex(date, PLAYLIST.length)].name);
+  const [trackIndex, setTrackIndex] = useState(initialIndex);
+  const [volume, setVolumeState] = useState(0.72);
 
-  const stop = useCallback(() => {
-    const graph = graphRef.current;
-    if (!graph) return;
-    graphRef.current = null;
-    graph.timers.forEach((timer) => window.clearTimeout(timer));
-    const now = graph.context.currentTime;
-    graph.master.gain.cancelScheduledValues(now);
-    graph.master.gain.setValueAtTime(Math.max(graph.master.gain.value, 0.0001), now);
-    graph.master.gain.exponentialRampToValueAtTime(0.0001, now + 0.65);
-    window.setTimeout(() => {
-      graph.oscillators.forEach((oscillator) => {
-        try { oscillator.stop(); } catch { /* Already stopped. */ }
+  const track = PLAYLIST[trackIndex];
+
+  const loadTrack = useCallback((index: number, shouldPlay: boolean) => {
+    audioRef.current?.pause();
+    const audio = new Audio(PLAYLIST[index].path);
+    audio.preload = "auto";
+    audio.volume = volumeRef.current;
+    audio.addEventListener("ended", () => advanceRef.current(), { once: true });
+    audioRef.current = audio;
+    indexRef.current = index;
+    setTrackIndex(index);
+    if (shouldPlay) {
+      void audio.play().then(() => {
+        playingRef.current = true;
+        setPlaying(true);
+      }).catch(() => {
+        playingRef.current = false;
+        setPlaying(false);
       });
-      void graph.context.close();
-    }, 700);
-    setPlaying(false);
+    }
   }, []);
 
   const start = useCallback(() => {
-    if (graphRef.current) return;
-    const AudioContextClass = window.AudioContext;
-    if (!AudioContextClass) return;
-
-    const context = new AudioContextClass();
-    const master = context.createGain();
-    const filter = context.createBiquadFilter();
-    master.gain.setValueAtTime(0.0001, context.currentTime);
-    master.gain.exponentialRampToValueAtTime(0.045, context.currentTime + 1.8);
-    filter.type = "lowpass";
-    filter.frequency.value = 1180;
-    filter.Q.value = 0.55;
-    filter.connect(master);
-    master.connect(context.destination);
-
-    const initialTrack = stableIndex(date, PLAYLIST.length);
-    const track = PLAYLIST[initialTrack];
-    const chordVoices: OscillatorNode[] = [];
-    const oscillators: OscillatorNode[] = [];
-    [1, 1.5, 2, 2.5].forEach((ratio, index) => {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.type = index === 3 ? track.color : "sine";
-      oscillator.frequency.value = track.roots[0] * ratio;
-      oscillator.detune.value = [-8, 5, -3, 7][index];
-      gain.gain.value = [0.38, 0.15, 0.065, 0.025][index];
-      oscillator.connect(gain);
-      gain.connect(filter);
-      oscillator.start();
-      chordVoices.push(oscillator);
-      oscillators.push(oscillator);
+    const audio = audioRef.current;
+    if (!audio) {
+      loadTrack(indexRef.current, true);
+      return;
+    }
+    audio.volume = volumeRef.current;
+    void audio.play().then(() => {
+      playingRef.current = true;
+      setPlaying(true);
+    }).catch(() => {
+      playingRef.current = false;
+      setPlaying(false);
     });
+  }, [loadTrack]);
 
-    // A very low vinyl/rain bed makes the synthesized playlist feel tactile
-    // without downloading or licensing third-party music files.
-    const noise = context.createBufferSource();
-    const noiseFilter = context.createBiquadFilter();
-    const noiseGain = context.createGain();
-    noise.buffer = makeNoise(context, 3);
-    noise.loop = true;
-    noiseFilter.type = "bandpass";
-    noiseFilter.frequency.value = 1600;
-    noiseFilter.Q.value = 0.35;
-    noiseGain.gain.value = 0.022;
-    noise.connect(noiseFilter);
-    noiseFilter.connect(noiseGain);
-    noiseGain.connect(master);
-    noise.start();
+  const stop = useCallback(() => {
+    audioRef.current?.pause();
+    playingRef.current = false;
+    setPlaying(false);
+  }, []);
 
-    const graph: SoundGraph = {
-      context,
-      master,
-      oscillators: [...oscillators, noise as unknown as OscillatorNode],
-      chordVoices,
-      timers: [],
-      trackIndex: initialTrack,
-      beat: 0,
-    };
-    graphRef.current = graph;
+  const next = useCallback(() => {
+    const nextIndex = (indexRef.current + 1) % PLAYLIST.length;
+    loadTrack(nextIndex, playingRef.current);
+  }, [loadTrack]);
 
-    const playKick = (at: number) => {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(90, at);
-      oscillator.frequency.exponentialRampToValueAtTime(42, at + 0.13);
-      gain.gain.setValueAtTime(0.085, at);
-      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.18);
-      oscillator.connect(gain);
-      gain.connect(master);
-      oscillator.start(at);
-      oscillator.stop(at + 0.2);
-    };
+  const setVolume = useCallback((nextVolume: number) => {
+    const safeVolume = Math.min(1, Math.max(0, nextVolume));
+    volumeRef.current = safeVolume;
+    setVolumeState(safeVolume);
+    if (audioRef.current) audioRef.current.volume = safeVolume;
+    window.localStorage.setItem("interview-arc-music-volume", String(safeVolume));
+  }, []);
 
-    const playTick = (at: number) => {
-      const source = context.createBufferSource();
-      const tickFilter = context.createBiquadFilter();
-      const gain = context.createGain();
-      source.buffer = makeNoise(context, 0.08);
-      tickFilter.type = "highpass";
-      tickFilter.frequency.value = 1900;
-      gain.gain.setValueAtTime(0.025, at);
-      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.07);
-      source.connect(tickFilter);
-      tickFilter.connect(gain);
-      gain.connect(master);
-      source.start(at);
-    };
+  useEffect(() => {
+    advanceRef.current = next;
+  }, [next]);
 
-    const advance = () => {
-      if (graphRef.current !== graph || context.state === "closed") return;
-      const current = PLAYLIST[graph.trackIndex];
-      const beatMs = 60_000 / current.bpm;
-      const beatInBar = graph.beat % 4;
-      const bar = Math.floor(graph.beat / 4);
-      if (beatInBar === 0) {
-        const root = current.roots[bar % current.roots.length];
-        [1, 1.5, 2, 2.5].forEach((ratio, index) => {
-          graph.chordVoices[index].frequency.exponentialRampToValueAtTime(root * ratio, context.currentTime + 0.5);
-        });
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const savedVolume = Number(window.localStorage.getItem("interview-arc-music-volume"));
+      if (Number.isFinite(savedVolume) && savedVolume > 0) {
+        const safeVolume = Math.min(1, savedVolume);
+        volumeRef.current = safeVolume;
+        setVolumeState(safeVolume);
       }
-      if (beatInBar === 0 || beatInBar === 2) playKick(context.currentTime);
-      if (beatInBar === 1 || beatInBar === 3) playTick(context.currentTime);
-      graph.beat += 1;
-
-      // Eighty beats is one small track; advance through the playlist while the
-      // page remains open, starting from a different song each date.
-      if (graph.beat % 80 === 0) {
-        graph.trackIndex = (graph.trackIndex + 1) % PLAYLIST.length;
-        graph.beat = 0;
-        const nextTrack = PLAYLIST[graph.trackIndex];
-        graph.chordVoices.forEach((voice) => { voice.type = nextTrack.color; });
-        setTrackName(nextTrack.name);
-      }
-      graph.timers.push(window.setTimeout(advance, beatMs));
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      audioRef.current?.pause();
+      audioRef.current = null;
     };
-    graph.timers.push(window.setTimeout(advance, 600));
+  }, []);
 
-    void context.resume();
-    setTrackName(track.name);
-    setPlaying(true);
-  }, [date]);
-
-  useEffect(() => stop, [stop]);
-
-  return { playing, trackName, start, stop };
+  return {
+    playing,
+    trackName: track.name,
+    trackArtist: track.artist,
+    volume,
+    start,
+    stop,
+    next,
+    setVolume,
+  };
 }

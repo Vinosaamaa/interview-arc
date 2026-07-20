@@ -12,4 +12,4 @@ The companion keeps Interview Arc beside the real LeetCode editor. It does not s
 
 The token is kept in Chrome extension storage. The server stores only its SHA-256 digest. Disconnect the companion or create a replacement token if the credential is ever shared.
 
-The panel can add the current public LeetCode URL to Today, run and finish its D1-backed stopwatch, cycle the user-owned result, mark the attempt Ready to publish, and save personal notes.
+The panel can add the current public LeetCode URL to Today, run and finish its D1-backed stopwatch, cycle the user-owned result, mark the attempt **Send to journal**, and save personal notes.

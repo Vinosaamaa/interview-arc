@@ -152,11 +152,13 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .result-legend i.solved { border-color: var(--signal); background: var(--signal); }
 .result-legend i.reviewed { border-color: #e3b746; background: #e3b746; }
 .result-legend i.failed { border-color: var(--coding); background: var(--coding); }
-.publication-control { min-height: 39px; padding: 0 11px; border: 1px solid #c8d0c6; border-radius: 999px; background: #f7f9f5; color: #687269; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: .75rem; font-weight: 760; white-space: nowrap; cursor: pointer; }
+.publication-control { position: relative; min-height: 39px; padding: 0 11px; border: 1px solid #c8d0c6; border-radius: 999px; background: #f7f9f5; color: #687269; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: .75rem; font-weight: 760; white-space: nowrap; cursor: pointer; }
 .publication-control span { font-family: var(--font-geist-mono); font-size: .88rem; }
 .publication-control.ready { border-color: #899b45; background: #f0f8d5; color: #465718; box-shadow: inset 0 0 0 1px rgba(201,239,77,.35); }
 .publication-control.published { border-color: #3e5a45; background: #203126; color: #ecf4e8; }
 .publication-control:disabled { cursor: default; }
+.publication-control::after { content: attr(data-tooltip); position: absolute; z-index: 80; right: 0; bottom: calc(100% + 9px); width: 240px; padding: 9px 11px; border-radius: 8px; background: #172019; color: #f3f6ef; box-shadow: 0 10px 28px rgba(20, 31, 23, .2); font-size: .69rem; font-weight: 580; line-height: 1.45; white-space: normal; text-align: left; opacity: 0; visibility: hidden; transform: translateY(4px); transition: opacity .15s ease, transform .15s ease, visibility .15s; pointer-events: none; }
+.publication-control:hover::after, .publication-control:focus-visible::after { opacity: 1; visibility: visible; transform: none; }
 .row-edit-actions { display: flex; gap: 5px; justify-content: end; }
 .row-edit-actions button { min-height: 34px; padding: 0 9px; border: 1px solid var(--line); border-radius: 7px; background: white; color: #586259; font-size: .75rem; cursor: pointer; }
 .row-edit-actions button:last-child { color: #a24f39; }
@@ -868,6 +870,29 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .atmosphere-toggle.active { border-color: #b5c48a; background: #f3f8df; color: #405020; }
 .atmosphere-toggle.active span { color: #6f8627; }
 
+.music-dock {
+  min-height: 42px;
+  padding: 3px 7px 3px 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .72);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.music-dock > button { border: 0; background: transparent; color: #59635b; cursor: pointer; }
+.music-dock > button:first-child { min-width: 150px; padding: 3px 8px 3px 7px; display: flex; align-items: center; gap: 8px; text-align: left; }
+.music-dock > button:first-child > span { width: 26px; height: 26px; border-radius: 50%; background: #e8ece5; display: grid; place-items: center; color: #566157; font-size: .66rem; }
+.music-dock i { min-width: 0; display: grid; font-style: normal; line-height: 1.05; }
+.music-dock i small { color: #899189; font-family: var(--font-geist-mono); font-size: .51rem; letter-spacing: .12em; }
+.music-dock i strong { max-width: 112px; overflow: hidden; text-overflow: ellipsis; color: #4e5850; font-size: .69rem; white-space: nowrap; }
+.music-dock.active { border-color: #aab97e; background: #f4f8e3; }
+.music-dock.active > button:first-child > span { background: #c9ef4d; color: #293514; }
+.music-next { width: 28px; height: 28px; border-radius: 50% !important; font-size: 1rem; }
+.music-next:hover { background: #e8ece5 !important; }
+.music-dock label { width: 72px; padding: 0 5px; display: grid; gap: 2px; color: #899189; font-family: var(--font-geist-mono); font-size: .48rem; letter-spacing: .09em; }
+.music-dock input { width: 100%; accent-color: #7e9536; cursor: pointer; }
+
 .arrival-ritual {
   position: fixed;
   inset: 0;
@@ -929,7 +954,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   font-size: .96rem;
   line-height: 1.65;
 }
-.arrival-actions { margin-top: 38px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.arrival-actions { margin-top: 38px; display: flex; align-items: stretch; gap: 12px; flex-wrap: wrap; }
 .arrival-enter,
 .arrival-sound {
   min-height: 50px;
@@ -954,16 +979,36 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .arrival-enter:hover { transform: translateY(-3px); box-shadow: 0 20px 48px rgba(4, 12, 17, .36); }
 .arrival-enter span { font-size: 1.1rem; }
 .arrival-sound {
-  padding: 0 18px;
-  border: 1px solid rgba(255, 255, 255, .3);
-  background: rgba(11, 20, 28, .28);
+  min-width: 210px;
+  padding: 0 15px;
+  border: 0;
+  background: transparent;
   color: #f5f3eb;
-  backdrop-filter: blur(10px);
   display: inline-flex;
   align-items: center;
   gap: 9px;
+  text-align: left;
 }
-.arrival-sound span { color: #d3dcac; font-size: 1rem; }
+.arrival-sound > span:first-child { width: 30px; height: 30px; border: 1px solid rgba(255, 255, 255, .2); border-radius: 50%; color: #d3dcac; display: grid; place-items: center; font-size: 1rem; }
+.arrival-sound > span:last-child { display: grid; line-height: 1.08; }
+.arrival-sound small { color: rgba(255, 255, 255, .48); font-family: var(--font-geist-mono); font-size: .5rem; letter-spacing: .12em; }
+.arrival-sound strong { margin-top: 3px; color: #fff; font-size: .73rem; }
+.arrival-sound em { margin-top: 2px; color: rgba(255, 255, 255, .55); font-size: .58rem; font-style: normal; font-weight: 560; }
+.arrival-listening-desk {
+  min-height: 56px;
+  padding: 2px 8px 2px 2px;
+  border: 1px solid rgba(255, 255, 255, .28);
+  border-radius: 16px;
+  background: rgba(7, 14, 20, .38);
+  backdrop-filter: blur(16px);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.arrival-next-track { width: 36px; height: 36px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .08); color: #f5f3eb; font-size: 1.15rem; cursor: pointer; }
+.arrival-next-track:hover { background: rgba(255, 255, 255, .16); }
+.arrival-volume { width: 88px; display: grid; gap: 3px; color: rgba(255, 255, 255, .48); font-family: var(--font-geist-mono); font-size: .49rem; letter-spacing: .1em; }
+.arrival-volume input { width: 100%; accent-color: #c9ef4d; cursor: pointer; }
 .arrival-ritual footer {
   position: absolute;
   right: clamp(24px, 5vw, 80px);
@@ -980,6 +1025,8 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   letter-spacing: .18em;
 }
 .arrival-ritual footer i { height: 1px; background: rgba(255, 255, 255, .26); }
+.arrival-ritual footer a { color: inherit; text-decoration: none; }
+.arrival-ritual footer a:hover { color: rgba(255, 255, 255, .82); }
 
 .petal-field { position: fixed; inset: 0; z-index: 110; overflow: hidden; pointer-events: none; transition: opacity .4s ease; }
 .petal-field.quiet { z-index: 19; opacity: .32; }
@@ -1016,6 +1063,8 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 
 @media (max-width: 900px) {
   .topbar > div:last-child { gap: 6px; }
+  .music-dock label, .music-dock i { display: none; }
+  .music-dock > button:first-child { min-width: 34px; padding: 0; }
   .atmosphere-toggle { width: 38px; padding: 0; justify-content: center; }
   .atmosphere-toggle > span { width: auto; }
   .atmosphere-toggle { font-size: 0; }
@@ -1030,8 +1079,10 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .arrival-content blockquote { font-size: clamp(3.15rem, 15vw, 5rem); }
   .arrival-content > p { max-width: 92%; font-size: .9rem; }
   .arrival-actions { width: 100%; display: grid; }
-  .arrival-enter, .arrival-sound { width: 100%; }
+  .arrival-enter, .arrival-listening-desk { width: 100%; }
   .arrival-sound { justify-content: center; }
+  .arrival-sound > span:last-child { text-align: left; }
+  .arrival-volume { flex: 1; }
   .arrival-ritual footer { bottom: 20px; }
 }
 
