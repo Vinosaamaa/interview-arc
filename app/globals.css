@@ -1067,7 +1067,8 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .music-playlist.arrival > summary:hover,
 .music-playlist.arrival[open] > summary { background: rgba(255, 255, 255, .13); color: #fff; }
 .music-playlist.arrival > summary small { background: rgba(255, 255, 255, .14); color: #fff; }
-.music-playlist.arrival .music-playlist-card { top: calc(100% + 16px); right: -8px; color: #4e5850; }
+.music-playlist.arrival .music-playlist-card { top: auto; right: -8px; bottom: calc(100% + 16px); color: #4e5850; }
+.music-playlist.arrival .music-playlist-card::before { top: auto; right: 25px; bottom: -7px; transform: rotate(225deg); }
 .arrival-ritual footer {
   position: absolute;
   right: clamp(24px, 5vw, 80px);
