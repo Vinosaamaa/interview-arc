@@ -6,11 +6,12 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
 
 ## Product Behavior
 
-- Show today's required plan: 6 LeetCode, 1 system design, and 1 behavioral question.
-- Give every full session one fixed six-hour countdown.
+- Default a new full session to 6 LeetCode, 1 system design, and 1 behavioral question.
+- Let the user configure each category count before work begins. Derive the session countdown from 40 minutes per coding problem and 60 minutes per system-design or behavioral question.
 - Give every activity a compact elapsed-time stopwatch. The session countdown may run alongside one activity stopwatch; only one activity stopwatch may run at a time.
 - Finishing an activity or session locks that timer. Never offer resume after finish.
-- Allow another complete session containing 6 coding problems, 1 system-design question, and 1 behavioral question.
+- Allow another configurable session; use 6/1/1 as the starting recipe.
+- Let an unstarted website-created session be edited. Lock its recipe once its session timer, activity timing, result, or publication work begins.
 - Allow an extra activity in any category with its own stopwatch and optional planning estimate.
 - Let locally added activities be edited and removed.
 - Store lifecycle separately from outcome.

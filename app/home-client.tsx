@@ -12,10 +12,13 @@ import type {
   QuestionBankItem,
 } from "./content-types";
 import {
+  CODING_SESSION_MINUTES,
   elapsed,
   formatClock,
+  INTERVIEW_SESSION_MINUTES,
   remaining,
   SESSION_SECONDS,
+  sessionAllocationSeconds,
   type ActivityType,
   type ExtraActivity,
   type LocalSession,
@@ -40,6 +43,10 @@ type ComposerState = {
   selectedId: string;
   minutes: string;
   editingId: string;
+  editingSessionId: string;
+  sessionCoding: number;
+  sessionSystemDesign: number;
+  sessionBehavioral: number;
 };
 type LogEntry = {
   id: string;
@@ -62,6 +69,10 @@ const EMPTY_COMPOSER: ComposerState = {
   selectedId: "",
   minutes: "30",
   editingId: "",
+  editingSessionId: "",
+  sessionCoding: 6,
+  sessionSystemDesign: 1,
+  sessionBehavioral: 1,
 };
 const OUTCOME_ORDER: (Outcome | undefined)[] = [undefined, "solved", "solved_after_reviewing_approach", "failed"];
 
@@ -269,7 +280,7 @@ function SessionCountdown({
   return (
     <div className={`session-countdown ${running ? "running" : ""} ${complete ? "complete" : ""}`}>
       <div className="countdown-copy">
-        <span>Six-hour session countdown</span>
+        <span>{formatDuration(allocated)} session countdown</span>
         <strong>{formatClock(timeLeft)}</strong>
         <small>{complete ? "Session finished" : running ? "Session in progress" : timer?.elapsedSeconds ? "Session paused" : "Ready when you are"}</small>
       </div>
@@ -278,6 +289,45 @@ function SessionCountdown({
         <button onClick={() => onComplete(session.id)} disabled={complete} aria-label={`Finish ${session.label}`} title={complete ? "Session finished" : "Finish session now"}><span aria-hidden="true">{complete ? "✓" : "■"}</span></button>
       </div>
       <span className="countdown-track" aria-hidden="true"><i style={{ width: `${progress}%` }} /></span>
+    </div>
+  );
+}
+
+function SessionCountControl({
+  label,
+  mark,
+  value,
+  minutesEach,
+  max,
+  onChange,
+}: {
+  label: string;
+  mark: string;
+  value: number;
+  minutesEach: number;
+  max: number;
+  onChange: (value: number) => void;
+}) {
+  const contribution = value * minutesEach * 60;
+  return (
+    <div className="session-count-card">
+      <div className="session-count-label">
+        <span aria-hidden="true">{mark}</span>
+        <div><strong>{label}</strong><small>{minutesEach} min each</small></div>
+      </div>
+      <div className="count-stepper">
+        <button type="button" onClick={() => onChange(Math.max(0, value - 1))} disabled={value === 0} aria-label={`Remove one ${label.toLowerCase()}`}>−</button>
+        <input
+          type="number"
+          min="0"
+          max={max}
+          value={value}
+          onChange={(event) => onChange(Math.min(max, Math.max(0, Math.floor(Number(event.target.value) || 0))))}
+          aria-label={`${label} count`}
+        />
+        <button type="button" onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max} aria-label={`Add one ${label.toLowerCase()}`}>＋</button>
+      </div>
+      <span className="session-contribution">{value} × {minutesEach}m <strong>{formatDuration(contribution)}</strong></span>
     </div>
   );
 }
@@ -575,10 +625,37 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     });
   }
 
-  const allTodayActivities = [...journal.activities, ...draft.extraActivities];
-  const allSessions: PracticeSession[] = [...journal.sessions, ...draft.sessions];
+  const allTodayActivities = useMemo(
+    () => [...journal.activities, ...draft.extraActivities],
+    [journal.activities, draft.extraActivities],
+  );
+  const allSessions: PracticeSession[] = useMemo(
+    () => [...journal.sessions, ...draft.sessions],
+    [journal.sessions, draft.sessions],
+  );
   const assignedExtraIds = new Set(draft.sessions.flatMap((session) => session.activityIds));
   const looseActivities = draft.extraActivities.filter((activity) => !assignedExtraIds.has(activity.id));
+
+  useEffect(() => {
+    const expired = allSessions.filter((session) => {
+      const timer = draft.sessionTimers[session.id];
+      return Boolean(timer?.runningSince) && elapsed(timer, now) >= session.allocatedSeconds;
+    });
+    if (!expired.length) return;
+    expired.forEach((session) => enqueue({ type: "timer", subjectId: session.id, kind: "session", action: "finish" }));
+    const expiredIds = new Set(expired.map((session) => session.id));
+    setDraft((current) => ({
+      ...current,
+      sessionTimers: Object.fromEntries(
+        Object.entries(current.sessionTimers).map(([id, timer]) => {
+          const session = allSessions.find((candidate) => candidate.id === id);
+          return expiredIds.has(id)
+            ? [id, { elapsedSeconds: session?.allocatedSeconds ?? SESSION_SECONDS, runningSince: null, completed: true }]
+            : [id, timer];
+        }),
+      ),
+    }));
+  }, [allSessions, draft.sessionTimers, enqueue, now, setDraft]);
 
   // The pop-out follows the running activity; when nothing runs it shows the first
   // unfinished problem so the controls are still one click away.
@@ -625,9 +702,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function toggleSessionTimer(sessionId: string) {
     const timestamp = Date.now();
+    const allocatedSeconds = allSessions.find((session) => session.id === sessionId)?.allocatedSeconds ?? SESSION_SECONDS;
     setNow(timestamp);
     const priorSession = draft.sessionTimers[sessionId];
-    if (priorSession?.completed || (priorSession && elapsed(priorSession, timestamp) >= SESSION_SECONDS)) return;
+    if (priorSession?.completed || (priorSession && elapsed(priorSession, timestamp) >= allocatedSeconds)) return;
     enqueue({
       type: "timer",
       subjectId: sessionId,
@@ -636,7 +714,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     });
     setDraft((current) => {
       const prior = current.sessionTimers[sessionId] ?? { elapsedSeconds: 0, runningSince: null, completed: false };
-      if (prior.completed || elapsed(prior, timestamp) >= SESSION_SECONDS) return current;
+      if (prior.completed || elapsed(prior, timestamp) >= allocatedSeconds) return current;
       return {
         ...current,
         sessionTimers: {
@@ -651,6 +729,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function completeSessionTimer(sessionId: string) {
     const timestamp = Date.now();
+    const allocatedSeconds = allSessions.find((session) => session.id === sessionId)?.allocatedSeconds ?? SESSION_SECONDS;
     setNow(timestamp);
     enqueue({ type: "timer", subjectId: sessionId, kind: "session", action: "finish" });
     setDraft((current) => {
@@ -659,7 +738,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         ...current,
         sessionTimers: {
           ...current.sessionTimers,
-          [sessionId]: { elapsedSeconds: Math.min(SESSION_SECONDS, elapsed(prior, timestamp)), runningSince: null, completed: true },
+          [sessionId]: { elapsedSeconds: Math.min(allocatedSeconds, elapsed(prior, timestamp)), runningSince: null, completed: true },
         },
       };
     });
@@ -736,6 +815,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const bank = bankFor(activity.type);
     const known = bank.find((question) => question.title === activity.title || question.url === activity.url);
     setComposer({
+      ...EMPTY_COMPOSER,
       open: true,
       mode: "activity",
       type: activity.type,
@@ -744,6 +824,48 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       minutes: String(Math.round(activity.allocatedSeconds / 60)),
       editingId: activity.id,
     });
+  }
+
+  function isSessionEditable(session: LocalSession) {
+    const sessionTimer = draft.sessionTimers[session.id];
+    if (sessionTimer?.runningSince || sessionTimer?.completed || sessionTimer?.elapsedSeconds) return false;
+    return session.activityIds.every((activityId) => {
+      const activity = allTodayActivities.find((candidate) => candidate.id === activityId);
+      const timer = draft.timers[activityId];
+      return !timer?.runningSince && !timer?.completed && !timer?.elapsedSeconds &&
+        !draft.outcomes[activityId] && !activity?.outcome && activity?.status !== "completed" &&
+        !activity?.artifactPath && !draft.publicationStatuses[activityId];
+    });
+  }
+
+  function openEditSession(session: LocalSession) {
+    if (!isSessionEditable(session)) return;
+    const activities = sessionActivities(session);
+    setComposer({
+      ...EMPTY_COMPOSER,
+      open: true,
+      mode: "session",
+      editingSessionId: session.id,
+      sessionCoding: activities.filter((activity) => activity.type === "leetcode").length,
+      sessionSystemDesign: activities.filter((activity) => activity.type === "system_design").length,
+      sessionBehavioral: activities.filter((activity) => activity.type === "behavioral").length,
+    });
+  }
+
+  function sessionBlockedQuestions(editingSessionId = "") {
+    const excludedIds = new Set(
+      draft.sessions.find((session) => session.id === editingSessionId)?.activityIds ?? [],
+    );
+    const blocked = new Set<string>();
+    allTodayActivities
+      .filter((activity) => !excludedIds.has(activity.id))
+      .forEach((activity) => addActivityToBlocked(blocked, activity));
+    return blocked;
+  }
+
+  function availableSessionQuestions(type: ActivityType, editingSessionId = "") {
+    const blocked = sessionBlockedQuestions(editingSessionId);
+    return bankFor(type).filter((question) => question.active && !isQuestionBlocked(question, blocked));
   }
 
   function selectBankQuestion(question: QuestionBankItem) {
@@ -824,18 +946,29 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     setComposer(EMPTY_COMPOSER);
   }
 
-  function addFullSession() {
-    const sessionNumber = allSessions.length + 1;
-    const sessionId = `${journal.date}-session-${sessionNumber}-${draft.extraActivities.length}-${draft.sessions.length}`;
-    // Skip anything already on today (planned or finished). Finished work from
-    // earlier days stays eligible so a new day can practice it again.
-    const blocked = new Set<string>();
-    for (const activity of allTodayActivities) addActivityToBlocked(blocked, activity);
-    const codingQuestions = pickQuestionsByFrequency(content.questionBanks.leetcode, 6, blocked, sessionId);
-    for (const question of codingQuestions) blockKeysForQuestion(question).forEach((key) => blocked.add(key));
-    const systemQuestion = pickQuestionsByFrequency(content.questionBanks.systemDesign, 1, blocked, sessionId)[0];
-    if (systemQuestion) blockKeysForQuestion(systemQuestion).forEach((key) => blocked.add(key));
-    const behaviorQuestion = pickQuestionsByFrequency(content.questionBanks.behavioral, 1, blocked, sessionId)[0];
+  function saveFullSession() {
+    const existing = draft.sessions.find((session) => session.id === composer.editingSessionId);
+    if (existing && !isSessionEditable(existing)) return;
+    const sessionNumber = existing
+      ? allSessions.findIndex((session) => session.id === existing.id) + 1
+      : allSessions.length + 1;
+    const sessionId = existing?.id ?? `${journal.date}-session-${sessionNumber}-${draft.extraActivities.length}-${draft.sessions.length}`;
+    // Skip anything already on today, except the unstarted session currently
+    // being rebuilt. Earlier days remain eligible for a fresh practice day.
+    const blocked = sessionBlockedQuestions(existing?.id);
+    const codingQuestions = pickQuestionsByFrequency(content.questionBanks.leetcode, composer.sessionCoding, blocked, sessionId);
+    codingQuestions.forEach((question) => blockKeysForQuestion(question).forEach((key) => blocked.add(key)));
+    const systemQuestions = pickQuestionsByFrequency(content.questionBanks.systemDesign, composer.sessionSystemDesign, blocked, sessionId);
+    systemQuestions.forEach((question) => blockKeysForQuestion(question).forEach((key) => blocked.add(key)));
+    const behaviorQuestions = pickQuestionsByFrequency(content.questionBanks.behavioral, composer.sessionBehavioral, blocked, sessionId);
+    if (
+      codingQuestions.length !== composer.sessionCoding ||
+      systemQuestions.length !== composer.sessionSystemDesign ||
+      behaviorQuestions.length !== composer.sessionBehavioral
+    ) {
+      window.alert("That exact recipe is no longer available after today’s other picks. Reduce one of the counts and try again.");
+      return;
+    }
     const activities: ExtraActivity[] = codingQuestions.map((question) => ({
       schemaVersion: 2,
       id: `${sessionId}-${question.id}`,
@@ -845,49 +978,85 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       recordKind: "attempt",
       title: question.title,
       url: question.url,
-      allocatedSeconds: question.targetMinutes * 60,
+      allocatedSeconds: CODING_SESSION_MINUTES * 60,
       timerGroupId: `${sessionId}-coding`,
       timingSource: "website",
       status: "planned",
       notes: question.topics.join(", "),
     }));
-    if (systemQuestion) activities.push({
+    systemQuestions.forEach((question) => activities.push({
       schemaVersion: 2,
-      id: `${sessionId}-${systemQuestion.id}`,
+      id: `${sessionId}-${question.id}`,
       date: journal.date,
       source: "extra",
       type: "system_design",
-      title: systemQuestion.title,
-      ...(systemQuestion.url ? { url: systemQuestion.url } : {}),
-      prompt: systemQuestion.prompt,
-      allocatedSeconds: systemQuestion.targetMinutes * 60,
+      title: question.title,
+      ...(question.url ? { url: question.url } : {}),
+      prompt: question.prompt,
+      allocatedSeconds: INTERVIEW_SESSION_MINUTES * 60,
       timerGroupId: `${sessionId}-system-design`,
       timingSource: "website",
       status: "planned",
-      notes: systemQuestion.topics.join(", "),
-    });
-    if (behaviorQuestion) activities.push({
+      notes: question.topics.join(", "),
+    }));
+    behaviorQuestions.forEach((question) => activities.push({
       schemaVersion: 2,
-      id: `${sessionId}-${behaviorQuestion.id}`,
+      id: `${sessionId}-${question.id}`,
       date: journal.date,
       source: "extra",
       type: "behavioral",
-      title: behaviorQuestion.title,
-      ...(behaviorQuestion.url ? { url: behaviorQuestion.url } : {}),
-      prompt: behaviorQuestion.prompt,
-      allocatedSeconds: behaviorQuestion.targetMinutes * 60,
+      title: question.title,
+      ...(question.url ? { url: question.url } : {}),
+      prompt: question.prompt,
+      allocatedSeconds: INTERVIEW_SESSION_MINUTES * 60,
       timerGroupId: `${sessionId}-behavioral`,
       timingSource: "website",
       status: "planned",
-      notes: behaviorQuestion.topics.join(", "),
-    });
+      notes: question.topics.join(", "),
+    }));
     if (activities.length === 0) {
-      window.alert("No unused bank questions are left for today. Finished or already planned problems stay out of new sessions until a new day.");
+      window.alert("Choose at least one activity. Questions already planned today stay out of new sessions until a new day.");
       return;
     }
-    const session: LocalSession = { id: sessionId, label: `Session ${sessionNumber}`, source: "extra", allocatedSeconds: SESSION_SECONDS, activityIds: activities.map((activity) => activity.id) };
-    setDraft((current) => ({ ...current, extraActivities: [...current.extraActivities, ...activities], sessions: [...current.sessions, session] }));
+    const actualCoding = activities.filter((activity) => activity.type === "leetcode").length;
+    const actualSystemDesign = activities.filter((activity) => activity.type === "system_design").length;
+    const actualBehavioral = activities.filter((activity) => activity.type === "behavioral").length;
+    const session: LocalSession = {
+      id: sessionId,
+      label: existing?.label ?? `Session ${sessionNumber}`,
+      source: "extra",
+      allocatedSeconds: sessionAllocationSeconds(actualCoding, actualSystemDesign, actualBehavioral),
+      activityIds: activities.map((activity) => activity.id),
+    };
+    const replacedIds = new Set(existing?.activityIds ?? []);
+    setDraft((current) => {
+      const timers = { ...current.timers };
+      const outcomes = { ...current.outcomes };
+      const publicationStatuses = { ...current.publicationStatuses };
+      const notes = { ...current.notes };
+      replacedIds.forEach((id) => {
+        delete timers[id];
+        delete outcomes[id];
+        delete publicationStatuses[id];
+        delete notes[id];
+      });
+      return {
+        ...current,
+        timers,
+        outcomes,
+        publicationStatuses,
+        notes,
+        extraActivities: [
+          ...current.extraActivities.filter((activity) => !replacedIds.has(activity.id)),
+          ...activities,
+        ],
+        sessions: existing
+          ? current.sessions.map((candidate) => candidate.id === session.id ? session : candidate)
+          : [...current.sessions, session],
+      };
+    });
     enqueue(
+      ...(existing ? [{ type: "session-remove" as const, id: existing.id, activityIds: existing.activityIds }] : []),
       { type: "session-upsert", session },
       ...activities.map((activity) => ({ type: "extra-upsert" as const, activity })),
     );
@@ -955,13 +1124,16 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       completed: timer.completed,
       timingSource: "website",
     }]));
-    const sessionTimers = Object.fromEntries(Object.entries(draft.sessionTimers).map(([id, timer]) => [id, {
-      elapsedSeconds: Math.min(SESSION_SECONDS, elapsed(timer, timestamp)),
-      remainingSeconds: remaining(timer, timestamp),
-      running: Boolean(timer.runningSince),
-      completed: timer.completed,
-      timingSource: "website",
-    }]));
+    const sessionTimers = Object.fromEntries(Object.entries(draft.sessionTimers).map(([id, timer]) => {
+      const allocatedSeconds = allSessions.find((session) => session.id === id)?.allocatedSeconds ?? SESSION_SECONDS;
+      return [id, {
+        elapsedSeconds: Math.min(allocatedSeconds, elapsed(timer, timestamp)),
+        remainingSeconds: remaining(timer, timestamp, allocatedSeconds),
+        running: Boolean(timer.runningSince),
+        completed: timer.completed,
+        timingSource: "website",
+      }];
+    }));
     const effectivePublicationStatuses = Object.fromEntries(
       allTodayActivities.map((activity) => [activity.id, publicationStatusFor(activity)]),
     );
@@ -1116,8 +1288,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   function renderSession(session: PracticeSession, index: number) {
     const activities = sessionActivities(session);
     const coding = activities.filter((activity) => activity.type === "leetcode");
-    const system = activities.find((activity) => activity.type === "system_design");
-    const behavioral = activities.find((activity) => activity.type === "behavioral");
+    const mockActivities = activities.filter((activity) => activity.type !== "leetcode");
     const complete = activities.filter(isActivityComplete).length;
     const codingSeconds = coding.reduce((sum, activity) => sum + elapsed(draft.timers[activity.id], now), 0);
     const localSession = draft.sessions.find((item) => item.id === session.id);
@@ -1125,15 +1296,15 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       <article className="session-sheet" key={session.id}>
         <header className="session-sheet-header">
           <div className="session-number"><span>{String(index + 1).padStart(2, "0")}</span><small>{session.source === "daily" ? "Required" : "Added"}</small></div>
-          <div className="session-heading-copy"><p>Practice session</p><h2>{session.label}</h2><span>{activities.length} activities · fixed six-hour window</span></div>
+          <div className="session-heading-copy"><p>Practice session</p><h2>{session.label}</h2><span>{activities.length} activities · {formatDuration(session.allocatedSeconds)} window</span></div>
           <SessionCountdown session={session} timer={draft.sessionTimers[session.id]} now={now} onToggle={toggleSessionTimer} onComplete={completeSessionTimer} />
           <div className="session-progress"><strong>{complete}/{activities.length}</strong><span>finished</span></div>
-          {localSession && <button className="remove-session" onClick={() => removeSession(localSession)}>Remove session</button>}
+          {localSession && <div className="session-header-actions"><button className="edit-session" onClick={() => openEditSession(localSession)} disabled={!isSessionEditable(localSession)} title={isSessionEditable(localSession) ? "Change this session recipe" : "A session recipe locks after timing or results begin"}>Edit recipe</button><button className="remove-session" onClick={() => removeSession(localSession)}>Remove</button></div>}
         </header>
 
-        <section className="coding-ledger">
+        {coding.length > 0 && <section className="coding-ledger">
           <div className="ledger-heading">
-            <div><span className="type-chip leetcode">Coding</span><h3>Six problems inside one session clock</h3><p>The six-hour countdown owns the session. Each row keeps a compact stopwatch for your record.</p></div>
+            <div><span className="type-chip leetcode">Coding</span><h3>{coding.length} coding {coding.length === 1 ? "problem" : "problems"} inside one session clock</h3><p>The session countdown follows your recipe. Each row keeps a compact stopwatch for your record.</p></div>
             <div className="coding-total"><span>Problem stopwatches</span><strong>{formatClock(codingSeconds)}</strong><small>tracked inside this session</small></div>
           </div>
           <div className="problem-ledger">
@@ -1152,11 +1323,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             })}
           </div>
           <p className="ledger-note">Solve and submit on LeetCode. Interview Arc records the time and result you choose; it does not execute or inspect your submission.</p>
-        </section>
+        </section>}
 
         <div className="mock-grid">
-          {[system, behavioral].filter(Boolean).map((activity) => {
-            const item = activity!;
+          {mockActivities.map((item) => {
             const isExtra = item.source === "extra";
             return (
               <section className={`mock-sheet ${item.type}`} key={item.id}>
@@ -1189,7 +1359,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           <div className="today-tally"><div><strong>{completeToday}/{totalToday}</strong><span>activities finished</span></div><div><strong>{formatDuration(todaySeconds)}</strong><span>time recorded locally</span></div><div><strong>{allSessions.length}</strong><span>session{allSessions.length === 1 ? "" : "s"} today</span></div></div>
         </section>
 
-        <div className="today-actions"><div><h2>Today&apos;s sessions</h2><p>Each session has one fixed six-hour countdown; activity stopwatches stay compact and independent.</p></div><div><button className="secondary-action" onClick={openNewActivity}>Add one activity</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
+        <div className="today-actions"><div><h2>Today&apos;s sessions</h2><p>Each session countdown follows its activity recipe; activity stopwatches stay compact and independent.</p></div><div><button className="secondary-action" onClick={openNewActivity}>Add one activity</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
         <section className="session-stack">{allSessions.length ? allSessions.map(renderSession) : <div className="quiet-empty session-empty"><strong>No session planned yet.</strong><span>Add another session to choose up to six coding questions and one question from each available interview bank.</span></div>}</section>
 
         <section className="loose-section">
@@ -1409,6 +1579,20 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }).slice(0, 7);
   const derivedUrl = composer.type === "leetcode" ? deriveLeetCodeFromUrl(composer.query, activeBank) : null;
   const canSaveActivity = composer.type === "leetcode" ? Boolean(composer.selectedId || derivedUrl) : Boolean(composer.selectedId || composer.query.trim());
+  const sessionAvailability = {
+    coding: availableSessionQuestions("leetcode", composer.editingSessionId).length,
+    systemDesign: availableSessionQuestions("system_design", composer.editingSessionId).length,
+    behavioral: availableSessionQuestions("behavioral", composer.editingSessionId).length,
+  };
+  const sessionTotalSeconds = sessionAllocationSeconds(
+    composer.sessionCoding,
+    composer.sessionSystemDesign,
+    composer.sessionBehavioral,
+  );
+  const canSaveSession = sessionTotalSeconds > 0 &&
+    composer.sessionCoding <= sessionAvailability.coding &&
+    composer.sessionSystemDesign <= sessionAvailability.systemDesign &&
+    composer.sessionBehavioral <= sessionAvailability.behavioral;
 
   return (
     <>
@@ -1441,13 +1625,38 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         <div className="page-content">{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
       </section>
 
-      {composer.open && <div className="modal-backdrop" role="presentation" onMouseDown={() => setComposer(EMPTY_COMPOSER)}><section className="composer" role="dialog" aria-modal="true" aria-labelledby="composer-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setComposer(EMPTY_COMPOSER)} aria-label="Close">×</button><span className="eyebrow">BUILD TODAY&apos;S WORK</span><h2 id="composer-title">{composer.editingId ? "Edit this activity" : composer.mode === "session" ? "Add another full session" : "Add one activity"}</h2>
-        {!composer.editingId && <div className="composer-mode"><button className={composer.mode === "session" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, mode: "session" }))}>Full session</button><button className={composer.mode === "activity" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, mode: "activity" }))}>Single activity</button></div>}
-        {composer.mode === "session" && !composer.editingId ? <div className="session-composer"><p>A full session uses up to six coding questions and one question from each available interview bank under one fixed six-hour countdown. Picks prefer higher-frequency bank questions, skip anything already on today, and stay unique across sessions.</p><div className="session-recipe"><div><strong>{Math.min(6, content.questionBanks.leetcode.filter((question) => question.active).length)}</strong><span>Coding problems</span></div><div><strong>{content.questionBanks.systemDesign.some((question) => question.active) ? 1 : 0}</strong><span>System design</span></div><div><strong>{content.questionBanks.behavioral.some((question) => question.active) ? 1 : 0}</strong><span>Behavioral</span></div></div><small>The current banks contain {content.questionBanks.leetcode.length} coding, {content.questionBanks.systemDesign.length} system-design, and {content.questionBanks.behavioral.length} behavioral questions. Finished work from earlier days can be drawn again on a new day.</small><button className="primary-action full-width" onClick={addFullSession}>Add session {allSessions.length + 1}</button></div> : <form onSubmit={saveActivity}><div className="type-selector" role="group" aria-label="Practice type">{(["leetcode", "system_design", "behavioral"] as const).map((type) => <button type="button" key={type} className={`${type} ${composer.type === type ? "active" : ""}`} onClick={() => setComposer((current) => ({ ...current, type, query: "", selectedId: "", minutes: type === "leetcode" ? "30" : type === "system_design" ? "90" : "60" }))}>{typeLabel(type)}</button>)}</div><label className="search-field"><span>{composer.type === "leetcode" ? "Search the bank or paste a LeetCode URL" : `Search the ${typeLabel(composer.type).toLowerCase()} bank or type a new title`}</span><input autoFocus value={composer.query} onChange={(event) => setComposer((current) => ({ ...current, query: event.target.value, selectedId: "" }))} placeholder={composer.type === "leetcode" ? "Search titles and topics, or https://leetcode.com/problems/…" : "Search or enter a custom question"} /></label>
-        {derivedUrl && !composer.selectedId && <div className="derived-question"><span>Title extracted from URL</span><strong>{derivedUrl.title}</strong><small>{derivedUrl.url}</small></div>}
-        {!derivedUrl && <div className="bank-results">{filteredQuestions.length ? filteredQuestions.map((question) => <button type="button" className={composer.selectedId === question.id ? "selected" : ""} key={question.id} onClick={() => selectBankQuestion(question)}><span className={`type-mark ${composer.type}`}>{typeMark(composer.type)}</span><div><strong>{question.title}</strong><small>{question.difficulty ? `${question.difficulty} · ` : ""}{question.topics.join(" · ")}</small></div><span>{composer.selectedId === question.id ? "Selected" : "Choose"}</span></button>) : <p className="no-results">{composer.type === "leetcode" ? "No bank match. Paste the public LeetCode problem URL and the title will be extracted automatically." : "No bank match. Your typed title will become a custom question."}</p>}</div>}
-        <label className="minutes-field"><span>Planning estimate in minutes</span><input type="number" min="1" max="360" value={composer.minutes} onChange={(event) => setComposer((current) => ({ ...current, minutes: event.target.value }))} /></label><button className="primary-action full-width" type="submit" disabled={!canSaveActivity}>{composer.editingId ? "Save changes" : "Add to today"}</button></form>}
-      </section></div>}
+      {composer.open && <div className="modal-backdrop" role="presentation" onMouseDown={() => setComposer(EMPTY_COMPOSER)}>
+        <section className="composer" role="dialog" aria-modal="true" aria-labelledby="composer-title" onMouseDown={(event) => event.stopPropagation()}>
+          <button className="modal-close" onClick={() => setComposer(EMPTY_COMPOSER)} aria-label="Close">×</button>
+          <span className="eyebrow">BUILD TODAY&apos;S WORK</span>
+          <h2 id="composer-title">{composer.editingSessionId ? "Edit session recipe" : composer.editingId ? "Edit this activity" : composer.mode === "session" ? "Build another session" : "Add one activity"}</h2>
+          {!composer.editingId && !composer.editingSessionId && <div className="composer-mode">
+            <button className={composer.mode === "session" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, mode: "session" }))}>Full session</button>
+            <button className={composer.mode === "activity" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, mode: "activity" }))}>Single activity</button>
+          </div>}
+          {composer.mode === "session" && !composer.editingId ? <div className="session-composer">
+            <p>Shape the session you need. The default is six coding problems, one system-design mock, and one behavioral mock. Interview Arc draws unique questions from the banks and builds one countdown from the time equation below.</p>
+            <div className="session-recipe" aria-label="Session recipe">
+              <SessionCountControl label="Coding" mark="C" value={composer.sessionCoding} minutesEach={CODING_SESSION_MINUTES} max={sessionAvailability.coding} onChange={(value) => setComposer((current) => ({ ...current, sessionCoding: value }))} />
+              <SessionCountControl label="System design" mark="S" value={composer.sessionSystemDesign} minutesEach={INTERVIEW_SESSION_MINUTES} max={sessionAvailability.systemDesign} onChange={(value) => setComposer((current) => ({ ...current, sessionSystemDesign: value }))} />
+              <SessionCountControl label="Behavioral" mark="B" value={composer.sessionBehavioral} minutesEach={INTERVIEW_SESSION_MINUTES} max={sessionAvailability.behavioral} onChange={(value) => setComposer((current) => ({ ...current, sessionBehavioral: value }))} />
+            </div>
+            <div className="session-total-strip">
+              <div><span>SESSION COUNTDOWN</span><small>{composer.sessionCoding * CODING_SESSION_MINUTES}m coding + {composer.sessionSystemDesign * INTERVIEW_SESSION_MINUTES}m system design + {composer.sessionBehavioral * INTERVIEW_SESSION_MINUTES}m behavioral</small></div>
+              <strong>{formatDuration(sessionTotalSeconds)}</strong>
+            </div>
+            <small>{sessionAvailability.coding} coding, {sessionAvailability.systemDesign} system-design, and {sessionAvailability.behavioral} behavioral questions are available after today&apos;s other picks. A recipe locks once its timer, activity work, or results begin.</small>
+            <button className="primary-action full-width" onClick={saveFullSession} disabled={!canSaveSession}>{composer.editingSessionId ? "Save session recipe" : `Add session ${allSessions.length + 1}`}</button>
+          </div> : <form onSubmit={saveActivity}>
+            <div className="type-selector" role="group" aria-label="Practice type">{(["leetcode", "system_design", "behavioral"] as const).map((type) => <button type="button" key={type} className={`${type} ${composer.type === type ? "active" : ""}`} onClick={() => setComposer((current) => ({ ...current, type, query: "", selectedId: "", minutes: type === "leetcode" ? "30" : type === "system_design" ? "90" : "60" }))}>{typeLabel(type)}</button>)}</div>
+            <label className="search-field"><span>{composer.type === "leetcode" ? "Search the bank or paste a LeetCode URL" : `Search the ${typeLabel(composer.type).toLowerCase()} bank or type a new title`}</span><input autoFocus value={composer.query} onChange={(event) => setComposer((current) => ({ ...current, query: event.target.value, selectedId: "" }))} placeholder={composer.type === "leetcode" ? "Search titles and topics, or https://leetcode.com/problems/…" : "Search or enter a custom question"} /></label>
+            {derivedUrl && !composer.selectedId && <div className="derived-question"><span>Title extracted from URL</span><strong>{derivedUrl.title}</strong><small>{derivedUrl.url}</small></div>}
+            {!derivedUrl && <div className="bank-results">{filteredQuestions.length ? filteredQuestions.map((question) => <button type="button" className={composer.selectedId === question.id ? "selected" : ""} key={question.id} onClick={() => selectBankQuestion(question)}><span className={`type-mark ${composer.type}`}>{typeMark(composer.type)}</span><div><strong>{question.title}</strong><small>{question.difficulty ? `${question.difficulty} · ` : ""}{question.topics.join(" · ")}</small></div><span>{composer.selectedId === question.id ? "Selected" : "Choose"}</span></button>) : <p className="no-results">{composer.type === "leetcode" ? "No bank match. Paste the public LeetCode problem URL and the title will be extracted automatically." : "No bank match. Your typed title will become a custom question."}</p>}</div>}
+            <label className="minutes-field"><span>Planning estimate in minutes</span><input type="number" min="1" max="360" value={composer.minutes} onChange={(event) => setComposer((current) => ({ ...current, minutes: event.target.value }))} /></label>
+            <button className="primary-action full-width" type="submit" disabled={!canSaveActivity}>{composer.editingId ? "Save changes" : "Add to today"}</button>
+          </form>}
+        </section>
+      </div>}
 
       {integrationOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setIntegrationOpen(false)}><section className="composer integration-dialog" role="dialog" aria-modal="true" aria-labelledby="integration-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setIntegrationOpen(false)} aria-label="Close">×</button><span className="eyebrow">ONE LIVE PRACTICE RECORD</span><h2 id="integration-title">Connect Codex and the LeetCode companion</h2><p>Create one personal token so both tools can read today&apos;s D1 state, control timers, and process every finished activity automatically. The token is shown once and stored as a secure digest.</p>{integrationToken ? <><label className="token-field"><span>Personal connection token</span><input readOnly value={integrationToken} onFocus={(event) => event.currentTarget.select()} /></label><button className="primary-action full-width" onClick={copyConnectionToken}>Copy token</button><div className="integration-steps"><strong>Use it in two places</strong><ol><li>Set <code>INTERVIEW_ARC_MCP_TOKEN</code> before opening Codex in this project.</li><li>Paste the same token into the Interview Arc Chrome companion after loading the extension.</li></ol></div></> : <button className="primary-action full-width" disabled={integrationBusy} onClick={createConnectionToken}>{integrationBusy ? "Creating…" : "Create personal connection token"}</button>}<small className="integration-warning">Treat this token like a password. Create a new one if it is ever shared accidentally.</small></section></div>}
 

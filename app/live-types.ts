@@ -16,7 +16,20 @@ export type LocalDraft = {
   sessions: LocalSession[];
 };
 
-export const SESSION_SECONDS = 6 * 60 * 60;
+export const CODING_SESSION_MINUTES = 40;
+export const INTERVIEW_SESSION_MINUTES = 60;
+
+export function sessionAllocationSeconds(coding: number, systemDesign: number, behavioral: number) {
+  const safeCoding = Math.max(0, Math.floor(coding));
+  const safeSystemDesign = Math.max(0, Math.floor(systemDesign));
+  const safeBehavioral = Math.max(0, Math.floor(behavioral));
+  return (
+    safeCoding * CODING_SESSION_MINUTES +
+    (safeSystemDesign + safeBehavioral) * INTERVIEW_SESSION_MINUTES
+  ) * 60;
+}
+
+export const SESSION_SECONDS = sessionAllocationSeconds(6, 1, 1);
 export const EMPTY_DRAFT: LocalDraft = {
   timers: {},
   sessionTimers: {},

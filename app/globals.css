@@ -93,7 +93,11 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .session-progress { min-width: 92px; display: grid; text-align: right; }
 .session-progress strong { font-family: var(--font-geist-mono); font-size: 1.55rem; }
 .session-progress span { color: var(--muted); font-size: .82rem; }
-.remove-session { min-height: 36px; padding: 0 11px; border: 1px solid #e1c1b8; border-radius: 8px; background: #fff8f5; color: #a24f39; font-size: .75rem; cursor: pointer; }
+.session-header-actions { display: grid; gap: 6px; }
+.session-header-actions button { min-height: 34px; padding: 0 10px; border-radius: 8px; font-size: .75rem; cursor: pointer; }
+.edit-session { border: 1px solid #b7c1b5; background: white; color: #455248; }
+.edit-session:disabled { opacity: .48; cursor: not-allowed; }
+.remove-session { border: 1px solid #e1c1b8; background: #fff8f5; color: #a24f39; }
 .session-countdown { min-width: 320px; padding: 12px 13px 9px; border: 1px solid #b9c2b7; border-radius: 12px; background: white; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 9px 12px; }
 .session-countdown.running { border-color: #8da039; box-shadow: inset 4px 0 var(--signal); }
 .session-countdown.complete { background: #f0f3ed; }
@@ -486,10 +490,25 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .composer-mode button.active { background: white; color: var(--ink); box-shadow: 0 3px 10px rgba(25,35,27,.07); }
 .session-composer { margin-top: 25px; }
 .session-composer > p { margin: 0; color: var(--muted); font-size: .92rem; line-height: 1.6; }
-.session-recipe { margin: 24px 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.session-recipe div { min-height: 110px; padding: 17px; border: 1px solid var(--line); border-radius: 11px; display: grid; align-content: center; text-align: center; }
-.session-recipe strong { font-family: var(--font-editorial); font-size: 2.7rem; font-weight: 520; }
-.session-recipe span { color: var(--muted); font-size: .84rem; }
+.session-recipe { margin: 24px 0 12px; border-top: 1px solid var(--line); }
+.session-count-card { min-height: 90px; padding: 14px 4px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: minmax(170px, 1fr) auto minmax(130px, auto); align-items: center; gap: 16px; }
+.session-count-label { display: flex; align-items: center; gap: 12px; }
+.session-count-label > span { width: 36px; height: 36px; border-radius: 50%; background: var(--ink); color: white; display: grid; place-items: center; font-family: var(--font-geist-mono); font-size: .8rem; font-weight: 780; }
+.session-count-label > div { display: grid; gap: 2px; }
+.session-count-label strong { font-size: .9rem; }
+.session-count-label small { color: var(--muted); font-size: .78rem; }
+.count-stepper { min-height: 42px; border: 1px solid #b9c2b7; border-radius: 10px; background: #fafbf8; display: grid; grid-template-columns: 40px 52px 40px; overflow: hidden; }
+.count-stepper button { border: 0; background: transparent; color: #546057; font-size: 1.05rem; cursor: pointer; }
+.count-stepper button:disabled { opacity: .35; cursor: not-allowed; }
+.count-stepper input { width: 52px; border: 0; border-inline: 1px solid var(--line); background: white; color: var(--ink); font-family: var(--font-geist-mono); font-size: 1rem; font-weight: 780; text-align: center; appearance: textfield; }
+.count-stepper input::-webkit-inner-spin-button, .count-stepper input::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.session-contribution { color: var(--muted); font-family: var(--font-geist-mono); font-size: .76rem; text-align: right; }
+.session-contribution strong { display: block; margin-top: 3px; color: var(--ink); font-size: .88rem; }
+.session-total-strip { margin-bottom: 14px; padding: 16px 18px; border-radius: 12px; background: var(--ink); color: white; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.session-total-strip > div { display: grid; gap: 4px; }
+.session-total-strip span { color: var(--signal); font-family: var(--font-geist-mono); font-size: .7rem; font-weight: 780; letter-spacing: .12em; }
+.session-total-strip small { color: #c7cec7; font-size: .76rem; }
+.session-total-strip > strong { flex: none; font-family: var(--font-editorial); font-size: 2.15rem; font-weight: 520; }
 .session-composer > small { display: block; margin-bottom: 20px; color: var(--muted); font-size: .86rem; line-height: 1.55; }
 .composer form { margin-top: 22px; display: grid; gap: 18px; }
 .type-selector { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -607,7 +626,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .session-sheet-header { grid-template-columns: auto 1fr; padding: 18px; }
   .session-countdown { min-width: 0; }
   .session-progress { text-align: left; }
-  .remove-session { justify-self: start; }
+  .session-header-actions { justify-self: start; grid-template-columns: auto auto; }
   .coding-ledger { padding: 21px 18px; }
   .ledger-heading { display: grid; }
   .coding-total { justify-items: start; }
@@ -646,7 +665,10 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .problem-bank-entry > button { grid-column: 2; grid-row: auto; justify-self: start; }
   .composer { padding: 28px 19px; }
   .composer > h2 { font-size: 2.2rem; }
-  .type-selector, .session-recipe { grid-template-columns: 1fr; }
+  .type-selector { grid-template-columns: 1fr; }
+  .session-count-card { grid-template-columns: 1fr auto; gap: 10px; }
+  .session-contribution { grid-column: 1 / -1; text-align: left; padding-left: 48px; }
+  .session-total-strip { align-items: flex-start; }
   .minutes-field { width: 100%; }
   .reading-letter { padding: 52px 23px 35px; box-shadow: 0 30px 70px rgba(9,16,10,.34), 6px 6px 0 rgba(201,239,77,.85); }
   .reading-letter > header h2 { font-size: 3rem; }

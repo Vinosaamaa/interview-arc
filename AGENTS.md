@@ -27,7 +27,7 @@ Maintain long system-design and behavioral drafts incrementally. Do not rely on 
 
 ## Shared Product Rules
 
-- Default daily plan: one fixed six-hour session containing 6 LeetCode problems, 1 system-design mock, and 1 behavioral mock.
+- Default daily plan: one session containing 6 LeetCode problems, 1 system-design mock, and 1 behavioral mock. Website-created sessions may change those counts before work begins; allocate 40 minutes per coding problem and 60 minutes per mock.
 - The session owns the countdown; every activity also has a compact elapsed-time stopwatch. Extra questions are allowed in every category.
 - Activity lifecycle is `planned`, `running`, or `completed`.
 - Publication state is `draft`, `ready`, or `published`. Finished activities

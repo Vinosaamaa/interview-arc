@@ -11,7 +11,8 @@ The default daily plan is:
 
 | Scope | Daily work | Clock |
 | --- | --- | ---: |
-| Full session | 6 LeetCode + 1 system design + 1 behavioral | fixed 6-hour countdown |
+| Default full session | 6 LeetCode + 1 system design + 1 behavioral | 6-hour countdown |
+| Configured full session | user-selected counts in all three categories | 40 min/coding + 60 min/system design + 60 min/behavioral |
 | Each activity | one problem or mock | elapsed-time stopwatch |
 
 Extra questions can be added in any category. Every extra question has its own elapsed-time stopwatch and is recorded as an activity with `source: extra`.
@@ -84,7 +85,7 @@ Shared formats live under `docs/contracts/`:
 - `daily-journal.schema.json` defines the file the website ingests for each day.
 - `question-bank.schema.json` defines manually maintained LeetCode metadata.
 - `practice-question-bank.schema.json` defines system-design and behavioral prompt banks.
-- `website-draft.md` defines six-hour session countdowns, activity stopwatches, editable extras, publish eligibility, and browser export.
+- `website-draft.md` defines recipe-based session countdowns, activity stopwatches, editable extras, publish eligibility, and browser export.
 - `session-artifact.md` defines system-design and behavioral transcript files.
 
 System-design and behavioral sessions preserve the complete conversation transcript with speaker labels. Summaries and feedback are added after the transcript; they do not replace it.
@@ -157,6 +158,6 @@ The system-design bank currently mirrors the 55 questions listed by SystemDesign
 
 The behavioral bank mirrors the 74 questions listed by Bugfree.ai. Each entry stores its canonical answer page, category/focus topics, expected answer format, frequency, and whether the reference may require sign-in. The behavioral task consults that page when the user asks for a solution and reports the exact URL when the site's answer cannot be accessed.
 
-A normal session contains six coding problems, one system-design question, and one behavioral question under one fixed six-hour countdown. The user may add another full session or a standalone activity. Every activity also has a compact elapsed-time stopwatch.
+A session defaults to six coding problems, one system-design question, and one behavioral question, producing a six-hour countdown. Before work begins, the user may change any category count; the countdown is recalculated at 40 minutes per coding problem and 60 minutes per system-design or behavioral question. The user may add another session or a standalone activity. Every activity also has a compact elapsed-time stopwatch.
 
 The site presents these sources in Problem Banks. Past is the completed-work reading log; Journey retains broader statistics, including failed attempts.

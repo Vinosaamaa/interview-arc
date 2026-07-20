@@ -4,7 +4,7 @@ Before editing website code, read `../docs/agents/website.md` and the shared con
 
 - Treat Interview Arc as a journey log and monitoring dashboard.
 - Keep LeetCode solving and submission on LeetCode; do not present a fake executable editor.
-- Timers must distinguish allocated time from actual elapsed time and survive normal page refreshes when persistence is implemented.
+- Timers must distinguish allocated time from actual elapsed time, use each session's stored allocation in every timer path, and survive normal page refreshes when persistence is implemented.
 - Preserve keyboard access, visible focus, semantic controls, responsive layouts, and reduced-motion behavior.
 - Do not expose local-only audio as a playable deployed URL.
 - Keep realistic data in versioned files or durable storage; avoid duplicating canonical enums in components.
