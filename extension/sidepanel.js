@@ -93,8 +93,8 @@ function render() {
   const publication = activity.publicationStatus ?? "draft";
   elements["publication-button"].className = `status-button publication ${publication}`;
   elements["publication-button"].querySelector("span").textContent = publication === "published" ? "✓" : publication === "ready" ? "↑" : "◇";
-  elements["publication-button"].querySelector("strong").textContent = publication === "published" ? "In journal" : publication === "ready" ? "Send to journal" : "Not queued";
-  elements["publication-button"].disabled = publication === "published";
+  elements["publication-button"].querySelector("strong").textContent = publication === "published" ? "In journal" : publication === "ready" ? "Ready for journal" : "Finish to journal";
+  elements["publication-button"].disabled = true;
   elements.notes.value = activity.personalNote ?? "";
   renderClock();
 }
@@ -132,7 +132,6 @@ elements["outcome-button"].addEventListener("click", () => {
   const current = OUTCOMES.indexOf(activity.outcome ?? null);
   mutate({ type: "outcome", activityId: activity.id, outcome: OUTCOMES[(current + 1) % OUTCOMES.length] });
 });
-elements["publication-button"].addEventListener("click", () => mutate({ type: "publication-status", activityId: activity.id, status: activity.publicationStatus === "ready" ? "draft" : "ready" }));
 elements["save-note"].addEventListener("click", async () => {
   elements["note-state"].textContent = "Saving…";
   await mutate({ type: "activity-note", activityId: activity.id, note: elements.notes.value });

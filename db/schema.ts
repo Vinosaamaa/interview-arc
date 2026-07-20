@@ -45,8 +45,9 @@ export const outcomes = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.activityId] })],
 );
 
-// Publication readiness is deliberately independent from the attempt result.
-// A failed attempt can still be marked ready and receive a useful postmortem.
+// Publication state persists specialist completion and legacy explicit readiness.
+// The read model also derives `ready` from any finished timer or selected result,
+// so failed attempts receive useful postmortems without a second queue action.
 export const publicationStatuses = sqliteTable(
   "publication_statuses",
   {

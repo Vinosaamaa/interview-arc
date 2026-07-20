@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { dateInTimeZone, emptyJournal } from "../app/current-day.ts";
 import { resolveOwnerId, TRUSTED_EMAIL_HEADER } from "../db/owner.ts";
+import { derivePublicationStatus } from "../db/publication-state.ts";
 import { foldElapsed, nextTimerState } from "../db/timer-state.ts";
 
 test("today follows the practice timezone instead of the Worker UTC date", () => {
@@ -20,6 +21,14 @@ test("timer transitions fold elapsed time and permanently lock finish", () => {
   const finished = nextTimerState(paused, "finish", 8_000);
   assert.deepEqual(finished, { accumulatedSeconds: 3, runningSince: null, completed: true, revision: 3 });
   assert.equal(nextTimerState(finished, "start", 10_000), finished);
+});
+
+test("finished activities enter the journal queue without a second toggle", () => {
+  assert.equal(derivePublicationStatus({ hasArtifact: false, completed: false }), "draft");
+  assert.equal(derivePublicationStatus({ hasArtifact: false, completed: true }), "ready");
+  assert.equal(derivePublicationStatus({ hasArtifact: false, completed: false, storedPublication: "ready" }), "ready");
+  assert.equal(derivePublicationStatus({ hasArtifact: true, completed: true }), "published");
+  assert.equal(derivePublicationStatus({ hasArtifact: false, completed: true, storedPublication: "published" }), "published");
 });
 
 test("authenticated emails map to stable, non-PII owner ids", async () => {

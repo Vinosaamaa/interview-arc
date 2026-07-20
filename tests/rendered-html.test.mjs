@@ -30,10 +30,12 @@ test("the Cloudflare build contains the Interview Arc dashboard", async () => {
   assert.match(bundle, /Previous music track/);
   assert.match(bundle, /Save MP3/);
   assert.match(bundle, /Source ↗/);
-  assert.match(bundle, /Send to journal/);
+  assert.match(bundle, /Ready for journal/);
   assert.match(bundle, /Connect Codex and the LeetCode companion/);
   assert.match(bundle, /Sweet September/);
+  assert.match(bundle, /Forest Mist Whispers/);
   assert.match(bundle, /arrival-cozy-room-4k\.jpg/);
+  assert.match(bundle, /arrival-illuminated-blossom-4k\.jpg/);
   assert.doesNotMatch(bundle, /Practice library|Story bank|All finished/);
   assert.doesNotMatch(bundle, /Test console|Submit attempt|solution\.py/);
   assert.doesNotMatch(bundle, /codex-preview|react-loading-skeleton/);
