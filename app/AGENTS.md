@@ -8,8 +8,13 @@ Before editing website code, read `../docs/agents/website.md` and the shared con
 - Preserve keyboard access, visible focus, semantic controls, responsive layouts, and reduced-motion behavior.
 - Do not expose local-only audio as a playable deployed URL.
 - Keep realistic data in versioned files or durable storage; avoid duplicating canonical enums in components.
-- Treat browser state as an unpublished local draft and versioned daily/artifact files as the durable source.
+- Treat D1 as the durable source for mutable timers, result flags, website-created
+  sessions, and extras. Browser storage is only an offline cache/retry queue.
+  Versioned daily/artifact files remain the durable narrative source.
 - Keep Today, Journey, Past, and Problem Banks as distinct information views; reveal full transcripts and code on demand.
 - Keep Problem Banks question-type and progress filters independent. A finished question must match Past eligibility; failed and planned questions remain to practice.
-- Preserve the vinext/Sites build architecture and root hosting configuration.
-- Verify website changes with `pnpm build`; also run `pnpm lint` for TypeScript or JavaScript changes.
+- Preserve the vinext/Cloudflare Worker architecture, `wrangler.jsonc`, D1
+  migrations, and root hosting configuration. The OpenAI Sites configuration
+  is legacy and must not be removed without explicit user direction.
+- Verify website changes with `pnpm test` and `pnpm lint`; validate migrations
+  and content import against local D1 when those paths change.

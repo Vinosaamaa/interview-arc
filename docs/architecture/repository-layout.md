@@ -12,7 +12,11 @@ Inside the repository, keep the existing website build files at the root and add
 
 ## Why The Website Is Not Under `apps/web/`
 
-The existing private Sites project is already configured around root-level `package.json`, `.openai/hosting.json`, and `dist/`. Moving the app into a package would add build and packaging risk without improving the first version of the product.
+The production Cloudflare Worker is configured around root-level
+`package.json`, `wrangler.jsonc`, `drizzle/`, and `dist/`. Moving the app into a
+package would add build, migration, and deployment risk without improving the
+product. `.openai/hosting.json` remains only for the temporary legacy site and
+does not define the current production architecture.
 
 If the repository later contains multiple deployable applications, revisit a workspace migration as a separate change with explicit hosting validation.
 

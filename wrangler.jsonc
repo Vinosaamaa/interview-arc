@@ -1,0 +1,41 @@
+{
+  // Real Cloudflare Workers config for deploying Interview Arc to your own
+  // account (via `vinext deploy` / `wrangler`). The Vite plugin also discovers
+  // this file for local dev + build, so bindings stay identical everywhere.
+  //
+  // Migrations: `pnpm db:migrate:local` (local D1) and `pnpm db:migrate:remote`
+  // (production D1) read `migrations_dir` below.
+  //
+  // The legacy OpenAI Sites deployment still works in parallel: it uses
+  // `.openai/hosting.json` and provides its own bindings at runtime, ignoring
+  // the `database_id` here.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "limitless",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-05-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "dist/client",
+    "not_found_handling": "none",
+    "binding": "ASSETS"
+  },
+  "images": {
+    "binding": "IMAGES"
+  },
+  // Cloudflare Access (email / Google login) for the workers.dev URL. These are
+  // public identifiers (not secrets): the Access application's Audience tag and
+  // the Zero Trust team domain. When set, worker/index.ts verifies the Access
+  // JWT and the old passcode gate is bypassed.
+  "vars": {
+    "POLICY_AUD": "6433d219855664b983cad4b605a888d84c698d953b7222c7ef74da3930ca1d71",
+    "TEAM_DOMAIN": "https://hidden-frost-ab6e.cloudflareaccess.com"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "interview-arc",
+      "database_id": "28834aae-e412-4046-913b-02684f1e11cf",
+      "migrations_dir": "drizzle"
+    }
+  ]
+}

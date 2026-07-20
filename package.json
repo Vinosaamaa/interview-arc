@@ -6,15 +6,16 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "content:build": "node scripts/build-content-index.mjs",
-    "predev": "pnpm run content:build",
+    "content:import:local": "node scripts/import-content.mjs",
+    "content:import:remote": "node scripts/import-content.mjs --remote",
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
-    "prebuild": "pnpm run content:build",
     "build": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
-    "test": "pnpm run build && node --test tests/*.test.mjs",
+    "test": "pnpm run build && node --experimental-strip-types --test tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",

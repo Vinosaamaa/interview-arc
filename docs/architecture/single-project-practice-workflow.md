@@ -33,18 +33,39 @@ The user may create multiple sessions in one day. A normal session contains six 
 
 An `attempt` is genuine user work and may end in one of the three allowed outcomes. A `walkthrough` is an agent-generated solution requested from a URL; it has no attempt outcome unless the user later performs a real attempt. See `../contracts/leetcode-log.md`.
 
-## File-Backed Website
+## Hybrid Git + D1 Website
 
-The first version uses build-time ingestion:
+The deployed Cloudflare architecture separates narrative publishing from live
+practice state:
 
-- `data/daily/YYYY-MM-DD.json` contains the daily plan and finalized activity summary.
-- specialist Markdown artifacts contain transcript, solution, and review detail.
-- `scripts/build-content-index.mjs` generates the website's content index before development and production builds.
-- browser storage is temporary timer/draft state only; versioned files are the durable record.
-- `data/drafts/journal-YYYY-MM-DD-draft.json` is the ignored local bridge from browser state to specialist tasks.
+- `data/daily/YYYY-MM-DD.json` and specialist Markdown artifacts are the
+  canonical, reviewable journal record in Git.
+- `scripts/import-content.mjs` projects that shared content into D1; the app
+  reads D1 at request time and no longer compiles a generated content index.
+- timers, outcomes, website-created sessions, and extra activities are written
+  immediately to owner-scoped D1 tables through the app API.
+- browser storage is an offline cache and retry queue, not the cross-device
+  source of truth.
+- Cloudflare Access verifies identity. The Worker forwards only its verified
+  email through a private internal header; app routes hash it before using it
+  as `owner_id`.
+- `data/drafts/journal-YYYY-MM-DD-draft.json` remains the explicit, ignored
+  bridge when a specialist task needs the user's live completion/timing data.
 
-Immediate multi-device writes from the deployed site would require a separately scoped D1/API implementation. This file-backed version deliberately avoids adding authentication or a database before the journal workflow is proven.
+The Today view is based on the current Los Angeles calendar date. It creates an
+empty in-memory journal shell when Git has no manifest for that date, so normal
+practice never remains pinned to the latest imported historical entry.
 
 ## Git
 
-Code and instruction changes use normal feature branches. Daily practice uses one sequential `journal/YYYY-MM-DD` branch in the shared checkout. Individual session publication does not commit, push, open a pull request, or deploy. The main task performs those actions once when the user finishes the journal.
+Code and instruction changes use normal feature branches. Daily practice uses
+one sequential `journal/YYYY-MM-DD` branch in the shared checkout. Individual
+session publication does not commit, push, open a pull request, or deploy. The
+main task performs those actions once when the user finishes the journal.
+
+Every pull request validates local D1 migrations/imports, lint, build, and
+tests. After merge to `main`, the production workflow waits for validation,
+applies pending migrations, and refreshes Git-backed content in D1. A merge
+containing only content or documentation skips the Worker redeploy. The legacy
+OpenAI Sites deployment is intentionally outside this flow until the user
+explicitly retires it.

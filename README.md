@@ -2,7 +2,8 @@
 
 Interview Arc is a personal interview-preparation journal. It plans the daily work, times each attempt, records what happened, and turns practice sessions into durable files that can be reviewed later.
 
-The website is the dashboard. The files in this repository are the long-term record.
+The website is the dashboard. D1 stores live working state; the files in this
+repository remain the long-term narrative record.
 
 ## Daily Practice
 
@@ -42,7 +43,9 @@ interview-arc/
 └── scripts/                        local artifact helpers
 ```
 
-The site remains at the Git repository root because the current Sites deployment expects the build output there. The interview-practice areas live beside the app, so all four specialist workflows share one repository without breaking hosting.
+The site remains at the Git repository root because the Cloudflare Worker build
+and repository automation run there. The interview-practice areas live beside
+the app, so all four specialist workflows share one portable repository.
 
 ## Working With Specialist Tasks
 
@@ -100,11 +103,26 @@ Prerequisite: Node.js `>=22.13.0`.
 
 ```bash
 pnpm install
+pnpm db:migrate:local
+pnpm content:import:local
 pnpm dev
 pnpm build
+pnpm test
 ```
 
-The existing hosted project configuration is stored in `.openai/hosting.json`. Keep that file and the root build layout intact.
+Production runs as the `limitless` Cloudflare Worker described by
+`wrangler.jsonc`, with shared published content and owner-scoped live state in
+D1. Cloudflare Access supplies verified identity. `.openai/hosting.json` is
+retained only for the temporary legacy OpenAI Sites deployment; do not use it
+as the production architecture or remove it until the user explicitly retires
+that site.
+
+Git JSON/Markdown is canonical for journals, solutions, transcripts, and story
+records. `scripts/import-content.mjs` projects those files into D1 so the site
+can read new published content without compiling it into the application.
+Timers, result flags, website-created sessions, and extra activities are
+canonical in D1, with browser storage acting only as an offline cache and retry
+queue.
 
 ## Git Workflow
 
@@ -115,6 +133,9 @@ The existing hosted project configuration is stored in `.openai/hosting.json`. K
 - `Finish today's journal` creates one commit/pull request for the complete day.
 - Timer ticks and live UI state belong in application storage, not one Git commit per click.
 - End-of-day Markdown is the durable journal record.
+- Pull requests run local-D1 validation, lint, build, and tests. A merge to
+  `main` refreshes the production D1 content projection only after validation;
+  content/documentation-only merges skip the Worker redeploy.
 
 ## Question Banks And Sessions
 

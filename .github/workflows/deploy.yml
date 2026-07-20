@@ -1,0 +1,102 @@
+name: Validate and publish Cloudflare
+
+# Pull requests are validated against a local D1 database. After a merge to
+# main, the production D1 projection is refreshed only after validation passes.
+# Content/documentation-only merges skip the Worker build and deployment.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: cloudflare-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      deploy_worker: ${{ steps.changes.outputs.deploy_worker }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate local D1 migrations and content import
+        run: |
+          pnpm db:migrate:local
+          pnpm content:import:local
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build and test
+        run: pnpm test
+
+      - name: Classify the main-branch change
+        id: changes
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" != "push" ]]; then
+            echo "deploy_worker=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          deploy_worker=false
+          while IFS= read -r file; do
+            case "$file" in
+              data/*|practice/*|audio-answers/*|docs/*|README.md|AGENTS.md) ;;
+              *) deploy_worker=true; break ;;
+            esac
+          done < <(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}")
+          echo "deploy_worker=$deploy_worker" >> "$GITHUB_OUTPUT"
+
+  publish:
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply production D1 migrations
+        run: pnpm db:migrate:remote
+
+      - name: Refresh the production content projection
+        run: pnpm content:import:remote
+
+      - name: Build Worker
+        if: needs.validate.outputs.deploy_worker == 'true'
+        run: pnpm build
+
+      - name: Deploy Worker
+        if: needs.validate.outputs.deploy_worker == 'true'
+        run: pnpm exec wrangler deploy

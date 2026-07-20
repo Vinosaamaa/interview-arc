@@ -68,9 +68,14 @@ If the repository has its own `.venv/`, use `./.venv/bin/python` instead.
 ## Source Control And Verification
 
 - Make code, schema, and instruction changes on a feature branch.
-- Preserve the root Sites/vinext layout and `.openai/hosting.json`.
+- Preserve the root vinext/Cloudflare layout, `wrangler.jsonc`, and D1
+  migrations. Keep `.openai/hosting.json` only while the legacy site is still
+  awaiting explicit retirement.
 - Use `pnpm` and preserve `pnpm-lock.yaml`.
-- Run `pnpm build` after website or shared-data changes that can affect the deployed app.
+- Run `pnpm test` and `pnpm lint` after website changes. Validate D1 changes
+  locally with `pnpm db:migrate:local` and `pnpm content:import:local`.
 - Run `pnpm lint` when TypeScript, JavaScript, or lint configuration changes.
 - Group generated daily artifacts into a daily journal branch rather than opening a pull request for each timer event.
 - Do not deploy or merge uncommitted work from another task.
+- Production publishing is owned by the main-branch GitHub workflow. Never
+  mutate production D1 or deploy a Worker before validation succeeds.

@@ -28,8 +28,19 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
 - Treat `practice/system-design/bank/questions.json` and `practice/behavioral/bank/questions.json` as the matching prompt banks.
 - Treat `practice/*/sessions/*.md` and `audio-answers/*.md` as durable journal artifacts.
 - Use the contracts under `docs/contracts/` as the canonical field names.
-- Run `scripts/build-content-index.mjs` before development/build so the app consumes daily JSON, specialist artifacts, and behavioral story files through one generated index.
-- Browser storage is temporary timer, outcome, and extra-activity draft state only. Versioned daily/artifact files are the first version's durable record. Durable direct multi-device writes require D1 or another explicitly approved backend.
+- `scripts/import-content.mjs` mirrors versioned journals, artifacts, story files,
+  and all three banks into the shared D1 content tables. Do not generate or
+  commit a TypeScript content bundle.
+- D1 is authoritative for owner-scoped timers, outcomes, website-created
+  sessions, and extra activities. Browser storage is an offline cache and retry
+  queue; versioned daily/artifact files are authoritative for published
+  narrative content.
+- The Today view uses the current date in `America/Los_Angeles`. If no imported
+  manifest exists for that date, render an empty current-day journal and let
+  D1 hold the live work instead of falling back to the latest historical day.
+- Cloudflare Access identity must be verified in the Worker and passed to app
+  routes through the internal trusted header. Hash the normalized email for D1
+  ownership; never store raw email or trust a caller-supplied identity header.
 - Never send private interview transcripts or local audio to an external service without explicit user authorization.
 
 The website must not imply that browser draft state has already been published to Git. Give the user a file export for transferring timer/outcome data when useful, and label committed artifacts separately from local drafts.
@@ -53,9 +64,18 @@ The website must not imply that browser draft state has already been published t
 
 ## Implementation And Hosting
 
-- Keep the website at the repository root; current Sites packaging expects root `dist/` and `.openai/hosting.json`.
-- Preserve pnpm, vinext, Worker-compatible ESM output, and the existing lockfile.
-- Do not introduce code execution, LeetCode scraping, embedded ChatGPT, authentication, or durable storage without a separately scoped product decision.
+- Keep the website at the repository root; Cloudflare Worker packaging expects
+  root `dist/`, `wrangler.jsonc`, and `drizzle/` migrations.
+- Preserve pnpm, vinext, Worker-compatible ESM output, D1, Cloudflare Access,
+  and the existing lockfile.
+- Do not introduce code execution, LeetCode scraping, or embedded ChatGPT.
 - Use semantic HTML and accessible labels. Support mobile widths and `prefers-reduced-motion`.
-- Run `pnpm build` after relevant changes. Run `pnpm lint` when TypeScript, JavaScript, or lint configuration changes.
-- After a validated website change, publish with the existing private Sites project unless the user asks for local-only work.
+- Run `pnpm lint` and `pnpm test` after relevant code changes. For database or
+  import changes, also run the local D1 migration and content-import commands.
+- Pull requests validate without production credentials. After merge to `main`,
+  the GitHub workflow validates first, then applies pending production
+  migrations and refreshes the content projection. It deploys the Worker only
+  when the merge contains application/infrastructure code; content-only merges
+  must not redeploy it.
+- The old OpenAI Sites project remains a temporary fallback. Do not deploy to
+  or retire it unless the user explicitly asks.
