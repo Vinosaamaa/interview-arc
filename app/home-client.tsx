@@ -66,9 +66,9 @@ const EMPTY_COMPOSER: ComposerState = {
 const OUTCOME_ORDER: (Outcome | undefined)[] = [undefined, "solved", "solved_after_reviewing_approach", "failed"];
 
 function publicationLabel(status: PublicationStatus) {
-  if (status === "ready") return "Send to journal";
+  if (status === "ready") return "Ready for journal";
   if (status === "published") return "In journal";
-  return "Not queued";
+  return "Finish to journal";
 }
 
 function formatDuration(seconds: number) {
@@ -315,26 +315,19 @@ function ResultFlag({
 
 function PublicationControl({
   status,
-  onChange,
 }: {
   status: PublicationStatus;
-  onChange: (status: PublicationStatus) => void;
 }) {
-  const published = status === "published";
-  const next = status === "ready" ? "draft" : "ready";
   return (
-    <button
-      type="button"
+    <div
       className={`publication-control ${status}`}
-      onClick={() => onChange(next)}
-      disabled={published}
-      data-tooltip={published ? "A permanent solution or transcript exists in your journal." : status === "ready" ? "Codex will process this activity the next time you publish the session." : "Codex ignores this activity until you send it to the journal."}
-      aria-label={published ? "This activity is in the journal" : `${publicationLabel(status)}. Change to ${publicationLabel(next)}.`}
-      title={published ? "The specialist task created the permanent journal record" : status === "ready" ? "Remove this activity from the specialist task queue" : "Ask the specialist task to create a solution or transcript for this activity"}
+      data-tooltip={status === "published" ? "A permanent solution or transcript exists in your journal." : status === "ready" ? "This finished activity will be included automatically the next time its specialist publishes." : "Finish the stopwatch or choose a result to include this activity in the specialist journal queue."}
+      aria-label={publicationLabel(status)}
+      title={status === "published" ? "The specialist task created the permanent journal record" : status === "ready" ? "Automatically included in the next specialist publication" : "Finish this activity to make it ready for publication"}
     >
       <span aria-hidden="true">{status === "published" ? "✓" : status === "ready" ? "↑" : "◇"}</span>
       {publicationLabel(status)}
-    </button>
+    </div>
   );
 }
 
@@ -698,14 +691,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     });
   }
 
-  function setPublication(activityId: string, status: PublicationStatus) {
-    enqueue({ type: "publication-status", activityId, status });
-    setDraft((current) => ({
-      ...current,
-      publicationStatuses: { ...current.publicationStatuses, [activityId]: status },
-    }));
-  }
-
   async function createConnectionToken() {
     setIntegrationBusy(true);
     try {
@@ -730,6 +715,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   function isActivityComplete(activity: JournalActivity) {
     if (activity.status === "completed") return true;
     return Boolean(draft.outcomes[activity.id] ?? activity.outcome ?? draft.timers[activity.id]?.completed);
+  }
+
+  function publicationStatusFor(activity: JournalActivity): PublicationStatus {
+    const stored = draft.publicationStatuses[activity.id];
+    if (activity.artifactPath || stored === "published") return "published";
+    if (isActivityComplete(activity) || stored === "ready") return "ready";
+    return "draft";
   }
 
   function openNewActivity() {
@@ -970,8 +962,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       completed: timer.completed,
       timingSource: "website",
     }]));
+    const effectivePublicationStatuses = Object.fromEntries(
+      allTodayActivities.map((activity) => [activity.id, publicationStatusFor(activity)]),
+    );
     const publishQueueActivityIds = allTodayActivities
-      .filter((activity) => draft.publicationStatuses[activity.id] === "ready")
+      .filter((activity) => publicationStatusFor(activity) === "ready")
       .map((activity) => activity.id);
     const payload = {
       schemaVersion: 4,
@@ -981,7 +976,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       sessionTimers,
       timers,
       outcomes: draft.outcomes,
-      publicationStatuses: draft.publicationStatuses,
+      publicationStatuses: effectivePublicationStatuses,
       notes: draft.notes,
       publishQueueActivityIds,
       sessions: draft.sessions,
@@ -1150,7 +1145,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                   <div className="problem-title"><strong>{activity.title}</strong><span>{activity.notes ?? "Coding problem"}</span>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open on LeetCode ↗</a>}</div>
                   <ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} />
                   <ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} />
-                  <PublicationControl status={draft.publicationStatuses[activity.id] ?? (activity.artifactPath ? "published" : "draft")} onChange={(status) => setPublication(activity.id, status)} />
+                  <PublicationControl status={publicationStatusFor(activity)} />
                   {isExtra && <div className="row-edit-actions"><button onClick={() => openEditActivity(activity as ExtraActivity)}>Edit</button><button onClick={() => removeActivity(activity.id)}>Remove</button></div>}
                 </div>
               );
@@ -1171,9 +1166,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                 <div className="mock-controls">
                   <ActivityTimer activity={item} timer={draft.timers[item.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} />
                   <ResultFlag activityType={item.type} outcome={draft.outcomes[item.id] ?? item.outcome} onChange={(outcome) => setOutcome(item.id, outcome)} />
-                  <PublicationControl status={draft.publicationStatuses[item.id] ?? (item.artifactPath ? "published" : "draft")} onChange={(status) => setPublication(item.id, status)} />
+                  <PublicationControl status={publicationStatusFor(item)} />
                 </div>
-                <div className="publish-instruction">Choose <strong>Send to journal</strong>, then say <strong>“Publish this session”</strong> in the {item.type === "system_design" ? "system-design" : "behavioral"} task.</div>
+                <div className="publish-instruction">Finish the activity, then say <strong>“Publish this session”</strong> in the {item.type === "system_design" ? "system-design" : "behavioral"} task. Finished work is ready automatically.</div>
               </section>
             );
           })}
@@ -1199,7 +1194,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
         <section className="loose-section">
           <div className="section-title"><div><span className="eyebrow">STANDALONE PRACTICE</span><h2>Outside a full session</h2><p>Swipe a card left, or use its ••• control, to edit or remove it.</p></div></div>
-          {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add one activity” above to search a bank or paste a public LeetCode problem URL.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <SwipeActivityCard key={activity.id} title={activity.title} onEdit={() => openEditActivity(activity)} onRemove={() => removeActivity(activity.id)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><small>{typeLabel(activity.type)} · local draft</small><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} /><ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} /><PublicationControl status={draft.publicationStatuses[activity.id] ?? "draft"} onChange={(status) => setPublication(activity.id, status)} /></SwipeActivityCard>)}</div>}
+          {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add one activity” above to search a bank or paste a public LeetCode problem URL.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <SwipeActivityCard key={activity.id} title={activity.title} onEdit={() => openEditActivity(activity)} onRemove={() => removeActivity(activity.id)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><small>{typeLabel(activity.type)} · local draft</small><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} /><ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} /><PublicationControl status={publicationStatusFor(activity)} /></SwipeActivityCard>)}</div>}
         </section>
       </>
     );
@@ -1454,7 +1449,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         <label className="minutes-field"><span>Planning estimate in minutes</span><input type="number" min="1" max="360" value={composer.minutes} onChange={(event) => setComposer((current) => ({ ...current, minutes: event.target.value }))} /></label><button className="primary-action full-width" type="submit" disabled={!canSaveActivity}>{composer.editingId ? "Save changes" : "Add to today"}</button></form>}
       </section></div>}
 
-      {integrationOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setIntegrationOpen(false)}><section className="composer integration-dialog" role="dialog" aria-modal="true" aria-labelledby="integration-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setIntegrationOpen(false)} aria-label="Close">×</button><span className="eyebrow">ONE LIVE PRACTICE RECORD</span><h2 id="integration-title">Connect Codex and the LeetCode companion</h2><p>Create one personal token so both tools can read today&apos;s D1 state, control timers, and process only activities marked <strong>Send to journal</strong>. The token is shown once and stored as a secure digest.</p>{integrationToken ? <><label className="token-field"><span>Personal connection token</span><input readOnly value={integrationToken} onFocus={(event) => event.currentTarget.select()} /></label><button className="primary-action full-width" onClick={copyConnectionToken}>Copy token</button><div className="integration-steps"><strong>Use it in two places</strong><ol><li>Set <code>INTERVIEW_ARC_MCP_TOKEN</code> before opening Codex in this project.</li><li>Paste the same token into the Interview Arc Chrome companion after loading the extension.</li></ol></div></> : <button className="primary-action full-width" disabled={integrationBusy} onClick={createConnectionToken}>{integrationBusy ? "Creating…" : "Create personal connection token"}</button>}<small className="integration-warning">Treat this token like a password. Create a new one if it is ever shared accidentally.</small></section></div>}
+      {integrationOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setIntegrationOpen(false)}><section className="composer integration-dialog" role="dialog" aria-modal="true" aria-labelledby="integration-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setIntegrationOpen(false)} aria-label="Close">×</button><span className="eyebrow">ONE LIVE PRACTICE RECORD</span><h2 id="integration-title">Connect Codex and the LeetCode companion</h2><p>Create one personal token so both tools can read today&apos;s D1 state, control timers, and process every finished activity automatically. The token is shown once and stored as a secure digest.</p>{integrationToken ? <><label className="token-field"><span>Personal connection token</span><input readOnly value={integrationToken} onFocus={(event) => event.currentTarget.select()} /></label><button className="primary-action full-width" onClick={copyConnectionToken}>Copy token</button><div className="integration-steps"><strong>Use it in two places</strong><ol><li>Set <code>INTERVIEW_ARC_MCP_TOKEN</code> before opening Codex in this project.</li><li>Paste the same token into the Interview Arc Chrome companion after loading the extension.</li></ol></div></> : <button className="primary-action full-width" disabled={integrationBusy} onClick={createConnectionToken}>{integrationBusy ? "Creating…" : "Create personal connection token"}</button>}<small className="integration-warning">Treat this token like a password. Create a new one if it is ever shared accidentally.</small></section></div>}
 
       {selectedEntry && <div className="letter-backdrop" role="presentation" onMouseDown={() => setSelectedEntry(null)}><article className="reading-letter" role="dialog" aria-modal="true" aria-labelledby="letter-title" onMouseDown={(event) => event.stopPropagation()}><button className="letter-close" onClick={() => setSelectedEntry(null)} aria-label="Close letter">Close ×</button><header><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)}</time></div><h2 id="letter-title">{selectedEntry.title}</h2><p>{selectedEntry.subtitle}</p></header><div className="letter-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.type === "leetcode" && <div><span>Outcome</span><strong>{outcomeLabel(selectedEntry.outcome)}</strong></div>}</div>{selectedEntry.artifact ? <div className="letter-sections">{selectedEntry.artifact.sections.map((section) => /conversation transcript|generated code|solution/i.test(section.title) ? <details key={section.title} open={/solution/i.test(section.title)}><summary>{section.title}</summary><MarkdownBody source={section.body} /></details> : <section key={section.title}><h3>{section.title}</h3><MarkdownBody source={section.body} /></section>)}</div> : <div className="unpublished-letter"><span className="eyebrow">LOCAL COMPLETION · NOT PUBLISHED YET</span><h3>The result is saved on this device, but its review is not in the repository yet.</h3><p>Export today&apos;s draft and ask the matching specialist task to publish. Coding records will show the generated solution and complexity; system-design and behavioral records will show the formatted conversation transcript and review.</p>{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}<footer>Interview Arc · {selectedEntry.id}</footer></article></div>}
     {pipWindow && createPortal(

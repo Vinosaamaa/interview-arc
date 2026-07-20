@@ -15,6 +15,18 @@ const PLAYLIST: LofiTrack[] = [
   { name: "Sleepy Cat", artist: "Alejandro Magaña", path: "/audio/sleepy-cat.mp3", sourceUrl: "https://mixkit.co/free-stock-music/lo-fi-beats/", sourceLabel: "Mixkit · Lo-fi beats" },
   { name: "Serene View", artist: "Arulo", path: "/audio/serene-view.mp3", sourceUrl: "https://mixkit.co/free-stock-music/chillout/", sourceLabel: "Mixkit · Chillout" },
   { name: "Thinking About You", artist: "Arulo", path: "/audio/thinking-about-you.mp3", sourceUrl: "https://mixkit.co/free-stock-music/chillout/", sourceLabel: "Mixkit · Chillout" },
+  { name: "Valley Sunset", artist: "Alejandro Magaña", path: "/audio/valley-sunset.mp3", sourceUrl: "https://mixkit.co/free-stock-music/ambient/", sourceLabel: "Mixkit · Ambient" },
+  { name: "Relax Beat", artist: "Arulo", path: "/audio/relax-beat.mp3", sourceUrl: "https://mixkit.co/free-stock-music/ambient/", sourceLabel: "Mixkit · Ambient" },
+  { name: "Spirit in the Woods", artist: "Alejandro Magaña", path: "/audio/spirit-in-the-woods.mp3", sourceUrl: "https://mixkit.co/free-stock-music/ambient/", sourceLabel: "Mixkit · Ambient" },
+  { name: "Forest Treasure", artist: "Alejandro Magaña", path: "/audio/forest-treasure.mp3", sourceUrl: "https://mixkit.co/free-stock-music/ambient/", sourceLabel: "Mixkit · Ambient" },
+  { name: "Meditation", artist: "Arulo", path: "/audio/meditation.mp3", sourceUrl: "https://mixkit.co/free-stock-music/ambient/", sourceLabel: "Mixkit · Ambient" },
+  { name: "Forest Walk", artist: "Eugenio Mininni", path: "/audio/forest-walk.mp3", sourceUrl: "https://mixkit.co/free-stock-music/ambient/", sourceLabel: "Mixkit · Ambient" },
+  { name: "Smooth Meditation", artist: "Arulo", path: "/audio/smooth-meditation.mp3", sourceUrl: "https://mixkit.co/free-stock-music/ambient/", sourceLabel: "Mixkit · Ambient" },
+  { name: "Rest Now", artist: "Eugenio Mininni", path: "/audio/rest-now.mp3", sourceUrl: "https://mixkit.co/free-stock-music/ambient/", sourceLabel: "Mixkit · Ambient" },
+  { name: "Yoga Song", artist: "Arulo", path: "/audio/yoga-song.mp3", sourceUrl: "https://mixkit.co/free-stock-music/ambient/", sourceLabel: "Mixkit · Ambient" },
+  { name: "Nature Yoga", artist: "Arulo", path: "/audio/nature-yoga.mp3", sourceUrl: "https://mixkit.co/free-stock-music/ambient/", sourceLabel: "Mixkit · Ambient" },
+  { name: "Finding Myself", artist: "Michael Ramir C.", path: "/audio/finding-myself.mp3", sourceUrl: "https://mixkit.co/free-stock-music/ambient/", sourceLabel: "Mixkit · Ambient" },
+  { name: "Forest Mist Whispers", artist: "Alejandro Magaña", path: "/audio/forest-mist-whispers.mp3", sourceUrl: "https://mixkit.co/free-stock-music/ambient/", sourceLabel: "Mixkit · Ambient" },
 ];
 
 function stableIndex(date: string, length: number) {
@@ -105,7 +117,16 @@ export function useAmbientSound(date: string) {
   }, [next]);
 
   useEffect(() => {
+    const bytes = new Uint32Array(1);
+    window.crypto.getRandomValues(bytes);
+    let nextIndex = bytes[0] % PLAYLIST.length;
+    const previous = Number(window.sessionStorage.getItem("interview-arc-last-opening-track"));
+    if (PLAYLIST.length > 1 && Number.isInteger(previous) && previous === nextIndex) nextIndex = (nextIndex + 1 + (bytes[0] % (PLAYLIST.length - 1))) % PLAYLIST.length;
+    window.sessionStorage.setItem("interview-arc-last-opening-track", String(nextIndex));
+
     const frame = window.requestAnimationFrame(() => {
+      indexRef.current = nextIndex;
+      setTrackIndex(nextIndex);
       const savedVolume = Number(window.localStorage.getItem("interview-arc-music-volume"));
       if (Number.isFinite(savedVolume) && savedVolume > 0) {
         const safeVolume = Math.min(1, savedVolume);
@@ -118,7 +139,7 @@ export function useAmbientSound(date: string) {
       audioRef.current?.pause();
       audioRef.current = null;
     };
-  }, []);
+  }, [date]);
 
   return {
     playing,

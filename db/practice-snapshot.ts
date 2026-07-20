@@ -2,6 +2,7 @@ import type { JournalActivity, PracticeSession } from "../app/content-types";
 import { emptyJournal } from "../app/current-day";
 import { loadContentIndex } from "./content";
 import { readLiveState, type PublicationStatusValue, type TimerState } from "./live-state";
+import { derivePublicationStatus } from "./publication-state";
 
 export type ConnectedActivity = JournalActivity & {
   timer?: TimerState;
@@ -24,11 +25,16 @@ export async function buildPracticeSnapshot(ownerId: string, date = dateInPracti
   const journal = content.journals.find((candidate) => candidate.date === date) ?? emptyJournal(date);
   const activities = [...journal.activities, ...(live.extraActivities as JournalActivity[])].map((activity) => {
     const artifact = content.artifacts.find((candidate) => candidate.activityId === activity.id);
+    const timer = live.timers[activity.id];
+    const outcome = live.outcomes[activity.id] ?? activity.outcome;
+    const storedPublication = live.publicationStatuses[activity.id];
+    const completed = activity.status === "completed" || Boolean(timer?.completed) || Boolean(outcome);
+    const publicationStatus = derivePublicationStatus({ hasArtifact: Boolean(artifact), storedPublication, completed });
     return {
       ...activity,
-      timer: live.timers[activity.id],
-      outcome: live.outcomes[activity.id] ?? activity.outcome,
-      publicationStatus: live.publicationStatuses[activity.id] ?? (artifact ? "published" : "draft"),
+      timer,
+      outcome,
+      publicationStatus,
       personalNote: live.notes[activity.id] ?? "",
       ...(artifact ? { artifactPath: artifact.path } : {}),
     } satisfies ConnectedActivity;

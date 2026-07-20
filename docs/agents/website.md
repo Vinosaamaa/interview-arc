@@ -48,12 +48,12 @@ The website must not imply that browser draft state has already been published t
 ## UX Direction
 
 - Treat the arrival screen as the product's signature moment. Show it on every
-  full page entry and keep it visible until the user explicitly enters. Use one
-  date-stable encouragement and one date-selected 4K photograph from the local,
-  licensed wallpaper pool. The entry click may start music because audible
+  full page entry and keep it visible until the user explicitly enters. Draw
+  fresh encouragement and one 4K photograph from the local, licensed wallpaper
+  pool while avoiding the immediately prior visit. The entry click may start music because audible
   playback requires a user gesture.
 - Keep a locally hosted, documented, licensed lo-fi/chillout playlist. Start
-  from a different date-stable track, advance when a song ends, and provide
+  from a freshly drawn track that avoids the prior visit, advance when a song ends, and provide
   play/pause, previous/next-track, direct track selection, and clearly audible
   volume controls. Show the daily playlist with the licensed source page and a
   direct save action for every locally hosted track. Never rip music from
@@ -76,10 +76,10 @@ The website must not imply that browser draft state has already been published t
 - For imported system-design questions, show the source question link, listed complexity, and whether reference solutions are available.
 - For imported behavioral questions, show the expected answer format, frequency, and whether the Bugfree.ai reference may require sign-in. Link to the canonical answer page without copying third-party answer text into the site.
 - Journey owns cumulative totals and daily charts for coding, system design, behavioral, outcomes, and elapsed time.
-- Present publication state in user language: `draft` is **Not queued**, `ready`
-  is **Send to journal**, and `published` is **In journal**. Keep the stored enum
-  and agent contract stable while explaining that only the middle state asks a
-  specialist task to generate a solution or transcript.
+- Present publication state in user language: `draft` is **Finish to journal**,
+  `ready` is **Ready for journal**, and `published` is **In journal**. Finishing
+  the stopwatch or choosing a result derives `ready` automatically; the control
+  is informational rather than a second user decision.
 
 ## Implementation And Hosting
 

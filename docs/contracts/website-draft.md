@@ -23,17 +23,17 @@ The website uses one cycling flag control:
 
 The control appears on coding, system-design, and behavioral activities so all Today cards keep the same layout. For LeetCode, green and yellow retain their canonical outcome names. For system-design and behavioral work, the interface reads them as `finished` and `finished after reviewing approach`; those mock labels are local publishing signals and must not be written into the durable activity `outcome` field, which remains LeetCode-specific.
 
-The control provides an accessible label and a hover/focus legend. Its legend must escape the card visually rather than being clipped by the swipe container. A result flag and timer completion are separate signals. Red work is excluded from Past, but it may still be explicitly marked ready for publication so the specialist can write a useful postmortem.
+The control provides an accessible label and a hover/focus legend. Its legend must escape the card visually rather than being clipped by the swipe container. A result flag and timer completion are separate signals. Red work is excluded from Past, but it is still ready for publication so the specialist can write a useful postmortem.
 
 ## Publication State
 
-Every activity has an owner-scoped publication state independent from lifecycle and outcome:
+Every activity exposes an owner-scoped publication state derived from lifecycle, outcome, and artifact existence:
 
-- `draft`: not offered to a specialist task;
-- `ready`: explicitly included in the publication queue;
+- `draft`: unfinished and not offered to a specialist task;
+- `ready`: finished and automatically included in the publication queue;
 - `published`: the specialist wrote the artifact and reported its path back to Interview Arc.
 
-Finishing a timer or choosing an outcome never silently changes publication state. The user chooses **Send to journal** (`ready`). A specialist changes it to **In journal** (`published`) only after the repository artifact actually exists. Failed attempts are eligible for both states.
+Finishing a timer or choosing an outcome changes the effective state to **Ready for journal** (`ready`) automatically. A specialist changes it to **In journal** (`published`) only after the repository artifact actually exists. Failed attempts are eligible and produce useful postmortems.
 
 ## Sessions
 
@@ -58,7 +58,7 @@ Standalone cards reveal Edit and Remove by swiping left. A compact overflow cont
 
 Draft export schema version 4 contains session countdowns, activity stopwatches, outcomes, publication states, personal notes, locally added sessions, locally added activities, and `publishQueueActivityIds`.
 
-`publishQueueActivityIds` contains exactly the activities whose independent publication state is `ready`, regardless of green, yellow, red, or unset outcome.
+`publishQueueActivityIds` contains exactly the finished, unpublished activities whose effective publication state is `ready`, including red/failed work and timer-finished work with no result selected.
 
 A specialist task should use the authenticated Interview Arc MCP tool
 `get_publication_queue` when it is connected. The portable fallback remains an
@@ -68,7 +68,7 @@ Git; `data/drafts/README.md` documents the fallback workflow.
 
 ## End-Of-Day LeetCode Publication
 
-The user marks the desired activities Ready and says `Publish today's LeetCode`.
+The user finishes the desired activities and says `Publish today's LeetCode`.
 
 The LeetCode task must:
 

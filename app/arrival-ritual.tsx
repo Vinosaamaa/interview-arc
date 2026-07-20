@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import type { LofiTrack } from "./ambient-sound";
 import { MusicPlaylist } from "./music-playlist";
 
@@ -15,6 +15,36 @@ const DAILY_LINES = [
   "The work counts even before it feels fluent.",
   "Make the mistake visible. Then make it useful.",
   "Begin calmly. Finish honestly.",
+  "Your pace can be quiet and still carry you forward.",
+  "A hard question is a place to practice staying present.",
+  "Do the next small thing with full attention.",
+  "Confidence is evidence remembered at the right moment.",
+  "Let the first draft be rough. Let the second be clear.",
+  "You are building recall, not performing perfection.",
+  "Name the tradeoff. Then choose with intention.",
+  "A clean explanation begins with a clear mental model.",
+  "The unfamiliar becomes ordinary one repetition at a time.",
+  "Slow thinking now becomes fluent thinking later.",
+  "Keep the signal. Release the noise.",
+  "One solved edge case is one less future surprise.",
+  "You can pause without losing momentum.",
+  "Make today specific enough to remember.",
+  "A useful answer is better than an impressive fog.",
+  "Read the constraint again. It is trying to help you.",
+  "Build the simplest correct story first.",
+  "Your explanation is part of the solution.",
+  "Practice creates choices where panic used to be.",
+  "Leave a trail your future self can follow.",
+  "Be curious about the miss, not ashamed of it.",
+  "A strong interview is a sequence of recoveries.",
+  "Today’s repetition is tomorrow’s composure.",
+  "Start with what must be true.",
+  "You only need enough courage for the next question.",
+  "Good systems begin with honest requirements.",
+  "Turn the vague part into a question.",
+  "The lesson is the part you get to keep.",
+  "Focus is a kindness you give the work.",
+  "Make progress visible, then let it compound.",
 ];
 
 const WALLPAPER_POOL = [
@@ -22,6 +52,14 @@ const WALLPAPER_POOL = [
   { path: "/arrival-sakura-river-4k.jpg", label: "Sakura at night", photographer: "ayumi kubo", href: "https://unsplash.com/photos/uiTY1tPjwlk" },
   { path: "/arrival-rain-office-4k.jpg", label: "Rain over Singapore", photographer: "Milin John", href: "https://unsplash.com/photos/9RD0bE5C9WI" },
   { path: "/arrival-mountain-lake-4k.jpg", label: "Peyto Lake at dawn", photographer: "Mario Häfliger", href: "https://unsplash.com/photos/Svnrlh3lXZ0" },
+  { path: "/arrival-tokyo-blossom-4k.jpg", label: "Tokyo blossoms at night", photographer: "Ramon Buçard", href: "https://unsplash.com/photos/VzHTeeBrek0" },
+  { path: "/arrival-window-lamp-4k.jpg", label: "A quiet window and lamp", photographer: "Karina Rubira", href: "https://unsplash.com/photos/G8zGGpqpP0U" },
+  { path: "/arrival-fukuoka-blossom-4k.jpg", label: "Blossoms over a city street", photographer: "Yux Xiang", href: "https://unsplash.com/photos/bAsOgzNy3XM" },
+  { path: "/arrival-crater-lake-4k.jpg", label: "Mountain lake at sunrise", photographer: "Jack Huynh", href: "https://unsplash.com/photos/oJWR1JInWRg" },
+  { path: "/arrival-trento-lake-4k.jpg", label: "Tranquil mountain lake", photographer: "Filippo Molinari", href: "https://unsplash.com/photos/6tcvf72JOmg" },
+  { path: "/arrival-dawn-lake-4k.jpg", label: "A calm lake at dawn", photographer: "Wolfgang Hasselmann", href: "https://unsplash.com/photos/JCqW61z2Sz0" },
+  { path: "/arrival-winter-sunrise-4k.jpg", label: "Winter sunrise", photographer: "Deep Singh Kushwaha", href: "https://unsplash.com/photos/ol7KRNzBUMY" },
+  { path: "/arrival-illuminated-blossom-4k.jpg", label: "Illuminated cherry blossoms", photographer: "Tsuyoshi Kozu", href: "https://unsplash.com/photos/GftNRR5Rs8E" },
 ];
 
 const PETALS = Array.from({ length: 72 }, (_, index) => ({
@@ -41,6 +79,16 @@ function quoteFor(date: string) {
 function wallpaperFor(date: string) {
   const value = date.split("").reduce((sum, character, index) => sum + character.charCodeAt(0) * (index + 1), 0);
   return WALLPAPER_POOL[value % WALLPAPER_POOL.length];
+}
+
+function visitIndex(key: string, length: number) {
+  const bytes = new Uint32Array(1);
+  window.crypto.getRandomValues(bytes);
+  let next = bytes[0] % length;
+  const previous = Number(window.sessionStorage.getItem(key));
+  if (length > 1 && Number.isInteger(previous) && previous === next) next = (next + 1 + (bytes[0] % (length - 1))) % length;
+  window.sessionStorage.setItem(key, String(next));
+  return next;
 }
 
 function displayDate(date: string) {
@@ -104,15 +152,28 @@ export function ArrivalRitual({
   onVolumeChange: (volume: number) => void;
   onEnter: () => void;
 }) {
+  const [quoteIndex, setQuoteIndex] = useState(() => DAILY_LINES.indexOf(quoteFor(date)));
+  const [wallpaperIndex, setWallpaperIndex] = useState(() => WALLPAPER_POOL.indexOf(wallpaperFor(date)));
+
+  useEffect(() => {
+    const nextQuote = visitIndex("interview-arc-last-arrival-quote", DAILY_LINES.length);
+    const nextWallpaper = visitIndex("interview-arc-last-arrival-wallpaper", WALLPAPER_POOL.length);
+    const frame = window.requestAnimationFrame(() => {
+      setQuoteIndex(nextQuote);
+      setWallpaperIndex(nextWallpaper);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [date]);
+
   if (state === "entered") return null;
-  const wallpaper = wallpaperFor(date);
+  const wallpaper = WALLPAPER_POOL[wallpaperIndex];
   return (
     <section className={`arrival-ritual ${state}`} aria-label="Daily arrival">
       <div className="arrival-image" style={{ "--arrival-wallpaper": `url(${wallpaper.path})` } as CSSProperties} aria-hidden="true" />
       <div className="arrival-shade" aria-hidden="true" />
       <div className="arrival-content">
         <span className="arrival-kicker">INTERVIEW ARC · {displayDate(date).toUpperCase()}</span>
-        <blockquote>{quoteFor(date)}</blockquote>
+        <blockquote>{DAILY_LINES[quoteIndex]}</blockquote>
         <p>One session. One clear record. Nothing to prove before you begin.</p>
         <div className="arrival-actions">
           <button className="arrival-enter" onClick={onEnter}>Begin today’s work <span>↘</span></button>

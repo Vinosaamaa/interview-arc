@@ -13,13 +13,14 @@ Before editing website code, read `../docs/agents/website.md` and the shared con
   Versioned daily/artifact files remain the durable narrative source.
 - Keep Today, Journey, Past, and Problem Banks as distinct information views; reveal full transcripts and code on demand.
 - Show the arrival ritual on every full page entry and keep it visible until the
-  user explicitly enters. Choose date-stable artwork and a starting track from
+  user explicitly enters. Draw fresh artwork, encouragement, and a starting track from
   locally hosted, documented, licensed pools. Sound begins only from a user
   action; expose play/pause, previous/next, playlist selection, licensed source,
   local save, volume, and persistent motion controls. Keep the petal field dense
   and legible over bright and dark surfaces, with reduced-motion support.
-- Keep outcome, timer completion, and publication state independent. Only
-  `ready` enters the agent queue; `published` is set after an artifact exists.
+- Treat a finished timer or selected result as publication-ready automatically.
+  Keep `ready` as the agent-queue enum and set `published` only after an artifact
+  exists; do not require a second manual queue action.
 - Keep Problem Banks question-type and progress filters independent. A finished question must match Past eligibility; failed and planned questions remain to practice.
 - Preserve the vinext/Cloudflare Worker architecture, `wrangler.jsonc`, D1
   migrations, and root hosting configuration. The OpenAI Sites configuration

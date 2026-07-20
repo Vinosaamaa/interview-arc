@@ -59,7 +59,7 @@ Use three shared commands:
 - `Publish this session` finalizes one question's files and updates the daily manifest.
 - `Finish today's journal` asks the main task to validate, commit, push, and open one pull request for the day.
 
-For coding, choose **Send to journal** on the desired problems, then say `Publish today's LeetCode`. Internally this is the `ready` state. The project-scoped Interview Arc MCP bridge lets the LeetCode task read that authenticated D1 queue and produce every coding artifact in one pass; it does not need a separate conversation for every problem. Exporting `journal-YYYY-MM-DD-draft.json` remains the portable fallback.
+For coding, finish the stopwatch or choose the actual result, then say `Publish today's LeetCode`. Finished activities become **Ready for journal** automatically (internal state: `ready`). The project-scoped Interview Arc MCP bridge lets the LeetCode task read that authenticated D1 queue and produce every coding artifact in one pass; it does not need a separate conversation for every problem. Exporting `journal-YYYY-MM-DD-draft.json` remains the portable fallback.
 
 See `docs/architecture/single-project-practice-workflow.md` for the full ownership and Git model.
 

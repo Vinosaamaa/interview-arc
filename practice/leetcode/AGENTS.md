@@ -52,7 +52,7 @@ When the user says `Publish today's LeetCode` or `Publish the LeetCode session`,
 6. Write one artifact per problem under `attempts/`, update or add the matching daily activity, and point it to `artifactPath`.
 7. After every artifact file exists, call `mark_activities_published` with its activity ID and repository-relative artifact path. If MCP is unavailable, leave publication state for the website task to reconcile from the artifact. Do not commit the local draft export. Do not commit, push, open a pull request, or deploy; the main task handles the daily journal integration.
 
-This command is the normal coding workflow. The user does not need to say `Publish this session` six times. The queue contains only activities for which the user chose **Send to journal** (internal state: `ready`); never substitute every completed or every discussed problem.
+This command is the normal coding workflow. The user does not need to say `Publish this session` six times. The queue contains every finished, unpublished LeetCode activity: finishing its stopwatch or choosing its actual result makes it **Ready for journal** (internal state: `ready`) automatically. Do not include merely planned or running problems, and do not substitute every problem discussed in chat.
 
 Do not scrape the user's LeetCode account, authenticated pages, or submission history. Read live state only through the authenticated Interview Arc MCP bridge. If neither MCP nor a website draft is available, publish only the facts present in repository files or explicitly supplied by the user and mark the rest unknown.
 
