@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -12,10 +12,13 @@ import type {
   QuestionBankItem,
 } from "./content-types";
 import {
+  CODING_SESSION_MINUTES,
   elapsed,
   formatClock,
+  INTERVIEW_SESSION_MINUTES,
   remaining,
   SESSION_SECONDS,
+  sessionAllocationSeconds,
   type ActivityType,
   type ExtraActivity,
   type LocalSession,
@@ -23,7 +26,7 @@ import {
   type PublicationStatus,
   type TimerDraft,
 } from "./live-types";
-import { useLiveState } from "./live-sync";
+import { useLiveState, useReadOnlyLiveState } from "./live-sync";
 import { emptyJournal } from "./current-day";
 import { ArrivalRitual, PetalField } from "./arrival-ritual";
 import { useAmbientSound } from "./ambient-sound";
@@ -31,6 +34,8 @@ import { MusicPlaylist } from "./music-playlist";
 
 type View = "today" | "journey" | "library" | "banks";
 type ComposerMode = "session" | "activity";
+type JourneyRange = 30 | 90 | 365 | "all";
+type JourneyMetric = "activities" | "time";
 type DocumentPiP = { requestWindow: (options?: { width?: number; height?: number }) => Promise<Window> };
 type ComposerState = {
   open: boolean;
@@ -40,6 +45,10 @@ type ComposerState = {
   selectedId: string;
   minutes: string;
   editingId: string;
+  editingSessionId: string;
+  sessionCoding: number;
+  sessionSystemDesign: number;
+  sessionBehavioral: number;
 };
 type LogEntry = {
   id: string;
@@ -50,6 +59,8 @@ type LogEntry = {
   status: "planned" | "running" | "completed" | "published";
   outcome?: Outcome;
   elapsedSeconds: number;
+  allocatedSeconds: number;
+  reviewDates?: string[];
   url?: string;
   artifact?: ContentArtifact;
 };
@@ -62,6 +73,10 @@ const EMPTY_COMPOSER: ComposerState = {
   selectedId: "",
   minutes: "30",
   editingId: "",
+  editingSessionId: "",
+  sessionCoding: 6,
+  sessionSystemDesign: 1,
+  sessionBehavioral: 1,
 };
 const OUTCOME_ORDER: (Outcome | undefined)[] = [undefined, "solved", "solved_after_reviewing_approach", "failed"];
 
@@ -87,6 +102,16 @@ function readableDate(date: string, compact = false) {
     ...(compact ? {} : { weekday: "long" as const }),
     timeZone: "UTC",
   }).format(new Date(`${date}T12:00:00Z`));
+}
+
+function shiftDate(date: string, days: number) {
+  const value = new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function daysBetween(left: string, right: string) {
+  return Math.round((Date.parse(`${right}T12:00:00Z`) - Date.parse(`${left}T12:00:00Z`)) / 86_400_000);
 }
 
 function typeLabel(type: ActivityType) {
@@ -269,7 +294,7 @@ function SessionCountdown({
   return (
     <div className={`session-countdown ${running ? "running" : ""} ${complete ? "complete" : ""}`}>
       <div className="countdown-copy">
-        <span>Six-hour session countdown</span>
+        <span>{formatDuration(allocated)} session countdown</span>
         <strong>{formatClock(timeLeft)}</strong>
         <small>{complete ? "Session finished" : running ? "Session in progress" : timer?.elapsedSeconds ? "Session paused" : "Ready when you are"}</small>
       </div>
@@ -278,6 +303,45 @@ function SessionCountdown({
         <button onClick={() => onComplete(session.id)} disabled={complete} aria-label={`Finish ${session.label}`} title={complete ? "Session finished" : "Finish session now"}><span aria-hidden="true">{complete ? "✓" : "■"}</span></button>
       </div>
       <span className="countdown-track" aria-hidden="true"><i style={{ width: `${progress}%` }} /></span>
+    </div>
+  );
+}
+
+function SessionCountControl({
+  label,
+  mark,
+  value,
+  minutesEach,
+  max,
+  onChange,
+}: {
+  label: string;
+  mark: string;
+  value: number;
+  minutesEach: number;
+  max: number;
+  onChange: (value: number) => void;
+}) {
+  const contribution = value * minutesEach * 60;
+  return (
+    <div className="session-count-card">
+      <div className="session-count-label">
+        <span aria-hidden="true">{mark}</span>
+        <div><strong>{label}</strong><small>{minutesEach} min each</small></div>
+      </div>
+      <div className="count-stepper">
+        <button type="button" onClick={() => onChange(Math.max(0, value - 1))} disabled={value === 0} aria-label={`Remove one ${label.toLowerCase()}`}>−</button>
+        <input
+          type="number"
+          min="0"
+          max={max}
+          value={value}
+          onChange={(event) => onChange(Math.min(max, Math.max(0, Math.floor(Number(event.target.value) || 0))))}
+          aria-label={`${label} count`}
+        />
+        <button type="button" onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max} aria-label={`Add one ${label.toLowerCase()}`}>＋</button>
+      </div>
+      <span className="session-contribution">{value} × {minutesEach}m <strong>{formatDuration(contribution)}</strong></span>
     </div>
   );
 }
@@ -453,6 +517,18 @@ function MarkdownBody({ source }: { source: string }) {
   return <div className="markdown-body"><Markdown remarkPlugins={[remarkGfm]}>{source}</Markdown></div>;
 }
 
+function MetricRing({ label, value, detail, color }: { label: string; value: number; detail: string; color: string }) {
+  const safeValue = Math.min(100, Math.max(0, Math.round(value)));
+  return (
+    <article className="metric-ring-card">
+      <div className="metric-ring" style={{ background: `conic-gradient(${color} ${safeValue}%, #e7ebe5 ${safeValue}% 100%)` }}>
+        <span><strong>{safeValue}%</strong><small>{label}</small></span>
+      </div>
+      <p>{detail}</p>
+    </article>
+  );
+}
+
 export default function HomeClient({ content, today }: { content: ContentIndex; today: string }) {
   const journal = useMemo(
     () => content.journals.find((candidate) => candidate.date === today) ?? emptyJournal(today),
@@ -460,6 +536,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   );
   const [view, setView] = useState<View>("today");
   const { draft, setDraft, now, setNow, hydrated, enqueue } = useLiveState(journal.date);
+  const yesterdayDate = shiftDate(journal.date, -1);
+  const yesterdayDraft = useReadOnlyLiveState(yesterdayDate);
   const [composer, setComposer] = useState<ComposerState>(EMPTY_COMPOSER);
   const [selectedEntry, setSelectedEntry] = useState<LogEntry | null>(null);
   const [libraryFilter, setLibraryFilter] = useState<"all" | ActivityType>("all");
@@ -469,6 +547,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [bankSortKey, setBankSortKey] = useState<"frequency" | "recent" | "acceptance">("frequency");
   const [bankSortDir, setBankSortDir] = useState<"asc" | "desc">("asc");
   const [bankSearch, setBankSearch] = useState("");
+  const [journeyRange, setJourneyRange] = useState<JourneyRange>(90);
+  const [journeyMetric, setJourneyMetric] = useState<JourneyMetric>("activities");
+  const [journeyDate, setJourneyDate] = useState("");
+  const [journeyTopic, setJourneyTopic] = useState("");
   const [pipWindow, setPipWindow] = useState<Window | null>(null);
   const [pipSupported, setPipSupported] = useState(false);
   const [arrivalState, setArrivalState] = useState<"show" | "leaving" | "entered">("show");
@@ -575,10 +657,37 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     });
   }
 
-  const allTodayActivities = [...journal.activities, ...draft.extraActivities];
-  const allSessions: PracticeSession[] = [...journal.sessions, ...draft.sessions];
+  const allTodayActivities = useMemo(
+    () => [...journal.activities, ...draft.extraActivities],
+    [journal.activities, draft.extraActivities],
+  );
+  const allSessions: PracticeSession[] = useMemo(
+    () => [...journal.sessions, ...draft.sessions],
+    [journal.sessions, draft.sessions],
+  );
   const assignedExtraIds = new Set(draft.sessions.flatMap((session) => session.activityIds));
   const looseActivities = draft.extraActivities.filter((activity) => !assignedExtraIds.has(activity.id));
+
+  useEffect(() => {
+    const expired = allSessions.filter((session) => {
+      const timer = draft.sessionTimers[session.id];
+      return Boolean(timer?.runningSince) && elapsed(timer, now) >= session.allocatedSeconds;
+    });
+    if (!expired.length) return;
+    expired.forEach((session) => enqueue({ type: "timer", subjectId: session.id, kind: "session", action: "finish" }));
+    const expiredIds = new Set(expired.map((session) => session.id));
+    setDraft((current) => ({
+      ...current,
+      sessionTimers: Object.fromEntries(
+        Object.entries(current.sessionTimers).map(([id, timer]) => {
+          const session = allSessions.find((candidate) => candidate.id === id);
+          return expiredIds.has(id)
+            ? [id, { elapsedSeconds: session?.allocatedSeconds ?? SESSION_SECONDS, runningSince: null, completed: true }]
+            : [id, timer];
+        }),
+      ),
+    }));
+  }, [allSessions, draft.sessionTimers, enqueue, now, setDraft]);
 
   // The pop-out follows the running activity; when nothing runs it shows the first
   // unfinished problem so the controls are still one click away.
@@ -625,9 +734,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function toggleSessionTimer(sessionId: string) {
     const timestamp = Date.now();
+    const allocatedSeconds = allSessions.find((session) => session.id === sessionId)?.allocatedSeconds ?? SESSION_SECONDS;
     setNow(timestamp);
     const priorSession = draft.sessionTimers[sessionId];
-    if (priorSession?.completed || (priorSession && elapsed(priorSession, timestamp) >= SESSION_SECONDS)) return;
+    if (priorSession?.completed || (priorSession && elapsed(priorSession, timestamp) >= allocatedSeconds)) return;
     enqueue({
       type: "timer",
       subjectId: sessionId,
@@ -636,7 +746,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     });
     setDraft((current) => {
       const prior = current.sessionTimers[sessionId] ?? { elapsedSeconds: 0, runningSince: null, completed: false };
-      if (prior.completed || elapsed(prior, timestamp) >= SESSION_SECONDS) return current;
+      if (prior.completed || elapsed(prior, timestamp) >= allocatedSeconds) return current;
       return {
         ...current,
         sessionTimers: {
@@ -651,6 +761,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function completeSessionTimer(sessionId: string) {
     const timestamp = Date.now();
+    const allocatedSeconds = allSessions.find((session) => session.id === sessionId)?.allocatedSeconds ?? SESSION_SECONDS;
     setNow(timestamp);
     enqueue({ type: "timer", subjectId: sessionId, kind: "session", action: "finish" });
     setDraft((current) => {
@@ -659,7 +770,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         ...current,
         sessionTimers: {
           ...current.sessionTimers,
-          [sessionId]: { elapsedSeconds: Math.min(SESSION_SECONDS, elapsed(prior, timestamp)), runningSince: null, completed: true },
+          [sessionId]: { elapsedSeconds: Math.min(allocatedSeconds, elapsed(prior, timestamp)), runningSince: null, completed: true },
         },
       };
     });
@@ -736,6 +847,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const bank = bankFor(activity.type);
     const known = bank.find((question) => question.title === activity.title || question.url === activity.url);
     setComposer({
+      ...EMPTY_COMPOSER,
       open: true,
       mode: "activity",
       type: activity.type,
@@ -744,6 +856,48 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       minutes: String(Math.round(activity.allocatedSeconds / 60)),
       editingId: activity.id,
     });
+  }
+
+  function isSessionEditable(session: LocalSession) {
+    const sessionTimer = draft.sessionTimers[session.id];
+    if (sessionTimer?.runningSince || sessionTimer?.completed || sessionTimer?.elapsedSeconds) return false;
+    return session.activityIds.every((activityId) => {
+      const activity = allTodayActivities.find((candidate) => candidate.id === activityId);
+      const timer = draft.timers[activityId];
+      return !timer?.runningSince && !timer?.completed && !timer?.elapsedSeconds &&
+        !draft.outcomes[activityId] && !activity?.outcome && activity?.status !== "completed" &&
+        !activity?.artifactPath && !draft.publicationStatuses[activityId];
+    });
+  }
+
+  function openEditSession(session: LocalSession) {
+    if (!isSessionEditable(session)) return;
+    const activities = sessionActivities(session);
+    setComposer({
+      ...EMPTY_COMPOSER,
+      open: true,
+      mode: "session",
+      editingSessionId: session.id,
+      sessionCoding: activities.filter((activity) => activity.type === "leetcode").length,
+      sessionSystemDesign: activities.filter((activity) => activity.type === "system_design").length,
+      sessionBehavioral: activities.filter((activity) => activity.type === "behavioral").length,
+    });
+  }
+
+  function sessionBlockedQuestions(editingSessionId = "") {
+    const excludedIds = new Set(
+      draft.sessions.find((session) => session.id === editingSessionId)?.activityIds ?? [],
+    );
+    const blocked = new Set<string>();
+    allTodayActivities
+      .filter((activity) => !excludedIds.has(activity.id))
+      .forEach((activity) => addActivityToBlocked(blocked, activity));
+    return blocked;
+  }
+
+  function availableSessionQuestions(type: ActivityType, editingSessionId = "") {
+    const blocked = sessionBlockedQuestions(editingSessionId);
+    return bankFor(type).filter((question) => question.active && !isQuestionBlocked(question, blocked));
   }
 
   function selectBankQuestion(question: QuestionBankItem) {
@@ -824,18 +978,29 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     setComposer(EMPTY_COMPOSER);
   }
 
-  function addFullSession() {
-    const sessionNumber = allSessions.length + 1;
-    const sessionId = `${journal.date}-session-${sessionNumber}-${draft.extraActivities.length}-${draft.sessions.length}`;
-    // Skip anything already on today (planned or finished). Finished work from
-    // earlier days stays eligible so a new day can practice it again.
-    const blocked = new Set<string>();
-    for (const activity of allTodayActivities) addActivityToBlocked(blocked, activity);
-    const codingQuestions = pickQuestionsByFrequency(content.questionBanks.leetcode, 6, blocked, sessionId);
-    for (const question of codingQuestions) blockKeysForQuestion(question).forEach((key) => blocked.add(key));
-    const systemQuestion = pickQuestionsByFrequency(content.questionBanks.systemDesign, 1, blocked, sessionId)[0];
-    if (systemQuestion) blockKeysForQuestion(systemQuestion).forEach((key) => blocked.add(key));
-    const behaviorQuestion = pickQuestionsByFrequency(content.questionBanks.behavioral, 1, blocked, sessionId)[0];
+  function saveFullSession() {
+    const existing = draft.sessions.find((session) => session.id === composer.editingSessionId);
+    if (existing && !isSessionEditable(existing)) return;
+    const sessionNumber = existing
+      ? allSessions.findIndex((session) => session.id === existing.id) + 1
+      : allSessions.length + 1;
+    const sessionId = existing?.id ?? `${journal.date}-session-${sessionNumber}-${draft.extraActivities.length}-${draft.sessions.length}`;
+    // Skip anything already on today, except the unstarted session currently
+    // being rebuilt. Earlier days remain eligible for a fresh practice day.
+    const blocked = sessionBlockedQuestions(existing?.id);
+    const codingQuestions = pickQuestionsByFrequency(content.questionBanks.leetcode, composer.sessionCoding, blocked, sessionId);
+    codingQuestions.forEach((question) => blockKeysForQuestion(question).forEach((key) => blocked.add(key)));
+    const systemQuestions = pickQuestionsByFrequency(content.questionBanks.systemDesign, composer.sessionSystemDesign, blocked, sessionId);
+    systemQuestions.forEach((question) => blockKeysForQuestion(question).forEach((key) => blocked.add(key)));
+    const behaviorQuestions = pickQuestionsByFrequency(content.questionBanks.behavioral, composer.sessionBehavioral, blocked, sessionId);
+    if (
+      codingQuestions.length !== composer.sessionCoding ||
+      systemQuestions.length !== composer.sessionSystemDesign ||
+      behaviorQuestions.length !== composer.sessionBehavioral
+    ) {
+      window.alert("That exact recipe is no longer available after today’s other picks. Reduce one of the counts and try again.");
+      return;
+    }
     const activities: ExtraActivity[] = codingQuestions.map((question) => ({
       schemaVersion: 2,
       id: `${sessionId}-${question.id}`,
@@ -845,49 +1010,85 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       recordKind: "attempt",
       title: question.title,
       url: question.url,
-      allocatedSeconds: question.targetMinutes * 60,
+      allocatedSeconds: CODING_SESSION_MINUTES * 60,
       timerGroupId: `${sessionId}-coding`,
       timingSource: "website",
       status: "planned",
       notes: question.topics.join(", "),
     }));
-    if (systemQuestion) activities.push({
+    systemQuestions.forEach((question) => activities.push({
       schemaVersion: 2,
-      id: `${sessionId}-${systemQuestion.id}`,
+      id: `${sessionId}-${question.id}`,
       date: journal.date,
       source: "extra",
       type: "system_design",
-      title: systemQuestion.title,
-      ...(systemQuestion.url ? { url: systemQuestion.url } : {}),
-      prompt: systemQuestion.prompt,
-      allocatedSeconds: systemQuestion.targetMinutes * 60,
+      title: question.title,
+      ...(question.url ? { url: question.url } : {}),
+      prompt: question.prompt,
+      allocatedSeconds: INTERVIEW_SESSION_MINUTES * 60,
       timerGroupId: `${sessionId}-system-design`,
       timingSource: "website",
       status: "planned",
-      notes: systemQuestion.topics.join(", "),
-    });
-    if (behaviorQuestion) activities.push({
+      notes: question.topics.join(", "),
+    }));
+    behaviorQuestions.forEach((question) => activities.push({
       schemaVersion: 2,
-      id: `${sessionId}-${behaviorQuestion.id}`,
+      id: `${sessionId}-${question.id}`,
       date: journal.date,
       source: "extra",
       type: "behavioral",
-      title: behaviorQuestion.title,
-      ...(behaviorQuestion.url ? { url: behaviorQuestion.url } : {}),
-      prompt: behaviorQuestion.prompt,
-      allocatedSeconds: behaviorQuestion.targetMinutes * 60,
+      title: question.title,
+      ...(question.url ? { url: question.url } : {}),
+      prompt: question.prompt,
+      allocatedSeconds: INTERVIEW_SESSION_MINUTES * 60,
       timerGroupId: `${sessionId}-behavioral`,
       timingSource: "website",
       status: "planned",
-      notes: behaviorQuestion.topics.join(", "),
-    });
+      notes: question.topics.join(", "),
+    }));
     if (activities.length === 0) {
-      window.alert("No unused bank questions are left for today. Finished or already planned problems stay out of new sessions until a new day.");
+      window.alert("Choose at least one activity. Questions already planned today stay out of new sessions until a new day.");
       return;
     }
-    const session: LocalSession = { id: sessionId, label: `Session ${sessionNumber}`, source: "extra", allocatedSeconds: SESSION_SECONDS, activityIds: activities.map((activity) => activity.id) };
-    setDraft((current) => ({ ...current, extraActivities: [...current.extraActivities, ...activities], sessions: [...current.sessions, session] }));
+    const actualCoding = activities.filter((activity) => activity.type === "leetcode").length;
+    const actualSystemDesign = activities.filter((activity) => activity.type === "system_design").length;
+    const actualBehavioral = activities.filter((activity) => activity.type === "behavioral").length;
+    const session: LocalSession = {
+      id: sessionId,
+      label: existing?.label ?? `Session ${sessionNumber}`,
+      source: "extra",
+      allocatedSeconds: sessionAllocationSeconds(actualCoding, actualSystemDesign, actualBehavioral),
+      activityIds: activities.map((activity) => activity.id),
+    };
+    const replacedIds = new Set(existing?.activityIds ?? []);
+    setDraft((current) => {
+      const timers = { ...current.timers };
+      const outcomes = { ...current.outcomes };
+      const publicationStatuses = { ...current.publicationStatuses };
+      const notes = { ...current.notes };
+      replacedIds.forEach((id) => {
+        delete timers[id];
+        delete outcomes[id];
+        delete publicationStatuses[id];
+        delete notes[id];
+      });
+      return {
+        ...current,
+        timers,
+        outcomes,
+        publicationStatuses,
+        notes,
+        extraActivities: [
+          ...current.extraActivities.filter((activity) => !replacedIds.has(activity.id)),
+          ...activities,
+        ],
+        sessions: existing
+          ? current.sessions.map((candidate) => candidate.id === session.id ? session : candidate)
+          : [...current.sessions, session],
+      };
+    });
     enqueue(
+      ...(existing ? [{ type: "session-remove" as const, id: existing.id, activityIds: existing.activityIds }] : []),
       { type: "session-upsert", session },
       ...activities.map((activity) => ({ type: "extra-upsert" as const, activity })),
     );
@@ -955,13 +1156,16 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       completed: timer.completed,
       timingSource: "website",
     }]));
-    const sessionTimers = Object.fromEntries(Object.entries(draft.sessionTimers).map(([id, timer]) => [id, {
-      elapsedSeconds: Math.min(SESSION_SECONDS, elapsed(timer, timestamp)),
-      remainingSeconds: remaining(timer, timestamp),
-      running: Boolean(timer.runningSince),
-      completed: timer.completed,
-      timingSource: "website",
-    }]));
+    const sessionTimers = Object.fromEntries(Object.entries(draft.sessionTimers).map(([id, timer]) => {
+      const allocatedSeconds = allSessions.find((session) => session.id === id)?.allocatedSeconds ?? SESSION_SECONDS;
+      return [id, {
+        elapsedSeconds: Math.min(allocatedSeconds, elapsed(timer, timestamp)),
+        remainingSeconds: remaining(timer, timestamp, allocatedSeconds),
+        running: Boolean(timer.runningSince),
+        completed: timer.completed,
+        timingSource: "website",
+      }];
+    }));
     const effectivePublicationStatuses = Object.fromEntries(
       allTodayActivities.map((activity) => [activity.id, publicationStatusFor(activity)]),
     );
@@ -1018,8 +1222,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const artifactByActivity = new Map(content.artifacts.filter((artifact) => artifact.activityId).map((artifact) => [artifact.activityId, artifact]));
     for (const daily of content.journals) {
       for (const activity of daily.activities) {
-        const localTimer = daily.date === journal.date ? draft.timers[activity.id] : undefined;
-        const localOutcome = daily.date === journal.date ? draft.outcomes[activity.id] : undefined;
+        const liveDraft = daily.date === journal.date ? draft : daily.date === yesterdayDate ? yesterdayDraft : null;
+        const localTimer = liveDraft?.timers[activity.id];
+        const localOutcome = liveDraft?.outcomes[activity.id];
         const artifact = artifactByActivity.get(activity.id);
         const running = Boolean(localTimer?.runningSince);
         const complete = activity.status === "completed" || Boolean(localOutcome) || Boolean(localTimer?.completed) || Boolean(artifact);
@@ -1032,6 +1237,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           status: artifact ? "published" : complete ? "completed" : running ? "running" : "planned",
           outcome: localOutcome ?? activity.outcome,
           elapsedSeconds: localTimer ? elapsed(localTimer, now) : activity.elapsedSeconds ?? 0,
+          allocatedSeconds: activity.allocatedSeconds,
+          reviewDates: activity.reviewDates,
           url: activity.url,
           artifact,
         });
@@ -1049,6 +1256,26 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         status: outcome || timer?.completed ? "completed" : timer?.runningSince ? "running" : "planned",
         outcome,
         elapsedSeconds: elapsed(timer, now),
+        allocatedSeconds: activity.allocatedSeconds,
+        reviewDates: activity.reviewDates,
+        url: activity.url,
+      });
+    }
+    for (const activity of yesterdayDraft?.extraActivities ?? []) {
+      if (entries.some((entry) => entry.id === activity.id)) continue;
+      const timer = yesterdayDraft?.timers[activity.id];
+      const outcome = yesterdayDraft?.outcomes[activity.id];
+      entries.push({
+        id: activity.id,
+        date: activity.date,
+        type: activity.type,
+        title: activity.title,
+        subtitle: activity.notes ?? activity.prompt ?? "Website-created activity",
+        status: outcome || timer?.completed ? "completed" : timer?.runningSince ? "running" : "planned",
+        outcome,
+        elapsedSeconds: elapsed(timer, now),
+        allocatedSeconds: activity.allocatedSeconds,
+        reviewDates: activity.reviewDates,
         url: activity.url,
       });
     }
@@ -1056,10 +1283,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       if (artifact.activityId && entries.some((entry) => entry.id === artifact.activityId)) continue;
       const inferredType: ActivityType = artifact.type === "leetcode" || artifact.type === "behavioral" ? artifact.type : "system_design";
       const preview = artifact.sections.find((section) => /summary|short answer|question/i.test(section.title))?.body ?? "Published interview record";
-      entries.push({ id: artifact.path, date: artifact.date, type: inferredType, title: artifact.title, subtitle: plainText(preview).slice(0, 160), status: "published", elapsedSeconds: 0, artifact });
+      entries.push({ id: artifact.path, date: artifact.date, type: inferredType, title: artifact.title, subtitle: plainText(preview).slice(0, 160), status: "published", elapsedSeconds: 0, allocatedSeconds: 0, artifact });
     }
     return entries.sort((left, right) => right.date.localeCompare(left.date) || left.title.localeCompare(right.title));
-  }, [content.artifacts, content.journals, draft, journal.date, now]);
+  }, [content.artifacts, content.journals, draft, journal.date, now, yesterdayDate, yesterdayDraft]);
 
   const libraryEntries = useMemo(() => logEntries.filter((entry) => {
     if (entry.outcome) return entry.outcome === "solved" || entry.outcome === "solved_after_reviewing_approach";
@@ -1076,17 +1303,34 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return [...groups.entries()].sort(([left], [right]) => right.localeCompare(left));
   }, [libraryEntries, libraryFilter]);
 
-  const completedEntries = logEntries.filter((entry) => entry.status === "completed" || entry.status === "published");
+  const completedEntries = useMemo(
+    () => logEntries.filter((entry) => entry.status === "completed" || entry.status === "published"),
+    [logEntries],
+  );
   const codingSolved = completedEntries.filter((entry) => entry.type === "leetcode" && (entry.outcome === "solved" || entry.outcome === "solved_after_reviewing_approach")).length;
   const codingFailed = completedEntries.filter((entry) => entry.type === "leetcode" && entry.outcome === "failed").length;
   const systemCompleted = completedEntries.filter((entry) => entry.type === "system_design").length;
   const behaviorCompleted = completedEntries.filter((entry) => entry.type === "behavioral").length;
   const totalRecordedSeconds = completedEntries.reduce((sum, entry) => sum + entry.elapsedSeconds, 0);
+  const outcomeCounts = {
+    solved: completedEntries.filter((entry) => entry.type === "leetcode" && entry.outcome === "solved").length,
+    reviewed: completedEntries.filter((entry) => entry.type === "leetcode" && entry.outcome === "solved_after_reviewing_approach").length,
+    failed: codingFailed,
+  };
+  const codingAttemptCount = outcomeCounts.solved + outcomeCounts.reviewed + outcomeCounts.failed;
 
-  const dailyStats = useMemo(() => {
-    const dates = [...new Set(logEntries.map((entry) => entry.date))].sort().slice(-14);
-    return dates.map((date) => {
-      const complete = logEntries.filter((entry) => entry.date === date && (entry.status === "completed" || entry.status === "published"));
+  const journeyStartDate = useMemo(() => {
+    if (journeyRange !== "all") return shiftDate(journal.date, -(journeyRange - 1));
+    return completedEntries.length
+      ? completedEntries.reduce((earliest, entry) => entry.date < earliest ? entry.date : earliest, journal.date)
+      : shiftDate(journal.date, -29);
+  }, [completedEntries, journal.date, journeyRange]);
+
+  const journeyStats = useMemo(() => {
+    const dayCount = Math.max(1, daysBetween(journeyStartDate, journal.date) + 1);
+    return Array.from({ length: dayCount }, (_, index) => {
+      const date = shiftDate(journeyStartDate, index);
+      const complete = completedEntries.filter((entry) => entry.date === date);
       return {
         date,
         coding: complete.filter((entry) => entry.type === "leetcode").length,
@@ -1095,10 +1339,96 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         seconds: complete.reduce((sum, entry) => sum + entry.elapsedSeconds, 0),
       };
     });
-  }, [logEntries]);
+  }, [completedEntries, journal.date, journeyStartDate]);
 
-  const maxDailyCount = Math.max(1, ...dailyStats.map((day) => day.coding + day.system + day.behavioral));
-  const maxDailySeconds = Math.max(1, ...dailyStats.map((day) => day.seconds));
+  const heatmapDays = useMemo(() => {
+    let start = shiftDate(journal.date, -364);
+    const weekday = new Date(`${start}T12:00:00Z`).getUTCDay();
+    start = shiftDate(start, -((weekday + 6) % 7));
+    const dayCount = daysBetween(start, journal.date) + 1;
+    return Array.from({ length: dayCount }, (_, index) => {
+      const date = shiftDate(start, index);
+      const entries = completedEntries.filter((entry) => entry.date === date);
+      const finished = entries.filter((entry) => entry.type !== "leetcode" || entry.outcome === "solved" || entry.outcome === "solved_after_reviewing_approach");
+      return {
+        date,
+        count: finished.length,
+        coding: finished.filter((entry) => entry.type === "leetcode").length,
+        system: finished.filter((entry) => entry.type === "system_design").length,
+        behavioral: finished.filter((entry) => entry.type === "behavioral").length,
+        failed: entries.filter((entry) => entry.outcome === "failed").length,
+        seconds: entries.reduce((sum, entry) => sum + entry.elapsedSeconds, 0),
+      };
+    });
+  }, [completedEntries, journal.date]);
+
+  const activeDates = useMemo(
+    () => [...new Set(completedEntries.map((entry) => entry.date))].sort(),
+    [completedEntries],
+  );
+  const streaks = useMemo(() => {
+    const active = new Set(activeDates);
+    let current = 0;
+    let cursor = active.has(journal.date) ? journal.date : shiftDate(journal.date, -1);
+    while (active.has(cursor)) {
+      current += 1;
+      cursor = shiftDate(cursor, -1);
+    }
+    let longest = 0;
+    let run = 0;
+    let previous = "";
+    activeDates.forEach((date) => {
+      run = previous && daysBetween(previous, date) === 1 ? run + 1 : 1;
+      longest = Math.max(longest, run);
+      previous = date;
+    });
+    return { current, longest };
+  }, [activeDates, journal.date]);
+
+  const codingQuestionFor = useCallback((entry: LogEntry) => {
+    return content.questionBanks.leetcode.find((question) => (
+      Boolean(question.url && entry.url && question.url.replace(/\/$/, "") === entry.url.replace(/\/$/, "")) ||
+      normalizedIdentity(question.title) === normalizedIdentity(entry.title)
+    ));
+  }, [content.questionBanks.leetcode]);
+
+  const topicStats = useMemo(() => {
+    const topics = new Map<string, { count: number; entries: LogEntry[] }>();
+    libraryEntries.filter((entry) => entry.type === "leetcode").forEach((entry) => {
+      codingQuestionFor(entry)?.topics.forEach((topic) => {
+        const current = topics.get(topic) ?? { count: 0, entries: [] };
+        topics.set(topic, { count: current.count + 1, entries: [...current.entries, entry] });
+      });
+    });
+    return [...topics.entries()]
+      .map(([topic, value]) => ({ topic, ...value }))
+      .sort((left, right) => right.count - left.count || left.topic.localeCompare(right.topic))
+      .slice(0, 12);
+  }, [codingQuestionFor, libraryEntries]);
+
+  const difficultyStats = useMemo(() => {
+    const values = { easy: 0, medium: 0, hard: 0, unknown: 0 };
+    libraryEntries.filter((entry) => entry.type === "leetcode").forEach((entry) => {
+      const difficulty = codingQuestionFor(entry)?.difficulty ?? "unknown";
+      values[difficulty] += 1;
+    });
+    return values;
+  }, [codingQuestionFor, libraryEntries]);
+
+  const selectedJourneyEntries = journeyDate
+    ? completedEntries.filter((entry) => entry.date === journeyDate)
+    : [];
+  const selectedTopicEntries = topicStats.find((topic) => topic.topic === journeyTopic)?.entries ?? [];
+  const yesterdayEntries = logEntries.filter((entry) => entry.date === yesterdayDate);
+  const yesterdayCompleted = yesterdayEntries.filter((entry) => entry.status === "completed" || entry.status === "published");
+  const yesterdaySeconds = yesterdayCompleted.reduce((sum, entry) => sum + entry.elapsedSeconds, 0);
+  const yesterdaySessions = new Set([
+    ...(content.journals.find((entry) => entry.date === yesterdayDate)?.sessions.map((session) => session.id) ?? []),
+    ...(yesterdayDraft?.sessions.map((session) => session.id) ?? []),
+  ]).size;
+  const recentSeven = completedEntries.filter((entry) => entry.date >= shiftDate(journal.date, -6) && entry.date <= journal.date).length;
+  const priorSeven = completedEntries.filter((entry) => entry.date >= shiftDate(journal.date, -13) && entry.date <= shiftDate(journal.date, -7)).length;
+  const momentumDelta = priorSeven ? Math.round(((recentSeven - priorSeven) / priorSeven) * 100) : recentSeven ? 100 : 0;
   const calendarDays = useMemo(() => {
     const anchor = new Date(`${journal.date}T12:00:00Z`);
     return Array.from({ length: 35 }, (_, index) => {
@@ -1116,8 +1446,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   function renderSession(session: PracticeSession, index: number) {
     const activities = sessionActivities(session);
     const coding = activities.filter((activity) => activity.type === "leetcode");
-    const system = activities.find((activity) => activity.type === "system_design");
-    const behavioral = activities.find((activity) => activity.type === "behavioral");
+    const mockActivities = activities.filter((activity) => activity.type !== "leetcode");
     const complete = activities.filter(isActivityComplete).length;
     const codingSeconds = coding.reduce((sum, activity) => sum + elapsed(draft.timers[activity.id], now), 0);
     const localSession = draft.sessions.find((item) => item.id === session.id);
@@ -1125,15 +1454,15 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       <article className="session-sheet" key={session.id}>
         <header className="session-sheet-header">
           <div className="session-number"><span>{String(index + 1).padStart(2, "0")}</span><small>{session.source === "daily" ? "Required" : "Added"}</small></div>
-          <div className="session-heading-copy"><p>Practice session</p><h2>{session.label}</h2><span>{activities.length} activities · fixed six-hour window</span></div>
+          <div className="session-heading-copy"><p>Practice session</p><h2>{session.label}</h2><span>{activities.length} activities · {formatDuration(session.allocatedSeconds)} window</span></div>
           <SessionCountdown session={session} timer={draft.sessionTimers[session.id]} now={now} onToggle={toggleSessionTimer} onComplete={completeSessionTimer} />
           <div className="session-progress"><strong>{complete}/{activities.length}</strong><span>finished</span></div>
-          {localSession && <button className="remove-session" onClick={() => removeSession(localSession)}>Remove session</button>}
+          {localSession && <div className="session-header-actions"><button className="edit-session" onClick={() => openEditSession(localSession)} disabled={!isSessionEditable(localSession)} title={isSessionEditable(localSession) ? "Change this session recipe" : "A session recipe locks after timing or results begin"}>Edit recipe</button><button className="remove-session" onClick={() => removeSession(localSession)}>Remove</button></div>}
         </header>
 
-        <section className="coding-ledger">
+        {coding.length > 0 && <section className="coding-ledger">
           <div className="ledger-heading">
-            <div><span className="type-chip leetcode">Coding</span><h3>Six problems inside one session clock</h3><p>The six-hour countdown owns the session. Each row keeps a compact stopwatch for your record.</p></div>
+            <div><span className="type-chip leetcode">Coding</span><h3>{coding.length} coding {coding.length === 1 ? "problem" : "problems"} inside one session clock</h3><p>The session countdown follows your recipe. Each row keeps a compact stopwatch for your record.</p></div>
             <div className="coding-total"><span>Problem stopwatches</span><strong>{formatClock(codingSeconds)}</strong><small>tracked inside this session</small></div>
           </div>
           <div className="problem-ledger">
@@ -1152,11 +1481,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             })}
           </div>
           <p className="ledger-note">Solve and submit on LeetCode. Interview Arc records the time and result you choose; it does not execute or inspect your submission.</p>
-        </section>
+        </section>}
 
         <div className="mock-grid">
-          {[system, behavioral].filter(Boolean).map((activity) => {
-            const item = activity!;
+          {mockActivities.map((item) => {
             const isExtra = item.source === "extra";
             return (
               <section className={`mock-sheet ${item.type}`} key={item.id}>
@@ -1178,18 +1506,16 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function renderToday() {
-    const completeToday = allTodayActivities.filter(isActivityComplete).length;
     const totalToday = allTodayActivities.length;
-    const todaySeconds = Object.entries(draft.timers).reduce((sum, [, timer]) => sum + elapsed(timer, now), 0);
     return (
       <>
         <section className="today-masthead">
           <div className="date-poster"><strong>{journal.date.slice(-2)}</strong><span>{new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(new Date(`${journal.date}T12:00:00Z`))}</span></div>
           <div className="today-thesis"><span className="eyebrow">TODAY · {journal.focus.toUpperCase()}</span><h1>{totalToday ? `${totalToday} activities.` : "A clean page."}<br /><em>One honest record.</em></h1><p>{journal.note}</p></div>
-          <div className="today-tally"><div><strong>{completeToday}/{totalToday}</strong><span>activities finished</span></div><div><strong>{formatDuration(todaySeconds)}</strong><span>time recorded locally</span></div><div><strong>{allSessions.length}</strong><span>session{allSessions.length === 1 ? "" : "s"} today</span></div></div>
+          <div className="today-tally"><span className="yesterday-label">YESTERDAY · {readableDate(yesterdayDate, true)}</span><div><strong>{yesterdayCompleted.length}/{yesterdayEntries.length}</strong><span>activities finished</span></div><div><strong>{formatDuration(yesterdaySeconds)}</strong><span>time recorded</span></div><div><strong>{yesterdaySessions}</strong><span>session{yesterdaySessions === 1 ? "" : "s"} planned</span></div></div>
         </section>
 
-        <div className="today-actions"><div><h2>Today&apos;s sessions</h2><p>Each session has one fixed six-hour countdown; activity stopwatches stay compact and independent.</p></div><div><button className="secondary-action" onClick={openNewActivity}>Add one activity</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
+        <div className="today-actions"><div><h2>Today&apos;s sessions</h2><p>Each session countdown follows its activity recipe; activity stopwatches stay compact and independent.</p></div><div><button className="secondary-action" onClick={openNewActivity}>Add one activity</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
         <section className="session-stack">{allSessions.length ? allSessions.map(renderSession) : <div className="quiet-empty session-empty"><strong>No session planned yet.</strong><span>Add another session to choose up to six coding questions and one question from each available interview bank.</span></div>}</section>
 
         <section className="loose-section">
@@ -1201,9 +1527,28 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function renderJourney() {
+    const metricValues = journeyStats.map((day) => journeyMetric === "activities"
+      ? day.coding + day.system + day.behavioral
+      : Math.round(day.seconds / 60));
+    const metricMax = Math.max(1, ...metricValues);
+    const plotPoints = journeyStats.map((day, index) => {
+      const x = journeyStats.length === 1 ? 400 : 42 + (index / (journeyStats.length - 1)) * 716;
+      const value = metricValues[index];
+      const y = 205 - (value / metricMax) * 155;
+      return { day, value, x, y };
+    });
+    const linePoints = plotPoints.map((point) => `${point.x},${point.y}`).join(" ");
+    const areaPath = plotPoints.length
+      ? `M ${plotPoints[0].x} 205 L ${plotPoints.map((point) => `${point.x} ${point.y}`).join(" L ")} L ${plotPoints.at(-1)!.x} 205 Z`
+      : "";
+    const activeDayAverage = activeDates.length ? completedEntries.length / activeDates.length : 0;
+    const maxTopicCount = Math.max(1, ...topicStats.map((topic) => topic.count));
+    const maxDifficulty = Math.max(1, difficultyStats.easy, difficultyStats.medium, difficultyStats.hard, difficultyStats.unknown);
+    const effortEntries = completedEntries.filter((entry) => entry.type === "leetcode" && entry.outcome && entry.elapsedSeconds > 0);
+    const maxEffortMinutes = Math.max(1, ...effortEntries.map((entry) => entry.elapsedSeconds / 60));
     return (
       <section className="view-page journey-page">
-        <header className="view-masthead"><span className="eyebrow">JOURNEY · PUBLISHED + TODAY&apos;S LOCAL DRAFT</span><h1>Progress you can<br /><em>actually count.</em></h1><p>Completed artifacts are permanent. Today&apos;s device-local work is included here so you can see the day taking shape before publication.</p></header>
+        <header className="view-masthead journey-masthead"><span className="eyebrow">JOURNEY · PUBLISHED + TODAY&apos;S LIVE RECORD</span><h1>Your practice,<br /><em>mapped over time.</em></h1><p>This page counts only recorded work. Explore consistency, outcomes, topic coverage, effort, and the exact days behind every trend.</p></header>
         <div className="stat-ledger">
           <article className="stat-block coding-stat"><span>Coding solved</span><strong>{codingSolved}</strong><small>{codingFailed} failed attempt{codingFailed === 1 ? "" : "s"}</small></article>
           <article className="stat-block system-stat"><span>System designs</span><strong>{systemCompleted}</strong><small>completed or published</small></article>
@@ -1211,26 +1556,83 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           <article className="stat-block time-stat"><span>Recorded time</span><strong>{formatDuration(totalRecordedSeconds)}</strong><small>from completed activity timers</small></article>
         </div>
 
-        <div className="analytics-grid">
-          <article className="chart-sheet activity-chart">
-            <div className="chart-heading"><div><span className="eyebrow">DAILY OUTPUT</span><h2>Completed activities by day</h2></div><div className="chart-legend"><span className="leetcode">Coding</span><span className="system_design">System</span><span className="behavioral">Behavioral</span></div></div>
-            <div className="bar-plot">{dailyStats.map((day) => {
-              const total = day.coding + day.system + day.behavioral;
-              return <div className="bar-row" key={day.date}><time>{readableDate(day.date, true)}</time><div className="bar-track" aria-label={`${total} completed activities`}><span className="leetcode" style={{ width: `${(day.coding / maxDailyCount) * 100}%` }} /><span className="system_design" style={{ width: `${(day.system / maxDailyCount) * 100}%` }} /><span className="behavioral" style={{ width: `${(day.behavioral / maxDailyCount) * 100}%` }} /></div><strong>{total}</strong></div>;
-            })}</div>
-            {dailyStats.every((day) => day.coding + day.system + day.behavioral === 0) && <p className="chart-empty">No completed activity has been recorded yet. Planned questions are not counted as solved.</p>}
+        <div className="journey-pulse" aria-label="Practice consistency summary">
+          <article><span>Current streak</span><strong>{streaks.current}</strong><small>day{streaks.current === 1 ? "" : "s"}</small></article>
+          <article><span>Longest streak</span><strong>{streaks.longest}</strong><small>consecutive days</small></article>
+          <article><span>Active days</span><strong>{activeDates.length}</strong><small>with completed work</small></article>
+          <article><span>Per active day</span><strong>{activeDayAverage.toFixed(1)}</strong><small>activities on average</small></article>
+          <article className={momentumDelta >= 0 ? "positive" : "negative"}><span>7-day momentum</span><strong>{momentumDelta > 0 ? "+" : ""}{momentumDelta}%</strong><small>{recentSeven} now · {priorSeven} prior</small></article>
+        </div>
+
+        <article className="chart-sheet heatmap-sheet">
+          <div className="chart-heading"><div><span className="eyebrow">365-DAY PRACTICE MAP</span><h2>Consistency at a glance</h2><p>Color measures finished coding and mock-interview work. Failed attempts remain visible in each day&apos;s detail without inflating the shade.</p></div><div className="heatmap-legend"><span>Less</span>{[0, 1, 2, 3, 4].map((level) => <i className={`level-${level}`} key={level} />)}<span>More</span></div></div>
+          <div className="heatmap-scroll">
+            <div className="heatmap-days"><span>M</span><span>W</span><span>F</span></div>
+            <div className="practice-heatmap" role="grid" aria-label="Completed practice during the last 365 days">
+              {heatmapDays.map((day) => {
+                const level = day.count === 0 ? 0 : Math.min(4, day.count);
+                return <button
+                  key={day.date}
+                  className={`heat-day level-${level} ${journeyDate === day.date ? "selected" : ""}`}
+                  onClick={() => setJourneyDate(day.date)}
+                  aria-label={`${readableDate(day.date)}: ${day.count} finished activities, ${day.failed} failed attempts`}
+                ><span role="tooltip"><strong>{readableDate(day.date, true)}</strong>{day.count} finished · {day.coding} coding · {day.system} system · {day.behavioral} behavioral{day.failed ? ` · ${day.failed} failed` : ""}<small>{formatDuration(day.seconds)} recorded</small></span></button>;
+              })}
+            </div>
+          </div>
+          <div className="heatmap-foot"><span>{readableDate(heatmapDays[0].date, true)}</span><span>Select a square to inspect the day</span><span>{readableDate(journal.date, true)}</span></div>
+          {journeyDate && <div className="journey-day-inspector">
+            <div><span className="eyebrow">SELECTED DAY</span><h3>{readableDate(journeyDate)}</h3><p>{selectedJourneyEntries.length ? `${selectedJourneyEntries.length} completed record${selectedJourneyEntries.length === 1 ? "" : "s"}.` : "No completed work was recorded on this day."}</p></div>
+            <div>{selectedJourneyEntries.map((entry) => <button key={entry.id} onClick={() => setSelectedEntry(entry)}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><i><strong>{entry.title}</strong><small>{typeLabel(entry.type)} · {entry.elapsedSeconds ? formatDuration(entry.elapsedSeconds) : "time not recorded"}</small></i><b>Read →</b></button>)}</div>
+          </div>}
+        </article>
+
+        <section className="metric-rings" aria-label="Coding outcome rates">
+          <MetricRing label="Independent" value={codingAttemptCount ? (outcomeCounts.solved / codingAttemptCount) * 100 : 0} detail={`${outcomeCounts.solved} coding attempt${outcomeCounts.solved === 1 ? "" : "s"} solved without an approach review.`} color="#91a72f" />
+          <MetricRing label="After review" value={codingAttemptCount ? (outcomeCounts.reviewed / codingAttemptCount) * 100 : 0} detail={`${outcomeCounts.reviewed} attempt${outcomeCounts.reviewed === 1 ? "" : "s"} completed after reviewing the approach.`} color="#6577d8" />
+          <MetricRing label="Failed" value={codingAttemptCount ? (outcomeCounts.failed / codingAttemptCount) * 100 : 0} detail={`${outcomeCounts.failed} recorded failure${outcomeCounts.failed === 1 ? "" : "s"}; these remain evidence for future review.`} color="#d46a52" />
+        </section>
+
+        <div className="analytics-grid journey-detail-grid">
+          <article className="chart-sheet trend-sheet">
+            <div className="chart-heading"><div><span className="eyebrow">PACE OVER TIME</span><h2>{journeyMetric === "activities" ? "Completed activities" : "Recorded minutes"}</h2></div><div className="journey-controls"><div role="group" aria-label="Journey date range">{([30, 90, 365, "all"] as const).map((range) => <button key={range} className={journeyRange === range ? "active" : ""} onClick={() => setJourneyRange(range)}>{range === "all" ? "All" : `${range}d`}</button>)}</div><div role="group" aria-label="Journey metric"><button className={journeyMetric === "activities" ? "active" : ""} onClick={() => setJourneyMetric("activities")}>Output</button><button className={journeyMetric === "time" ? "active" : ""} onClick={() => setJourneyMetric("time")}>Time</button></div></div></div>
+            <div className="trend-plot">
+              <svg viewBox="0 0 800 235" role="img" aria-label={`${journeyMetric} trend from ${journeyStartDate} through ${journal.date}`}>
+                <defs><linearGradient id="journey-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#9eb532" stopOpacity=".34"/><stop offset="1" stopColor="#9eb532" stopOpacity="0"/></linearGradient></defs>
+                {[50, 101.7, 153.3, 205].map((y) => <line key={y} x1="42" x2="758" y1={y} y2={y} className="plot-rule" />)}
+                <path d={areaPath} fill="url(#journey-area)" />
+                <polyline points={linePoints} className="trend-line" />
+                {plotPoints.filter((point) => point.value > 0).map((point) => <circle key={point.day.date} cx={point.x} cy={point.y} r={journeyDate === point.day.date ? 5.5 : 3.5} className={journeyDate === point.day.date ? "selected" : ""} tabIndex={0} role="button" onClick={() => setJourneyDate(point.day.date)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setJourneyDate(point.day.date); }} aria-label={`${readableDate(point.day.date)}: ${point.value} ${journeyMetric === "time" ? "minutes" : "activities"}`}><title>{readableDate(point.day.date, true)} · {point.value} {journeyMetric === "time" ? "min" : "finished"}</title></circle>)}
+                <text x="42" y="228">{readableDate(journeyStartDate, true)}</text><text x="758" y="228" textAnchor="end">{readableDate(journal.date, true)}</text><text x="42" y="43">{metricMax} {journeyMetric === "time" ? "min" : "max"}</text>
+              </svg>
+            </div>
+            <div className="chart-legend"><span className="leetcode">Coding</span><span className="system_design">System design</span><span className="behavioral">Behavioral</span></div>
           </article>
 
           <article className="chart-sheet outcome-chart">
-            <div className="chart-heading"><div><span className="eyebrow">CODING OUTCOMES</span><h2>How problems ended</h2></div></div>
-            <div className="outcome-numbers"><div><strong>{completedEntries.filter((entry) => entry.outcome === "solved").length}</strong><span>Solved</span></div><div><strong>{completedEntries.filter((entry) => entry.outcome === "solved_after_reviewing_approach").length}</strong><span>After review</span></div><div><strong>{codingFailed}</strong><span>Failed</span></div></div>
-            <div className="outcome-rule"><span className="solved" style={{ flex: completedEntries.filter((entry) => entry.outcome === "solved").length || .2 }} /><span className="reviewed" style={{ flex: completedEntries.filter((entry) => entry.outcome === "solved_after_reviewing_approach").length || .2 }} /><span className="failed" style={{ flex: codingFailed || .2 }} /></div>
-            <p>Walkthroughs without a real attempt are intentionally excluded from solved totals.</p>
+            <div className="chart-heading"><div><span className="eyebrow">CODING LADDER</span><h2>Difficulty mix</h2></div></div>
+            <div className="difficulty-bars">{(["easy", "medium", "hard", "unknown"] as const).map((level) => <div key={level}><span>{level}</span><i><b style={{ width: `${(difficultyStats[level] / maxDifficulty) * 100}%` }} /></i><strong>{difficultyStats[level]}</strong></div>)}</div>
+            <p>Difficulty comes from the question bank. Custom URLs stay “unknown” until bank metadata is added.</p>
           </article>
 
-          <article className="chart-sheet time-chart">
-            <div className="chart-heading"><div><span className="eyebrow">TIME TREND</span><h2>Recorded practice by day</h2></div></div>
-            <div className="time-plot">{dailyStats.map((day) => <div key={day.date}><time>{readableDate(day.date, true)}</time><span><i style={{ width: `${(day.seconds / maxDailySeconds) * 100}%` }} /></span><strong>{formatDuration(day.seconds)}</strong></div>)}</div>
+          <article className="chart-sheet effort-sheet">
+            <div className="chart-heading"><div><span className="eyebrow">EFFORT MAP</span><h2>Time spent versus outcome</h2><p>Each point is one coding attempt. Select a point to open its record.</p></div></div>
+            {effortEntries.length ? <svg className="effort-map" viewBox="0 0 800 245" role="img" aria-label="Coding attempts plotted by elapsed time and outcome">
+              {[{ label: "Solved", y: 52 }, { label: "After review", y: 122 }, { label: "Failed", y: 192 }].map((row) => <g key={row.label}><line x1="125" x2="760" y1={row.y} y2={row.y} /><text x="18" y={row.y + 4}>{row.label}</text></g>)}
+              {effortEntries.map((entry) => {
+                const minutes = entry.elapsedSeconds / 60;
+                const y = entry.outcome === "solved" ? 52 : entry.outcome === "solved_after_reviewing_approach" ? 122 : 192;
+                const x = 125 + (minutes / maxEffortMinutes) * 635;
+                return <circle key={entry.id} cx={x} cy={y} r="7" className={entry.outcome} tabIndex={0} role="button" onClick={() => setSelectedEntry(entry)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedEntry(entry); }} aria-label={`${entry.title}, ${Math.round(minutes)} minutes, ${outcomeLabel(entry.outcome)}`}><title>{entry.title} · {Math.round(minutes)} min · {outcomeLabel(entry.outcome)}</title></circle>;
+              })}
+              <text x="125" y="235">0 min</text><text x="760" y="235" textAnchor="end">{Math.ceil(maxEffortMinutes)} min</text>
+            </svg> : <div className="chart-empty rich-empty"><strong>Your effort map starts with a finished coding timer.</strong><span>Elapsed time and an outcome are both required; Interview Arc will not infer either.</span></div>}
+          </article>
+
+          <article className="chart-sheet topic-sheet">
+            <div className="chart-heading"><div><span className="eyebrow">SKILL COVERAGE</span><h2>Topics practiced</h2><p>Select a topic to see the records behind it.</p></div></div>
+            {topicStats.length ? <div className="topic-bars">{topicStats.map((topic) => <button key={topic.topic} className={journeyTopic === topic.topic ? "active" : ""} onClick={() => setJourneyTopic((current) => current === topic.topic ? "" : topic.topic)}><span>{topic.topic}</span><i><b style={{ width: `${(topic.count / maxTopicCount) * 100}%` }} /></i><strong>{topic.count}</strong></button>)}</div> : <div className="chart-empty rich-empty"><strong>No topic coverage yet.</strong><span>Finish bank-linked coding problems to build this map.</span></div>}
+            {journeyTopic && <div className="topic-records"><strong>{journeyTopic}</strong>{selectedTopicEntries.map((entry) => <button key={entry.id} onClick={() => setSelectedEntry(entry)}>{entry.title}<span>{readableDate(entry.date, true)} →</span></button>)}</div>}
           </article>
         </div>
       </section>
@@ -1409,6 +1811,20 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }).slice(0, 7);
   const derivedUrl = composer.type === "leetcode" ? deriveLeetCodeFromUrl(composer.query, activeBank) : null;
   const canSaveActivity = composer.type === "leetcode" ? Boolean(composer.selectedId || derivedUrl) : Boolean(composer.selectedId || composer.query.trim());
+  const sessionAvailability = {
+    coding: availableSessionQuestions("leetcode", composer.editingSessionId).length,
+    systemDesign: availableSessionQuestions("system_design", composer.editingSessionId).length,
+    behavioral: availableSessionQuestions("behavioral", composer.editingSessionId).length,
+  };
+  const sessionTotalSeconds = sessionAllocationSeconds(
+    composer.sessionCoding,
+    composer.sessionSystemDesign,
+    composer.sessionBehavioral,
+  );
+  const canSaveSession = sessionTotalSeconds > 0 &&
+    composer.sessionCoding <= sessionAvailability.coding &&
+    composer.sessionSystemDesign <= sessionAvailability.systemDesign &&
+    composer.sessionBehavioral <= sessionAvailability.behavioral;
 
   return (
     <>
@@ -1441,13 +1857,38 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         <div className="page-content">{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
       </section>
 
-      {composer.open && <div className="modal-backdrop" role="presentation" onMouseDown={() => setComposer(EMPTY_COMPOSER)}><section className="composer" role="dialog" aria-modal="true" aria-labelledby="composer-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setComposer(EMPTY_COMPOSER)} aria-label="Close">×</button><span className="eyebrow">BUILD TODAY&apos;S WORK</span><h2 id="composer-title">{composer.editingId ? "Edit this activity" : composer.mode === "session" ? "Add another full session" : "Add one activity"}</h2>
-        {!composer.editingId && <div className="composer-mode"><button className={composer.mode === "session" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, mode: "session" }))}>Full session</button><button className={composer.mode === "activity" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, mode: "activity" }))}>Single activity</button></div>}
-        {composer.mode === "session" && !composer.editingId ? <div className="session-composer"><p>A full session uses up to six coding questions and one question from each available interview bank under one fixed six-hour countdown. Picks prefer higher-frequency bank questions, skip anything already on today, and stay unique across sessions.</p><div className="session-recipe"><div><strong>{Math.min(6, content.questionBanks.leetcode.filter((question) => question.active).length)}</strong><span>Coding problems</span></div><div><strong>{content.questionBanks.systemDesign.some((question) => question.active) ? 1 : 0}</strong><span>System design</span></div><div><strong>{content.questionBanks.behavioral.some((question) => question.active) ? 1 : 0}</strong><span>Behavioral</span></div></div><small>The current banks contain {content.questionBanks.leetcode.length} coding, {content.questionBanks.systemDesign.length} system-design, and {content.questionBanks.behavioral.length} behavioral questions. Finished work from earlier days can be drawn again on a new day.</small><button className="primary-action full-width" onClick={addFullSession}>Add session {allSessions.length + 1}</button></div> : <form onSubmit={saveActivity}><div className="type-selector" role="group" aria-label="Practice type">{(["leetcode", "system_design", "behavioral"] as const).map((type) => <button type="button" key={type} className={`${type} ${composer.type === type ? "active" : ""}`} onClick={() => setComposer((current) => ({ ...current, type, query: "", selectedId: "", minutes: type === "leetcode" ? "30" : type === "system_design" ? "90" : "60" }))}>{typeLabel(type)}</button>)}</div><label className="search-field"><span>{composer.type === "leetcode" ? "Search the bank or paste a LeetCode URL" : `Search the ${typeLabel(composer.type).toLowerCase()} bank or type a new title`}</span><input autoFocus value={composer.query} onChange={(event) => setComposer((current) => ({ ...current, query: event.target.value, selectedId: "" }))} placeholder={composer.type === "leetcode" ? "Search titles and topics, or https://leetcode.com/problems/…" : "Search or enter a custom question"} /></label>
-        {derivedUrl && !composer.selectedId && <div className="derived-question"><span>Title extracted from URL</span><strong>{derivedUrl.title}</strong><small>{derivedUrl.url}</small></div>}
-        {!derivedUrl && <div className="bank-results">{filteredQuestions.length ? filteredQuestions.map((question) => <button type="button" className={composer.selectedId === question.id ? "selected" : ""} key={question.id} onClick={() => selectBankQuestion(question)}><span className={`type-mark ${composer.type}`}>{typeMark(composer.type)}</span><div><strong>{question.title}</strong><small>{question.difficulty ? `${question.difficulty} · ` : ""}{question.topics.join(" · ")}</small></div><span>{composer.selectedId === question.id ? "Selected" : "Choose"}</span></button>) : <p className="no-results">{composer.type === "leetcode" ? "No bank match. Paste the public LeetCode problem URL and the title will be extracted automatically." : "No bank match. Your typed title will become a custom question."}</p>}</div>}
-        <label className="minutes-field"><span>Planning estimate in minutes</span><input type="number" min="1" max="360" value={composer.minutes} onChange={(event) => setComposer((current) => ({ ...current, minutes: event.target.value }))} /></label><button className="primary-action full-width" type="submit" disabled={!canSaveActivity}>{composer.editingId ? "Save changes" : "Add to today"}</button></form>}
-      </section></div>}
+      {composer.open && <div className="modal-backdrop" role="presentation" onMouseDown={() => setComposer(EMPTY_COMPOSER)}>
+        <section className="composer" role="dialog" aria-modal="true" aria-labelledby="composer-title" onMouseDown={(event) => event.stopPropagation()}>
+          <button className="modal-close" onClick={() => setComposer(EMPTY_COMPOSER)} aria-label="Close">×</button>
+          <span className="eyebrow">BUILD TODAY&apos;S WORK</span>
+          <h2 id="composer-title">{composer.editingSessionId ? "Edit session recipe" : composer.editingId ? "Edit this activity" : composer.mode === "session" ? "Build another session" : "Add one activity"}</h2>
+          {!composer.editingId && !composer.editingSessionId && <div className="composer-mode">
+            <button className={composer.mode === "session" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, mode: "session" }))}>Full session</button>
+            <button className={composer.mode === "activity" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, mode: "activity" }))}>Single activity</button>
+          </div>}
+          {composer.mode === "session" && !composer.editingId ? <div className="session-composer">
+            <p>Shape the session you need. The default is six coding problems, one system-design mock, and one behavioral mock. Interview Arc draws unique questions from the banks and builds one countdown from the time equation below.</p>
+            <div className="session-recipe" aria-label="Session recipe">
+              <SessionCountControl label="Coding" mark="C" value={composer.sessionCoding} minutesEach={CODING_SESSION_MINUTES} max={sessionAvailability.coding} onChange={(value) => setComposer((current) => ({ ...current, sessionCoding: value }))} />
+              <SessionCountControl label="System design" mark="S" value={composer.sessionSystemDesign} minutesEach={INTERVIEW_SESSION_MINUTES} max={sessionAvailability.systemDesign} onChange={(value) => setComposer((current) => ({ ...current, sessionSystemDesign: value }))} />
+              <SessionCountControl label="Behavioral" mark="B" value={composer.sessionBehavioral} minutesEach={INTERVIEW_SESSION_MINUTES} max={sessionAvailability.behavioral} onChange={(value) => setComposer((current) => ({ ...current, sessionBehavioral: value }))} />
+            </div>
+            <div className="session-total-strip">
+              <div><span>SESSION COUNTDOWN</span><small>{composer.sessionCoding * CODING_SESSION_MINUTES}m coding + {composer.sessionSystemDesign * INTERVIEW_SESSION_MINUTES}m system design + {composer.sessionBehavioral * INTERVIEW_SESSION_MINUTES}m behavioral</small></div>
+              <strong>{formatDuration(sessionTotalSeconds)}</strong>
+            </div>
+            <small>{sessionAvailability.coding} coding, {sessionAvailability.systemDesign} system-design, and {sessionAvailability.behavioral} behavioral questions are available after today&apos;s other picks. A recipe locks once its timer, activity work, or results begin.</small>
+            <button className="primary-action full-width" onClick={saveFullSession} disabled={!canSaveSession}>{composer.editingSessionId ? "Save session recipe" : `Add session ${allSessions.length + 1}`}</button>
+          </div> : <form onSubmit={saveActivity}>
+            <div className="type-selector" role="group" aria-label="Practice type">{(["leetcode", "system_design", "behavioral"] as const).map((type) => <button type="button" key={type} className={`${type} ${composer.type === type ? "active" : ""}`} onClick={() => setComposer((current) => ({ ...current, type, query: "", selectedId: "", minutes: type === "leetcode" ? "30" : type === "system_design" ? "90" : "60" }))}>{typeLabel(type)}</button>)}</div>
+            <label className="search-field"><span>{composer.type === "leetcode" ? "Search the bank or paste a LeetCode URL" : `Search the ${typeLabel(composer.type).toLowerCase()} bank or type a new title`}</span><input autoFocus value={composer.query} onChange={(event) => setComposer((current) => ({ ...current, query: event.target.value, selectedId: "" }))} placeholder={composer.type === "leetcode" ? "Search titles and topics, or https://leetcode.com/problems/…" : "Search or enter a custom question"} /></label>
+            {derivedUrl && !composer.selectedId && <div className="derived-question"><span>Title extracted from URL</span><strong>{derivedUrl.title}</strong><small>{derivedUrl.url}</small></div>}
+            {!derivedUrl && <div className="bank-results">{filteredQuestions.length ? filteredQuestions.map((question) => <button type="button" className={composer.selectedId === question.id ? "selected" : ""} key={question.id} onClick={() => selectBankQuestion(question)}><span className={`type-mark ${composer.type}`}>{typeMark(composer.type)}</span><div><strong>{question.title}</strong><small>{question.difficulty ? `${question.difficulty} · ` : ""}{question.topics.join(" · ")}</small></div><span>{composer.selectedId === question.id ? "Selected" : "Choose"}</span></button>) : <p className="no-results">{composer.type === "leetcode" ? "No bank match. Paste the public LeetCode problem URL and the title will be extracted automatically." : "No bank match. Your typed title will become a custom question."}</p>}</div>}
+            <label className="minutes-field"><span>Planning estimate in minutes</span><input type="number" min="1" max="360" value={composer.minutes} onChange={(event) => setComposer((current) => ({ ...current, minutes: event.target.value }))} /></label>
+            <button className="primary-action full-width" type="submit" disabled={!canSaveActivity}>{composer.editingId ? "Save changes" : "Add to today"}</button>
+          </form>}
+        </section>
+      </div>}
 
       {integrationOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setIntegrationOpen(false)}><section className="composer integration-dialog" role="dialog" aria-modal="true" aria-labelledby="integration-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setIntegrationOpen(false)} aria-label="Close">×</button><span className="eyebrow">ONE LIVE PRACTICE RECORD</span><h2 id="integration-title">Connect Codex and the LeetCode companion</h2><p>Create one personal token so both tools can read today&apos;s D1 state, control timers, and process every finished activity automatically. The token is shown once and stored as a secure digest.</p>{integrationToken ? <><label className="token-field"><span>Personal connection token</span><input readOnly value={integrationToken} onFocus={(event) => event.currentTarget.select()} /></label><button className="primary-action full-width" onClick={copyConnectionToken}>Copy token</button><div className="integration-steps"><strong>Use it in two places</strong><ol><li>Set <code>INTERVIEW_ARC_MCP_TOKEN</code> before opening Codex in this project.</li><li>Paste the same token into the Interview Arc Chrome companion after loading the extension.</li></ol></div></> : <button className="primary-action full-width" disabled={integrationBusy} onClick={createConnectionToken}>{integrationBusy ? "Creating…" : "Create personal connection token"}</button>}<small className="integration-warning">Treat this token like a password. Create a new one if it is ever shared accidentally.</small></section></div>}
 

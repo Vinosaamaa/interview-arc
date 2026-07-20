@@ -22,7 +22,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     title: "Interview Arc — Your preparation journey",
-    description: "A personal training ledger with six-hour session countdowns, activity stopwatches, interview records, and honest progress.",
+    description: "A personal training ledger with configurable session countdowns, activity stopwatches, interview records, and honest progress.",
     icons: {
       icon: "/og.png",
       shortcut: "/og.png",

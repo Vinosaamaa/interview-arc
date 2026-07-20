@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { dateInTimeZone, emptyJournal } from "../app/current-day.ts";
+import { SESSION_SECONDS, sessionAllocationSeconds } from "../app/live-types.ts";
 import { resolveOwnerId, TRUSTED_EMAIL_HEADER } from "../db/owner.ts";
 import { derivePublicationStatus } from "../db/publication-state.ts";
 import { foldElapsed, nextTimerState } from "../db/timer-state.ts";
@@ -22,6 +23,14 @@ test("timer transitions fold elapsed time and permanently lock finish", () => {
   const finished = nextTimerState(paused, "finish", 8_000);
   assert.deepEqual(finished, { accumulatedSeconds: 3, runningSince: null, completed: true, revision: 3 });
   assert.equal(nextTimerState(finished, "start", 10_000), finished);
+});
+
+test("session allocations follow the configurable 40/60/60-minute recipe", () => {
+  assert.equal(sessionAllocationSeconds(6, 1, 1), 21_600);
+  assert.equal(SESSION_SECONDS, 21_600);
+  assert.equal(sessionAllocationSeconds(3, 2, 0), 14_400);
+  assert.equal(sessionAllocationSeconds(0, 1, 2), 10_800);
+  assert.equal(sessionAllocationSeconds(-2, 0, 0), 0);
 });
 
 test("finished activities enter the journal queue without a second toggle", () => {

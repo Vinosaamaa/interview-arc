@@ -6,7 +6,7 @@ manifests and specialist artifacts remain the durable narrative record.
 
 ## Timers
 
-Every session has a fixed 21,600-second (six-hour) countdown. It may run alongside an activity stopwatch.
+Every session has a stored countdown allocation. The default 6/1/1 recipe is 21,600 seconds (six hours). Configured sessions derive their allocation from 2,400 seconds per coding problem and 3,600 seconds per system-design or behavioral question. A session countdown may run alongside an activity stopwatch.
 
 Every activity has its own elapsed-time stopwatch ID, including each LeetCode problem. Only one activity stopwatch may run at a time. Starting another activity first pauses the active stopwatch and preserves its elapsed seconds.
 
@@ -43,9 +43,9 @@ A session is a named collection of activities. The default session contains:
 - one system-design activity selected from the system-design bank;
 - one behavioral activity selected from the behavioral bank.
 
-Each session declares `allocatedSeconds: 21600`.
+Each session declares `allocatedSeconds`. The default recipe uses `21600`; a configured recipe uses `(codingCount * 2400) + (systemDesignCount * 3600) + (behavioralCount * 3600)`.
 
-The user may add another complete session or add a standalone activity. Locally added activities can be edited or removed before publication.
+The user may add another session, configure its three category counts, or add a standalone activity. A website-created session recipe can be edited only before its timer, activity work, results, or publication state begin. Editing replaces its unstarted picks while preserving the session identity. Locally added activities can be edited or removed before publication.
 
 Standalone cards reveal Edit and Remove by swiping left. A compact overflow control provides the same action for pointer, keyboard, and assistive-technology users.
 

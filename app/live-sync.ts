@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   EMPTY_DRAFT,
-  elapsed,
-  SESSION_SECONDS,
   type ExtraActivity,
   type LocalDraft,
   type LocalSession,
@@ -30,6 +28,25 @@ type ServerLiveState = {
   extraActivities: ExtraActivity[];
   sessions: LocalSession[];
 };
+
+export function useReadOnlyLiveState(date: string) {
+  const [state, setState] = useState<LocalDraft | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(`/api/state?date=${date}`);
+        if (!response.ok) return;
+        const server = (await response.json()) as ServerLiveState;
+        if (!cancelled) setState(serverToDraft(server, server.serverNow - Date.now()));
+      } catch {
+        // Yesterday's card can fall back to versioned journal data offline.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [date]);
+  return state;
+}
 
 export type Mutation =
   | { type: "timer"; subjectId: string; kind: "activity" | "session"; action: "start" | "pause" | "finish" }
@@ -286,36 +303,17 @@ export function useLiveState(date: string): LiveStateController {
     };
   }, [flush]);
 
-  // Drive the display and auto-finish an expired session countdown.
+  // Drive the display. The dashboard owns auto-finish because each session can
+  // have a different allocation.
   useEffect(() => {
     if (![...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince)) {
       return;
     }
     const interval = window.setInterval(() => {
-      const timestamp = Date.now();
-      setNow(timestamp);
-      setDraft((current) => {
-        const expiredIds = new Set(
-          Object.entries(current.sessionTimers)
-            .filter(([, timer]) => timer.runningSince && elapsed(timer, timestamp) >= SESSION_SECONDS)
-            .map(([id]) => id),
-        );
-        if (!expiredIds.size) return current;
-        for (const id of expiredIds) enqueue({ type: "timer", subjectId: id, kind: "session", action: "finish" });
-        return {
-          ...current,
-          sessionTimers: Object.fromEntries(
-            Object.entries(current.sessionTimers).map(([id, timer]) =>
-              expiredIds.has(id)
-                ? [id, { elapsedSeconds: SESSION_SECONDS, runningSince: null, completed: true }]
-                : [id, timer],
-            ),
-          ),
-        };
-      });
+      setNow(Date.now());
     }, 1000);
     return () => window.clearInterval(interval);
-  }, [draft.sessionTimers, draft.timers, enqueue]);
+  }, [draft.sessionTimers, draft.timers]);
 
   const setDraftPublic = useCallback((updater: (current: LocalDraft) => LocalDraft) => {
     setDraft(updater);

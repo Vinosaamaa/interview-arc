@@ -6,12 +6,14 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
 
 ## Product Behavior
 
-- Show today's required plan: 6 LeetCode, 1 system design, and 1 behavioral question.
-- Give every full session one fixed six-hour countdown.
+- Default a new full session to 6 LeetCode, 1 system design, and 1 behavioral question.
+- Let the user configure each category count before work begins. Derive the session countdown from 40 minutes per coding problem and 60 minutes per system-design or behavioral question.
 - Give every activity a compact elapsed-time stopwatch. The session countdown may run alongside one activity stopwatch; only one activity stopwatch may run at a time.
 - Finishing an activity or session locks that timer. Never offer resume after finish.
-- Allow another complete session containing 6 coding problems, 1 system-design question, and 1 behavioral question.
+- Allow another configurable session; use 6/1/1 as the starting recipe.
+- Let an unstarted website-created session be edited. Lock its recipe once its session timer, activity timing, result, or publication work begins.
 - Allow an extra activity in any category with its own stopwatch and optional planning estimate.
+- On Today, use the masthead tally for yesterday's completed activities, recorded time, and sessions. Read owner-scoped D1 state for yesterday so unpublished work is not omitted; fall back to the versioned journal offline.
 - Let locally added activities be edited and removed.
 - Store lifecycle separately from outcome.
 - Give coding, system-design, and behavioral activities the same cycling result-flag layout. The local mock labels are finished, finished after review, and failed; only LeetCode persists the canonical outcome field. The hover/focus legend must explain the colors and must not be clipped inside a swipe card.
@@ -75,7 +77,9 @@ The website must not imply that browser draft state has already been published t
 - Problem Banks combines all three versioned banks, offers independent category and progress filters, and sends every `Practice today` selection to standalone practice on Today. Progress has `All`, `To practice`, and `Finished`; failed or merely planned work remains `To practice`.
 - For imported system-design questions, show the source question link, listed complexity, and whether reference solutions are available.
 - For imported behavioral questions, show the expected answer format, frequency, and whether the Bugfree.ai reference may require sign-in. Link to the canonical answer page without copying third-party answer text into the site.
-- Journey owns cumulative totals and daily charts for coding, system design, behavioral, outcomes, and elapsed time.
+- Journey owns cumulative totals and interactive analytics for coding, system design, behavioral, outcomes, elapsed time, consistency, difficulty, and bank-linked topic coverage.
+- Anchor Journey with a selectable 365-day practice heatmap. Shade only finished coding and mock work; expose failed-attempt counts in the day detail without treating them as solved output.
+- Every Journey visualization must disclose the records behind it: heatmap days and trend points select a date, topic bars reveal matching attempts, and effort/outcome points open the activity record. Do not infer mastery, productivity by time of day, or other statistics unsupported by stored evidence.
 - Present publication state in user language: `draft` is **Finish to journal**,
   `ready` is **Ready for journal**, and `published` is **In journal**. Finishing
   the stopwatch or choosing a result derives `ready` automatically; the control
