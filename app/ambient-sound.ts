@@ -2,17 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type LofiTrack = {
+export type LofiTrack = {
   name: string;
   artist: string;
   path: string;
+  sourceUrl: string;
+  sourceLabel: string;
 };
 
 const PLAYLIST: LofiTrack[] = [
-  { name: "Sweet September", artist: "Arulo", path: "/audio/sweet-september.mp3" },
-  { name: "Sleepy Cat", artist: "Alejandro Magaña", path: "/audio/sleepy-cat.mp3" },
-  { name: "Serene View", artist: "Arulo", path: "/audio/serene-view.mp3" },
-  { name: "Thinking About You", artist: "Arulo", path: "/audio/thinking-about-you.mp3" },
+  { name: "Sweet September", artist: "Arulo", path: "/audio/sweet-september.mp3", sourceUrl: "https://mixkit.co/free-stock-music/lo-fi-beats/", sourceLabel: "Mixkit · Lo-fi beats" },
+  { name: "Sleepy Cat", artist: "Alejandro Magaña", path: "/audio/sleepy-cat.mp3", sourceUrl: "https://mixkit.co/free-stock-music/lo-fi-beats/", sourceLabel: "Mixkit · Lo-fi beats" },
+  { name: "Serene View", artist: "Arulo", path: "/audio/serene-view.mp3", sourceUrl: "https://mixkit.co/free-stock-music/chillout/", sourceLabel: "Mixkit · Chillout" },
+  { name: "Thinking About You", artist: "Arulo", path: "/audio/thinking-about-you.mp3", sourceUrl: "https://mixkit.co/free-stock-music/chillout/", sourceLabel: "Mixkit · Chillout" },
 ];
 
 function stableIndex(date: string, length: number) {
@@ -80,6 +82,16 @@ export function useAmbientSound(date: string) {
     loadTrack(nextIndex, playingRef.current);
   }, [loadTrack]);
 
+  const previous = useCallback(() => {
+    const previousIndex = (indexRef.current - 1 + PLAYLIST.length) % PLAYLIST.length;
+    loadTrack(previousIndex, playingRef.current);
+  }, [loadTrack]);
+
+  const playTrack = useCallback((index: number) => {
+    if (index < 0 || index >= PLAYLIST.length) return;
+    loadTrack(index, true);
+  }, [loadTrack]);
+
   const setVolume = useCallback((nextVolume: number) => {
     const safeVolume = Math.min(1, Math.max(0, nextVolume));
     volumeRef.current = safeVolume;
@@ -110,12 +122,16 @@ export function useAmbientSound(date: string) {
 
   return {
     playing,
+    playlist: PLAYLIST,
+    trackIndex,
     trackName: track.name,
     trackArtist: track.artist,
     volume,
     start,
     stop,
     next,
+    previous,
+    playTrack,
     setVolume,
   };
 }

@@ -15,8 +15,9 @@ Before editing website code, read `../docs/agents/website.md` and the shared con
 - Show the arrival ritual on every full page entry and keep it visible until the
   user explicitly enters. Choose date-stable artwork and a starting track from
   locally hosted, documented, licensed pools. Sound begins only from a user
-  action; expose play/pause, next, volume, and persistent motion controls, with
-  reduced-motion support.
+  action; expose play/pause, previous/next, playlist selection, licensed source,
+  local save, volume, and persistent motion controls. Keep the petal field dense
+  and legible over bright and dark surfaces, with reduced-motion support.
 - Keep outcome, timer completion, and publication state independent. Only
   `ready` enters the agent queue; `published` is set after an artifact exists.
 - Keep Problem Banks question-type and progress filters independent. A finished question must match Past eligibility; failed and planned questions remain to practice.
