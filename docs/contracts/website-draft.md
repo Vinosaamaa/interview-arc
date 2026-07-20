@@ -33,7 +33,7 @@ Every activity has an owner-scoped publication state independent from lifecycle 
 - `ready`: explicitly included in the publication queue;
 - `published`: the specialist wrote the artifact and reported its path back to Interview Arc.
 
-Finishing a timer or choosing an outcome never silently changes publication state. The user marks an activity Ready. A specialist marks it Published only after the repository artifact actually exists. Failed attempts are eligible for Ready and Published.
+Finishing a timer or choosing an outcome never silently changes publication state. The user chooses **Send to journal** (`ready`). A specialist changes it to **In journal** (`published`) only after the repository artifact actually exists. Failed attempts are eligible for both states.
 
 ## Sessions
 

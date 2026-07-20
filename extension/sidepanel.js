@@ -93,7 +93,7 @@ function render() {
   const publication = activity.publicationStatus ?? "draft";
   elements["publication-button"].className = `status-button publication ${publication}`;
   elements["publication-button"].querySelector("span").textContent = publication === "published" ? "✓" : publication === "ready" ? "↑" : "◇";
-  elements["publication-button"].querySelector("strong").textContent = publication === "published" ? "Published" : publication === "ready" ? "Ready to publish" : "Draft";
+  elements["publication-button"].querySelector("strong").textContent = publication === "published" ? "In journal" : publication === "ready" ? "Send to journal" : "Not queued";
   elements["publication-button"].disabled = publication === "published";
   elements.notes.value = activity.personalNote ?? "";
   renderClock();

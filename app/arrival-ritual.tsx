@@ -16,10 +16,10 @@ const DAILY_LINES = [
 ];
 
 const WALLPAPER_POOL = [
-  { path: "/arrival-dawn.jpg", label: "Dawn study" },
-  { path: "/arrival-rain-city.jpg", label: "Rain on the window" },
-  { path: "/arrival-mountain-cabin.jpg", label: "Pines before sunrise" },
-  { path: "/arrival-sakura-study.jpg", label: "Sakura after rain" },
+  { path: "/arrival-cozy-room-4k.jpg", label: "Quiet room", photographer: "Magic Fan", href: "https://unsplash.com/photos/C3NeCFvQq4M" },
+  { path: "/arrival-sakura-river-4k.jpg", label: "Sakura at night", photographer: "ayumi kubo", href: "https://unsplash.com/photos/uiTY1tPjwlk" },
+  { path: "/arrival-rain-office-4k.jpg", label: "Rain over Singapore", photographer: "Milin John", href: "https://unsplash.com/photos/9RD0bE5C9WI" },
+  { path: "/arrival-mountain-lake-4k.jpg", label: "Peyto Lake at dawn", photographer: "Mario Häfliger", href: "https://unsplash.com/photos/Svnrlh3lXZ0" },
 ];
 
 const PETALS = Array.from({ length: 26 }, (_, index) => ({
@@ -76,14 +76,22 @@ export function ArrivalRitual({
   state,
   muted,
   trackName,
+  trackArtist,
+  volume,
   onToggleMuted,
+  onNextTrack,
+  onVolumeChange,
   onEnter,
 }: {
   date: string;
-  state: "checking" | "show" | "leaving" | "entered";
+  state: "show" | "leaving" | "entered";
   muted: boolean;
   trackName: string;
+  trackArtist: string;
+  volume: number;
   onToggleMuted: () => void;
+  onNextTrack: () => void;
+  onVolumeChange: (volume: number) => void;
   onEnter: () => void;
 }) {
   if (state === "entered") return null;
@@ -92,21 +100,23 @@ export function ArrivalRitual({
     <section className={`arrival-ritual ${state}`} aria-label="Daily arrival">
       <div className="arrival-image" style={{ "--arrival-wallpaper": `url(${wallpaper.path})` } as CSSProperties} aria-hidden="true" />
       <div className="arrival-shade" aria-hidden="true" />
-      {state !== "checking" && (
-        <div className="arrival-content">
-          <span className="arrival-kicker">INTERVIEW ARC · {displayDate(date).toUpperCase()}</span>
-          <blockquote>{quoteFor(date)}</blockquote>
-          <p>One session. One clear record. Nothing to prove before you begin.</p>
-          <div className="arrival-actions">
-            <button className="arrival-enter" onClick={onEnter}>Begin today’s work <span>↘</span></button>
-            <button className="arrival-sound" onClick={onToggleMuted} aria-pressed={muted}>
+      <div className="arrival-content">
+        <span className="arrival-kicker">INTERVIEW ARC · {displayDate(date).toUpperCase()}</span>
+        <blockquote>{quoteFor(date)}</blockquote>
+        <p>One session. One clear record. Nothing to prove before you begin.</p>
+        <div className="arrival-actions">
+          <button className="arrival-enter" onClick={onEnter}>Begin today’s work <span>↘</span></button>
+          <div className="arrival-listening-desk" aria-label="Music controls">
+            <button className="arrival-sound" onClick={onToggleMuted} aria-pressed={!muted}>
               <span aria-hidden="true">{muted ? "◌" : "♪"}</span>
-              {muted ? "Enter quietly" : trackName}
+              <span><small>{muted ? "MUSIC OFF" : "TODAY’S MIX"}</small><strong>{trackName}</strong><em>{trackArtist}</em></span>
             </button>
+            <button className="arrival-next-track" onClick={onNextTrack} aria-label="Choose the next track" title="Next track">↠</button>
+            <label className="arrival-volume"><span>VOLUME</span><input type="range" min="0" max="1" step="0.05" value={volume} onChange={(event) => onVolumeChange(Number(event.target.value))} aria-label="Music volume" /></label>
           </div>
         </div>
-      )}
-      <footer><span>{wallpaper.label.toUpperCase()}</span><i /><span>BEGIN</span></footer>
+      </div>
+      <footer><a href={wallpaper.href} target="_blank" rel="noreferrer">{wallpaper.label.toUpperCase()} · PHOTO BY {wallpaper.photographer.toUpperCase()}</a><i /><span>BEGIN</span></footer>
     </section>
   );
 }

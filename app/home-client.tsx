@@ -65,9 +65,9 @@ const EMPTY_COMPOSER: ComposerState = {
 const OUTCOME_ORDER: (Outcome | undefined)[] = [undefined, "solved", "solved_after_reviewing_approach", "failed"];
 
 function publicationLabel(status: PublicationStatus) {
-  if (status === "ready") return "Ready to publish";
-  if (status === "published") return "Published";
-  return "Draft";
+  if (status === "ready") return "Send to journal";
+  if (status === "published") return "In journal";
+  return "Not queued";
 }
 
 function formatDuration(seconds: number) {
@@ -327,8 +327,9 @@ function PublicationControl({
       className={`publication-control ${status}`}
       onClick={() => onChange(next)}
       disabled={published}
-      aria-label={published ? "Published record" : `${publicationLabel(status)}. Change to ${publicationLabel(next)}.`}
-      title={published ? "The specialist task published this record" : status === "ready" ? "Remove from the publication queue" : "Add to the publication queue"}
+      data-tooltip={published ? "A permanent solution or transcript exists in your journal." : status === "ready" ? "Codex will process this activity the next time you publish the session." : "Codex ignores this activity until you send it to the journal."}
+      aria-label={published ? "This activity is in the journal" : `${publicationLabel(status)}. Change to ${publicationLabel(next)}.`}
+      title={published ? "The specialist task created the permanent journal record" : status === "ready" ? "Remove this activity from the specialist task queue" : "Ask the specialist task to create a solution or transcript for this activity"}
     >
       <span aria-hidden="true">{status === "published" ? "✓" : status === "ready" ? "↑" : "◇"}</span>
       {publicationLabel(status)}
@@ -476,22 +477,38 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [bankSearch, setBankSearch] = useState("");
   const [pipWindow, setPipWindow] = useState<Window | null>(null);
   const [pipSupported, setPipSupported] = useState(false);
-  const [arrivalState, setArrivalState] = useState<"checking" | "show" | "leaving" | "entered">("checking");
+  const [arrivalState, setArrivalState] = useState<"show" | "leaving" | "entered">("show");
   const [soundMuted, setSoundMuted] = useState(false);
   const [petalsEnabled, setPetalsEnabled] = useState(true);
   const [integrationOpen, setIntegrationOpen] = useState(false);
   const [integrationToken, setIntegrationToken] = useState("");
   const [integrationBusy, setIntegrationBusy] = useState(false);
-  const { playing: ambientPlaying, trackName, start: startAmbient, stop: stopAmbient } = useAmbientSound(today);
+  const {
+    playing: ambientPlaying,
+    trackName,
+    trackArtist,
+    volume: musicVolume,
+    start: startAmbient,
+    stop: stopAmbient,
+    next: nextAmbientTrack,
+    setVolume: setMusicVolume,
+  } = useAmbientSound(today);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       setSoundMuted(window.localStorage.getItem("interview-arc-sound-muted") === "true");
       setPetalsEnabled(window.localStorage.getItem("interview-arc-petals-paused") !== "true");
-      setArrivalState(window.localStorage.getItem(`interview-arc-arrival-v1-${today}`) === "seen" ? "entered" : "show");
     });
     return () => window.cancelAnimationFrame(frame);
   }, [today]);
+
+  useEffect(() => {
+    const showArrivalAfterBackNavigation = (event: PageTransitionEvent) => {
+      if (event.persisted) setArrivalState("show");
+    };
+    window.addEventListener("pageshow", showArrivalAfterBackNavigation);
+    return () => window.removeEventListener("pageshow", showArrivalAfterBackNavigation);
+  }, []);
 
   useEffect(() => {
     const previous = document.body.style.overflow;
@@ -524,7 +541,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }, [composer.open, selectedEntry, integrationOpen]);
 
   function enterArc() {
-    window.localStorage.setItem(`interview-arc-arrival-v1-${today}`, "seen");
     if (!soundMuted) startAmbient();
     setArrivalState("leaving");
     window.setTimeout(() => setArrivalState("entered"), 850);
@@ -1146,7 +1162,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                   <ResultFlag activityType={item.type} outcome={draft.outcomes[item.id] ?? item.outcome} onChange={(outcome) => setOutcome(item.id, outcome)} />
                   <PublicationControl status={draft.publicationStatuses[item.id] ?? (item.artifactPath ? "published" : "draft")} onChange={(status) => setPublication(item.id, status)} />
                 </div>
-                <div className="publish-instruction">Mark this <strong>Ready to publish</strong>, then say <strong>“Publish this session”</strong> in the {item.type === "system_design" ? "system-design" : "behavioral"} task.</div>
+                <div className="publish-instruction">Choose <strong>Send to journal</strong>, then say <strong>“Publish this session”</strong> in the {item.type === "system_design" ? "system-design" : "behavioral"} task.</div>
               </section>
             );
           })}
@@ -1400,7 +1416,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       </aside>
 
       <section className="main-column">
-        <header className="topbar"><div><span>{readableDate(journal.date)}</span><strong>{view === "today" ? "Today’s work" : view === "journey" ? "Statistics" : view === "library" ? "Dated practice log" : "Question sources"}</strong></div><div><button className={`atmosphere-toggle ${ambientPlaying ? "active" : ""}`} onClick={toggleAmbientSound} aria-pressed={ambientPlaying} title={ambientPlaying ? `Playing ${trackName} · click to mute` : `Play today’s lo-fi mix · ${trackName}`}><span aria-hidden="true">{ambientPlaying ? "♪" : "◌"}</span>{ambientPlaying ? trackName : "Muted"}</button><button className={`atmosphere-toggle ${petalsEnabled ? "active" : ""}`} onClick={togglePetals} aria-pressed={petalsEnabled} title={petalsEnabled ? "Pause cherry blossoms" : "Resume cherry blossoms"}><span aria-hidden="true">✦</span>{petalsEnabled ? "Petals" : "Still"}</button>{view === "today" && pipSupported && <button className="secondary-action" onClick={openNowWindow}>{pipWindow ? "Now window open" : "Pop out timer"}</button>}<button className="secondary-action" onClick={() => setIntegrationOpen(true)}>Connect</button><button className="secondary-action" onClick={exportDraft}>Export today</button></div></header>
+        <header className="topbar"><div><span>{readableDate(journal.date)}</span><strong>{view === "today" ? "Today’s work" : view === "journey" ? "Statistics" : view === "library" ? "Dated practice log" : "Question sources"}</strong></div><div><div className={`music-dock ${ambientPlaying ? "active" : ""}`}><button onClick={toggleAmbientSound} aria-pressed={ambientPlaying} title={ambientPlaying ? "Pause music" : "Play music"}><span aria-hidden="true">{ambientPlaying ? "Ⅱ" : "▶"}</span><i><small>{ambientPlaying ? "PLAYING" : "PAUSED"}</small><strong>{trackName}</strong></i></button><button className="music-next" onClick={nextAmbientTrack} aria-label="Next music track" title={`Next track · ${trackArtist}`}>↠</button><label><span>Volume</span><input type="range" min="0" max="1" step="0.05" value={musicVolume} onChange={(event) => setMusicVolume(Number(event.target.value))} aria-label="Music volume" /></label></div><button className={`atmosphere-toggle ${petalsEnabled ? "active" : ""}`} onClick={togglePetals} aria-pressed={petalsEnabled} title={petalsEnabled ? "Pause cherry blossoms" : "Resume cherry blossoms"}><span aria-hidden="true">✦</span>{petalsEnabled ? "Petals" : "Still"}</button>{view === "today" && pipSupported && <button className="secondary-action" onClick={openNowWindow}>{pipWindow ? "Now window open" : "Pop out timer"}</button>}<button className="secondary-action" onClick={() => setIntegrationOpen(true)}>Connect</button><button className="secondary-action" onClick={exportDraft}>Export today</button></div></header>
         <div className="page-content">{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
       </section>
 
@@ -1412,7 +1428,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         <label className="minutes-field"><span>Planning estimate in minutes</span><input type="number" min="1" max="360" value={composer.minutes} onChange={(event) => setComposer((current) => ({ ...current, minutes: event.target.value }))} /></label><button className="primary-action full-width" type="submit" disabled={!canSaveActivity}>{composer.editingId ? "Save changes" : "Add to today"}</button></form>}
       </section></div>}
 
-      {integrationOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setIntegrationOpen(false)}><section className="composer integration-dialog" role="dialog" aria-modal="true" aria-labelledby="integration-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setIntegrationOpen(false)} aria-label="Close">×</button><span className="eyebrow">ONE LIVE PRACTICE RECORD</span><h2 id="integration-title">Connect Codex and the LeetCode companion</h2><p>Create one personal token so both tools can read today&apos;s D1 state, control timers, and publish only activities you marked Ready. The token is shown once and stored as a secure digest.</p>{integrationToken ? <><label className="token-field"><span>Personal connection token</span><input readOnly value={integrationToken} onFocus={(event) => event.currentTarget.select()} /></label><button className="primary-action full-width" onClick={copyConnectionToken}>Copy token</button><div className="integration-steps"><strong>Use it in two places</strong><ol><li>Set <code>INTERVIEW_ARC_MCP_TOKEN</code> before opening Codex in this project.</li><li>Paste the same token into the Interview Arc Chrome companion after loading the extension.</li></ol></div></> : <button className="primary-action full-width" disabled={integrationBusy} onClick={createConnectionToken}>{integrationBusy ? "Creating…" : "Create personal connection token"}</button>}<small className="integration-warning">Treat this token like a password. Create a new one if it is ever shared accidentally.</small></section></div>}
+      {integrationOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setIntegrationOpen(false)}><section className="composer integration-dialog" role="dialog" aria-modal="true" aria-labelledby="integration-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setIntegrationOpen(false)} aria-label="Close">×</button><span className="eyebrow">ONE LIVE PRACTICE RECORD</span><h2 id="integration-title">Connect Codex and the LeetCode companion</h2><p>Create one personal token so both tools can read today&apos;s D1 state, control timers, and process only activities marked <strong>Send to journal</strong>. The token is shown once and stored as a secure digest.</p>{integrationToken ? <><label className="token-field"><span>Personal connection token</span><input readOnly value={integrationToken} onFocus={(event) => event.currentTarget.select()} /></label><button className="primary-action full-width" onClick={copyConnectionToken}>Copy token</button><div className="integration-steps"><strong>Use it in two places</strong><ol><li>Set <code>INTERVIEW_ARC_MCP_TOKEN</code> before opening Codex in this project.</li><li>Paste the same token into the Interview Arc Chrome companion after loading the extension.</li></ol></div></> : <button className="primary-action full-width" disabled={integrationBusy} onClick={createConnectionToken}>{integrationBusy ? "Creating…" : "Create personal connection token"}</button>}<small className="integration-warning">Treat this token like a password. Create a new one if it is ever shared accidentally.</small></section></div>}
 
       {selectedEntry && <div className="letter-backdrop" role="presentation" onMouseDown={() => setSelectedEntry(null)}><article className="reading-letter" role="dialog" aria-modal="true" aria-labelledby="letter-title" onMouseDown={(event) => event.stopPropagation()}><button className="letter-close" onClick={() => setSelectedEntry(null)} aria-label="Close letter">Close ×</button><header><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)}</time></div><h2 id="letter-title">{selectedEntry.title}</h2><p>{selectedEntry.subtitle}</p></header><div className="letter-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.type === "leetcode" && <div><span>Outcome</span><strong>{outcomeLabel(selectedEntry.outcome)}</strong></div>}</div>{selectedEntry.artifact ? <div className="letter-sections">{selectedEntry.artifact.sections.map((section) => /conversation transcript|generated code|solution/i.test(section.title) ? <details key={section.title} open={/solution/i.test(section.title)}><summary>{section.title}</summary><MarkdownBody source={section.body} /></details> : <section key={section.title}><h3>{section.title}</h3><MarkdownBody source={section.body} /></section>)}</div> : <div className="unpublished-letter"><span className="eyebrow">LOCAL COMPLETION · NOT PUBLISHED YET</span><h3>The result is saved on this device, but its review is not in the repository yet.</h3><p>Export today&apos;s draft and ask the matching specialist task to publish. Coding records will show the generated solution and complexity; system-design and behavioral records will show the formatted conversation transcript and review.</p>{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}<footer>Interview Arc · {selectedEntry.id}</footer></article></div>}
     {pipWindow && createPortal(
@@ -1433,7 +1449,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     )}
     </main>
     <PetalField quiet={arrivalState === "entered"} paused={!petalsEnabled} />
-    <ArrivalRitual date={today} state={arrivalState} muted={soundMuted} trackName={trackName} onToggleMuted={toggleArrivalSound} onEnter={enterArc} />
+    <ArrivalRitual date={today} state={arrivalState} muted={soundMuted} trackName={trackName} trackArtist={trackArtist} volume={musicVolume} onToggleMuted={toggleArrivalSound} onNextTrack={nextAmbientTrack} onVolumeChange={setMusicVolume} onEnter={enterArc} />
     </>
   );
 }

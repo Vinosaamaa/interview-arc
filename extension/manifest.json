@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Interview Arc Companion",
   "version": "1.0.0",
-  "description": "Keep Interview Arc time, notes, outcome, and publication status beside LeetCode.",
+  "description": "Keep Interview Arc time, notes, outcome, and journal status beside LeetCode.",
   "minimum_chrome_version": "116",
   "permissions": ["sidePanel", "storage", "tabs"],
   "host_permissions": [

@@ -47,15 +47,15 @@ The website must not imply that browser draft state has already been published t
 
 ## UX Direction
 
-- Treat the once-daily arrival screen as the product's signature moment: show
-  one date-stable original encouragement, one date-selected artwork from the
-  owned wallpaper pool, and a single
-  explicit action into the dashboard. The click may start the procedural
-  ambient soundscape because browsers do not permit audible autoplay before a
-  user gesture.
-- Keep a small original procedural lo-fi playlist. Start from a different
-  date-stable track and rotate through the playlist during a long session;
-  never hotlink or ship unlicensed third-party music.
+- Treat the arrival screen as the product's signature moment. Show it on every
+  full page entry and keep it visible until the user explicitly enters. Use one
+  date-stable encouragement and one date-selected 4K photograph from the local,
+  licensed wallpaper pool. The entry click may start music because audible
+  playback requires a user gesture.
+- Keep a locally hosted, documented, licensed lo-fi/chillout playlist. Start
+  from a different date-stable track, advance when a song ends, and provide
+  play/pause, next-track, and clearly audible volume controls. Never rip music
+  from YouTube, hotlink media, or ship media without a documented usage license.
 - Keep cherry-blossom motion abundant on arrival and sparse inside the working
   dashboard. Provide persistent independent controls for sound and petals,
   remember those preferences locally, and disable motion for
@@ -74,6 +74,10 @@ The website must not imply that browser draft state has already been published t
 - For imported system-design questions, show the source question link, listed complexity, and whether reference solutions are available.
 - For imported behavioral questions, show the expected answer format, frequency, and whether the Bugfree.ai reference may require sign-in. Link to the canonical answer page without copying third-party answer text into the site.
 - Journey owns cumulative totals and daily charts for coding, system design, behavioral, outcomes, and elapsed time.
+- Present publication state in user language: `draft` is **Not queued**, `ready`
+  is **Send to journal**, and `published` is **In journal**. Keep the stored enum
+  and agent contract stable while explaining that only the middle state asks a
+  specialist task to generate a solution or transcript.
 
 ## Implementation And Hosting
 
