@@ -23,6 +23,7 @@ import {
   type TimerDraft,
 } from "./live-types";
 import { useLiveState } from "./live-sync";
+import { emptyJournal } from "./current-day";
 
 type View = "today" | "journey" | "library" | "banks";
 type ComposerMode = "session" | "activity";
@@ -424,8 +425,11 @@ function MarkdownBody({ source }: { source: string }) {
   return <div className="markdown-body"><Markdown remarkPlugins={[remarkGfm]}>{source}</Markdown></div>;
 }
 
-export default function HomeClient({ content }: { content: ContentIndex }) {
-  const journal = content.journals[0];
+export default function HomeClient({ content, today }: { content: ContentIndex; today: string }) {
+  const journal = useMemo(
+    () => content.journals.find((candidate) => candidate.date === today) ?? emptyJournal(today),
+    [content.journals, today],
+  );
   const [view, setView] = useState<View>("today");
   const { draft, setDraft, now, setNow, hydrated, enqueue } = useLiveState(journal.date);
   const [composer, setComposer] = useState<ComposerState>(EMPTY_COMPOSER);
@@ -656,7 +660,7 @@ export default function HomeClient({ content }: { content: ContentIndex }) {
     if (!title) return;
     const minutes = Math.max(1, Number(composer.minutes) || selected?.targetMinutes || derived?.targetMinutes || 30);
     const existing = draft.extraActivities.find((activity) => activity.id === composer.editingId);
-    const id = existing?.id ?? `${journal.date}-extra-${slugify(title)}-${Date.now().toString(36)}`;
+    const id = existing?.id ?? `${journal.date}-extra-${slugify(title)}-${event.timeStamp.toString(36)}`;
     const activity: ExtraActivity = {
       schemaVersion: 2,
       id,

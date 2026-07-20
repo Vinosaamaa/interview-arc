@@ -1,6 +1,8 @@
 # Website Draft Contract
 
-The website keeps unpublished timer and planning state on the current device. Versioned daily manifests and specialist artifacts remain the durable record.
+The website stores unpublished timer and planning state in owner-scoped D1
+tables and caches it on the current device for offline use. Versioned daily
+manifests and specialist artifacts remain the durable narrative record.
 
 ## Timers
 
@@ -52,7 +54,10 @@ Draft export schema version 3 contains session countdowns, activity stopwatches,
 - system-design activities marked green/yellow or finished with their stopwatch;
 - behavioral activities marked green/yellow or finished with their stopwatch.
 
-A specialist task may use an exported draft the user makes available, but it cannot read deployed browser storage directly. The standard local handoff path is `data/drafts/journal-YYYY-MM-DD-draft.json`. Draft JSON files are ignored by Git; `data/drafts/README.md` documents the workflow.
+A specialist task may use an exported draft the user makes available, but it
+must not assume it can access the user's authenticated D1 records. The standard
+portable handoff path is `data/drafts/journal-YYYY-MM-DD-draft.json`. Draft JSON
+files are ignored by Git; `data/drafts/README.md` documents the workflow.
 
 ## End-Of-Day LeetCode Publication
 
@@ -71,7 +76,10 @@ If no export is available, the task must not claim it knows what was finished. I
 
 ## Past
 
-The device-local Past view updates immediately from the same eligibility rules as `publishQueueActivityIds`. Planned, running, and red/failed records are excluded. Failed attempts remain available to Journey statistics but do not appear in the reading log.
+Past updates immediately from the same D1-backed eligibility rules as
+`publishQueueActivityIds`. Planned, running, and red/failed records are
+excluded. Failed attempts remain available to Journey statistics but do not
+appear in the reading log.
 
 Published LeetCode letters show original agent-generated solution material. Published system-design and behavioral letters show the complete formatted conversation transcript and review. Markdown is rendered as a preview with headings, lists, tables, links, quotations, and fenced code blocks; raw Markdown source is not the default reading surface.
 

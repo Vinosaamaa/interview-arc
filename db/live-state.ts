@@ -8,6 +8,7 @@ import {
   type ExtraActivityRow,
   type LiveSessionRow,
 } from "./schema";
+import { foldElapsed, nextTimerState } from "./timer-state";
 
 export type TimerKind = "activity" | "session";
 export type TimerAction = "start" | "pause" | "finish";
@@ -45,11 +46,6 @@ function toTimerState(row: {
     completed: row.completed,
     revision: row.revision,
   };
-}
-
-function foldElapsed(accumulatedSeconds: number, runningSince: number | null, nowMs: number) {
-  if (!runningSince) return accumulatedSeconds;
-  return accumulatedSeconds + Math.max(0, Math.floor((nowMs - runningSince) / 1000));
 }
 
 export async function readLiveState(ownerId: string, date: string): Promise<LiveState> {
@@ -107,8 +103,7 @@ export async function applyTimerAction(
   // Finished timers are locked permanently and never resume.
   if (existing?.completed) return toTimerState(existing);
 
-  const baseAccumulated = existing?.accumulatedSeconds ?? 0;
-  const revision = (existing?.revision ?? 0) + 1;
+  const next = nextTimerState(existing, action, nowMs);
 
   if (action === "start") {
     // Enforce the single-active-stopwatch rule server-side so the main tab and
@@ -122,40 +117,38 @@ export async function applyTimerAction(
         ownerId,
         subjectId,
         kind,
-        accumulatedSeconds: baseAccumulated,
-        runningSince: nowMs,
+        accumulatedSeconds: next.accumulatedSeconds,
+        runningSince: next.runningSince,
         completed: false,
-        revision,
+        revision: next.revision,
         updatedAt: nowMs,
       })
       .onConflictDoUpdate({
         target: [timers.ownerId, timers.subjectId, timers.kind],
-        set: { runningSince: nowMs, completed: false, revision, updatedAt: nowMs },
+        set: { runningSince: next.runningSince, completed: false, revision: next.revision, updatedAt: nowMs },
       });
   } else {
-    const folded = foldElapsed(baseAccumulated, existing?.runningSince ?? null, nowMs);
-    const completed = action === "finish";
     await db
       .insert(timers)
       .values({
         ownerId,
         subjectId,
         kind,
-        accumulatedSeconds: folded,
+        accumulatedSeconds: next.accumulatedSeconds,
         runningSince: null,
-        completed,
-        completedAt: completed ? nowMs : null,
-        revision,
+        completed: next.completed,
+        completedAt: next.completed ? nowMs : null,
+        revision: next.revision,
         updatedAt: nowMs,
       })
       .onConflictDoUpdate({
         target: [timers.ownerId, timers.subjectId, timers.kind],
         set: {
-          accumulatedSeconds: folded,
+          accumulatedSeconds: next.accumulatedSeconds,
           runningSince: null,
-          completed,
-          completedAt: completed ? nowMs : null,
-          revision,
+          completed: next.completed,
+          completedAt: next.completed ? nowMs : null,
+          revision: next.revision,
           updatedAt: nowMs,
         },
       });

@@ -22,7 +22,8 @@ export const timers = sqliteTable(
     runningSince: integer("running_since"),
     completed: integer("completed", { mode: "boolean" }).notNull().default(false),
     completedAt: integer("completed_at"),
-    // Monotonic per-row counter so a stale client cannot clobber newer state.
+    // Monotonic audit counter. Conflict rejection is not implemented yet;
+    // mutations are serialized by arrival order and finished timers are locked.
     revision: integer("revision").notNull().default(0),
     updatedAt,
   },

@@ -1,7 +1,5 @@
-// Shared content reader used by both `build-content-index.mjs` (emits the
-// build-time TS index) and `import-content.mjs` (upserts into D1). Keeping the
-// parsing in one place guarantees the generated index and the database copy
-// stay identical.
+// Shared content reader used by `import-content.mjs` to mirror durable Git
+// journals, artifacts, stories, and question banks into the D1 read model.
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 

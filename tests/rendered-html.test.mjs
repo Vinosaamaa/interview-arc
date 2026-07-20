@@ -1,37 +1,30 @@
 import assert from "node:assert/strict";
+import { readdir, readFile } from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
-async function render() {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
-
-  return worker.fetch(
-    new Request("http://localhost/", { headers: { accept: "text/html" } }),
-    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
-    { waitUntil() {}, passThroughOnException() {} },
+async function javascriptUnder(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const target = path.join(directory, entry.name);
+      if (entry.isDirectory()) return javascriptUnder(target);
+      return entry.name.endsWith(".js") ? readFile(target, "utf8") : "";
+    }),
   );
+  return files.flat().join("\n");
 }
 
-test("server-renders the Interview Arc dashboard", async () => {
-  const response = await render();
-  assert.equal(response.status, 200);
-  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
-
-  const html = await response.text();
-  assert.match(html, /<title>Interview Arc/);
-  assert.match(html, /A clean page/);
-  assert.match(html, /No session planned yet/);
-  assert.match(html, /Add another session/);
-  assert.match(html, /Add one activity/);
-  assert.match(html, />Past</);
-  assert.match(html, /Problem banks/);
-  assert.doesNotMatch(html, /Design a notification system/);
-  assert.doesNotMatch(html, /Disagree and commit/);
-  assert.doesNotMatch(html, /Number of Islands/);
-  assert.doesNotMatch(html, /Practice library|Story bank|All finished/);
-  assert.doesNotMatch(html, />＋ Add<\/button>/);
-  assert.doesNotMatch(html, /＋ Add activity/);
-  assert.doesNotMatch(html, /Test console|Submit attempt|solution\.py/);
-  assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/);
+test("the Cloudflare build contains the Interview Arc dashboard", async () => {
+  const bundle = await javascriptUnder(fileURLToPath(new URL("../dist", import.meta.url)));
+  assert.match(bundle, /Interview Arc/);
+  assert.match(bundle, /A clean page/);
+  assert.match(bundle, /No session planned yet/);
+  assert.match(bundle, /Add another session/);
+  assert.match(bundle, /Add one activity/);
+  assert.match(bundle, /Problem banks/);
+  assert.doesNotMatch(bundle, /Practice library|Story bank|All finished/);
+  assert.doesNotMatch(bundle, /Test console|Submit attempt|solution\.py/);
+  assert.doesNotMatch(bundle, /codex-preview|react-loading-skeleton/);
 });

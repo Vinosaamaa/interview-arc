@@ -1,7 +1,5 @@
 // Stable content types shared by the D1 loader (`db/content.ts`), the client UI
-// (`app/home-client.tsx`), and the build-time index. The generated
-// `app/generated/content-index.ts` re-declares matching types for its own const;
-// this file is the durable home that survives removing that generated file.
+// (`app/home-client.tsx`), and the Git-to-D1 import script.
 
 export type JournalActivity = {
   schemaVersion: number;

@@ -1,11 +1,10 @@
 // Resolves a stable, non-PII owner id for the current request.
 //
-// The Cloudflare deployment is single-user (protected by a passcode gate in
-// `worker/index.ts`), so every request maps to one constant owner. The legacy
-// OpenAI Sites deployment still passes an authenticated email header while it
-// runs in parallel; when present we hash it so raw email never lands in the
-// database and that deployment keeps its own scoping.
-const USER_EMAIL_HEADER = "oai-authenticated-user-email";
+// worker/index.ts writes this header only after independently verifying the
+// Cloudflare Access JWT. Incoming copies are always removed first, so app
+// routes can safely use it as the authenticated identity.
+export const TRUSTED_EMAIL_HEADER = "x-interview-arc-authenticated-email";
+const OPENAI_USER_EMAIL_HEADER = "oai-authenticated-user-email";
 const LOCAL_OWNER_ID = "owner";
 
 async function sha256Hex(value: string): Promise<string> {
@@ -17,7 +16,9 @@ async function sha256Hex(value: string): Promise<string> {
 }
 
 export async function resolveOwnerId(request: Request): Promise<string> {
-  const email = request.headers.get(USER_EMAIL_HEADER)?.trim().toLowerCase();
+  const email = (request.headers.get(TRUSTED_EMAIL_HEADER) ?? request.headers.get(OPENAI_USER_EMAIL_HEADER))
+    ?.trim()
+    .toLowerCase();
   if (!email) return LOCAL_OWNER_ID;
   return `u_${(await sha256Hex(email)).slice(0, 32)}`;
 }

@@ -1,6 +1,7 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import { TRUSTED_EMAIL_HEADER } from "../db/owner";
 
 interface Env {
   ASSETS: Fetcher;
@@ -256,7 +257,7 @@ async function verifyAccessJwt(token: string, env: Env): Promise<string | null> 
     );
     if (!valid) return null;
 
-    return payload.email ?? "authenticated";
+    return payload.email?.trim() || null;
   } catch {
     return null;
   }
@@ -265,33 +266,45 @@ async function verifyAccessJwt(token: string, env: Env): Promise<string | null> 
 // Prefers Cloudflare Access once configured (POLICY_AUD + TEAM_DOMAIN); falls
 // back to the passcode gate until then. Returns a Response to intercept the
 // request, or null when it is authorized to proceed.
-async function authGate(request: Request, env: Env): Promise<Response | null> {
+type AuthResult = { response: Response | null; email: string | null };
+
+async function authGate(request: Request, env: Env): Promise<AuthResult> {
   if (env.POLICY_AUD && env.TEAM_DOMAIN) {
     const token = request.headers.get(JWT_HEADER) ?? readCookie(request, ACCESS_COOKIE);
     const email = token ? await verifyAccessJwt(token, env) : null;
-    if (email) return null;
+    if (email) return { response: null, email };
     // Access normally intercepts unauthenticated requests at the edge; reaching
     // here means the token is missing/forged, so refuse.
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 403,
-      headers: { "content-type": "application/json", "cache-control": "no-store" },
-    });
+    return {
+      response: new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 403,
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
+      }),
+      email: null,
+    };
   }
 
-  return passcodeGate(request, env);
+  return { response: await passcodeGate(request, env), email: null };
 }
 
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const gated = await authGate(request, env);
-    if (gated) return gated;
+    const auth = await authGate(request, env);
+    if (auth.response) return auth.response;
 
-    const url = new URL(request.url);
+    // Never trust a caller-supplied identity header. Only the email recovered
+    // from a verified Access JWT is forwarded to the application routes.
+    const headers = new Headers(request.headers);
+    headers.delete(TRUSTED_EMAIL_HEADER);
+    if (auth.email) headers.set(TRUSTED_EMAIL_HEADER, auth.email);
+    const authenticatedRequest = new Request(request, { headers });
+
+    const url = new URL(authenticatedRequest.url);
 
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
-      return handleImageOptimization(request, {
-        fetchAsset: (path) => env.ASSETS.fetch(new Request(new URL(path, request.url))),
+      return handleImageOptimization(authenticatedRequest, {
+        fetchAsset: (path) => env.ASSETS.fetch(new Request(new URL(path, authenticatedRequest.url))),
         transformImage: async (body, { width, format, quality }) => {
           const result = await env.IMAGES.input(body).transform(width > 0 ? { width } : {}).output({ format, quality });
           return result.response();
@@ -299,7 +312,7 @@ const worker = {
       }, allowedWidths);
     }
 
-    return handler.fetch(request, env, ctx);
+    return handler.fetch(authenticatedRequest, env, ctx);
   },
 };
 
