@@ -14,8 +14,11 @@ Tasks share repository files but not hidden conversational context. Durable inst
 
 1. `Start a new session` creates or acknowledges the activity ID and draft.
 2. The specialist works with the user and records only evidence it observes.
-3. `Publish this session` finalizes the artifact and updates the daily manifest.
-4. `Finish today's journal` asks the main task to validate the files and create one daily pull request.
+3. `Publish this session` finalizes the artifact, updates the daily manifest,
+   and invokes the guarded checkpoint helper. The helper creates or reuses
+   `journal/YYYY-MM-DD` and commits only journal-owned files.
+4. `Finish today's journal` asks the main task to merge the latest `origin/main`,
+   validate the files, and create one daily pull request.
 
 System-design and behavioral transcripts are appended incrementally. LeetCode uses a structured log by default; a full transcript is optional when the conversation itself is valuable.
 
@@ -59,9 +62,20 @@ practice never remains pinned to the latest imported historical entry.
 ## Git
 
 Code and instruction changes use normal feature branches. Daily practice uses
-one sequential `journal/YYYY-MM-DD` branch in the shared checkout. Individual
-session publication does not commit, push, open a pull request, or deploy. The
-main task performs those actions once when the user finishes the journal.
+one sequential `journal/YYYY-MM-DD` branch in the shared checkout. Each
+specialist publication runs `pnpm journal:checkpoint -- --date YYYY-MM-DD
+--area <specialty>`, which creates a local checkpoint commit but never pushes,
+opens a pull request, or deploys. The filesystem lock rejects concurrent
+checkpoints, and the path guard rejects unrelated uncommitted code.
+
+Because the checkout is shared, practice conversations may be interleaved but
+publication commands must finish one at a time. Before website feature work,
+the coordinator checkpoints any journal-only changes, switches to updated
+`main`, and creates the feature branch. After the feature PR is merged, the
+coordinator may return to the daily branch. Before the daily PR, it merges the
+latest `origin/main` into the journal branch. A journal branch being behind main
+does not itself create a conflict; Git reports a conflict only when both lines
+of development changed overlapping content that cannot be combined safely.
 
 Every pull request validates local D1 migrations/imports, lint, build, and
 tests. After merge to `main`, the production workflow waits for validation,
@@ -69,3 +83,8 @@ applies pending migrations, and refreshes Git-backed content in D1. A merge
 containing only content or documentation skips the Worker redeploy. The legacy
 OpenAI Sites deployment is intentionally outside this flow until the user
 explicitly retires it.
+
+The specialist may report an artifact path to live D1 after its local checkpoint,
+but the website continues to show **Ready for journal** until the Git-backed
+artifact is merged and imported into production D1. This prevents a local-only
+checkpoint from appearing as a readable production journal entry.

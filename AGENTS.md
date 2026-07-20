@@ -20,8 +20,8 @@ The user may keep every specialist as a long-lived Codex task inside the same ou
 ## Session Commands
 
 - `Start a new session`: establish a stable `activity_id`, activity source, and draft artifact. Only the conversation after this boundary belongs to the session transcript.
-- `Publish this session`: finalize the current artifact and update the matching `data/daily/YYYY-MM-DD.json` entry. Do not open a pull request or deploy for an individual session.
-- `Finish today's journal`: in the main/website task, validate all daily files, commit them together on `journal/YYYY-MM-DD`, push, and open one pull request.
+- `Publish this session`: finalize the current artifact, update the matching `data/daily/YYYY-MM-DD.json` entry, then run `pnpm journal:checkpoint -- --date YYYY-MM-DD --area <specialty>`. The guarded helper creates or reuses the one daily branch and makes a local checkpoint commit. Do not push, open a pull request, or deploy for an individual session.
+- `Finish today's journal`: in the main/website task, switch to `journal/YYYY-MM-DD`, merge the latest `origin/main`, validate all daily files, push the accumulated checkpoint commits, and open one pull request.
 
 Maintain long system-design and behavioral drafts incrementally. Do not rely on reconstructing an arbitrarily long task transcript only at publish time.
 
@@ -30,8 +30,9 @@ Maintain long system-design and behavioral drafts incrementally. Do not rely on 
 - Default daily plan: one fixed six-hour session containing 6 LeetCode problems, 1 system-design mock, and 1 behavioral mock.
 - The session owns the countdown; every activity also has a compact elapsed-time stopwatch. Extra questions are allowed in every category.
 - Activity lifecycle is `planned`, `running`, or `completed`.
-- Publication state is independently `draft`, `ready`, or `published`. Only
-  explicit `ready` activities enter an agent queue, including failed attempts.
+- Publication state is `draft`, `ready`, or `published`. Finished activities
+  become `ready` automatically, including failed attempts. The website shows
+  `published` only after the artifact has been merged and imported from Git.
 - LeetCode outcome is exactly `solved`, `solved_after_reviewing_approach`, or `failed`.
 - Lifecycle and outcome are separate. A failed attempt can still be completed and documented.
 - Preserve raw session evidence. Do not replace a full conversation transcript with only a summary.
@@ -70,6 +71,9 @@ If the repository has its own `.venv/`, use `./.venv/bin/python` instead.
 ## Source Control And Verification
 
 - Make code, schema, and instruction changes on a feature branch.
+- Before starting a website feature branch, protect any journal-only working-tree
+  changes with the checkpoint helper. It must refuse to move journal files when
+  unrelated code changes are uncommitted.
 - Preserve the root vinext/Cloudflare layout, `wrangler.jsonc`, and D1
   migrations. Keep `.openai/hosting.json` only while the legacy site is still
   awaiting explicit retirement.
@@ -77,7 +81,12 @@ If the repository has its own `.venv/`, use `./.venv/bin/python` instead.
 - Run `pnpm test` and `pnpm lint` after website changes. Validate D1 changes
   locally with `pnpm db:migrate:local` and `pnpm content:import:local`.
 - Run `pnpm lint` when TypeScript, JavaScript, or lint configuration changes.
-- Group generated daily artifacts into a daily journal branch rather than opening a pull request for each timer event.
+- Group generated daily artifacts into one `journal/YYYY-MM-DD` branch. Each
+  specialist publication creates a local checkpoint commit through the shared
+  helper, but only `Finish today's journal` pushes and opens the daily PR.
+- Before opening the daily PR, merge the latest `origin/main` into the journal
+  branch. Being behind main is not itself a conflict; stop for user-visible
+  resolution only when Git reports overlapping changes.
 - Do not deploy or merge uncommitted work from another task.
 - Production publishing is owned by the main-branch GitHub workflow. Never
   mutate production D1 or deploy a Worker before validation succeeds.
