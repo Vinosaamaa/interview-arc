@@ -47,3 +47,13 @@ test("the Cloudflare build contains the Interview Arc dashboard", async () => {
   assert.doesNotMatch(bundle, /Test console|Submit attempt|solution\.py/);
   assert.doesNotMatch(bundle, /codex-preview|react-loading-skeleton/);
 });
+
+test("the refined analytics and composer layouts keep their intended grouping", async () => {
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const client = await readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8");
+  assert.match(css, /\.journey-detail-grid \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
+  assert.match(css, /\.session-recipe \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.minutes-field \{[^}]*display: flex;[^}]*justify-content: space-between/);
+  assert.ok(client.indexOf("CODING LADDER") < client.indexOf("SKILL COVERAGE"));
+  assert.ok(client.indexOf("SKILL COVERAGE") < client.indexOf("EFFORT MAP"));
+});
