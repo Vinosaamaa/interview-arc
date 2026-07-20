@@ -1,6 +1,8 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import type { LofiTrack } from "./ambient-sound";
+import { MusicPlaylist } from "./music-playlist";
 
 const DAILY_LINES = [
   "You do not need the whole answer. You need the next honest step.",
@@ -22,12 +24,12 @@ const WALLPAPER_POOL = [
   { path: "/arrival-mountain-lake-4k.jpg", label: "Peyto Lake at dawn", photographer: "Mario Häfliger", href: "https://unsplash.com/photos/Svnrlh3lXZ0" },
 ];
 
-const PETALS = Array.from({ length: 26 }, (_, index) => ({
+const PETALS = Array.from({ length: 72 }, (_, index) => ({
   left: (index * 37 + 11) % 101,
-  delay: -((index * 1.73) % 15),
-  duration: 11 + (index * 7) % 10,
-  drift: -70 + (index * 29) % 150,
-  size: 7 + (index * 5) % 9,
+  delay: -((index * 1.37) % 18),
+  duration: 10 + (index * 7) % 12,
+  drift: -130 + (index * 41) % 290,
+  size: 9 + (index * 5) % 12,
   rotate: (index * 47) % 180,
 }));
 
@@ -77,9 +79,13 @@ export function ArrivalRitual({
   muted,
   trackName,
   trackArtist,
+  playlist,
+  trackIndex,
   volume,
   onToggleMuted,
+  onPreviousTrack,
   onNextTrack,
+  onSelectTrack,
   onVolumeChange,
   onEnter,
 }: {
@@ -88,9 +94,13 @@ export function ArrivalRitual({
   muted: boolean;
   trackName: string;
   trackArtist: string;
+  playlist: LofiTrack[];
+  trackIndex: number;
   volume: number;
   onToggleMuted: () => void;
+  onPreviousTrack: () => void;
   onNextTrack: () => void;
+  onSelectTrack: (index: number) => void;
   onVolumeChange: (volume: number) => void;
   onEnter: () => void;
 }) {
@@ -111,8 +121,10 @@ export function ArrivalRitual({
               <span aria-hidden="true">{muted ? "◌" : "♪"}</span>
               <span><small>{muted ? "MUSIC OFF" : "TODAY’S MIX"}</small><strong>{trackName}</strong><em>{trackArtist}</em></span>
             </button>
+            <button className="arrival-next-track" onClick={onPreviousTrack} aria-label="Choose the previous track" title="Previous track">↞</button>
             <button className="arrival-next-track" onClick={onNextTrack} aria-label="Choose the next track" title="Next track">↠</button>
             <label className="arrival-volume"><span>VOLUME</span><input type="range" min="0" max="1" step="0.05" value={volume} onChange={(event) => onVolumeChange(Number(event.target.value))} aria-label="Music volume" /></label>
+            <MusicPlaylist playlist={playlist} currentIndex={trackIndex} onSelect={onSelectTrack} variant="arrival" />
           </div>
         </div>
       </div>

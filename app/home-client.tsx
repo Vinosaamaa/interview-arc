@@ -27,6 +27,7 @@ import { useLiveState } from "./live-sync";
 import { emptyJournal } from "./current-day";
 import { ArrivalRitual, PetalField } from "./arrival-ritual";
 import { useAmbientSound } from "./ambient-sound";
+import { MusicPlaylist } from "./music-playlist";
 
 type View = "today" | "journey" | "library" | "banks";
 type ComposerMode = "session" | "activity";
@@ -485,12 +486,16 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [integrationBusy, setIntegrationBusy] = useState(false);
   const {
     playing: ambientPlaying,
+    playlist: ambientPlaylist,
+    trackIndex: ambientTrackIndex,
     trackName,
     trackArtist,
     volume: musicVolume,
     start: startAmbient,
     stop: stopAmbient,
     next: nextAmbientTrack,
+    previous: previousAmbientTrack,
+    playTrack: playAmbientTrack,
     setVolume: setMusicVolume,
   } = useAmbientSound(today);
 
@@ -560,6 +565,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       return;
     }
     startAmbient();
+    setSoundMuted(false);
+    window.localStorage.setItem("interview-arc-sound-muted", "false");
+  }
+
+  function chooseAmbientTrack(index: number) {
+    playAmbientTrack(index);
     setSoundMuted(false);
     window.localStorage.setItem("interview-arc-sound-muted", "false");
   }
@@ -1416,7 +1427,22 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       </aside>
 
       <section className="main-column">
-        <header className="topbar"><div><span>{readableDate(journal.date)}</span><strong>{view === "today" ? "Today’s work" : view === "journey" ? "Statistics" : view === "library" ? "Dated practice log" : "Question sources"}</strong></div><div><div className={`music-dock ${ambientPlaying ? "active" : ""}`}><button onClick={toggleAmbientSound} aria-pressed={ambientPlaying} title={ambientPlaying ? "Pause music" : "Play music"}><span aria-hidden="true">{ambientPlaying ? "Ⅱ" : "▶"}</span><i><small>{ambientPlaying ? "PLAYING" : "PAUSED"}</small><strong>{trackName}</strong></i></button><button className="music-next" onClick={nextAmbientTrack} aria-label="Next music track" title={`Next track · ${trackArtist}`}>↠</button><label><span>Volume</span><input type="range" min="0" max="1" step="0.05" value={musicVolume} onChange={(event) => setMusicVolume(Number(event.target.value))} aria-label="Music volume" /></label></div><button className={`atmosphere-toggle ${petalsEnabled ? "active" : ""}`} onClick={togglePetals} aria-pressed={petalsEnabled} title={petalsEnabled ? "Pause cherry blossoms" : "Resume cherry blossoms"}><span aria-hidden="true">✦</span>{petalsEnabled ? "Petals" : "Still"}</button>{view === "today" && pipSupported && <button className="secondary-action" onClick={openNowWindow}>{pipWindow ? "Now window open" : "Pop out timer"}</button>}<button className="secondary-action" onClick={() => setIntegrationOpen(true)}>Connect</button><button className="secondary-action" onClick={exportDraft}>Export today</button></div></header>
+        <header className="topbar">
+          <div><span>{readableDate(journal.date)}</span><strong>{view === "today" ? "Today’s work" : view === "journey" ? "Statistics" : view === "library" ? "Dated practice log" : "Question sources"}</strong></div>
+          <div>
+            <div className={`music-dock ${ambientPlaying ? "active" : ""}`}>
+              <button onClick={toggleAmbientSound} aria-pressed={ambientPlaying} title={ambientPlaying ? "Pause music" : "Play music"}><span aria-hidden="true">{ambientPlaying ? "Ⅱ" : "▶"}</span><i><small>{ambientPlaying ? "PLAYING" : "PAUSED"}</small><strong>{trackName}</strong></i></button>
+              <button className="music-next" onClick={previousAmbientTrack} aria-label="Previous music track" title={`Previous track · ${trackArtist}`}>↞</button>
+              <button className="music-next" onClick={nextAmbientTrack} aria-label="Next music track" title={`Next track · ${trackArtist}`}>↠</button>
+              <label><span>Volume</span><input type="range" min="0" max="1" step="0.05" value={musicVolume} onChange={(event) => setMusicVolume(Number(event.target.value))} aria-label="Music volume" /></label>
+              <MusicPlaylist playlist={ambientPlaylist} currentIndex={ambientTrackIndex} onSelect={chooseAmbientTrack} />
+            </div>
+            <button className={`atmosphere-toggle ${petalsEnabled ? "active" : ""}`} onClick={togglePetals} aria-pressed={petalsEnabled} title={petalsEnabled ? "Pause cherry blossoms" : "Resume cherry blossoms"}><span aria-hidden="true">✦</span>{petalsEnabled ? "Petals" : "Still"}</button>
+            {view === "today" && pipSupported && <button className="secondary-action" onClick={openNowWindow}>{pipWindow ? "Now window open" : "Pop out timer"}</button>}
+            <button className="secondary-action" onClick={() => setIntegrationOpen(true)}>Connect</button>
+            <button className="secondary-action" onClick={exportDraft}>Export today</button>
+          </div>
+        </header>
         <div className="page-content">{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
       </section>
 
@@ -1449,7 +1475,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     )}
     </main>
     <PetalField quiet={arrivalState === "entered"} paused={!petalsEnabled} />
-    <ArrivalRitual date={today} state={arrivalState} muted={soundMuted} trackName={trackName} trackArtist={trackArtist} volume={musicVolume} onToggleMuted={toggleArrivalSound} onNextTrack={nextAmbientTrack} onVolumeChange={setMusicVolume} onEnter={enterArc} />
+    <ArrivalRitual date={today} state={arrivalState} muted={soundMuted} trackName={trackName} trackArtist={trackArtist} playlist={ambientPlaylist} trackIndex={ambientTrackIndex} volume={musicVolume} onToggleMuted={toggleArrivalSound} onPreviousTrack={previousAmbientTrack} onNextTrack={nextAmbientTrack} onSelectTrack={chooseAmbientTrack} onVolumeChange={setMusicVolume} onEnter={enterArc} />
     </>
   );
 }

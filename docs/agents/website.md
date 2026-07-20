@@ -54,12 +54,14 @@ The website must not imply that browser draft state has already been published t
   playback requires a user gesture.
 - Keep a locally hosted, documented, licensed lo-fi/chillout playlist. Start
   from a different date-stable track, advance when a song ends, and provide
-  play/pause, next-track, and clearly audible volume controls. Never rip music
-  from YouTube, hotlink media, or ship media without a documented usage license.
-- Keep cherry-blossom motion abundant on arrival and sparse inside the working
-  dashboard. Provide persistent independent controls for sound and petals,
-  remember those preferences locally, and disable motion for
-  `prefers-reduced-motion`.
+  play/pause, previous/next-track, direct track selection, and clearly audible
+  volume controls. Show the daily playlist with the licensed source page and a
+  direct save action for every locally hosted track. Never rip music from
+  YouTube, hotlink media, or ship media without a documented usage license.
+- Keep cherry-blossom motion abundant and high-contrast on both arrival and the
+  working dashboard so the petals remain visible over bright or dark surfaces.
+  Provide persistent independent controls for sound and petals, remember those
+  preferences locally, and disable motion for `prefers-reduced-motion`.
 - Lead with today's practice and progress, then history and review queues.
 - Favor a focused journal/dashboard over contest theater.
 - Provide Today, Journey, Past, and Problem Banks views without placing every raw log on one page.
