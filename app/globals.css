@@ -829,3 +829,196 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   font-size: .85rem;
   text-align: center;
 }
+
+/* Daily arrival ritual ---------------------------------------------------- */
+.atmosphere-toggle {
+  min-height: 38px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .66);
+  color: #687269;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: .75rem;
+  font-weight: 730;
+  cursor: pointer;
+  transition: background .2s ease, border-color .2s ease, color .2s ease;
+}
+.atmosphere-toggle span { width: 15px; color: #8a938b; text-align: center; }
+.atmosphere-toggle.active { border-color: #b5c48a; background: #f3f8df; color: #405020; }
+.atmosphere-toggle.active span { color: #6f8627; }
+
+.arrival-ritual {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  overflow: hidden;
+  background: #111a22;
+  color: #f7f4ec;
+  isolation: isolate;
+  transition: opacity .85s cubic-bezier(.65, 0, .35, 1), visibility .85s;
+}
+.arrival-ritual.leaving { opacity: 0; visibility: hidden; }
+.arrival-image {
+  position: absolute;
+  inset: -2.5%;
+  z-index: -3;
+  background: url("/arrival-dawn.jpg") center center / cover no-repeat;
+  animation: arrivalBreath 20s ease-in-out infinite alternate;
+}
+.arrival-shade {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background:
+    linear-gradient(90deg, rgba(10, 18, 27, .84) 0%, rgba(11, 20, 29, .52) 42%, rgba(13, 23, 31, .08) 72%),
+    linear-gradient(0deg, rgba(7, 13, 19, .66) 0%, transparent 46%);
+}
+.arrival-content {
+  width: min(880px, 80vw);
+  min-height: 100%;
+  padding: clamp(72px, 10vh, 120px) clamp(28px, 8vw, 132px) 100px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  animation: arrivalCopyIn 1.15s .12s both cubic-bezier(.2, .75, .2, 1);
+}
+.arrival-kicker {
+  color: #d3dcac;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: .74rem;
+  font-weight: 760;
+  letter-spacing: .16em;
+}
+.arrival-content blockquote {
+  max-width: 800px;
+  margin: 24px 0 22px;
+  font-family: var(--font-editorial);
+  font-size: clamp(3.5rem, 6.6vw, 7.3rem);
+  font-weight: 500;
+  line-height: .92;
+  letter-spacing: -.055em;
+  text-wrap: balance;
+  text-shadow: 0 4px 40px rgba(5, 12, 18, .32);
+}
+.arrival-content > p {
+  max-width: 540px;
+  margin: 0;
+  color: rgba(242, 243, 234, .76);
+  font-size: .96rem;
+  line-height: 1.65;
+}
+.arrival-actions { margin-top: 38px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.arrival-enter,
+.arrival-sound {
+  min-height: 50px;
+  border-radius: 999px;
+  font-size: .82rem;
+  font-weight: 780;
+  cursor: pointer;
+}
+.arrival-enter {
+  min-width: 214px;
+  padding: 0 20px 0 24px;
+  border: 1px solid #d8ef79;
+  background: #c9ef4d;
+  color: #182019;
+  display: inline-flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 26px;
+  box-shadow: 0 16px 42px rgba(4, 12, 17, .28);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.arrival-enter:hover { transform: translateY(-3px); box-shadow: 0 20px 48px rgba(4, 12, 17, .36); }
+.arrival-enter span { font-size: 1.1rem; }
+.arrival-sound {
+  padding: 0 18px;
+  border: 1px solid rgba(255, 255, 255, .3);
+  background: rgba(11, 20, 28, .28);
+  color: #f5f3eb;
+  backdrop-filter: blur(10px);
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+.arrival-sound span { color: #d3dcac; font-size: 1rem; }
+.arrival-ritual footer {
+  position: absolute;
+  right: clamp(24px, 5vw, 80px);
+  bottom: 31px;
+  left: clamp(24px, 5vw, 80px);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 16px;
+  color: rgba(255, 255, 255, .54);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: .65rem;
+  font-weight: 760;
+  letter-spacing: .18em;
+}
+.arrival-ritual footer i { height: 1px; background: rgba(255, 255, 255, .26); }
+
+.petal-field { position: fixed; inset: 0; z-index: 110; overflow: hidden; pointer-events: none; transition: opacity .4s ease; }
+.petal-field.quiet { z-index: 19; opacity: .32; }
+.petal-field.quiet .ambient-petal:nth-child(3n),
+.petal-field.quiet .ambient-petal:nth-child(3n + 1) { display: none; }
+.petal-field.paused { opacity: 0; }
+.ambient-petal {
+  position: absolute;
+  top: -30px;
+  left: var(--petal-left);
+  width: var(--petal-size);
+  height: calc(var(--petal-size) * .72);
+  border-radius: 75% 25% 68% 32%;
+  background: linear-gradient(135deg, #fff8f4 4%, #efc8cb 55%, #d99ba7 100%);
+  box-shadow: 0 1px 3px rgba(87, 48, 63, .12);
+  opacity: .78;
+  transform: rotate(var(--petal-rotate));
+  animation: petalFall var(--petal-duration) var(--petal-delay) linear infinite;
+}
+
+@keyframes arrivalBreath {
+  from { transform: scale(1.025) translate3d(-.4%, 0, 0); }
+  to { transform: scale(1.075) translate3d(.55%, -.35%, 0); }
+}
+@keyframes arrivalCopyIn {
+  from { opacity: 0; transform: translateY(26px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes petalFall {
+  0% { transform: translate3d(0, -5vh, 0) rotate(var(--petal-rotate)); }
+  48% { transform: translate3d(calc(var(--petal-drift) * -.35), 52vh, 0) rotate(calc(var(--petal-rotate) + 210deg)); }
+  100% { transform: translate3d(var(--petal-drift), 112vh, 0) rotate(calc(var(--petal-rotate) + 520deg)); }
+}
+
+@media (max-width: 900px) {
+  .topbar > div:last-child { gap: 6px; }
+  .atmosphere-toggle { width: 38px; padding: 0; justify-content: center; }
+  .atmosphere-toggle > span { width: auto; }
+  .atmosphere-toggle { font-size: 0; }
+  .atmosphere-toggle > span { font-size: .82rem; }
+  .arrival-content { width: min(92vw, 740px); padding-left: clamp(24px, 7vw, 70px); padding-right: 24px; }
+  .arrival-shade { background: linear-gradient(90deg, rgba(10, 18, 27, .84), rgba(11, 20, 29, .35)), linear-gradient(0deg, rgba(7, 13, 19, .7), transparent 55%); }
+}
+
+@media (max-width: 680px) {
+  .arrival-image { background-position: 61% center; }
+  .arrival-content { width: 100%; padding-top: 82px; padding-bottom: 120px; justify-content: flex-end; }
+  .arrival-content blockquote { font-size: clamp(3.15rem, 15vw, 5rem); }
+  .arrival-content > p { max-width: 92%; font-size: .9rem; }
+  .arrival-actions { width: 100%; display: grid; }
+  .arrival-enter, .arrival-sound { width: 100%; }
+  .arrival-sound { justify-content: center; }
+  .arrival-ritual footer { bottom: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arrival-image, .arrival-content, .ambient-petal { animation: none !important; }
+  .petal-field { display: none; }
+  .arrival-ritual { transition-duration: .01ms; }
+}
