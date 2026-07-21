@@ -10,9 +10,10 @@ Use this skill together with `practice/system-design/AGENTS.md`; that file owns 
 ## Start the activity
 
 1. Resolve the focused system-design activity through Interview Arc. Reuse its `activity_id`, `questionId`, session, prompt, and timer facts.
-2. Read [references/reference-preflight.md](references/reference-preflight.md). Inspect the stored question URL and accessible recommended sources before asking the prompt.
-3. If no adequate reference is accessible, tell the user briefly before the mock, then continue from first principles. Never claim a blocked source was reviewed.
-4. Ask the prompt without revealing the prepared answer. Let the user drive the first pass.
+2. Call `get_problem_solution_profile` with the resolved `questionId`.
+3. When a current profile exists, use it privately as the baseline. Do not reveal it before the user's fresh attempt unless asked. Skip repeated web research unless the profile is incomplete, plausibly outdated, disputed, or the user requests fresh research.
+4. When no adequate profile exists, read [references/reference-preflight.md](references/reference-preflight.md) and inspect the stored question URL and accessible recommended sources. If no adequate reference is accessible, tell the user briefly, then continue from first principles. Never claim a blocked source was reviewed.
+5. Ask the prompt without revealing the prepared answer. Let the user drive the first pass.
 
 ## Run the mock
 
@@ -35,5 +36,7 @@ Read [references/solution-template.md](references/solution-template.md). A compl
 - the stable `questionId` so the attempt links to the bank profile revision.
 
 The Solution Profile is reusable bank knowledge. Never put the transcript or raw exchanges inside it. If the mock was incomplete, still produce a complete model design from verified prompt facts and label assumptions.
+
+Compare the completed mock with the loaded current profile. Use `solutionProfileAction: reuse_current` when the design did not materially improve. Use `create_or_revise` and supply a complete new profile when requirements, architecture, flows, scaling, reliability, tradeoffs, or explanation genuinely improve. Never create a revision for formatting alone.
 
 Schedule a failed or full-walkthrough review in four days, an approach-review completion in seven days, and successful recall in the configured longer cadence.

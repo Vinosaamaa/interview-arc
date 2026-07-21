@@ -40,7 +40,7 @@ interview-arc/
 │   ├── leetcode/                   question bank and attempt records
 │   ├── system-design/              system-design sessions and agent guide
 │   └── behavioral/                 behavioral sessions and agent guide
-├── audio-answers/                  local-only recordings plus tracked reviews
+├── audio-answers/                  ignored local staging for private recordings
 └── scripts/                        local artifact helpers
 ```
 
@@ -101,7 +101,11 @@ System-design and behavioral sessions preserve the complete conversation transcr
 
 ## Audio
 
-Audio recordings are intentionally local-only and ignored by Git. Their matching Markdown transcript and review files are committed. A session artifact references the recording by filename and marks it as `local-only`; the deployed website must show that status instead of offering a broken playback link.
+Raw recordings are ignored by Git. A supplied recording can be transcribed
+locally, then uploaded through the authenticated audio API into the private
+`interview-arc-audio` Cloudflare R2 bucket. D1 stores owner-scoped clip metadata;
+dated Past attempts provide authenticated, seekable playback without exposing a
+public object URL. Local files may be removed after upload and verification.
 
 In the current local umbrella workspace, run transcription from this repository with:
 
@@ -111,7 +115,12 @@ In the current local umbrella workspace, run transcription from this repository 
   --prompt "Design TikTok's For You feed"
 ```
 
-The helper copies the recording into `audio-answers/` and creates its Markdown review. A standalone clone may instead create `.venv/` in this repository and run the same script with `./.venv/bin/python`.
+The helper copies the recording into ignored `audio-answers/` staging and
+creates its Markdown review. Upload the staged file with
+`node scripts/upload-practice-audio.mjs <activity_id> <path> [label]`; the
+authenticated specialist environment supplies `INTERVIEW_ARC_MCP_TOKEN`. A
+standalone clone may instead create `.venv/` in this repository and run the
+same transcription script with `./.venv/bin/python`.
 
 ## Website Development
 

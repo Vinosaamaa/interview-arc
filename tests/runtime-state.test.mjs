@@ -133,14 +133,17 @@ test("durable publishing keeps transcripts, review, notes, and four-day walkthro
   assert.match(contract, /complete standalone `modelAnswer`/i);
   assert.match(contract, /failed attempt or full walkthrough: first review in \*\*4 days\*\*/i);
   assert.match(contract, /Pinned Notes[\s\S]*What Went Well[\s\S]*What To Improve[\s\S]*References/);
-  for (const tool of ["append_practice_transcript", "add_practice_note", "save_specialist_finalization", "get_activity_practice_record", "schedule_practice_review", "register_specialist_task", "register_activity_audio_clip"]) {
+  for (const tool of ["append_practice_transcript", "add_practice_note", "save_specialist_finalization", "get_activity_practice_record", "get_problem_solution_profile", "schedule_practice_review", "register_specialist_task", "register_activity_audio_clip"]) {
     assert.match(bridge, new RegExp(`"${tool}"`));
   }
   assert.match(bridge, /modelAnswer: z\.string\(\)\.min\(1\)/);
   assert.match(bridge, /solutionProfile: z\.object/);
+  assert.match(bridge, /solutionProfileAction: z\.enum\(\["create_or_revise", "reuse_current"\]\)/);
+  assert.match(bridge, /behavioralAnswer: z\.object/);
   assert.match(bridge, /"upsert_personal_bank_question"/);
   const durableStore = await readFile(new URL("../db/durable-practice.ts", import.meta.url), "utf8");
   assert.match(durableStore, /Behavioral Solution Profiles cannot contain a transcript/);
+  assert.match(durableStore, /Behavioral Solution Profiles require .*preferred personal answer/);
 });
 
 test("private R2 audio stays owner-authorized and seekable", async () => {

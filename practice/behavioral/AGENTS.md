@@ -17,6 +17,9 @@ Read `../../docs/contracts/solution-profiles.md` before finalizing.
 
 - Resolve or resume the focused behavioral `activity_id`; ask only when the
   activity remains ambiguous.
+- After resolving `questionId`, call `get_problem_solution_profile`. On a
+  revisit, load the existing preferred personal answer, alternatives, verified
+  evidence, gaps, and follow-ups privately before asking the question.
 - Append every meaningful two-sided mock exchange to D1 in small idempotent
   batches with `append_practice_transcript`. Flush every few short turns and on
   long answer, activity switch, pause, finish, or coordinator request.
@@ -37,6 +40,14 @@ Read `../../docs/contracts/solution-profiles.md` before finalizing.
 - Pass the stable `questionId` and a reusable STAR/STARL `solutionProfile`.
   Never put the transcript, raw conversation, or exchange-by-exchange review in
   that profile. Those belong only to the dated Past attempt.
+- The profile must contain `behavioralAnswer.preferred`: a polished canonical
+  answer based on this mock and only verified user experience. Preserve the
+  user's voice. Add truthful alternative story variants when they provide a
+  genuinely different useful answer; never invent facts or metrics.
+- Use `reuse_current` when the mock adds no material evidence or answer
+  improvement. Use `create_or_revise` when it strengthens the preferred answer,
+  verifies new evidence, records a meaningful gap, adds an alternative, or
+  promotes a better story. Do not create revisions for wording polish alone.
 - Schedule failed/full-walkthrough review in 4 days, approach-review completion
   in 7 days, and successful reimplementation in 21 then 60 days.
 
@@ -98,7 +109,8 @@ after this foundation unless the user explicitly overrides the sequence.
 
 Every imported Bugfree.ai entry includes `url`, `solutionReference: true`, an expected `answerFormat`, and `referenceAccess`. The stored URL points directly to the question's behavioral answer page.
 
-When the user asks for the answer, a solution, a model response, or help improving their response:
+For the first attempt—or when the current profile is incomplete, disputed,
+plausibly outdated, or the user requests fresh external research:
 
 1. Open the selected bank entry's exact `url` immediately before answering. Do not rely on an old remembered version of the page.
 2. Follow the site's visible answer layers as needed, including expandable STAR/STARL sections and linked solution controls. Respect sign-in and subscription boundaries; never attempt to bypass them.
@@ -108,6 +120,10 @@ When the user asks for the answer, a solution, a model response, or help improvi
 6. You may still offer a clearly labeled first-principles STAR framework or original model example when useful, but keep it separate from the unavailable Bugfree.ai reference.
 
 During a mock interview, do not reveal the reference answer before the user attempts the question unless they explicitly ask for the solution first. Use the reference privately to choose follow-ups and evaluate completeness.
+
+On an ordinary revisit with a complete current Solution Profile, use the stored
+framework and personal answer first instead of reopening Bugfree.ai. The site is
+a rubric/reference source; it is never the source of the user's personal story.
 
 ## Artifacts
 

@@ -20,6 +20,7 @@ import {
   clearActivityReviewSchedules,
   markFinalizationPublished,
   readActivityPracticeRecord,
+  readProblemSolutionProfile,
   readSpecialistTasks,
   registerActivityAudioClip,
   registerSpecialistTask,
@@ -295,12 +296,28 @@ function createServer(ownerId: string) {
             url: z.string().url(),
             accessedAt: z.string().min(1),
           })),
+          solutionProfileAction: z.enum(["create_or_revise", "reuse_current"]).optional(),
           solutionProfile: z.object({
             schemaVersion: z.literal(1),
             summary: z.string().min(1),
             sections: z.array(z.object({ title: z.string().min(1), body: z.string().min(1) })).min(1),
             tags: z.array(z.string().min(1)).max(32),
             references: z.array(z.object({ title: z.string().min(1), url: z.string().url(), accessedAt: z.string().min(1) })),
+            behavioralAnswer: z.object({
+              preferred: z.object({
+                label: z.string().min(1),
+                answer: z.string().min(1),
+                evidence: z.array(z.string()),
+                evidenceGaps: z.array(z.string()),
+              }),
+              alternatives: z.array(z.object({
+                label: z.string().min(1),
+                answer: z.string().min(1),
+                whenToUse: z.string().optional(),
+                evidence: z.array(z.string()),
+                evidenceGaps: z.array(z.string()),
+              })).max(5),
+            }).optional(),
           }).optional(),
         }),
       },
@@ -311,6 +328,25 @@ function createServer(ownerId: string) {
       return {
         content: [{ type: "text", text: `${activityId} specialist bundle saved as ${finalization.complete ? "ready" : "draft"}.` }],
         structuredContent: { activityId, specialty, status: finalization.complete ? "ready" : "draft" },
+      };
+    },
+  );
+
+  server.registerTool(
+    "get_problem_solution_profile",
+    {
+      description: "Load the owner-private current Solution Profile and immutable revision history for a stable bank question. Every specialist calls this after resolving questionId and before preparing a first attempt or revisit.",
+      inputSchema: {
+        specialty: z.enum(["leetcode", "system_design", "behavioral"]),
+        questionId: z.string().min(1),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ specialty, questionId }) => {
+      const result = await readProblemSolutionProfile(ownerId, specialty, questionId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: { specialty, questionId, ...result },
       };
     },
   );

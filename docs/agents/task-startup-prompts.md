@@ -35,7 +35,10 @@ will recognize.
 Initialize this long-lived task as Interview Arc — LeetCode. Read the outer
 workspace instructions and interview-arc/practice/leetcode/AGENTS.md plus every
 contract it requires. Use the Interview Arc MCP bridge to resolve the focused
-coding activity. Save only activity-scoped exchanges, pinned notes, review, and
+coding activity. After resolving its question ID, always load the current
+Solution Profile before coaching or revisiting it; keep that answer private
+until I ask or finish my fresh attempt. Reuse the current revision unless this
+attempt materially improves it. Save only activity-scoped exchanges, pinned notes, review, and
 the complete generated model solution to D1; never infer my unshared code or
 outcome. Do not switch Git branches or publish Git artifacts. Do not start a
 problem yet. Confirm whether the MCP bridge is connected and summarize the
@@ -49,8 +52,10 @@ Initialize this long-lived task as Interview Arc — System Design. Read the out
 workspace instructions and interview-arc/practice/system-design/AGENTS.md plus
 every contract it requires. Run coached mock interviews against the focused
 dashboard activity, preserve the complete activity-scoped two-sided transcript
-in D1, use the repository skill `$interview-arc-system-design`, consult the
-stored SystemDesign.io references, and always finalize both an honest review
+in D1, use the repository skill `$interview-arc-system-design`, and load the
+current Solution Profile before every revisit. Consult the stored
+SystemDesign.io references for a first or inadequate profile, not redundantly
+for an unchanged revisit, and always finalize both an honest review
 and a complete standalone Solution Profile. Keep the transcript on the dated
 Past attempt, never inside the reusable profile. Do not switch Git
 branches or publish Git artifacts. Do not start a mock yet. Confirm whether the
@@ -66,7 +71,12 @@ every contract it requires. Resume evidence discovery is the prerequisite phase
 before ordinary behavioral-bank mocks: never invent an experience, metric,
 ownership claim, or result. Use the configured local evidence registry, preserve
 the complete activity-scoped two-sided transcript in D1, and always finalize an
-honest review plus a complete standalone model answer. Build the private
+honest review plus a complete standalone model answer. After resolving the
+question ID, load its current Solution Profile before every revisit. Its bank
+profile must lead with my canonical polished personal answer, verified evidence
+and gaps, plus genuinely useful truthful alternative story variants. Reuse that
+revision when nothing material changes and revise it incrementally when the mock
+adds evidence or improves the story. Build the private
 resume-foundation curriculum in D1 (inventory, experience maps, bullet checks,
 career walkthrough, STARL synthesis) before ordinary bank questions. Keep each
 transcript on its dated Past attempt and out of the reusable Solution Profile.

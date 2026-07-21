@@ -36,6 +36,27 @@ Only practice conversation after the activity boundary is in scope. Website
 bugs, scheduling, Git discussion, unrelated questions, and task administration
 must not enter a practice transcript.
 
+## Solution Profile Preflight
+
+After resolving the stable `questionId`, every specialist calls
+`get_problem_solution_profile` before preparing the activity.
+
+- When no profile exists, prepare from the canonical prompt and the specialty's
+  permitted references, then create revision 1 during finalization.
+- When a profile exists, use its current revision privately as the baseline for
+  coaching and evaluation. Do not reveal it before a fresh attempt unless the
+  user asks for the answer.
+- Fresh web research is not the default on a revisit. Use it only when the
+  stored profile is incomplete, plausibly outdated, disputed, missing needed
+  support, or the user explicitly requests fresh research.
+- After the attempt, use `solutionProfileAction: reuse_current` when the
+  canonical solution did not materially change. Use `create_or_revise` with a
+  complete profile when the discussion adds verified facts, a better approach,
+  a stronger explanation, or a useful alternative.
+
+Every completed attempt links to the exact revision reused or created. Never
+create a new revision for punctuation or formatting alone.
+
 ## Draft Capture
 
 Specialists call `append_practice_transcript` with small, ordered, idempotent

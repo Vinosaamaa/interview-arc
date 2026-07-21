@@ -37,12 +37,28 @@ export type SpecialistFinalization = {
   alternatives?: Array<{ title: string; summary: string; time?: string; space?: string }>;
   edgeCases?: string[];
   references: Array<{ title: string; url: string; accessedAt: string }>;
+  solutionProfileAction?: "create_or_revise" | "reuse_current";
   solutionProfile?: {
     schemaVersion: 1;
     summary: string;
     sections: Array<{ title: string; body: string }>;
     tags: string[];
     references: Array<{ title: string; url: string; accessedAt: string }>;
+    behavioralAnswer?: {
+      preferred: {
+        label: string;
+        answer: string;
+        evidence: string[];
+        evidenceGaps: string[];
+      };
+      alternatives: Array<{
+        label: string;
+        answer: string;
+        whenToUse?: string;
+        evidence: string[];
+        evidenceGaps: string[];
+      }>;
+    };
   };
 };
 
@@ -59,6 +75,9 @@ function validateSolutionProfile(specialty: Specialty, payload: SpecialistFinali
   }
   if (specialty === "behavioral" && payload.sections.some((section) => TRANSCRIPT_SECTION.test(section.title))) {
     throw new Error("Behavioral Solution Profiles cannot contain a transcript; keep it on the dated Past attempt.");
+  }
+  if (specialty === "behavioral" && !payload.behavioralAnswer?.preferred.answer.trim()) {
+    throw new Error("Behavioral Solution Profiles require the user's polished, evidence-grounded preferred personal answer.");
   }
 }
 
@@ -163,9 +182,21 @@ export async function saveSpecialistFinalization(
   nowMs: number,
 ) {
   const db = getDb();
+  const profileAction = payload.solutionProfileAction ?? "create_or_revise";
+  let currentProfile: typeof problemSolutionProfiles.$inferSelect | undefined;
   if (payload.complete) {
     if (!questionId) throw new Error("A complete finalization needs the stable questionId.");
-    validateSolutionProfile(specialty, payload.solutionProfile);
+    if (profileAction === "reuse_current") {
+      const rows = await db.select().from(problemSolutionProfiles).where(and(
+        eq(problemSolutionProfiles.ownerId, ownerId),
+        eq(problemSolutionProfiles.specialty, specialty),
+        eq(problemSolutionProfiles.questionId, questionId),
+      ));
+      currentProfile = rows[0];
+      if (!currentProfile) throw new Error("Cannot reuse a Solution Profile that does not exist.");
+    } else {
+      validateSolutionProfile(specialty, payload.solutionProfile);
+    }
   }
   const status = payload.complete ? "ready" : "draft";
   await db
@@ -192,7 +223,11 @@ export async function saveSpecialistFinalization(
       },
     });
 
-  if (payload.complete && questionId && payload.solutionProfile) {
+  let linkedRevision: number | null = null;
+  if (payload.complete && questionId && profileAction === "reuse_current" && currentProfile) {
+    linkedRevision = currentProfile.currentRevision;
+  }
+  if (payload.complete && questionId && profileAction === "create_or_revise" && payload.solutionProfile) {
     const prior = await db
       .select({ currentRevision: problemSolutionProfiles.currentRevision })
       .from(problemSolutionProfiles)
@@ -223,12 +258,15 @@ export async function saveSpecialistFinalization(
       payload: profile,
       createdAt: nowMs,
     });
+    linkedRevision = revision;
+  }
+  if (payload.complete && questionId && linkedRevision !== null) {
     await db
       .insert(activitySolutionLinks)
-      .values({ ownerId, activityId, specialty, questionId, solutionRevision: revision, updatedAt: nowMs })
+      .values({ ownerId, activityId, specialty, questionId, solutionRevision: linkedRevision, updatedAt: nowMs })
       .onConflictDoUpdate({
         target: [activitySolutionLinks.ownerId, activitySolutionLinks.activityId],
-        set: { specialty, questionId, solutionRevision: revision, updatedAt: nowMs },
+        set: { specialty, questionId, solutionRevision: linkedRevision, updatedAt: nowMs },
       });
   }
 }
@@ -462,6 +500,27 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
     db.select().from(activityAudioClips).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.activityId, activityId))),
   ]);
   return { turns, notes, finalization: finalizations[0] ?? null, reviews, audioClips: clips };
+}
+
+export async function readProblemSolutionProfile(ownerId: string, specialty: Specialty, questionId: string) {
+  const db = getDb();
+  const [profiles, revisions] = await Promise.all([
+    db.select().from(problemSolutionProfiles).where(and(
+      eq(problemSolutionProfiles.ownerId, ownerId),
+      eq(problemSolutionProfiles.specialty, specialty),
+      eq(problemSolutionProfiles.questionId, questionId),
+    )),
+    db.select({
+      revision: problemSolutionRevisions.revision,
+      activityId: problemSolutionRevisions.activityId,
+      createdAt: problemSolutionRevisions.createdAt,
+    }).from(problemSolutionRevisions).where(and(
+      eq(problemSolutionRevisions.ownerId, ownerId),
+      eq(problemSolutionRevisions.specialty, specialty),
+      eq(problemSolutionRevisions.questionId, questionId),
+    )).orderBy(desc(problemSolutionRevisions.revision)),
+  ]);
+  return { profile: profiles[0] ?? null, revisions };
 }
 
 export async function readDurablePracticeSummary(ownerId: string, _activityIds: string[], today: string) {

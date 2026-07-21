@@ -99,6 +99,9 @@ The website must not imply that browser draft state has already been published t
 - Keep body and annotation text readable: normal supporting copy should be at least 14px and short utility labels at least 12px.
 - Past is a date-grouped scrolling log with category color, filters, a calendar jump control, and a centered reading dialog.
 - Problem Banks combines all three versioned banks, offers independent category and progress filters, and sends every `Practice today` selection to standalone practice on Today. Progress has `All`, `To practice`, and `Finished`; failed or merely planned work remains `To practice`.
+- A behavioral Problem Bank profile leads with the user's preferred polished
+  personal answer, verified evidence, evidence gaps, and expandable alternative
+  story variants. Its transcript remains exclusively on the dated Past attempt.
 - For imported system-design questions, show the source question link, listed complexity, and whether reference solutions are available.
 - For imported behavioral questions, show the expected answer format, frequency, and whether the Bugfree.ai reference may require sign-in. Link to the canonical answer page without copying third-party answer text into the site.
 - Journey owns cumulative totals and interactive analytics for coding, system design, behavioral, outcomes, elapsed time, consistency, difficulty, and bank-linked topic coverage.

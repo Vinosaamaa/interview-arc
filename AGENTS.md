@@ -82,7 +82,10 @@ For a behavioral bank question with `source: Bugfree.ai` and `solutionReference:
 
 ## Audio Boundary
 
-Raw recordings stay in `audio-answers/` and are ignored by Git. Commit the matching Markdown transcript/review. Reference audio by filename with `availability: local-only`; the deployed site cannot play a file that exists only on the user's computer.
+Raw recordings are ignored by Git and may be staged in `audio-answers/` for
+transcription. Upload them through the authenticated Interview Arc audio API to
+the private R2 bucket; D1 stores owner-scoped metadata and dated Past attempts
+provide authenticated playback. Never commit raw audio or a public object URL.
 
 For local transcription, prefer the current workspace environment:
 

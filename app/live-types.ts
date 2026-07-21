@@ -48,6 +48,21 @@ export type SolutionProfilePayload = {
   sections: Array<{ title: string; body: string }>;
   tags: string[];
   references: Array<{ title: string; url: string; accessedAt: string }>;
+  behavioralAnswer?: {
+    preferred: {
+      label: string;
+      answer: string;
+      evidence: string[];
+      evidenceGaps: string[];
+    };
+    alternatives: Array<{
+      label: string;
+      answer: string;
+      whenToUse?: string;
+      evidence: string[];
+      evidenceGaps: string[];
+    }>;
+  };
 };
 export type SolutionProfile = {
   specialty: ActivityType;

@@ -39,6 +39,19 @@ normalized domain/concept tags such as `feed-ranking`, `event-streaming`,
 8. Likely follow-ups and evidence gaps
 9. Reference answer patterns and sources consulted
 
+The structured behavioral answer contains:
+
+- one **Preferred personal answer**, polished from the mock conversation and
+  grounded only in verified user experience;
+- the evidence supporting that answer and any unresolved evidence gaps;
+- up to five optional truthful alternative story variants, each with a label
+  and guidance on when it is a better fit.
+
+The preferred answer is the user's canonical rehearsal answer for this
+question. A later mock may improve it or promote an alternative story, creating
+a new immutable revision. If nothing material improves, link the new attempt to
+the current revision instead of duplicating it.
+
 The profile may contain a polished answer supported by verified user evidence.
 It must not contain the activity transcript, raw dialogue, or claims the user
 did not establish. Use competency/evidence tags such as `conflict`,

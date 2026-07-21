@@ -25,6 +25,9 @@ procedure below.
 
 - Resolve or resume the focused system-design `activity_id`; ask only when the
   activity remains ambiguous.
+- After resolving `questionId`, call `get_problem_solution_profile`. Use an
+  existing design privately as the baseline on revisits; do not reveal it
+  before a fresh attempt unless the user asks.
 - Append every meaningful two-sided mock exchange to D1 in small idempotent
   batches with `append_practice_transcript`. Flush every few short turns and on
   long answer, activity switch, pause, finish, or coordinator request.
@@ -44,6 +47,9 @@ procedure below.
 - Pass the stable `questionId` and a complete `solutionProfile`. The profile is
   reusable Problem Bank knowledge; the dated transcript and feedback remain on
   the Past attempt and are never copied into the profile.
+- Use `reuse_current` when the reference design remains complete. Use
+  `create_or_revise` only when the mock produces a material requirements,
+  architecture, flow, scaling, reliability, or tradeoff improvement.
 - Schedule failed/full-walkthrough review in 4 days, approach-review completion
   in 7 days, and successful reimplementation in 21 then 60 days.
 
@@ -124,15 +130,20 @@ At the beginning of a mock interview:
 
 The canonical system-design bank contains the 55 questions from SystemDesign.io. The bank stores each canonical question page URL, its listed complexity, and `solutionReference: true`.
 
-For every selected SystemDesign.io question:
+For a first attempt, or when the stored profile is incomplete, outdated,
+disputed, or the user asks for fresh research:
 
-1. Open the stored question URL immediately before the mock, because its recommended links and details may change.
+1. Open the stored question URL during private preparation, because its recommended links and details may change.
 2. Review the page's "Recommended Solutions from the Web" and its question-specific details. Follow the most relevant accessible references when needed to establish a strong expected architecture, key tradeoffs, and likely follow-ups.
 3. Treat this research as interviewer preparation, not as a script to reveal. Let the user clarify requirements and propose a design before using the reference material for nudges or evaluation.
 4. Do not copy a third-party solution into the repository. Summarize concepts in original language and preserve source links when they materially support the review.
 5. If a reference is unavailable, continue with first-principles system-design coaching and note the unavailable reference rather than pretending it was reviewed.
 
 The public question page is the durable pointer; external recommended articles and videos remain owned by their publishers and are not vendored into Interview Arc.
+
+On an ordinary revisit with a complete current Solution Profile, begin from the
+stored design instead of repeating web research. Research again only under the
+conditions above, and preserve any newly consulted sources in a new revision.
 
 ## Default System Design Flow
 
