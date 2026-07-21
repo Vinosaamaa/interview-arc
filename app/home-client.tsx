@@ -327,21 +327,22 @@ function SessionCountControl({
     <div className="session-count-card">
       <div className="session-count-label">
         <span aria-hidden="true">{mark}</span>
-        <div><strong>{label}</strong><small>{minutesEach} min each</small></div>
+        <strong>{label}</strong>
       </div>
+      <input
+        className="session-count-value"
+        type="number"
+        min="0"
+        max={max}
+        value={value}
+        onChange={(event) => onChange(Math.min(max, Math.max(0, Math.floor(Number(event.target.value) || 0))))}
+        aria-label={`${label} count`}
+      />
+      <span className="session-contribution">{minutesEach} min each · {formatDuration(contribution)}</span>
       <div className="count-stepper">
         <button type="button" onClick={() => onChange(Math.max(0, value - 1))} disabled={value === 0} aria-label={`Remove one ${label.toLowerCase()}`}>−</button>
-        <input
-          type="number"
-          min="0"
-          max={max}
-          value={value}
-          onChange={(event) => onChange(Math.min(max, Math.max(0, Math.floor(Number(event.target.value) || 0))))}
-          aria-label={`${label} count`}
-        />
         <button type="button" onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max} aria-label={`Add one ${label.toLowerCase()}`}>＋</button>
       </div>
-      <span className="session-contribution">{value} × {minutesEach}m <strong>{formatDuration(contribution)}</strong></span>
     </div>
   );
 }
@@ -1615,6 +1616,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             <p>Difficulty comes from the question bank. Custom URLs stay “unknown” until bank metadata is added.</p>
           </article>
 
+          <article className="chart-sheet topic-sheet">
+            <div className="chart-heading"><div><span className="eyebrow">SKILL COVERAGE</span><h2>Topics practiced</h2><p>Select a topic to see the records behind it.</p></div></div>
+            {topicStats.length ? <div className="topic-bars">{topicStats.map((topic) => <button key={topic.topic} className={journeyTopic === topic.topic ? "active" : ""} onClick={() => setJourneyTopic((current) => current === topic.topic ? "" : topic.topic)}><span>{topic.topic}</span><i><b style={{ width: `${(topic.count / maxTopicCount) * 100}%` }} /></i><strong>{topic.count}</strong></button>)}</div> : <div className="chart-empty rich-empty"><strong>No topic coverage yet.</strong><span>Finish bank-linked coding problems to build this map.</span></div>}
+            {journeyTopic && <div className="topic-records"><strong>{journeyTopic}</strong>{selectedTopicEntries.map((entry) => <button key={entry.id} onClick={() => setSelectedEntry(entry)}>{entry.title}<span>{readableDate(entry.date, true)} →</span></button>)}</div>}
+          </article>
+
           <article className="chart-sheet effort-sheet">
             <div className="chart-heading"><div><span className="eyebrow">EFFORT MAP</span><h2>Time spent versus outcome</h2><p>Each point is one coding attempt. Select a point to open its record.</p></div></div>
             {effortEntries.length ? <svg className="effort-map" viewBox="0 0 800 245" role="img" aria-label="Coding attempts plotted by elapsed time and outcome">
@@ -1629,11 +1636,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             </svg> : <div className="chart-empty rich-empty"><strong>Your effort map starts with a finished coding timer.</strong><span>Elapsed time and an outcome are both required; Interview Arc will not infer either.</span></div>}
           </article>
 
-          <article className="chart-sheet topic-sheet">
-            <div className="chart-heading"><div><span className="eyebrow">SKILL COVERAGE</span><h2>Topics practiced</h2><p>Select a topic to see the records behind it.</p></div></div>
-            {topicStats.length ? <div className="topic-bars">{topicStats.map((topic) => <button key={topic.topic} className={journeyTopic === topic.topic ? "active" : ""} onClick={() => setJourneyTopic((current) => current === topic.topic ? "" : topic.topic)}><span>{topic.topic}</span><i><b style={{ width: `${(topic.count / maxTopicCount) * 100}%` }} /></i><strong>{topic.count}</strong></button>)}</div> : <div className="chart-empty rich-empty"><strong>No topic coverage yet.</strong><span>Finish bank-linked coding problems to build this map.</span></div>}
-            {journeyTopic && <div className="topic-records"><strong>{journeyTopic}</strong>{selectedTopicEntries.map((entry) => <button key={entry.id} onClick={() => setSelectedEntry(entry)}>{entry.title}<span>{readableDate(entry.date, true)} →</span></button>)}</div>}
-          </article>
         </div>
       </section>
     );
