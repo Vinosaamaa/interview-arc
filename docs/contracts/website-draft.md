@@ -33,10 +33,10 @@ The website uses one cycling flag control:
 
 1. hollow: no result;
 2. green: `solved`;
-3. yellow: `solved_after_reviewing_approach`;
+3. yellow: `solved_after_reviewing_approach` (displayed as **Solved with help**);
 4. red: `failed`.
 
-The control appears on coding, system-design, and behavioral activities so all Today cards keep the same layout. For LeetCode, green and yellow retain their canonical outcome names. For system-design and behavioral work, the interface reads the same D1 result values as `finished` and `finished after reviewing approach`; published mock artifacts describe them as qualitative review signals rather than LeetCode acceptance claims.
+The control appears on coding, system-design, and behavioral activities so all Today cards keep the same layout. Every interface uses the labels **Solved**, **Solved with help**, and **Failed** while D1 preserves the canonical outcome enum. Published mock artifacts describe these as qualitative review signals rather than LeetCode acceptance claims.
 
 The control provides an accessible label and a hover/focus legend. Its legend must escape the card visually rather than being clipped by its card. A result flag and timer completion are separate signals. A red flag does not appear in Past or become publication-ready until the already-started stopwatch is explicitly finished; completed red work remains useful for postmortems and scheduled review.
 
@@ -118,7 +118,13 @@ Published LeetCode letters show original agent-generated solution material. Publ
 
 ## Problem Banks
 
-Problem Banks is the reusable catalog for all three sources: LeetCode, system design, and behavioral. It provides independent question-type filters (`All`, `Coding`, `System design`, `Behavioral`) and progress filters (`All`, `To practice`, `Finished`). Finished uses the same green/yellow or published eligibility as Past; failed and merely planned work remains to practice. Every question has a `Practice today` action that adds it as standalone practice and returns to Today.
+Problem Banks is the reusable catalog for all three sources: LeetCode, system design, and behavioral. It provides independent question-type, review (`Due now`, `Needs review`), result (`Solved`, `Solved with help`, `Failed`, `To do`), notes, difficulty, tag, and starred filters. Every question shows the most recent finished-attempt flag and has a `Practice today` action that adds it as standalone practice and returns to Today. Past instead shows the flag belonging to each specific attempt.
+
+The same canonical question may appear only once on a Pacific practice day.
+This rule applies to full-session selection, standalone activity selection,
+Problem Bank shortcuts, and pasted URLs. A URL with no canonical bank match
+creates a deduplicated personal bank question using the public URL and a title
+derived without crawling the source page.
 
 SystemDesign.io entries link to their canonical question pages and label the availability of reference solutions. The specialist agent uses those sources to prepare; the website does not copy or embed third-party solution content.
 
