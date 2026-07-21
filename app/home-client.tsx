@@ -48,7 +48,7 @@ type View = "today" | "journey" | "library" | "banks";
 type ComposerMode = "session" | "activity";
 type JourneyRange = 30 | 90 | 365 | "all";
 type JourneyMetric = "activities" | "time";
-type LibraryAttentionFilter = "all" | "due" | "needs_review" | "independent" | "helped" | "failed" | "notes";
+type LibraryAttentionFilter = "due" | "needs_review" | "independent" | "helped" | "failed" | "notes";
 type DocumentPiP = { requestWindow: (options?: { width?: number; height?: number }) => Promise<Window> };
 type ComposerState = {
   open: boolean;
@@ -668,8 +668,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [composer, setComposer] = useState<ComposerState>(EMPTY_COMPOSER);
   const [selectedEntry, setSelectedEntry] = useState<LogEntry | null>(null);
   const [selectedProblem, setSelectedProblem] = useState<{ type: ActivityType; question: QuestionBankItem } | null>(null);
-  const [libraryFilter, setLibraryFilter] = useState<"all" | ActivityType>("all");
-  const [libraryAttentionFilter, setLibraryAttentionFilter] = useState<LibraryAttentionFilter>("all");
+  const [libraryTypeFilters, setLibraryTypeFilters] = useState<ActivityType[]>([]);
+  const [libraryAttentionFilters, setLibraryAttentionFilters] = useState<LibraryAttentionFilter[]>([]);
   const [bankFilter, setBankFilter] = useState<"all" | ActivityType>("all");
   const [bankProgressFilter, setBankProgressFilter] = useState<"all" | "todo" | "finished">("all");
   const [bankLevelFilter, setBankLevelFilter] = useState<"all" | "easy" | "medium" | "hard">("all");
@@ -725,6 +725,28 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     };
     window.addEventListener("pageshow", showArrivalAfterBackNavigation);
     return () => window.removeEventListener("pageshow", showArrivalAfterBackNavigation);
+  }, []);
+
+  useEffect(() => {
+    const closeControlMenus = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      document.querySelectorAll<HTMLDetailsElement>("details.control-menu[open]").forEach((menu) => {
+        if (!menu.contains(target)) menu.open = false;
+      });
+    };
+    const closeControlMenusOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      document.querySelectorAll<HTMLDetailsElement>("details.control-menu[open]").forEach((menu) => {
+        menu.open = false;
+      });
+    };
+    document.addEventListener("pointerdown", closeControlMenus);
+    document.addEventListener("keydown", closeControlMenusOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeControlMenus);
+      document.removeEventListener("keydown", closeControlMenusOnEscape);
+    };
   }, []);
 
   useEffect(() => {
@@ -1816,19 +1838,20 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const groupedLog = useMemo(() => {
     const groups = new Map<string, LogEntry[]>();
     for (const entry of libraryEntries) {
-      if (libraryFilter !== "all" && entry.type !== libraryFilter) continue;
+      if (libraryTypeFilters.length > 0 && !libraryTypeFilters.includes(entry.type)) continue;
       const hasNotes = Boolean(entry.personalNote?.trim() || entry.pinnedNotes?.length);
       const needsReview = Boolean(entry.review && entry.review.status !== "dismissed" && entry.review.status !== "completed");
-      if (libraryAttentionFilter === "due" && entry.review?.status !== "due") continue;
-      if (libraryAttentionFilter === "needs_review" && !needsReview) continue;
-      if (libraryAttentionFilter === "independent" && entry.outcome !== "solved") continue;
-      if (libraryAttentionFilter === "helped" && entry.outcome !== "solved_after_reviewing_approach") continue;
-      if (libraryAttentionFilter === "failed" && entry.outcome !== "failed") continue;
-      if (libraryAttentionFilter === "notes" && !hasNotes) continue;
+      const reviewFilters = libraryAttentionFilters.filter((filter) => filter === "due" || filter === "needs_review");
+      const outcomeFilters = libraryAttentionFilters.filter((filter) => filter === "independent" || filter === "helped" || filter === "failed");
+      if (reviewFilters.length > 0 && !reviewFilters.some((filter) => filter === "due" ? entry.review?.status === "due" : needsReview)) continue;
+      if (outcomeFilters.length > 0 && !outcomeFilters.some((filter) => filter === "independent"
+        ? entry.outcome === "solved"
+        : filter === "helped" ? entry.outcome === "solved_after_reviewing_approach" : entry.outcome === "failed")) continue;
+      if (libraryAttentionFilters.includes("notes") && !hasNotes) continue;
       groups.set(entry.date, [...(groups.get(entry.date) ?? []), entry]);
     }
     return [...groups.entries()].sort(([left], [right]) => right.localeCompare(left));
-  }, [libraryEntries, libraryAttentionFilter, libraryFilter]);
+  }, [libraryEntries, libraryAttentionFilters, libraryTypeFilters]);
 
   const completedEntries = useMemo(
     () => logEntries.filter((entry) => entry.status === "completed" || entry.status === "published"),
@@ -2228,29 +2251,41 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function renderLibrary() {
-    const attentionOptions: Array<{ value: LibraryAttentionFilter; label: string; description: string }> = [
-      { value: "all", label: "All completed", description: "Every finished attempt." },
-      { value: "due", label: "Due now", description: "The scheduled review date has arrived." },
-      { value: "needs_review", label: "Needs review", description: "Any active review plan, including future dates." },
-      { value: "independent", label: "Independent", description: "Solved without reviewing the approach." },
-      { value: "helped", label: "Solved with help", description: "Completed after reviewing the approach." },
-      { value: "failed", label: "Failed", description: "Finished attempts marked failed." },
-      { value: "notes", label: "Has notes", description: "Attempts with at least one pinned note." },
+    const attentionGroups: Array<{ label: string; options: Array<{ value: LibraryAttentionFilter; label: string; description: string }> }> = [
+      { label: "Review schedule", options: [
+        { value: "due", label: "Due now", description: "The scheduled review date has arrived." },
+        { value: "needs_review", label: "Needs review", description: "Any active review plan, including future dates." },
+      ] },
+      { label: "Attempt result", options: [
+        { value: "independent", label: "Independent", description: "Solved without reviewing the approach." },
+        { value: "helped", label: "Solved with help", description: "Completed after reviewing the approach." },
+        { value: "failed", label: "Failed", description: "Finished attempts marked failed." },
+      ] },
+      { label: "Record details", options: [
+        { value: "notes", label: "Has notes", description: "Attempts with at least one pinned note." },
+      ] },
     ];
+    const toggleTypeFilter = (type: ActivityType) => setLibraryTypeFilters((current) => current.includes(type)
+      ? current.filter((candidate) => candidate !== type)
+      : [...current, type]);
+    const toggleAttentionFilter = (filter: LibraryAttentionFilter) => setLibraryAttentionFilters((current) => current.includes(filter)
+      ? current.filter((candidate) => candidate !== filter)
+      : [...current, filter]);
+    const activePastFilterCount = libraryTypeFilters.length + libraryAttentionFilters.length;
     return (
       <section className="view-page library-page">
         <header className="view-masthead"><span className="eyebrow">PAST · COMPLETED WORK</span><h1>Read the journey<br /><em>like a field journal.</em></h1><p>Past contains finished activity timers and published case files—never planned work or result flags by themselves.</p></header>
         <div className="library-toolbar compact-toolbar">
-          <div className="filter-row" role="group" aria-label="Filter past practice by type">{(["all", "leetcode", "system_design", "behavioral"] as const).map((filter) => <button key={filter} className={libraryFilter === filter ? "active" : ""} onClick={() => setLibraryFilter(filter)}>{filter === "all" ? "All" : typeLabel(filter)}</button>)}</div>
+          <div className="past-type-filter"><span>Practice type</span><div className="filter-row" role="group" aria-label="Filter past practice by type">{(["leetcode", "system_design", "behavioral"] as const).map((filter) => <button key={filter} className={libraryTypeFilters.includes(filter) ? "active" : ""} aria-pressed={libraryTypeFilters.includes(filter)} onClick={() => toggleTypeFilter(filter)}>{typeLabel(filter)}</button>)}</div></div>
           <details className="control-menu">
-            <summary><Icon name="filter" /> Filter{libraryAttentionFilter !== "all" && <i>1</i>}</summary>
-            <div className="control-popover attention-menu">{attentionOptions.map((option) => <button key={option.value} className={libraryAttentionFilter === option.value ? "active" : ""} onClick={(event) => { setLibraryAttentionFilter(option.value); event.currentTarget.closest("details")?.removeAttribute("open"); }}><span>{option.label}</span><small>{option.description}</small></button>)}</div>
+            <summary><Icon name="filter" /> More filters{activePastFilterCount > 0 && <i>{activePastFilterCount}</i>}</summary>
+            <div className="control-popover attention-menu"><div className="filter-menu-heading"><strong>Filter completed practice</strong>{activePastFilterCount > 0 && <button type="button" onClick={() => { setLibraryTypeFilters([]); setLibraryAttentionFilters([]); }}>Clear all</button>}</div>{attentionGroups.map((group) => <fieldset key={group.label}><legend>{group.label}</legend>{group.options.map((option) => <button type="button" key={option.value} className={libraryAttentionFilters.includes(option.value) ? "active" : ""} aria-pressed={libraryAttentionFilters.includes(option.value)} onClick={() => toggleAttentionFilter(option.value)}><span>{option.label}</span><small>{option.description}</small><i aria-hidden="true">✓</i></button>)}</fieldset>)}</div>
           </details>
           <strong>{groupedLog.reduce((sum, [, entries]) => sum + entries.length, 0)} records</strong>
         </div>
         <div className="log-layout">
           <div className="dated-log">
-            {groupedLog.length ? groupedLog.map(([date, entries]) => <section className="log-day" id={`log-date-${date}`} key={date}><header><time>{readableDate(date)}</time><span>{entries.length} record{entries.length === 1 ? "" : "s"} · Pacific day</span></header><div className="log-day-entries">{entries.map((entry) => <article className={`log-entry ${entry.type}`} key={entry.id}><button className="log-entry-open" onClick={() => setSelectedEntry(entry)} aria-label={`Read ${entry.title}`}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><div className="log-entry-copy"><small>{typeLabel(entry.type)} · {entry.status}{entry.sessionId ? " · session activity" : " · standalone"}</small><strong>{entry.title}</strong>{meaningfulSubtitle(entry.subtitle) && <span>{meaningfulSubtitle(entry.subtitle)}</span>}<div className="entry-badges">{entry.review?.status === "due" && <i className="review-badge due">Due now</i>}{entry.review?.status === "scheduled" && <i className="review-badge">Review {entry.review.dueDate}</i>}{(entry.personalNote?.trim() || entry.pinnedNotes?.length) && <i className="note-badge">Pinned note</i>}{entry.outcome === "solved" && <i className="independent-badge">Independent</i>}{entry.outcome === "solved_after_reviewing_approach" && <i className="help-badge">Solved with help</i>}{entry.outcome === "failed" && <i className="failure-badge">Failed attempt</i>}</div>{entry.startedAt && <span className="entry-time-range">{formatPracticeTimestamp(entry.startedAt, true)} → {entry.endedAt ? formatPracticeTimestamp(entry.endedAt, true) : "Paused"}</span>}</div><div className="log-entry-meta"><strong>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "—"}</strong><span>{entry.type === "leetcode" ? outcomeLabel(entry.outcome) : entry.artifact ? "Published record" : entry.status}</span></div></button><button className={`star-control ${isStarred(entry.type, entry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(entry.type, entry.questionId)} disabled={!entry.questionId} aria-label={`${isStarred(entry.type, entry.questionId) ? "Unstar" : "Star"} ${entry.title}`} title="Star this problem"><Icon name="star" /></button></article>)}</div></section>) : <div className="quiet-empty library-empty"><strong>No completed work in this filter yet.</strong><span>Try another filter, or finish an activity to add it to the field journal.</span></div>}
+            {groupedLog.length ? groupedLog.map(([date, entries]) => <section className="log-day" id={`log-date-${date}`} key={date}><header><time>{readableDate(date)}</time><span>{entries.length} record{entries.length === 1 ? "" : "s"} · Pacific day</span></header><div className="log-day-entries">{entries.map((entry) => <article className={`log-entry ${entry.type}`} key={entry.id}><button className="log-entry-open" onClick={() => setSelectedEntry(entry)} aria-label={`Read ${entry.title}`}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><div className="log-entry-copy"><small>{typeLabel(entry.type)} · {entry.status}{entry.sessionId ? " · session activity" : " · standalone"}</small><strong>{entry.title}</strong>{meaningfulSubtitle(entry.subtitle) && <span>{meaningfulSubtitle(entry.subtitle)}</span>}<div className="entry-badges">{entry.review?.status === "due" && <i className="review-badge due">Due now</i>}{entry.review?.status === "scheduled" && <i className="review-badge">Review {entry.review.dueDate}</i>}{Boolean(entry.personalNote?.trim() || entry.pinnedNotes?.length) && <i className="note-badge">Pinned note</i>}{entry.outcome === "solved" && <i className="independent-badge">Independent</i>}{entry.outcome === "solved_after_reviewing_approach" && <i className="help-badge">Solved with help</i>}{entry.outcome === "failed" && <i className="failure-badge">Failed attempt</i>}</div>{entry.startedAt && <span className="entry-time-range">{formatPracticeTimestamp(entry.startedAt, true)} → {entry.endedAt ? formatPracticeTimestamp(entry.endedAt, true) : "Paused"}</span>}</div><div className="log-entry-meta"><strong>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "—"}</strong><span>{entry.type === "leetcode" ? outcomeLabel(entry.outcome) : entry.artifact ? "Published record" : entry.status}</span></div></button><button className={`star-control ${isStarred(entry.type, entry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(entry.type, entry.questionId)} disabled={!entry.questionId} aria-label={`${isStarred(entry.type, entry.questionId) ? "Unstar" : "Star"} ${entry.title}`} title="Star this problem"><Icon name="star" /></button></article>)}</div></section>) : <div className="quiet-empty library-empty"><strong>No completed work in this filter yet.</strong><span>Try another filter, or finish an activity to add it to the field journal.</span></div>}
           </div>
           <aside className="log-calendar"><span className="eyebrow">JUMP TO A DAY</span><h2>{new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${journal.date}T12:00:00Z`))}</h2><div className="calendar-week"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div><div className="calendar-mini">{calendarDays.map((day) => day.hasEntries ? <button key={day.key} onClick={() => scrollToLogDate(day.key)} title={`Jump to ${day.key}`}>{day.day}<i /></button> : <span key={day.key}>{day.day}</span>)}</div><div className="calendar-dates">{groupedLog.map(([date]) => <button key={date} onClick={() => scrollToLogDate(date)}>{readableDate(date, true)} <span>↘</span></button>)}</div></aside>
         </div>
@@ -2322,9 +2357,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const finishedCount = bankEntries.filter((entry) => entry.finished).length;
     const finishedPercent = bankEntries.length ? Math.round((finishedCount / bankEntries.length) * 100) : 0;
     const selectedTag = bankTagFilter === "all" ? null : bankTagFilter.split(":").slice(1).join(":");
+    const activeBankFilterCount = Number(bankFilter !== "all")
+      + Number(bankProgressFilter !== "all")
+      + Number(bankLevelFilter !== "all")
+      + Number(bankTagFilter !== "all");
+    const activeSort = sortOptions.find((option) => option.key === bankSortKey) ?? sortOptions[0];
     return (
       <section className="view-page banks-page">
-        <header className="view-masthead"><span className="eyebrow">PROBLEM BANKS · ALL PRACTICE SOURCES</span><h1>Choose the next thing<br /><em>worth practicing.</em></h1><p>Browse every coding, system-design, and behavioral prompt in one place. “Practice today” adds the question to standalone practice and takes you directly to Today.</p></header>
+        <header className="view-masthead banks-masthead"><span className="eyebrow">PROBLEM BANKS · ALL PRACTICE SOURCES</span><h1>Choose the next thing<br /><em>worth practicing.</em></h1><div className="banks-masthead-meta"><p>Browse every coding, system-design, and behavioral prompt in one place. “Practice today” adds the question to standalone practice and takes you directly to Today.</p><div className="bank-progress-meter" style={{ background: `conic-gradient(var(--signal-dark) ${finishedPercent}%, #e4e9e1 ${finishedPercent}% 100%)` }} aria-label={`${finishedCount} of ${bankEntries.length} problems finished`}><span><strong>{finishedCount}</strong><small>of {bankEntries.length}</small></span></div></div></header>
         <div className="bank-totals" aria-label="Question bank totals">
           <article className="leetcode"><strong>{bankFor("leetcode").length}</strong><span>Coding problems</span></article>
           <article className="system_design"><strong>{bankFor("system_design").length}</strong><span>System designs</span></article>
@@ -2346,10 +2386,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
               <button type="button" className="bank-search-clear" onClick={() => setBankSearch("")} aria-label="Clear search">×</button>
             ) : <span className="bank-search-clear-spacer" aria-hidden="true" />}
             <span className="bank-result-count" aria-live="polite">{visibleEntries.length} result{visibleEntries.length === 1 ? "" : "s"}</span>
-          </label><div className="bank-progress-meter" style={{ background: `conic-gradient(var(--signal-dark) ${finishedPercent}%, #e4e9e1 ${finishedPercent}% 100%)` }}><span><strong>{finishedCount}</strong><small>of {bankEntries.length}</small></span></div></div>
+          </label></div>
           <div className={`topic-ribbon ${bankTopicsExpanded ? "expanded" : ""}`}>
             <div className="topic-ribbon-head"><span>Patterns & competencies</span>{selectedTag && <button className="clear-topic" onClick={() => setBankTagFilter("all")}>Clear “{selectedTag}”</button>}<button className="topic-expand" onClick={() => setBankTopicsExpanded((current) => !current)}>{bankTopicsExpanded ? "Collapse" : "Explore all"}<Icon name="chevron" /></button></div>
-            <div className="topic-ribbon-columns">{tagCatalog.map((group) => <section className={group.type} key={group.type}><header><i className={`type-mark ${group.type}`}>{typeMark(group.type)}</i><strong>{typeLabel(group.type)}</strong></header><div>{group.tags.slice(0, bankTopicsExpanded ? undefined : 4).map(({ tag, count }) => <button key={tag} className={bankTagFilter === `${group.type}:${tag}` ? "active" : ""} onClick={() => setBankTagFilter((current) => current === `${group.type}:${tag}` ? "all" : `${group.type}:${tag}`)}><span>{tag}</span><small>{count}</small></button>)}</div></section>)}</div>
+            <div className="topic-ribbon-columns">{tagCatalog.map((group) => <section className={group.type} key={group.type}><header><i className={`type-mark ${group.type}`}>{typeMark(group.type)}</i><strong>{typeLabel(group.type)}</strong></header><div>{group.tags.slice(0, bankTopicsExpanded ? undefined : 3).map(({ tag, count }) => <button key={tag} className={bankTagFilter === `${group.type}:${tag}` ? "active" : ""} onClick={() => setBankTagFilter((current) => current === `${group.type}:${tag}` ? "all" : `${group.type}:${tag}`)}><span>{tag}</span><small>{count}</small></button>)}</div></section>)}</div>
           </div>
           <div className="library-toolbar bank-toolbar compact-toolbar">
             <div className="bank-filter-rail primary-bank-controls">
@@ -2367,9 +2407,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                     </button>
                   ))}
               </div>
-              <button className={`collection-toggle ${bankStarFilter === "starred" ? "active" : ""}`} onClick={() => setBankStarFilter((current) => current === "starred" ? "all" : "starred")} aria-pressed={bankStarFilter === "starred"}><Icon name="star" /> Starred</button>
-              <details className="control-menu"><summary><Icon name="filter" /> Filter{bankLevelFilter !== "all" && <i>1</i>}</summary><div className="control-popover"><strong>Difficulty</strong>{(["all", "easy", "medium", "hard"] as const).map((filter) => <button key={filter} className={bankLevelFilter === filter ? "active" : ""} onClick={(event) => { setBankLevelFilter(filter); event.currentTarget.closest("details")?.removeAttribute("open"); }}>{filter === "all" ? "Any difficulty" : filter[0].toUpperCase() + filter.slice(1)}</button>)}</div></details>
-              <details className="control-menu sort-menu"><summary><Icon name="sort" /> Sort <small>{sortOptions.find((option) => option.key === bankSortKey)?.label} {bankSortDir === "asc" ? "↑" : "↓"}</small></summary><div className="control-popover"><strong>Order by</strong>
+              <div className="bank-icon-tools" aria-label="Problem bank tools">
+                <button className={`collection-toggle icon-tool ${bankStarFilter === "starred" ? "active" : ""}`} onClick={() => setBankStarFilter((current) => current === "starred" ? "all" : "starred")} aria-pressed={bankStarFilter === "starred"} aria-label={bankStarFilter === "starred" ? "Show all problems" : "Show starred problems"} title={bankStarFilter === "starred" ? "Showing starred problems" : "Show starred problems"}><Icon name="star" /></button>
+                <details className={`control-menu icon-menu ${activeBankFilterCount > 0 ? "active" : ""}`}><summary aria-label={`Filters${activeBankFilterCount ? `, ${activeBankFilterCount} active` : ""}`} title={`${activeBankFilterCount || "No"} active filters`}><Icon name="filter" />{activeBankFilterCount > 0 && <i>{activeBankFilterCount}</i>}</summary><div className="control-popover"><strong>Difficulty</strong>{(["all", "easy", "medium", "hard"] as const).map((filter) => <button key={filter} className={bankLevelFilter === filter ? "active" : ""} onClick={(event) => { setBankLevelFilter(filter); event.currentTarget.closest("details")?.removeAttribute("open"); }}>{filter === "all" ? "Any difficulty" : filter[0].toUpperCase() + filter.slice(1)}</button>)}</div></details>
+                <details className="control-menu sort-menu icon-menu"><summary aria-label={`Sort by ${activeSort.label}, ${bankSortDir === "asc" ? "ascending" : "descending"}`} title={`Sort: ${activeSort.label} · ${bankSortDir === "asc" ? "low to high" : "high to low"}`}><span className={`bank-sort-glyph ${activeSort.icon}`} aria-hidden="true" /><small className="sort-direction-badge" aria-hidden="true">{bankSortDir === "asc" ? "↑" : "↓"}</small></summary><div className="control-popover"><strong>Order by</strong>
                   {sortOptions.map((option) => {
                     const active = bankSortKey === option.key;
                     const direction = active ? bankSortDir : null;
@@ -2387,7 +2428,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                       </button>
                     );
                   })}
-              </div></details>
+                </div></details>
+              </div>
             </div>
           </div>
         </div>
@@ -2534,10 +2576,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       {selectedEntry && <div className="letter-backdrop" role="presentation" onMouseDown={() => setSelectedEntry(null)}>
         <article className="reading-letter case-file-shell" role="dialog" aria-modal="true" aria-labelledby="letter-title" onMouseDown={(event) => event.stopPropagation()}>
           <button className="letter-close icon-action" onClick={() => setSelectedEntry(null)} aria-label="Close case file" title="Close"><Icon name="close" /></button>
-          <aside className="case-toc" aria-label="Case file contents"><span>Contents</span><nav><a href="#case-summary">Overview</a>{(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedEntry.artifact?.sections.map((section, index) => <a key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}{selectedEntryTurns.length > 0 && selectedArtifactTranscriptIndex < 0 && <a href="#case-transcript">Conversation transcript</a>}</nav></aside>
+          <aside className="case-toc" aria-label="Case file contents"><span>Contents</span><nav><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedEntry.artifact?.sections.map((section, index) => <a key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}{selectedEntryTurns.length > 0 && selectedArtifactTranscriptIndex < 0 && <a href="#case-transcript">Conversation transcript</a>}</nav></aside>
           <div className="case-document">
-            <header id="case-summary"><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time></div><div className="case-title-row"><h2 id="letter-title">{selectedEntry.title}</h2><button className={`star-control ${isStarred(selectedEntry.type, selectedEntry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedEntry.type, selectedEntry.questionId)} disabled={!selectedEntry.questionId} aria-label={`${isStarred(selectedEntry.type, selectedEntry.questionId) ? "Unstar" : "Star"} ${selectedEntry.title}`} title="Star this problem"><Icon name="star" /></button><button className="icon-action note-add" onClick={() => openNoteComposer()} disabled={!selectedEntryActivityId} aria-label="Add a note" title="Add a note"><Icon name="note" /><i><Icon name="plus" /></i></button></div>{meaningfulSubtitle(selectedEntry.subtitle) && <p>{meaningfulSubtitle(selectedEntry.subtitle)}</p>}{selectedEntry.questionId && <button className="solution-link-button" onClick={() => { const question = bankFor(selectedEntry.type).find((candidate) => candidate.id === selectedEntry.questionId); if (question) { setSelectedEntry(null); setSelectedProblem({ type: selectedEntry.type, question }); } }}>View solution →</button>}</header>
-            {(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <aside className="pinned-notes" id="case-notes" aria-label="Pinned practice notes"><span>NOTES</span>{selectedEntry.personalNote?.trim() && <article><div className="note-actions"><button onClick={() => openNoteComposer("personal")} aria-label="Edit personal note" title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote("personal")} aria-label="Delete personal note" title="Delete"><Icon name="trash" /></button></div><MarkdownBody source={selectedEntry.personalNote} /></article>}{selectedEntry.pinnedNotes?.map((note) => <article key={note.id}><header><small>{note.kind}</small><div className="note-actions"><button onClick={() => openNoteComposer(note)} aria-label={`Edit ${note.kind} note`} title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote(note.id)} aria-label={`Delete ${note.kind} note`} title="Delete"><Icon name="trash" /></button></div></header><MarkdownBody source={note.body} /></article>)}</aside>}
+            <header id="case-summary"><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time></div><div className="case-title-row"><h2 id="letter-title">{selectedEntry.title}</h2><div className="case-title-actions"><button className={`star-control ${isStarred(selectedEntry.type, selectedEntry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedEntry.type, selectedEntry.questionId)} disabled={!selectedEntry.questionId} aria-label={`${isStarred(selectedEntry.type, selectedEntry.questionId) ? "Unstar" : "Star"} ${selectedEntry.title}`} title="Star this problem"><Icon name="star" /></button><button className="icon-action note-add" onClick={() => openNoteComposer()} disabled={!selectedEntryActivityId} aria-label="Add a note" title="Add a note"><Icon name="note" /><i><Icon name="plus" /></i></button></div></div>{meaningfulSubtitle(selectedEntry.subtitle) && <p>{meaningfulSubtitle(selectedEntry.subtitle)}</p>}{selectedEntry.questionId && <button className="solution-link-button" onClick={() => { const question = bankFor(selectedEntry.type).find((candidate) => candidate.id === selectedEntry.questionId); if (question) { setSelectedEntry(null); setSelectedProblem({ type: selectedEntry.type, question }); } }}>View solution →</button>}</header>
+            {Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <aside className="pinned-notes" id="case-notes" aria-label="Pinned practice notes"><span>NOTES</span>{selectedEntry.personalNote?.trim() && <article><div className="note-actions"><button onClick={() => openNoteComposer("personal")} aria-label="Edit personal note" title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote("personal")} aria-label="Delete personal note" title="Delete"><Icon name="trash" /></button></div><MarkdownBody source={selectedEntry.personalNote} /></article>}{selectedEntry.pinnedNotes?.map((note) => <article key={note.id}><header><small>{note.kind}</small><div className="note-actions"><button onClick={() => openNoteComposer(note)} aria-label={`Edit ${note.kind} note`} title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote(note.id)} aria-label={`Delete ${note.kind} note`} title="Delete"><Icon name="trash" /></button></div></header><MarkdownBody source={note.body} /></article>)}</aside>}
             {noteComposerOpen && <form className="case-note-composer" onSubmit={(event) => { event.preventDefault(); void saveCaseNote(); }}><label htmlFor="case-note">{editingNoteId ? "Edit note" : "Add a note"}</label><textarea id="case-note" autoFocus value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} placeholder="A concise reminder, mistake, or pattern to keep visible…" /><div><button type="button" onClick={() => { setNoteComposerOpen(false); setEditingNoteId(""); setNoteDraft(""); }}>Cancel</button><button type="submit" disabled={noteBusy || !noteDraft.trim()}>{noteBusy ? "Saving…" : "Save note"}</button></div></form>}
             <div className="letter-facts" id="case-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.startedAt && <div><span>Started</span><strong>{formatPracticeTimestamp(selectedEntry.startedAt)}</strong></div>}{selectedEntry.endedAt && <div><span>Finished</span><strong>{formatPracticeTimestamp(selectedEntry.endedAt)}</strong></div>}{selectedEntry.sessionId && <div><span>Session</span><strong>{selectedEntry.sessionId}</strong></div>}{selectedEntry.outcome && <div><span>Result</span><strong>{resultLabel(selectedEntry.outcome, selectedEntry.type)}</strong></div>}{selectedEntry.review && <div className="review-fact"><span>{selectedEntry.review.status === "due" ? "Review due" : "Next review"}</span><strong>{selectedEntry.review.dueDate}</strong><small>{selectedEntry.review.reason.replaceAll("_", " ")} · {selectedEntry.review.intervalDays} day interval</small></div>}</div>
             {practiceRecordLoading && <div className="transcript-loading"><span />Loading conversation and recordings…</div>}

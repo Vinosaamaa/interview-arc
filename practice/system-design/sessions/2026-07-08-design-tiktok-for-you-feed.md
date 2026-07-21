@@ -1,4 +1,4 @@
-# 2026-07-08 System Design: Design a TikTok-Style For You Feed
+# Design a TikTok-Style For You Feed
 
 ## Question
 
