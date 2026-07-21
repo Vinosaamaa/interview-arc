@@ -73,7 +73,7 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(css, /\.journey-detail-grid \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
   assert.match(css, /\.session-recipe \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(css, /\.minutes-field \{[^}]*display: flex;[^}]*justify-content: space-between/);
-  assert.match(css, /\.activity-timer \{ min-height: 66px; \}/);
+  assert.match(css, /\.activity-timer \{[^}]*height: 66px;[^}]*min-height: 66px;[^}]*max-height: 66px;[^}]*grid-template-rows: 34px 14px;/);
   assert.match(css, /\.mock-controls \{ grid-template-columns: minmax\(160px, 1fr\) auto auto auto; \}/);
   assert.match(css, /\.past-control-deck \{[^}]*grid-template-columns: minmax\(0, 1fr\) 250px;/);
   assert.match(css, /\.case-title-row \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto;/);
@@ -81,8 +81,15 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /placeholder="Search"/);
   assert.match(client, /const \[bankTypeFilters, setBankTypeFilters\] = useState<ActivityType\[]>\(\[\]\)/);
   assert.match(client, /const \[bankProgressFilters, setBankProgressFilters\] = useState<Array<"todo" \| "finished">>\(\[\]\)/);
+  assert.match(client, /const \[bankLevelFilters, setBankLevelFilters\] = useState<Array<"easy" \| "medium" \| "hard">>\(\[\]\)/);
+  assert.match(client, /const \[bankTagFilters, setBankTagFilters\] = useState<string\[]>\(\[\]\)/);
   assert.match(client, /bankTypeFilters\.includes\(filter\)/);
   assert.match(client, /bankProgressFilters\.includes\(filter\)/);
+  assert.match(client, /bankLevelFilters\.includes\(filter\)/);
+  assert.match(client, /bankTagFilters\.includes\(filterKey\)/);
+  assert.match(client, /compact-filter-popover attention-menu/);
+  assert.match(client, /compact-filter-popover difficulty-menu/);
+  assert.doesNotMatch(client, /The scheduled review date has arrived|Any active review plan|Completed after reviewing the approach/);
   assert.doesNotMatch(client, />Started \{formatPracticeTimestamp/);
   assert.doesNotMatch(client, /\["all", "leetcode", "system_design", "behavioral"\]/);
   assert.doesNotMatch(client, /\{\(entry\.personalNote\?\.trim\(\) \|\| entry\.pinnedNotes\?\.length\) &&/);

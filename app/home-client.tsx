@@ -38,6 +38,7 @@ import { ArrivalRitual, PetalField } from "./arrival-ritual";
 import { useAmbientSound } from "./ambient-sound";
 import { MusicPlaylist } from "./music-playlist";
 import {
+  formatPracticeTimerTimestamp,
   formatPracticeTimestamp,
   practiceDateAt,
   practicePeriodAt,
@@ -372,7 +373,9 @@ function ActivityTimer({
           <span aria-hidden="true">{complete ? "✓" : "■"}</span>
         </button>
       </div>
-      {timer?.startedAt && <small className="activity-start-time">{formatPracticeTimestamp(timer.startedAt, true, false)}</small>}
+      <small className={`activity-start-time ${started ? "" : "empty"}`} aria-hidden={!started}>
+        {timer?.startedAt ? formatPracticeTimerTimestamp(timer.startedAt) : "\u00A0"}
+      </small>
     </div>
   );
 }
@@ -674,11 +677,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [libraryStarFilter, setLibraryStarFilter] = useState(false);
   const [bankTypeFilters, setBankTypeFilters] = useState<ActivityType[]>([]);
   const [bankProgressFilters, setBankProgressFilters] = useState<Array<"todo" | "finished">>([]);
-  const [bankLevelFilter, setBankLevelFilter] = useState<"all" | "easy" | "medium" | "hard">("all");
+  const [bankLevelFilters, setBankLevelFilters] = useState<Array<"easy" | "medium" | "hard">>([]);
   const [bankSortKey, setBankSortKey] = useState<"frequency" | "recent" | "acceptance">("frequency");
   const [bankSortDir, setBankSortDir] = useState<"asc" | "desc">("asc");
   const [bankSearch, setBankSearch] = useState("");
-  const [bankTagFilter, setBankTagFilter] = useState("all");
+  const [bankTagFilters, setBankTagFilters] = useState<string[]>([]);
   const [bankStarFilter, setBankStarFilter] = useState<"all" | "starred">("all");
   const [bankTopicsExpanded, setBankTopicsExpanded] = useState(false);
   const [journeyRange, setJourneyRange] = useState<JourneyRange>(90);
@@ -2265,18 +2268,28 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function renderLibrary() {
-    const attentionGroups: Array<{ label: string; options: Array<{ value: LibraryAttentionFilter; label: string; description: string }> }> = [
-      { label: "Review schedule", options: [
-        { value: "due", label: "Due now", description: "The scheduled review date has arrived." },
-        { value: "needs_review", label: "Needs review", description: "Any active review plan, including future dates." },
+    const attentionFilterCount = (filter: LibraryAttentionFilter) => libraryEntries.filter((entry) => {
+      const hasNotes = Boolean(entry.personalNote?.trim() || entry.pinnedNotes?.length);
+      const needsReview = Boolean(entry.review && entry.review.status !== "dismissed" && entry.review.status !== "completed");
+      if (filter === "due") return entry.review?.status === "due";
+      if (filter === "needs_review") return needsReview;
+      if (filter === "independent") return entry.outcome === "solved";
+      if (filter === "helped") return entry.outcome === "solved_after_reviewing_approach";
+      if (filter === "failed") return entry.outcome === "failed";
+      return hasNotes;
+    }).length;
+    const attentionGroups: Array<{ label: string; tone: string; options: Array<{ value: LibraryAttentionFilter; label: string }> }> = [
+      { label: "Review filters", tone: "review", options: [
+        { value: "due", label: "Due now" },
+        { value: "needs_review", label: "Needs review" },
       ] },
-      { label: "Attempt result", options: [
-        { value: "independent", label: "Independent", description: "Solved without reviewing the approach." },
-        { value: "helped", label: "Solved with help", description: "Completed after reviewing the approach." },
-        { value: "failed", label: "Failed", description: "Finished attempts marked failed." },
+      { label: "Result filters", tone: "result", options: [
+        { value: "independent", label: "Independent" },
+        { value: "helped", label: "Solved with help" },
+        { value: "failed", label: "Failed" },
       ] },
-      { label: "Record details", options: [
-        { value: "notes", label: "Has notes", description: "Attempts with at least one pinned note." },
+      { label: "Record filters", tone: "record", options: [
+        { value: "notes", label: "Has notes" },
       ] },
     ];
     const toggleTypeFilter = (type: ActivityType) => setLibraryTypeFilters((current) => current.includes(type)
@@ -2286,6 +2299,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       ? current.filter((candidate) => candidate !== filter)
       : [...current, filter]);
     const activePastFilterCount = libraryAttentionFilters.length;
+    const hasPastFilters = libraryTypeFilters.length > 0 || activePastFilterCount > 0;
     const visibleRecordCount = groupedLog.reduce((sum, [, entries]) => sum + entries.length, 0);
     return (
       <section className="view-page library-page">
@@ -2295,10 +2309,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             <div className="bank-filter-rail primary-bank-controls past-filter-rail">
               <div className="filter-row type-control" role="group" aria-label="Filter past practice by type">{(["leetcode", "system_design", "behavioral"] as const).map((filter) => <button key={filter} className={libraryTypeFilters.includes(filter) ? "active" : ""} aria-pressed={libraryTypeFilters.includes(filter)} onClick={() => toggleTypeFilter(filter)}>{typeLabel(filter)}</button>)}</div>
               <div className="bank-icon-tools" aria-label="Past tools">
+                {hasPastFilters && <button type="button" className="filter-clear" onClick={() => { setLibraryTypeFilters([]); setLibraryAttentionFilters([]); }}>Clear</button>}
                 <button className={`collection-toggle icon-tool ${libraryStarFilter ? "active" : ""}`} onClick={() => setLibraryStarFilter((current) => !current)} aria-pressed={libraryStarFilter} aria-label={libraryStarFilter ? "Show all completed practice" : "Show starred completed practice"} title={libraryStarFilter ? "Showing starred practice" : "Show starred practice"}><Icon name="star" /></button>
                 <details className={`control-menu icon-menu ${activePastFilterCount > 0 ? "active" : ""}`}>
                   <summary aria-label={`More filters${activePastFilterCount ? `, ${activePastFilterCount} active` : ""}`} title={`${activePastFilterCount || "No"} active filters`}><Icon name="filter" />{activePastFilterCount > 0 && <i>{activePastFilterCount}</i>}</summary>
-                  <div className="control-popover attention-menu"><div className="filter-menu-heading"><strong>Filter completed practice</strong>{activePastFilterCount > 0 && <button type="button" onClick={() => setLibraryAttentionFilters([])}>Clear all</button>}</div>{attentionGroups.map((group) => <fieldset key={group.label}><legend>{group.label}</legend>{group.options.map((option) => <button type="button" key={option.value} className={libraryAttentionFilters.includes(option.value) ? "active" : ""} aria-pressed={libraryAttentionFilters.includes(option.value)} onClick={() => toggleAttentionFilter(option.value)}><span>{option.label}</span><small>{option.description}</small><i aria-hidden="true">✓</i></button>)}</fieldset>)}</div>
+                  <div className="control-popover compact-filter-popover attention-menu">{attentionGroups.map((group) => <div className={`compact-filter-group ${group.tone}`} role="group" aria-label={group.label} key={group.label}>{group.options.map((option) => <button type="button" key={option.value} className={libraryAttentionFilters.includes(option.value) ? "active" : ""} aria-pressed={libraryAttentionFilters.includes(option.value)} onClick={() => toggleAttentionFilter(option.value)}><span>{option.label}</span><small>{attentionFilterCount(option.value)}</small><i aria-hidden="true">✓</i></button>)}</div>)}</div>
                 </details>
               </div>
             </div>
@@ -2345,9 +2360,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       const level = questionLevel(entry.question);
       return (bankTypeFilters.length === 0 || bankTypeFilters.includes(entry.type))
         && (bankProgressFilters.length === 0 || bankProgressFilters.some((filter) => filter === "finished" ? entry.finished : !entry.finished))
-        && (bankLevelFilter === "all" || level === bankLevelFilter)
+        && (bankLevelFilters.length === 0 || (level !== null && bankLevelFilters.includes(level)))
         && (bankStarFilter === "all" || isStarred(entry.type, entry.question.id))
-        && (bankTagFilter === "all" || tagsForEntry(entry.type, entry.question).some((tag) => `${entry.type}:${tag}` === bankTagFilter))
+        && (bankTagFilters.length === 0 || tagsForEntry(entry.type, entry.question).some((tag) => bankTagFilters.includes(`${entry.type}:${tag}`)))
         && (!searchNeedle
           || entry.question.title.toLowerCase().includes(searchNeedle)
           || (entry.question.prompt?.toLowerCase().includes(searchNeedle) ?? false)
@@ -2383,17 +2398,30 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     ];
     const finishedCount = bankEntries.filter((entry) => entry.finished).length;
     const finishedPercent = bankEntries.length ? Math.round((finishedCount / bankEntries.length) * 100) : 0;
-    const selectedTag = bankTagFilter === "all" ? null : bankTagFilter.split(":").slice(1).join(":");
-    const activeBankFilterCount = bankTypeFilters.length
-      + bankProgressFilters.length
-      + Number(bankLevelFilter !== "all")
-      + Number(bankTagFilter !== "all");
+    const activeBankFilterCount = bankLevelFilters.length;
+    const hasBankFilters = bankTypeFilters.length > 0
+      || bankProgressFilters.length > 0
+      || bankLevelFilters.length > 0
+      || bankTagFilters.length > 0;
     const toggleBankTypeFilter = (type: ActivityType) => setBankTypeFilters((current) => current.includes(type)
       ? current.filter((candidate) => candidate !== type)
       : [...current, type]);
     const toggleBankProgressFilter = (filter: "todo" | "finished") => setBankProgressFilters((current) => current.includes(filter)
       ? current.filter((candidate) => candidate !== filter)
       : [...current, filter]);
+    const toggleBankLevelFilter = (filter: "easy" | "medium" | "hard") => setBankLevelFilters((current) => current.includes(filter)
+      ? current.filter((candidate) => candidate !== filter)
+      : [...current, filter]);
+    const toggleBankTagFilter = (filter: string) => setBankTagFilters((current) => current.includes(filter)
+      ? current.filter((candidate) => candidate !== filter)
+      : [...current, filter]);
+    const difficultyCount = (filter: "easy" | "medium" | "hard") => bankEntries.filter((entry) => questionLevel(entry.question) === filter).length;
+    const clearBankFilters = () => {
+      setBankTypeFilters([]);
+      setBankProgressFilters([]);
+      setBankLevelFilters([]);
+      setBankTagFilters([]);
+    };
     const activeSort = sortOptions.find((option) => option.key === bankSortKey) ?? sortOptions[0];
     return (
       <section className="view-page banks-page">
@@ -2421,8 +2449,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             <span className="bank-result-count" aria-live="polite">{visibleEntries.length} result{visibleEntries.length === 1 ? "" : "s"}</span>
           </label></div>
           <div className={`topic-ribbon ${bankTopicsExpanded ? "expanded" : ""}`}>
-            <div className="topic-ribbon-head"><span>Patterns & competencies</span>{selectedTag && <button className="clear-topic" onClick={() => setBankTagFilter("all")}>Clear “{selectedTag}”</button>}<button className="topic-expand" onClick={() => setBankTopicsExpanded((current) => !current)}>{bankTopicsExpanded ? "Collapse" : "Explore all"}<Icon name="chevron" /></button></div>
-            <div className="topic-ribbon-columns">{tagCatalog.map((group) => <section className={group.type} key={group.type}><header><i className={`type-mark ${group.type}`}>{typeMark(group.type)}</i><strong>{typeLabel(group.type)}</strong></header><div>{group.tags.slice(0, bankTopicsExpanded ? undefined : 3).map(({ tag, count }) => <button key={tag} className={bankTagFilter === `${group.type}:${tag}` ? "active" : ""} onClick={() => setBankTagFilter((current) => current === `${group.type}:${tag}` ? "all" : `${group.type}:${tag}`)}><span>{tag}</span><small>{count}</small></button>)}</div></section>)}</div>
+            <div className="topic-ribbon-head"><span>Patterns & competencies</span>{bankTagFilters.length > 0 && <button className="clear-topic" onClick={() => setBankTagFilters([])}>Clear</button>}<button className="topic-expand" onClick={() => setBankTopicsExpanded((current) => !current)}>{bankTopicsExpanded ? "Collapse" : "Explore all"}<Icon name="chevron" /></button></div>
+            <div className="topic-ribbon-columns">{tagCatalog.map((group) => <section className={group.type} key={group.type}><header><i className={`type-mark ${group.type}`}>{typeMark(group.type)}</i><strong>{typeLabel(group.type)}</strong></header><div>{group.tags.slice(0, bankTopicsExpanded ? undefined : 3).map(({ tag, count }) => { const filterKey = `${group.type}:${tag}`; return <button key={tag} className={bankTagFilters.includes(filterKey) ? "active" : ""} aria-pressed={bankTagFilters.includes(filterKey)} onClick={() => toggleBankTagFilter(filterKey)}><span>{tag}</span><small>{count}</small></button>; })}</div></section>)}</div>
           </div>
           <div className="library-toolbar bank-toolbar compact-toolbar">
             <div className="bank-filter-rail primary-bank-controls">
@@ -2441,8 +2469,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                   ))}
               </div>
               <div className="bank-icon-tools" aria-label="Problem bank tools">
+                {hasBankFilters && <button type="button" className="filter-clear" onClick={clearBankFilters}>Clear</button>}
                 <button className={`collection-toggle icon-tool ${bankStarFilter === "starred" ? "active" : ""}`} onClick={() => setBankStarFilter((current) => current === "starred" ? "all" : "starred")} aria-pressed={bankStarFilter === "starred"} aria-label={bankStarFilter === "starred" ? "Show all problems" : "Show starred problems"} title={bankStarFilter === "starred" ? "Showing starred problems" : "Show starred problems"}><Icon name="star" /></button>
-                <details className={`control-menu icon-menu ${activeBankFilterCount > 0 ? "active" : ""}`}><summary aria-label={`Filters${activeBankFilterCount ? `, ${activeBankFilterCount} active` : ""}`} title={`${activeBankFilterCount || "No"} active filters`}><Icon name="filter" />{activeBankFilterCount > 0 && <i>{activeBankFilterCount}</i>}</summary><div className="control-popover"><strong>Difficulty</strong>{(["all", "easy", "medium", "hard"] as const).map((filter) => <button key={filter} className={bankLevelFilter === filter ? "active" : ""} onClick={(event) => { setBankLevelFilter(filter); event.currentTarget.closest("details")?.removeAttribute("open"); }}>{filter === "all" ? "Any difficulty" : filter[0].toUpperCase() + filter.slice(1)}</button>)}</div></details>
+                <details className={`control-menu icon-menu ${activeBankFilterCount > 0 ? "active" : ""}`}><summary aria-label={`Difficulty filters${activeBankFilterCount ? `, ${activeBankFilterCount} active` : ""}`} title={`${activeBankFilterCount || "No"} active difficulty filters`}><Icon name="filter" />{activeBankFilterCount > 0 && <i>{activeBankFilterCount}</i>}</summary><div className="control-popover compact-filter-popover difficulty-menu"><div className="compact-filter-group difficulty" role="group" aria-label="Difficulty filters">{(["easy", "medium", "hard"] as const).map((filter) => <button type="button" key={filter} className={bankLevelFilters.includes(filter) ? "active" : ""} aria-pressed={bankLevelFilters.includes(filter)} onClick={() => toggleBankLevelFilter(filter)}><span>{filter[0].toUpperCase() + filter.slice(1)}</span><small>{difficultyCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div></div></details>
                 <details className="control-menu sort-menu icon-menu"><summary aria-label={`Sort by ${activeSort.label}, ${bankSortDir === "asc" ? "ascending" : "descending"}`} title={`Sort: ${activeSort.label} · ${bankSortDir === "asc" ? "low to high" : "high to low"}`}><span className={`bank-sort-glyph ${activeSort.icon}`} aria-hidden="true" /><small className="sort-direction-badge" aria-hidden="true">{bankSortDir === "asc" ? "↑" : "↓"}</small></summary><div className="control-popover"><strong>Order by</strong>
                   {sortOptions.map((option) => {
                     const active = bankSortKey === option.key;
