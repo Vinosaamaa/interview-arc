@@ -90,7 +90,9 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /compact-filter-popover attention-menu/);
   assert.match(client, /compact-filter-popover bank-attention-menu/);
   assert.match(client, /composerVisibleCount/);
-  assert.match(client, /activity-picker-progress/);
+  assert.match(client, /activity-picker-toolbar/);
+  assert.match(client, /\['todo', 'To do'\]/);
+  assert.doesNotMatch(client, /activity-picker-progress/);
   assert.match(client, /Already on Today/);
   assert.doesNotMatch(client, /The scheduled review date has arrived|Any active review plan|Completed after reviewing the approach/);
   assert.doesNotMatch(client, />Started \{formatPracticeTimestamp/);

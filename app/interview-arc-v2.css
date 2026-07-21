@@ -464,14 +464,11 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .bank-entry-actions .static-result-flag { width: 38px; height: 38px; }
 .bank-entry-actions .icon-action:disabled { opacity: .38; cursor: not-allowed; }
 
-.activity-picker-heading { min-height: 30px; display: flex; align-items: center; gap: 9px; }
-.activity-picker-heading > span { color: #59635a; font-size: .8rem; font-weight: 730; }
-.activity-picker-progress { width: 50px; height: 50px; margin-left: auto; flex: 0 0 auto; box-shadow: inset 0 0 0 1px rgba(15,95,90,.08); }
-.activity-picker-progress strong { font-size: .72rem; }
-.activity-picker-progress small { font-size: .5rem; }
-.activity-picker-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 9px; align-items: center; }
-.activity-picker-search { min-width: 0; }
-.activity-picker-tools { margin-left: 0; }
+.activity-picker-toolbar { padding: 14px; border: 1px solid #c6cfc5; border-radius: 13px; background: #fbfaf5; display: grid; gap: 11px; }
+.activity-picker-heading { min-height: 44px; display: flex; align-items: center; gap: 9px; }
+.activity-picker-heading > span { min-width: 0; flex: 1; color: #59635a; font-size: .8rem; font-weight: 730; }
+.activity-picker-search { width: 100%; min-width: 0; }
+.activity-picker-tools { width: auto; margin-left: auto; flex: 0 0 auto; }
 .activity-filter-menu { gap: 6px; }
 .bank-results { max-height: min(360px, 42vh); }
 .bank-results button { grid-template-columns: auto minmax(0, 1fr) auto; }
@@ -524,7 +521,9 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .primary-nav button, .primary-nav button.active { min-height: 48px; padding: 4px 2px; border-radius: 11px; display: grid; grid-template-columns: 1fr; place-items: center; gap: 0; color: #aac1bc; font-size: .67rem; text-align: center; box-shadow: none; }
   .primary-nav button span { font-size: .55rem; }
   .primary-nav button.active { color: white; background: rgba(13,148,136,.42); box-shadow: inset 0 2px #6be0d5; }
-  .activity-picker-toolbar { grid-template-columns: minmax(0, 1fr) auto; }
+  .activity-picker-toolbar { padding: 12px; }
+  .activity-picker-heading { align-items: flex-start; }
+  .activity-picker-heading > span { align-self: center; line-height: 1.35; }
   .activity-picker-tools { gap: 5px; }
   .activity-picker-tools .collection-toggle.icon-tool,
   .activity-picker-tools .control-menu.icon-menu > summary { width: 40px; min-width: 40px; }
@@ -570,7 +569,6 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .problem-bank-entry { padding: 17px 12px; }
   .banks-masthead-meta { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; }
   .banks-masthead .bank-progress-meter { width: 54px; height: 54px; }
-  .activity-picker-progress { display: block; width: 48px; height: 48px; }
   .topic-ribbon:not(.expanded) .topic-ribbon-columns { display: flex; overflow-x: auto; scrollbar-width: thin; }
   .topic-ribbon:not(.expanded) .topic-ribbon-columns > section { min-width: min(88vw, 520px); border-bottom: 0; }
   .topic-ribbon.expanded .topic-ribbon-columns { grid-template-columns: 1fr; }
@@ -579,6 +577,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .bank-toolbar .primary-bank-controls { overflow: visible; }
   .bank-icon-tools { width: 100%; margin-left: 0; justify-content: flex-end; }
   .past-filter-rail .bank-icon-tools { width: auto; margin-left: auto; }
+  .activity-picker-heading .activity-picker-tools { width: auto; margin-left: auto; }
   .letter-backdrop { padding: 8px; }
   .case-file-shell { width: 100%; max-height: calc(100vh - 16px); border-radius: 12px; }
   .case-document { padding: 38px 20px 34px; }
