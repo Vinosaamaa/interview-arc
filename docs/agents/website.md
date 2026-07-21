@@ -36,6 +36,9 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
 - Treat `data/daily/YYYY-MM-DD.json` as the canonical daily plan and finalized activity summary.
 - Treat `practice/leetcode/bank/questions.json` as user-maintained metadata, not scraped data.
 - Treat `practice/system-design/bank/questions.json` and `practice/behavioral/bank/questions.json` as the matching prompt banks.
+- A bank question may point to a durable `solutionPath`. The content importer
+  hydrates that Markdown into its reusable Solution Profile without turning it
+  into a dated Past attempt.
 - Treat `practice/*/sessions/*.md` and `audio-answers/*.md` as durable journal artifacts.
 - Use the contracts under `docs/contracts/` as the canonical field names.
 - `scripts/import-content.mjs` mirrors versioned journals, artifacts, story files,

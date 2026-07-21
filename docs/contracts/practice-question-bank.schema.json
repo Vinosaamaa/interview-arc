@@ -28,6 +28,7 @@
             "enum": ["very_easy", "easy", "medium", "hard", "very_hard"]
           },
           "solutionReference": { "type": "boolean" },
+          "solutionPath": { "type": "string", "minLength": 1 },
           "referenceAccess": { "enum": ["public", "may_require_sign_in"] },
           "topics": {
             "type": "array",

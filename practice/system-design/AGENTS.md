@@ -391,13 +391,15 @@ The complete artifact should contain the relevant sections below. Do not omit th
 
 Use only the sections that make sense during an unfinished session, but a completed full topic should be reviewable without reopening the chat.
 
-The existing reference artifact is:
+The reusable first-party TikTok reference solution is:
 
 ```text
-practice/system-design/sessions/2026-07-08-design-tiktok-for-you-feed.md
+practice/system-design/solutions/design-tiktok-for-you-feed.md
 ```
 
-It predates the full conversation-transcript contract. Preserve it as historical material; apply the new contract to future sessions.
+It is bank-owned Solution Profile material, not a dated attempt or transcript.
+Use it privately as the baseline when this question is selected. Future real
+attempts still follow the session contract and appear separately in Past.
 
 ## Long Audio Answer Workflow
 
