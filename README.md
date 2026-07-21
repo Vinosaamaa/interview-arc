@@ -23,6 +23,9 @@ LeetCode attempts use exactly three outcomes:
 - `solved_after_reviewing_approach`
 - `failed`
 
+The website labels these **Solved**, **Solved with help**, and **Failed**. The
+stored `solved_after_reviewing_approach` value remains stable for compatibility.
+
 An activity's lifecycle is separate from its outcome. For example, a failed problem is still a completed and documented attempt.
 
 ## Repository Map
@@ -179,7 +182,7 @@ The system-design bank currently mirrors the 55 questions listed by SystemDesign
 
 The behavioral bank mirrors the 74 questions listed by Bugfree.ai. Each entry stores its canonical answer page, category/focus topics, expected answer format, frequency, and whether the reference may require sign-in. The behavioral task consults that page when the user asks for a solution and reports the exact URL when the site's answer cannot be accessed.
 
-A session defaults to six coding problems, one system-design question, and one behavioral question, producing a six-hour countdown. Before work begins, the user may change any category count; the countdown is recalculated at 40 minutes per coding problem and 60 minutes per system-design or behavioral question. The user may add another session or a standalone activity. Every activity also has a compact elapsed-time stopwatch.
+A session defaults to six coding problems, one system-design question, and one behavioral question, producing a six-hour countdown. Before work begins, the user may change any category count; the countdown is recalculated at 40 minutes per coding problem and 60 minutes per system-design or behavioral question. The user may add another session or a standalone activity. Every activity also has a compact elapsed-time stopwatch. The same canonical question can appear only once on a Pacific practice day, regardless of whether it was selected through a full session, the standalone picker, the Problem Bank, or a pasted URL.
 
 All day boundaries use `America/Los_Angeles`. An activity begun before midnight
 and finished after midnight is recorded on the later date, with both exact

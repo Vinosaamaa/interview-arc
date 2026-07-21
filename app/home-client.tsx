@@ -49,7 +49,9 @@ type View = "today" | "journey" | "library" | "banks";
 type ComposerMode = "session" | "activity";
 type JourneyRange = 30 | 90 | 365 | "all";
 type JourneyMetric = "activities" | "time";
-type LibraryAttentionFilter = "due" | "needs_review" | "independent" | "helped" | "failed" | "notes";
+type LibraryAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "failed" | "notes";
+type BankAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "failed" | "todo" | "notes";
+type ComposerAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "failed";
 type DocumentPiP = { requestWindow: (options?: { width?: number; height?: number }) => Promise<Window> };
 type ComposerState = {
   open: boolean;
@@ -152,17 +154,14 @@ function typeMark(type: ActivityType) {
 
 function outcomeLabel(outcome?: Outcome) {
   if (outcome === "solved") return "Solved";
-  if (outcome === "solved_after_reviewing_approach") return "Solved after reviewing approach";
+  if (outcome === "solved_after_reviewing_approach") return "Solved with help";
   if (outcome === "failed") return "Failed";
   return "No result yet";
 }
 
 function resultLabel(outcome: Outcome | undefined, activityType: ActivityType) {
-  if (activityType === "leetcode") return outcomeLabel(outcome);
-  if (outcome === "solved") return "Finished";
-  if (outcome === "solved_after_reviewing_approach") return "Finished after reviewing approach";
-  if (outcome === "failed") return "Failed";
-  return "No result yet";
+  void activityType;
+  return outcomeLabel(outcome);
 }
 
 function plainText(markdown: string) {
@@ -177,12 +176,22 @@ function normalizedIdentity(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-function questionHasFinishedAttempt(entries: LogEntry[], type: ActivityType, question: QuestionBankItem) {
-  return entries.some((record) => record.type === type && (
-    record.questionId === question.id ||
-    Boolean(question.url && record.url && question.url.replace(/\/$/, "") === record.url.replace(/\/$/, "")) ||
-    normalizedIdentity(question.title) === normalizedIdentity(record.title)
-  ));
+function entryMatchesQuestion(entry: LogEntry, type: ActivityType, question: QuestionBankItem) {
+  return entry.type === type && (
+    entry.questionId === question.id ||
+    Boolean(question.url && entry.url && question.url.replace(/\/$/, "") === entry.url.replace(/\/$/, "")) ||
+    normalizedIdentity(question.title) === normalizedIdentity(entry.title)
+  );
+}
+
+function latestFinishedAttempt(entries: LogEntry[], type: ActivityType, question: QuestionBankItem) {
+  return entries
+    .filter((entry) => entryMatchesQuestion(entry, type, question))
+    .sort((left, right) => {
+      const leftStamp = Date.parse(left.endedAt ?? `${left.date}T23:59:59Z`);
+      const rightStamp = Date.parse(right.endedAt ?? `${right.date}T23:59:59Z`);
+      return rightStamp - leftStamp;
+    })[0];
 }
 
 function blockKeysForQuestion(question: QuestionBankItem) {
@@ -191,7 +200,8 @@ function blockKeysForQuestion(question: QuestionBankItem) {
   return keys;
 }
 
-function addActivityToBlocked(blocked: Set<string>, activity: { id: string; title: string; url?: string }) {
+function addActivityToBlocked(blocked: Set<string>, activity: { id: string; questionId?: string; title: string; url?: string }) {
+  if (activity.questionId) blocked.add(`id:${activity.questionId}`);
   blocked.add(`title:${normalizedIdentity(activity.title)}`);
   blocked.add(`slug:${slugify(activity.title)}`);
   if (activity.url) blocked.add(`url:${activity.url.replace(/\/$/, "").toLowerCase()}`);
@@ -309,7 +319,7 @@ function inferredQuestionTags(type: ActivityType, question: QuestionBankItem) {
   return inferred.length ? [...new Set(inferred)] : [type === "leetcode" ? "General coding" : type === "system_design" ? "Distributed systems" : "Behavioral signal"];
 }
 
-function Icon({ name }: { name: "close" | "star" | "book" | "plus" | "filter" | "sort" | "note" | "edit" | "trash" | "chevron" }) {
+function Icon({ name }: { name: "close" | "star" | "book" | "plus" | "filter" | "sort" | "note" | "edit" | "trash" | "chevron" | "flag" }) {
   const paths: Record<typeof name, ReactNode> = {
     close: <><path d="M5 5l14 14M19 5 5 19" /></>,
     star: <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" />,
@@ -321,22 +331,36 @@ function Icon({ name }: { name: "close" | "star" | "book" | "plus" | "filter" | 
     edit: <><path d="m4 20 4.5-1 10-10-3.5-3.5-10 10L4 20Z" /><path d="m13.5 7 3.5 3.5" /></>,
     trash: <><path d="M5 7h14M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" /></>,
     chevron: <path d="m8 10 4 4 4-4" />,
+    flag: <><path d="M6 21V4" /><path d="M6 5h9.5l-1.5 3 1.5 3H6" /></>,
   };
   return <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 }
 
-function deriveLeetCodeFromUrl(value: string, bank: QuestionBankItem[]) {
+function titleFromUrlPath(url: URL) {
+  const ignored = new Set(["question", "questions", "problem", "problems", "practice", "behavior", "design"]);
+  const segment = url.pathname.split("/").filter(Boolean).reverse().find((part) => !ignored.has(part.toLowerCase())) ?? url.hostname.replace(/^www\./, "");
+  const acronyms: Record<string, string> = { lru: "LRU", bfs: "BFS", dfs: "DFS", sql: "SQL", xor: "XOR", api: "API", url: "URL", cdn: "CDN" };
+  return decodeURIComponent(segment).split(/[-_]+/).filter(Boolean).map((word) => acronyms[word.toLowerCase()] ?? `${word.charAt(0).toUpperCase()}${word.slice(1)}`).join(" ");
+}
+
+function deriveQuestionFromUrl(value: string, type: ActivityType, bank: QuestionBankItem[]) {
   try {
     const url = new URL(value.trim());
-    if (!/(^|\.)leetcode\.com$/i.test(url.hostname)) return null;
-    const match = url.pathname.match(/^\/problems\/([a-z0-9-]+)\/?/i);
-    if (!match) return null;
-    const normalizedUrl = `https://leetcode.com/problems/${match[1].toLowerCase()}/`;
-    const known = bank.find((question) => question.url?.replace(/\/$/, "") === normalizedUrl.replace(/\/$/, ""));
-    if (known) return { title: known.title, url: normalizedUrl, targetMinutes: known.targetMinutes };
-    const acronyms: Record<string, string> = { lru: "LRU", bfs: "BFS", dfs: "DFS", sql: "SQL", xor: "XOR" };
-    const title = match[1].split("-").map((word) => acronyms[word] ?? `${word.charAt(0).toUpperCase()}${word.slice(1)}`).join(" ");
-    return { title, url: normalizedUrl, targetMinutes: 30 };
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    let normalizedUrl = `${url.origin}${url.pathname}`.replace(/\/$/, "");
+    if (type === "leetcode") {
+      if (!/(^|\.)leetcode\.com$/i.test(url.hostname)) return null;
+      const match = url.pathname.match(/^\/problems\/([a-z0-9-]+)\/?/i);
+      if (!match) return null;
+      normalizedUrl = `https://leetcode.com/problems/${match[1].toLowerCase()}`;
+    }
+    const known = bank.find((question) => question.url?.replace(/\/$/, "").toLowerCase() === normalizedUrl.toLowerCase());
+    if (known) return { questionId: known.id, title: known.title, url: known.url ?? normalizedUrl, targetMinutes: known.targetMinutes, prompt: known.prompt };
+    return {
+      title: titleFromUrlPath(url),
+      url: normalizedUrl,
+      targetMinutes: type === "leetcode" ? 30 : type === "system_design" ? 60 : 60,
+    };
   } catch {
     return null;
   }
@@ -467,23 +491,28 @@ function ResultFlag({
 }) {
   const currentIndex = OUTCOME_ORDER.indexOf(outcome);
   const next = OUTCOME_ORDER[(currentIndex + 1) % OUTCOME_ORDER.length];
-  const isCoding = activityType === "leetcode";
-  const labels = isCoding
-    ? { solved: "Solved", reviewed: "Solved after reviewing approach" }
-    : { solved: "Finished", reviewed: "Finished after reviewing approach" };
   return (
     <div className="result-flag-wrap">
       <button className={`result-flag ${outcome ?? "unset"}`} onClick={() => onChange(next)} aria-label={`Result: ${resultLabel(outcome, activityType)}. Select the next result.`} title="Change result">
-        <span aria-hidden="true">{outcome ? "⚑" : "⚐"}</span>
+        <Icon name="flag" />
       </button>
       <div className="result-legend" role="tooltip">
         <strong>Result flag</strong>
         <span><i className="unset" /> Not set</span>
-        <span><i className="solved" /> {labels.solved}</span>
-        <span><i className="reviewed" /> {labels.reviewed}</span>
+        <span><i className="solved" /> Solved</span>
+        <span><i className="reviewed" /> Solved with help</span>
         <span><i className="failed" /> Failed</span>
       </div>
     </div>
+  );
+}
+
+function StaticResultFlag({ outcome, label }: { outcome?: Outcome; label?: string }) {
+  const text = label ?? outcomeLabel(outcome);
+  return (
+    <span className={`static-result-flag ${outcome ?? "unset"}`} aria-label={`Latest result: ${text}`} title={text}>
+      <Icon name="flag" />
+    </span>
   );
 }
 
@@ -676,7 +705,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [librarySearch, setLibrarySearch] = useState("");
   const [libraryStarFilter, setLibraryStarFilter] = useState(false);
   const [bankTypeFilters, setBankTypeFilters] = useState<ActivityType[]>([]);
-  const [bankProgressFilters, setBankProgressFilters] = useState<Array<"todo" | "finished">>([]);
+  const [bankAttentionFilters, setBankAttentionFilters] = useState<BankAttentionFilter[]>([]);
   const [bankLevelFilters, setBankLevelFilters] = useState<Array<"easy" | "medium" | "hard">>([]);
   const [bankSortKey, setBankSortKey] = useState<"frequency" | "recent" | "acceptance">("frequency");
   const [bankSortDir, setBankSortDir] = useState<"asc" | "desc">("asc");
@@ -684,6 +713,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [bankTagFilters, setBankTagFilters] = useState<string[]>([]);
   const [bankStarFilter, setBankStarFilter] = useState<"all" | "starred">("all");
   const [bankTopicsExpanded, setBankTopicsExpanded] = useState(false);
+  const [composerAttentionFilters, setComposerAttentionFilters] = useState<ComposerAttentionFilter[]>([]);
+  const [composerLevelFilters, setComposerLevelFilters] = useState<Array<"easy" | "medium" | "hard">>([]);
+  const [composerStarFilter, setComposerStarFilter] = useState(false);
+  const [composerVisibleCount, setComposerVisibleCount] = useState(20);
   const [journeyRange, setJourneyRange] = useState<JourneyRange>(90);
   const [journeyMetric, setJourneyMetric] = useState<JourneyMetric>("activities");
   const [journeyDate, setJourneyDate] = useState("");
@@ -837,7 +870,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }, [allSessions]);
   const assignedExtraIds = new Set(draft.sessions.flatMap((session) => session.activityIds));
   const looseActivities = draft.extraActivities.filter((activity) => !assignedExtraIds.has(activity.id));
-  const dueReviewCount = Object.values(draft.reviews).filter((review) => review.status === "due" || (review.status === "scheduled" && review.dueDate <= journal.date)).length;
 
   // Pacific midnight is the journal boundary even when a session continues.
   // Reloading swaps the Today shell while D1 carries the focused unfinished
@@ -1252,6 +1284,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function openNewActivity() {
+    setComposerAttentionFilters([]);
+    setComposerLevelFilters([]);
+    setComposerStarFilter(false);
+    setComposerVisibleCount(20);
     setComposer({ ...EMPTY_COMPOSER, open: true, mode: "activity" });
   }
 
@@ -1285,15 +1321,17 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     });
   }
 
-  function sessionBlockedQuestions(editingSessionId = "") {
-    const excludedIds = new Set(
-      draft.sessions.find((session) => session.id === editingSessionId)?.activityIds ?? [],
-    );
+  function todayBlockedQuestions(excludedActivityIds: string[] = []) {
+    const excludedIds = new Set(excludedActivityIds);
     const blocked = new Set<string>();
     allTodayActivities
       .filter((activity) => !excludedIds.has(activity.id))
       .forEach((activity) => addActivityToBlocked(blocked, activity));
     return blocked;
+  }
+
+  function sessionBlockedQuestions(editingSessionId = "") {
+    return todayBlockedQuestions(draft.sessions.find((session) => session.id === editingSessionId)?.activityIds ?? []);
   }
 
   function availableSessionQuestions(type: ActivityType, editingSessionId = "") {
@@ -1325,6 +1363,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function addBankQuestionToToday(question: QuestionBankItem, type: ActivityType) {
+    if (isQuestionBlocked(question, todayBlockedQuestions())) {
+      window.alert("That question is already on Today. Interview Arc allows one attempt per Pacific practice day.");
+      return;
+    }
     const baseId = `${journal.date}-extra-${slugify(question.title)}`;
     let id = baseId;
     let suffix = 2;
@@ -1361,14 +1403,27 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     event.preventDefault();
     const bank = bankFor(composer.type);
     const selected = bank.find((question) => question.id === composer.selectedId);
-    const derived = composer.type === "leetcode" && !selected ? deriveLeetCodeFromUrl(composer.query, bank) : null;
+    const derived = !selected ? deriveQuestionFromUrl(composer.query, composer.type, bank) : null;
     if (composer.type === "leetcode" && !selected && !derived) return;
     const title = selected?.title ?? derived?.title ?? composer.query.trim();
     if (!title) return;
     const minutes = Math.max(1, Number(composer.minutes) || selected?.targetMinutes || derived?.targetMinutes || 30);
     const existing = draft.extraActivities.find((activity) => activity.id === composer.editingId);
     const id = existing?.id ?? `${journal.date}-extra-${slugify(title)}-${event.timeStamp.toString(36)}`;
-    const questionId = selected?.id ?? existing?.questionId ?? `personal-${composer.type}-${slugify(title)}`;
+    const questionId = selected?.id ?? derived?.questionId ?? existing?.questionId ?? `personal-${composer.type}-${slugify(title)}`;
+    const blocked = todayBlockedQuestions(existing ? [existing.id] : []);
+    const identityQuestion: QuestionBankItem = {
+      id: questionId,
+      title,
+      url: selected?.url ?? derived?.url,
+      topics: [],
+      targetMinutes: minutes,
+      active: true,
+    };
+    if (isQuestionBlocked(identityQuestion, blocked)) {
+      window.alert("That question is already on Today. Interview Arc allows one attempt per Pacific practice day.");
+      return;
+    }
     const activity: ExtraActivity = {
       schemaVersion: 2,
       id,
@@ -1379,7 +1434,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       ...(composer.type === "leetcode" ? { recordKind: "attempt" as const } : {}),
       title,
       ...(selected?.url || derived?.url ? { url: selected?.url ?? derived?.url } : {}),
-      ...(selected?.prompt ? { prompt: selected.prompt } : composer.type !== "leetcode" ? { prompt: title } : {}),
+      ...(selected?.prompt || derived?.prompt ? { prompt: selected?.prompt ?? derived?.prompt } : composer.type !== "leetcode" ? { prompt: title } : {}),
       allocatedSeconds: minutes * 60,
       timerGroupId: existing?.timerGroupId ?? id,
       timingSource: "website",
@@ -1394,7 +1449,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     }));
     enqueue(
       { type: "extra-upsert", activity },
-      ...(!selected ? [{
+      ...(!selected && !derived?.questionId ? [{
         type: "personal-question-upsert" as const,
         specialty: composer.type,
         question: {
@@ -1857,9 +1912,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       const hasNotes = Boolean(entry.personalNote?.trim() || entry.pinnedNotes?.length);
       const needsReview = Boolean(entry.review && entry.review.status !== "dismissed" && entry.review.status !== "completed");
       const reviewFilters = libraryAttentionFilters.filter((filter) => filter === "due" || filter === "needs_review");
-      const outcomeFilters = libraryAttentionFilters.filter((filter) => filter === "independent" || filter === "helped" || filter === "failed");
+      const outcomeFilters = libraryAttentionFilters.filter((filter) => filter === "solved" || filter === "helped" || filter === "failed");
       if (reviewFilters.length > 0 && !reviewFilters.some((filter) => filter === "due" ? entry.review?.status === "due" : needsReview)) continue;
-      if (outcomeFilters.length > 0 && !outcomeFilters.some((filter) => filter === "independent"
+      if (outcomeFilters.length > 0 && !outcomeFilters.some((filter) => filter === "solved"
         ? entry.outcome === "solved"
         : filter === "helped" ? entry.outcome === "solved_after_reviewing_approach" : entry.outcome === "failed")) continue;
       if (libraryAttentionFilters.includes("notes") && !hasNotes) continue;
@@ -2201,7 +2256,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         </article>
 
         <section className="metric-rings" aria-label="Coding outcome rates">
-          <MetricRing label="Independent" value={codingAttemptCount ? (outcomeCounts.solved / codingAttemptCount) * 100 : 0} detail={`${outcomeCounts.solved} coding attempt${outcomeCounts.solved === 1 ? "" : "s"} solved without an approach review.`} color="#91a72f" />
+          <MetricRing label="Solved" value={codingAttemptCount ? (outcomeCounts.solved / codingAttemptCount) * 100 : 0} detail={`${outcomeCounts.solved} coding attempt${outcomeCounts.solved === 1 ? "" : "s"} solved without help.`} color="#91a72f" />
           <MetricRing label="After review" value={codingAttemptCount ? (outcomeCounts.reviewed / codingAttemptCount) * 100 : 0} detail={`${outcomeCounts.reviewed} attempt${outcomeCounts.reviewed === 1 ? "" : "s"} completed after reviewing the approach.`} color="#6577d8" />
           <MetricRing label="Failed" value={codingAttemptCount ? (outcomeCounts.failed / codingAttemptCount) * 100 : 0} detail={`${outcomeCounts.failed} recorded failure${outcomeCounts.failed === 1 ? "" : "s"}; these remain evidence for future review.`} color="#d46a52" />
         </section>
@@ -2273,7 +2328,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       const needsReview = Boolean(entry.review && entry.review.status !== "dismissed" && entry.review.status !== "completed");
       if (filter === "due") return entry.review?.status === "due";
       if (filter === "needs_review") return needsReview;
-      if (filter === "independent") return entry.outcome === "solved";
+      if (filter === "solved") return entry.outcome === "solved";
       if (filter === "helped") return entry.outcome === "solved_after_reviewing_approach";
       if (filter === "failed") return entry.outcome === "failed";
       return hasNotes;
@@ -2284,7 +2339,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         { value: "needs_review", label: "Needs review" },
       ] },
       { label: "Result filters", tone: "result", options: [
-        { value: "independent", label: "Independent" },
+        { value: "solved", label: "Solved" },
         { value: "helped", label: "Solved with help" },
         { value: "failed", label: "Failed" },
       ] },
@@ -2327,7 +2382,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         </div>
         <div className="log-layout">
           <div className="dated-log">
-            {groupedLog.length ? groupedLog.map(([date, entries]) => <section className="log-day" id={`log-date-${date}`} key={date}><header><time>{readableDate(date)}</time><span>{entries.length} record{entries.length === 1 ? "" : "s"} · Pacific day</span></header><div className="log-day-entries">{entries.map((entry) => <article className={`log-entry ${entry.type}`} key={entry.id}><button className="log-entry-open" onClick={() => setSelectedEntry(entry)} aria-label={`Read ${entry.title}`}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><div className="log-entry-copy"><small>{typeLabel(entry.type)} · {entry.status}{entry.sessionId ? " · session activity" : " · standalone"}</small><strong>{entry.title}</strong>{meaningfulSubtitle(entry.subtitle) && <span>{meaningfulSubtitle(entry.subtitle)}</span>}<div className="entry-badges">{entry.review?.status === "due" && <i className="review-badge due">Due now</i>}{entry.review?.status === "scheduled" && <i className="review-badge">Review {entry.review.dueDate}</i>}{Boolean(entry.personalNote?.trim() || entry.pinnedNotes?.length) && <i className="note-badge">Pinned note</i>}{entry.outcome === "solved" && <i className="independent-badge">Independent</i>}{entry.outcome === "solved_after_reviewing_approach" && <i className="help-badge">Solved with help</i>}{entry.outcome === "failed" && <i className="failure-badge">Failed attempt</i>}</div>{entry.startedAt && <span className="entry-time-range">{formatPracticeTimestamp(entry.startedAt, true)} → {entry.endedAt ? formatPracticeTimestamp(entry.endedAt, true) : "Paused"}</span>}</div><div className="log-entry-meta"><strong>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "—"}</strong><span>{entry.type === "leetcode" ? outcomeLabel(entry.outcome) : entry.artifact ? "Published record" : entry.status}</span></div></button><button className={`star-control ${isStarred(entry.type, entry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(entry.type, entry.questionId)} disabled={!entry.questionId} aria-label={`${isStarred(entry.type, entry.questionId) ? "Unstar" : "Star"} ${entry.title}`} title="Star this problem"><Icon name="star" /></button></article>)}</div></section>) : <div className="quiet-empty library-empty"><strong>No completed work in this filter yet.</strong><span>Try another filter, or finish an activity to add it to the field journal.</span></div>}
+            {groupedLog.length ? groupedLog.map(([date, entries]) => <section className="log-day" id={`log-date-${date}`} key={date}><header><time>{readableDate(date)}</time><span>{entries.length} record{entries.length === 1 ? "" : "s"} · Pacific day</span></header><div className="log-day-entries">{entries.map((entry) => <article className={`log-entry ${entry.type}`} key={entry.id}><button className="log-entry-open" onClick={() => setSelectedEntry(entry)} aria-label={`Read ${entry.title}`}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><div className="log-entry-copy"><small>{typeLabel(entry.type)} · {entry.status}{entry.sessionId ? " · session activity" : " · standalone"}</small><strong>{entry.title}</strong>{meaningfulSubtitle(entry.subtitle) && <span>{meaningfulSubtitle(entry.subtitle)}</span>}<div className="entry-badges">{entry.review?.status === "due" && <i className="review-badge due">Due now</i>}{entry.review?.status === "scheduled" && <i className="review-badge">Review {entry.review.dueDate}</i>}{Boolean(entry.personalNote?.trim() || entry.pinnedNotes?.length) && <i className="note-badge">Pinned note</i>}{entry.outcome === "solved" && <i className="independent-badge">Solved</i>}{entry.outcome === "solved_after_reviewing_approach" && <i className="help-badge">Solved with help</i>}{entry.outcome === "failed" && <i className="failure-badge">Failed attempt</i>}</div>{entry.startedAt && <span className="entry-time-range">{formatPracticeTimestamp(entry.startedAt, true)} → {entry.endedAt ? formatPracticeTimestamp(entry.endedAt, true) : "Paused"}</span>}</div><div className="log-entry-meta"><strong>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "—"}</strong><span>{entry.type === "leetcode" ? outcomeLabel(entry.outcome) : entry.artifact ? "Published record" : entry.status}</span></div></button><div className="log-entry-actions"><StaticResultFlag outcome={entry.outcome} label={resultLabel(entry.outcome, entry.type)} /><button className={`star-control ${isStarred(entry.type, entry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(entry.type, entry.questionId)} disabled={!entry.questionId} aria-label={`${isStarred(entry.type, entry.questionId) ? "Unstar" : "Star"} ${entry.title}`} title="Star this problem"><Icon name="star" /></button></div></article>)}</div></section>) : <div className="quiet-empty library-empty"><strong>No completed work in this filter yet.</strong><span>Try another filter, or finish an activity to add it to the field journal.</span></div>}
           </div>
           <aside className="log-calendar"><span className="eyebrow">JUMP TO A DAY</span><h2>{new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${journal.date}T12:00:00Z`))}</h2><div className="calendar-week"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div><div className="calendar-mini">{calendarDays.map((day) => day.hasEntries ? <button key={day.key} onClick={() => scrollToLogDate(day.key)} title={`Jump to ${day.key}`}>{day.day}<i /></button> : <span key={day.key}>{day.day}</span>)}</div><div className="calendar-dates">{groupedLog.map(([date]) => <button key={date} onClick={() => scrollToLogDate(date)}>{readableDate(date, true)} <span>↘</span></button>)}</div></aside>
         </div>
@@ -2336,11 +2391,24 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function renderBanks() {
-    const bankEntries: { type: ActivityType; question: QuestionBankItem; finished: boolean }[] = [
+    const todayBlocked = todayBlockedQuestions();
+    const bankEntries = [
       ...bankFor("leetcode").map((question) => ({ type: "leetcode" as const, question })),
       ...bankFor("system_design").map((question) => ({ type: "system_design" as const, question })),
       ...bankFor("behavioral").map((question) => ({ type: "behavioral" as const, question })),
-    ].map((entry) => ({ ...entry, finished: questionHasFinishedAttempt(libraryEntries, entry.type, entry.question) }));
+    ].map((entry) => {
+      const latestAttempt = latestFinishedAttempt(libraryEntries, entry.type, entry.question);
+      const needsReview = Boolean(latestAttempt?.review && latestAttempt.review.status !== "dismissed" && latestAttempt.review.status !== "completed");
+      const dueNow = Boolean(latestAttempt?.review && (latestAttempt.review.status === "due" || (latestAttempt.review.status === "scheduled" && latestAttempt.review.dueDate <= journal.date)));
+      return {
+        ...entry,
+        latestAttempt,
+        finished: Boolean(latestAttempt),
+        needsReview,
+        dueNow,
+        hasNotes: Boolean(latestAttempt?.personalNote?.trim() || latestAttempt?.pinnedNotes?.length),
+      };
+    });
     const tagsForEntry = (type: ActivityType, question: QuestionBankItem) => [...new Set([
       ...inferredQuestionTags(type, question),
       ...(profileFor(type, question.id)?.tags ?? []),
@@ -2358,8 +2426,21 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const searchNeedle = bankSearch.toLowerCase().trim();
     const filteredEntries = bankEntries.filter((entry) => {
       const level = questionLevel(entry.question);
+      const attentionMatch = (filter: BankAttentionFilter) => {
+        if (filter === "due") return entry.dueNow;
+        if (filter === "needs_review") return entry.needsReview;
+        if (filter === "solved") return entry.latestAttempt?.outcome === "solved";
+        if (filter === "helped") return entry.latestAttempt?.outcome === "solved_after_reviewing_approach";
+        if (filter === "failed") return entry.latestAttempt?.outcome === "failed";
+        if (filter === "todo") return !entry.latestAttempt;
+        return entry.hasNotes;
+      };
+      const reviewFilters = bankAttentionFilters.filter((filter) => filter === "due" || filter === "needs_review");
+      const resultFilters = bankAttentionFilters.filter((filter) => filter === "solved" || filter === "helped" || filter === "failed" || filter === "todo");
       return (bankTypeFilters.length === 0 || bankTypeFilters.includes(entry.type))
-        && (bankProgressFilters.length === 0 || bankProgressFilters.some((filter) => filter === "finished" ? entry.finished : !entry.finished))
+        && (reviewFilters.length === 0 || reviewFilters.some(attentionMatch))
+        && (resultFilters.length === 0 || resultFilters.some(attentionMatch))
+        && (!bankAttentionFilters.includes("notes") || attentionMatch("notes"))
         && (bankLevelFilters.length === 0 || (level !== null && bankLevelFilters.includes(level)))
         && (bankStarFilter === "all" || isStarred(entry.type, entry.question.id))
         && (bankTagFilters.length === 0 || tagsForEntry(entry.type, entry.question).some((tag) => bankTagFilters.includes(`${entry.type}:${tag}`)))
@@ -2398,15 +2479,15 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     ];
     const finishedCount = bankEntries.filter((entry) => entry.finished).length;
     const finishedPercent = bankEntries.length ? Math.round((finishedCount / bankEntries.length) * 100) : 0;
-    const activeBankFilterCount = bankLevelFilters.length;
+    const activeBankFilterCount = bankLevelFilters.length + bankAttentionFilters.length;
     const hasBankFilters = bankTypeFilters.length > 0
-      || bankProgressFilters.length > 0
+      || bankAttentionFilters.length > 0
       || bankLevelFilters.length > 0
       || bankTagFilters.length > 0;
     const toggleBankTypeFilter = (type: ActivityType) => setBankTypeFilters((current) => current.includes(type)
       ? current.filter((candidate) => candidate !== type)
       : [...current, type]);
-    const toggleBankProgressFilter = (filter: "todo" | "finished") => setBankProgressFilters((current) => current.includes(filter)
+    const toggleBankAttentionFilter = (filter: BankAttentionFilter) => setBankAttentionFilters((current) => current.includes(filter)
       ? current.filter((candidate) => candidate !== filter)
       : [...current, filter]);
     const toggleBankLevelFilter = (filter: "easy" | "medium" | "hard") => setBankLevelFilters((current) => current.includes(filter)
@@ -2416,9 +2497,18 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       ? current.filter((candidate) => candidate !== filter)
       : [...current, filter]);
     const difficultyCount = (filter: "easy" | "medium" | "hard") => bankEntries.filter((entry) => questionLevel(entry.question) === filter).length;
+    const attentionCount = (filter: BankAttentionFilter) => bankEntries.filter((entry) => {
+      if (filter === "due") return entry.dueNow;
+      if (filter === "needs_review") return entry.needsReview;
+      if (filter === "solved") return entry.latestAttempt?.outcome === "solved";
+      if (filter === "helped") return entry.latestAttempt?.outcome === "solved_after_reviewing_approach";
+      if (filter === "failed") return entry.latestAttempt?.outcome === "failed";
+      if (filter === "todo") return !entry.latestAttempt;
+      return entry.hasNotes;
+    }).length;
     const clearBankFilters = () => {
       setBankTypeFilters([]);
-      setBankProgressFilters([]);
+      setBankAttentionFilters([]);
       setBankLevelFilters([]);
       setBankTagFilters([]);
     };
@@ -2449,7 +2539,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             <span className="bank-result-count" aria-live="polite">{visibleEntries.length} result{visibleEntries.length === 1 ? "" : "s"}</span>
           </label></div>
           <div className={`topic-ribbon ${bankTopicsExpanded ? "expanded" : ""}`}>
-            <div className="topic-ribbon-head"><span>Patterns & competencies</span>{bankTagFilters.length > 0 && <button className="clear-topic" onClick={() => setBankTagFilters([])}>Clear</button>}<button className="topic-expand" onClick={() => setBankTopicsExpanded((current) => !current)}>{bankTopicsExpanded ? "Collapse" : "Explore all"}<Icon name="chevron" /></button></div>
+            <div className="topic-ribbon-head"><span>Patterns & competencies</span>{bankTagFilters.length > 0 && <button className="filter-clear clear-topic" onClick={() => setBankTagFilters([])}>Clear</button>}<button className="topic-expand" onClick={() => setBankTopicsExpanded((current) => !current)}>{bankTopicsExpanded ? "Collapse" : "Explore all"}<Icon name="chevron" /></button></div>
             <div className="topic-ribbon-columns">{tagCatalog.map((group) => <section className={group.type} key={group.type}><header><i className={`type-mark ${group.type}`}>{typeMark(group.type)}</i><strong>{typeLabel(group.type)}</strong></header><div>{group.tags.slice(0, bankTopicsExpanded ? undefined : 3).map(({ tag, count }) => { const filterKey = `${group.type}:${tag}`; return <button key={tag} className={bankTagFilters.includes(filterKey) ? "active" : ""} aria-pressed={bankTagFilters.includes(filterKey)} onClick={() => toggleBankTagFilter(filterKey)}><span>{tag}</span><small>{count}</small></button>; })}</div></section>)}</div>
           </div>
           <div className="library-toolbar bank-toolbar compact-toolbar">
@@ -2461,17 +2551,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                     </button>
                   ))}
               </div>
-              <div className="filter-row progress-control" role="group" aria-label="Filter problem banks by progress">
-                  {(["todo", "finished"] as const).map((filter) => (
-                    <button key={filter} className={bankProgressFilters.includes(filter) ? "active" : ""} aria-pressed={bankProgressFilters.includes(filter)} onClick={() => toggleBankProgressFilter(filter)}>
-                      {filter === "todo" ? "To practice" : "Finished"}
-                    </button>
-                  ))}
-              </div>
               <div className="bank-icon-tools" aria-label="Problem bank tools">
                 {hasBankFilters && <button type="button" className="filter-clear" onClick={clearBankFilters}>Clear</button>}
                 <button className={`collection-toggle icon-tool ${bankStarFilter === "starred" ? "active" : ""}`} onClick={() => setBankStarFilter((current) => current === "starred" ? "all" : "starred")} aria-pressed={bankStarFilter === "starred"} aria-label={bankStarFilter === "starred" ? "Show all problems" : "Show starred problems"} title={bankStarFilter === "starred" ? "Showing starred problems" : "Show starred problems"}><Icon name="star" /></button>
-                <details className={`control-menu icon-menu ${activeBankFilterCount > 0 ? "active" : ""}`}><summary aria-label={`Difficulty filters${activeBankFilterCount ? `, ${activeBankFilterCount} active` : ""}`} title={`${activeBankFilterCount || "No"} active difficulty filters`}><Icon name="filter" />{activeBankFilterCount > 0 && <i>{activeBankFilterCount}</i>}</summary><div className="control-popover compact-filter-popover difficulty-menu"><div className="compact-filter-group difficulty" role="group" aria-label="Difficulty filters">{(["easy", "medium", "hard"] as const).map((filter) => <button type="button" key={filter} className={bankLevelFilters.includes(filter) ? "active" : ""} aria-pressed={bankLevelFilters.includes(filter)} onClick={() => toggleBankLevelFilter(filter)}><span>{filter[0].toUpperCase() + filter.slice(1)}</span><small>{difficultyCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div></div></details>
+                <details className={`control-menu icon-menu ${activeBankFilterCount > 0 ? "active" : ""}`}><summary aria-label={`Problem filters${activeBankFilterCount ? `, ${activeBankFilterCount} active` : ""}`} title={`${activeBankFilterCount || "No"} active filters`}><Icon name="filter" />{activeBankFilterCount > 0 && <i>{activeBankFilterCount}</i>}</summary><div className="control-popover compact-filter-popover bank-attention-menu"><div className="compact-filter-group review" role="group" aria-label="Review filters">{([['due', 'Due now'], ['needs_review', 'Needs review']] as const).map(([filter, label]) => <button type="button" key={filter} className={bankAttentionFilters.includes(filter) ? "active" : ""} aria-pressed={bankAttentionFilters.includes(filter)} onClick={() => toggleBankAttentionFilter(filter)}><span>{label}</span><small>{attentionCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div><div className="compact-filter-group result" role="group" aria-label="Result filters">{([['solved', 'Solved'], ['helped', 'Solved with help'], ['failed', 'Failed'], ['todo', 'To do']] as const).map(([filter, label]) => <button type="button" key={filter} className={bankAttentionFilters.includes(filter) ? "active" : ""} aria-pressed={bankAttentionFilters.includes(filter)} onClick={() => toggleBankAttentionFilter(filter)}><span>{label}</span><small>{attentionCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div><div className="compact-filter-group record" role="group" aria-label="Record filters"><button type="button" className={bankAttentionFilters.includes("notes") ? "active" : ""} aria-pressed={bankAttentionFilters.includes("notes")} onClick={() => toggleBankAttentionFilter("notes")}><span>Has notes</span><small>{attentionCount("notes")}</small><i aria-hidden="true">✓</i></button></div><div className="compact-filter-group difficulty" role="group" aria-label="Difficulty filters">{(["easy", "medium", "hard"] as const).map((filter) => <button type="button" key={filter} className={bankLevelFilters.includes(filter) ? "active" : ""} aria-pressed={bankLevelFilters.includes(filter)} onClick={() => toggleBankLevelFilter(filter)}><span>{filter[0].toUpperCase() + filter.slice(1)}</span><small>{difficultyCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div></div></details>
                 <details className="control-menu sort-menu icon-menu"><summary aria-label={`Sort by ${activeSort.label}, ${bankSortDir === "asc" ? "ascending" : "descending"}`} title={`Sort: ${activeSort.label} · ${bankSortDir === "asc" ? "low to high" : "high to low"}`}><span className={`bank-sort-glyph ${activeSort.icon}`} aria-hidden="true" /><small className="sort-direction-badge" aria-hidden="true">{bankSortDir === "asc" ? "↑" : "↓"}</small></summary><div className="control-popover"><strong>Order by</strong>
                   {sortOptions.map((option) => {
                     const active = bankSortKey === option.key;
@@ -2496,12 +2579,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           </div>
         </div>
         <div className="problem-bank-list" tabIndex={0} aria-label="Problem bank results">
-          {visibleEntries.map(({ type, question, finished }) => <article className={`problem-bank-entry ${type}`} key={`${type}-${question.id}`}>
+          {visibleEntries.map(({ type, question, finished, latestAttempt }) => { const blockedToday = isQuestionBlocked(question, todayBlocked); return <article className={`problem-bank-entry ${type}`} key={`${type}-${question.id}`}>
             <span className={`type-mark ${type}`}>{typeMark(type)}</span>
             <div className="problem-bank-copy"><small>{typeLabel(type)}{question.difficulty ? ` · ${question.difficulty}` : ""}{question.complexity ? ` · ${displayComplexity(question.complexity)}` : ""} · {finished ? "finished" : "to practice"}</small><button className="problem-title-button" onClick={() => setSelectedProblem({ type, question })}>{question.title}</button>{question.prompt && question.prompt !== question.title && <p>{question.prompt}</p>}{question.url && <a href={question.url} target="_blank" rel="noreferrer">{question.solutionReference ? "Open question & solution references ↗" : "Open problem ↗"}</a>}</div>
             <div className="bank-entry-meta"><span>{question.targetMinutes} min estimate</span>{question.problemNumber && <small>#{question.problemNumber}{typeof question.acceptanceRate === "number" ? ` · ${question.acceptanceRate.toFixed(1)}% acceptance` : ""}</small>}{question.companySignals?.[0] && <small>{question.companySignals[0].company} frequency {question.companySignals[0].frequencyScore}/{question.companySignals[0].frequencyScale} · {question.companySignals[0].window}</small>}{question.answerFormat && <small>{question.answerFormat} answer · {question.frequency ?? "medium"} frequency</small>}{question.solutionReference && <small>Reference solution{question.referenceAccess === "may_require_sign_in" ? " may require sign-in" : " available"}</small>}<small className={`content-tags ${type}`}>{tagsForEntry(type, question).slice(0, 4).map((tag) => `#${tag}`).join("  ")}</small></div>
-            <div className="bank-entry-actions"><button className={`icon-action ${isStarred(type, question.id) ? "active starred" : ""}`} onClick={() => toggleProblemStar(type, question.id)} aria-label={`${isStarred(type, question.id) ? "Unstar" : "Star"} ${question.title}`} title={isStarred(type, question.id) ? "Unstar" : "Star"}><Icon name="star" /></button><button className="icon-action" onClick={() => setSelectedProblem({ type, question })} aria-label={`View solution for ${question.title}`} title="View solution"><Icon name="book" /></button><button className="icon-action practice" onClick={() => addBankQuestionToToday(question, type)} aria-label={`Practice ${question.title} today`} title="Practice today"><Icon name="plus" /></button></div>
-          </article>)}
+            <div className="bank-entry-actions"><StaticResultFlag outcome={latestAttempt?.outcome} /><button className={`icon-action ${isStarred(type, question.id) ? "active starred" : ""}`} onClick={() => toggleProblemStar(type, question.id)} aria-label={`${isStarred(type, question.id) ? "Unstar" : "Star"} ${question.title}`} title={isStarred(type, question.id) ? "Unstar" : "Star"}><Icon name="star" /></button><button className="icon-action" onClick={() => setSelectedProblem({ type, question })} aria-label={`View solution for ${question.title}`} title="View solution"><Icon name="book" /></button><button className="icon-action practice" onClick={() => addBankQuestionToToday(question, type)} disabled={blockedToday} aria-label={blockedToday ? `${question.title} is already on Today` : `Practice ${question.title} today`} title={blockedToday ? "Already on Today" : "Practice today"}><Icon name="plus" /></button></div>
+          </article>; })}
           {!visibleEntries.length && <div className="quiet-empty bank-empty"><strong>No questions match these filters.</strong><span>Change type, progress, level, or search text.</span></div>}
         </div>
       </section>
@@ -2509,12 +2592,57 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   const activeBank = bankFor(composer.type);
-  const filteredQuestions = activeBank.filter((question) => {
+  const composerBlocked = todayBlockedQuestions(composer.editingId ? [composer.editingId] : []);
+  const composerQuestionEntries = activeBank.map((question) => {
+    const latestAttempt = latestFinishedAttempt(libraryEntries, composer.type, question);
+    const needsReview = Boolean(latestAttempt?.review && latestAttempt.review.status !== "dismissed" && latestAttempt.review.status !== "completed");
+    const dueNow = Boolean(latestAttempt?.review && (latestAttempt.review.status === "due" || (latestAttempt.review.status === "scheduled" && latestAttempt.review.dueDate <= journal.date)));
+    return { question, latestAttempt, needsReview, dueNow, blockedToday: isQuestionBlocked(question, composerBlocked) };
+  });
+  const filteredQuestionEntries = composerQuestionEntries.filter((entry) => {
+    const { question, latestAttempt, needsReview, dueNow } = entry;
     const needle = composer.query.toLowerCase().trim();
-    return !needle || question.title.toLowerCase().includes(needle) || question.topics.some((topic) => topic.toLowerCase().includes(needle));
-  }).slice(0, 7);
-  const derivedUrl = composer.type === "leetcode" ? deriveLeetCodeFromUrl(composer.query, activeBank) : null;
-  const canSaveActivity = composer.type === "leetcode" ? Boolean(composer.selectedId || derivedUrl) : Boolean(composer.selectedId || composer.query.trim());
+    const reviewFilters = composerAttentionFilters.filter((filter) => filter === "due" || filter === "needs_review");
+    const resultFilters = composerAttentionFilters.filter((filter) => filter === "solved" || filter === "helped" || filter === "failed");
+    const matchesReview = (filter: ComposerAttentionFilter) => filter === "due" ? dueNow : needsReview;
+    const matchesResult = (filter: ComposerAttentionFilter) => filter === "solved"
+      ? latestAttempt?.outcome === "solved"
+      : filter === "helped" ? latestAttempt?.outcome === "solved_after_reviewing_approach" : latestAttempt?.outcome === "failed";
+    return question.active
+      && (!needle || question.title.toLowerCase().includes(needle) || question.topics.some((topic) => topic.toLowerCase().includes(needle)))
+      && (reviewFilters.length === 0 || reviewFilters.some(matchesReview))
+      && (resultFilters.length === 0 || resultFilters.some(matchesResult))
+      && (composerLevelFilters.length === 0 || (questionLevel(question) !== null && composerLevelFilters.includes(questionLevel(question)!)))
+      && (!composerStarFilter || isStarred(composer.type, question.id));
+  });
+  const visibleQuestionEntries = filteredQuestionEntries.slice(0, composerVisibleCount);
+  const derivedUrl = deriveQuestionFromUrl(composer.query, composer.type, activeBank);
+  const derivedBlocked = Boolean(derivedUrl && isQuestionBlocked({ id: derivedUrl.questionId ?? `personal-${composer.type}-${slugify(derivedUrl.title)}`, title: derivedUrl.title, url: derivedUrl.url, topics: [], targetMinutes: derivedUrl.targetMinutes, active: true }, composerBlocked));
+  const canSaveActivity = !derivedBlocked && (composer.type === "leetcode" ? Boolean(composer.selectedId || derivedUrl) : Boolean(composer.selectedId || derivedUrl || composer.query.trim()));
+  const activeComposerFilterCount = composerAttentionFilters.length + composerLevelFilters.length;
+  const hasComposerFilters = activeComposerFilterCount > 0 || composerStarFilter;
+  const composerAttentionCount = (filter: ComposerAttentionFilter) => composerQuestionEntries.filter((entry) => {
+    if (filter === "due") return entry.dueNow;
+    if (filter === "needs_review") return entry.needsReview;
+    if (filter === "solved") return entry.latestAttempt?.outcome === "solved";
+    if (filter === "helped") return entry.latestAttempt?.outcome === "solved_after_reviewing_approach";
+    return entry.latestAttempt?.outcome === "failed";
+  }).length;
+  const composerLevelCount = (level: "easy" | "medium" | "hard") => composerQuestionEntries.filter((entry) => questionLevel(entry.question) === level).length;
+  const toggleComposerAttentionFilter = (filter: ComposerAttentionFilter) => {
+    setComposerVisibleCount(20);
+    setComposerAttentionFilters((current) => current.includes(filter) ? current.filter((candidate) => candidate !== filter) : [...current, filter]);
+  };
+  const toggleComposerLevelFilter = (filter: "easy" | "medium" | "hard") => {
+    setComposerVisibleCount(20);
+    setComposerLevelFilters((current) => current.includes(filter) ? current.filter((candidate) => candidate !== filter) : [...current, filter]);
+  };
+  const clearComposerFilters = () => {
+    setComposerAttentionFilters([]);
+    setComposerLevelFilters([]);
+    setComposerStarFilter(false);
+    setComposerVisibleCount(20);
+  };
   const sessionAvailability = {
     coding: availableSessionQuestions("leetcode", composer.editingSessionId).length,
     systemDesign: availableSessionQuestions("system_design", composer.editingSessionId).length,
@@ -2610,7 +2738,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           {composer.mode === "session" && !composer.editingId ? <div className="session-composer">
             <p>Shape the session you need. The default is six coding problems, one system-design mock, and one behavioral mock. When available, Interview Arc places up to two due reviews first and fills the remaining slots with new bank questions.</p>
             {bankFor("behavioral").filter(isResumeCurriculumQuestion).length === 0 && <div className="resume-setup-warning"><strong>Résumé foundation is not ready yet.</strong><span>Interview Arc will not substitute a random behavioral prompt. Connect the Behavioral specialist once to build the private résumé curriculum.</span></div>}
-            {dueReviewCount > 0 && <div className="review-composer-strip"><span>RECALL QUEUE</span><strong>Up to {Math.min(2, dueReviewCount)} due review{Math.min(2, dueReviewCount) === 1 ? "" : "s"} will be included</strong><small>{dueReviewCount} total due now · oldest eligible first</small></div>}
             <div className="session-recipe" aria-label="Session recipe">
               <SessionCountControl label="Coding" mark="C" value={composer.sessionCoding} minutesEach={CODING_SESSION_MINUTES} max={sessionAvailability.coding} onChange={(value) => setComposer((current) => ({ ...current, sessionCoding: value }))} />
               <SessionCountControl label="System design" mark="S" value={composer.sessionSystemDesign} minutesEach={INTERVIEW_SESSION_MINUTES} max={sessionAvailability.systemDesign} onChange={(value) => setComposer((current) => ({ ...current, sessionSystemDesign: value }))} />
@@ -2623,10 +2750,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             <small>{sessionAvailability.coding} coding, {sessionAvailability.systemDesign} system-design, and {sessionAvailability.behavioral} behavioral questions are available after today&apos;s other picks. A recipe locks once its timer, activity work, or completion begins.</small>
             <button className="primary-action full-width" onClick={saveFullSession} disabled={!canSaveSession}>{composer.editingSessionId ? "Save session recipe" : `Add session ${allSessions.length + 1}`}</button>
           </div> : <form onSubmit={saveActivity}>
-            <div className="type-selector" role="group" aria-label="Practice type">{(["leetcode", "system_design", "behavioral"] as const).map((type) => <button type="button" key={type} className={`${type} ${composer.type === type ? "active" : ""}`} onClick={() => setComposer((current) => ({ ...current, type, query: "", selectedId: "", minutes: type === "leetcode" ? "30" : type === "system_design" ? "90" : "60" }))}>{typeLabel(type)}</button>)}</div>
-            <label className="search-field"><span>{composer.type === "leetcode" ? "Search the bank or paste a LeetCode URL" : `Search the ${typeLabel(composer.type).toLowerCase()} bank or type a new title`}</span><input autoFocus value={composer.query} onChange={(event) => setComposer((current) => ({ ...current, query: event.target.value, selectedId: "" }))} placeholder={composer.type === "leetcode" ? "Search titles and topics, or https://leetcode.com/problems/…" : "Search or enter a custom question"} /></label>
-            {derivedUrl && !composer.selectedId && <div className="derived-question"><span>Title extracted from URL</span><strong>{derivedUrl.title}</strong><small>{derivedUrl.url}</small></div>}
-            {!derivedUrl && <div className="bank-results">{filteredQuestions.length ? filteredQuestions.map((question) => <button type="button" className={composer.selectedId === question.id ? "selected" : ""} key={question.id} onClick={() => selectBankQuestion(question)}><span className={`type-mark ${composer.type}`}>{typeMark(composer.type)}</span><div><strong>{question.title}</strong><small>{question.difficulty ? `${question.difficulty} · ` : ""}{question.topics.join(" · ")}</small></div><span>{composer.selectedId === question.id ? "Selected" : "Choose"}</span></button>) : <p className="no-results">{composer.type === "leetcode" ? "No bank match. Paste the public LeetCode problem URL and the title will be extracted automatically." : "No bank match. Your typed title will become a custom question."}</p>}</div>}
+            <div className="type-selector" role="group" aria-label="Practice type">{(["leetcode", "system_design", "behavioral"] as const).map((type) => <button type="button" key={type} className={`${type} ${composer.type === type ? "active" : ""}`} onClick={() => { setComposerVisibleCount(20); setComposer((current) => ({ ...current, type, query: "", selectedId: "", minutes: type === "leetcode" ? "30" : "60" })); }}>{typeLabel(type)}</button>)}</div>
+            <div className="activity-picker-heading"><span>{composer.type === "leetcode" ? "Search the bank or paste a LeetCode URL" : `Search the ${typeLabel(composer.type).toLowerCase()} bank, paste a URL, or type a new title`}</span>{hasComposerFilters && <button type="button" className="filter-clear" onClick={clearComposerFilters}>Clear</button>}</div>
+            <div className="activity-picker-toolbar">
+              <label className="bank-search-bar activity-picker-search"><span className="bank-search-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="16" height="16" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.8"/><path d="M12.8 12.8 17 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg></span><input autoFocus type="search" value={composer.query} onChange={(event) => { setComposerVisibleCount(20); setComposer((current) => ({ ...current, query: event.target.value, selectedId: "" })); }} placeholder={composer.type === "leetcode" ? "Search titles and topics, or paste a LeetCode URL" : "Search titles and topics, paste a URL, or enter a title"} aria-label="Search activity questions" />{composer.query ? <button type="button" className="bank-search-clear" onClick={() => { setComposerVisibleCount(20); setComposer((current) => ({ ...current, query: "", selectedId: "" })); }} aria-label="Clear search">×</button> : <span className="bank-search-clear-spacer" aria-hidden="true" />}<span className="bank-result-count" aria-live="polite">{filteredQuestionEntries.length}</span></label>
+              <div className="bank-icon-tools activity-picker-tools"><button type="button" className={`collection-toggle icon-tool ${composerStarFilter ? "active" : ""}`} onClick={() => { setComposerVisibleCount(20); setComposerStarFilter((current) => !current); }} aria-pressed={composerStarFilter} aria-label={composerStarFilter ? "Show all questions" : "Show starred questions"} title={composerStarFilter ? "Showing starred questions" : "Show starred questions"}><Icon name="star" /></button><details className={`control-menu icon-menu ${activeComposerFilterCount > 0 ? "active" : ""}`}><summary aria-label={`Activity filters${activeComposerFilterCount ? `, ${activeComposerFilterCount} active` : ""}`} title={`${activeComposerFilterCount || "No"} active filters`}><Icon name="filter" />{activeComposerFilterCount > 0 && <i>{activeComposerFilterCount}</i>}</summary><div className="control-popover compact-filter-popover activity-filter-menu"><div className="compact-filter-group review" role="group" aria-label="Review filters">{([['due', 'Due now'], ['needs_review', 'Needs review']] as const).map(([filter, label]) => <button type="button" key={filter} className={composerAttentionFilters.includes(filter) ? "active" : ""} aria-pressed={composerAttentionFilters.includes(filter)} onClick={() => toggleComposerAttentionFilter(filter)}><span>{label}</span><small>{composerAttentionCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div><div className="compact-filter-group result" role="group" aria-label="Result filters">{([['solved', 'Solved'], ['helped', 'Solved with help'], ['failed', 'Failed']] as const).map(([filter, label]) => <button type="button" key={filter} className={composerAttentionFilters.includes(filter) ? "active" : ""} aria-pressed={composerAttentionFilters.includes(filter)} onClick={() => toggleComposerAttentionFilter(filter)}><span>{label}</span><small>{composerAttentionCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div><div className="compact-filter-group difficulty" role="group" aria-label="Difficulty filters">{(["easy", "medium", "hard"] as const).map((filter) => <button type="button" key={filter} className={composerLevelFilters.includes(filter) ? "active" : ""} aria-pressed={composerLevelFilters.includes(filter)} onClick={() => toggleComposerLevelFilter(filter)}><span>{filter[0].toUpperCase() + filter.slice(1)}</span><small>{composerLevelCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div></div></details></div>
+            </div>
+            {derivedUrl && !composer.selectedId && <div className={`derived-question ${derivedBlocked ? "blocked" : ""}`}><span>{derivedUrl.questionId ? "Question matched in the bank" : "New personal bank question"}</span><strong>{derivedUrl.title}</strong><small>{derivedUrl.url}</small>{derivedBlocked && <em>Already on Today</em>}</div>}
+            {!derivedUrl && <div className="bank-results" onScroll={(event) => { const list = event.currentTarget; if (list.scrollTop + list.clientHeight >= list.scrollHeight - 72 && composerVisibleCount < filteredQuestionEntries.length) setComposerVisibleCount((current) => Math.min(filteredQuestionEntries.length, current + 20)); }}>{visibleQuestionEntries.length ? visibleQuestionEntries.map(({ question, latestAttempt, blockedToday }) => <button type="button" className={`${composer.selectedId === question.id ? "selected" : ""} ${blockedToday ? "blocked" : ""}`} key={question.id} onClick={() => selectBankQuestion(question)} disabled={blockedToday} aria-label={blockedToday ? `${question.title} is already on Today` : `Select ${question.title}`}><span className={`type-mark ${composer.type}`}>{typeMark(composer.type)}</span><div><strong>{question.title}</strong><small>{question.difficulty ? `${question.difficulty} · ` : ""}{question.topics.join(" · ")}{blockedToday ? `${question.topics.length || question.difficulty ? " · " : ""}Already on Today` : ""}</small></div><StaticResultFlag outcome={latestAttempt?.outcome} /></button>) : <p className="no-results">{composer.type === "leetcode" ? "No bank match. Paste a public LeetCode problem URL to create a personal bank question automatically." : "No bank match. Paste a public URL or enter a custom title to create a personal bank question."}</p>}{visibleQuestionEntries.length < filteredQuestionEntries.length && <span className="picker-load-status">Scroll for more · {filteredQuestionEntries.length - visibleQuestionEntries.length} remaining</span>}</div>}
             <label className="minutes-field"><span>Planning estimate in minutes</span><input type="number" min="1" max="360" value={composer.minutes} onChange={(event) => setComposer((current) => ({ ...current, minutes: event.target.value }))} /></label>
             <button className="primary-action full-width" type="submit" disabled={!canSaveActivity}>{composer.editingId ? "Save changes" : "Add to today"}</button>
           </form>}

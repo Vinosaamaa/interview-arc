@@ -145,6 +145,9 @@ For `record_kind: attempt`, a completed problem uses exactly one outcome:
 - `solved_after_reviewing_approach`
 - `failed`
 
+The website displays these as **Solved**, **Solved with help**, and **Failed**;
+continue to persist the canonical enum above.
+
 Do not add partial-success labels. Put nuance in notes. Keep outcome separate from lifecycle status.
 
 For `record_kind: walkthrough`, use `user_attempted: false` or `unknown`, assistance level `full_solution`, and no outcome. A walkthrough can later be linked to a separate reimplementation attempt.

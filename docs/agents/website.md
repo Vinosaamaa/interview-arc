@@ -16,13 +16,13 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
 - On Today, use the masthead tally for yesterday's completed activities, recorded time, and sessions. Read owner-scoped D1 state for yesterday so unpublished work is not omitted; fall back to the versioned journal offline.
 - Let locally added activities be edited and removed.
 - Store lifecycle separately from outcome.
-- Give coding, system-design, and behavioral activities the same cycling result-flag layout. The local mock labels are finished, finished after review, and failed; only LeetCode persists the canonical outcome field. The hover/focus legend must explain the colors and must not be clipped inside its activity card.
+- Give coding, system-design, and behavioral activities the same cycling result-flag layout: Solved, Solved with help, and Failed. Preserve `solved_after_reviewing_approach` as the canonical stored value. The hover/focus legend must explain the colors and must not be clipped inside its activity card.
 - Open the original LeetCode page for prompt reading and submission. Never imply that code was executed or accepted locally.
 - Show system-design and behavioral transcript/review artifacts when tracked files exist.
 - Past contains every completed attempt, including failed work worth reviewing;
   it never shows planned or running activities. Keep practice-type filters
-  separate from attention filters: Due now, Needs review, Solved with help,
-  Failed, and Has notes.
+  separate from attention filters: Due now, Needs review, Solved, Solved with
+  help, Failed, and Has notes.
 - Render tracked artifact Markdown as formatted headings, lists, links, tables, quotes, and code blocks rather than raw source text.
 - For legacy ignored audio, display the filename and `Local only`. For private
   R2 clips with D1 status `available`, render the authenticated audio player;
@@ -100,10 +100,22 @@ The website must not imply that browser draft state has already been published t
   time-of-day distribution into a productivity or mastery claim.
 - A failed attempt should still feel like useful logged work.
 - Make extra-question creation a short modal or inline form: category, title or URL/prompt, and timer.
-- In the creation flow, search the matching bank first. For an unknown LeetCode URL, derive a title from its public problem slug without scraping the page. For unknown system-design or behavioral questions, accept a custom title with no URL.
+- In the creation flow, search the matching bank first. A pasted public URL in
+  any category creates a personal bank question when no canonical URL match
+  exists; derive its title from the public path without crawling or scraping
+  the page. Continue to accept a custom title for system-design or behavioral
+  practice.
+- Render the activity picker progressively, expose compact multi-select review,
+  result, and difficulty filters, and show the most recent finished result as a
+  read-only flag. Keep questions already scheduled on Today visible but
+  disabled.
 - Keep body and annotation text readable: normal supporting copy should be at least 14px and short utility labels at least 12px.
 - Past is a date-grouped scrolling log with category color, filters, a calendar jump control, and a centered reading dialog.
-- Problem Banks combines all three versioned banks, offers independent category and progress filters, and sends every `Practice today` selection to standalone practice on Today. Progress has `All`, `To practice`, and `Finished`; failed or merely planned work remains `To practice`.
+- Problem Banks combines all three versioned banks, offers independent category,
+  review, result, notes, difficulty, tag, and starred filters, and sends every
+  eligible `Practice today` selection to standalone practice on Today. Its
+  result flag reflects the most recent finished attempt; Past keeps the flag of
+  each specific attempt.
 - A behavioral Problem Bank profile leads with the user's preferred polished
   personal answer, verified evidence, evidence gaps, and expandable alternative
   story variants. Its transcript remains exclusively on the dated Past attempt.

@@ -21,7 +21,14 @@ Before editing website code, read `../docs/agents/website.md` and the shared con
 - Treat only a finished, previously started activity stopwatch as publication-ready automatically. A selected result is metadata and never completes or queues work by itself.
   Keep `ready` as the agent-queue enum and set `published` only after an artifact
   exists; do not require a second manual queue action.
-- Keep Problem Banks question-type and progress filters independent. A finished question must match Past eligibility; failed and planned questions remain to practice.
+- Keep Problem Banks question-type filters independent from review, result,
+  notes, difficulty, tag, and starred filters.
+- Present result flags consistently as **Solved**, **Solved with help**, and
+  **Failed** while preserving the canonical stored outcome enum. Past shows the
+  specific attempt result; Problem Banks and activity selection show the most
+  recent finished attempt.
+- Enforce one canonical question per Pacific practice day across sessions,
+  standalone activities, Problem Bank shortcuts, and pasted URLs.
 - Preserve the vinext/Cloudflare Worker architecture, `wrangler.jsonc`, D1
   migrations, and root hosting configuration. The OpenAI Sites configuration
   is legacy and must not be removed without explicit user direction.

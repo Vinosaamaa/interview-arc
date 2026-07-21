@@ -257,18 +257,27 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   overflow: visible;
 }
 .activity-time-copy {
+  grid-column: 1;
+  grid-row: 1;
   min-width: 0;
   min-height: 34px;
   grid-template-rows: 14px 20px;
   align-content: center;
 }
 .activity-timer.unstarted .activity-time-copy {
+  grid-row: 1 / -1;
+  align-self: center;
   place-content: center start;
+}
+.activity-time-actions {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  align-self: center;
 }
 .activity-time-copy > span,
 .activity-time-copy > strong { min-width: 0; line-height: 1.15; }
 .activity-start-time {
-  grid-column: 1 / -1;
+  grid-column: 1;
   grid-row: 2;
   align-self: end;
   min-width: 0;
@@ -338,7 +347,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 }
 .attention-menu { right: 0; left: auto; }
 .compact-filter-group { display: flex; flex-wrap: wrap; gap: 6px; }
-.compact-filter-group + .compact-filter-group { padding-top: 8px; border-top: 1px solid #e4ebe8; }
+.compact-filter-group + .compact-filter-group { padding-top: 0; border-top: 0; }
 .compact-filter-group button {
   min-height: 32px;
   padding: 0 6px 0 10px;
@@ -390,7 +399,9 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .compact-filter-group.difficulty button:hover,
 .compact-filter-group.difficulty button.active { background: #fff2ed; }
 .compact-filter-group.difficulty button.active > i { background: #914b36; }
-.difficulty-menu { width: min(300px, calc(100vw - 38px)); right: 0; left: auto; }
+.difficulty-menu,
+.bank-attention-menu,
+.activity-filter-menu { width: min(310px, calc(100vw - 38px)); right: 0; left: auto; }
 
 .case-title-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 18px; }
 .case-title-row h2 { width: auto; min-width: 0; overflow-wrap: anywhere; }
@@ -403,6 +414,8 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .bank-search-row { grid-template-columns: minmax(0, 1fr); }
 
 .topic-ribbon-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.topic-ribbon-head { border-bottom: 0; }
+.topic-ribbon-head .clear-topic { min-height: 30px; padding-inline: 11px; border: 1px solid #d5b6aa; background: #fff8f5; }
 .topic-ribbon-columns > section { min-width: 0; padding: 12px 14px; border-right: 0; display: flex; align-items: center; gap: 9px; }
 .topic-ribbon-columns header { margin: 0; flex: 0 0 auto; }
 .topic-ribbon-columns section > div { min-width: 0; flex: 1; flex-wrap: nowrap; overflow: hidden; }
@@ -428,6 +441,43 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .sort-direction-badge { min-width: 15px; height: 15px; position: absolute; right: 3px; bottom: 3px; border-radius: 4px; background: #e5efec; color: var(--primary-deep) !important; display: grid; place-items: center; font-family: var(--font-geist-mono); font-size: .6rem !important; line-height: 1; }
 .control-menu.icon-menu[open] .sort-direction-badge { background: rgba(255,255,255,.18); color: white !important; }
 .bank-toolbar { overflow: visible; }
+
+.static-result-flag {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #c6cec4;
+  border-radius: 50%;
+  background: #fff;
+  color: #8d968e;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+.static-result-flag .ui-icon,
+.result-flag .ui-icon { width: 17px; height: 17px; }
+.static-result-flag.solved { border-color: #77952b; background: #edf8c9; color: #567414; }
+.static-result-flag.solved_after_reviewing_approach { border-color: #c7972b; background: #fff2bb; color: #a36d00; }
+.static-result-flag.failed { border-color: #c85d48; background: #ffe0d9; color: #ad3e2a; }
+.log-entry-actions { margin: 0 18px 0 8px; display: flex; align-items: center; gap: 8px; }
+.log-entry-actions .star-control { margin: 0; }
+.bank-entry-actions { min-width: 82px; grid-template-columns: repeat(2, 38px); }
+.bank-entry-actions .static-result-flag { width: 38px; height: 38px; }
+.bank-entry-actions .icon-action:disabled { opacity: .38; cursor: not-allowed; }
+
+.activity-picker-heading { min-height: 30px; display: flex; align-items: center; gap: 9px; }
+.activity-picker-heading > span { color: #59635a; font-size: .8rem; font-weight: 730; }
+.activity-picker-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 9px; align-items: center; }
+.activity-picker-search { min-width: 0; }
+.activity-picker-tools { margin-left: 0; }
+.activity-filter-menu { gap: 6px; }
+.bank-results { max-height: min(360px, 42vh); }
+.bank-results button { grid-template-columns: auto minmax(0, 1fr) auto; }
+.bank-results button.blocked { opacity: .55; background: #f3f5f1; cursor: not-allowed; }
+.bank-results button.blocked:hover { border-color: var(--line); }
+.bank-results .static-result-flag { width: 34px; height: 34px; }
+.picker-load-status { padding: 8px 0 2px; color: var(--muted); font-family: var(--font-geist-mono); font-size: .68rem; text-align: center; }
+.derived-question.blocked { border-color: #d8aaa0; background: #fff3ef; }
+.derived-question em { color: #9e4936; font-size: .78rem; font-style: normal; font-weight: 760; }
 
 @media (max-width: 1180px) {
   .app-shell { grid-template-columns: 190px minmax(0, 1fr); }
@@ -471,6 +521,10 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .primary-nav button, .primary-nav button.active { min-height: 48px; padding: 4px 2px; border-radius: 11px; display: grid; grid-template-columns: 1fr; place-items: center; gap: 0; color: #aac1bc; font-size: .67rem; text-align: center; box-shadow: none; }
   .primary-nav button span { font-size: .55rem; }
   .primary-nav button.active { color: white; background: rgba(13,148,136,.42); box-shadow: inset 0 2px #6be0d5; }
+  .activity-picker-toolbar { grid-template-columns: minmax(0, 1fr) auto; }
+  .activity-picker-tools { gap: 5px; }
+  .activity-picker-tools .collection-toggle.icon-tool,
+  .activity-picker-tools .control-menu.icon-menu > summary { width: 40px; min-width: 40px; }
   .topbar { min-height: 66px; padding: 8px 16px; align-items: center; }
   .topbar > div:first-child span { display: none; }
   .topbar > div:last-child { gap: 5px; }
