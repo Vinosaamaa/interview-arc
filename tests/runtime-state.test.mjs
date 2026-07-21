@@ -4,7 +4,7 @@ import test from "node:test";
 
 import { dateInTimeZone, emptyJournal } from "../app/current-day.ts";
 import { SESSION_SECONDS, sessionAllocationSeconds } from "../app/live-types.ts";
-import { formatPracticeTimestamp, practiceDateAt, practicePeriodAt } from "../app/practice-time.ts";
+import { formatPracticeTimerTimestamp, formatPracticeTimestamp, practiceDateAt, practicePeriodAt } from "../app/practice-time.ts";
 import { resolveOwnerId, TRUSTED_EMAIL_HEADER } from "../db/owner.ts";
 import { derivePublicationStatus } from "../db/publication-state.ts";
 import { foldElapsed, nextTimerState } from "../db/timer-state.ts";
@@ -27,6 +27,7 @@ test("activity completion dates and rhythm periods follow Pacific time across mi
 test("compact activity timestamps omit the redundant Pacific abbreviation", () => {
   assert.equal(formatPracticeTimestamp("2026-07-21T18:29:00Z", true, false), "Jul 21, 11:29 AM");
   assert.match(formatPracticeTimestamp("2026-07-21T18:29:00Z", true), /PDT$/);
+  assert.equal(formatPracticeTimerTimestamp("2026-07-22T06:29:00Z"), "Jul 21, 23:29");
 });
 
 test("timer transitions fold elapsed time and permanently lock finish", () => {
