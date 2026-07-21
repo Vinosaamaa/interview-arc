@@ -35,7 +35,8 @@ procedure below.
   consulted.
 - Call `save_specialist_finalization` with the complete activity-scoped
   two-sided transcript, summary, what went well, what to improve, stronger
-  answer/architecture, follow-ups, and references.
+  answer/architecture, follow-ups, and references. Always include a complete
+  standalone model design even when the live mock stopped after partial advice.
 - Schedule failed/full-walkthrough review in 4 days, approach-review completion
   in 7 days, and successful reimplementation in 21 then 60 days.
 

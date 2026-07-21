@@ -246,6 +246,7 @@ function createServer(ownerId: string) {
             didWell: z.array(z.string()),
             improve: z.array(z.string()),
           }),
+          modelAnswer: z.string().min(1),
           solution: z.string().optional(),
           improvedAnswer: z.string().optional(),
           complexity: z.object({ time: z.string().optional(), space: z.string().optional() }).optional(),

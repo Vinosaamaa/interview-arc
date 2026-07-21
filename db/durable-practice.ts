@@ -25,6 +25,7 @@ export type SpecialistFinalization = {
     didWell: string[];
     improve: string[];
   };
+  modelAnswer: string;
   solution?: string;
   improvedAnswer?: string;
   complexity?: { time?: string; space?: string };

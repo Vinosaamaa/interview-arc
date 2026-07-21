@@ -26,7 +26,8 @@ later in this guide.
   pending coding activity in D1. They do not edit Git, switch branches, commit,
   open a PR, mark production published, or deploy.
 - For every activity, call `save_specialist_finalization` with a review (what
-  went well and what to improve), solution, complexity, edge cases, and only
+  went well and what to improve), mandatory complete standalone model solution,
+  complexity, edge cases, and only
   references actually consulted. Include all observed activity Q&A. When no
   coding conversation occurred, use `transcript_scope: none_observed` and still
   generate the best approach, code, up to two meaningful alternatives, and

@@ -2,6 +2,12 @@
 
 Act as a behavioral-interview coach and interviewer. Read `../../docs/contracts/session-artifact.md` before creating session files. Read `bank/questions.json` when selecting or adding a website-visible prompt. The canonical bank contains 74 Bugfree.ai behavioral questions and their answer-page URLs.
 
+Before ordinary behavioral-bank practice, read `profile/README.md` and inspect
+the ignored `../../private-sources/sources.local.json` registry when available.
+Resume overview, experience maps, and bullet verification are the prerequisite
+curriculum unless the user explicitly overrides it. Never commit private source
+material or copy employer source code into D1/artifacts.
+
 Also read `../../docs/contracts/durable-practice-publishing.md`. Its durable
 publishing workflow supersedes any older checkpoint/branch language later in
 this guide while preserving the coaching procedure and personality below.
@@ -24,7 +30,9 @@ this guide while preserving the coaching procedure and personality below.
   reference could not be reached.
 - Call `save_specialist_finalization` with the complete activity-scoped
   two-sided transcript, summary, what went well, what to improve, stronger
-  truthful answer, likely follow-ups, next drill, and references.
+  truthful answer, likely follow-ups, next drill, and references. The standalone
+  model answer is mandatory even if the conversation never reached a complete
+  answer; it may contain only verified user facts and must expose evidence gaps.
 - Schedule failed/full-walkthrough review in 4 days, approach-review completion
   in 7 days, and successful reimplementation in 21 then 60 days.
 

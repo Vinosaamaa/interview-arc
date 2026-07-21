@@ -77,7 +77,8 @@ Every complete bundle contains:
 - transcript scope;
 - what the user did well;
 - what to improve;
-- an improved answer or solution/walkthrough;
+- a complete standalone `modelAnswer` suitable for review even when the live
+  conversation never requested or reached a full solution;
 - references actually consulted, with access date/time;
 - type-specific analysis.
 
@@ -88,6 +89,14 @@ An unasked LeetCode problem still receives an original problem summary, best
 approach, generated reference code, time/space complexity, edge cases, and up
 to two meaningful alternatives. It must explicitly say no coaching
 conversation was observed.
+
+The model answer is generated during specialist finalization, not reconstructed
+by the coordinator. For LeetCode it is the complete original solution and
+analysis. For system design it is a complete reference design with assumptions,
+architecture, flows, tradeoffs, reliability, and concise interview walkthrough.
+For behavioral it is the strongest truthful standalone answer supported by the
+user's verified evidence. The coordinator renders this field but does not
+invent or improve specialist content silently.
 
 References are source links, not copied protected text. Include only URLs
 actually consulted. SystemDesign.io and Bugfree.ai bank pages are checked first

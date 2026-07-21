@@ -17,6 +17,9 @@ If a task starts at the repository root, explicitly read the owning guide before
 
 The user may keep every specialist as a long-lived Codex task inside the same outer Interview Prep project. Do not require separate local projects or worktrees. Codex tasks share committed and working-tree files, not one another's unrecorded transcript, so write durable decisions and published results to the repository.
 
+For first-time task creation and durable specialist registration, follow
+`docs/agents/task-startup-prompts.md`.
+
 ## Session Commands
 
 - A focused dashboard activity or a clearly named problem establishes the

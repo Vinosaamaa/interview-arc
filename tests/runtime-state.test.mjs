@@ -126,11 +126,13 @@ test("durable publishing keeps transcripts, review, notes, and four-day walkthro
   const contract = await readFile(new URL("../docs/contracts/durable-practice-publishing.md", import.meta.url), "utf8");
   const bridge = await readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8");
   assert.match(contract, /complete two-sided activity transcript/i);
+  assert.match(contract, /complete standalone `modelAnswer`/i);
   assert.match(contract, /failed attempt or full walkthrough: first review in \*\*4 days\*\*/i);
   assert.match(contract, /Pinned Notes[\s\S]*What Went Well[\s\S]*What To Improve[\s\S]*References/);
   for (const tool of ["append_practice_transcript", "add_practice_note", "save_specialist_finalization", "get_activity_practice_record", "schedule_practice_review", "register_specialist_task", "register_activity_audio_clip"]) {
     assert.match(bridge, new RegExp(`"${tool}"`));
   }
+  assert.match(bridge, /modelAnswer: z\.string\(\)\.min\(1\)/);
 });
 
 test("the Chrome companion is scoped to public LeetCode pages and the bridge host", async () => {
