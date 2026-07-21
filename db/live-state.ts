@@ -48,6 +48,11 @@ export type LiveState = {
   reviews: Record<string, unknown>;
   finalizations: Record<string, unknown>;
   audioClips: Record<string, unknown[]>;
+  problemPreferences: unknown[];
+  solutionProfiles: unknown[];
+  solutionRevisions: unknown[];
+  activitySolutionLinks: unknown[];
+  personalQuestions: unknown[];
   extraActivities: unknown[];
   sessions: unknown[];
   focusedActivityId: string | null;
@@ -169,6 +174,11 @@ export async function readLiveState(
       durationSeconds: row.durationSeconds,
       status: row.status,
     }))])),
+    problemPreferences: durable.problemPreferences,
+    solutionProfiles: durable.solutionProfiles,
+    solutionRevisions: durable.solutionRevisions,
+    activitySolutionLinks: durable.activitySolutionLinks,
+    personalQuestions: durable.personalQuestions,
     extraActivities: visibleActivities,
     sessions: visibleSessions,
     focusedActivityId: focus?.activityId ?? null,
@@ -324,6 +334,16 @@ export async function applyTimerAction(
   }
 
   const updated = await loadTimer(db, ownerId, subjectId, kind);
+  if (kind === "activity" && action === "finish" && options.sessionId) {
+    const sessionRows = await db.select().from(liveSessions).where(and(eq(liveSessions.ownerId, ownerId), eq(liveSessions.id, options.sessionId)));
+    const session = sessionRows[0]?.payload as SessionPayload | undefined;
+    if (session?.activityIds.length) {
+      const activityStates = await Promise.all(session.activityIds.map((activityId) => loadTimer(db, ownerId, activityId, "activity")));
+      if (activityStates.every((timer) => timer?.completed)) {
+        await applyTimerAction(ownerId, options.sessionId, "session", "finish", nowMs, { activityIds: session.activityIds });
+      }
+    }
+  }
   return toTimerState(updated!);
 }
 

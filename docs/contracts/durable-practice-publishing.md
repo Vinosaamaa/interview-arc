@@ -81,6 +81,12 @@ Every complete bundle contains:
   conversation never requested or reached a full solution;
 - references actually consulted, with access date/time;
 - type-specific analysis.
+- a stable `questionId` and reusable Solution Profile revision. The Solution
+  Profile holds the canonical best answer and normalized tags; it never holds
+  an attempt transcript. Past retains the activity transcript, feedback,
+  timing, notes, result, and recording links.
+
+Follow `solution-profiles.md` for the specialty-specific structure and tags.
 
 System-design and behavioral bundles use `transcript_scope: full_activity` and
 include the complete two-sided activity transcript. LeetCode uses
@@ -165,11 +171,16 @@ preferred review identity; activity ID is the fallback.
 Raw transcripts and long code remain expandable in the website, but they are
 still part of the published artifact.
 
+The web experience may replace item 5 with a stable link to the corresponding
+Problem Bank Solution Profile. This avoids duplicating the same canonical
+solution across repeated attempts while preserving the exact profile revision
+used for each attempt.
+
 ## Audio
 
 Transcripts are canonical. Voice Memo clips may supplement long answers and
 multiple clips may belong to one activity. Raw audio never belongs in Git.
-Until private Cloudflare R2 storage is configured, clips remain `local_only`.
-When R2 is enabled, store only private object metadata in D1 and stream through
-an authenticated Worker route that supports byte ranges; never expose a public
-bucket URL.
+Upload clips to the private Cloudflare R2 `AUDIO` binding, store owner-scoped
+metadata in D1, and stream through the authenticated `/api/audio/:id` Worker
+route with byte-range support. Never expose a bucket URL or place raw audio in
+Git. Transcription remains canonical for search and publication.

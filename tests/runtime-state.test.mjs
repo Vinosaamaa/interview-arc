@@ -88,6 +88,7 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   const connected = await readFile(new URL("../drizzle/0002_chubby_the_hand.sql", import.meta.url), "utf8");
   const orchestrator = await readFile(new URL("../drizzle/0003_clear_miek.sql", import.meta.url), "utf8");
   const durable = await readFile(new URL("../drizzle/0004_lyrical_sinister_six.sql", import.meta.url), "utf8");
+  const knowledge = await readFile(new URL("../drizzle/0005_colorful_nuke.sql", import.meta.url), "utf8");
   for (const table of ["timers", "outcomes", "extra_activities", "live_sessions"]) {
     assert.match(live, new RegExp("CREATE TABLE `" + table + "`"));
   }
@@ -105,6 +106,9 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   assert.match(orchestrator, /ALTER TABLE `timers` ADD `started_at` integer/);
   for (const table of ["practice_notes", "practice_transcript_turns", "activity_finalizations", "review_schedules", "specialist_tasks", "activity_audio_clips"]) {
     assert.match(durable, new RegExp("CREATE TABLE `" + table + "`"));
+  }
+  for (const table of ["problem_preferences", "problem_solution_profiles", "problem_solution_revisions", "activity_solution_links", "owner_bank_questions"]) {
+    assert.match(knowledge, new RegExp("CREATE TABLE `" + table + "`"));
   }
 });
 
@@ -133,6 +137,22 @@ test("durable publishing keeps transcripts, review, notes, and four-day walkthro
     assert.match(bridge, new RegExp(`"${tool}"`));
   }
   assert.match(bridge, /modelAnswer: z\.string\(\)\.min\(1\)/);
+  assert.match(bridge, /solutionProfile: z\.object/);
+  assert.match(bridge, /"upsert_personal_bank_question"/);
+  const durableStore = await readFile(new URL("../db/durable-practice.ts", import.meta.url), "utf8");
+  assert.match(durableStore, /Behavioral Solution Profiles cannot contain a transcript/);
+});
+
+test("private R2 audio stays owner-authorized and seekable", async () => {
+  const config = await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8");
+  const upload = await readFile(new URL("../app/api/audio/route.ts", import.meta.url), "utf8");
+  const stream = await readFile(new URL("../app/api/audio/[id]/route.ts", import.meta.url), "utf8");
+  assert.match(config, /"binding": "AUDIO"/);
+  assert.match(upload, /resolveOwnerId/);
+  assert.match(upload, /env\.AUDIO\.put/);
+  assert.match(stream, /accept-ranges/);
+  assert.match(stream, /content-range/);
+  assert.match(stream, /cache-control": "private, no-store/);
 });
 
 test("the Chrome companion is scoped to public LeetCode pages and the bridge host", async () => {

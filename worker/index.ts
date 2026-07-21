@@ -6,6 +6,7 @@ import { TRUSTED_EMAIL_HEADER } from "../db/owner";
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
+  AUDIO: R2Bucket;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {

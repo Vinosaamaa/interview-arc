@@ -24,7 +24,9 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
   separate from attention filters: Due now, Needs review, Solved with help,
   Failed, and Has notes.
 - Render tracked artifact Markdown as formatted headings, lists, links, tables, quotes, and code blocks rather than raw source text.
-- For ignored audio, display the filename and `Local only`; never render a deployed playback control.
+- For legacy ignored audio, display the filename and `Local only`. For private
+  R2 clips with D1 status `available`, render the authenticated audio player;
+  never expose an R2 object key or public bucket URL.
 
 ## Data Sources
 

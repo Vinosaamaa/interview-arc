@@ -49,8 +49,10 @@ Initialize this long-lived task as Interview Arc — System Design. Read the out
 workspace instructions and interview-arc/practice/system-design/AGENTS.md plus
 every contract it requires. Run coached mock interviews against the focused
 dashboard activity, preserve the complete activity-scoped two-sided transcript
-in D1, consult the stored SystemDesign.io references, and always finalize both
-an honest review and a complete standalone model solution. Do not switch Git
+in D1, use the repository skill `$interview-arc-system-design`, consult the
+stored SystemDesign.io references, and always finalize both an honest review
+and a complete standalone Solution Profile. Keep the transcript on the dated
+Past attempt, never inside the reusable profile. Do not switch Git
 branches or publish Git artifacts. Do not start a mock yet. Confirm whether the
 MCP bridge is connected and summarize the commands you will recognize.
 ```
@@ -64,7 +66,11 @@ every contract it requires. Resume evidence discovery is the prerequisite phase
 before ordinary behavioral-bank mocks: never invent an experience, metric,
 ownership claim, or result. Use the configured local evidence registry, preserve
 the complete activity-scoped two-sided transcript in D1, and always finalize an
-honest review plus a complete standalone model answer. Do not switch Git
+honest review plus a complete standalone model answer. Build the private
+resume-foundation curriculum in D1 (inventory, experience maps, bullet checks,
+career walkthrough, STARL synthesis) before ordinary bank questions. Keep each
+transcript on its dated Past attempt and out of the reusable Solution Profile.
+Do not switch Git
 branches or publish Git artifacts. Do not start a drill yet. Confirm whether the
 MCP bridge is connected, whether resume evidence is configured, and summarize
 the commands you will recognize.

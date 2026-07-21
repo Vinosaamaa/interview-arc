@@ -71,6 +71,8 @@ export type QuestionBankItem = {
   companyTags?: string[];
   companySignals?: { company: string; window: string; frequencyScore: number; frequencyScale: number; capturedAt: string }[];
   topics: string[];
+  tags?: string[];
+  priority?: number;
   targetMinutes: number;
   active: boolean;
 };

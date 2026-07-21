@@ -11,6 +11,7 @@ material or copy employer source code into D1/artifacts.
 Also read `../../docs/contracts/durable-practice-publishing.md`. Its durable
 publishing workflow supersedes any older checkpoint/branch language later in
 this guide while preserving the coaching procedure and personality below.
+Read `../../docs/contracts/solution-profiles.md` before finalizing.
 
 ## Authoritative Durable Publishing Workflow
 
@@ -28,11 +29,14 @@ this guide while preserving the coaching procedure and personality below.
 - Before finalization, consult the stored Bugfree.ai answer page when
   accessible. Save only sources actually consulted and state plainly when the
   reference could not be reached.
-- Call `save_specialist_finalization` with the complete activity-scoped
-  two-sided transcript, summary, what went well, what to improve, stronger
+- Call `save_specialist_finalization` with the activity-scoped transcript,
+  summary, what went well, what to improve, stronger
   truthful answer, likely follow-ups, next drill, and references. The standalone
   model answer is mandatory even if the conversation never reached a complete
   answer; it may contain only verified user facts and must expose evidence gaps.
+- Pass the stable `questionId` and a reusable STAR/STARL `solutionProfile`.
+  Never put the transcript, raw conversation, or exchange-by-exchange review in
+  that profile. Those belong only to the dated Past attempt.
 - Schedule failed/full-walkthrough review in 4 days, approach-review completion
   in 7 days, and successful reimplementation in 21 then 60 days.
 
@@ -78,6 +82,18 @@ timestamps.
 - Preserve the full two-sided conversation transcript in the final artifact.
 - Never invent a personal experience, responsibility, decision, conflict, failure, metric, or result.
 
+## Resume-First Curriculum
+
+On first setup, inspect only the resume and private sources the user explicitly
+provides. Use `upsert_personal_bank_question` to create owner-private behavioral
+activities in this order: Resume Inventory, one employer/project map per major
+experience, one verification activity per resume bullet, Career Walkthrough,
+then STARL synthesis. Tag them `resume-foundation` plus employer/project and
+competency tags, and give earlier prerequisites higher priority. New sessions
+automatically prefer the highest-priority unfinished resume activity; the user
+does not need to create or name it manually. Ordinary Bugfree.ai practice begins
+after this foundation unless the user explicitly overrides the sequence.
+
 ## Bugfree.ai Answer Reference Policy
 
 Every imported Bugfree.ai entry includes `url`, `solutionReference: true`, an expected `answerFormat`, and `referenceAccess`. The stored URL points directly to the question's behavioral answer page.
@@ -98,7 +114,13 @@ During a mock interview, do not reveal the reference answer before the user atte
 - Write sessions to `sessions/YYYY-MM-DD-<topic>-attempt-01.md`.
 - Follow the shared frontmatter and transcript contract.
 - Record allocated and elapsed time when known.
-- If audio exists, keep the raw recording under `../../audio-answers/`, commit the Markdown review, and reference only the filename with `audio_availability: local-only`.
+- If audio exists, upload it through the authenticated Interview Arc audio API
+  to private R2. Store only owner-scoped metadata in D1 and show playback on the
+  dated Past attempt; never commit raw audio or a public object URL.
+- When an attached audio path is available, transcribe it as required and run
+  `node scripts/upload-practice-audio.mjs <activity_id> <path> [label]`. The
+  script uses `INTERVIEW_ARC_MCP_TOKEN`; never expose the token in output or a
+  command argument.
 
 ## Story Bank
 

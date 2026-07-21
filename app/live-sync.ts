@@ -3,13 +3,18 @@ import {
   EMPTY_DRAFT,
   type ExtraActivity,
   type AudioClip,
+  type ActivitySolutionLink,
   type FinalizationSummary,
   type LocalDraft,
   type LocalSession,
   type PracticeNote,
+  type PersonalQuestion,
+  type ProblemPreference,
   type ReviewSchedule,
   type Outcome,
   type PublicationStatus,
+  type SolutionProfile,
+  type SolutionRevision,
   type TimerDraft,
 } from "./live-types";
 
@@ -35,6 +40,11 @@ type ServerLiveState = {
   reviews: Record<string, ReviewSchedule>;
   finalizations: Record<string, FinalizationSummary>;
   audioClips: Record<string, AudioClip[]>;
+  problemPreferences: ProblemPreference[];
+  solutionProfiles: SolutionProfile[];
+  solutionRevisions: SolutionRevision[];
+  activitySolutionLinks: ActivitySolutionLink[];
+  personalQuestions: PersonalQuestion[];
   extraActivities: ExtraActivity[];
   sessions: LocalSession[];
   focusedActivityId: string | null;
@@ -73,6 +83,8 @@ export type Mutation =
   | { type: "outcome"; activityId: string; outcome: Outcome | null; sessionId?: string }
   | { type: "publication-status"; activityId: string; status: PublicationStatus; artifactPath?: string }
   | { type: "activity-note"; activityId: string; note: string }
+  | { type: "problem-star"; specialty: import("./live-types").ActivityType; questionId: string; starred: boolean }
+  | { type: "personal-question-upsert"; specialty: import("./live-types").ActivityType; question: { questionId: string; title: string; prompt?: string; url?: string; tags?: string[]; priority?: number; targetMinutes?: number } }
   | { type: "extra-upsert"; activity: ExtraActivity }
   | { type: "extra-remove"; id: string }
   | { type: "session-upsert"; session: LocalSession }
@@ -112,6 +124,11 @@ function serverToDraft(state: ServerLiveState, offset: number, date = ""): Local
     reviews: state.reviews ?? {},
     finalizations: state.finalizations ?? {},
     audioClips: state.audioClips ?? {},
+    problemPreferences: state.problemPreferences ?? [],
+    solutionProfiles: state.solutionProfiles ?? [],
+    solutionRevisions: state.solutionRevisions ?? [],
+    activitySolutionLinks: state.activitySolutionLinks ?? [],
+    personalQuestions: state.personalQuestions ?? [],
     extraActivities: state.extraActivities ?? [],
     sessions: (state.sessions ?? []).map((session) => ({ ...session, date: session.date ?? date })),
     focusedActivityId: state.focusedActivityId ?? null,
@@ -155,6 +172,11 @@ function mergeDrafts(server: LocalDraft, local: LocalDraft) {
     reviews: { ...local.reviews, ...server.reviews },
     finalizations: { ...local.finalizations, ...server.finalizations },
     audioClips: { ...local.audioClips, ...server.audioClips },
+    problemPreferences: server.problemPreferences,
+    solutionProfiles: server.solutionProfiles,
+    solutionRevisions: server.solutionRevisions,
+    activitySolutionLinks: server.activitySolutionLinks,
+    personalQuestions: server.personalQuestions,
     extraActivities: [
       ...local.extraActivities.filter((activity) => !serverExtraIds.has(activity.id)),
       ...server.extraActivities,
@@ -185,6 +207,11 @@ function readDraft(date: string): LocalDraft {
       reviews: parsed.reviews ?? {},
       finalizations: parsed.finalizations ?? {},
       audioClips: parsed.audioClips ?? {},
+      problemPreferences: parsed.problemPreferences ?? [],
+      solutionProfiles: parsed.solutionProfiles ?? [],
+      solutionRevisions: parsed.solutionRevisions ?? [],
+      activitySolutionLinks: parsed.activitySolutionLinks ?? [],
+      personalQuestions: parsed.personalQuestions ?? [],
       extraActivities: parsed.extraActivities ?? [],
       sessions: (parsed.sessions ?? []).map((session) => ({ ...session, date: session.date ?? date })),
       focusedActivityId: parsed.focusedActivityId ?? null,

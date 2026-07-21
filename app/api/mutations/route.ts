@@ -15,7 +15,7 @@ import {
 } from "../../../db/live-state";
 import { resolveOwnerId } from "../../../db/owner";
 import { toRouteErrorMessage } from "../route-helpers";
-import { clearActivityReviewSchedules, scheduleReview } from "../../../db/durable-practice";
+import { clearActivityReviewSchedules, scheduleReview, setProblemStar, upsertOwnerBankQuestion } from "../../../db/durable-practice";
 
 type Mutation =
   | {
@@ -29,6 +29,8 @@ type Mutation =
   | { type: "outcome"; activityId: string; outcome: OutcomeValue | null; sessionId?: string }
   | { type: "publication-status"; activityId: string; status: PublicationStatusValue; artifactPath?: string }
   | { type: "activity-note"; activityId: string; note: string }
+  | { type: "problem-star"; specialty: "leetcode" | "system_design" | "behavioral"; questionId: string; starred: boolean }
+  | { type: "personal-question-upsert"; specialty: "leetcode" | "system_design" | "behavioral"; question: { questionId: string; title: string; prompt?: string; url?: string; tags?: string[]; priority?: number; targetMinutes?: number } }
   | { type: "extra-upsert"; activity: { id: string; date: string } & Record<string, unknown> }
   | { type: "extra-remove"; id: string }
   | { type: "session-upsert"; session: { id: string; date: string } & Record<string, unknown> }
@@ -111,6 +113,20 @@ export async function POST(request: Request) {
           return Response.json({ error: "Invalid activity-note mutation." }, { status: 400 });
         }
         await setActivityNote(ownerId, mutation.activityId, date, mutation.note, now);
+        break;
+      }
+      case "problem-star": {
+        if (!mutation.questionId || !["leetcode", "system_design", "behavioral"].includes(mutation.specialty) || typeof mutation.starred !== "boolean") {
+          return Response.json({ error: "Invalid problem-star mutation." }, { status: 400 });
+        }
+        await setProblemStar(ownerId, mutation.specialty, mutation.questionId, mutation.starred, now);
+        break;
+      }
+      case "personal-question-upsert": {
+        if (!mutation.question?.questionId || !mutation.question.title || !["leetcode", "system_design", "behavioral"].includes(mutation.specialty)) {
+          return Response.json({ error: "Invalid personal question mutation." }, { status: 400 });
+        }
+        await upsertOwnerBankQuestion(ownerId, mutation.specialty, mutation.question, now);
         break;
       }
       case "extra-upsert": {

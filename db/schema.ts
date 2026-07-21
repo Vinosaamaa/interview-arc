@@ -226,6 +226,86 @@ export const activityAudioClips = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.id] })],
 );
 
+// A star is an owner-specific preference on the stable bank question, never on
+// one dated attempt. Every surface joins through specialty + question id.
+export const problemPreferences = sqliteTable(
+  "problem_preferences",
+  {
+    ownerId,
+    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
+    questionId: text("question_id").notNull(),
+    starred: integer("starred", { mode: "boolean" }).notNull().default(false),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.specialty, table.questionId] })],
+);
+
+// Solution Profiles are the reusable, current answer attached to a Problem.
+// Attempt transcripts never live here; each dated activity retains its own
+// transcript and feedback while linking to the solution revision it produced.
+export const problemSolutionProfiles = sqliteTable(
+  "problem_solution_profiles",
+  {
+    ownerId,
+    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
+    questionId: text("question_id").notNull(),
+    title: text("title").notNull(),
+    currentRevision: integer("current_revision").notNull().default(1),
+    tags: text("tags", { mode: "json" }).notNull(),
+    payload: text("payload", { mode: "json" }).notNull(),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.specialty, table.questionId] })],
+);
+
+export const problemSolutionRevisions = sqliteTable(
+  "problem_solution_revisions",
+  {
+    ownerId,
+    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
+    questionId: text("question_id").notNull(),
+    revision: integer("revision").notNull(),
+    activityId: text("activity_id").notNull(),
+    payload: text("payload", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.specialty, table.questionId, table.revision] })],
+);
+
+export const activitySolutionLinks = sqliteTable(
+  "activity_solution_links",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
+    questionId: text("question_id").notNull(),
+    solutionRevision: integer("solution_revision").notNull(),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.activityId] })],
+);
+
+// Resume-foundation and user-authored questions stay owner-scoped in D1 so
+// private resume details never have to be committed to a shared Git bank.
+export const ownerBankQuestions = sqliteTable(
+  "owner_bank_questions",
+  {
+    ownerId,
+    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
+    questionId: text("question_id").notNull(),
+    title: text("title").notNull(),
+    prompt: text("prompt"),
+    url: text("url"),
+    source: text("source").notNull().default("personal"),
+    tags: text("tags", { mode: "json" }).notNull(),
+    priority: integer("priority").notNull().default(0),
+    targetMinutes: integer("target_minutes").notNull().default(60),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.specialty, table.questionId] })],
+);
+
 // Personal integration tokens map a bearer credential to the same opaque
 // owner id used by the dashboard. Only the SHA-256 digest is persisted.
 export const integrationTokens = sqliteTable("integration_tokens", {
@@ -320,6 +400,11 @@ export type ActivityFinalizationRow = typeof activityFinalizations.$inferSelect;
 export type ReviewScheduleRow = typeof reviewSchedules.$inferSelect;
 export type SpecialistTaskRow = typeof specialistTasks.$inferSelect;
 export type ActivityAudioClipRow = typeof activityAudioClips.$inferSelect;
+export type ProblemPreferenceRow = typeof problemPreferences.$inferSelect;
+export type ProblemSolutionProfileRow = typeof problemSolutionProfiles.$inferSelect;
+export type ProblemSolutionRevisionRow = typeof problemSolutionRevisions.$inferSelect;
+export type ActivitySolutionLinkRow = typeof activitySolutionLinks.$inferSelect;
+export type OwnerBankQuestionRow = typeof ownerBankQuestions.$inferSelect;
 export type IntegrationTokenRow = typeof integrationTokens.$inferSelect;
 export type ExtraActivityRow = typeof extraActivities.$inferSelect;
 export type LiveSessionRow = typeof liveSessions.$inferSelect;

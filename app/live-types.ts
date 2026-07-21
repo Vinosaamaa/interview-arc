@@ -41,6 +41,44 @@ export type AudioClip = {
   durationSeconds: number | null;
   status: "local_only" | "uploading" | "available" | "failed";
 };
+export type ProblemPreference = { specialty: ActivityType; questionId: string; starred: boolean; updatedAt: number };
+export type SolutionProfilePayload = {
+  schemaVersion: 1;
+  summary: string;
+  sections: Array<{ title: string; body: string }>;
+  tags: string[];
+  references: Array<{ title: string; url: string; accessedAt: string }>;
+};
+export type SolutionProfile = {
+  specialty: ActivityType;
+  questionId: string;
+  title: string;
+  currentRevision: number;
+  tags: string[];
+  payload: SolutionProfilePayload;
+  updatedAt: number;
+};
+export type SolutionRevision = {
+  specialty: ActivityType;
+  questionId: string;
+  revision: number;
+  activityId: string;
+  payload: SolutionProfilePayload;
+  createdAt: number;
+};
+export type ActivitySolutionLink = { activityId: string; specialty: ActivityType; questionId: string; solutionRevision: number };
+export type PersonalQuestion = {
+  specialty: ActivityType;
+  questionId: string;
+  title: string;
+  prompt: string | null;
+  url: string | null;
+  source: string;
+  tags: string[];
+  priority: number;
+  targetMinutes: number;
+  active: boolean;
+};
 export type TimerDraft = {
   elapsedSeconds: number;
   runningSince: number | null;
@@ -60,6 +98,11 @@ export type LocalDraft = {
   reviews: Record<string, ReviewSchedule>;
   finalizations: Record<string, FinalizationSummary>;
   audioClips: Record<string, AudioClip[]>;
+  problemPreferences: ProblemPreference[];
+  solutionProfiles: SolutionProfile[];
+  solutionRevisions: SolutionRevision[];
+  activitySolutionLinks: ActivitySolutionLink[];
+  personalQuestions: PersonalQuestion[];
   extraActivities: ExtraActivity[];
   sessions: LocalSession[];
   focusedActivityId: string | null;
@@ -91,6 +134,11 @@ export const EMPTY_DRAFT: LocalDraft = {
   reviews: {},
   finalizations: {},
   audioClips: {},
+  problemPreferences: [],
+  solutionProfiles: [],
+  solutionRevisions: [],
+  activitySolutionLinks: [],
+  personalQuestions: [],
   extraActivities: [],
   sessions: [],
   focusedActivityId: null,
@@ -118,4 +166,8 @@ export function elapsed(timer: TimerDraft | undefined, now: number) {
 
 export function remaining(timer: TimerDraft | undefined, now: number, allocatedSeconds = SESSION_SECONDS) {
   return Math.max(0, allocatedSeconds - elapsed(timer, now));
+}
+
+export function overtime(timer: TimerDraft | undefined, now: number, allocatedSeconds = SESSION_SECONDS) {
+  return Math.max(0, elapsed(timer, now) - allocatedSeconds);
 }

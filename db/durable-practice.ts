@@ -1,10 +1,15 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import {
   activityAudioClips,
   activityFinalizations,
+  activitySolutionLinks,
+  ownerBankQuestions,
   practiceNotes,
   practiceTranscriptTurns,
+  problemPreferences,
+  problemSolutionProfiles,
+  problemSolutionRevisions,
   reviewSchedules,
   specialistTasks,
 } from "./schema";
@@ -32,7 +37,30 @@ export type SpecialistFinalization = {
   alternatives?: Array<{ title: string; summary: string; time?: string; space?: string }>;
   edgeCases?: string[];
   references: Array<{ title: string; url: string; accessedAt: string }>;
+  solutionProfile?: {
+    schemaVersion: 1;
+    summary: string;
+    sections: Array<{ title: string; body: string }>;
+    tags: string[];
+    references: Array<{ title: string; url: string; accessedAt: string }>;
+  };
 };
+
+const TRANSCRIPT_SECTION = /transcript|conversation|raw exchange|verbatim/i;
+
+function normalizedTags(tags: string[]) {
+  return [...new Set(tags.map((tag) => tag.trim().toLowerCase().replace(/[^a-z0-9+#.]+/g, "-")).filter(Boolean))]
+    .slice(0, 32);
+}
+
+function validateSolutionProfile(specialty: Specialty, payload: SpecialistFinalization["solutionProfile"]) {
+  if (!payload?.summary.trim() || payload.sections.length === 0) {
+    throw new Error("A complete finalization needs a reusable Solution Profile.");
+  }
+  if (specialty === "behavioral" && payload.sections.some((section) => TRANSCRIPT_SECTION.test(section.title))) {
+    throw new Error("Behavioral Solution Profiles cannot contain a transcript; keep it on the dated Past attempt.");
+  }
+}
 
 function addDays(date: string, days: number) {
   const value = new Date(`${date}T12:00:00Z`);
@@ -130,10 +158,15 @@ export async function saveSpecialistFinalization(
   ownerId: string,
   activityId: string,
   specialty: Specialty,
+  questionId: string | null,
   payload: SpecialistFinalization,
   nowMs: number,
 ) {
   const db = getDb();
+  if (payload.complete) {
+    if (!questionId) throw new Error("A complete finalization needs the stable questionId.");
+    validateSolutionProfile(specialty, payload.solutionProfile);
+  }
   const status = payload.complete ? "ready" : "draft";
   await db
     .insert(activityFinalizations)
@@ -158,6 +191,46 @@ export async function saveSpecialistFinalization(
         updatedAt: nowMs,
       },
     });
+
+  if (payload.complete && questionId && payload.solutionProfile) {
+    const prior = await db
+      .select({ currentRevision: problemSolutionProfiles.currentRevision })
+      .from(problemSolutionProfiles)
+      .where(and(
+        eq(problemSolutionProfiles.ownerId, ownerId),
+        eq(problemSolutionProfiles.specialty, specialty),
+        eq(problemSolutionProfiles.questionId, questionId),
+      ));
+    const revision = (prior[0]?.currentRevision ?? 0) + 1;
+    const profile = {
+      ...payload.solutionProfile,
+      tags: normalizedTags(payload.solutionProfile.tags),
+      references: payload.solutionProfile.references.length ? payload.solutionProfile.references : payload.references,
+    };
+    await db
+      .insert(problemSolutionProfiles)
+      .values({ ownerId, specialty, questionId, title: payload.title, currentRevision: revision, tags: profile.tags, payload: profile, updatedAt: nowMs })
+      .onConflictDoUpdate({
+        target: [problemSolutionProfiles.ownerId, problemSolutionProfiles.specialty, problemSolutionProfiles.questionId],
+        set: { title: payload.title, currentRevision: revision, tags: profile.tags, payload: profile, updatedAt: nowMs },
+      });
+    await db.insert(problemSolutionRevisions).values({
+      ownerId,
+      specialty,
+      questionId,
+      revision,
+      activityId,
+      payload: profile,
+      createdAt: nowMs,
+    });
+    await db
+      .insert(activitySolutionLinks)
+      .values({ ownerId, activityId, specialty, questionId, solutionRevision: revision, updatedAt: nowMs })
+      .onConflictDoUpdate({
+        target: [activitySolutionLinks.ownerId, activitySolutionLinks.activityId],
+        set: { specialty, questionId, solutionRevision: revision, updatedAt: nowMs },
+      });
+  }
 }
 
 export async function markFinalizationPublished(ownerId: string, activityId: string, nowMs: number) {
@@ -298,6 +371,78 @@ export async function registerActivityAudioClip(
     });
 }
 
+export async function readActivityAudioClip(ownerId: string, id: string) {
+  const db = getDb();
+  const rows = await db.select().from(activityAudioClips).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.id, id)));
+  return rows[0] ?? null;
+}
+
+export async function updateActivityAudioClipStatus(
+  ownerId: string,
+  id: string,
+  status: "local_only" | "uploading" | "available" | "failed",
+  nowMs: number,
+) {
+  const db = getDb();
+  await db.update(activityAudioClips).set({ status, updatedAt: nowMs }).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.id, id)));
+}
+
+export async function deleteActivityAudioClip(ownerId: string, id: string) {
+  const db = getDb();
+  await db.delete(activityAudioClips).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.id, id)));
+}
+
+export async function setProblemStar(
+  ownerId: string,
+  specialty: Specialty,
+  questionId: string,
+  starred: boolean,
+  nowMs: number,
+) {
+  const db = getDb();
+  await db.insert(problemPreferences).values({ ownerId, specialty, questionId, starred, updatedAt: nowMs }).onConflictDoUpdate({
+    target: [problemPreferences.ownerId, problemPreferences.specialty, problemPreferences.questionId],
+    set: { starred, updatedAt: nowMs },
+  });
+}
+
+export async function upsertOwnerBankQuestion(
+  ownerId: string,
+  specialty: Specialty,
+  question: {
+    questionId: string;
+    title: string;
+    prompt?: string;
+    url?: string;
+    source?: string;
+    tags?: string[];
+    priority?: number;
+    targetMinutes?: number;
+    active?: boolean;
+  },
+  nowMs: number,
+) {
+  const db = getDb();
+  const values = {
+    ownerId,
+    specialty,
+    questionId: question.questionId,
+    title: question.title,
+    prompt: question.prompt ?? null,
+    url: question.url ?? null,
+    source: question.source ?? "personal",
+    tags: normalizedTags(question.tags ?? []),
+    priority: question.priority ?? 0,
+    targetMinutes: question.targetMinutes ?? (specialty === "leetcode" ? 40 : 60),
+    active: question.active ?? true,
+    updatedAt: nowMs,
+  };
+  await db.insert(ownerBankQuestions).values(values).onConflictDoUpdate({
+    target: [ownerBankQuestions.ownerId, ownerBankQuestions.specialty, ownerBankQuestions.questionId],
+    set: values,
+  });
+}
+
 export async function readSpecialistTasks(ownerId: string) {
   const db = getDb();
   return db.select().from(specialistTasks).where(eq(specialistTasks.ownerId, ownerId));
@@ -321,11 +466,16 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
 
 export async function readDurablePracticeSummary(ownerId: string, _activityIds: string[], today: string) {
   const db = getDb();
-  const [notes, reviews, finalizations, clips] = await Promise.all([
+  const [notes, reviews, finalizations, clips, preferences, profiles, revisions, links, personalQuestions] = await Promise.all([
     db.select().from(practiceNotes).where(eq(practiceNotes.ownerId, ownerId)),
     db.select().from(reviewSchedules).where(eq(reviewSchedules.ownerId, ownerId)),
     db.select().from(activityFinalizations).where(eq(activityFinalizations.ownerId, ownerId)),
     db.select().from(activityAudioClips).where(eq(activityAudioClips.ownerId, ownerId)),
+    db.select().from(problemPreferences).where(eq(problemPreferences.ownerId, ownerId)),
+    db.select().from(problemSolutionProfiles).where(eq(problemSolutionProfiles.ownerId, ownerId)),
+    db.select().from(problemSolutionRevisions).where(eq(problemSolutionRevisions.ownerId, ownerId)).orderBy(desc(problemSolutionRevisions.createdAt)),
+    db.select().from(activitySolutionLinks).where(eq(activitySolutionLinks.ownerId, ownerId)),
+    db.select().from(ownerBankQuestions).where(eq(ownerBankQuestions.ownerId, ownerId)),
   ]);
   const group = <T extends { activityId: string }>(rows: T[]) => rows.reduce<Record<string, T[]>>((result, row) => {
     (result[row.activityId] ??= []).push(row);
@@ -342,6 +492,11 @@ export async function readDurablePracticeSummary(ownerId: string, _activityIds: 
       return result;
     }, {}),
     audioClips: group(clips),
+    problemPreferences: preferences,
+    solutionProfiles: profiles,
+    solutionRevisions: revisions,
+    activitySolutionLinks: links,
+    personalQuestions,
   };
 }
 

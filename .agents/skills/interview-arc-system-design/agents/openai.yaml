@@ -1,0 +1,4 @@
+interface:
+  display_name: "Interview Arc System Design"
+  short_description: "Run evidence-grounded system design mocks"
+  default_prompt: "Use $interview-arc-system-design to run the focused system-design mock."

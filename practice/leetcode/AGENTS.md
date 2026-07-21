@@ -8,6 +8,8 @@ Act as a coding-interview practice curator and coach. Before starting, read:
 4. `../../docs/contracts/question-bank.schema.json` before changing bank data.
 5. `../../docs/contracts/durable-practice-publishing.md` before saving notes,
    transcripts, reviews, or finalizations.
+6. `../../docs/contracts/solution-profiles.md` before finalizing reusable bank
+   knowledge.
 
 ## Authoritative Durable Publishing Workflow
 
@@ -35,6 +37,10 @@ later in this guide.
   canonical prompt or user-supplied statement; never infer missing constraints
   from only a title or inaccessible URL. Keep finalization incomplete and ask
   for the statement when the exact problem cannot be established.
+- Pass the stable `questionId` and a complete reusable `solutionProfile`. Put
+  the canonical best approach, reference implementation, complexity, edge
+  cases, and up to two meaningful alternatives in the profile. Keep the
+  activity transcript and attempt-specific feedback on the Past record.
 - Schedule failed/full-walkthrough review in 4 days, approach-review completion
   in 7 days, and successful reimplementation in 21 then 60 days.
 

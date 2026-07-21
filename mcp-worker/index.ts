@@ -25,10 +25,42 @@ import {
   registerSpecialistTask,
   saveSpecialistFinalization,
   scheduleReview,
+  updateActivityAudioClipStatus,
+  upsertOwnerBankQuestion,
 } from "../db/durable-practice";
 
 interface Env {
   DB: D1Database;
+  AUDIO: R2Bucket;
+}
+
+function safeAudioFilename(value: string) {
+  return value.normalize("NFKC").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 120) || "practice-audio";
+}
+
+async function uploadPracticeAudio(ownerId: string, request: Request, env: Env) {
+  const form = await request.formData();
+  const activityId = String(form.get("activityId") ?? "").trim();
+  const label = String(form.get("label") ?? "Practice answer").trim().slice(0, 120) || "Practice answer";
+  const file = form.get("file");
+  if (!activityId || !(file instanceof File) || !file.type.startsWith("audio/") || file.size === 0 || file.size > 100 * 1024 * 1024) {
+    return json(request, { error: "An activityId and non-empty audio file no larger than 100 MB are required." }, { status: 400 });
+  }
+  const clipId = crypto.randomUUID();
+  const filename = safeAudioFilename(file.name);
+  const objectKey = `${ownerId}/${activityId}/${clipId}-${filename}`;
+  await registerActivityAudioClip(ownerId, { id: clipId, activityId, filename, mimeType: file.type, label, objectKey, status: "uploading" }, Date.now());
+  try {
+    await env.AUDIO.put(objectKey, file.stream(), {
+      httpMetadata: { contentType: file.type, contentDisposition: `inline; filename="${filename}"` },
+      customMetadata: { ownerId, activityId, clipId },
+    });
+    await updateActivityAudioClipStatus(ownerId, clipId, "available", Date.now());
+  } catch (error) {
+    await updateActivityAudioClipStatus(ownerId, clipId, "failed", Date.now());
+    throw error;
+  }
+  return json(request, { clipId, activityId, filename, mimeType: file.type, label, status: "available" }, { status: 201 });
 }
 
 function bearerToken(request: Request) {
@@ -237,6 +269,7 @@ function createServer(ownerId: string) {
       inputSchema: {
         activityId: z.string().min(1),
         specialty: z.enum(["leetcode", "system_design", "behavioral"]),
+        questionId: z.string().min(1).optional(),
         finalization: z.object({
           title: z.string().min(1),
           complete: z.boolean(),
@@ -262,12 +295,19 @@ function createServer(ownerId: string) {
             url: z.string().url(),
             accessedAt: z.string().min(1),
           })),
+          solutionProfile: z.object({
+            schemaVersion: z.literal(1),
+            summary: z.string().min(1),
+            sections: z.array(z.object({ title: z.string().min(1), body: z.string().min(1) })).min(1),
+            tags: z.array(z.string().min(1)).max(32),
+            references: z.array(z.object({ title: z.string().min(1), url: z.string().url(), accessedAt: z.string().min(1) })),
+          }).optional(),
         }),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
-    async ({ activityId, specialty, finalization }) => {
-      await saveSpecialistFinalization(ownerId, activityId, specialty, finalization, Date.now());
+    async ({ activityId, specialty, questionId, finalization }) => {
+      await saveSpecialistFinalization(ownerId, activityId, specialty, questionId ?? null, finalization, Date.now());
       return {
         content: [{ type: "text", text: `${activityId} specialist bundle saved as ${finalization.complete ? "ready" : "draft"}.` }],
         structuredContent: { activityId, specialty, status: finalization.complete ? "ready" : "draft" },
@@ -287,6 +327,33 @@ function createServer(ownerId: string) {
       return {
         content: [{ type: "text", text: JSON.stringify(record, null, 2) }],
         structuredContent: { activityId, ...record },
+      };
+    },
+  );
+
+  server.registerTool(
+    "upsert_personal_bank_question",
+    {
+      description: "Create or update an owner-private bank question. Behavioral specialists use this to build the resume-foundation curriculum without committing private resume details to Git.",
+      inputSchema: {
+        specialty: z.enum(["leetcode", "system_design", "behavioral"]),
+        questionId: z.string().min(1),
+        title: z.string().min(1),
+        prompt: z.string().optional(),
+        url: z.string().url().optional(),
+        source: z.string().min(1).optional(),
+        tags: z.array(z.string().min(1)).max(32).optional(),
+        priority: z.number().int().min(0).max(1000).optional(),
+        targetMinutes: z.number().int().min(5).max(480).optional(),
+        active: z.boolean().optional(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ specialty, ...question }) => {
+      await upsertOwnerBankQuestion(ownerId, specialty, question, Date.now());
+      return {
+        content: [{ type: "text", text: `Saved ${question.title} to the private ${specialty} bank.` }],
+        structuredContent: { specialty, ...question },
       };
     },
   );
@@ -453,6 +520,9 @@ export default {
     }
     if (url.pathname === "/companion/mutations" && request.method === "POST") {
       return companionMutation(ownerId, request);
+    }
+    if (url.pathname === "/audio/upload" && request.method === "POST") {
+      return uploadPracticeAudio(ownerId, request, env);
     }
     if (url.pathname === "/mcp" || url.pathname.startsWith("/mcp/")) {
       return createMcpHandler(createServer(ownerId))(request, env, ctx);

@@ -12,6 +12,10 @@ Before starting:
 6. If the requested mode is genuinely unclear, ask whether the user wants instructor mode, interviewer mode, or a full model answer. Otherwise, infer it from the request and continue.
 7. Read `../../docs/contracts/durable-practice-publishing.md` before saving
    notes, transcript turns, reviews, or finalizations.
+8. Use the repository skill `$interview-arc-system-design` and follow its
+   reference preflight and Solution Profile template.
+9. Read `../../docs/contracts/solution-profiles.md` for the shared Past-versus-
+   Problem-Bank boundary.
 
 ## Authoritative Durable Publishing Workflow
 
@@ -37,6 +41,9 @@ procedure below.
   two-sided transcript, summary, what went well, what to improve, stronger
   answer/architecture, follow-ups, and references. Always include a complete
   standalone model design even when the live mock stopped after partial advice.
+- Pass the stable `questionId` and a complete `solutionProfile`. The profile is
+  reusable Problem Bank knowledge; the dated transcript and feedback remain on
+  the Past attempt and are never copied into the profile.
 - Schedule failed/full-walkthrough review in 4 days, approach-review completion
   in 7 days, and successful reimplementation in 21 then 60 days.
 
@@ -392,14 +399,24 @@ audio-answers/YYYY-MM-DD-<topic>-attempt-01.m4a
 audio-answers/YYYY-MM-DD-<topic>-attempt-01.md
 ```
 
-Raw audio is local-only and ignored by Git. Commit the matching Markdown transcript/review and the canonical system-design session artifact. In committed Markdown, reference only the audio filename and set:
+Raw audio is ignored by Git. After local transcription, upload the source file
+through Interview Arc's authenticated audio endpoint so it is stored privately
+in R2 and attached to the dated Past activity. Legacy local-only artifacts may
+still use:
 
 ```yaml
 audio_file: YYYY-MM-DD-<topic>-attempt-01.m4a
 audio_availability: local-only
 ```
 
-Never commit an absolute local path. The deployed website cannot play ignored audio and must show it as local-only.
+Never commit an absolute local path or R2 object key. The deployed website plays
+only owner-authorized clips whose D1 status is `available`.
+
+When the user attaches or copies an audio file into this task and its local path
+is available, resolve the focused activity ID, transcribe as required, then run
+`node scripts/upload-practice-audio.mjs <activity_id> <path> [label]`. This uses
+the configured `INTERVIEW_ARC_MCP_TOKEN`, uploads to private R2, and attaches the
+clip to the Past activity. Never print or pass the token as a command argument.
 
 Use this decision process:
 

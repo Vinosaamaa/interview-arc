@@ -16,6 +16,7 @@ import {
   elapsed,
   formatClock,
   INTERVIEW_SESSION_MINUTES,
+  overtime,
   remaining,
   SESSION_SECONDS,
   sessionAllocationSeconds,
@@ -63,6 +64,7 @@ type ComposerState = {
 };
 type LogEntry = {
   id: string;
+  questionId?: string;
   date: string;
   type: ActivityType;
   title: string;
@@ -213,6 +215,8 @@ function pickQuestionsByFrequency(pool: QuestionBankItem[], count: number, block
   const candidates = pool
     .filter((question) => question.active && !isQuestionBlocked(question, blocked))
     .sort((left, right) => {
+      const priorityDiff = (right.priority ?? 0) - (left.priority ?? 0);
+      if (priorityDiff !== 0) return priorityDiff;
       const rankDiff = frequencyRank(right) - frequencyRank(left);
       if (rankDiff !== 0) return rankDiff;
       const leftKey = `${salt}:${left.id}:${left.title}`;
@@ -308,15 +312,16 @@ function SessionCountdown({
 }) {
   const allocated = session.allocatedSeconds ?? SESSION_SECONDS;
   const timeLeft = remaining(timer, now, allocated);
-  const running = Boolean(timer?.runningSince) && timeLeft > 0;
-  const complete = Boolean(timer?.completed) || timeLeft === 0;
+  const overtimeSeconds = overtime(timer, now, allocated);
+  const running = Boolean(timer?.runningSince);
+  const complete = Boolean(timer?.completed);
   const progress = Math.min(100, (elapsed(timer, now) / allocated) * 100);
   return (
     <div className={`session-countdown ${running ? "running" : ""} ${complete ? "complete" : ""}`}>
       <div className="countdown-copy">
         <span>{formatDuration(allocated)} session countdown</span>
-        <strong>{formatClock(timeLeft)}</strong>
-        <small>{complete ? "Session finished" : running ? "Session in progress" : timer?.elapsedSeconds ? "Session paused" : "Ready when you are"}</small>
+        <strong>{overtimeSeconds ? `+${formatClock(overtimeSeconds)}` : formatClock(timeLeft)}</strong>
+        <small>{complete ? "Session finished" : overtimeSeconds ? `Overtime · ${running ? "still running" : "paused"}` : running ? "Session in progress" : timer?.elapsedSeconds ? "Session paused" : "Ready when you are"}</small>
       </div>
       <div className="countdown-controls">
         <button onClick={() => onToggle(session.id)} disabled={complete} aria-label={running ? `Pause ${session.label}` : `Start ${session.label}`} title={running ? "Pause session countdown" : "Start session countdown"}><span aria-hidden="true">{running ? "Ⅱ" : "▶"}</span></button>
@@ -561,6 +566,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const yesterdayDraft = useReadOnlyLiveState(yesterdayDate);
   const [composer, setComposer] = useState<ComposerState>(EMPTY_COMPOSER);
   const [selectedEntry, setSelectedEntry] = useState<LogEntry | null>(null);
+  const [selectedProblem, setSelectedProblem] = useState<{ type: ActivityType; question: QuestionBankItem } | null>(null);
   const [libraryFilter, setLibraryFilter] = useState<"all" | ActivityType>("all");
   const [libraryAttentionFilter, setLibraryAttentionFilter] = useState<LibraryAttentionFilter>("all");
   const [bankFilter, setBankFilter] = useState<"all" | ActivityType>("all");
@@ -569,6 +575,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [bankSortKey, setBankSortKey] = useState<"frequency" | "recent" | "acceptance">("frequency");
   const [bankSortDir, setBankSortDir] = useState<"asc" | "desc">("asc");
   const [bankSearch, setBankSearch] = useState("");
+  const [bankTagFilter, setBankTagFilter] = useState("all");
+  const [bankStarFilter, setBankStarFilter] = useState<"all" | "starred">("all");
   const [journeyRange, setJourneyRange] = useState<JourneyRange>(90);
   const [journeyMetric, setJourneyMetric] = useState<JourneyMetric>("activities");
   const [journeyDate, setJourneyDate] = useState("");
@@ -581,6 +589,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [integrationOpen, setIntegrationOpen] = useState(false);
   const [integrationToken, setIntegrationToken] = useState("");
   const [integrationBusy, setIntegrationBusy] = useState(false);
+  const [audioBusy, setAudioBusy] = useState(false);
   const {
     playing: ambientPlaying,
     playlist: ambientPlaylist,
@@ -630,17 +639,18 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }, [pipWindow]);
 
   useEffect(() => {
-    if (!composer.open && !selectedEntry && !integrationOpen) return;
+    if (!composer.open && !selectedEntry && !selectedProblem && !integrationOpen) return;
     const onEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setComposer(EMPTY_COMPOSER);
         setSelectedEntry(null);
+        setSelectedProblem(null);
         setIntegrationOpen(false);
       }
     };
     window.addEventListener("keydown", onEscape);
     return () => window.removeEventListener("keydown", onEscape);
-  }, [composer.open, selectedEntry, integrationOpen]);
+  }, [composer.open, selectedEntry, selectedProblem, integrationOpen]);
 
   function enterArc() {
     if (!soundMuted) startAmbient();
@@ -708,45 +718,36 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }, [journal.date]);
 
   useEffect(() => {
-    const expired = allSessions.filter((session) => {
-      const timer = draft.sessionTimers[session.id];
-      return Boolean(timer?.runningSince) && elapsed(timer, now) >= session.allocatedSeconds;
-    });
-    if (!expired.length) return;
-    expired.forEach((session) => enqueue({
+    const finished = allSessions.filter((session) => session.activityIds.length > 0
+      && !draft.sessionTimers[session.id]?.completed
+      && session.activityIds.every((activityId) => draft.timers[activityId]?.completed));
+    if (!finished.length) return;
+    const timestamp = Date.now();
+    finished.forEach((session) => enqueue({
       type: "timer",
       subjectId: session.id,
       kind: "session",
       action: "finish",
       activityIds: session.activityIds,
     }));
-    const expiredIds = new Set(expired.map((session) => session.id));
+    const finishedIds = new Set(finished.map((session) => session.id));
     setDraft((current) => ({
       ...current,
-      timers: Object.fromEntries(
-        Object.entries(current.timers).map(([id, timer]) => {
-          const belongsToExpired = expired.some((session) => session.activityIds.includes(id));
-          return belongsToExpired && timer.runningSince
-            ? [id, { ...timer, elapsedSeconds: elapsed(timer, now), runningSince: null }]
-            : [id, timer];
-        }),
-      ),
       sessionTimers: Object.fromEntries(
         Object.entries(current.sessionTimers).map(([id, timer]) => {
-          const session = allSessions.find((candidate) => candidate.id === id);
-          return expiredIds.has(id)
+          return finishedIds.has(id)
             ? [id, {
               ...timer,
-              elapsedSeconds: session?.allocatedSeconds ?? SESSION_SECONDS,
+              elapsedSeconds: elapsed(timer, timestamp),
               runningSince: null,
               completed: true,
-              completedAt: now,
+              completedAt: timestamp,
             }]
             : [id, timer];
         }),
       ),
     }));
-  }, [allSessions, draft.sessionTimers, enqueue, now, setDraft]);
+  }, [allSessions, draft.sessionTimers, draft.timers, enqueue, setDraft]);
 
   const focusedActivity =
     allTodayActivities.find((activity) => activity.id === draft.focusedActivityId) ??
@@ -766,9 +767,46 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     focusedSession ?? allSessions.find((session) => draft.sessionTimers[session.id]?.runningSince) ?? allSessions[0] ?? null;
 
   function bankFor(type: ActivityType) {
-    if (type === "leetcode") return content.questionBanks.leetcode;
-    if (type === "system_design") return content.questionBanks.systemDesign;
-    return content.questionBanks.behavioral;
+    const canonical = type === "leetcode"
+      ? content.questionBanks.leetcode
+      : type === "system_design"
+        ? content.questionBanks.systemDesign
+        : content.questionBanks.behavioral;
+    const personal = draft.personalQuestions.filter((question) => question.specialty === type).map((question): QuestionBankItem => ({
+      id: question.questionId,
+      title: question.title,
+      prompt: question.prompt ?? undefined,
+      url: question.url ?? undefined,
+      source: question.source,
+      topics: question.tags,
+      tags: question.tags,
+      priority: question.priority,
+      targetMinutes: question.targetMinutes,
+      active: question.active,
+    }));
+    const canonicalIds = new Set(canonical.map((question) => question.id));
+    return [...personal.filter((question) => !canonicalIds.has(question.id)), ...canonical];
+  }
+
+  function isStarred(type: ActivityType, questionId?: string) {
+    return Boolean(questionId && draft.problemPreferences.some((preference) => preference.specialty === type && preference.questionId === questionId && preference.starred));
+  }
+
+  function toggleProblemStar(type: ActivityType, questionId?: string) {
+    if (!questionId) return;
+    const starred = !isStarred(type, questionId);
+    setDraft((current) => ({
+      ...current,
+      problemPreferences: [
+        ...current.problemPreferences.filter((preference) => !(preference.specialty === type && preference.questionId === questionId)),
+        { specialty: type, questionId, starred, updatedAt: Date.now() },
+      ],
+    }));
+    enqueue({ type: "problem-star", specialty: type, questionId, starred });
+  }
+
+  function profileFor(type: ActivityType, questionId?: string) {
+    return questionId ? draft.solutionProfiles.find((profile) => profile.specialty === type && profile.questionId === questionId) : undefined;
   }
 
   function toggleTimer(activityId: string) {
@@ -843,10 +881,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function toggleSessionTimer(sessionId: string) {
     const timestamp = Date.now();
-    const allocatedSeconds = allSessions.find((session) => session.id === sessionId)?.allocatedSeconds ?? SESSION_SECONDS;
     setNow(timestamp);
     const priorSession = draft.sessionTimers[sessionId];
-    if (priorSession?.completed || (priorSession && elapsed(priorSession, timestamp) >= allocatedSeconds)) return;
+    if (priorSession?.completed) return;
     const session = allSessions.find((candidate) => candidate.id === sessionId);
     enqueue({
       type: "timer",
@@ -857,7 +894,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     });
     setDraft((current) => {
       const prior = current.sessionTimers[sessionId] ?? { elapsedSeconds: 0, runningSince: null, completed: false };
-      if (prior.completed || elapsed(prior, timestamp) >= allocatedSeconds) return current;
+      if (prior.completed) return current;
       const pausing = Boolean(prior.runningSince);
       const sessionTimers = { ...current.sessionTimers };
       if (!pausing) {
@@ -898,7 +935,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function completeSessionTimer(sessionId: string) {
     const timestamp = Date.now();
-    const allocatedSeconds = allSessions.find((session) => session.id === sessionId)?.allocatedSeconds ?? SESSION_SECONDS;
     setNow(timestamp);
     const session = allSessions.find((candidate) => candidate.id === sessionId);
     enqueue({ type: "timer", subjectId: sessionId, kind: "session", action: "finish", activityIds: session?.activityIds ?? [] });
@@ -918,7 +954,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           ...current.sessionTimers,
           [sessionId]: {
             ...prior,
-            elapsedSeconds: Math.min(allocatedSeconds, elapsed(prior, timestamp)),
+            elapsedSeconds: elapsed(prior, timestamp),
             startedAt: prior.startedAt ?? timestamp,
             runningSince: null,
             completed: true,
@@ -1022,6 +1058,34 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     setSelectedEntry((current) => current?.id === activityId ? { ...current, personalNote: note } : current);
   }
 
+  async function uploadActivityAudio(activityId: string, files: File[]) {
+    const audioFiles = files.filter((file) => file.type.startsWith("audio/"));
+    if (!audioFiles.length) return;
+    setAudioBusy(true);
+    try {
+      for (const file of audioFiles) {
+        const form = new FormData();
+        form.set("activityId", activityId);
+        form.set("label", "Practice answer");
+        form.set("file", file);
+        const response = await fetch("/api/audio", { method: "POST", body: form });
+        if (!response.ok) throw new Error((await response.json() as { error?: string }).error ?? "Audio upload failed.");
+        const clip = await response.json() as AudioClip;
+        setDraft((current) => ({ ...current, audioClips: { ...current.audioClips, [activityId]: [...(current.audioClips[activityId] ?? []), clip] } }));
+        setSelectedEntry((current) => current?.id === activityId ? { ...current, audioClips: [...(current.audioClips ?? []), clip] } : current);
+      }
+    } finally {
+      setAudioBusy(false);
+    }
+  }
+
+  async function removeActivityAudio(activityId: string, clipId: string) {
+    const response = await fetch(`/api/audio/${encodeURIComponent(clipId)}`, { method: "DELETE" });
+    if (!response.ok) return;
+    setDraft((current) => ({ ...current, audioClips: { ...current.audioClips, [activityId]: (current.audioClips[activityId] ?? []).filter((clip) => clip.id !== clipId) } }));
+    setSelectedEntry((current) => current?.id === activityId ? { ...current, audioClips: (current.audioClips ?? []).filter((clip) => clip.id !== clipId) } : current);
+  }
+
   function publicationStatusFor(activity: JournalActivity): PublicationStatus {
     const stored = draft.publicationStatuses[activity.id];
     if (activity.artifactPath || stored === "published") return "published";
@@ -1091,7 +1155,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function availableSessionQuestions(type: ActivityType, editingSessionId = "") {
     const blocked = sessionBlockedQuestions(editingSessionId);
-    return bankFor(type).filter((question) => question.active && !isQuestionBlocked(question, blocked));
+    return bankFor(type).filter((question) => question.active
+      && !isQuestionBlocked(question, blocked)
+      && !((question.priority ?? 0) > 0 && profileFor(type, question.id)));
   }
 
   function selectBankQuestion(question: QuestionBankItem) {
@@ -1147,10 +1213,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const minutes = Math.max(1, Number(composer.minutes) || selected?.targetMinutes || derived?.targetMinutes || 30);
     const existing = draft.extraActivities.find((activity) => activity.id === composer.editingId);
     const id = existing?.id ?? `${journal.date}-extra-${slugify(title)}-${event.timeStamp.toString(36)}`;
+    const questionId = selected?.id ?? existing?.questionId ?? `personal-${composer.type}-${slugify(title)}`;
     const activity: ExtraActivity = {
       schemaVersion: 2,
       id,
-      ...(selected?.id ? { questionId: selected.id } : existing?.questionId ? { questionId: existing.questionId } : {}),
+      questionId,
       date: journal.date,
       source: "extra",
       type: composer.type,
@@ -1170,7 +1237,20 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         ? current.extraActivities.map((item) => item.id === activity.id ? activity : item)
         : [...current.extraActivities, activity],
     }));
-    enqueue({ type: "extra-upsert", activity });
+    enqueue(
+      { type: "extra-upsert", activity },
+      ...(!selected ? [{
+        type: "personal-question-upsert" as const,
+        specialty: composer.type,
+        question: {
+          questionId,
+          title,
+          ...(derived?.url ? { url: derived.url } : {}),
+          ...(composer.type !== "leetcode" ? { prompt: title } : {}),
+          targetMinutes: minutes,
+        },
+      }] : []),
+    );
     setComposer(EMPTY_COMPOSER);
   }
 
@@ -1216,9 +1296,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       fresh.forEach((question) => blockKeysForQuestion(question).forEach((key) => blocked.add(key)));
       return [...reviews, ...fresh];
     }
-    const codingQuestions = pickSessionQuestions("leetcode", content.questionBanks.leetcode, composer.sessionCoding);
-    const systemQuestions = pickSessionQuestions("system_design", content.questionBanks.systemDesign, composer.sessionSystemDesign);
-    const behaviorQuestions = pickSessionQuestions("behavioral", content.questionBanks.behavioral, composer.sessionBehavioral);
+    const codingQuestions = pickSessionQuestions("leetcode", availableSessionQuestions("leetcode", existing?.id), composer.sessionCoding);
+    const systemQuestions = pickSessionQuestions("system_design", availableSessionQuestions("system_design", existing?.id), composer.sessionSystemDesign);
+    const behaviorQuestions = pickSessionQuestions("behavioral", availableSessionQuestions("behavioral", existing?.id), composer.sessionBehavioral);
     if (
       codingQuestions.length !== composer.sessionCoding ||
       systemQuestions.length !== composer.sessionSystemDesign ||
@@ -1446,6 +1526,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       reviews: draft.reviews,
       finalizations: draft.finalizations,
       audioClips: draft.audioClips,
+      problemPreferences: draft.problemPreferences,
+      solutionProfiles: draft.solutionProfiles,
+      solutionRevisions: draft.solutionRevisions,
+      activitySolutionLinks: draft.activitySolutionLinks,
+      personalQuestions: draft.personalQuestions,
       publishQueueActivityIds,
       publishQueueByDate,
       sessions: draft.sessions,
@@ -1503,6 +1588,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         const endedAt = localTimer?.completedAt ? new Date(localTimer.completedAt).toISOString() : activity.endedAt;
         entries.push({
           id: activity.id,
+          questionId: activity.questionId,
           date: endedAt ? practiceDateAt(endedAt) : activity.date,
           type: activity.type,
           title: activity.title,
@@ -1532,6 +1618,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       const endedAt = timer?.completedAt ? new Date(timer.completedAt).toISOString() : activity.endedAt;
       entries.push({
         id: activity.id,
+        questionId: activity.questionId,
         date: endedAt ? practiceDateAt(endedAt) : activity.date,
         type: activity.type,
         title: activity.title,
@@ -1560,6 +1647,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       const endedAt = timer?.completedAt ? new Date(timer.completedAt).toISOString() : activity.endedAt;
       entries.push({
         id: activity.id,
+        questionId: activity.questionId,
         date: endedAt ? practiceDateAt(endedAt) : activity.date,
         type: activity.type,
         title: activity.title,
@@ -1814,6 +1902,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                   <ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} />
                   <ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} />
                   <PublicationControl status={publicationStatusFor(activity)} />
+                  <button className={`star-control ${isStarred(activity.type, activity.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(activity.type, activity.questionId)} disabled={!activity.questionId} aria-label={`${isStarred(activity.type, activity.questionId) ? "Unstar" : "Star"} ${activity.title}`} title={activity.questionId ? "Keep this problem in your starred review set" : "A stable bank question is required to star this activity"}>★</button>
                   {isExtra && <div className="row-edit-actions"><button onClick={() => openEditActivity(activity as ExtraActivity)}>Edit</button><button onClick={() => removeActivity(activity.id)}>Remove</button></div>}
                 </div>
               );
@@ -1834,6 +1923,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                   <ActivityTimer activity={item} timer={draft.timers[item.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} />
                   <ResultFlag activityType={item.type} outcome={draft.outcomes[item.id] ?? item.outcome} onChange={(outcome) => setOutcome(item.id, outcome)} />
                   <PublicationControl status={publicationStatusFor(item)} />
+                  <button className={`star-control ${isStarred(item.type, item.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(item.type, item.questionId)} disabled={!item.questionId} aria-label={`${isStarred(item.type, item.questionId) ? "Unstar" : "Star"} ${item.title}`}>★</button>
                 </div>
                 <div className="publish-instruction">Finish the activity, then say <strong>“Publish this session”</strong> in the {item.type === "system_design" ? "system-design" : "behavioral"} task. Finished work is ready automatically.</div>
               </section>
@@ -1874,7 +1964,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
         <section className="loose-section">
           <div className="section-title"><div><span className="eyebrow">STANDALONE PRACTICE</span><h2>Outside a full session</h2><p>Swipe a card left, or use its ••• control, to edit or remove it.</p></div></div>
-          {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add one activity” above to search a bank or paste a public LeetCode problem URL.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <SwipeActivityCard key={activity.id} title={activity.title} onEdit={() => openEditActivity(activity)} onRemove={() => removeActivity(activity.id)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><small>{typeLabel(activity.type)} · local draft</small><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} /><ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} /><PublicationControl status={publicationStatusFor(activity)} /></SwipeActivityCard>)}</div>}
+          {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add one activity” above to search a bank or paste a public LeetCode problem URL.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <SwipeActivityCard key={activity.id} title={activity.title} onEdit={() => openEditActivity(activity)} onRemove={() => removeActivity(activity.id)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><small>{typeLabel(activity.type)} · local draft</small><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} /><ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} /><PublicationControl status={publicationStatusFor(activity)} /><button className={`star-control ${isStarred(activity.type, activity.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(activity.type, activity.questionId)} disabled={!activity.questionId} aria-label={`${isStarred(activity.type, activity.questionId) ? "Unstar" : "Star"} ${activity.title}`}>★</button></SwipeActivityCard>)}</div>}
         </section>
       </>
     );
@@ -2029,26 +2119,36 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function renderBanks() {
     const bankEntries: { type: ActivityType; question: QuestionBankItem; finished: boolean }[] = [
-      ...content.questionBanks.leetcode.map((question) => ({ type: "leetcode" as const, question })),
-      ...content.questionBanks.systemDesign.map((question) => ({ type: "system_design" as const, question })),
-      ...content.questionBanks.behavioral.map((question) => ({ type: "behavioral" as const, question })),
+      ...bankFor("leetcode").map((question) => ({ type: "leetcode" as const, question })),
+      ...bankFor("system_design").map((question) => ({ type: "system_design" as const, question })),
+      ...bankFor("behavioral").map((question) => ({ type: "behavioral" as const, question })),
     ].map((entry) => ({
       ...entry,
       finished: libraryEntries.some((record) => record.type === entry.type && (
+        record.questionId === entry.question.id ||
         Boolean(entry.question.url && record.url && entry.question.url.replace(/\/$/, "") === record.url.replace(/\/$/, "")) ||
         normalizedIdentity(entry.question.title) === normalizedIdentity(record.title)
       )),
     }));
+    const bankTags = [...new Set(bankEntries.flatMap(({ type, question }) => [
+      ...question.topics,
+      ...(question.tags ?? []),
+      ...(profileFor(type, question.id)?.tags ?? []),
+    ]))].sort((left, right) => left.localeCompare(right));
     const searchNeedle = bankSearch.toLowerCase().trim();
     const filteredEntries = bankEntries.filter((entry) => {
       const level = questionLevel(entry.question);
       return (bankFilter === "all" || entry.type === bankFilter)
         && (bankProgressFilter === "all" || (bankProgressFilter === "finished" ? entry.finished : !entry.finished))
         && (bankLevelFilter === "all" || level === bankLevelFilter)
+        && (bankStarFilter === "all" || isStarred(entry.type, entry.question.id))
+        && (bankTagFilter === "all" || [...entry.question.topics, ...(entry.question.tags ?? []), ...(profileFor(entry.type, entry.question.id)?.tags ?? [])].includes(bankTagFilter))
         && (!searchNeedle
           || entry.question.title.toLowerCase().includes(searchNeedle)
           || (entry.question.prompt?.toLowerCase().includes(searchNeedle) ?? false)
           || entry.question.topics.some((topic) => topic.toLowerCase().includes(searchNeedle))
+          || (entry.question.tags?.some((tag) => tag.toLowerCase().includes(searchNeedle)) ?? false)
+          || (profileFor(entry.type, entry.question.id)?.tags.some((tag) => tag.includes(searchNeedle)) ?? false)
           || (entry.question.problemNumber !== undefined && String(entry.question.problemNumber).includes(searchNeedle))
           || (entry.question.companyTags?.some((tag) => tag.toLowerCase().includes(searchNeedle)) ?? false));
     });
@@ -2135,6 +2235,19 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                 </div>
               </div>
               <div className="bank-filter-group">
+                <span>Collection</span>
+                <div className="filter-row" role="group" aria-label="Filter starred problems">
+                  {(["all", "starred"] as const).map((filter) => <button key={filter} className={bankStarFilter === filter ? "active" : ""} onClick={() => setBankStarFilter(filter)}>{filter === "all" ? "All" : "★ Starred"}</button>)}
+                </div>
+              </div>
+              <label className="bank-filter-group bank-tag-select">
+                <span>Pattern / competency</span>
+                <select value={bankTagFilter} onChange={(event) => setBankTagFilter(event.target.value)} aria-label="Filter problem banks by tag">
+                  <option value="all">All tags</option>
+                  {bankTags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
+                </select>
+              </label>
+              <div className="bank-filter-group">
                 <span>Order</span>
                 <div className="filter-row bank-sort-row" role="group" aria-label="Order problem banks">
                   {sortOptions.map((option) => {
@@ -2163,9 +2276,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         <div className="problem-bank-list" tabIndex={0} aria-label="Problem bank results">
           {visibleEntries.map(({ type, question, finished }) => <article className={`problem-bank-entry ${type}`} key={`${type}-${question.id}`}>
             <span className={`type-mark ${type}`}>{typeMark(type)}</span>
-            <div className="problem-bank-copy"><small>{typeLabel(type)}{question.difficulty ? ` · ${question.difficulty}` : ""}{question.complexity ? ` · ${displayComplexity(question.complexity)}` : ""} · {finished ? "finished" : "to practice"}</small><strong>{question.title}</strong>{question.prompt && question.prompt !== question.title && <p>{question.prompt}</p>}{question.url && <a href={question.url} target="_blank" rel="noreferrer">{question.solutionReference ? "Open question & solution references ↗" : "Open problem ↗"}</a>}</div>
-            <div className="bank-entry-meta"><span>{question.targetMinutes} min estimate</span>{question.problemNumber && <small>#{question.problemNumber}{typeof question.acceptanceRate === "number" ? ` · ${question.acceptanceRate.toFixed(1)}% acceptance` : ""}</small>}{question.companySignals?.[0] && <small>{question.companySignals[0].company} frequency {question.companySignals[0].frequencyScore}/{question.companySignals[0].frequencyScale} · {question.companySignals[0].window}</small>}{question.answerFormat && <small>{question.answerFormat} answer · {question.frequency ?? "medium"} frequency</small>}{question.solutionReference && <small>Reference solution{question.referenceAccess === "may_require_sign_in" ? " may require sign-in" : " available"}</small>}{question.topics.length > 0 && <small>{question.topics.slice(0, 3).join(" · ")}</small>}</div>
-            <button onClick={() => addBankQuestionToToday(question, type)}>Practice today</button>
+            <div className="problem-bank-copy"><small>{typeLabel(type)}{question.difficulty ? ` · ${question.difficulty}` : ""}{question.complexity ? ` · ${displayComplexity(question.complexity)}` : ""} · {finished ? "finished" : "to practice"}</small><button className="problem-title-button" onClick={() => setSelectedProblem({ type, question })}>{question.title}</button>{question.prompt && question.prompt !== question.title && <p>{question.prompt}</p>}{question.url && <a href={question.url} target="_blank" rel="noreferrer">{question.solutionReference ? "Open question & solution references ↗" : "Open problem ↗"}</a>}</div>
+            <div className="bank-entry-meta"><span>{question.targetMinutes} min estimate</span>{question.problemNumber && <small>#{question.problemNumber}{typeof question.acceptanceRate === "number" ? ` · ${question.acceptanceRate.toFixed(1)}% acceptance` : ""}</small>}{question.companySignals?.[0] && <small>{question.companySignals[0].company} frequency {question.companySignals[0].frequencyScore}/{question.companySignals[0].frequencyScale} · {question.companySignals[0].window}</small>}{question.answerFormat && <small>{question.answerFormat} answer · {question.frequency ?? "medium"} frequency</small>}{question.solutionReference && <small>Reference solution{question.referenceAccess === "may_require_sign_in" ? " may require sign-in" : " available"}</small>}{question.topics.length > 0 && <small>{question.topics.slice(0, 3).join(" · ")}</small>}{profileFor(type, question.id)?.tags.length ? <small className="content-tags">{profileFor(type, question.id)?.tags.slice(0, 4).map((tag) => `#${tag}`).join("  ")}</small> : null}</div>
+            <div className="bank-entry-actions"><button className={`star-control ${isStarred(type, question.id) ? "starred" : ""}`} onClick={() => toggleProblemStar(type, question.id)} aria-label={`${isStarred(type, question.id) ? "Unstar" : "Star"} ${question.title}`}>★</button><button className="open-solution" onClick={() => setSelectedProblem({ type, question })}>{profileFor(type, question.id) ? "Read solution" : "View problem"}</button><button onClick={() => addBankQuestionToToday(question, type)}>Practice today</button></div>
           </article>)}
           {!visibleEntries.length && <div className="quiet-empty bank-empty"><strong>No questions match these filters.</strong><span>Change type, progress, level, or search text.</span></div>}
         </div>
@@ -2194,6 +2307,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     composer.sessionCoding <= sessionAvailability.coding &&
     composer.sessionSystemDesign <= sessionAvailability.systemDesign &&
     composer.sessionBehavioral <= sessionAvailability.behavioral;
+  const selectedProblemProfile = selectedProblem ? profileFor(selectedProblem.type, selectedProblem.question.id) : undefined;
+  const selectedProblemAttempts = selectedProblem
+    ? libraryEntries.filter((entry) => entry.type === selectedProblem.type && entry.questionId === selectedProblem.question.id)
+    : [];
+  const selectedProblemRevisions = selectedProblem
+    ? draft.solutionRevisions.filter((revision) => revision.specialty === selectedProblem.type && revision.questionId === selectedProblem.question.id)
+    : [];
 
   return (
     <>
@@ -2263,15 +2383,27 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       {integrationOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setIntegrationOpen(false)}><section className="composer integration-dialog" role="dialog" aria-modal="true" aria-labelledby="integration-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setIntegrationOpen(false)} aria-label="Close">×</button><span className="eyebrow">ONE DURABLE PRACTICE RECORD</span><h2 id="integration-title">Connect Interview Arc tools</h2><p>One personal token connects two separate tools to the same Interview Arc record. Codex specialists save activity transcripts, pinned notes, reviews, and finalization drafts; the coordinator alone turns those drafts into the published journal. The Chrome companion controls LeetCode timers and results. The token is shown once and stored as a secure digest.</p>{integrationToken ? <><label className="token-field"><span>Personal connection token</span><input readOnly value={integrationToken} onFocus={(event) => event.currentTarget.select()} /></label><button className="primary-action full-width" onClick={copyConnectionToken}>Copy token</button><div className="integration-steps"><strong>Connect each tool separately</strong><ol><li><strong>Codex practice bridge:</strong> set <code>INTERVIEW_ARC_MCP_TOKEN</code> before opening Codex in this trusted project. Specialists append only activity-related exchanges to D1; the coordinator creates the Git case files when you say “Publish all pending practice.”</li><li><strong>LeetCode Chrome companion:</strong> paste the same token into the loaded extension. The side panel can control the current coding activity while you work on LeetCode.</li></ol></div></> : <button className="primary-action full-width" disabled={integrationBusy} onClick={createConnectionToken}>{integrationBusy ? "Creating…" : "Create personal connection token"}</button>}<small className="integration-warning">Treat this token like a password. Create a new one if it is ever shared accidentally.</small></section></div>}
 
       {selectedEntry && <div className="letter-backdrop" role="presentation" onMouseDown={() => setSelectedEntry(null)}>
-        <article className="reading-letter" role="dialog" aria-modal="true" aria-labelledby="letter-title" onMouseDown={(event) => event.stopPropagation()}>
+        <article className="reading-letter" role="dialog" aria-modal="true" aria-labelledby="letter-title" onMouseDown={(event) => event.stopPropagation()} onPaste={(event) => { const files = [...event.clipboardData.files]; if (files.some((file) => file.type.startsWith("audio/")) && !selectedEntry.id.includes("/")) { event.preventDefault(); void uploadActivityAudio(selectedEntry.id, files); } }}>
           <button className="letter-close" onClick={() => setSelectedEntry(null)} aria-label="Close letter">Close ×</button>
-          <header><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time></div><h2 id="letter-title">{selectedEntry.title}</h2><p>{selectedEntry.subtitle}</p></header>
+          <header><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time><button className={`star-control ${isStarred(selectedEntry.type, selectedEntry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedEntry.type, selectedEntry.questionId)} disabled={!selectedEntry.questionId} aria-label={`${isStarred(selectedEntry.type, selectedEntry.questionId) ? "Unstar" : "Star"} ${selectedEntry.title}`}>★</button></div><h2 id="letter-title">{selectedEntry.title}</h2><p>{selectedEntry.subtitle}</p>{selectedEntry.questionId && <button className="solution-link-button" onClick={() => { const question = bankFor(selectedEntry.type).find((candidate) => candidate.id === selectedEntry.questionId); if (question) { setSelectedEntry(null); setSelectedProblem({ type: selectedEntry.type, question }); } }}>Open reusable Solution Profile →</button>}</header>
           {(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <aside className="pinned-notes" aria-label="Pinned practice notes"><span>PINNED TO THIS CASE</span>{selectedEntry.personalNote?.trim() && <MarkdownBody source={selectedEntry.personalNote} />}{selectedEntry.pinnedNotes?.map((note) => <blockquote key={note.id}><small>{note.kind}</small><p>{note.body}</p></blockquote>)}</aside>}
           <div className="letter-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.startedAt && <div><span>Started</span><strong>{formatPracticeTimestamp(selectedEntry.startedAt)}</strong></div>}{selectedEntry.endedAt && <div><span>Finished</span><strong>{formatPracticeTimestamp(selectedEntry.endedAt)}</strong></div>}{selectedEntry.sessionId && <div><span>Session</span><strong>{selectedEntry.sessionId}</strong></div>}{selectedEntry.outcome && <div><span>Result</span><strong>{resultLabel(selectedEntry.outcome, selectedEntry.type)}</strong></div>}{selectedEntry.review && <div className="review-fact"><span>{selectedEntry.review.status === "due" ? "Review due" : "Next review"}</span><strong>{selectedEntry.review.dueDate}</strong><small>{selectedEntry.review.reason.replaceAll("_", " ")} · {selectedEntry.review.intervalDays} day interval</small></div>}</div>
           {selectedEntry.id && !selectedEntry.id.includes("/") && <form className="letter-note-editor" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); savePersonalNote(selectedEntry.id, String(form.get("note") ?? "")); }}><label htmlFor="case-note">Personal note for this activity</label><textarea id="case-note" name="note" defaultValue={selectedEntry.personalNote ?? ""} placeholder="A concise reminder, mistake, or pattern to keep visible…" /><button type="submit">Pin note</button></form>}
-          {selectedEntry.audioClips?.length ? <section className="delivery-recordings"><span className="eyebrow">DELIVERY RECORDINGS</span>{selectedEntry.audioClips.map((clip) => <div key={clip.id}><div><strong>{clip.label}</strong><small>{clip.filename} · {clip.status.replaceAll("_", " ")}</small></div>{clip.status === "available" ? <audio controls preload="metadata" src={`/api/audio/${encodeURIComponent(clip.id)}`} /> : <em>Audio remains local until private storage is connected.</em>}</div>)}</section> : null}
+          {!selectedEntry.id.includes("/") && <section className="delivery-recordings"><span className="eyebrow">DELIVERY RECORDINGS · PRIVATE R2</span>{selectedEntry.audioClips?.map((clip) => <div key={clip.id}><div><strong>{clip.label}</strong><small>{clip.filename} · {clip.status.replaceAll("_", " ")}</small></div>{clip.status === "available" ? <audio controls preload="metadata" src={`/api/audio/${encodeURIComponent(clip.id)}`} /> : <em>Upload is not available yet.</em>}<button className="audio-remove" onClick={() => void removeActivityAudio(selectedEntry.id, clip.id)}>Remove</button></div>)}<label className="audio-upload"><strong>{audioBusy ? "Uploading securely…" : "Add an answer recording"}</strong><span>Choose or paste an audio file here. It stays private and is streamed only after login.</span><input type="file" accept="audio/*" multiple disabled={audioBusy} onChange={(event) => { void uploadActivityAudio(selectedEntry.id, [...(event.target.files ?? [])]); event.currentTarget.value = ""; }} /></label></section>}
           {selectedEntry.artifact ? <div className="letter-sections">{selectedEntry.artifact.sections.map((section) => /conversation transcript|generated code|solution|raw exchange/i.test(section.title) ? <details key={section.title} open={/solution/i.test(section.title)}><summary>{section.title}</summary><MarkdownBody source={section.body} /></details> : <section key={section.title}><h3>{section.title}</h3><MarkdownBody source={section.body} /></section>)}</div> : <div className="unpublished-letter"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to flush any unsaved activity exchanges, then publish the transcript, review, improved answer or walkthrough, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
           <footer>Interview Arc · {selectedEntry.id}</footer>
+        </article>
+      </div>}
+      {selectedProblem && <div className="letter-backdrop" role="presentation" onMouseDown={() => setSelectedProblem(null)}>
+        <article className="reading-letter solution-profile-letter" role="dialog" aria-modal="true" aria-labelledby="solution-profile-title" onMouseDown={(event) => event.stopPropagation()}>
+          <button className="letter-close" onClick={() => setSelectedProblem(null)} aria-label="Close solution profile">Close ×</button>
+          <header><div><span className={`type-chip ${selectedProblem.type}`}>{typeLabel(selectedProblem.type)}</span><span className="profile-revision">{selectedProblemProfile ? `Solution revision ${selectedProblemProfile.currentRevision}` : "No solution yet"}</span><button className={`star-control ${isStarred(selectedProblem.type, selectedProblem.question.id) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedProblem.type, selectedProblem.question.id)} aria-label={`${isStarred(selectedProblem.type, selectedProblem.question.id) ? "Unstar" : "Star"} ${selectedProblem.question.title}`}>★</button></div><h2 id="solution-profile-title">{selectedProblem.question.title}</h2><p>{selectedProblemProfile?.payload.summary ?? selectedProblem.question.prompt ?? "Finish and finalize an attempt to build this reusable Solution Profile."}</p></header>
+          <div className="profile-tags">{[...new Set([...selectedProblem.question.topics, ...(selectedProblem.question.tags ?? []), ...(selectedProblemProfile?.tags ?? [])])].map((tag) => <span key={tag}>{tag}</span>)}</div>
+          {selectedProblemProfile ? <div className="letter-sections solution-sections">{selectedProblemProfile.payload.sections.map((section) => <section key={section.title}><h3>{section.title}</h3><MarkdownBody source={section.body} /></section>)}</div> : <div className="unpublished-letter"><span className="eyebrow">KNOWLEDGE PROFILE</span><h3>This problem has no finalized solution yet.</h3><p>The matching specialist creates it when a completed attempt is finalized. Past will keep the transcript; this bank page will keep the reusable answer.</p></div>}
+          <section className="attempt-history"><span className="eyebrow">PAST ATTEMPTS</span>{selectedProblemAttempts.length ? selectedProblemAttempts.map((entry) => <button key={entry.id} onClick={() => { setSelectedProblem(null); setSelectedEntry(entry); }}><span>{readableDate(entry.date, true)}</span><strong>{resultLabel(entry.outcome, entry.type)}</strong><small>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "No timer"} · Read case →</small></button>) : <p>No completed attempt is linked yet.</p>}</section>
+          {selectedProblemRevisions.length > 1 && <section className="revision-history"><span className="eyebrow">SOLUTION HISTORY</span><p>{selectedProblemRevisions.length} immutable revisions are linked to past attempts. The profile above is the current revision.</p></section>}
+          {selectedProblemProfile?.payload.references.length ? <section className="profile-references"><span className="eyebrow">REFERENCES CONSULTED</span>{selectedProblemProfile.payload.references.map((reference) => <a key={`${reference.url}-${reference.accessedAt}`} href={reference.url} target="_blank" rel="noreferrer">{reference.title} ↗<small>{reference.accessedAt}</small></a>)}</section> : null}
+          <footer>Interview Arc · {selectedProblem.type}:{selectedProblem.question.id}</footer>
         </article>
       </div>}
     {pipWindow && createPortal(
