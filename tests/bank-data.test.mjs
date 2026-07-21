@@ -69,5 +69,6 @@ test("starts with no mock activity records while preserving the real system-desi
     new URL("../practice/system-design/sessions/2026-07-08-design-tiktok-for-you-feed.md", import.meta.url),
     "utf8",
   );
-  assert.match(artifact, /TikTok/i);
+  assert.match(artifact, /^# Design a TikTok-Style For You Feed$/m);
+  assert.doesNotMatch(artifact, /^# 2026-07-08 System Design:/m);
 });

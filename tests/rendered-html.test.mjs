@@ -65,11 +65,18 @@ test("the Cloudflare build contains the Interview Arc dashboard", async () => {
 });
 
 test("the refined analytics and composer layouts keep their intended grouping", async () => {
-  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const css = await Promise.all([
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/interview-arc-v2.css", import.meta.url), "utf8"),
+  ]).then((stylesheets) => stylesheets.join("\n"));
   const client = await readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8");
   assert.match(css, /\.journey-detail-grid \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
   assert.match(css, /\.session-recipe \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(css, /\.minutes-field \{[^}]*display: flex;[^}]*justify-content: space-between/);
+  assert.match(css, /\.activity-timer \{ min-height: 66px; \}/);
+  assert.match(css, /\.case-title-row \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto;/);
+  assert.doesNotMatch(client, /\{\(entry\.personalNote\?\.trim\(\) \|\| entry\.pinnedNotes\?\.length\) &&/);
+  assert.doesNotMatch(client, /\{\(selectedEntry\.personalNote\?\.trim\(\) \|\| selectedEntry\.pinnedNotes\?\.length\) &&/);
   assert.ok(client.indexOf("CODING LADDER") < client.indexOf("SKILL COVERAGE"));
   assert.ok(client.indexOf("SKILL COVERAGE") < client.indexOf("EFFORT MAP"));
 });
