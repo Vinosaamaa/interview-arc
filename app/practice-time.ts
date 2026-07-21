@@ -20,7 +20,7 @@ export function practiceHourAt(value: number | string | Date) {
   return Number(hour ?? 0);
 }
 
-export function formatPracticeTimestamp(value?: number | string | null, compact = false) {
+export function formatPracticeTimestamp(value?: number | string | null, compact = false, includeTimeZone = true) {
   if (value === undefined || value === null || value === "") return "Not recorded";
   const date = typeof value === "number" ? new Date(value) : new Date(value);
   if (Number.isNaN(date.getTime())) return "Not recorded";
@@ -31,7 +31,7 @@ export function formatPracticeTimestamp(value?: number | string | null, compact 
     ...(compact ? {} : { year: "numeric" as const }),
     hour: "numeric",
     minute: "2-digit",
-    timeZoneName: "short",
+    ...(includeTimeZone ? { timeZoneName: "short" as const } : {}),
   }).format(date);
 }
 

@@ -252,10 +252,47 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   grid-template-rows: 14px 20px 14px;
   align-content: center;
 }
+.activity-time-copy.unstarted {
+  grid-template-rows: auto auto;
+  place-content: center start;
+}
 .activity-time-copy > span,
 .activity-time-copy > strong,
 .activity-time-copy > small { min-width: 0; line-height: 1.15; }
 .activity-time-copy > small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.mock-controls { grid-template-columns: minmax(160px, 1fr) auto auto auto; }
+.mock-controls .activity-timer { min-width: 160px; }
+
+.journey-page > .view-masthead,
+.library-page > .view-masthead { border-bottom: 0; }
+
+.past-control-deck {
+  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 250px;
+  gap: 22px;
+  align-items: stretch;
+}
+.past-toolbar { min-width: 0; margin: 0; }
+.past-filter-rail { width: 100%; align-items: center; }
+.past-filter-rail .bank-icon-tools { margin-left: auto; }
+.past-search-bar { min-width: 0; border-radius: 12px; }
+
+.filter-row.type-control button {
+  border-color: #b8cec8;
+  background: #f1f8f6;
+  color: #365f59;
+}
+.filter-row.type-control button:hover { border-color: var(--primary); background: #e8f5f2; }
+.filter-row.type-control button.active { border-color: var(--primary-deep); background: var(--primary-deep); color: white; }
+.filter-row.progress-control button {
+  border-color: #ccd5ad;
+  background: #f6f8eb;
+  color: #586731;
+}
+.filter-row.progress-control button:hover { border-color: #849a42; background: #f0f5d9; }
+.filter-row.progress-control button.active { border-color: #5d7029; background: #5d7029; color: white; }
 
 .past-type-filter { display: flex; align-items: center; gap: 10px; }
 .past-type-filter > span { color: var(--muted); font-size: .7rem; font-weight: 760; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
@@ -293,7 +330,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .topic-ribbon.expanded .topic-ribbon-columns section button { max-width: none; flex: 0 1 auto; }
 
 .primary-bank-controls { gap: 8px; flex-wrap: wrap; overflow: visible; }
-.primary-bank-controls .progress-control { margin-left: 0; padding-left: 0; border-left: 0; }
+.primary-bank-controls .progress-control { margin-left: 12px; padding-left: 0; border-left: 0; }
 .bank-icon-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .collection-toggle.icon-tool,
 .control-menu.icon-menu > summary { width: 42px; min-width: 42px; height: 42px; min-height: 42px; padding: 0; border-radius: 9px; justify-content: center; position: relative; }
@@ -338,6 +375,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .log-layout { grid-template-columns: 1fr; }
   .log-calendar { position: static; order: -1; }
   .bank-icon-tools { margin-left: 0; }
+  .past-filter-rail .bank-icon-tools { margin-left: auto; }
 }
 
 @media (max-width: 760px) {
@@ -375,13 +413,18 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .problem-ledger-row { padding: 17px 0; }
   .mock-grid { padding: 0 17px 17px; }
   .mock-sheet { min-height: 280px; padding: 20px; }
+  .mock-controls { grid-template-columns: minmax(110px, 1fr) auto auto auto; gap: 6px; }
+  .mock-controls .activity-timer { min-width: 0; }
   .view-masthead { padding-top: 20px; }
   .stat-ledger, .journey-pulse { grid-template-columns: 1fr 1fr; }
   .chart-sheet { border-radius: 12px; }
   .log-day > header { padding: 0 16px; }
   .log-entry-open { padding-inline: 14px; }
   .library-toolbar.compact-toolbar { align-items: stretch; flex-wrap: wrap; }
-  .past-type-filter { width: 100%; align-items: flex-start; flex-direction: column; gap: 7px; }
+  .past-control-deck { grid-template-columns: 1fr; gap: 10px; }
+  .past-search-bar { order: -1; }
+  .past-filter-rail { display: flex; flex-wrap: wrap; }
+  .past-filter-rail .bank-icon-tools { width: auto; margin-left: auto; }
   .library-toolbar.compact-toolbar > strong { margin-left: 0; }
   .problem-bank-list { border-radius: 11px; }
   .problem-bank-entry { padding: 17px 12px; }
@@ -394,6 +437,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .topic-ribbon.expanded .topic-ribbon-columns > section:last-child { border-bottom: 0; }
   .bank-toolbar .primary-bank-controls { overflow: visible; }
   .bank-icon-tools { width: 100%; margin-left: 0; justify-content: flex-end; }
+  .past-filter-rail .bank-icon-tools { width: auto; margin-left: auto; }
   .letter-backdrop { padding: 8px; }
   .case-file-shell { width: 100%; max-height: calc(100vh - 16px); border-radius: 12px; }
   .case-document { padding: 38px 20px 34px; }
@@ -414,6 +458,10 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .today-thesis h1 { font-size: 2.4rem; }
   .today-thesis p { font-size: .88rem; }
   .today-actions > div:last-child { grid-template-columns: 1fr; }
+  .mock-sheet { padding: 14px; }
+  .mock-controls { grid-template-columns: minmax(150px, 1fr) auto auto auto; gap: 4px; }
+  .mock-controls .publication-control { width: 44px; min-width: 44px; padding: 0; overflow: hidden; font-size: 0; }
+  .mock-controls .publication-control > span { font-size: .88rem; }
   .session-sheet-header { grid-template-columns: auto 1fr; }
   .session-progress { grid-column: 2; grid-row: 2; justify-self: start; text-align: left; }
   .session-countdown { grid-row: 3; }

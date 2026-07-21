@@ -74,7 +74,13 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(css, /\.session-recipe \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(css, /\.minutes-field \{[^}]*display: flex;[^}]*justify-content: space-between/);
   assert.match(css, /\.activity-timer \{ min-height: 66px; \}/);
+  assert.match(css, /\.mock-controls \{ grid-template-columns: minmax\(160px, 1fr\) auto auto auto; \}/);
+  assert.match(css, /\.past-control-deck \{[^}]*grid-template-columns: minmax\(0, 1fr\) 250px;/);
   assert.match(css, /\.case-title-row \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto;/);
+  assert.match(client, /left\.type === "system_design" \? -1 : 1/);
+  assert.match(client, /placeholder="Search past…"/);
+  assert.match(client, /setBankFilter\(\(current\) => current === filter \? "all" : filter\)/);
+  assert.doesNotMatch(client, /\["all", "leetcode", "system_design", "behavioral"\]/);
   assert.doesNotMatch(client, /\{\(entry\.personalNote\?\.trim\(\) \|\| entry\.pinnedNotes\?\.length\) &&/);
   assert.doesNotMatch(client, /\{\(selectedEntry\.personalNote\?\.trim\(\) \|\| selectedEntry\.pinnedNotes\?\.length\) &&/);
   assert.ok(client.indexOf("CODING LADDER") < client.indexOf("SKILL COVERAGE"));
