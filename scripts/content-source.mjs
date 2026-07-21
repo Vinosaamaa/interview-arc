@@ -82,6 +82,30 @@ function parseMarkdown(source, relativePath, fallbackType) {
   };
 }
 
+async function hydrateBankSolution(root, question) {
+  if (!question.solutionPath) return question;
+  const parsed = parseMarkdown(
+    await readFile(path.join(root, question.solutionPath), "utf8"),
+    question.solutionPath,
+    "solution",
+  );
+  const summary = parsed.sections.find((section) => /short answer|summary/i.test(section.title))?.body
+    ?? parsed.sections[0]?.body
+    ?? question.prompt;
+  return {
+    ...question,
+    solutionProfile: {
+      schemaVersion: 1,
+      summary,
+      sections: parsed.sections,
+      tags: question.topics ?? [],
+      references: question.url
+        ? [{ title: question.source ?? "Original question", url: question.url, accessedAt: "2026-07-21" }]
+        : [],
+    },
+  };
+}
+
 // Reads every Git-tracked content source and returns the same shape the app
 // consumes: { journals, artifacts, stories, questionBanks }.
 export async function readContent(root) {
@@ -106,8 +130,8 @@ export async function readContent(root) {
       targetMinutes: question.targetMinutes ?? 30,
       active: question.active ?? true,
     })),
-    systemDesign: systemDesignBank.questions,
-    behavioral: behavioralBank.questions,
+    systemDesign: await Promise.all(systemDesignBank.questions.map((question) => hydrateBankSolution(root, question))),
+    behavioral: await Promise.all(behavioralBank.questions.map((question) => hydrateBankSolution(root, question))),
   };
 
   const artifactDirectories = [

@@ -466,6 +466,9 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 
 .activity-picker-heading { min-height: 30px; display: flex; align-items: center; gap: 9px; }
 .activity-picker-heading > span { color: #59635a; font-size: .8rem; font-weight: 730; }
+.activity-picker-progress { width: 50px; height: 50px; margin-left: auto; flex: 0 0 auto; box-shadow: inset 0 0 0 1px rgba(15,95,90,.08); }
+.activity-picker-progress strong { font-size: .72rem; }
+.activity-picker-progress small { font-size: .5rem; }
 .activity-picker-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 9px; align-items: center; }
 .activity-picker-search { min-width: 0; }
 .activity-picker-tools { margin-left: 0; }
@@ -567,6 +570,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .problem-bank-entry { padding: 17px 12px; }
   .banks-masthead-meta { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; }
   .banks-masthead .bank-progress-meter { width: 54px; height: 54px; }
+  .activity-picker-progress { display: block; width: 48px; height: 48px; }
   .topic-ribbon:not(.expanded) .topic-ribbon-columns { display: flex; overflow-x: auto; scrollbar-width: thin; }
   .topic-ribbon:not(.expanded) .topic-ribbon-columns > section { min-width: min(88vw, 520px); border-bottom: 0; }
   .topic-ribbon.expanded .topic-ribbon-columns { grid-template-columns: 1fr; }

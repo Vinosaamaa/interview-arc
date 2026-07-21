@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
   "type": "system_design",
-  "updatedAt": "2026-07-17",
+  "updatedAt": "2026-07-21",
   "questions": [
+    {
+      "id": "design-tiktok-style-for-you-feed",
+      "title": "Design a TikTok-Style For You Feed",
+      "prompt": "Design the personalized short-video feed for a TikTok-like application.",
+      "source": "Interview Arc",
+      "complexity": "very_hard",
+      "solutionReference": true,
+      "solutionPath": "practice/system-design/solutions/design-tiktok-for-you-feed.md",
+      "topics": [
+        "recommendation systems",
+        "feed ranking",
+        "event streaming",
+        "media delivery",
+        "machine learning"
+      ],
+      "targetMinutes": 90,
+      "active": true
+    },
     {
       "id": "design-url-shortening-service-like-tinyurl",
       "title": "Design a URL Shortening service like TinyURL",

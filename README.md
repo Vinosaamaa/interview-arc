@@ -180,6 +180,10 @@ The website reads three versioned banks:
 
 The system-design bank currently mirrors the 55 questions listed by SystemDesign.io. Each stored question URL leads to that site's current curated solution references; the system-design task reviews those references before starting the corresponding mock.
 
+Reusable first-party answers may live under a bank question's `solutionPath`.
+They appear as the Problem Bank Solution Profile and remain separate from dated
+attempt transcripts and Past records.
+
 The behavioral bank mirrors the 74 questions listed by Bugfree.ai. Each entry stores its canonical answer page, category/focus topics, expected answer format, frequency, and whether the reference may require sign-in. The behavioral task consults that page when the user asks for a solution and reports the exact URL when the site's answer cannot be accessed.
 
 A session defaults to six coding problems, one system-design question, and one behavioral question, producing a six-hour countdown. Before work begins, the user may change any category count; the countdown is recalculated at 40 minutes per coding problem and 60 minutes per system-design or behavioral question. The user may add another session or a standalone activity. Every activity also has a compact elapsed-time stopwatch. The same canonical question can appear only once on a Pacific practice day, regardless of whether it was selected through a full session, the standalone picker, the Problem Bank, or a pasted URL.

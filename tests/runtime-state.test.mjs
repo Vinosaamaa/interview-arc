@@ -75,6 +75,13 @@ test("result flags stay separate from timer completion and publication readiness
   assert.match(mutationRoute, /Start the .* before finishing it/);
 });
 
+test("the clean-start release cannot replay stale mock browser queues", async () => {
+  const liveSync = await readFile(new URL("../app/live-sync.ts", import.meta.url), "utf8");
+  assert.match(liveSync, /interview-arc-draft-v3-/);
+  assert.match(liveSync, /interview-arc-queue-v2-/);
+  assert.match(liveSync, /startsWith\("interview-arc-queue-"\)/);
+});
+
 test("daily checkpoint guard recognizes only journal-owned changes", () => {
   assert.equal(journalBranch("2026-07-20"), "journal/2026-07-20");
   assert.throws(() => journalBranch("July-20"), /ISO date/);
@@ -162,6 +169,8 @@ test("durable publishing keeps transcripts, review, notes, and four-day walkthro
   const durableStore = await readFile(new URL("../db/durable-practice.ts", import.meta.url), "utf8");
   assert.match(durableStore, /Behavioral Solution Profiles cannot contain a transcript/);
   assert.match(durableStore, /Behavioral Solution Profiles require .*preferred personal answer/);
+  assert.match(durableStore, /contentBank/);
+  assert.match(durableStore, /canonicalQuestion\?\.solutionProfile/);
 });
 
 test("private R2 audio stays owner-authorized and seekable", async () => {

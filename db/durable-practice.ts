@@ -4,6 +4,7 @@ import {
   activityAudioClips,
   activityFinalizations,
   activitySolutionLinks,
+  contentBank,
   ownerBankQuestions,
   practiceNotes,
   practiceTranscriptTurns,
@@ -537,7 +538,8 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
 
 export async function readProblemSolutionProfile(ownerId: string, specialty: Specialty, questionId: string) {
   const db = getDb();
-  const [profiles, revisions] = await Promise.all([
+  const category = specialty === "system_design" ? "systemDesign" : specialty;
+  const [profiles, revisions, canonicalQuestions] = await Promise.all([
     db.select().from(problemSolutionProfiles).where(and(
       eq(problemSolutionProfiles.ownerId, ownerId),
       eq(problemSolutionProfiles.specialty, specialty),
@@ -552,8 +554,28 @@ export async function readProblemSolutionProfile(ownerId: string, specialty: Spe
       eq(problemSolutionRevisions.specialty, specialty),
       eq(problemSolutionRevisions.questionId, questionId),
     )).orderBy(desc(problemSolutionRevisions.revision)),
+    db.select({ payload: contentBank.payload }).from(contentBank).where(and(
+      eq(contentBank.category, category),
+      eq(contentBank.id, questionId),
+    )),
   ]);
-  return { profile: profiles[0] ?? null, revisions };
+  const canonicalQuestion = canonicalQuestions[0]?.payload as {
+    title?: string;
+    solutionProfile?: SpecialistFinalization["solutionProfile"];
+  } | undefined;
+  const canonicalProfile = canonicalQuestion?.solutionProfile
+    ? {
+        ownerId: "shared",
+        specialty,
+        questionId,
+        title: canonicalQuestion.title ?? questionId,
+        currentRevision: 1,
+        tags: canonicalQuestion.solutionProfile.tags,
+        payload: canonicalQuestion.solutionProfile,
+        updatedAt: 0,
+      }
+    : null;
+  return { profile: profiles[0] ?? canonicalProfile, revisions };
 }
 
 export async function readDurablePracticeSummary(ownerId: string, _activityIds: string[], today: string) {

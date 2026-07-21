@@ -65,6 +65,14 @@ export type QuestionBankItem = {
   acceptanceRate?: number;
   source?: string;
   solutionReference?: boolean;
+  solutionPath?: string;
+  solutionProfile?: {
+    schemaVersion: 1;
+    summary: string;
+    sections: Array<{ title: string; body: string }>;
+    tags: string[];
+    references: Array<{ title: string; url: string; accessedAt: string }>;
+  };
   frequency?: "low" | "medium" | "high";
   answerFormat?: "SIMPLE" | "STAR" | "STARL" | "PPF" | "IFV";
   referenceAccess?: "public" | "may_require_sign_in";

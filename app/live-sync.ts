@@ -93,10 +93,10 @@ export type Mutation =
 const RETRY_INTERVAL_MS = 15000;
 
 function draftKey(date: string) {
-  return `interview-arc-draft-v2-${date}`;
+  return `interview-arc-draft-v3-${date}`;
 }
 function queueKey(date: string) {
-  return `interview-arc-queue-v1-${date}`;
+  return `interview-arc-queue-v2-${date}`;
 }
 
 function timerToDraft(timer: ServerTimer, offset: number): TimerDraft {
@@ -294,7 +294,8 @@ export function useLiveState(date: string): LiveStateController {
     let serverApplied = false;
     for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
       const key = window.localStorage.key(index);
-      if (key?.startsWith("interview-arc-draft-") && key !== draftKey(date)) {
+      if ((key?.startsWith("interview-arc-draft-") && key !== draftKey(date))
+        || (key?.startsWith("interview-arc-queue-") && key !== queueKey(date))) {
         window.localStorage.removeItem(key);
       }
     }
