@@ -18,24 +18,38 @@ Do not treat the second flow as a successful attempt. Choose the record kind fro
 
 ## Session Commands
 
-### Start A New Session
+### Start Or Resume A Problem
 
-When the user says `Start a new session` or clearly begins one problem:
+When the user says `Start a new session`, clearly begins one problem, asks about
+"the current problem," or asks for the solution to the focused coding activity:
 
-1. Reuse the activity ID from `data/daily/YYYY-MM-DD.json` when the problem is already planned; otherwise create a stable lowercase ID.
-2. Identify `source: daily` or `extra`.
-3. Identify `record_kind: attempt` or `walkthrough` from the user's intent.
-4. Create or acknowledge a draft under `attempts/` when substantive work begins.
+1. Prefer `get_today_practice` through the Interview Arc MCP bridge and use its
+   focused coding activity. Ask which problem the user means only when there is
+   no focused coding activity and the request itself is ambiguous.
+2. Reuse that dashboard `activity_id`; otherwise reuse the activity ID from the
+   matching daily manifest when the problem is already planned, or create a
+   stable lowercase ID.
+3. Identify `source: daily` or `extra`.
+4. Identify `record_kind: attempt` or `walkthrough` from the user's intent.
+5. Create or acknowledge a draft under `attempts/` when substantive work begins.
 
-Only interaction after this boundary belongs to the optional session transcript.
+The explicit command remains available as an override, but it is not required
+for every problem. The focused dashboard activity or a clearly named problem is
+the boundary. Only interaction after that boundary belongs to the optional
+session transcript.
 
 ### Publish This Session
 
 When the user says `Publish this session`:
 
-1. Finalize `attempts/YYYY-MM-DD-<problem-id>.md` using the LeetCode log contract.
+1. Read the dashboard activity and use the Pacific completion date reported by
+   the bridge. Finalize `attempts/YYYY-MM-DD-<problem-id>.md` using that date and
+   the LeetCode log contract.
 2. Add only facts observed in this task or explicitly supplied by the user/website export.
-3. Update the matching activity in `../../data/daily/YYYY-MM-DD.json` with known durable fields and `artifactPath`.
+3. Preserve the dashboard `session_id`, exact Pacific start/end timestamps, and
+   elapsed time. Update the matching activity in
+   `../../data/daily/YYYY-MM-DD.json` with known durable fields and
+   `artifactPath`.
 4. Run `pnpm journal:checkpoint -- --date YYYY-MM-DD --area leetcode` from the repository root. This is the only Git commit this task may initiate; the guarded helper creates or reuses the daily branch and refuses unrelated dirty code.
 5. After the checkpoint succeeds, call `mark_activities_published` with the artifact path when the MCP bridge is available. Do not push, open a pull request, or deploy. The main task does that once for the day.
 
@@ -43,16 +57,37 @@ LeetCode uses a structured postmortem by default. Preserve a full two-sided tran
 
 ### Publish Today's LeetCode
 
-When the user says `Publish today's LeetCode` or `Publish the LeetCode session`, perform one end-of-day batch:
+When the user says `Publish today's LeetCode` or `Publish the LeetCode session`,
+perform one batch across every ready coding activity. The command may be issued
+after midnight and may contain work from more than one Pacific calendar day:
 
-1. Prefer the configured Interview Arc MCP tool `get_publication_queue` for the requested date. It reads the user's authenticated D1 state directly. If the MCP bridge is unavailable, look for `../../data/drafts/journal-YYYY-MM-DD-draft.json`, or use the website export attached or otherwise explicitly provided by the user.
-2. Read the ready activity IDs, outcomes, timers, publication states, personal notes, extra activities, and the matching daily manifest.
+1. Prefer the configured Interview Arc MCP tool `get_publication_queue` without
+   forcing a date. It reads the user's authenticated D1 state directly and
+   groups ready activities by Pacific completion date. If the MCP bridge is
+   unavailable, use every relevant `../../data/drafts/journal-YYYY-MM-DD-draft.json`
+   export attached or otherwise explicitly provided by the user.
+2. Read the ready activity IDs, outcomes, timers, exact start/end timestamps,
+   session IDs, publication states, personal notes, extra activities, and each
+   matching daily manifest.
 3. Select every queued LeetCode activity, including locally added activities that do not yet exist in the daily manifest.
 4. Preserve each website-provided stopwatch time and result. Do not use chat timestamps as a timer and do not upgrade a failed or unset result to solved. A failed activity may be ready and should receive a postmortem.
 5. For every selected problem, generate an original coaching solution or walkthrough, reference code, time and space complexity, edge cases, and key lesson. Do this even when the user never discussed that problem in this task.
-6. Write one artifact per problem under `attempts/`, update or add the matching daily activity, and point it to `artifactPath`.
-7. After every artifact file exists, run `pnpm journal:checkpoint -- --date YYYY-MM-DD --area leetcode` from the repository root. The helper makes one local checkpoint containing the batch and daily manifest; it must finish before D1 is marked.
-8. Call `mark_activities_published` with each activity ID and repository-relative artifact path. If MCP is unavailable, leave publication state for the website task to reconcile from the artifact. Do not commit the local draft export. Do not push, open a pull request, or deploy; the main task handles the daily journal integration.
+6. Assign each activity to the Pacific calendar date containing its completion
+   timestamp. A problem begun before midnight and finished after midnight belongs
+   to the new date. Preserve its original timestamps and `session_id`; one
+   dashboard session may therefore span multiple daily manifests without losing
+   session membership.
+7. Write one artifact per problem under `attempts/`, update or add the matching
+   daily activity for that completion date, and point it to `artifactPath`.
+8. Process the date groups sequentially. After every artifact for one date
+   exists, run `pnpm journal:checkpoint -- --date YYYY-MM-DD --area leetcode`
+   from the repository root. The helper creates or reuses that date's local
+   journal branch and must finish before those activities are marked in D1.
+9. Call `mark_activities_published` for that date group with each activity ID and
+   repository-relative artifact path, then continue to the next date group. If
+   MCP is unavailable, leave publication state for the website task to reconcile
+   from the artifact. Do not commit local draft exports. Do not push, open a pull
+   request, or deploy; the main task handles daily journal integration.
 
 Never run raw branch-switching or commit commands in this task. Use only the checkpoint helper. If it reports unrelated uncommitted work, stop publishing and ask the coordinator to protect or finish that work; do not stash, discard, or absorb it into the journal commit.
 

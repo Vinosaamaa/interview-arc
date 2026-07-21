@@ -1,11 +1,14 @@
-import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { practiceDateAt } from "../app/practice-time";
 import { getDb } from "./index";
 import {
   activityNotes,
   extraActivities,
   liveSessions,
   outcomes,
+  practiceFocus,
   publicationStatuses,
+  timerIntervals,
   timers,
   type ExtraActivityRow,
   type LiveSessionRow,
@@ -21,8 +24,10 @@ export type PublicationStatusValue = "draft" | "ready" | "published";
 // the client corrects for clock skew using `serverNow` from the state response.
 export type TimerState = {
   accumulatedSeconds: number;
+  startedAt: number | null;
   runningSince: number | null;
   completed: boolean;
+  completedAt: number | null;
   revision: number;
 };
 
@@ -35,45 +40,52 @@ export type LiveState = {
   notes: Record<string, string>;
   extraActivities: unknown[];
   sessions: unknown[];
+  focusedActivityId: string | null;
+  focusedSessionId: string | null;
+  focusedAt: number | null;
 };
 
 type Db = ReturnType<typeof getDb>;
 
 function toTimerState(row: {
   accumulatedSeconds: number;
+  startedAt: number | null;
   runningSince: number | null;
   completed: boolean;
+  completedAt: number | null;
   revision: number;
 }): TimerState {
   return {
     accumulatedSeconds: row.accumulatedSeconds,
+    startedAt: row.startedAt,
     runningSince: row.runningSince,
     completed: row.completed,
+    completedAt: row.completedAt,
     revision: row.revision,
   };
 }
 
-export async function readLiveState(ownerId: string, date: string): Promise<LiveState> {
+type ActivityPayload = { id: string; date: string; sessionId?: string } & Record<string, unknown>;
+type SessionPayload = { id: string; date?: string; activityIds: string[] } & Record<string, unknown>;
+
+function timerBelongsToPracticeDate(timer: TimerState | undefined, date: string) {
+  return Boolean(timer?.completedAt && practiceDateAt(timer.completedAt) === date);
+}
+
+export async function readLiveState(
+  ownerId: string,
+  date: string,
+  options: { includeAll?: boolean } = {},
+): Promise<LiveState> {
   const db = getDb();
-  const [timerRows, outcomeRows, publicationRows, noteRows, extraRows, sessionRows] = await Promise.all([
+  const [timerRows, outcomeRows, publicationRows, noteRows, extraRows, sessionRows, focusRows] = await Promise.all([
     db.select().from(timers).where(eq(timers.ownerId, ownerId)),
     db.select().from(outcomes).where(eq(outcomes.ownerId, ownerId)),
-    db
-      .select()
-      .from(publicationStatuses)
-      .where(and(eq(publicationStatuses.ownerId, ownerId), eq(publicationStatuses.date, date))),
-    db
-      .select()
-      .from(activityNotes)
-      .where(and(eq(activityNotes.ownerId, ownerId), eq(activityNotes.date, date))),
-    db
-      .select()
-      .from(extraActivities)
-      .where(and(eq(extraActivities.ownerId, ownerId), eq(extraActivities.date, date))),
-    db
-      .select()
-      .from(liveSessions)
-      .where(and(eq(liveSessions.ownerId, ownerId), eq(liveSessions.date, date))),
+    db.select().from(publicationStatuses).where(eq(publicationStatuses.ownerId, ownerId)),
+    db.select().from(activityNotes).where(eq(activityNotes.ownerId, ownerId)),
+    db.select().from(extraActivities).where(eq(extraActivities.ownerId, ownerId)),
+    db.select().from(liveSessions).where(eq(liveSessions.ownerId, ownerId)),
+    db.select().from(practiceFocus).where(eq(practiceFocus.ownerId, ownerId)),
   ]);
 
   const activityTimers: Record<string, TimerState> = {};
@@ -82,14 +94,45 @@ export async function readLiveState(ownerId: string, date: string): Promise<Live
     (row.kind === "session" ? sessionTimers : activityTimers)[row.subjectId] = toTimerState(row);
   }
 
+  const allSessions = sessionRows.map((row: LiveSessionRow) => row.payload as SessionPayload);
+  const activeSessionIds = new Set(allSessions.filter((session) => {
+    const timer = sessionTimers[session.id];
+    return Boolean(timer?.startedAt && !timer.completed);
+  }).map((session) => session.id));
+  const sessionForActivity = new Map<string, string>();
+  allSessions.forEach((session) => session.activityIds.forEach((activityId) => sessionForActivity.set(activityId, session.id)));
+
+  const visibleSessions = options.includeAll ? allSessions : allSessions.filter((session) => {
+    const timer = sessionTimers[session.id];
+    return session.date === date || timerBelongsToPracticeDate(timer, date) || Boolean(timer?.startedAt && !timer.completed);
+  });
+  const allActivities = extraRows.map((row: ExtraActivityRow) => row.payload as ActivityPayload);
+  const visibleActivities = options.includeAll ? allActivities : allActivities.filter((activity) => {
+    const timer = activityTimers[activity.id];
+    const sessionId = activity.sessionId ?? sessionForActivity.get(activity.id);
+    return activity.date === date
+      || timerBelongsToPracticeDate(timer, date)
+      || Boolean(timer?.startedAt && !timer.completed)
+      || Boolean(sessionId && activeSessionIds.has(sessionId));
+  });
+  const visibleActivityIds = new Set(visibleActivities.map((activity) => activity.id));
+
   const outcomeMap: Record<string, OutcomeValue> = {};
   for (const row of outcomeRows) outcomeMap[row.activityId] = row.outcome as OutcomeValue;
 
   const publicationMap: Record<string, PublicationStatusValue> = {};
-  for (const row of publicationRows) publicationMap[row.activityId] = row.status as PublicationStatusValue;
+  for (const row of publicationRows) {
+    if (options.includeAll || row.date === date || visibleActivityIds.has(row.activityId)) {
+      publicationMap[row.activityId] = row.status as PublicationStatusValue;
+    }
+  }
 
   const noteMap: Record<string, string> = {};
-  for (const row of noteRows) noteMap[row.activityId] = row.note;
+  for (const row of noteRows) {
+    if (options.includeAll || row.date === date || visibleActivityIds.has(row.activityId)) noteMap[row.activityId] = row.note;
+  }
+
+  const focus = focusRows[0];
 
   return {
     serverNow: Date.now(),
@@ -98,8 +141,11 @@ export async function readLiveState(ownerId: string, date: string): Promise<Live
     outcomes: outcomeMap,
     publicationStatuses: publicationMap,
     notes: noteMap,
-    extraActivities: extraRows.map((row: ExtraActivityRow) => row.payload),
-    sessions: sessionRows.map((row: LiveSessionRow) => row.payload),
+    extraActivities: visibleActivities,
+    sessions: visibleSessions,
+    focusedActivityId: focus?.activityId ?? null,
+    focusedSessionId: focus?.sessionId ?? null,
+    focusedAt: focus?.focusedAt ?? null,
   };
 }
 
@@ -111,18 +157,72 @@ async function loadTimer(db: Db, ownerId: string, subjectId: string, kind: Timer
   return rows[0];
 }
 
+async function setPracticeFocus(
+  ownerId: string,
+  activityId: string | null,
+  sessionId: string | null,
+  nowMs: number,
+) {
+  const db = getDb();
+  await db
+    .insert(practiceFocus)
+    .values({ ownerId, activityId, sessionId, focusedAt: nowMs, updatedAt: nowMs })
+    .onConflictDoUpdate({
+      target: practiceFocus.ownerId,
+      set: { activityId, sessionId, focusedAt: nowMs, updatedAt: nowMs },
+    });
+}
+
+async function focusSession(ownerId: string, sessionId: string, activityIds: string[], nowMs: number) {
+  const db = getDb();
+  const rows = await db.select().from(practiceFocus).where(eq(practiceFocus.ownerId, ownerId));
+  const currentActivityId = rows[0]?.activityId;
+  await setPracticeFocus(
+    ownerId,
+    currentActivityId && activityIds.includes(currentActivityId) ? currentActivityId : null,
+    sessionId,
+    nowMs,
+  );
+}
+
+async function openTimerInterval(ownerId: string, subjectId: string, kind: TimerKind, nowMs: number) {
+  const db = getDb();
+  await db.insert(timerIntervals).values({ ownerId, subjectId, kind, startedAt: nowMs }).onConflictDoNothing();
+}
+
+async function closeTimerInterval(ownerId: string, subjectId: string, kind: TimerKind, nowMs: number) {
+  const db = getDb();
+  await db
+    .update(timerIntervals)
+    .set({ endedAt: nowMs })
+    .where(and(
+      eq(timerIntervals.ownerId, ownerId),
+      eq(timerIntervals.subjectId, subjectId),
+      eq(timerIntervals.kind, kind),
+      isNull(timerIntervals.endedAt),
+    ));
+}
+
 export async function applyTimerAction(
   ownerId: string,
   subjectId: string,
   kind: TimerKind,
   action: TimerAction,
   nowMs: number,
+  options: { sessionId?: string | null; activityIds?: string[] } = {},
 ): Promise<TimerState> {
   const db = getDb();
   const existing = await loadTimer(db, ownerId, subjectId, kind);
 
   // Finished timers are locked permanently and never resume.
   if (existing?.completed) return toTimerState(existing);
+
+  // A duplicated start from another surface keeps the original segment intact.
+  if (action === "start" && existing?.runningSince) {
+    if (kind === "activity") await setPracticeFocus(ownerId, subjectId, options.sessionId ?? null, nowMs);
+    else await setPracticeFocus(ownerId, null, subjectId, nowMs);
+    return toTimerState(existing);
+  }
 
   const next = nextTimerState(existing, action, nowMs);
 
@@ -131,6 +231,41 @@ export async function applyTimerAction(
     // the pop-out window can never both drive two activity clocks at once.
     if (kind === "activity") {
       await pauseOtherActivityTimers(ownerId, subjectId, nowMs);
+      if (!options.sessionId) await pauseAllSessionTimers(ownerId, nowMs);
+      await setPracticeFocus(ownerId, subjectId, options.sessionId ?? null, nowMs);
+    } else {
+      await pauseOtherSessionTimers(ownerId, subjectId, nowMs);
+      await pauseActivityTimersOutside(ownerId, options.activityIds ?? [], nowMs);
+      await focusSession(ownerId, subjectId, options.activityIds ?? [], nowMs);
+    }
+    await openTimerInterval(ownerId, subjectId, kind, nowMs);
+    await db
+      .insert(timers)
+      .values({
+        ownerId,
+        subjectId,
+        kind,
+        accumulatedSeconds: next.accumulatedSeconds,
+        startedAt: existing?.startedAt ?? nowMs,
+        runningSince: next.runningSince,
+        completed: false,
+        revision: next.revision,
+        updatedAt: nowMs,
+      })
+      .onConflictDoUpdate({
+        target: [timers.ownerId, timers.subjectId, timers.kind],
+        set: {
+          startedAt: existing?.startedAt ?? nowMs,
+          runningSince: next.runningSince,
+          completed: false,
+          revision: next.revision,
+          updatedAt: nowMs,
+        },
+      });
+  } else {
+    await closeTimerInterval(ownerId, subjectId, kind, nowMs);
+    if (kind === "session" && options.activityIds?.length) {
+      await pauseActivityTimers(ownerId, options.activityIds, nowMs);
     }
     await db
       .insert(timers)
@@ -139,23 +274,7 @@ export async function applyTimerAction(
         subjectId,
         kind,
         accumulatedSeconds: next.accumulatedSeconds,
-        runningSince: next.runningSince,
-        completed: false,
-        revision: next.revision,
-        updatedAt: nowMs,
-      })
-      .onConflictDoUpdate({
-        target: [timers.ownerId, timers.subjectId, timers.kind],
-        set: { runningSince: next.runningSince, completed: false, revision: next.revision, updatedAt: nowMs },
-      });
-  } else {
-    await db
-      .insert(timers)
-      .values({
-        ownerId,
-        subjectId,
-        kind,
-        accumulatedSeconds: next.accumulatedSeconds,
+        startedAt: existing?.startedAt ?? (action === "finish" ? nowMs : null),
         runningSince: null,
         completed: next.completed,
         completedAt: next.completed ? nowMs : null,
@@ -166,6 +285,7 @@ export async function applyTimerAction(
         target: [timers.ownerId, timers.subjectId, timers.kind],
         set: {
           accumulatedSeconds: next.accumulatedSeconds,
+          startedAt: existing?.startedAt ?? (action === "finish" ? nowMs : null),
           runningSince: null,
           completed: next.completed,
           completedAt: next.completed ? nowMs : null,
@@ -194,6 +314,7 @@ export async function pauseOtherActivityTimers(ownerId: string, exceptSubjectId:
     );
   for (const row of running) {
     const folded = foldElapsed(row.accumulatedSeconds, row.runningSince, nowMs);
+    await closeTimerInterval(ownerId, row.subjectId, "activity", nowMs);
     await db
       .update(timers)
       .set({ accumulatedSeconds: folded, runningSince: null, revision: row.revision + 1, updatedAt: nowMs })
@@ -203,7 +324,86 @@ export async function pauseOtherActivityTimers(ownerId: string, exceptSubjectId:
   }
 }
 
-export async function setOutcome(ownerId: string, activityId: string, outcome: OutcomeValue | null, nowMs: number) {
+export async function pauseOtherSessionTimers(ownerId: string, exceptSubjectId: string, nowMs: number) {
+  const db = getDb();
+  const running = await db
+    .select()
+    .from(timers)
+    .where(and(
+      eq(timers.ownerId, ownerId),
+      eq(timers.kind, "session"),
+      isNotNull(timers.runningSince),
+      ne(timers.subjectId, exceptSubjectId),
+    ));
+  for (const row of running) {
+    const folded = foldElapsed(row.accumulatedSeconds, row.runningSince, nowMs);
+    await closeTimerInterval(ownerId, row.subjectId, "session", nowMs);
+    await db
+      .update(timers)
+      .set({ accumulatedSeconds: folded, runningSince: null, revision: row.revision + 1, updatedAt: nowMs })
+      .where(and(eq(timers.ownerId, ownerId), eq(timers.subjectId, row.subjectId), eq(timers.kind, "session")));
+  }
+}
+
+export async function pauseAllSessionTimers(ownerId: string, nowMs: number) {
+  const db = getDb();
+  const running = await db
+    .select()
+    .from(timers)
+    .where(and(eq(timers.ownerId, ownerId), eq(timers.kind, "session"), isNotNull(timers.runningSince)));
+  for (const row of running) {
+    const folded = foldElapsed(row.accumulatedSeconds, row.runningSince, nowMs);
+    await closeTimerInterval(ownerId, row.subjectId, "session", nowMs);
+    await db
+      .update(timers)
+      .set({ accumulatedSeconds: folded, runningSince: null, revision: row.revision + 1, updatedAt: nowMs })
+      .where(and(eq(timers.ownerId, ownerId), eq(timers.subjectId, row.subjectId), eq(timers.kind, "session")));
+  }
+}
+
+export async function pauseActivityTimers(ownerId: string, activityIds: string[], nowMs: number) {
+  const db = getDb();
+  const allowed = new Set(activityIds);
+  const running = await db
+    .select()
+    .from(timers)
+    .where(and(eq(timers.ownerId, ownerId), eq(timers.kind, "activity"), isNotNull(timers.runningSince)));
+  for (const row of running) {
+    if (!allowed.has(row.subjectId)) continue;
+    const folded = foldElapsed(row.accumulatedSeconds, row.runningSince, nowMs);
+    await closeTimerInterval(ownerId, row.subjectId, "activity", nowMs);
+    await db
+      .update(timers)
+      .set({ accumulatedSeconds: folded, runningSince: null, revision: row.revision + 1, updatedAt: nowMs })
+      .where(and(eq(timers.ownerId, ownerId), eq(timers.subjectId, row.subjectId), eq(timers.kind, "activity")));
+  }
+}
+
+export async function pauseActivityTimersOutside(ownerId: string, activityIds: string[], nowMs: number) {
+  const db = getDb();
+  const allowed = new Set(activityIds);
+  const running = await db
+    .select()
+    .from(timers)
+    .where(and(eq(timers.ownerId, ownerId), eq(timers.kind, "activity"), isNotNull(timers.runningSince)));
+  for (const row of running) {
+    if (allowed.has(row.subjectId)) continue;
+    const folded = foldElapsed(row.accumulatedSeconds, row.runningSince, nowMs);
+    await closeTimerInterval(ownerId, row.subjectId, "activity", nowMs);
+    await db
+      .update(timers)
+      .set({ accumulatedSeconds: folded, runningSince: null, revision: row.revision + 1, updatedAt: nowMs })
+      .where(and(eq(timers.ownerId, ownerId), eq(timers.subjectId, row.subjectId), eq(timers.kind, "activity")));
+  }
+}
+
+export async function setOutcome(
+  ownerId: string,
+  activityId: string,
+  outcome: OutcomeValue | null,
+  nowMs: number,
+  sessionId?: string | null,
+) {
   const db = getDb();
   if (!outcome) {
     await db.delete(outcomes).where(and(eq(outcomes.ownerId, ownerId), eq(outcomes.activityId, activityId)));
@@ -216,6 +416,8 @@ export async function setOutcome(ownerId: string, activityId: string, outcome: O
       target: [outcomes.ownerId, outcomes.activityId],
       set: { outcome, updatedAt: nowMs },
     });
+  await setPracticeFocus(ownerId, activityId, sessionId ?? null, nowMs);
+  await applyTimerAction(ownerId, activityId, "activity", "finish", nowMs);
 }
 
 export async function setPublicationStatus(
@@ -291,6 +493,11 @@ export async function removeExtraActivity(ownerId: string, id: string) {
   await db.delete(publicationStatuses).where(and(eq(publicationStatuses.ownerId, ownerId), eq(publicationStatuses.activityId, id)));
   await db.delete(activityNotes).where(and(eq(activityNotes.ownerId, ownerId), eq(activityNotes.activityId, id)));
   await db.delete(timers).where(and(eq(timers.ownerId, ownerId), eq(timers.subjectId, id), eq(timers.kind, "activity")));
+  await db.delete(timerIntervals).where(and(eq(timerIntervals.ownerId, ownerId), eq(timerIntervals.subjectId, id), eq(timerIntervals.kind, "activity")));
+  await db
+    .update(practiceFocus)
+    .set({ activityId: null, updatedAt: Date.now() })
+    .where(and(eq(practiceFocus.ownerId, ownerId), eq(practiceFocus.activityId, id)));
 }
 
 export async function upsertLiveSession(
@@ -312,6 +519,11 @@ export async function removeLiveSession(ownerId: string, id: string, activityIds
   const db = getDb();
   await db.delete(liveSessions).where(and(eq(liveSessions.ownerId, ownerId), eq(liveSessions.id, id)));
   await db.delete(timers).where(and(eq(timers.ownerId, ownerId), eq(timers.subjectId, id), eq(timers.kind, "session")));
+  await db.delete(timerIntervals).where(and(eq(timerIntervals.ownerId, ownerId), eq(timerIntervals.subjectId, id), eq(timerIntervals.kind, "session")));
+  await db
+    .update(practiceFocus)
+    .set({ sessionId: null, updatedAt: Date.now() })
+    .where(and(eq(practiceFocus.ownerId, ownerId), eq(practiceFocus.sessionId, id)));
   for (const activityId of activityIds) {
     await removeExtraActivity(ownerId, activityId);
   }

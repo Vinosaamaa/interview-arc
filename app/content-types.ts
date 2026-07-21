@@ -12,6 +12,7 @@ export type JournalActivity = {
   url?: string;
   prompt?: string;
   allocatedSeconds: number;
+  sessionId?: string;
   timerGroupId?: string;
   timingSource: "website" | "manual" | "unknown";
   startedAt?: string;
@@ -33,6 +34,7 @@ export type TimerGroup = {
 
 export type PracticeSession = {
   id: string;
+  date?: string;
   label: string;
   source: "daily" | "extra";
   allocatedSeconds: number;

@@ -1086,6 +1086,58 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .music-playlist-card li > div a:hover { color: #344037; text-decoration: underline; text-underline-offset: 3px; }
 .music-playlist-card > footer { margin-top: 8px; padding: 10px 3px 1px; border-top: 1px solid #e4e8e1; color: #8a938c; font-size: .59rem; }
 
+.orchestrator-rail {
+  margin: 22px 0 30px;
+  min-height: 126px;
+  padding: 19px 22px;
+  border: 1px solid #cfd7ca;
+  border-left: 5px solid #a7ba45;
+  border-radius: 18px;
+  background: linear-gradient(112deg, rgba(243, 247, 232, .96), rgba(250, 251, 247, .92) 56%, rgba(232, 238, 229, .88));
+  display: grid;
+  grid-template-columns: 54px minmax(260px, 1.4fr) auto minmax(290px, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  box-shadow: 0 14px 34px rgba(52, 67, 47, .07);
+}
+.orchestrator-rail.empty { grid-template-columns: 54px 1fr; border-left-color: #ccd3c8; }
+.orchestrator-signal { display: grid; place-items: center; gap: 7px; color: #7e897f; font-family: var(--font-geist-mono); font-size: .7rem; letter-spacing: .15em; }
+.orchestrator-signal > span { width: 18px; height: 18px; border: 5px solid #e1e7dd; border-radius: 50%; background: #aab3aa; }
+.orchestrator-signal > span.live { border-color: #dff28f; background: #6f8421; box-shadow: 0 0 0 7px rgba(179, 204, 72, .14); animation: orchestratorPulse 1.8s ease-in-out infinite; }
+.orchestrator-focus { min-width: 0; display: flex; align-items: center; gap: 14px; }
+.orchestrator-focus > div { min-width: 0; display: grid; gap: 4px; }
+.orchestrator-focus small { color: #778079; font-size: .75rem; font-weight: 720; text-transform: uppercase; letter-spacing: .06em; }
+.orchestrator-focus strong { overflow: hidden; color: #26332b; font-family: var(--font-editorial); font-size: 1.25rem; text-overflow: ellipsis; white-space: nowrap; }
+.orchestrator-focus > div > span { color: #738078; font-size: .78rem; }
+.orchestrator-clock { min-width: 120px; padding-left: 18px; border-left: 1px solid #d8ded3; display: grid; gap: 2px; }
+.orchestrator-clock span, .orchestrator-clock small { color: #818a82; font-size: .7rem; }
+.orchestrator-clock strong { color: #354238; font-family: var(--font-geist-mono); font-size: 1.25rem; }
+.orchestrator-lifecycle { display: grid; grid-template-columns: auto 1fr auto 1fr auto 1fr auto; align-items: center; gap: 7px; }
+.orchestrator-lifecycle i { color: #9aa29b; font-size: .68rem; font-style: normal; font-weight: 760; white-space: nowrap; }
+.orchestrator-lifecycle i.done { color: #536326; }
+.orchestrator-lifecycle b { height: 2px; background: #d5dbd2; }
+.orchestrator-rail > a { color: #4f5f31; font-size: .75rem; font-weight: 780; text-decoration: none; white-space: nowrap; }
+.orchestrator-empty { display: grid; gap: 4px; }
+.orchestrator-empty strong { font-family: var(--font-editorial); font-size: 1.15rem; }
+.orchestrator-empty span { color: #788179; font-size: .8rem; }
+.activity-time-copy small { max-width: 210px; color: #899188; font-size: .7rem; line-height: 1.3; }
+.entry-time-range { color: #647266 !important; font-family: var(--font-geist-mono); font-size: .72rem !important; font-weight: 690; }
+.rhythm-bars, .session-rollups { display: grid; gap: 13px; }
+.rhythm-bars > div { display: grid; grid-template-columns: 80px 1fr 26px 64px; align-items: center; gap: 10px; }
+.rhythm-bars span, .rhythm-bars small { color: #758078; font-size: .72rem; }
+.rhythm-bars i, .session-rollups i { height: 8px; overflow: hidden; border-radius: 999px; background: #e7ebe3; }
+.rhythm-bars i b { height: 100%; border-radius: inherit; background: linear-gradient(90deg, #a7bb3d, #65736a); display: block; }
+.rhythm-bars strong { color: #344038; font-family: var(--font-geist-mono); font-size: .75rem; }
+.rhythm-bars small { text-align: right; }
+.session-rollups > div { display: grid; grid-template-columns: minmax(150px, 1fr) 38px minmax(80px, .7fr) 68px; align-items: center; gap: 12px; }
+.session-rollups > div > div { min-width: 0; display: grid; gap: 3px; }
+.session-rollups strong { overflow: hidden; color: #354038; font-size: .8rem; text-overflow: ellipsis; white-space: nowrap; }
+.session-rollups small { color: #858e87; font-size: .7rem; }
+.session-rollups span { color: #59645b; font-family: var(--font-geist-mono); font-size: .72rem; }
+.session-rollups i b { height: 100%; border-radius: inherit; background: #849735; display: block; }
+.session-rollups em { color: #657067; font-size: .7rem; font-style: normal; text-align: right; }
+@keyframes orchestratorPulse { 50% { transform: scale(.82); opacity: .72; } }
+
 .arrival-ritual {
   position: fixed;
   inset: 0;
@@ -1263,6 +1315,9 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 }
 
 @media (max-width: 900px) {
+  .orchestrator-rail { grid-template-columns: 42px 1fr auto; }
+  .orchestrator-lifecycle { grid-column: 2 / -1; }
+  .orchestrator-rail > a { grid-column: 3; grid-row: 1; }
   .topbar > div:last-child { gap: 6px; }
   .music-dock label, .music-dock i { display: none; }
   .music-dock > button:first-child { min-width: 34px; padding: 0; }
@@ -1276,6 +1331,14 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 }
 
 @media (max-width: 680px) {
+  .orchestrator-rail { padding: 17px; grid-template-columns: 34px 1fr; align-items: start; }
+  .orchestrator-clock, .orchestrator-lifecycle, .orchestrator-rail > a { grid-column: 2; }
+  .orchestrator-clock { padding: 12px 0 0; border-top: 1px solid #d8ded3; border-left: 0; }
+  .orchestrator-lifecycle { overflow-x: auto; }
+  .rhythm-bars > div { grid-template-columns: 72px 1fr 24px; }
+  .rhythm-bars small { display: none; }
+  .session-rollups > div { grid-template-columns: 1fr 34px; }
+  .session-rollups i, .session-rollups em { grid-column: 1 / -1; }
   .arrival-image { background-position: 61% center; }
   .arrival-content { width: 100%; padding-top: 82px; padding-bottom: 120px; justify-content: flex-end; }
   .arrival-content blockquote { font-size: clamp(3.15rem, 15vw, 5rem); }

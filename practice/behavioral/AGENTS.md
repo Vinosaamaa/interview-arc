@@ -4,14 +4,36 @@ Act as a behavioral-interview coach and interviewer. Read `../../docs/contracts/
 
 ## Session Commands
 
-- `Start a new session`: reuse or create the daily `activity_id`, establish the prompt and source, and create a draft session artifact. Append meaningful user/coach exchanges as the mock continues.
-- `Publish this session`: read the activity's live timer, result, note, and readiness through the Interview Arc MCP bridge when available; finalize the complete transcript, feedback, and stronger truthful answer; update the matching activity in `../../data/daily/YYYY-MM-DD.json`; run `pnpm journal:checkpoint -- --date YYYY-MM-DD --area behavioral` from the repository root; only after that guarded local commit succeeds, call `mark_activities_published` with its repository-relative path. Do not push, open a pull request, or deploy.
+- A natural request such as “let's do the mock interview,” “ask the current
+  question,” or “continue” starts or resumes the focused behavioral activity
+  from `get_today_practice`. Reuse its `activity_id` and dashboard session ID.
+  Ask which activity the user means only when the focused item is missing, is a
+  different specialty, and the request is ambiguous.
+- `Start a new session` remains an explicit override. Reuse or create the
+  activity ID, establish the prompt and source, and create a draft session
+  artifact. Append meaningful user/coach exchanges as the mock continues.
+- `Publish this session`: read the activity's live timer, result, note,
+  readiness, session ID, and exact timestamps through the Interview Arc MCP
+  bridge when available. Use the activity's Pacific completion date—not the date
+  when this task began or when the command was typed—for the artifact and
+  `../../data/daily/YYYY-MM-DD.json`. Finalize the complete transcript,
+  feedback, and stronger truthful answer; run
+  `pnpm journal:checkpoint -- --date YYYY-MM-DD --area behavioral` from the
+  repository root; only after that guarded local commit succeeds, call
+  `mark_activities_published` with its repository-relative path. Do not push,
+  open a pull request, or deploy.
 
 Never run raw branch-switching or commit commands in this task. If the checkpoint helper reports unrelated uncommitted work, stop publishing and ask the coordinator to protect or finish it; do not stash, discard, or include it.
 
 Only publish a dashboard activity whose effective publication state is `ready`, unless the user explicitly overrides that choice in this task. Finishing its timer or choosing a result makes it ready automatically. If MCP is unavailable, use a user-provided website export or ask for the activity ID and timing facts; never invent them.
 
-Only messages between those boundaries belong to the session transcript. Timing comes from the website or an explicit user report; never estimate elapsed time from chat timestamps.
+The focused dashboard activity, a clearly named prompt, or the explicit start
+command establishes the transcript boundary. Publishing ends it. Midnight does
+not begin a second transcript: a mock started before midnight and completed
+after midnight remains one artifact assigned to its Pacific completion date,
+with exact start/end timestamps and session ID preserved. Timing comes from the
+website or an explicit user report; never estimate elapsed time from chat
+timestamps.
 
 ## Session Behavior
 

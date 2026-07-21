@@ -3,9 +3,15 @@ import type { JournalActivity, PracticeSession } from "./content-types";
 export type ActivityType = JournalActivity["type"];
 export type Outcome = "solved" | "solved_after_reviewing_approach" | "failed";
 export type PublicationStatus = "draft" | "ready" | "published";
-export type TimerDraft = { elapsedSeconds: number; runningSince: number | null; completed: boolean };
+export type TimerDraft = {
+  elapsedSeconds: number;
+  runningSince: number | null;
+  completed: boolean;
+  startedAt?: number | null;
+  completedAt?: number | null;
+};
 export type ExtraActivity = JournalActivity & { timerGroupId: string };
-export type LocalSession = PracticeSession & { source: "extra" };
+export type LocalSession = PracticeSession & { source: "extra"; date: string };
 export type LocalDraft = {
   timers: Record<string, TimerDraft>;
   sessionTimers: Record<string, TimerDraft>;
@@ -14,6 +20,9 @@ export type LocalDraft = {
   notes: Record<string, string>;
   extraActivities: ExtraActivity[];
   sessions: LocalSession[];
+  focusedActivityId: string | null;
+  focusedSessionId: string | null;
+  focusedAt: number | null;
 };
 
 export const CODING_SESSION_MINUTES = 40;
@@ -38,6 +47,9 @@ export const EMPTY_DRAFT: LocalDraft = {
   notes: {},
   extraActivities: [],
   sessions: [],
+  focusedActivityId: null,
+  focusedSessionId: null,
+  focusedAt: null,
 };
 
 export function formatClock(seconds: number) {

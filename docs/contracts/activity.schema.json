@@ -26,6 +26,7 @@
     "url": { "type": "string", "format": "uri" },
     "prompt": { "type": "string" },
     "allocatedSeconds": { "type": "integer", "minimum": 60 },
+    "sessionId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
     "timerGroupId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
     "timingSource": { "enum": ["website", "manual", "unknown"] },
     "startedAt": { "type": "string", "format": "date-time" },

@@ -19,8 +19,15 @@ The user may keep every specialist as a long-lived Codex task inside the same ou
 
 ## Session Commands
 
-- `Start a new session`: establish a stable `activity_id`, activity source, and draft artifact. Only the conversation after this boundary belongs to the session transcript.
-- `Publish this session`: finalize the current artifact, update the matching `data/daily/YYYY-MM-DD.json` entry, then run `pnpm journal:checkpoint -- --date YYYY-MM-DD --area <specialty>`. The guarded helper creates or reuses the one daily branch and makes a local checkpoint commit. Do not push, open a pull request, or deploy for an individual session.
+- A focused dashboard activity or a clearly named problem establishes the normal
+  activity boundary. `Start a new session` remains an explicit override; it is
+  not required merely because the Pacific calendar date changed.
+- `Publish this session`: finalize the current artifact, assign it to the
+  Pacific calendar date containing its completion timestamp, update the matching
+  `data/daily/YYYY-MM-DD.json` entry, then run `pnpm journal:checkpoint -- --date
+  YYYY-MM-DD --area <specialty>`. The guarded helper creates or reuses that
+  date's daily branch and makes a local checkpoint commit. Do not push, open a
+  pull request, or deploy for an individual session.
 - `Finish today's journal`: in the main/website task, switch to `journal/YYYY-MM-DD`, merge the latest `origin/main`, validate all daily files, push the accumulated checkpoint commits, and open one pull request.
 
 Maintain long system-design and behavioral drafts incrementally. Do not rely on reconstructing an arbitrarily long task transcript only at publish time.
@@ -29,6 +36,13 @@ Maintain long system-design and behavioral drafts incrementally. Do not rely on 
 
 - Default daily plan: one session containing 6 LeetCode problems, 1 system-design mock, and 1 behavioral mock. Website-created sessions may change those counts before work begins; allocate 40 minutes per coding problem and 60 minutes per mock.
 - The session owns the countdown; every activity also has a compact elapsed-time stopwatch. Extra questions are allowed in every category.
+- Practice dates are strict `America/Los_Angeles` calendar dates. An activity
+  belongs to the date on which it finishes. Preserve its exact start/end
+  timestamps and `session_id`; a single session may span midnight and appear in
+  more than one daily manifest while remaining one session for analytics.
+- Starting an activity focuses it and pauses any other running activity.
+  Pausing or finishing a session pauses its running child activity. Starting a
+  child activity resumes its parent session when necessary.
 - Activity lifecycle is `planned`, `running`, or `completed`.
 - Publication state is `draft`, `ready`, or `published`. Finished activities
   become `ready` automatically, including failed attempts. The website shows
@@ -45,6 +59,8 @@ Maintain long system-design and behavioral drafts incrementally. Do not rely on 
 - User: LeetCode outcome, initial approach, unshared code, and blocker.
 - Specialist task: only the coaching, solution, complexity, feedback, and transcript it observed.
 - `activity_id`: joins website state to specialist artifacts.
+- `session_id`: preserves session membership independently of daily publication
+  date.
 
 Leave unavailable fields empty or set their source to `unknown`. Never invent timer values, attempt results, code, personal experience, metrics, or transcript content.
 

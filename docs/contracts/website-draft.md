@@ -10,7 +10,22 @@ Every session has a stored countdown allocation. The default 6/1/1 recipe is 21,
 
 Every activity has its own elapsed-time stopwatch ID, including each LeetCode problem. Only one activity stopwatch may run at a time. Starting another activity first pauses the active stopwatch and preserves its elapsed seconds.
 
+The practice timezone is always `America/Los_Angeles`. The first start records
+`startedAt`; finishing the timer or selecting the first result records
+`endedAt`. Exact active intervals are retained so later reports can divide
+recorded effort across Pacific midnight without guessing from a total.
+
+Starting an activity gives it durable focus. Focus survives pause, navigation,
+and Pacific midnight, so “the current problem” remains unambiguous even when
+its stopwatch is not running. Starting another activity transfers focus.
+
 Finishing a session or activity sets `completed: true`, clears `runningSince`, and locks the timer permanently. A completed timer must never expose a resume action.
+
+Pausing or finishing a session countdown pauses its running child activity.
+Starting a child activity resumes its unfinished parent session. Only one
+session countdown and one activity stopwatch may run at a time. Starting a
+standalone activity pauses the running session so standalone effort is not
+counted inside that session.
 
 ## Result Flags
 
@@ -49,6 +64,13 @@ The user may add another session, configure its three category counts, or add a 
 
 Standalone cards reveal Edit and Remove by swiping left. A compact overflow control provides the same action for pointer, keyboard, and assistive-technology users.
 
+Session membership and journal date are independent. A session that starts at
+9:00 PM Pacific may continue after midnight with the same session ID. Each
+completed activity is assigned to the Pacific date of its completion. An
+activity that crosses midnight belongs to the date it finishes; its exact
+start and finish remain visible. Session statistics may span multiple daily
+journals without duplicating an activity.
+
 ## Question Selection
 
 - LeetCode: search the bank first. If the problem is absent, accept a public LeetCode problem URL and derive the display title from the URL slug. Do not scrape the page or authenticated account data.
@@ -56,7 +78,10 @@ Standalone cards reveal Edit and Remove by swiping left. A compact overflow cont
 
 ## Export
 
-Draft export schema version 4 contains session countdowns, activity stopwatches, outcomes, publication states, personal notes, locally added sessions, locally added activities, and `publishQueueActivityIds`.
+Draft export schema version 5 contains session countdowns, activity stopwatches,
+Pacific start/finish timestamps, durable focus, outcomes, publication states,
+personal notes, locally added sessions and activities,
+`publishQueueActivityIds`, and `publishQueueByDate`.
 
 `publishQueueActivityIds` contains exactly the finished, unpublished activities whose effective publication state is `ready`, including red/failed work and timer-finished work with no result selected.
 
@@ -72,13 +97,13 @@ The user finishes the desired activities and says `Publish today's LeetCode`.
 
 The LeetCode task must:
 
-1. call `get_publication_queue` through the configured Interview Arc MCP bridge; if it is unavailable, read the exported `publishQueueActivityIds`, `outcomes`, `timers`, publication states, notes, daily manifest, and locally added activity metadata;
+1. call `get_publication_queue` through the configured Interview Arc MCP bridge; if it is unavailable, read the exported `publishQueueActivityIds`, `publishQueueByDate`, outcomes, timers, publication states, notes, daily manifest, and locally added activity metadata;
 2. select only queued LeetCode activities;
 3. preserve the website-provided outcome and elapsed time without inferring either from chat timestamps;
 4. generate an original coaching solution, code, complexity analysis, edge cases, and key lesson for every selected problem, even when that problem was never discussed earlier in the task;
-5. write one attempt artifact per problem and update the daily manifest;
-6. checkpoint the artifact and daily manifest with the guarded daily-branch helper;
-7. after the checkpoint succeeds, call `mark_activities_published` with its repository path; when using the fallback export, leave the draft file local and uncommitted.
+5. group records by their Pacific completion date, write one attempt artifact per problem, and update that date's daily manifest;
+6. checkpoint each date sequentially on its own `journal/YYYY-MM-DD` branch; never combine two Pacific dates into one journal branch;
+7. after each date's checkpoint succeeds, call `mark_activities_published` with that date and its repository paths; when using the fallback export, leave the draft file local and uncommitted.
 
 If neither MCP nor an export is available, the task must not claim it knows what was finished. It may use durable manifest facts or ask the user to connect Interview Arc or attach the draft.
 

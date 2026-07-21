@@ -4,11 +4,22 @@ System-design and behavioral agents write one Markdown artifact per completed mo
 
 ## Session Boundaries
 
-1. `Start a new session` establishes the prompt, `activity_id`, `source`, and draft path.
+1. Starting or focusing a dashboard activity establishes the prompt,
+   `activity_id`, source, and draft path when the MCP bridge is available. A
+   natural request such as “let's do the current mock” is an equivalent
+   boundary. `Start a new session` remains a supported explicit override, not a
+   phrase the user must repeat every day.
 2. Append each meaningful user/coach exchange to the draft in chronological order.
 3. `Publish this session` closes the transcript, adds feedback and the stronger answer, marks the artifact completed, and updates the matching activity in `data/daily/YYYY-MM-DD.json`.
 
-Only messages inside these explicit boundaries belong to the transcript. Publishing the session writes files; the main task handles the end-of-day commit, pull request, and deployment.
+Only messages after the resolved activity boundary belong to the transcript.
+If no focused activity exists, the specialist must ask which prompt to use.
+Publishing writes files; the main task handles pull requests and deployment.
+
+The journal date is the Pacific (`America/Los_Angeles`) date when the activity
+finishes. A mock may begin before midnight and finish after it without creating
+a second transcript; the artifact belongs to the finish date while preserving
+both exact timestamps and its original session ID.
 
 ## Naming
 
@@ -23,7 +34,9 @@ practice/behavioral/sessions/YYYY-MM-DD-<topic>-attempt-01.md
 ---
 schema_version: 1
 activity_id: 2026-07-17-system-design-news-feed
+session_id: 2026-07-17-session-1
 date: 2026-07-17
+practice_timezone: America/Los_Angeles
 type: system_design
 source: daily
 title: Design a news feed

@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { dateInTimeZone, emptyJournal } from "../app/current-day.ts";
 import { SESSION_SECONDS, sessionAllocationSeconds } from "../app/live-types.ts";
+import { practiceDateAt, practicePeriodAt } from "../app/practice-time.ts";
 import { resolveOwnerId, TRUSTED_EMAIL_HEADER } from "../db/owner.ts";
 import { derivePublicationStatus } from "../db/publication-state.ts";
 import { foldElapsed, nextTimerState } from "../db/timer-state.ts";
@@ -13,6 +14,13 @@ test("today follows the practice timezone instead of the Worker UTC date", () =>
   assert.equal(dateInTimeZone(new Date("2026-07-20T05:30:00Z")), "2026-07-19");
   assert.equal(dateInTimeZone(new Date("2026-07-20T08:00:00Z")), "2026-07-20");
   assert.deepEqual(emptyJournal("2026-07-20").activities, []);
+});
+
+test("activity completion dates and rhythm periods follow Pacific time across midnight", () => {
+  assert.equal(practiceDateAt(Date.parse("2026-07-21T06:59:59Z")), "2026-07-20");
+  assert.equal(practiceDateAt(Date.parse("2026-07-21T07:00:00Z")), "2026-07-21");
+  assert.equal(practicePeriodAt(Date.parse("2026-07-21T06:30:00Z")), "Evening");
+  assert.equal(practicePeriodAt(Date.parse("2026-07-21T07:30:00Z")), "Late night");
 });
 
 test("timer transitions fold elapsed time and permanently lock finish", () => {
@@ -69,6 +77,7 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   const live = await readFile(new URL("../drizzle/0000_nosy_legion.sql", import.meta.url), "utf8");
   const content = await readFile(new URL("../drizzle/0001_high_nightmare.sql", import.meta.url), "utf8");
   const connected = await readFile(new URL("../drizzle/0002_chubby_the_hand.sql", import.meta.url), "utf8");
+  const orchestrator = await readFile(new URL("../drizzle/0003_clear_miek.sql", import.meta.url), "utf8");
   for (const table of ["timers", "outcomes", "extra_activities", "live_sessions"]) {
     assert.match(live, new RegExp("CREATE TABLE `" + table + "`"));
   }
@@ -80,6 +89,22 @@ test("D1 migrations cover owner-scoped live state and shared published content",
     assert.match(connected, new RegExp("CREATE TABLE `" + table + "`"));
   }
   assert.match(connected, /`token_hash` text PRIMARY KEY NOT NULL/);
+  for (const table of ["practice_focus", "timer_intervals"]) {
+    assert.match(orchestrator, new RegExp("CREATE TABLE `" + table + "`"));
+  }
+  assert.match(orchestrator, /ALTER TABLE `timers` ADD `started_at` integer/);
+});
+
+test("contracts preserve flexible session duration, membership, and exact timestamps", async () => {
+  const activity = JSON.parse(await readFile(new URL("../docs/contracts/activity.schema.json", import.meta.url), "utf8"));
+  const journal = JSON.parse(await readFile(new URL("../docs/contracts/daily-journal.schema.json", import.meta.url), "utf8"));
+  const leetcode = JSON.parse(await readFile(new URL("../docs/contracts/leetcode-log.schema.json", import.meta.url), "utf8"));
+  assert.equal(activity.properties.sessionId.type, "string");
+  assert.equal(activity.properties.startedAt.format, "date-time");
+  assert.equal(activity.properties.endedAt.format, "date-time");
+  assert.equal(journal.properties.sessions.items.properties.allocatedSeconds.minimum, 60);
+  assert.equal(leetcode.properties.practiceTimezone.const, "America/Los_Angeles");
+  assert.equal(leetcode.properties.timing.properties.startedAt.format, "date-time");
 });
 
 test("the Chrome companion is scoped to public LeetCode pages and the bridge host", async () => {

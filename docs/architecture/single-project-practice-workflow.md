@@ -12,9 +12,12 @@ Tasks share repository files but not hidden conversational context. Durable inst
 
 ## Session Protocol
 
-1. `Start a new session` creates or acknowledges the activity ID and draft.
+1. A focused dashboard activity or clearly named problem creates, acknowledges,
+   or resumes the activity ID and draft. `Start a new session` remains an
+   optional explicit override rather than a required daily command.
 2. The specialist works with the user and records only evidence it observes.
-3. `Publish this session` finalizes the artifact, updates the daily manifest,
+3. `Publish this session` finalizes the artifact, updates the manifest for the
+   activity's Pacific completion date,
    and invokes the guarded checkpoint helper. The helper creates or reuses
    `journal/YYYY-MM-DD` and commits only journal-owned files.
 4. `Finish today's journal` asks the main task to merge the latest `origin/main`,
@@ -22,13 +25,26 @@ Tasks share repository files but not hidden conversational context. Durable inst
 
 System-design and behavioral transcripts are appended incrementally. LeetCode uses a structured log by default; a full transcript is optional when the conversation itself is valuable.
 
-LeetCode also supports the day-level `Publish today's LeetCode` command. The user exports Today once and places the JSON under `data/drafts/` or attaches it to the LeetCode task. That task uses the publish queue to generate every eligible coding artifact in one batch, including problems that were never discussed in that task.
+LeetCode also supports `Publish today's LeetCode`. The MCP publication queue
+groups every eligible coding activity by Pacific completion date, including
+problems that were never discussed in that task. A single command after midnight
+may therefore checkpoint two date groups sequentially. A website export under
+`data/drafts/` remains the fallback.
 
 ## Ownership
 
 The website owns live timer draft state. A specialist can use time only when it comes from the website export or the user. The user owns attempt outcome and any code or reasoning they did not share. The specialist owns only its generated explanation and observed coaching interaction. Every surface joins data through `activity_id`.
 
 Each session owns one countdown derived from its recipe: 40 minutes per coding problem and 60 minutes per system-design or behavioral question. The default 6/1/1 recipe remains six hours. Every activity also owns a compact elapsed-time stopwatch so per-problem time remains publishable. A session countdown may run alongside one activity stopwatch; only one activity stopwatch may run at a time. Finishing an activity locks its stopwatch permanently.
+
+Calendar ownership and session ownership are separate. Activities use
+`America/Los_Angeles` completion dates for daily manifests and journal branches,
+while a stable `session_id` keeps all activities in one configured session even
+when it crosses midnight. Exact start/end timestamps and timer intervals are
+preserved. Pausing or finishing a parent session pauses its running child; a new
+activity pauses the previously running activity, and starting a child resumes
+its parent when needed. Starting a standalone activity pauses any running
+session so standalone time is never counted in a session rollup.
 
 The user may create multiple sessions in one day. A session starts with six coding problems, one system-design question, and one behavioral question selected from their respective banks, but the user may configure those counts before starting. Standalone extra activities remain supported and reveal edit/remove actions with a left swipe.
 
