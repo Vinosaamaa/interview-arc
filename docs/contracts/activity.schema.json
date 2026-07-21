@@ -18,6 +18,7 @@
   "properties": {
     "schemaVersion": { "const": 2 },
     "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "questionId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
     "date": { "type": "string", "format": "date" },
     "source": { "enum": ["daily", "extra"] },
     "type": { "enum": ["leetcode", "system_design", "behavioral"] },
@@ -42,7 +43,9 @@
       "type": "array",
       "items": { "type": "string", "format": "date" },
       "uniqueItems": true
-    }
+    },
+    "reviewOfActivityId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "reviewReason": { "enum": ["failed", "full_walkthrough", "approach_review", "manual", "successful_recall"] }
   },
   "allOf": [
     {

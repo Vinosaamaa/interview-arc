@@ -19,7 +19,10 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
 - Give coding, system-design, and behavioral activities the same cycling result-flag layout. The local mock labels are finished, finished after review, and failed; only LeetCode persists the canonical outcome field. The hover/focus legend must explain the colors and must not be clipped inside a swipe card.
 - Open the original LeetCode page for prompt reading and submission. Never imply that code was executed or accepted locally.
 - Show system-design and behavioral transcript/review artifacts when tracked files exist.
-- Past contains only green/yellow LeetCode work and green/yellow or otherwise finished/published system-design and behavioral work. Never show planned, running, or red/failed activities there.
+- Past contains every completed attempt, including failed work worth reviewing;
+  it never shows planned or running activities. Keep practice-type filters
+  separate from attention filters: Due now, Needs review, Solved with help,
+  Failed, and Has notes.
 - Render tracked artifact Markdown as formatted headings, lists, links, tables, quotes, and code blocks rather than raw source text.
 - For ignored audio, display the filename and `Local only`; never render a deployed playback control.
 
@@ -37,6 +40,10 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
   sessions, and extra activities. Browser storage is an offline cache and retry
   queue; versioned daily/artifact files are authoritative for published
   narrative content.
+- D1 also owns activity-scoped draft transcript turns, pinned notes,
+  specialist finalization bundles, review schedules, the stable specialist-task
+  registry, and private audio metadata. These rows are working state—not the
+  published journal. Follow `../contracts/durable-practice-publishing.md`.
 - The Today view uses the current date in `America/Los_Angeles`. If no imported
   manifest exists for that date, render an empty current-day journal and let
   D1 hold the live work instead of falling back to the latest historical day.
@@ -68,6 +75,9 @@ The website must not imply that browser draft state has already been published t
 - Favor a focused journal/dashboard over contest theater.
 - Provide Today, Journey, Past, and Problem Banks views without placing every raw log on one page.
 - Activity detail should lead with summary, outcome, approach, lessons, and feedback; keep full transcript or code expandable.
+- Treat activity detail as a case file: pinned notes first, then facts, review
+  date, summary/solution, review, transcript/code, delivery recordings, and
+  references. Notes apply equally to coding, system design, and behavioral.
 - The session clock is a countdown. Activity clocks are stopwatches with compact icon controls for start/pause and finish.
 - Use `America/Los_Angeles` as the canonical practice timezone. Display exact
   Pacific start and finish timestamps in Past and preserve them in exports.
@@ -90,6 +100,9 @@ The website must not imply that browser draft state has already been published t
 - For imported system-design questions, show the source question link, listed complexity, and whether reference solutions are available.
 - For imported behavioral questions, show the expected answer format, frequency, and whether the Bugfree.ai reference may require sign-in. Link to the canonical answer page without copying third-party answer text into the site.
 - Journey owns cumulative totals and interactive analytics for coding, system design, behavioral, outcomes, elapsed time, consistency, difficulty, and bank-linked topic coverage.
+- A new session places up to two due reviews ahead of new questions when the
+  configured category slots permit it. Failed/full-walkthrough work is due in 4
+  days; approach-review work in 7; successful recalls advance to 21 then 60.
 - Anchor Journey with a selectable 365-day practice heatmap. Shade only finished coding and mock work; expose failed-attempt counts in the day detail without treating them as solved output.
 - Every Journey visualization must disclose the records behind it: heatmap days and trend points select a date, topic bars reveal matching attempts, and effort/outcome points open the activity record. Do not infer mastery, productivity by time of day, or other statistics unsupported by stored evidence.
 - Present publication state in user language: `draft` is **Finish to journal**,
@@ -124,10 +137,11 @@ The website must not imply that browser draft state has already been published t
   journal:checkpoint -- --date YYYY-MM-DD --area practice`; if unrelated code
   is also dirty, finish or explicitly separate that work instead of stashing or
   mixing it automatically.
-- After a bug-fix PR is merged, return to an existing daily branch when more
-  practice publishing is requested. For `Finish today's journal`, fetch main,
-  switch to `journal/YYYY-MM-DD`, merge `origin/main`, resolve any actual
-  overlap deliberately, validate, push, and open the one daily PR. Never treat
-  “behind main” as a conflict by itself.
+- For `Publish all pending practice`, first ask every relevant registered
+  specialist task to flush/finalize. Then fetch main, create or return to each
+  required `journal/YYYY-MM-DD`, merge `origin/main`, render and validate the
+  D1-backed case files, push, and open the journal PR. Never treat “behind main”
+  as a conflict by itself. Mark D1 records published only after their artifacts
+  exist and are importable.
 - The old OpenAI Sites project remains a temporary fallback. Do not deploy to
   or retire it unless the user explicitly asks.

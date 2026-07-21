@@ -43,8 +43,14 @@ test("the Cloudflare build contains the Interview Arc dashboard", async () => {
   assert.match(bundle, /Source ↗/);
   assert.match(bundle, /Ready for journal/);
   assert.match(bundle, /Connect Interview Arc tools/);
-  assert.match(bundle, /Codex publishing bridge/);
+  assert.match(bundle, /Codex practice bridge/);
   assert.match(bundle, /LeetCode Chrome companion/);
+  assert.match(bundle, /Needs review/);
+  assert.match(bundle, /Solved with help/);
+  assert.match(bundle, /Has notes/);
+  assert.match(bundle, /PINNED TO THIS CASE/);
+  assert.match(bundle, /D1 DRAFT · NOT YET IN THE JOURNAL/);
+  assert.match(bundle, /up to two due reviews first/);
   assert.match(bundle, /Sweet September/);
   assert.match(bundle, /Forest Mist Whispers/);
   assert.match(bundle, /arrival-cozy-room-4k\.jpg/);

@@ -15,6 +15,7 @@ import {
 } from "../../../db/live-state";
 import { resolveOwnerId } from "../../../db/owner";
 import { toRouteErrorMessage } from "../route-helpers";
+import { clearActivityReviewSchedules, scheduleReview } from "../../../db/durable-practice";
 
 type Mutation =
   | {
@@ -68,6 +69,27 @@ export async function POST(request: Request) {
           return Response.json({ error: "Invalid outcome mutation." }, { status: 400 });
         }
         await setOutcome(ownerId, mutation.activityId, mutation.outcome ?? null, now, mutation.sessionId);
+        const live = await readLiveState(ownerId, date);
+        const activity = (live.extraActivities as Array<{ id: string; questionId?: string; reviewOfActivityId?: string; type?: "leetcode" | "system_design" | "behavioral" }>).find((item) => item.id === mutation.activityId);
+        if (mutation.outcome === "failed" || mutation.outcome === "solved_after_reviewing_approach") {
+          await scheduleReview(ownerId, {
+            activityId: mutation.activityId,
+            questionId: activity?.questionId,
+            specialty: activity?.type ?? "leetcode",
+            completedDate: date,
+            reason: mutation.outcome === "failed" ? "failed" : "approach_review",
+          }, now);
+        } else if (mutation.outcome === "solved" && activity?.reviewOfActivityId) {
+          await scheduleReview(ownerId, {
+            activityId: mutation.activityId,
+            questionId: activity.questionId,
+            specialty: activity.type ?? "leetcode",
+            completedDate: date,
+            reason: "successful_recall",
+          }, now);
+        } else {
+          await clearActivityReviewSchedules(ownerId, mutation.activityId);
+        }
         break;
       }
       case "publication-status": {

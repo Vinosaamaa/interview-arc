@@ -2,8 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   EMPTY_DRAFT,
   type ExtraActivity,
+  type AudioClip,
+  type FinalizationSummary,
   type LocalDraft,
   type LocalSession,
+  type PracticeNote,
+  type ReviewSchedule,
   type Outcome,
   type PublicationStatus,
   type TimerDraft,
@@ -27,6 +31,10 @@ type ServerLiveState = {
   outcomes: Record<string, Outcome>;
   publicationStatuses: Record<string, PublicationStatus>;
   notes: Record<string, string>;
+  structuredNotes: Record<string, PracticeNote[]>;
+  reviews: Record<string, ReviewSchedule>;
+  finalizations: Record<string, FinalizationSummary>;
+  audioClips: Record<string, AudioClip[]>;
   extraActivities: ExtraActivity[];
   sessions: LocalSession[];
   focusedActivityId: string | null;
@@ -100,6 +108,10 @@ function serverToDraft(state: ServerLiveState, offset: number, date = ""): Local
     outcomes: state.outcomes ?? {},
     publicationStatuses: state.publicationStatuses ?? {},
     notes: state.notes ?? {},
+    structuredNotes: state.structuredNotes ?? {},
+    reviews: state.reviews ?? {},
+    finalizations: state.finalizations ?? {},
+    audioClips: state.audioClips ?? {},
     extraActivities: state.extraActivities ?? [],
     sessions: (state.sessions ?? []).map((session) => ({ ...session, date: session.date ?? date })),
     focusedActivityId: state.focusedActivityId ?? null,
@@ -139,6 +151,10 @@ function mergeDrafts(server: LocalDraft, local: LocalDraft) {
     outcomes: { ...local.outcomes, ...server.outcomes },
     publicationStatuses: { ...local.publicationStatuses, ...server.publicationStatuses },
     notes: { ...local.notes, ...server.notes },
+    structuredNotes: { ...local.structuredNotes, ...server.structuredNotes },
+    reviews: { ...local.reviews, ...server.reviews },
+    finalizations: { ...local.finalizations, ...server.finalizations },
+    audioClips: { ...local.audioClips, ...server.audioClips },
     extraActivities: [
       ...local.extraActivities.filter((activity) => !serverExtraIds.has(activity.id)),
       ...server.extraActivities,
@@ -165,6 +181,10 @@ function readDraft(date: string): LocalDraft {
       outcomes: parsed.outcomes ?? {},
       publicationStatuses: parsed.publicationStatuses ?? {},
       notes: parsed.notes ?? {},
+      structuredNotes: parsed.structuredNotes ?? {},
+      reviews: parsed.reviews ?? {},
+      finalizations: parsed.finalizations ?? {},
+      audioClips: parsed.audioClips ?? {},
       extraActivities: parsed.extraActivities ?? [],
       sessions: (parsed.sessions ?? []).map((session) => ({ ...session, date: session.date ?? date })),
       focusedActivityId: parsed.focusedActivityId ?? null,

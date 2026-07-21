@@ -23,7 +23,11 @@ import {
   type ExtraActivity,
   type LocalSession,
   type Outcome,
+  type PracticeNote,
   type PublicationStatus,
+  type ReviewSchedule,
+  type FinalizationSummary,
+  type AudioClip,
   type TimerDraft,
 } from "./live-types";
 import { useLiveState, useReadOnlyLiveState } from "./live-sync";
@@ -42,6 +46,7 @@ type View = "today" | "journey" | "library" | "banks";
 type ComposerMode = "session" | "activity";
 type JourneyRange = 30 | 90 | 365 | "all";
 type JourneyMetric = "activities" | "time";
+type LibraryAttentionFilter = "all" | "due" | "needs_review" | "helped" | "failed" | "notes";
 type DocumentPiP = { requestWindow: (options?: { width?: number; height?: number }) => Promise<Window> };
 type ComposerState = {
   open: boolean;
@@ -72,6 +77,11 @@ type LogEntry = {
   startedAt?: string;
   endedAt?: string;
   sessionId?: string;
+  personalNote?: string;
+  pinnedNotes?: PracticeNote[];
+  review?: ReviewSchedule;
+  finalization?: FinalizationSummary;
+  audioClips?: AudioClip[];
 };
 
 const EMPTY_COMPOSER: ComposerState = {
@@ -552,6 +562,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [composer, setComposer] = useState<ComposerState>(EMPTY_COMPOSER);
   const [selectedEntry, setSelectedEntry] = useState<LogEntry | null>(null);
   const [libraryFilter, setLibraryFilter] = useState<"all" | ActivityType>("all");
+  const [libraryAttentionFilter, setLibraryAttentionFilter] = useState<LibraryAttentionFilter>("all");
   const [bankFilter, setBankFilter] = useState<"all" | ActivityType>("all");
   const [bankProgressFilter, setBankProgressFilter] = useState<"all" | "todo" | "finished">("all");
   const [bankLevelFilter, setBankLevelFilter] = useState<"all" | "easy" | "medium" | "hard">("all");
@@ -683,6 +694,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }, [allSessions]);
   const assignedExtraIds = new Set(draft.sessions.flatMap((session) => session.activityIds));
   const looseActivities = draft.extraActivities.filter((activity) => !assignedExtraIds.has(activity.id));
+  const dueReviewCount = Object.values(draft.reviews).filter((review) => review.status === "due" || (review.status === "scheduled" && review.dueDate <= journal.date)).length;
 
   // Pacific midnight is the journal boundary even when a session continues.
   // Reloading swaps the Today shell while D1 carries the focused unfinished
@@ -1004,6 +1016,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return Boolean(draft.outcomes[activity.id] ?? activity.outcome ?? draft.timers[activity.id]?.completed);
   }
 
+  function savePersonalNote(activityId: string, note: string) {
+    setDraft((current) => ({ ...current, notes: { ...current.notes, [activityId]: note } }));
+    enqueue({ type: "activity-note", activityId, note });
+    setSelectedEntry((current) => current?.id === activityId ? { ...current, personalNote: note } : current);
+  }
+
   function publicationStatusFor(activity: JournalActivity): PublicationStatus {
     const stored = draft.publicationStatuses[activity.id];
     if (activity.artifactPath || stored === "published") return "published";
@@ -1096,6 +1114,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const activity: ExtraActivity = {
       schemaVersion: 2,
       id,
+      questionId: question.id,
       date: journal.date,
       source: "extra",
       type,
@@ -1131,6 +1150,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const activity: ExtraActivity = {
       schemaVersion: 2,
       id,
+      ...(selected?.id ? { questionId: selected.id } : existing?.questionId ? { questionId: existing.questionId } : {}),
       date: journal.date,
       source: "extra",
       type: composer.type,
@@ -1164,11 +1184,41 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     // Skip anything already on today, except the unstarted session currently
     // being rebuilt. Earlier days remain eligible for a fresh practice day.
     const blocked = sessionBlockedQuestions(existing?.id);
-    const codingQuestions = pickQuestionsByFrequency(content.questionBanks.leetcode, composer.sessionCoding, blocked, sessionId);
-    codingQuestions.forEach((question) => blockKeysForQuestion(question).forEach((key) => blocked.add(key)));
-    const systemQuestions = pickQuestionsByFrequency(content.questionBanks.systemDesign, composer.sessionSystemDesign, blocked, sessionId);
-    systemQuestions.forEach((question) => blockKeysForQuestion(question).forEach((key) => blocked.add(key)));
-    const behaviorQuestions = pickQuestionsByFrequency(content.questionBanks.behavioral, composer.sessionBehavioral, blocked, sessionId);
+    const dueReviews = Object.values(draft.reviews)
+      .filter((review) => review.status === "due" || (review.status === "scheduled" && review.dueDate <= journal.date))
+      .sort((left, right) => left.dueDate.localeCompare(right.dueDate));
+    const reviewByQuestion = new Map(dueReviews.filter((review) => review.questionId).map((review) => [`${review.specialty}:${review.questionId}`, review]));
+    const reviewCapacity: Record<ActivityType, number> = {
+      leetcode: composer.sessionCoding,
+      system_design: composer.sessionSystemDesign,
+      behavioral: composer.sessionBehavioral,
+    };
+    const selectedReviewKeys = new Set<string>();
+    const selectedReviewCounts: Record<ActivityType, number> = { leetcode: 0, system_design: 0, behavioral: 0 };
+    for (const review of dueReviews) {
+      if (selectedReviewKeys.size >= 2) break;
+      if (!review.questionId) continue;
+      if (selectedReviewCounts[review.specialty] >= reviewCapacity[review.specialty]) continue;
+      const pool = bankFor(review.specialty);
+      const question = pool.find((candidate) => candidate.id === review.questionId && candidate.active && !isQuestionBlocked(candidate, blocked));
+      if (!question) continue;
+      selectedReviewKeys.add(`${review.specialty}:${review.questionId}`);
+      selectedReviewCounts[review.specialty] += 1;
+    }
+    function pickSessionQuestions(type: ActivityType, pool: QuestionBankItem[], count: number) {
+      const reviews = dueReviews.flatMap((review) => {
+        if (review.specialty !== type || !review.questionId || !selectedReviewKeys.has(`${review.specialty}:${review.questionId}`)) return [];
+        const question = pool.find((candidate) => candidate.id === review.questionId && candidate.active && !isQuestionBlocked(candidate, blocked));
+        return question ? [question] : [];
+      });
+      reviews.forEach((question) => blockKeysForQuestion(question).forEach((key) => blocked.add(key)));
+      const fresh = pickQuestionsByFrequency(pool, count - reviews.length, blocked, `${sessionId}:${type}`);
+      fresh.forEach((question) => blockKeysForQuestion(question).forEach((key) => blocked.add(key)));
+      return [...reviews, ...fresh];
+    }
+    const codingQuestions = pickSessionQuestions("leetcode", content.questionBanks.leetcode, composer.sessionCoding);
+    const systemQuestions = pickSessionQuestions("system_design", content.questionBanks.systemDesign, composer.sessionSystemDesign);
+    const behaviorQuestions = pickSessionQuestions("behavioral", content.questionBanks.behavioral, composer.sessionBehavioral);
     if (
       codingQuestions.length !== composer.sessionCoding ||
       systemQuestions.length !== composer.sessionSystemDesign ||
@@ -1180,6 +1230,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const activities: ExtraActivity[] = codingQuestions.map((question) => ({
       schemaVersion: 2,
       id: `${sessionId}-${question.id}`,
+      questionId: question.id,
       date: journal.date,
       source: "extra",
       type: "leetcode",
@@ -1192,10 +1243,15 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       timingSource: "website",
       status: "planned",
       notes: question.topics.join(", "),
+      ...(reviewByQuestion.get(`leetcode:${question.id}`) ? {
+        reviewOfActivityId: reviewByQuestion.get(`leetcode:${question.id}`)!.activityId,
+        reviewReason: reviewByQuestion.get(`leetcode:${question.id}`)!.reason,
+      } : {}),
     }));
     systemQuestions.forEach((question) => activities.push({
       schemaVersion: 2,
       id: `${sessionId}-${question.id}`,
+      questionId: question.id,
       date: journal.date,
       source: "extra",
       type: "system_design",
@@ -1208,10 +1264,15 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       timingSource: "website",
       status: "planned",
       notes: question.topics.join(", "),
+      ...(reviewByQuestion.get(`system_design:${question.id}`) ? {
+        reviewOfActivityId: reviewByQuestion.get(`system_design:${question.id}`)!.activityId,
+        reviewReason: reviewByQuestion.get(`system_design:${question.id}`)!.reason,
+      } : {}),
     }));
     behaviorQuestions.forEach((question) => activities.push({
       schemaVersion: 2,
       id: `${sessionId}-${question.id}`,
+      questionId: question.id,
       date: journal.date,
       source: "extra",
       type: "behavioral",
@@ -1224,6 +1285,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       timingSource: "website",
       status: "planned",
       notes: question.topics.join(", "),
+      ...(reviewByQuestion.get(`behavioral:${question.id}`) ? {
+        reviewOfActivityId: reviewByQuestion.get(`behavioral:${question.id}`)!.activityId,
+        reviewReason: reviewByQuestion.get(`behavioral:${question.id}`)!.reason,
+      } : {}),
     }));
     if (activities.length === 0) {
       window.alert("Choose at least one activity. Questions already planned today stay out of new sessions until a new day.");
@@ -1367,7 +1432,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       })]),
     );
     const payload = {
-      schemaVersion: 5,
+      schemaVersion: 6,
       date: journal.date,
       practiceTimeZone: PRACTICE_TIME_ZONE,
       exportedAt: new Date(timestamp).toISOString(),
@@ -1377,6 +1442,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       outcomes: draft.outcomes,
       publicationStatuses: effectivePublicationStatuses,
       notes: draft.notes,
+      structuredNotes: draft.structuredNotes,
+      reviews: draft.reviews,
+      finalizations: draft.finalizations,
+      audioClips: draft.audioClips,
       publishQueueActivityIds,
       publishQueueByDate,
       sessions: draft.sessions,
@@ -1448,6 +1517,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           startedAt,
           endedAt,
           sessionId: activity.sessionId ?? knownSessionByActivity.get(activity.id),
+          personalNote: liveDraft?.notes[activity.id] ?? "",
+          pinnedNotes: liveDraft?.structuredNotes[activity.id] ?? [],
+          review: liveDraft?.reviews[activity.id],
+          finalization: liveDraft?.finalizations[activity.id],
+          audioClips: liveDraft?.audioClips[activity.id] ?? [],
         });
       }
     }
@@ -1471,6 +1545,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         startedAt,
         endedAt,
         sessionId: activity.sessionId ?? knownSessionByActivity.get(activity.id),
+        personalNote: draft.notes[activity.id] ?? "",
+        pinnedNotes: draft.structuredNotes[activity.id] ?? [],
+        review: draft.reviews[activity.id],
+        finalization: draft.finalizations[activity.id],
+        audioClips: draft.audioClips[activity.id] ?? [],
       });
     }
     for (const activity of yesterdayDraft?.extraActivities ?? []) {
@@ -1494,33 +1573,45 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         startedAt,
         endedAt,
         sessionId: activity.sessionId ?? knownSessionByActivity.get(activity.id),
+        personalNote: yesterdayDraft?.notes[activity.id] ?? "",
+        pinnedNotes: yesterdayDraft?.structuredNotes[activity.id] ?? [],
+        review: yesterdayDraft?.reviews[activity.id],
+        finalization: yesterdayDraft?.finalizations[activity.id],
+        audioClips: yesterdayDraft?.audioClips[activity.id] ?? [],
       });
     }
     for (const artifact of content.artifacts) {
       if (artifact.activityId && entries.some((entry) => entry.id === artifact.activityId)) continue;
       const inferredType: ActivityType = artifact.type === "leetcode" || artifact.type === "behavioral" ? artifact.type : "system_design";
       const preview = artifact.sections.find((section) => /summary|short answer|question/i.test(section.title))?.body ?? "Published interview record";
-      entries.push({ id: artifact.path, date: artifact.date, type: inferredType, title: artifact.title, subtitle: plainText(preview).slice(0, 160), status: "published", elapsedSeconds: 0, allocatedSeconds: 0, artifact });
+      const noteSection = artifact.sections.find((section) => /pinned notes?|notes to remember/i.test(section.title));
+      entries.push({ id: artifact.path, date: artifact.date, type: inferredType, title: artifact.title, subtitle: plainText(preview).slice(0, 160), status: "published", elapsedSeconds: 0, allocatedSeconds: 0, artifact, personalNote: noteSection?.body ?? "" });
     }
     return entries.sort((left, right) => right.date.localeCompare(left.date)
       || (right.endedAt ?? "").localeCompare(left.endedAt ?? "")
       || left.title.localeCompare(right.title));
   }, [content.artifacts, content.journals, draft, journal.date, now, yesterdayDate, yesterdayDraft]);
 
-  const libraryEntries = useMemo(() => logEntries.filter((entry) => {
-    if (entry.outcome) return entry.outcome === "solved" || entry.outcome === "solved_after_reviewing_approach";
-    if (entry.type === "leetcode") return false;
-    return entry.status === "completed" || entry.status === "published";
-  }), [logEntries]);
+  const libraryEntries = useMemo(
+    () => logEntries.filter((entry) => entry.status === "completed" || entry.status === "published"),
+    [logEntries],
+  );
 
   const groupedLog = useMemo(() => {
     const groups = new Map<string, LogEntry[]>();
     for (const entry of libraryEntries) {
       if (libraryFilter !== "all" && entry.type !== libraryFilter) continue;
+      const hasNotes = Boolean(entry.personalNote?.trim() || entry.pinnedNotes?.length);
+      const needsReview = Boolean(entry.review && entry.review.status !== "dismissed" && entry.review.status !== "completed");
+      if (libraryAttentionFilter === "due" && entry.review?.status !== "due") continue;
+      if (libraryAttentionFilter === "needs_review" && !needsReview) continue;
+      if (libraryAttentionFilter === "helped" && entry.outcome !== "solved_after_reviewing_approach") continue;
+      if (libraryAttentionFilter === "failed" && entry.outcome !== "failed") continue;
+      if (libraryAttentionFilter === "notes" && !hasNotes) continue;
       groups.set(entry.date, [...(groups.get(entry.date) ?? []), entry]);
     }
     return [...groups.entries()].sort(([left], [right]) => right.localeCompare(left));
-  }, [libraryEntries, libraryFilter]);
+  }, [libraryEntries, libraryAttentionFilter, libraryFilter]);
 
   const completedEntries = useMemo(
     () => logEntries.filter((entry) => entry.status === "completed" || entry.status === "published"),
@@ -1920,11 +2011,15 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   function renderLibrary() {
     return (
       <section className="view-page library-page">
-        <header className="view-masthead"><span className="eyebrow">PAST · COMPLETED WORK ONLY</span><h1>Read the journey<br /><em>like a field journal.</em></h1><p>Solved coding problems and finished interview mocks appear here immediately. Planned, running, and failed activities stay out of this reading log.</p></header>
-        <div className="library-toolbar"><div className="filter-row" role="group" aria-label="Filter past practice">{(["all", "leetcode", "system_design", "behavioral"] as const).map((filter) => <button key={filter} className={libraryFilter === filter ? "active" : ""} onClick={() => setLibraryFilter(filter)}>{filter === "all" ? "All" : typeLabel(filter)}</button>)}</div><span>{groupedLog.reduce((sum, [, entries]) => sum + entries.length, 0)} records shown</span></div>
+        <header className="view-masthead"><span className="eyebrow">PAST · COMPLETED WORK</span><h1>Read the journey<br /><em>like a field journal.</em></h1><p>Every completed attempt belongs here—including failures worth learning from. Use the attention filters to find due reviews, assisted solves, and pinned notes.</p></header>
+        <div className="library-toolbar library-toolbar-stacked">
+          <div><span>Practice type</span><div className="filter-row" role="group" aria-label="Filter past practice by type">{(["all", "leetcode", "system_design", "behavioral"] as const).map((filter) => <button key={filter} className={libraryFilter === filter ? "active" : ""} onClick={() => setLibraryFilter(filter)}>{filter === "all" ? "All" : typeLabel(filter)}</button>)}</div></div>
+          <div><span>Attention</span><div className="filter-row attention-filters" role="group" aria-label="Filter past practice by attention">{(["all", "due", "needs_review", "helped", "failed", "notes"] as const).map((filter) => <button key={filter} className={libraryAttentionFilter === filter ? "active" : ""} onClick={() => setLibraryAttentionFilter(filter)}>{filter === "all" ? "All" : filter === "needs_review" ? "Needs review" : filter === "helped" ? "Solved with help" : filter === "notes" ? "Has notes" : filter[0].toUpperCase() + filter.slice(1)}</button>)}</div></div>
+          <strong>{groupedLog.reduce((sum, [, entries]) => sum + entries.length, 0)} records shown</strong>
+        </div>
         <div className="log-layout">
           <div className="dated-log">
-            {groupedLog.length ? groupedLog.map(([date, entries]) => <section className="log-day" id={`log-date-${date}`} key={date}><header><time>{readableDate(date)}</time><span>{entries.length} record{entries.length === 1 ? "" : "s"} · Pacific day</span></header><div className="log-day-entries">{entries.map((entry) => <button className={`log-entry ${entry.type}`} key={entry.id} onClick={() => setSelectedEntry(entry)}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><div className="log-entry-copy"><small>{typeLabel(entry.type)} · {entry.status}{entry.sessionId ? " · session activity" : " · standalone"}</small><strong>{entry.title}</strong><span>{entry.subtitle}</span>{entry.startedAt && <span className="entry-time-range">{formatPracticeTimestamp(entry.startedAt, true)} → {entry.endedAt ? formatPracticeTimestamp(entry.endedAt, true) : "Paused"}</span>}</div><div className="log-entry-meta"><strong>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "—"}</strong><span>{entry.type === "leetcode" ? outcomeLabel(entry.outcome) : entry.artifact ? "Published record" : entry.status}</span></div><span className="open-letter">Read →</span></button>)}</div></section>) : <div className="quiet-empty library-empty"><strong>No finished work in this filter yet.</strong><span>Mark a coding result as solved, or finish a system-design or behavioral stopwatch, and it will appear here.</span></div>}
+            {groupedLog.length ? groupedLog.map(([date, entries]) => <section className="log-day" id={`log-date-${date}`} key={date}><header><time>{readableDate(date)}</time><span>{entries.length} record{entries.length === 1 ? "" : "s"} · Pacific day</span></header><div className="log-day-entries">{entries.map((entry) => <button className={`log-entry ${entry.type}`} key={entry.id} onClick={() => setSelectedEntry(entry)}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><div className="log-entry-copy"><small>{typeLabel(entry.type)} · {entry.status}{entry.sessionId ? " · session activity" : " · standalone"}</small><strong>{entry.title}</strong><span>{entry.subtitle}</span><div className="entry-badges">{entry.review?.status === "due" && <i className="review-badge due">Due now</i>}{entry.review?.status === "scheduled" && <i className="review-badge">Review {entry.review.dueDate}</i>}{(entry.personalNote?.trim() || entry.pinnedNotes?.length) && <i className="note-badge">Pinned note</i>}{entry.outcome === "solved_after_reviewing_approach" && <i className="help-badge">Solved with help</i>}{entry.outcome === "failed" && <i className="failure-badge">Failed attempt</i>}</div>{entry.startedAt && <span className="entry-time-range">{formatPracticeTimestamp(entry.startedAt, true)} → {entry.endedAt ? formatPracticeTimestamp(entry.endedAt, true) : "Paused"}</span>}</div><div className="log-entry-meta"><strong>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "—"}</strong><span>{entry.type === "leetcode" ? outcomeLabel(entry.outcome) : entry.artifact ? "Published record" : entry.status}</span></div><span className="open-letter">Read →</span></button>)}</div></section>) : <div className="quiet-empty library-empty"><strong>No completed work in this filter yet.</strong><span>Try another filter, or finish an activity to add it to the field journal.</span></div>}
           </div>
           <aside className="log-calendar"><span className="eyebrow">JUMP TO A DAY</span><h2>{new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${journal.date}T12:00:00Z`))}</h2><div className="calendar-week"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div><div className="calendar-mini">{calendarDays.map((day) => day.hasEntries ? <button key={day.key} onClick={() => scrollToLogDate(day.key)} title={`Jump to ${day.key}`}>{day.day}<i /></button> : <span key={day.key}>{day.day}</span>)}</div><div className="calendar-dates">{groupedLog.map(([date]) => <button key={date} onClick={() => scrollToLogDate(date)}>{readableDate(date, true)} <span>↘</span></button>)}</div></aside>
         </div>
@@ -2141,7 +2236,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             <button className={composer.mode === "activity" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, mode: "activity" }))}>Single activity</button>
           </div>}
           {composer.mode === "session" && !composer.editingId ? <div className="session-composer">
-            <p>Shape the session you need. The default is six coding problems, one system-design mock, and one behavioral mock. Interview Arc draws unique questions from the banks and builds one countdown from the time equation below.</p>
+            <p>Shape the session you need. The default is six coding problems, one system-design mock, and one behavioral mock. When available, Interview Arc places up to two due reviews first and fills the remaining slots with new bank questions.</p>
+            {dueReviewCount > 0 && <div className="review-composer-strip"><span>RECALL QUEUE</span><strong>Up to {Math.min(2, dueReviewCount)} due review{Math.min(2, dueReviewCount) === 1 ? "" : "s"} will be included</strong><small>{dueReviewCount} total due now · oldest eligible first</small></div>}
             <div className="session-recipe" aria-label="Session recipe">
               <SessionCountControl label="Coding" mark="C" value={composer.sessionCoding} minutesEach={CODING_SESSION_MINUTES} max={sessionAvailability.coding} onChange={(value) => setComposer((current) => ({ ...current, sessionCoding: value }))} />
               <SessionCountControl label="System design" mark="S" value={composer.sessionSystemDesign} minutesEach={INTERVIEW_SESSION_MINUTES} max={sessionAvailability.systemDesign} onChange={(value) => setComposer((current) => ({ ...current, sessionSystemDesign: value }))} />
@@ -2164,9 +2260,20 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         </section>
       </div>}
 
-      {integrationOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setIntegrationOpen(false)}><section className="composer integration-dialog" role="dialog" aria-modal="true" aria-labelledby="integration-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setIntegrationOpen(false)} aria-label="Close">×</button><span className="eyebrow">ONE LIVE PRACTICE RECORD</span><h2 id="integration-title">Connect Interview Arc tools</h2><p>One personal token connects two separate tools to the same Interview Arc record. Codex reads practice metadata and publishes finished artifacts; the Chrome companion controls LeetCode timers, results, and notes. The token is shown once and stored as a secure digest.</p>{integrationToken ? <><label className="token-field"><span>Personal connection token</span><input readOnly value={integrationToken} onFocus={(event) => event.currentTarget.select()} /></label><button className="primary-action full-width" onClick={copyConnectionToken}>Copy token</button><div className="integration-steps"><strong>Connect each tool separately</strong><ol><li><strong>Codex publishing bridge:</strong> set <code>INTERVIEW_ARC_MCP_TOKEN</code> before opening Codex in this trusted project. Codex can read today&apos;s activities and mark created journal artifacts as published; it does not show the LeetCode side panel or run its timer.</li><li><strong>LeetCode Chrome companion:</strong> paste the same token into the loaded extension. The side panel can control the current coding activity while you work on LeetCode.</li></ol></div></> : <button className="primary-action full-width" disabled={integrationBusy} onClick={createConnectionToken}>{integrationBusy ? "Creating…" : "Create personal connection token"}</button>}<small className="integration-warning">Treat this token like a password. Create a new one if it is ever shared accidentally.</small></section></div>}
+      {integrationOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setIntegrationOpen(false)}><section className="composer integration-dialog" role="dialog" aria-modal="true" aria-labelledby="integration-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setIntegrationOpen(false)} aria-label="Close">×</button><span className="eyebrow">ONE DURABLE PRACTICE RECORD</span><h2 id="integration-title">Connect Interview Arc tools</h2><p>One personal token connects two separate tools to the same Interview Arc record. Codex specialists save activity transcripts, pinned notes, reviews, and finalization drafts; the coordinator alone turns those drafts into the published journal. The Chrome companion controls LeetCode timers and results. The token is shown once and stored as a secure digest.</p>{integrationToken ? <><label className="token-field"><span>Personal connection token</span><input readOnly value={integrationToken} onFocus={(event) => event.currentTarget.select()} /></label><button className="primary-action full-width" onClick={copyConnectionToken}>Copy token</button><div className="integration-steps"><strong>Connect each tool separately</strong><ol><li><strong>Codex practice bridge:</strong> set <code>INTERVIEW_ARC_MCP_TOKEN</code> before opening Codex in this trusted project. Specialists append only activity-related exchanges to D1; the coordinator creates the Git case files when you say “Publish all pending practice.”</li><li><strong>LeetCode Chrome companion:</strong> paste the same token into the loaded extension. The side panel can control the current coding activity while you work on LeetCode.</li></ol></div></> : <button className="primary-action full-width" disabled={integrationBusy} onClick={createConnectionToken}>{integrationBusy ? "Creating…" : "Create personal connection token"}</button>}<small className="integration-warning">Treat this token like a password. Create a new one if it is ever shared accidentally.</small></section></div>}
 
-      {selectedEntry && <div className="letter-backdrop" role="presentation" onMouseDown={() => setSelectedEntry(null)}><article className="reading-letter" role="dialog" aria-modal="true" aria-labelledby="letter-title" onMouseDown={(event) => event.stopPropagation()}><button className="letter-close" onClick={() => setSelectedEntry(null)} aria-label="Close letter">Close ×</button><header><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time></div><h2 id="letter-title">{selectedEntry.title}</h2><p>{selectedEntry.subtitle}</p></header><div className="letter-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.startedAt && <div><span>Started</span><strong>{formatPracticeTimestamp(selectedEntry.startedAt)}</strong></div>}{selectedEntry.endedAt && <div><span>Finished</span><strong>{formatPracticeTimestamp(selectedEntry.endedAt)}</strong></div>}{selectedEntry.sessionId && <div><span>Session</span><strong>{selectedEntry.sessionId}</strong></div>}{selectedEntry.type === "leetcode" && <div><span>Outcome</span><strong>{outcomeLabel(selectedEntry.outcome)}</strong></div>}</div>{selectedEntry.artifact ? <div className="letter-sections">{selectedEntry.artifact.sections.map((section) => /conversation transcript|generated code|solution/i.test(section.title) ? <details key={section.title} open={/solution/i.test(section.title)}><summary>{section.title}</summary><MarkdownBody source={section.body} /></details> : <section key={section.title}><h3>{section.title}</h3><MarkdownBody source={section.body} /></section>)}</div> : <div className="unpublished-letter"><span className="eyebrow">LOCAL COMPLETION · NOT PUBLISHED YET</span><h3>The result is saved on this device, but its review is not in the repository yet.</h3><p>Export today&apos;s draft and ask the matching specialist task to publish. Coding records will show the generated solution and complexity; system-design and behavioral records will show the formatted conversation transcript and review.</p>{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}<footer>Interview Arc · {selectedEntry.id}</footer></article></div>}
+      {selectedEntry && <div className="letter-backdrop" role="presentation" onMouseDown={() => setSelectedEntry(null)}>
+        <article className="reading-letter" role="dialog" aria-modal="true" aria-labelledby="letter-title" onMouseDown={(event) => event.stopPropagation()}>
+          <button className="letter-close" onClick={() => setSelectedEntry(null)} aria-label="Close letter">Close ×</button>
+          <header><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time></div><h2 id="letter-title">{selectedEntry.title}</h2><p>{selectedEntry.subtitle}</p></header>
+          {(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <aside className="pinned-notes" aria-label="Pinned practice notes"><span>PINNED TO THIS CASE</span>{selectedEntry.personalNote?.trim() && <MarkdownBody source={selectedEntry.personalNote} />}{selectedEntry.pinnedNotes?.map((note) => <blockquote key={note.id}><small>{note.kind}</small><p>{note.body}</p></blockquote>)}</aside>}
+          <div className="letter-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.startedAt && <div><span>Started</span><strong>{formatPracticeTimestamp(selectedEntry.startedAt)}</strong></div>}{selectedEntry.endedAt && <div><span>Finished</span><strong>{formatPracticeTimestamp(selectedEntry.endedAt)}</strong></div>}{selectedEntry.sessionId && <div><span>Session</span><strong>{selectedEntry.sessionId}</strong></div>}{selectedEntry.outcome && <div><span>Result</span><strong>{resultLabel(selectedEntry.outcome, selectedEntry.type)}</strong></div>}{selectedEntry.review && <div className="review-fact"><span>{selectedEntry.review.status === "due" ? "Review due" : "Next review"}</span><strong>{selectedEntry.review.dueDate}</strong><small>{selectedEntry.review.reason.replaceAll("_", " ")} · {selectedEntry.review.intervalDays} day interval</small></div>}</div>
+          {selectedEntry.id && !selectedEntry.id.includes("/") && <form className="letter-note-editor" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); savePersonalNote(selectedEntry.id, String(form.get("note") ?? "")); }}><label htmlFor="case-note">Personal note for this activity</label><textarea id="case-note" name="note" defaultValue={selectedEntry.personalNote ?? ""} placeholder="A concise reminder, mistake, or pattern to keep visible…" /><button type="submit">Pin note</button></form>}
+          {selectedEntry.audioClips?.length ? <section className="delivery-recordings"><span className="eyebrow">DELIVERY RECORDINGS</span>{selectedEntry.audioClips.map((clip) => <div key={clip.id}><div><strong>{clip.label}</strong><small>{clip.filename} · {clip.status.replaceAll("_", " ")}</small></div>{clip.status === "available" ? <audio controls preload="metadata" src={`/api/audio/${encodeURIComponent(clip.id)}`} /> : <em>Audio remains local until private storage is connected.</em>}</div>)}</section> : null}
+          {selectedEntry.artifact ? <div className="letter-sections">{selectedEntry.artifact.sections.map((section) => /conversation transcript|generated code|solution|raw exchange/i.test(section.title) ? <details key={section.title} open={/solution/i.test(section.title)}><summary>{section.title}</summary><MarkdownBody source={section.body} /></details> : <section key={section.title}><h3>{section.title}</h3><MarkdownBody source={section.body} /></section>)}</div> : <div className="unpublished-letter"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to flush any unsaved activity exchanges, then publish the transcript, review, improved answer or walkthrough, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
+          <footer>Interview Arc · {selectedEntry.id}</footer>
+        </article>
+      </div>}
     {pipWindow && createPortal(
       <PipNowPanel
         activity={pipActivity}

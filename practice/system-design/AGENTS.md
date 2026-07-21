@@ -10,6 +10,37 @@ Before starting:
 4. Read `bank/questions.json` when selecting or adding a website-visible prompt.
 5. When the selected bank entry has `source: SystemDesign.io` and `solutionReference: true`, open its `url` and review the current recommended solution links and question-specific design details before the mock begins.
 6. If the requested mode is genuinely unclear, ask whether the user wants instructor mode, interviewer mode, or a full model answer. Otherwise, infer it from the request and continue.
+7. Read `../../docs/contracts/durable-practice-publishing.md` before saving
+   notes, transcript turns, reviews, or finalizations.
+
+## Authoritative Durable Publishing Workflow
+
+The durable publishing contract supersedes any older checkpoint/branch language
+later in this guide while preserving the coaching personality and interview
+procedure below.
+
+- Resolve or resume the focused system-design `activity_id`; ask only when the
+  activity remains ambiguous.
+- Append every meaningful two-sided mock exchange to D1 in small idempotent
+  batches with `append_practice_transcript`. Flush every few short turns and on
+  long answer, activity switch, pause, finish, or coordinator request.
+- “Please note for this question” calls `add_practice_note` with the user's exact
+  wording. Notes lead the final case file.
+- `Publish this session` finalizes the current activity in D1.
+- `Publish today's practice` finalizes every pending system-design activity in
+  D1. Neither command edits Git, switches branches, commits, opens a PR, marks
+  production published, or deploys.
+- Before finalization, privately consult the stored SystemDesign.io question
+  page and relevant accessible recommended sources. Save only sources actually
+  consulted.
+- Call `save_specialist_finalization` with the complete activity-scoped
+  two-sided transcript, summary, what went well, what to improve, stronger
+  answer/architecture, follow-ups, and references.
+- Schedule failed/full-walkthrough review in 4 days, approach-review completion
+  in 7 days, and successful reimplementation in 21 then 60 days.
+
+The coordinator owns Git rendering and production publication through `Publish
+all pending practice`.
 
 ## Mission And Personality
 
@@ -50,20 +81,16 @@ The default role is not "answer generator." The default role is "coach plus inte
   item is missing, is a different specialty, and the request is ambiguous.
 - `Start a new session` remains an explicit override. Reuse or create the
   activity ID, establish the prompt and source, and create the draft session
-  artifact. Append each meaningful user/coach exchange as the mock continues so
-  the record does not depend on reconstructing a very long task at the end.
+  boundary. Append each meaningful user/coach exchange to D1 as the mock
+  continues so the record does not depend on reconstruction at the end.
 - `Publish this session`: read the activity's live timer, result, note,
   readiness, session ID, and exact timestamps through the Interview Arc MCP
-  bridge when available. Use its Pacific completion date—not the date when this
-  task began or when the command was typed—for the artifact and
-  `../../data/daily/YYYY-MM-DD.json`. Close the transcript, complete the
-  framework notes and feedback, and mark the artifact completed. Run
-  `pnpm journal:checkpoint -- --date YYYY-MM-DD --area system-design` from the
-  repository root. Only after that guarded local commit succeeds, call
-  `mark_activities_published` with the repository-relative path. Do not push,
-  open a pull request, or deploy; the main task does that once for the day.
+  bridge; flush the complete two-sided transcript; save the review, stronger
+  answer, and consulted references with `save_specialist_finalization`; then
+  stop. The coordinator owns files, Git, pull requests, and deployment.
 
-Never run raw branch-switching or commit commands in this task. If the checkpoint helper reports unrelated uncommitted work, stop publishing and ask the coordinator to protect or finish it; do not stash, discard, or include it.
+Never run branch-switching, checkpoint, commit, mark-published, pull-request, or
+deploy commands in this task.
 
 Only publish a dashboard activity whose effective publication state is `ready`, unless the user explicitly overrides that choice in this task. Finishing its timer or choosing a result makes it ready automatically. If MCP is unavailable, use a user-provided website export or ask for the activity ID and timing facts; never invent them.
 

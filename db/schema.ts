@@ -56,7 +56,9 @@ export const timerIntervals = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.subjectId, table.kind, table.startedAt] })],
 );
 
-// LeetCode canonical outcome, kept separate from timer completion.
+// Canonical three-state result flag, kept separate from timer completion. The
+// UI translates the same values to finished/finished-after-review/failed for
+// system-design and behavioral activities.
 export const outcomes = sqliteTable(
   "outcomes",
   {
@@ -89,7 +91,8 @@ export const publicationStatuses = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.activityId] })],
 );
 
-// Short personal notes can be edited from the website or LeetCode companion.
+// Short personal notes can be edited from the website or companion for any
+// activity. Specialists append immutable/pinned note records below.
 export const activityNotes = sqliteTable(
   "activity_notes",
   {
@@ -101,6 +104,126 @@ export const activityNotes = sqliteTable(
     updatedAt,
   },
   (table) => [primaryKey({ columns: [table.ownerId, table.activityId] })],
+);
+
+// Pinned, activity-scoped notes are first-class records for every practice
+// category. The legacy single-note row above remains readable by older clients;
+// new specialist/coordinator workflows append here without overwriting history.
+export const practiceNotes = sqliteTable(
+  "practice_notes",
+  {
+    ownerId,
+    id: text("id").notNull(),
+    activityId: text("activity_id").notNull(),
+    date: text("date").notNull(),
+    body: text("body").notNull(),
+    kind: text("kind", { enum: ["remember", "insight", "mistake", "pattern", "question"] })
+      .notNull()
+      .default("remember"),
+    pinned: integer("pinned", { mode: "boolean" }).notNull().default(true),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.id] })],
+);
+
+// Durable transcript events are appended in small idempotent batches. They are
+// activity-scoped: website/admin conversation must never be copied into a
+// practice transcript merely because it happened in the same Codex task.
+export const practiceTranscriptTurns = sqliteTable(
+  "practice_transcript_turns",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    turnId: text("turn_id").notNull(),
+    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
+    speaker: text("speaker", { enum: ["user", "specialist"] }).notNull(),
+    body: text("body").notNull(),
+    source: text("source", { enum: ["codex", "dictation", "audio_transcript"] }).notNull().default("codex"),
+    sequence: integer("sequence").notNull(),
+    occurredAt: integer("occurred_at").notNull(),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.activityId, table.turnId] })],
+);
+
+// A specialist writes one ready bundle after flushing its draft. The
+// coordinator consumes this JSON payload to render versioned Markdown; writing
+// this row is finalization, not publication.
+export const activityFinalizations = sqliteTable(
+  "activity_finalizations",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
+    status: text("status", { enum: ["draft", "ready", "published"] }).notNull().default("draft"),
+    payload: text("payload", { mode: "json" }).notNull(),
+    finalizedAt: integer("finalized_at"),
+    publishedAt: integer("published_at"),
+    revision: integer("revision").notNull().default(0),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.activityId] })],
+);
+
+// Review scheduling is tied to the stable bank question when available and to
+// the activity otherwise. A full walkthrough/failed attempt starts at four
+// days; approach review starts at seven; successful recalls advance to 21/60.
+export const reviewSchedules = sqliteTable(
+  "review_schedules",
+  {
+    ownerId,
+    reviewKey: text("review_key").notNull(),
+    activityId: text("activity_id").notNull(),
+    questionId: text("question_id"),
+    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
+    status: text("status", { enum: ["scheduled", "due", "completed", "dismissed"] }).notNull().default("scheduled"),
+    reason: text("reason", { enum: ["failed", "full_walkthrough", "approach_review", "manual", "successful_recall"] }).notNull(),
+    dueDate: text("due_date").notNull(),
+    intervalDays: integer("interval_days").notNull(),
+    stage: integer("stage").notNull().default(0),
+    reviewCount: integer("review_count").notNull().default(0),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.reviewKey] })],
+);
+
+// Stable task identifiers remove the need for the user to paste task IDs on
+// every publish. Titles are discovery labels only; the registered IDs are the
+// durable routing source of truth.
+export const specialistTasks = sqliteTable(
+  "specialist_tasks",
+  {
+    ownerId,
+    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
+    threadId: text("thread_id").notNull(),
+    hostId: text("host_id"),
+    title: text("title").notNull(),
+    connectedAt: integer("connected_at").notNull(),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.specialty] })],
+);
+
+// Audio stays outside Git. These rows describe private R2 objects and their
+// relationship to an activity; the object key is never exposed as a public URL.
+export const activityAudioClips = sqliteTable(
+  "activity_audio_clips",
+  {
+    ownerId,
+    id: text("id").notNull(),
+    activityId: text("activity_id").notNull(),
+    objectKey: text("object_key").notNull(),
+    filename: text("filename").notNull(),
+    mimeType: text("mime_type").notNull(),
+    label: text("label").notNull().default("Practice answer"),
+    durationSeconds: integer("duration_seconds"),
+    status: text("status", { enum: ["local_only", "uploading", "available", "failed"] }).notNull().default("local_only"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.id] })],
 );
 
 // Personal integration tokens map a bearer credential to the same opaque
@@ -191,6 +314,12 @@ export type TimerIntervalRow = typeof timerIntervals.$inferSelect;
 export type OutcomeRow = typeof outcomes.$inferSelect;
 export type PublicationStatusRow = typeof publicationStatuses.$inferSelect;
 export type ActivityNoteRow = typeof activityNotes.$inferSelect;
+export type PracticeNoteRow = typeof practiceNotes.$inferSelect;
+export type PracticeTranscriptTurnRow = typeof practiceTranscriptTurns.$inferSelect;
+export type ActivityFinalizationRow = typeof activityFinalizations.$inferSelect;
+export type ReviewScheduleRow = typeof reviewSchedules.$inferSelect;
+export type SpecialistTaskRow = typeof specialistTasks.$inferSelect;
+export type ActivityAudioClipRow = typeof activityAudioClips.$inferSelect;
 export type IntegrationTokenRow = typeof integrationTokens.$inferSelect;
 export type ExtraActivityRow = typeof extraActivities.$inferSelect;
 export type LiveSessionRow = typeof liveSessions.$inferSelect;

@@ -70,6 +70,8 @@ by this date and checkpoints one `journal/YYYY-MM-DD` branch per group.
 ```markdown
 # <Problem title>
 
+## Pinned Notes
+
 ## Problem Reference
 
 ## User Attempt
@@ -94,13 +96,31 @@ by this date and checkpoints one `journal/YYYY-MM-DD` branch per group.
 
 ## Review
 
+### What Went Well
+
+### What To Improve
+
 ### Key Lessons
 
 ### Mistakes To Avoid
 
 ### Reimplementation Plan
+
+## Activity Exchanges
+
+## References
 ```
 
 Omit unavailable user-attempt subsections instead of inventing them. Generated code may be stored inline or referenced with a repository-relative path. Label generated material as original coaching, not an official LeetCode solution.
+
+`Activity Exchanges` contains every relevant two-sided exchange observed for
+this problem. When no specialist conversation occurred, write “No coaching
+conversation was observed for this activity” instead of fabricating a script.
+`References` lists only sources actually consulted with access date/time.
+Pinned notes apply to coding, system design, and behavioral artifacts and must
+preserve the user's wording.
+
+Review scheduling defaults to 4 days after failure or a full walkthrough, 7
+days after an approach review, and 21 then 60 days after successful recalls.
 
 The machine-readable equivalent is `leetcode-log.schema.json`.

@@ -4,6 +4,7 @@
 export type JournalActivity = {
   schemaVersion: number;
   id: string;
+  questionId?: string;
   date: string;
   source: "daily" | "extra";
   type: "leetcode" | "system_design" | "behavioral";
@@ -23,6 +24,8 @@ export type JournalActivity = {
   artifactPath?: string;
   notes?: string;
   reviewDates?: string[];
+  reviewOfActivityId?: string;
+  reviewReason?: "failed" | "full_walkthrough" | "approach_review" | "manual" | "successful_recall";
 };
 
 export type TimerGroup = {

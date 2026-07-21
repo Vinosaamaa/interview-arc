@@ -36,9 +36,9 @@ The website uses one cycling flag control:
 3. yellow: `solved_after_reviewing_approach`;
 4. red: `failed`.
 
-The control appears on coding, system-design, and behavioral activities so all Today cards keep the same layout. For LeetCode, green and yellow retain their canonical outcome names. For system-design and behavioral work, the interface reads them as `finished` and `finished after reviewing approach`; those mock labels are local publishing signals and must not be written into the durable activity `outcome` field, which remains LeetCode-specific.
+The control appears on coding, system-design, and behavioral activities so all Today cards keep the same layout. For LeetCode, green and yellow retain their canonical outcome names. For system-design and behavioral work, the interface reads the same D1 result values as `finished` and `finished after reviewing approach`; published mock artifacts describe them as qualitative review signals rather than LeetCode acceptance claims.
 
-The control provides an accessible label and a hover/focus legend. Its legend must escape the card visually rather than being clipped by the swipe container. A result flag and timer completion are separate signals. Red work is excluded from Past, but it is still ready for publication so the specialist can write a useful postmortem.
+The control provides an accessible label and a hover/focus legend. Its legend must escape the card visually rather than being clipped by the swipe container. A result flag and timer completion are separate signals. Red work remains in Past and is ready for publication so the specialist can write a useful postmortem and schedule review.
 
 ## Publication State
 
@@ -46,9 +46,9 @@ Every activity exposes an owner-scoped publication state derived from lifecycle,
 
 - `draft`: unfinished and not offered to a specialist task;
 - `ready`: finished and automatically included in the publication queue;
-- `published`: the specialist wrote the artifact and reported its path back to Interview Arc.
+- `published`: the coordinator wrote/imported the artifact and reported its path back to Interview Arc.
 
-Finishing a timer or choosing an outcome changes the effective state to **Ready for journal** (`ready`) automatically. A specialist changes it to **In journal** (`published`) only after the repository artifact actually exists. Failed attempts are eligible and produce useful postmortems.
+Finishing a timer or choosing an outcome changes the effective state to **Ready for journal** (`ready`) automatically. The coordinator changes it to **In journal** (`published`) only after the repository artifact actually exists and is importable. Failed attempts are eligible and produce useful postmortems.
 
 ## Sessions
 
@@ -78,9 +78,10 @@ journals without duplicating an activity.
 
 ## Export
 
-Draft export schema version 5 contains session countdowns, activity stopwatches,
+Draft export schema version 6 contains session countdowns, activity stopwatches,
 Pacific start/finish timestamps, durable focus, outcomes, publication states,
-personal notes, locally added sessions and activities,
+personal and structured notes, review schedules, specialist finalization
+summaries, audio metadata, locally added sessions and activities,
 `publishQueueActivityIds`, and `publishQueueByDate`.
 
 `publishQueueActivityIds` contains exactly the finished, unpublished activities whose effective publication state is `ready`, including red/failed work and timer-finished work with no result selected.
@@ -91,28 +92,27 @@ export the user makes available at
 `data/drafts/journal-YYYY-MM-DD-draft.json`. Draft JSON files are ignored by
 Git; `data/drafts/README.md` documents the fallback workflow.
 
-## End-Of-Day LeetCode Publication
+## Durable Publication
 
-The user finishes the desired activities and says `Publish today's LeetCode`.
+Specialists read their ready activities and save complete D1 finalization
+bundles; they do not write Git artifacts. `Publish today's LeetCode` remains a
+coding-only alias for this finalization step.
 
-The LeetCode task must:
+The coordinator command `Publish all pending practice` reads the complete queue,
+asks each registered specialist to flush unsaved exchanges and finalize its
+activities, renders artifacts grouped by Pacific completion date, and publishes
+the journal pull request. Follow `durable-practice-publishing.md`.
 
-1. call `get_publication_queue` through the configured Interview Arc MCP bridge; if it is unavailable, read the exported `publishQueueActivityIds`, `publishQueueByDate`, outcomes, timers, publication states, notes, daily manifest, and locally added activity metadata;
-2. select only queued LeetCode activities;
-3. preserve the website-provided outcome and elapsed time without inferring either from chat timestamps;
-4. generate an original coaching solution, code, complexity analysis, edge cases, and key lesson for every selected problem, even when that problem was never discussed earlier in the task;
-5. group records by their Pacific completion date, write one attempt artifact per problem, and update that date's daily manifest;
-6. checkpoint each date sequentially on its own `journal/YYYY-MM-DD` branch; never combine two Pacific dates into one journal branch;
-7. after each date's checkpoint succeeds, call `mark_activities_published` with that date and its repository paths; when using the fallback export, leave the draft file local and uncommitted.
-
-If neither MCP nor an export is available, the task must not claim it knows what was finished. It may use durable manifest facts or ask the user to connect Interview Arc or attach the draft.
+If neither MCP nor an export is available, no task may claim it knows what was
+finished. It may use durable manifest facts or ask the user to connect
+Interview Arc or attach the draft.
 
 ## Past
 
 Past updates immediately from the same D1-backed eligibility rules as
-`publishQueueActivityIds`. Planned, running, and red/failed records are
-excluded. Failed attempts remain available to Journey statistics but do not
-appear in the reading log.
+`publishQueueActivityIds`. Planned and running records are excluded. Completed
+failed attempts remain visible and can be isolated with the Failed or Needs
+review attention filters.
 
 Published LeetCode letters show original agent-generated solution material. Published system-design and behavioral letters show the complete formatted conversation transcript and review. Markdown is rendered as a preview with headings, lists, tables, links, quotations, and fenced code blocks; raw Markdown source is not the default reading surface.
 

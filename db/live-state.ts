@@ -3,17 +3,23 @@ import { practiceDateAt } from "../app/practice-time";
 import { getDb } from "./index";
 import {
   activityNotes,
+  activityAudioClips,
+  activityFinalizations,
   extraActivities,
   liveSessions,
   outcomes,
   practiceFocus,
+  practiceNotes,
+  practiceTranscriptTurns,
   publicationStatuses,
   timerIntervals,
   timers,
+  reviewSchedules,
   type ExtraActivityRow,
   type LiveSessionRow,
 } from "./schema";
 import { foldElapsed, nextTimerState } from "./timer-state";
+import { readDurablePracticeSummary } from "./durable-practice";
 
 export type TimerKind = "activity" | "session";
 export type TimerAction = "start" | "pause" | "finish";
@@ -38,6 +44,10 @@ export type LiveState = {
   outcomes: Record<string, OutcomeValue>;
   publicationStatuses: Record<string, PublicationStatusValue>;
   notes: Record<string, string>;
+  structuredNotes: Record<string, unknown[]>;
+  reviews: Record<string, unknown>;
+  finalizations: Record<string, unknown>;
+  audioClips: Record<string, unknown[]>;
   extraActivities: unknown[];
   sessions: unknown[];
   focusedActivityId: string | null;
@@ -116,6 +126,7 @@ export async function readLiveState(
       || Boolean(sessionId && activeSessionIds.has(sessionId));
   });
   const visibleActivityIds = new Set(visibleActivities.map((activity) => activity.id));
+  const durable = await readDurablePracticeSummary(ownerId, [...visibleActivityIds], date);
 
   const outcomeMap: Record<string, OutcomeValue> = {};
   for (const row of outcomeRows) outcomeMap[row.activityId] = row.outcome as OutcomeValue;
@@ -141,6 +152,23 @@ export async function readLiveState(
     outcomes: outcomeMap,
     publicationStatuses: publicationMap,
     notes: noteMap,
+    structuredNotes: durable.notes,
+    reviews: durable.reviews,
+    finalizations: Object.fromEntries(Object.entries(durable.finalizations).map(([activityId, row]) => [activityId, {
+      activityId,
+      specialty: row.specialty,
+      status: row.status,
+      finalizedAt: row.finalizedAt,
+    }])),
+    audioClips: Object.fromEntries(Object.entries(durable.audioClips).map(([activityId, rows]) => [activityId, rows.map((row) => ({
+      id: row.id,
+      activityId,
+      filename: row.filename,
+      mimeType: row.mimeType,
+      label: row.label,
+      durationSeconds: row.durationSeconds,
+      status: row.status,
+    }))])),
     extraActivities: visibleActivities,
     sessions: visibleSessions,
     focusedActivityId: focus?.activityId ?? null,
@@ -492,6 +520,11 @@ export async function removeExtraActivity(ownerId: string, id: string) {
   await db.delete(outcomes).where(and(eq(outcomes.ownerId, ownerId), eq(outcomes.activityId, id)));
   await db.delete(publicationStatuses).where(and(eq(publicationStatuses.ownerId, ownerId), eq(publicationStatuses.activityId, id)));
   await db.delete(activityNotes).where(and(eq(activityNotes.ownerId, ownerId), eq(activityNotes.activityId, id)));
+  await db.delete(practiceNotes).where(and(eq(practiceNotes.ownerId, ownerId), eq(practiceNotes.activityId, id)));
+  await db.delete(practiceTranscriptTurns).where(and(eq(practiceTranscriptTurns.ownerId, ownerId), eq(practiceTranscriptTurns.activityId, id)));
+  await db.delete(activityFinalizations).where(and(eq(activityFinalizations.ownerId, ownerId), eq(activityFinalizations.activityId, id)));
+  await db.delete(activityAudioClips).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.activityId, id)));
+  await db.delete(reviewSchedules).where(and(eq(reviewSchedules.ownerId, ownerId), eq(reviewSchedules.activityId, id)));
   await db.delete(timers).where(and(eq(timers.ownerId, ownerId), eq(timers.subjectId, id), eq(timers.kind, "activity")));
   await db.delete(timerIntervals).where(and(eq(timerIntervals.ownerId, ownerId), eq(timerIntervals.subjectId, id), eq(timerIntervals.kind, "activity")));
   await db

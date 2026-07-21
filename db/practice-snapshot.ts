@@ -10,6 +10,10 @@ export type ConnectedActivity = JournalActivity & {
   outcome?: "solved" | "solved_after_reviewing_approach" | "failed";
   publicationStatus: PublicationStatusValue;
   personalNote: string;
+  pinnedNotes: unknown[];
+  review: unknown | null;
+  specialistFinalization: unknown | null;
+  audioClips: unknown[];
   sessionId?: string;
   practiceDate: string;
 };
@@ -39,6 +43,10 @@ export async function buildPracticeSnapshot(ownerId: string, date = dateInPracti
       outcome,
       publicationStatus,
       personalNote: live.notes[activity.id] ?? "",
+      pinnedNotes: live.structuredNotes[activity.id] ?? [],
+      review: live.reviews[activity.id] ?? null,
+      specialistFinalization: live.finalizations[activity.id] ?? null,
+      audioClips: live.audioClips[activity.id] ?? [],
       practiceDate,
       ...(sessionId ? { sessionId } : {}),
       ...(timer?.startedAt ? { startedAt: new Date(timer.startedAt).toISOString() } : {}),
@@ -103,6 +111,10 @@ export async function buildPublicationQueue(ownerId: string, requestedDate?: str
       publicationStatus,
       practiceDate,
       personalNote: live.notes[activity.id] ?? "",
+      pinnedNotes: live.structuredNotes[activity.id] ?? [],
+      review: live.reviews[activity.id] ?? null,
+      specialistFinalization: live.finalizations[activity.id] ?? null,
+      audioClips: live.audioClips[activity.id] ?? [],
       ...(sessionId ? { sessionId } : {}),
       ...(timer?.startedAt ? { startedAt: new Date(timer.startedAt).toISOString() } : {}),
       ...(timer?.completedAt ? { endedAt: new Date(timer.completedAt).toISOString() } : {}),

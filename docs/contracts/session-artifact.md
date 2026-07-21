@@ -1,6 +1,10 @@
 # Session Artifact Contract
 
-System-design and behavioral agents write one Markdown artifact per completed mock or substantial coached session. The task maintains a draft incrementally during long sessions and finalizes it when the user says `Publish this session`.
+System-design and behavioral specialists maintain one durable D1 record per
+completed mock or substantial coached session. The coordinator later renders
+one Markdown artifact from that record. The specialist maintains its transcript
+incrementally and finalizes the D1 bundle when the user says `Publish this
+session` or the coordinator requests a flush.
 
 ## Session Boundaries
 
@@ -9,12 +13,16 @@ System-design and behavioral agents write one Markdown artifact per completed mo
    natural request such as “let's do the current mock” is an equivalent
    boundary. `Start a new session` remains a supported explicit override, not a
    phrase the user must repeat every day.
-2. Append each meaningful user/coach exchange to the draft in chronological order.
-3. `Publish this session` closes the transcript, adds feedback and the stronger answer, marks the artifact completed, and updates the matching activity in `data/daily/YYYY-MM-DD.json`.
+2. Append each meaningful user/coach exchange to D1 in chronological order.
+3. `Publish this session` closes the specialist draft and saves feedback,
+   stronger answer, and references with `save_specialist_finalization`.
+4. The coordinator reads that bundle, writes the Markdown/daily journal, and
+   performs Git publication.
 
 Only messages after the resolved activity boundary belong to the transcript.
 If no focused activity exists, the specialist must ask which prompt to use.
-Publishing writes files; the main task handles pull requests and deployment.
+Specialist finalization writes no files. The coordinator handles files, pull
+requests, import, and deployment.
 
 The journal date is the Pacific (`America/Los_Angeles`) date when the activity
 finishes. A mock may begin before midnight and finish after it without creating
@@ -60,6 +68,8 @@ Use `timing_source: website` when the value came from the website timer, `manual
 ```markdown
 # <Title>
 
+## Pinned Notes
+
 ## Prompt
 
 ## Conversation Transcript
@@ -79,8 +89,19 @@ Use `timing_source: website` when the value came from the website timer, `manual
 ## Follow-Up Questions
 
 ## Next Drill
+
+## Delivery Recordings
+
+## References
 ```
 
 The conversation transcript is the full two-sided session in chronological order. Preserve the user's meaning and the coach's questions or responses. Do not substitute a summary for the transcript. If an audio transcript contains only the user's long answer, label it clearly and keep the available conversation text around it.
 
 System-design files may add framework sections such as requirements, capacity, APIs, data model, architecture, key flows, bottlenecks, tradeoffs, and a one-minute summary. Behavioral files may add STAR structure, signal analysis, and stronger phrasing.
+
+Pinned notes preserve the user's wording and appear before the rest of the case
+file. Every completed artifact includes both `What Went Well` and `What To
+Improve`. `References` is last and lists only sources actually consulted with
+access date/time. Review scheduling applies to both mock types: 4 days after a
+failed/full walkthrough, 7 after approach review, and 21 then 60 after
+successful recalls.
