@@ -14,8 +14,10 @@ import {
 // math can use `Date.now()` without tracking skew per render.
 type ServerTimer = {
   accumulatedSeconds: number;
+  startedAt: number | null;
   runningSince: number | null;
   completed: boolean;
+  completedAt: number | null;
   revision: number;
 };
 type ServerLiveState = {
@@ -27,6 +29,9 @@ type ServerLiveState = {
   notes: Record<string, string>;
   extraActivities: ExtraActivity[];
   sessions: LocalSession[];
+  focusedActivityId: string | null;
+  focusedSessionId: string | null;
+  focusedAt: number | null;
 };
 
 export function useReadOnlyLiveState(date: string) {
@@ -38,7 +43,7 @@ export function useReadOnlyLiveState(date: string) {
         const response = await fetch(`/api/state?date=${date}`);
         if (!response.ok) return;
         const server = (await response.json()) as ServerLiveState;
-        if (!cancelled) setState(serverToDraft(server, server.serverNow - Date.now()));
+        if (!cancelled) setState(serverToDraft(server, server.serverNow - Date.now(), date));
       } catch {
         // Yesterday's card can fall back to versioned journal data offline.
       }
@@ -49,8 +54,15 @@ export function useReadOnlyLiveState(date: string) {
 }
 
 export type Mutation =
-  | { type: "timer"; subjectId: string; kind: "activity" | "session"; action: "start" | "pause" | "finish" }
-  | { type: "outcome"; activityId: string; outcome: Outcome | null }
+  | {
+      type: "timer";
+      subjectId: string;
+      kind: "activity" | "session";
+      action: "start" | "pause" | "finish";
+      sessionId?: string;
+      activityIds?: string[];
+    }
+  | { type: "outcome"; activityId: string; outcome: Outcome | null; sessionId?: string }
   | { type: "publication-status"; activityId: string; status: PublicationStatus; artifactPath?: string }
   | { type: "activity-note"; activityId: string; note: string }
   | { type: "extra-upsert"; activity: ExtraActivity }
@@ -72,10 +84,12 @@ function timerToDraft(timer: ServerTimer, offset: number): TimerDraft {
     elapsedSeconds: timer.accumulatedSeconds,
     runningSince: timer.runningSince === null ? null : timer.runningSince - offset,
     completed: timer.completed,
+    startedAt: timer.startedAt,
+    completedAt: timer.completedAt,
   };
 }
 
-function serverToDraft(state: ServerLiveState, offset: number): LocalDraft {
+function serverToDraft(state: ServerLiveState, offset: number, date = ""): LocalDraft {
   const timers: Record<string, TimerDraft> = {};
   for (const [id, timer] of Object.entries(state.timers)) timers[id] = timerToDraft(timer, offset);
   const sessionTimers: Record<string, TimerDraft> = {};
@@ -87,7 +101,10 @@ function serverToDraft(state: ServerLiveState, offset: number): LocalDraft {
     publicationStatuses: state.publicationStatuses ?? {},
     notes: state.notes ?? {},
     extraActivities: state.extraActivities ?? [],
-    sessions: state.sessions ?? [],
+    sessions: (state.sessions ?? []).map((session) => ({ ...session, date: session.date ?? date })),
+    focusedActivityId: state.focusedActivityId ?? null,
+    focusedSessionId: state.focusedSessionId ?? null,
+    focusedAt: state.focusedAt,
   };
 }
 
@@ -130,6 +147,9 @@ function mergeDrafts(server: LocalDraft, local: LocalDraft) {
       ...local.sessions.filter((session) => !serverSessionIds.has(session.id)),
       ...server.sessions,
     ],
+    focusedActivityId: server.focusedActivityId ?? local.focusedActivityId,
+    focusedSessionId: server.focusedSessionId ?? local.focusedSessionId,
+    focusedAt: server.focusedAt ?? local.focusedAt,
   };
   return { merged, localOnly };
 }
@@ -146,7 +166,10 @@ function readDraft(date: string): LocalDraft {
       publicationStatuses: parsed.publicationStatuses ?? {},
       notes: parsed.notes ?? {},
       extraActivities: parsed.extraActivities ?? [],
-      sessions: parsed.sessions ?? [],
+      sessions: (parsed.sessions ?? []).map((session) => ({ ...session, date: session.date ?? date })),
+      focusedActivityId: parsed.focusedActivityId ?? null,
+      focusedSessionId: parsed.focusedSessionId ?? null,
+      focusedAt: parsed.focusedAt ?? null,
     };
   } catch {
     return EMPTY_DRAFT;
@@ -206,7 +229,7 @@ export function useLiveState(date: string): LiveStateController {
         if (queueRef.current.length === 0) {
           // Queue drained: adopt the server's authoritative view (it also reflects
           // server-side effects like pausing other stopwatches on start).
-          setDraft(() => serverToDraft(state, offsetRef.current));
+          setDraft(() => serverToDraft(state, offsetRef.current, date));
         }
       }
     } finally {
@@ -258,7 +281,7 @@ export function useLiveState(date: string): LiveStateController {
         const state = (await response.json()) as ServerLiveState;
         if (cancelled) return;
         offsetRef.current = state.serverNow - Date.now();
-        const serverDraft = serverToDraft(state, offsetRef.current);
+        const serverDraft = serverToDraft(state, offsetRef.current, date);
         const { merged, localOnly } = mergeDrafts(serverDraft, localDraft);
         serverApplied = true;
         setDraft(() => merged);

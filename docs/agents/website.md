@@ -69,6 +69,18 @@ The website must not imply that browser draft state has already been published t
 - Provide Today, Journey, Past, and Problem Banks views without placing every raw log on one page.
 - Activity detail should lead with summary, outcome, approach, lessons, and feedback; keep full transcript or code expandable.
 - The session clock is a countdown. Activity clocks are stopwatches with compact icon controls for start/pause and finish.
+- Use `America/Los_Angeles` as the canonical practice timezone. Display exact
+  Pacific start and finish timestamps in Past and preserve them in exports.
+- Keep calendar date and session membership independent. Assign a completed
+  activity to its Pacific completion date, but retain one stable `session_id`
+  when a session crosses midnight.
+- Persist a single focused activity. Starting another activity pauses the prior
+  one; starting a child resumes its parent session. Pausing or finishing a
+  session pauses its running child activity. Starting a standalone activity
+  pauses any running session so that work is not charged to the wrong session.
+- Journey may summarize evidence-backed Pacific time-of-day distribution and
+  per-session completion, duration, and cross-midnight span. Do not turn a
+  time-of-day distribution into a productivity or mastery claim.
 - A failed attempt should still feel like useful logged work.
 - Make extra-question creation a short modal or inline form: category, title or URL/prompt, and timer.
 - In the creation flow, search the matching bank first. For an unknown LeetCode URL, derive a title from its public problem slug without scraping the page. For unknown system-design or behavioral questions, accept a custom title with no URL.

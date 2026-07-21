@@ -17,8 +17,15 @@ import { resolveOwnerId } from "../../../db/owner";
 import { toRouteErrorMessage } from "../route-helpers";
 
 type Mutation =
-  | { type: "timer"; subjectId: string; kind: TimerKind; action: TimerAction }
-  | { type: "outcome"; activityId: string; outcome: OutcomeValue | null }
+  | {
+      type: "timer";
+      subjectId: string;
+      kind: TimerKind;
+      action: TimerAction;
+      sessionId?: string;
+      activityIds?: string[];
+    }
+  | { type: "outcome"; activityId: string; outcome: OutcomeValue | null; sessionId?: string }
   | { type: "publication-status"; activityId: string; status: PublicationStatusValue; artifactPath?: string }
   | { type: "activity-note"; activityId: string; note: string }
   | { type: "extra-upsert"; activity: { id: string; date: string } & Record<string, unknown> }
@@ -50,14 +57,17 @@ export async function POST(request: Request) {
         if (!mutation.subjectId || !TIMER_KINDS.includes(mutation.kind) || !TIMER_ACTIONS.includes(mutation.action)) {
           return Response.json({ error: "Invalid timer mutation." }, { status: 400 });
         }
-        await applyTimerAction(ownerId, mutation.subjectId, mutation.kind, mutation.action, now);
+        await applyTimerAction(ownerId, mutation.subjectId, mutation.kind, mutation.action, now, {
+          sessionId: mutation.sessionId,
+          activityIds: mutation.activityIds,
+        });
         break;
       }
       case "outcome": {
         if (!mutation.activityId) {
           return Response.json({ error: "Invalid outcome mutation." }, { status: 400 });
         }
-        await setOutcome(ownerId, mutation.activityId, mutation.outcome ?? null, now);
+        await setOutcome(ownerId, mutation.activityId, mutation.outcome ?? null, now, mutation.sessionId);
         break;
       }
       case "publication-status": {

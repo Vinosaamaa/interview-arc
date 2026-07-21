@@ -19,6 +19,7 @@ export const timers = sqliteTable(
     subjectId: text("subject_id").notNull(),
     kind: text("kind", { enum: ["activity", "session"] }).notNull(),
     accumulatedSeconds: integer("accumulated_seconds").notNull().default(0),
+    startedAt: integer("started_at"),
     runningSince: integer("running_since"),
     completed: integer("completed", { mode: "boolean" }).notNull().default(false),
     completedAt: integer("completed_at"),
@@ -28,6 +29,31 @@ export const timers = sqliteTable(
     updatedAt,
   },
   (table) => [primaryKey({ columns: [table.ownerId, table.subjectId, table.kind] })],
+);
+
+// One durable pointer answers “what am I working on?” even while its stopwatch
+// is paused. The focused session is stored separately because a session may be
+// active before the user chooses its first activity.
+export const practiceFocus = sqliteTable("practice_focus", {
+  ownerId: text("owner_id").primaryKey(),
+  activityId: text("activity_id"),
+  sessionId: text("session_id"),
+  focusedAt: integer("focused_at"),
+  updatedAt,
+});
+
+// Immutable clock segments preserve exact active intervals across Pacific
+// midnight. They support day-sliced statistics without guessing from totals.
+export const timerIntervals = sqliteTable(
+  "timer_intervals",
+  {
+    ownerId,
+    subjectId: text("subject_id").notNull(),
+    kind: text("kind", { enum: ["activity", "session"] }).notNull(),
+    startedAt: integer("started_at").notNull(),
+    endedAt: integer("ended_at"),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.subjectId, table.kind, table.startedAt] })],
 );
 
 // LeetCode canonical outcome, kept separate from timer completion.
@@ -160,6 +186,8 @@ export const contentBank = sqliteTable(
 );
 
 export type TimerRow = typeof timers.$inferSelect;
+export type PracticeFocusRow = typeof practiceFocus.$inferSelect;
+export type TimerIntervalRow = typeof timerIntervals.$inferSelect;
 export type OutcomeRow = typeof outcomes.$inferSelect;
 export type PublicationStatusRow = typeof publicationStatuses.$inferSelect;
 export type ActivityNoteRow = typeof activityNotes.$inferSelect;

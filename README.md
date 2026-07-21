@@ -56,11 +56,16 @@ The outer workspace instructions route a task to the right guide even when every
 
 Use three shared commands:
 
-- `Start a new session` creates or acknowledges a stable activity ID and draft artifact.
-- `Publish this session` finalizes one question's files, updates the daily manifest, and makes a guarded local checkpoint commit on `journal/YYYY-MM-DD`.
+- A focused dashboard activity or a clearly named problem normally starts or
+  resumes specialist work. `Start a new session` explicitly creates or
+  acknowledges a stable activity ID and draft artifact when an override is
+  useful; it is not a required daily ritual.
+- `Publish this session` finalizes one question's files, assigns it to the
+  Pacific date on which it finished, updates that daily manifest, and makes a
+  guarded local checkpoint commit on `journal/YYYY-MM-DD`.
 - `Finish today's journal` asks the main task to merge the latest `main`, validate, push, and open one pull request for the day.
 
-For coding, finish the stopwatch or choose the actual result, then say `Publish today's LeetCode`. Finished activities become **Ready for journal** automatically (internal state: `ready`). The project-scoped Interview Arc MCP bridge lets the LeetCode task read that authenticated D1 queue and produce every coding artifact in one pass; it does not need a separate conversation for every problem. Exporting `journal-YYYY-MM-DD-draft.json` remains the portable fallback.
+For coding, finish the stopwatch or choose the actual result, then say `Publish today's LeetCode`. Finished activities become **Ready for journal** automatically (internal state: `ready`). The project-scoped Interview Arc MCP bridge reads the complete authenticated D1 queue, groups ready problems by Pacific completion date, and produces every coding artifact in one pass; it does not need a separate conversation for every problem or a separate command at midnight. Exporting `journal-YYYY-MM-DD-draft.json` remains the portable fallback.
 
 All specialist publications use the same guarded `journal/YYYY-MM-DD` branch.
 The checkpoint helper commits only journal-owned paths and refuses to cross a
@@ -159,5 +164,12 @@ The system-design bank currently mirrors the 55 questions listed by SystemDesign
 The behavioral bank mirrors the 74 questions listed by Bugfree.ai. Each entry stores its canonical answer page, category/focus topics, expected answer format, frequency, and whether the reference may require sign-in. The behavioral task consults that page when the user asks for a solution and reports the exact URL when the site's answer cannot be accessed.
 
 A session defaults to six coding problems, one system-design question, and one behavioral question, producing a six-hour countdown. Before work begins, the user may change any category count; the countdown is recalculated at 40 minutes per coding problem and 60 minutes per system-design or behavioral question. The user may add another session or a standalone activity. Every activity also has a compact elapsed-time stopwatch.
+
+All day boundaries use `America/Los_Angeles`. An activity begun before midnight
+and finished after midnight is recorded on the later date, with both exact
+timestamps preserved. Session membership is independent: the same session ID
+continues across midnight so its complete activity count and elapsed time remain
+available for session analytics. Only one activity and one parent session run at
+a time; pausing or finishing the parent pauses its running child.
 
 The site presents these sources in Problem Banks. Past is the completed-work reading log. Journey is an interactive practice atlas with a 365-day heatmap, streak and momentum measures, coding outcome rates, difficulty and topic coverage, pace controls, and an elapsed-time-versus-outcome map. Every point opens or filters to the records behind it; unsupported mastery or productivity claims are intentionally excluded.

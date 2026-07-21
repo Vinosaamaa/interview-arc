@@ -36,7 +36,9 @@ Use `record_kind: walkthrough` when the user gives the task a problem URL and as
 ---
 schema_version: 1
 activity_id: 2026-07-17-leetcode-number-of-islands
-date: 2026-07-17
+session_id: 2026-07-17-session-1
+date: 2026-07-18
+practice_timezone: America/Los_Angeles
 type: leetcode
 source: daily
 record_kind: attempt
@@ -48,6 +50,8 @@ status: completed
 allocated_seconds: 1500
 timing_source: website
 elapsed_seconds: 1324
+started_at: 2026-07-17T23:48:00-07:00
+ended_at: 2026-07-18T00:10:04-07:00
 user_attempted: true
 outcome: solved_after_reviewing_approach
 assistance_level: approach_review
@@ -55,6 +59,11 @@ assistance_level: approach_review
 ```
 
 For a walkthrough with no timer, use `timing_source: unknown` and omit `elapsed_seconds` and `outcome`.
+
+`date` is the Pacific completion date. A problem that starts before midnight
+and finishes afterward belongs to the date it finishes while preserving both
+timestamps and its session membership. Batch publication groups ready problems
+by this date and checkpoints one `journal/YYYY-MM-DD` branch per group.
 
 ## Canonical Sections
 

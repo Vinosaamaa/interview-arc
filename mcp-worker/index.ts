@@ -13,7 +13,7 @@ import {
   type PublicationStatusValue,
   type TimerAction,
 } from "../db/live-state";
-import { buildPracticeSnapshot, dateInPracticeTimeZone } from "../db/practice-snapshot";
+import { buildPracticeSnapshot, buildPublicationQueue, dateInPracticeTimeZone } from "../db/practice-snapshot";
 
 interface Env {
   DB: D1Database;
@@ -92,9 +92,21 @@ async function companionMutation(ownerId: string, request: Request) {
     if (!mutation.activityId || !["start", "pause", "finish"].includes(mutation.action)) {
       return json(request, { error: "Invalid timer mutation." }, { status: 400 });
     }
-    await applyTimerAction(ownerId, mutation.activityId, "activity", mutation.action, now);
+    const snapshot = await buildPracticeSnapshot(ownerId, date);
+    const activity = snapshot.activities.find((candidate) => candidate.id === mutation.activityId);
+    const session = activity?.sessionId
+      ? snapshot.sessions.find((candidate) => candidate.id === activity.sessionId)
+      : undefined;
+    if (mutation.action === "start" && session && !snapshot.sessionTimers[session.id]?.completed) {
+      await applyTimerAction(ownerId, session.id, "session", "start", now, { activityIds: session.activityIds });
+    }
+    await applyTimerAction(ownerId, mutation.activityId, "activity", mutation.action, now, {
+      sessionId: activity?.sessionId,
+    });
   } else if (mutation.type === "outcome") {
-    await setOutcome(ownerId, mutation.activityId, mutation.outcome, now);
+    const snapshot = await buildPracticeSnapshot(ownerId, date);
+    const activity = snapshot.activities.find((candidate) => candidate.id === mutation.activityId);
+    await setOutcome(ownerId, mutation.activityId, mutation.outcome, now, activity?.sessionId);
   } else if (mutation.type === "publication-status") {
     if (!["draft", "ready", "published"].includes(mutation.status)) {
       return json(request, { error: "Invalid publication status." }, { status: 400 });
@@ -154,16 +166,15 @@ function createServer(ownerId: string) {
   server.registerTool(
     "get_publication_queue",
     {
-      description: "Read only the activities explicitly marked Ready to publish. Failed attempts remain eligible for a postmortem.",
+      description: "Read every activity ready for publication, grouped by America/Los_Angeles completion date. Failed attempts remain eligible for a postmortem.",
       inputSchema: { date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async ({ date }) => {
-      const snapshot = await buildPracticeSnapshot(ownerId, date);
-      const result = { date: snapshot.date, activities: snapshot.readyActivities };
+      const result = await buildPublicationQueue(ownerId, date);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        structuredContent: result,
+        structuredContent: { date: date ?? null, ...result },
       };
     },
   );
