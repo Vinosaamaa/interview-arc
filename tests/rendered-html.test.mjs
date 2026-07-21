@@ -78,8 +78,12 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(css, /\.past-control-deck \{[^}]*grid-template-columns: minmax\(0, 1fr\) 250px;/);
   assert.match(css, /\.case-title-row \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto;/);
   assert.match(client, /left\.type === "system_design" \? -1 : 1/);
-  assert.match(client, /placeholder="Search past…"/);
-  assert.match(client, /setBankFilter\(\(current\) => current === filter \? "all" : filter\)/);
+  assert.match(client, /placeholder="Search"/);
+  assert.match(client, /const \[bankTypeFilters, setBankTypeFilters\] = useState<ActivityType\[]>\(\[\]\)/);
+  assert.match(client, /const \[bankProgressFilters, setBankProgressFilters\] = useState<Array<"todo" \| "finished">>\(\[\]\)/);
+  assert.match(client, /bankTypeFilters\.includes\(filter\)/);
+  assert.match(client, /bankProgressFilters\.includes\(filter\)/);
+  assert.doesNotMatch(client, />Started \{formatPracticeTimestamp/);
   assert.doesNotMatch(client, /\["all", "leetcode", "system_design", "behavioral"\]/);
   assert.doesNotMatch(client, /\{\(entry\.personalNote\?\.trim\(\) \|\| entry\.pinnedNotes\?\.length\) &&/);
   assert.doesNotMatch(client, /\{\(selectedEntry\.personalNote\?\.trim\(\) \|\| selectedEntry\.pinnedNotes\?\.length\) &&/);

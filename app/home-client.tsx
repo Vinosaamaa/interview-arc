@@ -359,11 +359,10 @@ function ActivityTimer({
   const complete = Boolean(timer?.completed);
   const started = Boolean(timer?.startedAt);
   return (
-    <div className={`activity-timer ${running ? "running" : ""} ${complete ? "complete" : ""}`}>
-      <div className={`activity-time-copy ${started ? "started" : "unstarted"}`}>
+    <div className={`activity-timer ${started ? "started" : "unstarted"} ${running ? "running" : ""} ${complete ? "complete" : ""}`}>
+      <div className="activity-time-copy">
         <span>{complete ? "Final time" : running ? "Running" : timer?.startedAt ? "Paused" : "Stopwatch"}</span>
         <strong>{formatClock(used)}</strong>
-        {timer?.startedAt && <small>Started {formatPracticeTimestamp(timer.startedAt, true, false)}</small>}
       </div>
       <div className="activity-time-actions">
         <button className="start-timer icon-control" onClick={() => onToggle(activity.id)} disabled={complete} aria-label={running ? `Pause ${activity.title}` : `Start ${activity.title}`} title={running ? "Pause stopwatch" : complete ? "Finished activities cannot be resumed" : "Start stopwatch"}>
@@ -373,6 +372,7 @@ function ActivityTimer({
           <span aria-hidden="true">{complete ? "✓" : "■"}</span>
         </button>
       </div>
+      {timer?.startedAt && <small className="activity-start-time">{formatPracticeTimestamp(timer.startedAt, true, false)}</small>}
     </div>
   );
 }
@@ -672,8 +672,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [libraryAttentionFilters, setLibraryAttentionFilters] = useState<LibraryAttentionFilter[]>([]);
   const [librarySearch, setLibrarySearch] = useState("");
   const [libraryStarFilter, setLibraryStarFilter] = useState(false);
-  const [bankFilter, setBankFilter] = useState<"all" | ActivityType>("all");
-  const [bankProgressFilter, setBankProgressFilter] = useState<"all" | "todo" | "finished">("all");
+  const [bankTypeFilters, setBankTypeFilters] = useState<ActivityType[]>([]);
+  const [bankProgressFilters, setBankProgressFilters] = useState<Array<"todo" | "finished">>([]);
   const [bankLevelFilter, setBankLevelFilter] = useState<"all" | "easy" | "medium" | "hard">("all");
   const [bankSortKey, setBankSortKey] = useState<"frequency" | "recent" | "acceptance">("frequency");
   const [bankSortDir, setBankSortDir] = useState<"asc" | "desc">("asc");
@@ -2305,7 +2305,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           </div>
           <label className="bank-search-bar past-search-bar">
             <span className="bank-search-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="16" height="16" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.8"/><path d="M12.8 12.8 17 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg></span>
-            <input type="search" value={librarySearch} onChange={(event) => setLibrarySearch(event.target.value)} placeholder="Search past…" aria-label="Search completed practice" />
+            <input type="search" value={librarySearch} onChange={(event) => setLibrarySearch(event.target.value)} placeholder="Search" aria-label="Search completed practice" />
             {librarySearch ? <button type="button" className="bank-search-clear" onClick={() => setLibrarySearch("")} aria-label="Clear search">×</button> : <span className="bank-search-clear-spacer" aria-hidden="true" />}
             <span className="bank-result-count" aria-live="polite">{visibleRecordCount} record{visibleRecordCount === 1 ? "" : "s"}</span>
           </label>
@@ -2343,8 +2343,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const searchNeedle = bankSearch.toLowerCase().trim();
     const filteredEntries = bankEntries.filter((entry) => {
       const level = questionLevel(entry.question);
-      return (bankFilter === "all" || entry.type === bankFilter)
-        && (bankProgressFilter === "all" || (bankProgressFilter === "finished" ? entry.finished : !entry.finished))
+      return (bankTypeFilters.length === 0 || bankTypeFilters.includes(entry.type))
+        && (bankProgressFilters.length === 0 || bankProgressFilters.some((filter) => filter === "finished" ? entry.finished : !entry.finished))
         && (bankLevelFilter === "all" || level === bankLevelFilter)
         && (bankStarFilter === "all" || isStarred(entry.type, entry.question.id))
         && (bankTagFilter === "all" || tagsForEntry(entry.type, entry.question).some((tag) => `${entry.type}:${tag}` === bankTagFilter))
@@ -2384,10 +2384,16 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const finishedCount = bankEntries.filter((entry) => entry.finished).length;
     const finishedPercent = bankEntries.length ? Math.round((finishedCount / bankEntries.length) * 100) : 0;
     const selectedTag = bankTagFilter === "all" ? null : bankTagFilter.split(":").slice(1).join(":");
-    const activeBankFilterCount = Number(bankFilter !== "all")
-      + Number(bankProgressFilter !== "all")
+    const activeBankFilterCount = bankTypeFilters.length
+      + bankProgressFilters.length
       + Number(bankLevelFilter !== "all")
       + Number(bankTagFilter !== "all");
+    const toggleBankTypeFilter = (type: ActivityType) => setBankTypeFilters((current) => current.includes(type)
+      ? current.filter((candidate) => candidate !== type)
+      : [...current, type]);
+    const toggleBankProgressFilter = (filter: "todo" | "finished") => setBankProgressFilters((current) => current.includes(filter)
+      ? current.filter((candidate) => candidate !== filter)
+      : [...current, filter]);
     const activeSort = sortOptions.find((option) => option.key === bankSortKey) ?? sortOptions[0];
     return (
       <section className="view-page banks-page">
@@ -2422,14 +2428,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             <div className="bank-filter-rail primary-bank-controls">
               <div className="filter-row type-control" role="group" aria-label="Filter problem banks by question type">
                   {(["leetcode", "system_design", "behavioral"] as const).map((filter) => (
-                    <button key={filter} className={bankFilter === filter ? "active" : ""} aria-pressed={bankFilter === filter} onClick={() => setBankFilter((current) => current === filter ? "all" : filter)}>
+                    <button key={filter} className={bankTypeFilters.includes(filter) ? "active" : ""} aria-pressed={bankTypeFilters.includes(filter)} onClick={() => toggleBankTypeFilter(filter)}>
                       {typeLabel(filter)}
                     </button>
                   ))}
               </div>
               <div className="filter-row progress-control" role="group" aria-label="Filter problem banks by progress">
                   {(["todo", "finished"] as const).map((filter) => (
-                    <button key={filter} className={bankProgressFilter === filter ? "active" : ""} aria-pressed={bankProgressFilter === filter} onClick={() => setBankProgressFilter((current) => current === filter ? "all" : filter)}>
+                    <button key={filter} className={bankProgressFilters.includes(filter) ? "active" : ""} aria-pressed={bankProgressFilters.includes(filter)} onClick={() => toggleBankProgressFilter(filter)}>
                       {filter === "todo" ? "To practice" : "Finished"}
                     </button>
                   ))}
