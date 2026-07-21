@@ -25,8 +25,8 @@ export async function generateMetadata(): Promise<Metadata> {
     title: "Interview Arc — Your preparation journey",
     description: "A personal training ledger with configurable session countdowns, activity stopwatches, interview records, and honest progress.",
     icons: {
-      icon: "/og.png",
-      shortcut: "/og.png",
+      icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+      shortcut: "/favicon.svg",
     },
     openGraph: {
       title: "Interview Arc",

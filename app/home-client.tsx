@@ -360,10 +360,10 @@ function ActivityTimer({
   const started = Boolean(timer?.startedAt);
   return (
     <div className={`activity-timer ${running ? "running" : ""} ${complete ? "complete" : ""}`}>
-      <div className="activity-time-copy">
+      <div className={`activity-time-copy ${started ? "started" : "unstarted"}`}>
         <span>{complete ? "Final time" : running ? "Running" : timer?.startedAt ? "Paused" : "Stopwatch"}</span>
         <strong>{formatClock(used)}</strong>
-        {timer?.startedAt && <small>{formatPracticeTimestamp(timer.startedAt, true)}{timer.completedAt ? ` → ${formatPracticeTimestamp(timer.completedAt, true)}` : ""}</small>}
+        {timer?.startedAt && <small>Started {formatPracticeTimestamp(timer.startedAt, true, false)}</small>}
       </div>
       <div className="activity-time-actions">
         <button className="start-timer icon-control" onClick={() => onToggle(activity.id)} disabled={complete} aria-label={running ? `Pause ${activity.title}` : `Start ${activity.title}`} title={running ? "Pause stopwatch" : complete ? "Finished activities cannot be resumed" : "Start stopwatch"}>
@@ -670,6 +670,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [selectedProblem, setSelectedProblem] = useState<{ type: ActivityType; question: QuestionBankItem } | null>(null);
   const [libraryTypeFilters, setLibraryTypeFilters] = useState<ActivityType[]>([]);
   const [libraryAttentionFilters, setLibraryAttentionFilters] = useState<LibraryAttentionFilter[]>([]);
+  const [librarySearch, setLibrarySearch] = useState("");
+  const [libraryStarFilter, setLibraryStarFilter] = useState(false);
   const [bankFilter, setBankFilter] = useState<"all" | ActivityType>("all");
   const [bankProgressFilter, setBankProgressFilter] = useState<"all" | "todo" | "finished">("all");
   const [bankLevelFilter, setBankLevelFilter] = useState<"all" | "easy" | "medium" | "hard">("all");
@@ -1837,8 +1839,18 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   const groupedLog = useMemo(() => {
     const groups = new Map<string, LogEntry[]>();
+    const searchNeedle = librarySearch.toLowerCase().trim();
     for (const entry of libraryEntries) {
       if (libraryTypeFilters.length > 0 && !libraryTypeFilters.includes(entry.type)) continue;
+      if (libraryStarFilter && (!entry.questionId || !draft.problemPreferences.some((preference) =>
+        preference.specialty === entry.type && preference.questionId === entry.questionId && preference.starred
+      ))) continue;
+      if (searchNeedle && ![
+        entry.title,
+        entry.subtitle,
+        entry.personalNote,
+        ...(entry.pinnedNotes?.map((note) => note.body) ?? []),
+      ].some((value) => value?.toLowerCase().includes(searchNeedle))) continue;
       const hasNotes = Boolean(entry.personalNote?.trim() || entry.pinnedNotes?.length);
       const needsReview = Boolean(entry.review && entry.review.status !== "dismissed" && entry.review.status !== "completed");
       const reviewFilters = libraryAttentionFilters.filter((filter) => filter === "due" || filter === "needs_review");
@@ -1851,7 +1863,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       groups.set(entry.date, [...(groups.get(entry.date) ?? []), entry]);
     }
     return [...groups.entries()].sort(([left], [right]) => right.localeCompare(left));
-  }, [libraryEntries, libraryAttentionFilters, libraryTypeFilters]);
+  }, [draft.problemPreferences, libraryAttentionFilters, libraryEntries, librarySearch, libraryStarFilter, libraryTypeFilters]);
 
   const completedEntries = useMemo(
     () => logEntries.filter((entry) => entry.status === "completed" || entry.status === "published"),
@@ -2025,7 +2037,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   function renderSession(session: PracticeSession, index: number) {
     const activities = sessionActivities(session);
     const coding = activities.filter((activity) => activity.type === "leetcode");
-    const mockActivities = activities.filter((activity) => activity.type !== "leetcode");
+    const mockActivities = activities
+      .filter((activity) => activity.type !== "leetcode")
+      .sort((left, right) => (left.type === right.type ? 0 : left.type === "system_design" ? -1 : 1));
     const complete = activities.filter(isActivityComplete).length;
     const codingSeconds = coding.reduce((sum, activity) => sum + elapsed(draft.timers[activity.id], now), 0);
     const localSession = draft.sessions.find((item) => item.id === session.id);
@@ -2271,17 +2285,30 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const toggleAttentionFilter = (filter: LibraryAttentionFilter) => setLibraryAttentionFilters((current) => current.includes(filter)
       ? current.filter((candidate) => candidate !== filter)
       : [...current, filter]);
-    const activePastFilterCount = libraryTypeFilters.length + libraryAttentionFilters.length;
+    const activePastFilterCount = libraryAttentionFilters.length;
+    const visibleRecordCount = groupedLog.reduce((sum, [, entries]) => sum + entries.length, 0);
     return (
       <section className="view-page library-page">
         <header className="view-masthead"><span className="eyebrow">PAST · COMPLETED WORK</span><h1>Read the journey<br /><em>like a field journal.</em></h1><p>Past contains finished activity timers and published case files—never planned work or result flags by themselves.</p></header>
-        <div className="library-toolbar compact-toolbar">
-          <div className="past-type-filter"><span>Practice type</span><div className="filter-row" role="group" aria-label="Filter past practice by type">{(["leetcode", "system_design", "behavioral"] as const).map((filter) => <button key={filter} className={libraryTypeFilters.includes(filter) ? "active" : ""} aria-pressed={libraryTypeFilters.includes(filter)} onClick={() => toggleTypeFilter(filter)}>{typeLabel(filter)}</button>)}</div></div>
-          <details className="control-menu">
-            <summary><Icon name="filter" /> More filters{activePastFilterCount > 0 && <i>{activePastFilterCount}</i>}</summary>
-            <div className="control-popover attention-menu"><div className="filter-menu-heading"><strong>Filter completed practice</strong>{activePastFilterCount > 0 && <button type="button" onClick={() => { setLibraryTypeFilters([]); setLibraryAttentionFilters([]); }}>Clear all</button>}</div>{attentionGroups.map((group) => <fieldset key={group.label}><legend>{group.label}</legend>{group.options.map((option) => <button type="button" key={option.value} className={libraryAttentionFilters.includes(option.value) ? "active" : ""} aria-pressed={libraryAttentionFilters.includes(option.value)} onClick={() => toggleAttentionFilter(option.value)}><span>{option.label}</span><small>{option.description}</small><i aria-hidden="true">✓</i></button>)}</fieldset>)}</div>
-          </details>
-          <strong>{groupedLog.reduce((sum, [, entries]) => sum + entries.length, 0)} records</strong>
+        <div className="past-control-deck">
+          <div className="library-toolbar bank-toolbar compact-toolbar past-toolbar">
+            <div className="bank-filter-rail primary-bank-controls past-filter-rail">
+              <div className="filter-row type-control" role="group" aria-label="Filter past practice by type">{(["leetcode", "system_design", "behavioral"] as const).map((filter) => <button key={filter} className={libraryTypeFilters.includes(filter) ? "active" : ""} aria-pressed={libraryTypeFilters.includes(filter)} onClick={() => toggleTypeFilter(filter)}>{typeLabel(filter)}</button>)}</div>
+              <div className="bank-icon-tools" aria-label="Past tools">
+                <button className={`collection-toggle icon-tool ${libraryStarFilter ? "active" : ""}`} onClick={() => setLibraryStarFilter((current) => !current)} aria-pressed={libraryStarFilter} aria-label={libraryStarFilter ? "Show all completed practice" : "Show starred completed practice"} title={libraryStarFilter ? "Showing starred practice" : "Show starred practice"}><Icon name="star" /></button>
+                <details className={`control-menu icon-menu ${activePastFilterCount > 0 ? "active" : ""}`}>
+                  <summary aria-label={`More filters${activePastFilterCount ? `, ${activePastFilterCount} active` : ""}`} title={`${activePastFilterCount || "No"} active filters`}><Icon name="filter" />{activePastFilterCount > 0 && <i>{activePastFilterCount}</i>}</summary>
+                  <div className="control-popover attention-menu"><div className="filter-menu-heading"><strong>Filter completed practice</strong>{activePastFilterCount > 0 && <button type="button" onClick={() => setLibraryAttentionFilters([])}>Clear all</button>}</div>{attentionGroups.map((group) => <fieldset key={group.label}><legend>{group.label}</legend>{group.options.map((option) => <button type="button" key={option.value} className={libraryAttentionFilters.includes(option.value) ? "active" : ""} aria-pressed={libraryAttentionFilters.includes(option.value)} onClick={() => toggleAttentionFilter(option.value)}><span>{option.label}</span><small>{option.description}</small><i aria-hidden="true">✓</i></button>)}</fieldset>)}</div>
+                </details>
+              </div>
+            </div>
+          </div>
+          <label className="bank-search-bar past-search-bar">
+            <span className="bank-search-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="16" height="16" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.8"/><path d="M12.8 12.8 17 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg></span>
+            <input type="search" value={librarySearch} onChange={(event) => setLibrarySearch(event.target.value)} placeholder="Search past…" aria-label="Search completed practice" />
+            {librarySearch ? <button type="button" className="bank-search-clear" onClick={() => setLibrarySearch("")} aria-label="Clear search">×</button> : <span className="bank-search-clear-spacer" aria-hidden="true" />}
+            <span className="bank-result-count" aria-live="polite">{visibleRecordCount} record{visibleRecordCount === 1 ? "" : "s"}</span>
+          </label>
         </div>
         <div className="log-layout">
           <div className="dated-log">
@@ -2393,17 +2420,17 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           </div>
           <div className="library-toolbar bank-toolbar compact-toolbar">
             <div className="bank-filter-rail primary-bank-controls">
-              <div className="filter-row" role="group" aria-label="Filter problem banks by question type">
-                  {(["all", "leetcode", "system_design", "behavioral"] as const).map((filter) => (
-                    <button key={filter} className={bankFilter === filter ? "active" : ""} onClick={() => setBankFilter(filter)}>
-                      {filter === "all" ? "All" : typeLabel(filter)}
+              <div className="filter-row type-control" role="group" aria-label="Filter problem banks by question type">
+                  {(["leetcode", "system_design", "behavioral"] as const).map((filter) => (
+                    <button key={filter} className={bankFilter === filter ? "active" : ""} aria-pressed={bankFilter === filter} onClick={() => setBankFilter((current) => current === filter ? "all" : filter)}>
+                      {typeLabel(filter)}
                     </button>
                   ))}
               </div>
               <div className="filter-row progress-control" role="group" aria-label="Filter problem banks by progress">
-                  {(["all", "todo", "finished"] as const).map((filter) => (
-                    <button key={filter} className={bankProgressFilter === filter ? "active" : ""} onClick={() => setBankProgressFilter(filter)}>
-                      {filter === "all" ? "All" : filter === "todo" ? "To practice" : "Finished"}
+                  {(["todo", "finished"] as const).map((filter) => (
+                    <button key={filter} className={bankProgressFilter === filter ? "active" : ""} aria-pressed={bankProgressFilter === filter} onClick={() => setBankProgressFilter((current) => current === filter ? "all" : filter)}>
+                      {filter === "todo" ? "To practice" : "Finished"}
                     </button>
                   ))}
               </div>
