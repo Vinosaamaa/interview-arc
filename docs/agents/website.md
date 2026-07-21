@@ -26,7 +26,10 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
 - Render tracked artifact Markdown as formatted headings, lists, links, tables, quotes, and code blocks rather than raw source text.
 - For legacy ignored audio, display the filename and `Local only`. For private
   R2 clips with D1 status `available`, render the authenticated audio player;
-  never expose an R2 object key or public bucket URL.
+  never expose an R2 object key or public bucket URL. When a clip references a
+  user transcript turn, place the full player after the preceding specialist
+  prompt and immediately before that user's written answer. Keep only clips
+  without a turn link in the activity-level fallback tray.
 
 ## Data Sources
 
@@ -78,8 +81,10 @@ The website must not imply that browser draft state has already been published t
 - Provide Today, Journey, Past, and Problem Banks views without placing every raw log on one page.
 - Activity detail should lead with summary, outcome, approach, lessons, and feedback; keep full transcript or code expandable.
 - Treat activity detail as a case file: pinned notes first, then facts, review
-  date, summary/solution, review, transcript/code, delivery recordings, and
-  references. Notes apply equally to coding, system design, and behavioral.
+  date, summary/solution, review, transcript/code, and references. A linked
+  delivery recording belongs inline between its specialist prompt and user
+  answer; an unlinked legacy recording follows the transcript. Notes apply
+  equally to coding, system design, and behavioral.
 - The session clock is a countdown. Activity clocks are stopwatches with compact icon controls for start/pause and finish.
 - Use `America/Los_Angeles` as the canonical practice timezone. Display exact
   Pacific start and finish timestamps in Past and preserve them in exports.

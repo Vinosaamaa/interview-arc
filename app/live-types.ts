@@ -32,9 +32,21 @@ export type FinalizationSummary = {
   status: "draft" | "ready" | "published";
   finalizedAt: number | null;
 };
+export type TranscriptTurn = {
+  activityId: string;
+  turnId: string;
+  specialty: ActivityType;
+  speaker: "user" | "specialist";
+  body: string;
+  source: "codex" | "dictation" | "audio_transcript";
+  sequence: number;
+  occurredAt: number;
+  updatedAt: number;
+};
 export type AudioClip = {
   id: string;
   activityId: string;
+  transcriptTurnId: string | null;
   filename: string;
   mimeType: string;
   label: string;

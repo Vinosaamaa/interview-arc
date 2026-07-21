@@ -19,6 +19,12 @@ Use this skill together with `practice/system-design/AGENTS.md`; that file owns 
 
 Guide the conversation through scope, functional requirements, non-functional requirements, estimates, APIs, data model, high-level architecture, critical flows, bottlenecks, reliability, and tradeoffs. Ask one focused follow-up at a time. Append only activity-specific exchanges to D1 in small batches.
 
+When the user supplies a recording and transcript for one answer, append that
+user turn first with a stable ID. Then upload the recording with
+`scripts/upload-practice-audio.mjs --turn <user-turn-id>` so Past places the
+player after the prompt and immediately before the answer. Never infer a link
+for an older or ambiguous clip.
+
 Use diagrams when three or more interacting components or a non-trivial event sequence would be clearer visually. Treat numbers as explicit assumptions. Keep functional and non-functional requirements separate.
 
 ## Coach and evaluate

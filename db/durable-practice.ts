@@ -368,6 +368,7 @@ export async function registerActivityAudioClip(
   input: {
     id: string;
     activityId: string;
+    transcriptTurnId?: string;
     filename: string;
     mimeType: string;
     label?: string;
@@ -379,12 +380,23 @@ export async function registerActivityAudioClip(
 ) {
   const db = getDb();
   const status = input.status ?? "local_only";
+  if (input.transcriptTurnId) {
+    const turns = await db.select({ speaker: practiceTranscriptTurns.speaker }).from(practiceTranscriptTurns).where(and(
+      eq(practiceTranscriptTurns.ownerId, ownerId),
+      eq(practiceTranscriptTurns.activityId, input.activityId),
+      eq(practiceTranscriptTurns.turnId, input.transcriptTurnId),
+    ));
+    if (turns[0]?.speaker !== "user") {
+      throw new Error("Answer audio must reference an existing user transcript turn in the same activity.");
+    }
+  }
   await db
     .insert(activityAudioClips)
     .values({
       ownerId,
       id: input.id,
       activityId: input.activityId,
+      transcriptTurnId: input.transcriptTurnId ?? null,
       objectKey: input.objectKey ?? `local-only/${input.id}`,
       filename: input.filename,
       mimeType: input.mimeType,
@@ -398,6 +410,7 @@ export async function registerActivityAudioClip(
       target: [activityAudioClips.ownerId, activityAudioClips.id],
       set: {
         activityId: input.activityId,
+        transcriptTurnId: input.transcriptTurnId ?? null,
         objectKey: input.objectKey ?? `local-only/${input.id}`,
         filename: input.filename,
         mimeType: input.mimeType,

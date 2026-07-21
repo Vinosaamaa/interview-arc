@@ -205,3 +205,12 @@ Upload clips to the private Cloudflare R2 `AUDIO` binding, store owner-scoped
 metadata in D1, and stream through the authenticated `/api/audio/:id` Worker
 route with byte-range support. Never expose a bucket URL or place raw audio in
 Git. Transcription remains canonical for search and publication.
+
+When audio and transcript text describe the same user answer, append the user
+turn first with a stable `turnId`, then upload the audio with that ID as
+`transcriptTurnId`. The link is valid only when the turn belongs to the same
+owner and activity and its speaker is `user`. Past renders the full player after
+the preceding specialist prompt and immediately before the linked answer text.
+Multiple takes may share one user turn. Older clips without a turn link remain
+readable in an unlinked activity-level recording section; never guess their
+answer association.

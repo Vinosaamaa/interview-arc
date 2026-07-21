@@ -19,6 +19,7 @@ export async function POST(request: Request) {
     ownerId = await resolveOwnerId(request);
     const form = await request.formData();
     const activityId = String(form.get("activityId") ?? "").trim();
+    const transcriptTurnId = String(form.get("transcriptTurnId") ?? "").trim() || undefined;
     const label = String(form.get("label") ?? "Practice answer").trim().slice(0, 120) || "Practice answer";
     const file = form.get("file");
     if (!activityId || !(file instanceof File)) {
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
     await registerActivityAudioClip(ownerId, {
       id: clipId,
       activityId,
+      transcriptTurnId,
       filename,
       mimeType: file.type,
       label,
@@ -42,12 +44,13 @@ export async function POST(request: Request) {
     }, now);
     await env.AUDIO.put(objectKey, file.stream(), {
       httpMetadata: { contentType: file.type, contentDisposition: `inline; filename="${filename}"` },
-      customMetadata: { ownerId, activityId, clipId },
+      customMetadata: { ownerId, activityId, clipId, ...(transcriptTurnId ? { transcriptTurnId } : {}) },
     });
     await updateActivityAudioClipStatus(ownerId, clipId, "available", Date.now());
     return Response.json({
       id: clipId,
       activityId,
+      transcriptTurnId: transcriptTurnId ?? null,
       filename,
       mimeType: file.type,
       label,

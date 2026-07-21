@@ -168,6 +168,7 @@ export async function readLiveState(
     audioClips: Object.fromEntries(Object.entries(durable.audioClips).map(([activityId, rows]) => [activityId, rows.map((row) => ({
       id: row.id,
       activityId,
+      transcriptTurnId: row.transcriptTurnId,
       filename: row.filename,
       mimeType: row.mimeType,
       label: row.label,

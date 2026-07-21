@@ -425,9 +425,12 @@ only owner-authorized clips whose D1 status is `available`.
 
 When the user attaches or copies an audio file into this task and its local path
 is available, resolve the focused activity ID, transcribe as required, then run
-`node scripts/upload-practice-audio.mjs <activity_id> <path> [label]`. This uses
-the configured `INTERVIEW_ARC_MCP_TOKEN`, uploads to private R2, and attaches the
-clip to the Past activity. Never print or pass the token as a command argument.
+`node scripts/upload-practice-audio.mjs <activity_id> <path> --turn <user_turn_id> --label "Recorded answer"`.
+Append the matching user transcript turn first and reuse its stable ID so the
+Past player sits after the specialist prompt and before the written answer. This
+uses the configured `INTERVIEW_ARC_MCP_TOKEN`, uploads to private R2, and
+attaches the clip to the Past activity. Never print or pass the token as a
+command argument. Omit `--turn` when the association is genuinely unknown.
 
 Use this decision process:
 
