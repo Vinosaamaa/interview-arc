@@ -214,6 +214,7 @@ export const activityAudioClips = sqliteTable(
     ownerId,
     id: text("id").notNull(),
     activityId: text("activity_id").notNull(),
+    transcriptTurnId: text("transcript_turn_id"),
     objectKey: text("object_key").notNull(),
     filename: text("filename").notNull(),
     mimeType: text("mime_type").notNull(),

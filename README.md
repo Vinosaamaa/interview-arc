@@ -103,9 +103,11 @@ System-design and behavioral sessions preserve the complete conversation transcr
 
 Raw recordings are ignored by Git. A supplied recording can be transcribed
 locally, then uploaded through the authenticated audio API into the private
-`interview-arc-audio` Cloudflare R2 bucket. D1 stores owner-scoped clip metadata;
-dated Past attempts provide authenticated, seekable playback without exposing a
-public object URL. Local files may be removed after upload and verification.
+`interview-arc-audio` Cloudflare R2 bucket. D1 stores owner-scoped clip metadata
+and, when known, the stable user transcript-turn ID that recording captures.
+Dated Past attempts place a full, seekable player after the specialist prompt
+and immediately before the matching written answer without exposing a public
+object URL. Local files may be removed after upload and verification.
 
 In the current local umbrella workspace, run transcription from this repository with:
 
@@ -117,7 +119,7 @@ In the current local umbrella workspace, run transcription from this repository 
 
 The helper copies the recording into ignored `audio-answers/` staging and
 creates its Markdown review. Upload the staged file with
-`node scripts/upload-practice-audio.mjs <activity_id> <path> [label]`; the
+`node scripts/upload-practice-audio.mjs <activity_id> <path> --turn <user_turn_id> --label "Recorded answer"`; the
 authenticated specialist environment supplies `INTERVIEW_ARC_MCP_TOKEN`. A
 standalone clone may instead create `.venv/` in this repository and run the
 same transcription script with `./.venv/bin/python`.

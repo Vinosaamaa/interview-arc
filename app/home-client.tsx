@@ -30,6 +30,7 @@ import {
   type FinalizationSummary,
   type AudioClip,
   type TimerDraft,
+  type TranscriptTurn,
 } from "./live-types";
 import { useLiveState, useReadOnlyLiveState } from "./live-sync";
 import { emptyJournal } from "./current-day";
@@ -83,6 +84,7 @@ type LogEntry = {
   pinnedNotes?: PracticeNote[];
   review?: ReviewSchedule;
   finalization?: FinalizationSummary;
+  transcriptTurns?: TranscriptTurn[];
   audioClips?: AudioClip[];
 };
 
@@ -543,6 +545,49 @@ function MarkdownBody({ source }: { source: string }) {
   return <div className="markdown-body"><Markdown remarkPlugins={[remarkGfm]}>{source}</Markdown></div>;
 }
 
+function ActivityTranscript({
+  activityId,
+  turns,
+  clips,
+  audioBusy,
+  onUpload,
+  onRemove,
+}: {
+  activityId: string;
+  turns: TranscriptTurn[];
+  clips: AudioClip[];
+  audioBusy: boolean;
+  onUpload: (activityId: string, files: File[], transcriptTurnId: string) => void;
+  onRemove: (activityId: string, clipId: string) => void;
+}) {
+  return (
+    <section className="case-transcript" aria-label="Conversation transcript and answer recordings">
+      <div className="case-transcript-heading"><span className="eyebrow">CONVERSATION TRANSCRIPT</span><p>Your recording sits between the prompt and the answer it captures.</p></div>
+      <div className="transcript-thread">
+        {turns.map((turn) => {
+          const answerClips = turn.speaker === "user"
+            ? clips.filter((clip) => clip.transcriptTurnId === turn.turnId)
+            : [];
+          return <div className={`transcript-turn ${turn.speaker}`} key={turn.turnId} data-answer-turn-id={turn.speaker === "user" ? turn.turnId : undefined}>
+            {turn.speaker === "user" && <div className={`answer-playback ${answerClips.length ? "has-audio" : "empty"}`}>
+              {answerClips.map((clip) => <div className="answer-take" key={clip.id}>
+                <div><strong>{clip.label}</strong><small>{clip.filename}</small></div>
+                {clip.status === "available" ? <audio controls preload="metadata" src={`/api/audio/${encodeURIComponent(clip.id)}`} /> : <em>{clip.status.replaceAll("_", " ")}</em>}
+                <button type="button" className="audio-remove" onClick={() => onRemove(activityId, clip.id)} aria-label={`Remove ${clip.label}`}>Remove</button>
+              </div>)}
+              <label className="answer-audio-attach"><span aria-hidden="true">＋</span>{audioBusy ? "Uploading securely…" : answerClips.length ? "Add another take" : "Attach your recording"}<input type="file" accept="audio/*" multiple disabled={audioBusy} onChange={(event) => { onUpload(activityId, [...(event.target.files ?? [])], turn.turnId); event.currentTarget.value = ""; }} /></label>
+            </div>}
+            <article>
+              <header><span>{turn.speaker === "specialist" ? "Specialist" : "Your answer"}</span><time>{formatPracticeTimestamp(new Date(turn.occurredAt).toISOString())}</time></header>
+              <MarkdownBody source={turn.body} />
+            </article>
+          </div>;
+        })}
+      </div>
+    </section>
+  );
+}
+
 function MetricRing({ label, value, detail, color }: { label: string; value: number; detail: string; color: string }) {
   const safeValue = Math.min(100, Math.max(0, Math.round(value)));
   return (
@@ -590,6 +635,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [integrationToken, setIntegrationToken] = useState("");
   const [integrationBusy, setIntegrationBusy] = useState(false);
   const [audioBusy, setAudioBusy] = useState(false);
+  const [loadedPracticeRecordId, setLoadedPracticeRecordId] = useState("");
   const {
     playing: ambientPlaying,
     playlist: ambientPlaylist,
@@ -1058,7 +1104,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     setSelectedEntry((current) => current?.id === activityId ? { ...current, personalNote: note } : current);
   }
 
-  async function uploadActivityAudio(activityId: string, files: File[]) {
+  async function uploadActivityAudio(activityId: string, files: File[], transcriptTurnId?: string) {
     const audioFiles = files.filter((file) => file.type.startsWith("audio/"));
     if (!audioFiles.length) return;
     setAudioBusy(true);
@@ -1066,13 +1112,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       for (const file of audioFiles) {
         const form = new FormData();
         form.set("activityId", activityId);
-        form.set("label", "Practice answer");
+        form.set("label", transcriptTurnId ? "Recorded answer" : "Practice answer");
+        if (transcriptTurnId) form.set("transcriptTurnId", transcriptTurnId);
         form.set("file", file);
         const response = await fetch("/api/audio", { method: "POST", body: form });
         if (!response.ok) throw new Error((await response.json() as { error?: string }).error ?? "Audio upload failed.");
         const clip = await response.json() as AudioClip;
         setDraft((current) => ({ ...current, audioClips: { ...current.audioClips, [activityId]: [...(current.audioClips[activityId] ?? []), clip] } }));
-        setSelectedEntry((current) => current?.id === activityId ? { ...current, audioClips: [...(current.audioClips ?? []), clip] } : current);
+        setSelectedEntry((current) => current && (current.artifact?.activityId || current.id) === activityId ? { ...current, audioClips: [...(current.audioClips ?? []), clip] } : current);
       }
     } finally {
       setAudioBusy(false);
@@ -1083,7 +1130,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const response = await fetch(`/api/audio/${encodeURIComponent(clipId)}`, { method: "DELETE" });
     if (!response.ok) return;
     setDraft((current) => ({ ...current, audioClips: { ...current.audioClips, [activityId]: (current.audioClips[activityId] ?? []).filter((clip) => clip.id !== clipId) } }));
-    setSelectedEntry((current) => current?.id === activityId ? { ...current, audioClips: (current.audioClips ?? []).filter((clip) => clip.id !== clipId) } : current);
+    setSelectedEntry((current) => current && (current.artifact?.activityId || current.id) === activityId ? { ...current, audioClips: (current.audioClips ?? []).filter((clip) => clip.id !== clipId) } : current);
   }
 
   function publicationStatusFor(activity: JournalActivity): PublicationStatus {
@@ -1607,7 +1654,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           pinnedNotes: liveDraft?.structuredNotes[activity.id] ?? [],
           review: liveDraft?.reviews[activity.id],
           finalization: liveDraft?.finalizations[activity.id],
-          audioClips: liveDraft?.audioClips[activity.id] ?? [],
+          audioClips: draft.audioClips[activity.id] ?? [],
         });
       }
     }
@@ -1665,7 +1712,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         pinnedNotes: yesterdayDraft?.structuredNotes[activity.id] ?? [],
         review: yesterdayDraft?.reviews[activity.id],
         finalization: yesterdayDraft?.finalizations[activity.id],
-        audioClips: yesterdayDraft?.audioClips[activity.id] ?? [],
+        audioClips: draft.audioClips[activity.id] ?? yesterdayDraft?.audioClips[activity.id] ?? [],
       });
     }
     for (const artifact of content.artifacts) {
@@ -1673,7 +1720,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       const inferredType: ActivityType = artifact.type === "leetcode" || artifact.type === "behavioral" ? artifact.type : "system_design";
       const preview = artifact.sections.find((section) => /summary|short answer|question/i.test(section.title))?.body ?? "Published interview record";
       const noteSection = artifact.sections.find((section) => /pinned notes?|notes to remember/i.test(section.title));
-      entries.push({ id: artifact.path, date: artifact.date, type: inferredType, title: artifact.title, subtitle: plainText(preview).slice(0, 160), status: "published", elapsedSeconds: 0, allocatedSeconds: 0, artifact, personalNote: noteSection?.body ?? "" });
+      entries.push({ id: artifact.path, date: artifact.date, type: inferredType, title: artifact.title, subtitle: plainText(preview).slice(0, 160), status: "published", elapsedSeconds: 0, allocatedSeconds: 0, artifact, personalNote: noteSection?.body ?? "", audioClips: draft.audioClips[artifact.activityId] ?? [] });
     }
     return entries.sort((left, right) => right.date.localeCompare(left.date)
       || (right.endedAt ?? "").localeCompare(left.endedAt ?? "")
@@ -2314,6 +2361,36 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const selectedProblemRevisions = selectedProblem
     ? draft.solutionRevisions.filter((revision) => revision.specialty === selectedProblem.type && revision.questionId === selectedProblem.question.id)
     : [];
+  const selectedEntryActivityId = selectedEntry?.artifact?.activityId || (selectedEntry && !selectedEntry.id.includes("/") ? selectedEntry.id : "");
+  const selectedEntryTurns = selectedEntry?.transcriptTurns ?? [];
+  const selectedEntryClips = selectedEntry?.audioClips ?? [];
+  const selectedEntryUnlinkedClips = selectedEntryClips.filter((clip) => !clip.transcriptTurnId);
+  const selectedArtifactTranscriptIndex = selectedEntry?.artifact?.sections.findIndex((section) => /conversation transcript|full transcript|raw exchange/i.test(section.title)) ?? -1;
+  const practiceRecordLoading = Boolean(selectedEntryActivityId && loadedPracticeRecordId !== selectedEntryActivityId);
+
+  useEffect(() => {
+    if (!selectedEntryActivityId) return;
+    const controller = new AbortController();
+    void fetch(`/api/practice-record?activityId=${encodeURIComponent(selectedEntryActivityId)}`, { signal: controller.signal })
+      .then(async (response) => response.ok ? response.json() as Promise<{ turns: TranscriptTurn[]; audioClips: AudioClip[] }> : null)
+      .then((record) => {
+        if (!record) {
+          setLoadedPracticeRecordId(selectedEntryActivityId);
+          return;
+        }
+        setSelectedEntry((current) => current && (current.artifact?.activityId || current.id) === selectedEntryActivityId
+          ? { ...current, transcriptTurns: record.turns, audioClips: record.audioClips }
+          : current);
+        setLoadedPracticeRecordId(selectedEntryActivityId);
+      })
+      .catch((error: unknown) => {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          console.error("Unable to load the practice transcript.");
+          setLoadedPracticeRecordId(selectedEntryActivityId);
+        }
+      });
+    return () => controller.abort();
+  }, [selectedEntryActivityId]);
 
   return (
     <>
@@ -2383,14 +2460,21 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       {integrationOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setIntegrationOpen(false)}><section className="composer integration-dialog" role="dialog" aria-modal="true" aria-labelledby="integration-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setIntegrationOpen(false)} aria-label="Close">×</button><span className="eyebrow">ONE DURABLE PRACTICE RECORD</span><h2 id="integration-title">Connect Interview Arc tools</h2><p>One personal token connects two separate tools to the same Interview Arc record. Codex specialists save activity transcripts, pinned notes, reviews, and finalization drafts; the coordinator alone turns those drafts into the published journal. The Chrome companion controls LeetCode timers and results. The token is shown once and stored as a secure digest.</p>{integrationToken ? <><label className="token-field"><span>Personal connection token</span><input readOnly value={integrationToken} onFocus={(event) => event.currentTarget.select()} /></label><button className="primary-action full-width" onClick={copyConnectionToken}>Copy token</button><div className="integration-steps"><strong>Connect each tool separately</strong><ol><li><strong>Codex practice bridge:</strong> set <code>INTERVIEW_ARC_MCP_TOKEN</code> before opening Codex in this trusted project. Specialists append only activity-related exchanges to D1; the coordinator creates the Git case files when you say “Publish all pending practice.”</li><li><strong>LeetCode Chrome companion:</strong> paste the same token into the loaded extension. The side panel can control the current coding activity while you work on LeetCode.</li></ol></div></> : <button className="primary-action full-width" disabled={integrationBusy} onClick={createConnectionToken}>{integrationBusy ? "Creating…" : "Create personal connection token"}</button>}<small className="integration-warning">Treat this token like a password. Create a new one if it is ever shared accidentally.</small></section></div>}
 
       {selectedEntry && <div className="letter-backdrop" role="presentation" onMouseDown={() => setSelectedEntry(null)}>
-        <article className="reading-letter" role="dialog" aria-modal="true" aria-labelledby="letter-title" onMouseDown={(event) => event.stopPropagation()} onPaste={(event) => { const files = [...event.clipboardData.files]; if (files.some((file) => file.type.startsWith("audio/")) && !selectedEntry.id.includes("/")) { event.preventDefault(); void uploadActivityAudio(selectedEntry.id, files); } }}>
+        <article className="reading-letter" role="dialog" aria-modal="true" aria-labelledby="letter-title" onMouseDown={(event) => event.stopPropagation()} onPaste={(event) => { const files = [...event.clipboardData.files]; if (files.some((file) => file.type.startsWith("audio/")) && selectedEntryActivityId) { event.preventDefault(); const target = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-answer-turn-id]") : null; void uploadActivityAudio(selectedEntryActivityId, files, target?.dataset.answerTurnId); } }}>
           <button className="letter-close" onClick={() => setSelectedEntry(null)} aria-label="Close letter">Close ×</button>
           <header><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time><button className={`star-control ${isStarred(selectedEntry.type, selectedEntry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedEntry.type, selectedEntry.questionId)} disabled={!selectedEntry.questionId} aria-label={`${isStarred(selectedEntry.type, selectedEntry.questionId) ? "Unstar" : "Star"} ${selectedEntry.title}`}>★</button></div><h2 id="letter-title">{selectedEntry.title}</h2><p>{selectedEntry.subtitle}</p>{selectedEntry.questionId && <button className="solution-link-button" onClick={() => { const question = bankFor(selectedEntry.type).find((candidate) => candidate.id === selectedEntry.questionId); if (question) { setSelectedEntry(null); setSelectedProblem({ type: selectedEntry.type, question }); } }}>Open reusable Solution Profile →</button>}</header>
           {(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <aside className="pinned-notes" aria-label="Pinned practice notes"><span>PINNED TO THIS CASE</span>{selectedEntry.personalNote?.trim() && <MarkdownBody source={selectedEntry.personalNote} />}{selectedEntry.pinnedNotes?.map((note) => <blockquote key={note.id}><small>{note.kind}</small><p>{note.body}</p></blockquote>)}</aside>}
           <div className="letter-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.startedAt && <div><span>Started</span><strong>{formatPracticeTimestamp(selectedEntry.startedAt)}</strong></div>}{selectedEntry.endedAt && <div><span>Finished</span><strong>{formatPracticeTimestamp(selectedEntry.endedAt)}</strong></div>}{selectedEntry.sessionId && <div><span>Session</span><strong>{selectedEntry.sessionId}</strong></div>}{selectedEntry.outcome && <div><span>Result</span><strong>{resultLabel(selectedEntry.outcome, selectedEntry.type)}</strong></div>}{selectedEntry.review && <div className="review-fact"><span>{selectedEntry.review.status === "due" ? "Review due" : "Next review"}</span><strong>{selectedEntry.review.dueDate}</strong><small>{selectedEntry.review.reason.replaceAll("_", " ")} · {selectedEntry.review.intervalDays} day interval</small></div>}</div>
-          {selectedEntry.id && !selectedEntry.id.includes("/") && <form className="letter-note-editor" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); savePersonalNote(selectedEntry.id, String(form.get("note") ?? "")); }}><label htmlFor="case-note">Personal note for this activity</label><textarea id="case-note" name="note" defaultValue={selectedEntry.personalNote ?? ""} placeholder="A concise reminder, mistake, or pattern to keep visible…" /><button type="submit">Pin note</button></form>}
-          {!selectedEntry.id.includes("/") && <section className="delivery-recordings"><span className="eyebrow">DELIVERY RECORDINGS · PRIVATE R2</span>{selectedEntry.audioClips?.map((clip) => <div key={clip.id}><div><strong>{clip.label}</strong><small>{clip.filename} · {clip.status.replaceAll("_", " ")}</small></div>{clip.status === "available" ? <audio controls preload="metadata" src={`/api/audio/${encodeURIComponent(clip.id)}`} /> : <em>Upload is not available yet.</em>}<button className="audio-remove" onClick={() => void removeActivityAudio(selectedEntry.id, clip.id)}>Remove</button></div>)}<label className="audio-upload"><strong>{audioBusy ? "Uploading securely…" : "Add an answer recording"}</strong><span>Choose or paste an audio file here. It stays private and is streamed only after login.</span><input type="file" accept="audio/*" multiple disabled={audioBusy} onChange={(event) => { void uploadActivityAudio(selectedEntry.id, [...(event.target.files ?? [])]); event.currentTarget.value = ""; }} /></label></section>}
-          {selectedEntry.artifact ? <div className="letter-sections">{selectedEntry.artifact.sections.map((section) => /conversation transcript|generated code|solution|raw exchange/i.test(section.title) ? <details key={section.title} open={/solution/i.test(section.title)}><summary>{section.title}</summary><MarkdownBody source={section.body} /></details> : <section key={section.title}><h3>{section.title}</h3><MarkdownBody source={section.body} /></section>)}</div> : <div className="unpublished-letter"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to flush any unsaved activity exchanges, then publish the transcript, review, improved answer or walkthrough, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
+          {selectedEntryActivityId && <form className="letter-note-editor" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); savePersonalNote(selectedEntryActivityId, String(form.get("note") ?? "")); }}><label htmlFor="case-note">Personal note for this activity</label><textarea id="case-note" name="note" defaultValue={selectedEntry.personalNote ?? ""} placeholder="A concise reminder, mistake, or pattern to keep visible…" /><button type="submit">Pin note</button></form>}
+          {practiceRecordLoading && <div className="transcript-loading"><span />Loading conversation and recordings…</div>}
+          {selectedEntry.artifact ? <div className="letter-sections">{selectedEntry.artifact.sections.map((section, index) => {
+            if (selectedEntryTurns.length && index === selectedArtifactTranscriptIndex) return <ActivityTranscript key="structured-transcript" activityId={selectedEntryActivityId} turns={selectedEntryTurns} clips={selectedEntryClips} audioBusy={audioBusy} onUpload={(activityId, files, turnId) => void uploadActivityAudio(activityId, files, turnId)} onRemove={(activityId, clipId) => void removeActivityAudio(activityId, clipId)} />;
+            if (selectedEntryTurns.length && /conversation transcript|full transcript|raw exchange/i.test(section.title)) return null;
+            return /generated code|solution|raw exchange/i.test(section.title) ? <details key={section.title} open={/solution/i.test(section.title)}><summary>{section.title}</summary><MarkdownBody source={section.body} /></details> : <section key={section.title}><h3>{section.title}</h3><MarkdownBody source={section.body} /></section>;
+          })}</div> : <div className="unpublished-letter"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to flush any unsaved activity exchanges, then publish the transcript, review, improved answer or walkthrough, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
+          {selectedEntryTurns.length > 0 && selectedArtifactTranscriptIndex < 0 && <ActivityTranscript activityId={selectedEntryActivityId} turns={selectedEntryTurns} clips={selectedEntryClips} audioBusy={audioBusy} onUpload={(activityId, files, turnId) => void uploadActivityAudio(activityId, files, turnId)} onRemove={(activityId, clipId) => void removeActivityAudio(activityId, clipId)} />}
+          {selectedEntryTurns.length > 0 && selectedEntryUnlinkedClips.length > 0 && <section className="delivery-recordings unlinked-recordings"><span className="eyebrow">UNLINKED RECORDINGS · PRIVATE R2</span><p>These older clips belong to this attempt but are not attached to one transcript answer.</p>{selectedEntryUnlinkedClips.map((clip) => <div key={clip.id}><div><strong>{clip.label}</strong><small>{clip.filename} · {clip.status.replaceAll("_", " ")}</small></div>{clip.status === "available" ? <audio controls preload="metadata" src={`/api/audio/${encodeURIComponent(clip.id)}`} /> : <em>Upload is not available yet.</em>}<button type="button" className="audio-remove" onClick={() => void removeActivityAudio(selectedEntryActivityId, clip.id)}>Remove</button></div>)}</section>}
+          {!practiceRecordLoading && selectedEntryTurns.length === 0 && selectedEntryActivityId && <section className="delivery-recordings"><span className="eyebrow">DELIVERY RECORDINGS · PRIVATE R2</span><p>A structured transcript is not available yet, so recordings remain at the activity level.</p>{selectedEntryClips.map((clip) => <div key={clip.id}><div><strong>{clip.label}</strong><small>{clip.filename} · {clip.status.replaceAll("_", " ")}</small></div>{clip.status === "available" ? <audio controls preload="metadata" src={`/api/audio/${encodeURIComponent(clip.id)}`} /> : <em>Upload is not available yet.</em>}<button type="button" className="audio-remove" onClick={() => void removeActivityAudio(selectedEntryActivityId, clip.id)}>Remove</button></div>)}<label className="audio-upload"><strong>{audioBusy ? "Uploading securely…" : "Add an answer recording"}</strong><span>Choose or paste an audio file here. It stays private and is streamed only after login.</span><input type="file" accept="audio/*" multiple disabled={audioBusy} onChange={(event) => { void uploadActivityAudio(selectedEntryActivityId, [...(event.target.files ?? [])]); event.currentTarget.value = ""; }} /></label></section>}
           <footer>Interview Arc · {selectedEntry.id}</footer>
         </article>
       </div>}

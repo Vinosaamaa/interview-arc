@@ -54,15 +54,17 @@ timing_source: website
 elapsed_seconds: 4872
 started_at: 2026-07-17T09:00:00-07:00
 ended_at: 2026-07-17T10:21:12-07:00
-audio_clip_ids:
-  - clip_01J...
+audio_clips:
+  - id: clip_01J...
+    transcript_turn_id: answer-03
 audio_availability: private-r2
 ---
 ```
 
-Omit `audio_clip_ids` and `audio_availability` when there is no recording.
+Omit `audio_clips` and `audio_availability` when there is no recording.
 Legacy files may retain `audio_file` with `local-only`, but new artifacts store
-only owner-authorized D1 clip identifiers. Do not put an absolute local
+only owner-authorized D1 clip identifiers and their matching user transcript
+turn IDs. Do not put an absolute local
 filesystem path or public R2 object URL in a committed artifact.
 
 Use `timing_source: website` when the value came from the website timer, `manual` when the user reported it, and `unknown` when neither source exists. When timing is unknown, omit `elapsed_seconds`, `started_at`, and `ended_at`; never estimate them from chat message timestamps.

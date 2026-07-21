@@ -42,6 +42,7 @@ function safeAudioFilename(value: string) {
 async function uploadPracticeAudio(ownerId: string, request: Request, env: Env) {
   const form = await request.formData();
   const activityId = String(form.get("activityId") ?? "").trim();
+  const transcriptTurnId = String(form.get("transcriptTurnId") ?? "").trim() || undefined;
   const label = String(form.get("label") ?? "Practice answer").trim().slice(0, 120) || "Practice answer";
   const file = form.get("file");
   if (!activityId || !(file instanceof File) || !file.type.startsWith("audio/") || file.size === 0 || file.size > 100 * 1024 * 1024) {
@@ -50,18 +51,18 @@ async function uploadPracticeAudio(ownerId: string, request: Request, env: Env) 
   const clipId = crypto.randomUUID();
   const filename = safeAudioFilename(file.name);
   const objectKey = `${ownerId}/${activityId}/${clipId}-${filename}`;
-  await registerActivityAudioClip(ownerId, { id: clipId, activityId, filename, mimeType: file.type, label, objectKey, status: "uploading" }, Date.now());
+  await registerActivityAudioClip(ownerId, { id: clipId, activityId, transcriptTurnId, filename, mimeType: file.type, label, objectKey, status: "uploading" }, Date.now());
   try {
     await env.AUDIO.put(objectKey, file.stream(), {
       httpMetadata: { contentType: file.type, contentDisposition: `inline; filename="${filename}"` },
-      customMetadata: { ownerId, activityId, clipId },
+      customMetadata: { ownerId, activityId, clipId, ...(transcriptTurnId ? { transcriptTurnId } : {}) },
     });
     await updateActivityAudioClipStatus(ownerId, clipId, "available", Date.now());
   } catch (error) {
     await updateActivityAudioClipStatus(ownerId, clipId, "failed", Date.now());
     throw error;
   }
-  return json(request, { clipId, activityId, filename, mimeType: file.type, label, status: "available" }, { status: 201 });
+  return json(request, { clipId, activityId, transcriptTurnId: transcriptTurnId ?? null, filename, mimeType: file.type, label, status: "available" }, { status: 201 });
 }
 
 function bearerToken(request: Request) {
@@ -457,9 +458,10 @@ function createServer(ownerId: string) {
   server.registerTool(
     "register_activity_audio_clip",
     {
-      description: "Attach local-only or privately stored audio metadata to any practice activity. Raw audio is never placed in Git.",
+      description: "Attach local-only or privately stored audio metadata to a practice activity and, when known, one existing user transcript turn. Raw audio is never placed in Git.",
       inputSchema: {
         activityId: z.string().min(1),
+        transcriptTurnId: z.string().min(1).optional(),
         clipId: z.string().min(1),
         filename: z.string().min(1),
         mimeType: z.string().min(1),

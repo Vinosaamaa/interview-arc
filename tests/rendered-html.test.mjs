@@ -50,6 +50,9 @@ test("the Cloudflare build contains the Interview Arc dashboard", async () => {
   assert.match(bundle, /Has notes/);
   assert.match(bundle, /PINNED TO THIS CASE/);
   assert.match(bundle, /D1 DRAFT · NOT YET IN THE JOURNAL/);
+  assert.match(bundle, /CONVERSATION TRANSCRIPT/);
+  assert.match(bundle, /Attach your recording/);
+  assert.match(bundle, /Your recording sits between the prompt and the answer it captures/);
   assert.match(bundle, /up to two due reviews first/);
   assert.match(bundle, /Sweet September/);
   assert.match(bundle, /Forest Mist Whispers/);

@@ -1,0 +1,1 @@
+ALTER TABLE `activity_audio_clips` ADD `transcript_turn_id` text;

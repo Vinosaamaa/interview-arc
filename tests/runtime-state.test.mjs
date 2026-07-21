@@ -89,6 +89,7 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   const orchestrator = await readFile(new URL("../drizzle/0003_clear_miek.sql", import.meta.url), "utf8");
   const durable = await readFile(new URL("../drizzle/0004_lyrical_sinister_six.sql", import.meta.url), "utf8");
   const knowledge = await readFile(new URL("../drizzle/0005_colorful_nuke.sql", import.meta.url), "utf8");
+  const answerAudio = await readFile(new URL("../drizzle/0006_shiny_legion.sql", import.meta.url), "utf8");
   for (const table of ["timers", "outcomes", "extra_activities", "live_sessions"]) {
     assert.match(live, new RegExp("CREATE TABLE `" + table + "`"));
   }
@@ -110,6 +111,7 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   for (const table of ["problem_preferences", "problem_solution_profiles", "problem_solution_revisions", "activity_solution_links", "owner_bank_questions"]) {
     assert.match(knowledge, new RegExp("CREATE TABLE `" + table + "`"));
   }
+  assert.match(answerAudio, /ALTER TABLE `activity_audio_clips` ADD `transcript_turn_id` text/);
 });
 
 test("contracts preserve flexible session duration, membership, and exact timestamps", async () => {
@@ -150,12 +152,18 @@ test("private R2 audio stays owner-authorized and seekable", async () => {
   const config = await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8");
   const upload = await readFile(new URL("../app/api/audio/route.ts", import.meta.url), "utf8");
   const stream = await readFile(new URL("../app/api/audio/[id]/route.ts", import.meta.url), "utf8");
+  const durableStore = await readFile(new URL("../db/durable-practice.ts", import.meta.url), "utf8");
+  const client = await readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8");
   assert.match(config, /"binding": "AUDIO"/);
   assert.match(upload, /resolveOwnerId/);
   assert.match(upload, /env\.AUDIO\.put/);
+  assert.match(upload, /transcriptTurnId/);
+  assert.match(durableStore, /Answer audio must reference an existing user transcript turn in the same activity/);
   assert.match(stream, /accept-ranges/);
   assert.match(stream, /content-range/);
   assert.match(stream, /cache-control": "private, no-store/);
+  assert.ok(client.indexOf("answer-playback") < client.indexOf('"Your answer"'));
+  assert.match(client, /UNLINKED RECORDINGS · PRIVATE R2/);
 });
 
 test("the Chrome companion is scoped to public LeetCode pages and the bridge host", async () => {

@@ -134,9 +134,12 @@ a rubric/reference source; it is never the source of the user's personal story.
   to private R2. Store only owner-scoped metadata in D1 and show playback on the
   dated Past attempt; never commit raw audio or a public object URL.
 - When an attached audio path is available, transcribe it as required and run
-  `node scripts/upload-practice-audio.mjs <activity_id> <path> [label]`. The
-  script uses `INTERVIEW_ARC_MCP_TOKEN`; never expose the token in output or a
-  command argument.
+  `node scripts/upload-practice-audio.mjs <activity_id> <path> --turn <user_turn_id> --label "Recorded answer"`.
+  Append the matching user transcript turn first and reuse its stable ID so Past
+  places the player after the question and before the answer. The script uses
+  `INTERVIEW_ARC_MCP_TOKEN`; never expose the token in output or a command
+  argument. If no truthful turn association is known, omit `--turn` rather than
+  guessing.
 
 ## Story Bank
 

@@ -26,6 +26,11 @@ later in this guide.
   website discussion.
 - “Please note for this problem” calls `add_practice_note` with the user's exact
   wording. Notes apply to all practice types and lead the final case file.
+- When the user supplies audio and transcript text for one coding explanation,
+  append the user transcript turn first and upload the recording with that
+  stable turn ID using `scripts/upload-practice-audio.mjs --turn`. This places
+  the player after the specialist prompt and before the answer in Past. Never
+  guess a turn association.
 - `Publish this session` finalizes the current coding activity in D1.
 - `Publish today's practice` and `Publish today's LeetCode` finalize every
   pending coding activity in D1. They do not edit Git, switch branches, commit,
