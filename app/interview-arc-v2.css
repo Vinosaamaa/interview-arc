@@ -247,19 +247,28 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 
 /* Focused repair pass: stable clocks, grouped filters, and compact bank tools */
 .activity-timer { min-height: 66px; }
+.activity-timer.started { grid-template-rows: minmax(0, 1fr) 14px; }
 .activity-time-copy {
-  min-height: 48px;
-  grid-template-rows: 14px 20px 14px;
+  min-width: 0;
+  min-height: 34px;
+  grid-template-rows: 14px 20px;
   align-content: center;
 }
-.activity-time-copy.unstarted {
-  grid-template-rows: auto auto;
+.activity-timer.unstarted .activity-time-copy {
   place-content: center start;
 }
 .activity-time-copy > span,
-.activity-time-copy > strong,
-.activity-time-copy > small { min-width: 0; line-height: 1.15; }
-.activity-time-copy > small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-time-copy > strong { min-width: 0; line-height: 1.15; }
+.activity-start-time {
+  grid-column: 1 / -1;
+  min-width: 0;
+  color: #75857f;
+  font-family: var(--font-geist-mono);
+  font-size: .68rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  white-space: nowrap;
+}
 
 .mock-controls { grid-template-columns: minmax(160px, 1fr) auto auto auto; }
 .mock-controls .activity-timer { min-width: 160px; }
