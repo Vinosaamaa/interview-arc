@@ -17,20 +17,28 @@ If a task starts at the repository root, explicitly read the owning guide before
 
 The user may keep every specialist as a long-lived Codex task inside the same outer Interview Prep project. Do not require separate local projects or worktrees. Codex tasks share committed and working-tree files, not one another's unrecorded transcript, so write durable decisions and published results to the repository.
 
+For first-time task creation and durable specialist registration, follow
+`docs/agents/task-startup-prompts.md`.
+
 ## Session Commands
 
-- A focused dashboard activity or a clearly named problem establishes the normal
-  activity boundary. `Start a new session` remains an explicit override; it is
-  not required merely because the Pacific calendar date changed.
-- `Publish this session`: finalize the current artifact, assign it to the
-  Pacific calendar date containing its completion timestamp, update the matching
-  `data/daily/YYYY-MM-DD.json` entry, then run `pnpm journal:checkpoint -- --date
-  YYYY-MM-DD --area <specialty>`. The guarded helper creates or reuses that
-  date's daily branch and makes a local checkpoint commit. Do not push, open a
-  pull request, or deploy for an individual session.
-- `Finish today's journal`: in the main/website task, switch to `journal/YYYY-MM-DD`, merge the latest `origin/main`, validate all daily files, push the accumulated checkpoint commits, and open one pull request.
+- A focused dashboard activity or a clearly named problem establishes the
+  normal activity boundary. `Start a new session` is an explicit override, not
+  a daily ritual.
+- Specialists append activity-scoped transcript turns and pinned notes to D1
+  incrementally. D1 is draft storage; it is not the published journal.
+- `Publish today's practice` inside a specialist task flushes and finalizes all
+  pending activities for that specialty into D1. It performs no Git or deploy
+  operation.
+- `Publish all pending practice` in `Interview Arc — Coordinator` asks each
+  registered specialist to flush/finalize, renders every pending artifact from
+  D1, groups it by Pacific completion date, uses the guarded journal workflow,
+  and publishes the resulting pull request to production.
 
-Maintain long system-design and behavioral drafts incrementally. Do not rely on reconstructing an arbitrarily long task transcript only at publish time.
+Read `docs/contracts/durable-practice-publishing.md` for the complete task
+registry, transcript, finalization, review, and publication protocol. Maintain
+long system-design and behavioral drafts incrementally; never reconstruct an
+arbitrarily long task transcript from memory at publication time.
 
 ## Shared Product Rules
 
@@ -74,7 +82,10 @@ For a behavioral bank question with `source: Bugfree.ai` and `solutionReference:
 
 ## Audio Boundary
 
-Raw recordings stay in `audio-answers/` and are ignored by Git. Commit the matching Markdown transcript/review. Reference audio by filename with `availability: local-only`; the deployed site cannot play a file that exists only on the user's computer.
+Raw recordings are ignored by Git and may be staged in `audio-answers/` for
+transcription. Upload them through the authenticated Interview Arc audio API to
+the private R2 bucket; D1 stores owner-scoped metadata and dated Past attempts
+provide authenticated playback. Never commit raw audio or a public object URL.
 
 For local transcription, prefer the current workspace environment:
 
@@ -97,9 +108,9 @@ If the repository has its own `.venv/`, use `./.venv/bin/python` instead.
 - Run `pnpm test` and `pnpm lint` after website changes. Validate D1 changes
   locally with `pnpm db:migrate:local` and `pnpm content:import:local`.
 - Run `pnpm lint` when TypeScript, JavaScript, or lint configuration changes.
-- Group generated daily artifacts into one `journal/YYYY-MM-DD` branch. Each
-  specialist publication creates a local checkpoint commit through the shared
-  helper, but only `Finish today's journal` pushes and opens the daily PR.
+- Group generated daily artifacts into one `journal/YYYY-MM-DD` branch. Only
+  the coordinator renders/checkpoints Git artifacts; specialist tasks stop at a
+  complete D1 finalization bundle.
 - Before opening the daily PR, merge the latest `origin/main` into the journal
   branch. Being behind main is not itself a conflict; stop for user-visible
   resolution only when Git reports overlapping changes.

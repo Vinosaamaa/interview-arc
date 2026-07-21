@@ -55,6 +55,9 @@ __pycache__/
 /audio-answers/**/*.aac
 /audio-answers/**/*.flac
 
+# local-only resume, employer evidence, chat exports, and source registries
+/private-sources/
+
 # local website-to-agent handoff; keep the instructions only
 /data/drafts/*.json
 !/data/drafts/README.md

@@ -3,6 +3,97 @@ import type { JournalActivity, PracticeSession } from "./content-types";
 export type ActivityType = JournalActivity["type"];
 export type Outcome = "solved" | "solved_after_reviewing_approach" | "failed";
 export type PublicationStatus = "draft" | "ready" | "published";
+export type NoteKind = "remember" | "insight" | "mistake" | "pattern" | "question";
+export type PracticeNote = {
+  id: string;
+  activityId: string;
+  date: string;
+  body: string;
+  kind: NoteKind;
+  pinned: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+export type ReviewSchedule = {
+  reviewKey: string;
+  activityId: string;
+  questionId: string | null;
+  specialty: ActivityType;
+  status: "scheduled" | "due" | "completed" | "dismissed";
+  reason: "failed" | "full_walkthrough" | "approach_review" | "manual" | "successful_recall";
+  dueDate: string;
+  intervalDays: number;
+  stage: number;
+  reviewCount: number;
+};
+export type FinalizationSummary = {
+  activityId: string;
+  specialty: ActivityType;
+  status: "draft" | "ready" | "published";
+  finalizedAt: number | null;
+};
+export type AudioClip = {
+  id: string;
+  activityId: string;
+  filename: string;
+  mimeType: string;
+  label: string;
+  durationSeconds: number | null;
+  status: "local_only" | "uploading" | "available" | "failed";
+};
+export type ProblemPreference = { specialty: ActivityType; questionId: string; starred: boolean; updatedAt: number };
+export type SolutionProfilePayload = {
+  schemaVersion: 1;
+  summary: string;
+  sections: Array<{ title: string; body: string }>;
+  tags: string[];
+  references: Array<{ title: string; url: string; accessedAt: string }>;
+  behavioralAnswer?: {
+    preferred: {
+      label: string;
+      answer: string;
+      evidence: string[];
+      evidenceGaps: string[];
+    };
+    alternatives: Array<{
+      label: string;
+      answer: string;
+      whenToUse?: string;
+      evidence: string[];
+      evidenceGaps: string[];
+    }>;
+  };
+};
+export type SolutionProfile = {
+  specialty: ActivityType;
+  questionId: string;
+  title: string;
+  currentRevision: number;
+  tags: string[];
+  payload: SolutionProfilePayload;
+  updatedAt: number;
+};
+export type SolutionRevision = {
+  specialty: ActivityType;
+  questionId: string;
+  revision: number;
+  activityId: string;
+  payload: SolutionProfilePayload;
+  createdAt: number;
+};
+export type ActivitySolutionLink = { activityId: string; specialty: ActivityType; questionId: string; solutionRevision: number };
+export type PersonalQuestion = {
+  specialty: ActivityType;
+  questionId: string;
+  title: string;
+  prompt: string | null;
+  url: string | null;
+  source: string;
+  tags: string[];
+  priority: number;
+  targetMinutes: number;
+  active: boolean;
+};
 export type TimerDraft = {
   elapsedSeconds: number;
   runningSince: number | null;
@@ -18,6 +109,15 @@ export type LocalDraft = {
   outcomes: Record<string, Outcome>;
   publicationStatuses: Record<string, PublicationStatus>;
   notes: Record<string, string>;
+  structuredNotes: Record<string, PracticeNote[]>;
+  reviews: Record<string, ReviewSchedule>;
+  finalizations: Record<string, FinalizationSummary>;
+  audioClips: Record<string, AudioClip[]>;
+  problemPreferences: ProblemPreference[];
+  solutionProfiles: SolutionProfile[];
+  solutionRevisions: SolutionRevision[];
+  activitySolutionLinks: ActivitySolutionLink[];
+  personalQuestions: PersonalQuestion[];
   extraActivities: ExtraActivity[];
   sessions: LocalSession[];
   focusedActivityId: string | null;
@@ -45,6 +145,15 @@ export const EMPTY_DRAFT: LocalDraft = {
   outcomes: {},
   publicationStatuses: {},
   notes: {},
+  structuredNotes: {},
+  reviews: {},
+  finalizations: {},
+  audioClips: {},
+  problemPreferences: [],
+  solutionProfiles: [],
+  solutionRevisions: [],
+  activitySolutionLinks: [],
+  personalQuestions: [],
   extraActivities: [],
   sessions: [],
   focusedActivityId: null,
@@ -72,4 +181,8 @@ export function elapsed(timer: TimerDraft | undefined, now: number) {
 
 export function remaining(timer: TimerDraft | undefined, now: number, allocatedSeconds = SESSION_SECONDS) {
   return Math.max(0, allocatedSeconds - elapsed(timer, now));
+}
+
+export function overtime(timer: TimerDraft | undefined, now: number, allocatedSeconds = SESSION_SECONDS) {
+  return Math.max(0, elapsed(timer, now) - allocatedSeconds);
 }

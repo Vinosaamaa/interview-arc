@@ -10,6 +10,51 @@ Before starting:
 4. Read `bank/questions.json` when selecting or adding a website-visible prompt.
 5. When the selected bank entry has `source: SystemDesign.io` and `solutionReference: true`, open its `url` and review the current recommended solution links and question-specific design details before the mock begins.
 6. If the requested mode is genuinely unclear, ask whether the user wants instructor mode, interviewer mode, or a full model answer. Otherwise, infer it from the request and continue.
+7. Read `../../docs/contracts/durable-practice-publishing.md` before saving
+   notes, transcript turns, reviews, or finalizations.
+8. Use the repository skill `$interview-arc-system-design` and follow its
+   reference preflight and Solution Profile template.
+9. Read `../../docs/contracts/solution-profiles.md` for the shared Past-versus-
+   Problem-Bank boundary.
+
+## Authoritative Durable Publishing Workflow
+
+The durable publishing contract supersedes any older checkpoint/branch language
+later in this guide while preserving the coaching personality and interview
+procedure below.
+
+- Resolve or resume the focused system-design `activity_id`; ask only when the
+  activity remains ambiguous.
+- After resolving `questionId`, call `get_problem_solution_profile`. Use an
+  existing design privately as the baseline on revisits; do not reveal it
+  before a fresh attempt unless the user asks.
+- Append every meaningful two-sided mock exchange to D1 in small idempotent
+  batches with `append_practice_transcript`. Flush every few short turns and on
+  long answer, activity switch, pause, finish, or coordinator request.
+- “Please note for this question” calls `add_practice_note` with the user's exact
+  wording. Notes lead the final case file.
+- `Publish this session` finalizes the current activity in D1.
+- `Publish today's practice` finalizes every pending system-design activity in
+  D1. Neither command edits Git, switches branches, commits, opens a PR, marks
+  production published, or deploys.
+- Before finalization, privately consult the stored SystemDesign.io question
+  page and relevant accessible recommended sources. Save only sources actually
+  consulted.
+- Call `save_specialist_finalization` with the complete activity-scoped
+  two-sided transcript, summary, what went well, what to improve, stronger
+  answer/architecture, follow-ups, and references. Always include a complete
+  standalone model design even when the live mock stopped after partial advice.
+- Pass the stable `questionId` and a complete `solutionProfile`. The profile is
+  reusable Problem Bank knowledge; the dated transcript and feedback remain on
+  the Past attempt and are never copied into the profile.
+- Use `reuse_current` when the reference design remains complete. Use
+  `create_or_revise` only when the mock produces a material requirements,
+  architecture, flow, scaling, reliability, or tradeoff improvement.
+- Schedule failed/full-walkthrough review in 4 days, approach-review completion
+  in 7 days, and successful reimplementation in 21 then 60 days.
+
+The coordinator owns Git rendering and production publication through `Publish
+all pending practice`.
 
 ## Mission And Personality
 
@@ -50,20 +95,16 @@ The default role is not "answer generator." The default role is "coach plus inte
   item is missing, is a different specialty, and the request is ambiguous.
 - `Start a new session` remains an explicit override. Reuse or create the
   activity ID, establish the prompt and source, and create the draft session
-  artifact. Append each meaningful user/coach exchange as the mock continues so
-  the record does not depend on reconstructing a very long task at the end.
+  boundary. Append each meaningful user/coach exchange to D1 as the mock
+  continues so the record does not depend on reconstruction at the end.
 - `Publish this session`: read the activity's live timer, result, note,
   readiness, session ID, and exact timestamps through the Interview Arc MCP
-  bridge when available. Use its Pacific completion date—not the date when this
-  task began or when the command was typed—for the artifact and
-  `../../data/daily/YYYY-MM-DD.json`. Close the transcript, complete the
-  framework notes and feedback, and mark the artifact completed. Run
-  `pnpm journal:checkpoint -- --date YYYY-MM-DD --area system-design` from the
-  repository root. Only after that guarded local commit succeeds, call
-  `mark_activities_published` with the repository-relative path. Do not push,
-  open a pull request, or deploy; the main task does that once for the day.
+  bridge; flush the complete two-sided transcript; save the review, stronger
+  answer, and consulted references with `save_specialist_finalization`; then
+  stop. The coordinator owns files, Git, pull requests, and deployment.
 
-Never run raw branch-switching or commit commands in this task. If the checkpoint helper reports unrelated uncommitted work, stop publishing and ask the coordinator to protect or finish it; do not stash, discard, or include it.
+Never run branch-switching, checkpoint, commit, mark-published, pull-request, or
+deploy commands in this task.
 
 Only publish a dashboard activity whose effective publication state is `ready`, unless the user explicitly overrides that choice in this task. Finishing its timer or choosing a result makes it ready automatically. If MCP is unavailable, use a user-provided website export or ask for the activity ID and timing facts; never invent them.
 
@@ -89,15 +130,20 @@ At the beginning of a mock interview:
 
 The canonical system-design bank contains the 55 questions from SystemDesign.io. The bank stores each canonical question page URL, its listed complexity, and `solutionReference: true`.
 
-For every selected SystemDesign.io question:
+For a first attempt, or when the stored profile is incomplete, outdated,
+disputed, or the user asks for fresh research:
 
-1. Open the stored question URL immediately before the mock, because its recommended links and details may change.
+1. Open the stored question URL during private preparation, because its recommended links and details may change.
 2. Review the page's "Recommended Solutions from the Web" and its question-specific details. Follow the most relevant accessible references when needed to establish a strong expected architecture, key tradeoffs, and likely follow-ups.
 3. Treat this research as interviewer preparation, not as a script to reveal. Let the user clarify requirements and propose a design before using the reference material for nudges or evaluation.
 4. Do not copy a third-party solution into the repository. Summarize concepts in original language and preserve source links when they materially support the review.
 5. If a reference is unavailable, continue with first-principles system-design coaching and note the unavailable reference rather than pretending it was reviewed.
 
 The public question page is the durable pointer; external recommended articles and videos remain owned by their publishers and are not vendored into Interview Arc.
+
+On an ordinary revisit with a complete current Solution Profile, begin from the
+stored design instead of repeating web research. Research again only under the
+conditions above, and preserve any newly consulted sources in a new revision.
 
 ## Default System Design Flow
 
@@ -364,14 +410,24 @@ audio-answers/YYYY-MM-DD-<topic>-attempt-01.m4a
 audio-answers/YYYY-MM-DD-<topic>-attempt-01.md
 ```
 
-Raw audio is local-only and ignored by Git. Commit the matching Markdown transcript/review and the canonical system-design session artifact. In committed Markdown, reference only the audio filename and set:
+Raw audio is ignored by Git. After local transcription, upload the source file
+through Interview Arc's authenticated audio endpoint so it is stored privately
+in R2 and attached to the dated Past activity. Legacy local-only artifacts may
+still use:
 
 ```yaml
 audio_file: YYYY-MM-DD-<topic>-attempt-01.m4a
 audio_availability: local-only
 ```
 
-Never commit an absolute local path. The deployed website cannot play ignored audio and must show it as local-only.
+Never commit an absolute local path or R2 object key. The deployed website plays
+only owner-authorized clips whose D1 status is `available`.
+
+When the user attaches or copies an audio file into this task and its local path
+is available, resolve the focused activity ID, transcribe as required, then run
+`node scripts/upload-practice-audio.mjs <activity_id> <path> [label]`. This uses
+the configured `INTERVIEW_ARC_MCP_TOKEN`, uploads to private R2, and attaches the
+clip to the Past activity. Never print or pass the token as a command argument.
 
 Use this decision process:
 

@@ -40,7 +40,7 @@ interview-arc/
 │   ├── leetcode/                   question bank and attempt records
 │   ├── system-design/              system-design sessions and agent guide
 │   └── behavioral/                 behavioral sessions and agent guide
-├── audio-answers/                  local-only recordings plus tracked reviews
+├── audio-answers/                  ignored local staging for private recordings
 └── scripts/                        local artifact helpers
 ```
 
@@ -50,28 +50,32 @@ the app, so all four specialist workflows share one portable repository.
 
 ## Working With Specialist Tasks
 
+Use the exact task names, first prompts, and one-time connection procedure in
+[`docs/agents/task-startup-prompts.md`](docs/agents/task-startup-prompts.md).
+Task titles are used only to discover each specialist once; Interview Arc stores
+the durable task identifiers for coordinator routing afterward.
+
 Use four long-lived Codex tasks inside the same Interview Prep project: main/website, LeetCode, system design, and behavioral. They share this checkout and its files; they do not automatically share the private conversation history of another task.
 
 The outer workspace instructions route a task to the right guide even when every task starts from the same Interview Prep folder. The user does not need separate projects or worktrees.
 
-Use three shared commands:
+Use the durable D1 handoff described in
+`docs/contracts/durable-practice-publishing.md`:
 
-- A focused dashboard activity or a clearly named problem normally starts or
-  resumes specialist work. `Start a new session` explicitly creates or
-  acknowledges a stable activity ID and draft artifact when an override is
-  useful; it is not a required daily ritual.
-- `Publish this session` finalizes one question's files, assigns it to the
-  Pacific date on which it finished, updates that daily manifest, and makes a
-  guarded local checkpoint commit on `journal/YYYY-MM-DD`.
-- `Finish today's journal` asks the main task to merge the latest `main`, validate, push, and open one pull request for the day.
+- A focused dashboard activity or clearly named problem starts/resumes work.
+  `Start a new session` is only an override.
+- Specialists append activity-scoped turns and notes to D1 while practicing.
+- `Publish today's practice` in a specialist task flushes and finalizes that
+  specialty's pending activities in D1; it does not touch Git.
+- `Publish all pending practice` in `Interview Arc — Coordinator` contacts all
+  registered specialists, consumes their finalized bundles, creates every Git
+  artifact/daily journal by Pacific completion date, opens the journal pull
+  request, and publishes through the main workflow.
 
-For coding, finish the stopwatch or choose the actual result, then say `Publish today's LeetCode`. Finished activities become **Ready for journal** automatically (internal state: `ready`). The project-scoped Interview Arc MCP bridge reads the complete authenticated D1 queue, groups ready problems by Pacific completion date, and produces every coding artifact in one pass; it does not need a separate conversation for every problem or a separate command at midnight. Exporting `journal-YYYY-MM-DD-draft.json` remains the portable fallback.
-
-All specialist publications use the same guarded `journal/YYYY-MM-DD` branch.
-The checkpoint helper commits only journal-owned paths and refuses to cross a
-branch boundary while unrelated website changes are uncommitted. This keeps
-practice artifacts out of feature PRs while still allowing feature work between
-completed publication commands.
+Finished activities become **Ready for journal** automatically. The command is
+a checkpoint over all still-unpublished ready work, so it can be run after
+midnight. Exporting `journal-YYYY-MM-DD-draft.json` remains the portable
+fallback when the authenticated bridge is unavailable.
 
 See `docs/architecture/single-project-practice-workflow.md` for the full ownership and Git model.
 
@@ -97,7 +101,11 @@ System-design and behavioral sessions preserve the complete conversation transcr
 
 ## Audio
 
-Audio recordings are intentionally local-only and ignored by Git. Their matching Markdown transcript and review files are committed. A session artifact references the recording by filename and marks it as `local-only`; the deployed website must show that status instead of offering a broken playback link.
+Raw recordings are ignored by Git. A supplied recording can be transcribed
+locally, then uploaded through the authenticated audio API into the private
+`interview-arc-audio` Cloudflare R2 bucket. D1 stores owner-scoped clip metadata;
+dated Past attempts provide authenticated, seekable playback without exposing a
+public object URL. Local files may be removed after upload and verification.
 
 In the current local umbrella workspace, run transcription from this repository with:
 
@@ -107,7 +115,12 @@ In the current local umbrella workspace, run transcription from this repository 
   --prompt "Design TikTok's For You feed"
 ```
 
-The helper copies the recording into `audio-answers/` and creates its Markdown review. A standalone clone may instead create `.venv/` in this repository and run the same script with `./.venv/bin/python`.
+The helper copies the recording into ignored `audio-answers/` staging and
+creates its Markdown review. Upload the staged file with
+`node scripts/upload-practice-audio.mjs <activity_id> <path> [label]`; the
+authenticated specialist environment supplies `INTERVIEW_ARC_MCP_TOKEN`. A
+standalone clone may instead create `.venv/` in this repository and run the
+same transcription script with `./.venv/bin/python`.
 
 ## Website Development
 
@@ -142,9 +155,10 @@ queue.
 
 - Code, schemas, and agent-guide changes use a feature branch and pull request.
 - Generated interview artifacts can be grouped into one daily branch such as `journal/2026-07-17`.
-- All specialist tasks use the same daily branch sequentially in the same checkout.
-- `Publish this session` writes files only; it does not create a pull request or deploy by itself.
-- `Finish today's journal` creates one commit/pull request for the complete day.
+- Specialist tasks do not switch branches or write publication files. They save
+  draft turns, notes, and finalization bundles to D1.
+- The coordinator alone uses the daily branch and creates the complete journal
+  pull request.
 - Timer ticks and live UI state belong in application storage, not one Git commit per click.
 - End-of-day Markdown is the durable journal record.
 - Pull requests run local-D1 validation, lint, build, and tests. A merge to

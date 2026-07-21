@@ -37,5 +37,11 @@
       "database_id": "28834aae-e412-4046-913b-02684f1e11cf",
       "migrations_dir": "drizzle"
     }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "AUDIO",
+      "bucket_name": "interview-arc-audio"
+    }
   ]
 }

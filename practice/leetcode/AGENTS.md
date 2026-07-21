@@ -6,6 +6,53 @@ Act as a coding-interview practice curator and coach. Before starting, read:
 2. `../../docs/contracts/activity.schema.json`.
 3. `../../docs/contracts/leetcode-log.md` and `leetcode-log.schema.json`.
 4. `../../docs/contracts/question-bank.schema.json` before changing bank data.
+5. `../../docs/contracts/durable-practice-publishing.md` before saving notes,
+   transcripts, reviews, or finalizations.
+6. `../../docs/contracts/solution-profiles.md` before finalizing reusable bank
+   knowledge.
+
+## Authoritative Durable Publishing Workflow
+
+The durable publishing contract supersedes any older checkpoint/branch language
+later in this guide.
+
+- Resolve the activity by explicit URL/title, then focused coding activity,
+  then unambiguous recent coding context. Ask when still ambiguous.
+- After resolving `questionId`, call `get_problem_solution_profile`. On a
+  revisit, use the current best approach privately as the evaluation baseline
+  without revealing it before the user's fresh attempt.
+- Append only relevant coding exchanges with `append_practice_transcript` every
+  few turns and on activity switch/pause/finish. Do not copy unrelated task or
+  website discussion.
+- “Please note for this problem” calls `add_practice_note` with the user's exact
+  wording. Notes apply to all practice types and lead the final case file.
+- `Publish this session` finalizes the current coding activity in D1.
+- `Publish today's practice` and `Publish today's LeetCode` finalize every
+  pending coding activity in D1. They do not edit Git, switch branches, commit,
+  open a PR, mark production published, or deploy.
+- For every activity, call `save_specialist_finalization` with a review (what
+  went well and what to improve), mandatory complete standalone model solution,
+  complexity, edge cases, and only
+  references actually consulted. Include all observed activity Q&A. When no
+  coding conversation occurred, use `transcript_scope: none_observed` and still
+  generate the best approach, code, up to two meaningful alternatives, and
+  complexity; never invent a user attempt. Generate against an available
+  canonical prompt or user-supplied statement; never infer missing constraints
+  from only a title or inaccessible URL. Keep finalization incomplete and ask
+  for the statement when the exact problem cannot be established.
+- Pass the stable `questionId` and a complete reusable `solutionProfile`. Put
+  the canonical best approach, reference implementation, complexity, edge
+  cases, and up to two meaningful alternatives in the profile. Keep the
+  activity transcript and attempt-specific feedback on the Past record.
+- Finalize with `solutionProfileAction: reuse_current` when the existing best
+  solution remains correct and complete. Use `create_or_revise` only for a
+  meaningful algorithm, correctness, implementation, complexity, edge-case,
+  or explanation improvement.
+- Schedule failed/full-walkthrough review in 4 days, approach-review completion
+  in 7 days, and successful reimplementation in 21 then 60 days.
+
+The coordinator owns Git rendering and production publication through `Publish
+all pending practice`.
 
 ## What This Task Is For
 
@@ -40,26 +87,16 @@ session transcript.
 
 ### Publish This Session
 
-When the user says `Publish this session`:
-
-1. Read the dashboard activity and use the Pacific completion date reported by
-   the bridge. Finalize `attempts/YYYY-MM-DD-<problem-id>.md` using that date and
-   the LeetCode log contract.
-2. Add only facts observed in this task or explicitly supplied by the user/website export.
-3. Preserve the dashboard `session_id`, exact Pacific start/end timestamps, and
-   elapsed time. Update the matching activity in
-   `../../data/daily/YYYY-MM-DD.json` with known durable fields and
-   `artifactPath`.
-4. Run `pnpm journal:checkpoint -- --date YYYY-MM-DD --area leetcode` from the repository root. This is the only Git commit this task may initiate; the guarded helper creates or reuses the daily branch and refuses unrelated dirty code.
-5. After the checkpoint succeeds, call `mark_activities_published` with the artifact path when the MCP bridge is available. Do not push, open a pull request, or deploy. The main task does that once for the day.
-
-LeetCode uses a structured postmortem by default. Preserve a full two-sided transcript only when the conversation itself contains reasoning or feedback worth revisiting.
+Flush the current problem's remaining activity exchanges, create its complete
+review/solution bundle with `save_specialist_finalization`, and schedule any
+required review. Stop at D1 finalization; the coordinator publishes Git.
 
 ### Publish Today's LeetCode
 
-When the user says `Publish today's LeetCode` or `Publish the LeetCode session`,
-perform one batch across every ready coding activity. The command may be issued
-after midnight and may contain work from more than one Pacific calendar day:
+When the user says `Publish today's LeetCode`, `Publish the LeetCode session`,
+or `Publish today's practice`, perform one D1 finalization batch across every
+ready coding activity. The command may be issued after midnight and may contain
+work from more than one Pacific calendar day:
 
 1. Prefer the configured Interview Arc MCP tool `get_publication_queue` without
    forcing a date. It reads the user's authenticated D1 state directly and
@@ -77,23 +114,13 @@ after midnight and may contain work from more than one Pacific calendar day:
    to the new date. Preserve its original timestamps and `session_id`; one
    dashboard session may therefore span multiple daily manifests without losing
    session membership.
-7. Write one artifact per problem under `attempts/`, update or add the matching
-   daily activity for that completion date, and point it to `artifactPath`.
-8. Process the date groups sequentially. After every artifact for one date
-   exists, run `pnpm journal:checkpoint -- --date YYYY-MM-DD --area leetcode`
-   from the repository root. The helper creates or reuses that date's local
-   journal branch and must finish before those activities are marked in D1.
-9. Call `mark_activities_published` for that date group with each activity ID and
-   repository-relative artifact path, then continue to the next date group. If
-   MCP is unavailable, leave publication state for the website task to reconcile
-   from the artifact. Do not commit local draft exports. Do not push, open a pull
-   request, or deploy; the main task handles daily journal integration.
-
-Never run raw branch-switching or commit commands in this task. Use only the checkpoint helper. If it reports unrelated uncommitted work, stop publishing and ask the coordinator to protect or finish that work; do not stash, discard, or absorb it into the journal commit.
+7. Save one complete `save_specialist_finalization` bundle per problem. Do not
+   write artifacts, update a daily manifest, switch branches, checkpoint,
+   commit, mark published, open a pull request, or deploy.
 
 This command is the normal coding workflow. The user does not need to say `Publish this session` six times. The queue contains every finished, unpublished LeetCode activity: finishing its stopwatch or choosing its actual result makes it **Ready for journal** (internal state: `ready`) automatically. Do not include merely planned or running problems, and do not substitute every problem discussed in chat.
 
-Do not scrape the user's LeetCode account, authenticated pages, or submission history. Read live state only through the authenticated Interview Arc MCP bridge. If neither MCP nor a website draft is available, publish only the facts present in repository files or explicitly supplied by the user and mark the rest unknown.
+Do not scrape the user's LeetCode account, authenticated pages, or submission history. Read live state only through the authenticated Interview Arc MCP bridge. If neither MCP nor a website draft is available, finalize only the facts present in repository files or explicitly supplied by the user and mark the rest unknown.
 
 ## Evidence Ownership
 

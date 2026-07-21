@@ -8,6 +8,7 @@ import { practiceDateAt, practicePeriodAt } from "../app/practice-time.ts";
 import { resolveOwnerId, TRUSTED_EMAIL_HEADER } from "../db/owner.ts";
 import { derivePublicationStatus } from "../db/publication-state.ts";
 import { foldElapsed, nextTimerState } from "../db/timer-state.ts";
+import { reviewIntervalDays } from "../db/review-cadence.ts";
 import { isJournalPath, journalBranch, parsePorcelain } from "../scripts/journal-branch.mjs";
 
 test("today follows the practice timezone instead of the Worker UTC date", () => {
@@ -39,6 +40,14 @@ test("session allocations follow the configurable 40/60/60-minute recipe", () =>
   assert.equal(sessionAllocationSeconds(3, 2, 0), 14_400);
   assert.equal(sessionAllocationSeconds(0, 1, 2), 10_800);
   assert.equal(sessionAllocationSeconds(-2, 0, 0), 0);
+});
+
+test("review cadence starts at four days and advances successful recall", () => {
+  assert.equal(reviewIntervalDays("failed"), 4);
+  assert.equal(reviewIntervalDays("full_walkthrough"), 4);
+  assert.equal(reviewIntervalDays("approach_review"), 7);
+  assert.equal(reviewIntervalDays("successful_recall"), 21);
+  assert.equal(reviewIntervalDays("successful_recall", 21), 60);
 });
 
 test("finished activities enter the journal queue without a second toggle", () => {
@@ -78,6 +87,8 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   const content = await readFile(new URL("../drizzle/0001_high_nightmare.sql", import.meta.url), "utf8");
   const connected = await readFile(new URL("../drizzle/0002_chubby_the_hand.sql", import.meta.url), "utf8");
   const orchestrator = await readFile(new URL("../drizzle/0003_clear_miek.sql", import.meta.url), "utf8");
+  const durable = await readFile(new URL("../drizzle/0004_lyrical_sinister_six.sql", import.meta.url), "utf8");
+  const knowledge = await readFile(new URL("../drizzle/0005_colorful_nuke.sql", import.meta.url), "utf8");
   for (const table of ["timers", "outcomes", "extra_activities", "live_sessions"]) {
     assert.match(live, new RegExp("CREATE TABLE `" + table + "`"));
   }
@@ -93,6 +104,12 @@ test("D1 migrations cover owner-scoped live state and shared published content",
     assert.match(orchestrator, new RegExp("CREATE TABLE `" + table + "`"));
   }
   assert.match(orchestrator, /ALTER TABLE `timers` ADD `started_at` integer/);
+  for (const table of ["practice_notes", "practice_transcript_turns", "activity_finalizations", "review_schedules", "specialist_tasks", "activity_audio_clips"]) {
+    assert.match(durable, new RegExp("CREATE TABLE `" + table + "`"));
+  }
+  for (const table of ["problem_preferences", "problem_solution_profiles", "problem_solution_revisions", "activity_solution_links", "owner_bank_questions"]) {
+    assert.match(knowledge, new RegExp("CREATE TABLE `" + table + "`"));
+  }
 });
 
 test("contracts preserve flexible session duration, membership, and exact timestamps", async () => {
@@ -102,9 +119,43 @@ test("contracts preserve flexible session duration, membership, and exact timest
   assert.equal(activity.properties.sessionId.type, "string");
   assert.equal(activity.properties.startedAt.format, "date-time");
   assert.equal(activity.properties.endedAt.format, "date-time");
+  assert.equal(activity.properties.questionId.type, "string");
+  assert.ok(activity.properties.reviewReason.enum.includes("full_walkthrough"));
   assert.equal(journal.properties.sessions.items.properties.allocatedSeconds.minimum, 60);
   assert.equal(leetcode.properties.practiceTimezone.const, "America/Los_Angeles");
   assert.equal(leetcode.properties.timing.properties.startedAt.format, "date-time");
+});
+
+test("durable publishing keeps transcripts, review, notes, and four-day walkthrough recall", async () => {
+  const contract = await readFile(new URL("../docs/contracts/durable-practice-publishing.md", import.meta.url), "utf8");
+  const bridge = await readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8");
+  assert.match(contract, /complete two-sided activity transcript/i);
+  assert.match(contract, /complete standalone `modelAnswer`/i);
+  assert.match(contract, /failed attempt or full walkthrough: first review in \*\*4 days\*\*/i);
+  assert.match(contract, /Pinned Notes[\s\S]*What Went Well[\s\S]*What To Improve[\s\S]*References/);
+  for (const tool of ["append_practice_transcript", "add_practice_note", "save_specialist_finalization", "get_activity_practice_record", "get_problem_solution_profile", "schedule_practice_review", "register_specialist_task", "register_activity_audio_clip"]) {
+    assert.match(bridge, new RegExp(`"${tool}"`));
+  }
+  assert.match(bridge, /modelAnswer: z\.string\(\)\.min\(1\)/);
+  assert.match(bridge, /solutionProfile: z\.object/);
+  assert.match(bridge, /solutionProfileAction: z\.enum\(\["create_or_revise", "reuse_current"\]\)/);
+  assert.match(bridge, /behavioralAnswer: z\.object/);
+  assert.match(bridge, /"upsert_personal_bank_question"/);
+  const durableStore = await readFile(new URL("../db/durable-practice.ts", import.meta.url), "utf8");
+  assert.match(durableStore, /Behavioral Solution Profiles cannot contain a transcript/);
+  assert.match(durableStore, /Behavioral Solution Profiles require .*preferred personal answer/);
+});
+
+test("private R2 audio stays owner-authorized and seekable", async () => {
+  const config = await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8");
+  const upload = await readFile(new URL("../app/api/audio/route.ts", import.meta.url), "utf8");
+  const stream = await readFile(new URL("../app/api/audio/[id]/route.ts", import.meta.url), "utf8");
+  assert.match(config, /"binding": "AUDIO"/);
+  assert.match(upload, /resolveOwnerId/);
+  assert.match(upload, /env\.AUDIO\.put/);
+  assert.match(stream, /accept-ranges/);
+  assert.match(stream, /content-range/);
+  assert.match(stream, /cache-control": "private, no-store/);
 });
 
 test("the Chrome companion is scoped to public LeetCode pages and the bridge host", async () => {
