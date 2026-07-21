@@ -143,17 +143,43 @@ async function companionMutation(ownerId: string, request: Request) {
     const session = activity?.sessionId
       ? snapshot.sessions.find((candidate) => candidate.id === activity.sessionId)
       : undefined;
+    if (mutation.action === "finish" && !activity?.timer?.startedAt) {
+      return json(request, { error: "Start the activity stopwatch before finishing it." }, { status: 409 });
+    }
     if (mutation.action === "start" && session && !snapshot.sessionTimers[session.id]?.completed) {
       await applyTimerAction(ownerId, session.id, "session", "start", now, { activityIds: session.activityIds });
     }
     await applyTimerAction(ownerId, mutation.activityId, "activity", mutation.action, now, {
       sessionId: activity?.sessionId,
     });
+    if (mutation.action === "finish") {
+      if (activity?.outcome === "failed" || activity?.outcome === "solved_after_reviewing_approach") {
+        await scheduleReview(ownerId, {
+          activityId: mutation.activityId,
+          questionId: activity.questionId,
+          specialty: activity.type,
+          completedDate: date,
+          reason: activity.outcome === "failed" ? "failed" : "approach_review",
+        }, now);
+      } else if (activity?.outcome === "solved" && activity.reviewOfActivityId) {
+        await scheduleReview(ownerId, {
+          activityId: mutation.activityId,
+          questionId: activity.questionId,
+          specialty: activity.type,
+          completedDate: date,
+          reason: "successful_recall",
+        }, now);
+      } else {
+        await clearActivityReviewSchedules(ownerId, mutation.activityId);
+      }
+    }
   } else if (mutation.type === "outcome") {
     const snapshot = await buildPracticeSnapshot(ownerId, date);
     const activity = snapshot.activities.find((candidate) => candidate.id === mutation.activityId);
-    await setOutcome(ownerId, mutation.activityId, mutation.outcome, now, activity?.sessionId);
-    if (mutation.outcome === "failed" || mutation.outcome === "solved_after_reviewing_approach") {
+    await setOutcome(ownerId, mutation.activityId, mutation.outcome, now);
+    if (!activity?.timer?.completed) {
+      await clearActivityReviewSchedules(ownerId, mutation.activityId);
+    } else if (mutation.outcome === "failed" || mutation.outcome === "solved_after_reviewing_approach") {
       await scheduleReview(ownerId, {
         activityId: mutation.activityId,
         questionId: activity?.questionId,

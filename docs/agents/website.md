@@ -16,7 +16,7 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
 - On Today, use the masthead tally for yesterday's completed activities, recorded time, and sessions. Read owner-scoped D1 state for yesterday so unpublished work is not omitted; fall back to the versioned journal offline.
 - Let locally added activities be edited and removed.
 - Store lifecycle separately from outcome.
-- Give coding, system-design, and behavioral activities the same cycling result-flag layout. The local mock labels are finished, finished after review, and failed; only LeetCode persists the canonical outcome field. The hover/focus legend must explain the colors and must not be clipped inside a swipe card.
+- Give coding, system-design, and behavioral activities the same cycling result-flag layout. The local mock labels are finished, finished after review, and failed; only LeetCode persists the canonical outcome field. The hover/focus legend must explain the colors and must not be clipped inside its activity card.
 - Open the original LeetCode page for prompt reading and submission. Never imply that code was executed or accepted locally.
 - Show system-design and behavioral transcript/review artifacts when tracked files exist.
 - Past contains every completed attempt, including failed work worth reviewing;
@@ -117,8 +117,9 @@ The website must not imply that browser draft state has already been published t
 - Every Journey visualization must disclose the records behind it: heatmap days and trend points select a date, topic bars reveal matching attempts, and effort/outcome points open the activity record. Do not infer mastery, productivity by time of day, or other statistics unsupported by stored evidence.
 - Present publication state in user language: `draft` is **Finish to journal**,
   `ready` is **Ready for journal**, and `published` is **In journal**. Finishing
-  the stopwatch or choosing a result derives `ready` automatically; the control
-  is informational rather than a second user decision.
+  an already-started stopwatch derives `ready` automatically. Choosing or
+  clearing a result never changes completion or publication readiness; the
+  publication control is informational rather than a second user decision.
 
 ## Implementation And Hosting
 

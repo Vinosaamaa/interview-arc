@@ -451,7 +451,6 @@ export async function setOutcome(
   activityId: string,
   outcome: OutcomeValue | null,
   nowMs: number,
-  sessionId?: string | null,
 ) {
   const db = getDb();
   if (!outcome) {
@@ -465,8 +464,6 @@ export async function setOutcome(
       target: [outcomes.ownerId, outcomes.activityId],
       set: { outcome, updatedAt: nowMs },
     });
-  await setPracticeFocus(ownerId, activityId, sessionId ?? null, nowMs);
-  await applyTimerAction(ownerId, activityId, "activity", "finish", nowMs);
 }
 
 export async function setPublicationStatus(

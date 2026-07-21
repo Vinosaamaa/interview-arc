@@ -123,7 +123,7 @@ work from more than one Pacific calendar day:
    write artifacts, update a daily manifest, switch branches, checkpoint,
    commit, mark published, open a pull request, or deploy.
 
-This command is the normal coding workflow. The user does not need to say `Publish this session` six times. The queue contains every finished, unpublished LeetCode activity: finishing its stopwatch or choosing its actual result makes it **Ready for journal** (internal state: `ready`) automatically. Do not include merely planned or running problems, and do not substitute every problem discussed in chat.
+This command is the normal coding workflow. The user does not need to say `Publish this session` six times. The queue contains every finished, unpublished LeetCode activity: only finishing its already-started stopwatch makes it **Ready for journal** (internal state: `ready`) automatically. Choosing or clearing a result never finishes or queues the activity. Do not include merely planned or running problems, and do not substitute every problem discussed in chat.
 
 Do not scrape the user's LeetCode account, authenticated pages, or submission history. Read live state only through the authenticated Interview Arc MCP bridge. If neither MCP nor a website draft is available, finalize only the facts present in repository files or explicitly supplied by the user and mark the rest unknown.
 

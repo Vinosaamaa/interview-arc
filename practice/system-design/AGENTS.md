@@ -106,7 +106,7 @@ The default role is not "answer generator." The default role is "coach plus inte
 Never run branch-switching, checkpoint, commit, mark-published, pull-request, or
 deploy commands in this task.
 
-Only publish a dashboard activity whose effective publication state is `ready`, unless the user explicitly overrides that choice in this task. Finishing its timer or choosing a result makes it ready automatically. If MCP is unavailable, use a user-provided website export or ask for the activity ID and timing facts; never invent them.
+Only publish a dashboard activity whose effective publication state is `ready`, unless the user explicitly overrides that choice in this task. Only finishing its already-started stopwatch makes it ready automatically; a result flag by itself never finishes or queues work. If MCP is unavailable, use a user-provided website export or ask for the activity ID and timing facts; never invent them.
 
 The focused dashboard activity, a clearly named prompt, or the explicit start
 command establishes the transcript boundary. Publishing ends it. Midnight does

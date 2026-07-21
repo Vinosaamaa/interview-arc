@@ -150,24 +150,15 @@ function mergeDrafts(server: LocalDraft, local: LocalDraft) {
   for (const session of local.sessions) {
     if (!serverSessionIds.has(session.id)) localOnly.push({ type: "session-upsert", session });
   }
-  for (const [activityId, outcome] of Object.entries(local.outcomes)) {
-    if (!(activityId in server.outcomes)) localOnly.push({ type: "outcome", activityId, outcome });
-  }
-  for (const [activityId, status] of Object.entries(local.publicationStatuses)) {
-    if (!(activityId in server.publicationStatuses)) {
-      localOnly.push({ type: "publication-status", activityId, status });
-    }
-  }
-  for (const [activityId, note] of Object.entries(local.notes)) {
-    if (!(activityId in server.notes)) localOnly.push({ type: "activity-note", activityId, note });
-  }
-
   const merged: LocalDraft = {
-    timers: { ...local.timers, ...server.timers },
-    sessionTimers: { ...local.sessionTimers, ...server.sessionTimers },
-    outcomes: { ...local.outcomes, ...server.outcomes },
-    publicationStatuses: { ...local.publicationStatuses, ...server.publicationStatuses },
-    notes: { ...local.notes, ...server.notes },
+    // Once the server is reachable, mutable practice state is authoritative in
+    // D1. The persisted mutation queue—not an old display cache—owns unsynced
+    // timer, outcome, publication, and note changes.
+    timers: server.timers,
+    sessionTimers: server.sessionTimers,
+    outcomes: server.outcomes,
+    publicationStatuses: server.publicationStatuses,
+    notes: server.notes,
     structuredNotes: { ...local.structuredNotes, ...server.structuredNotes },
     reviews: { ...local.reviews, ...server.reviews },
     finalizations: { ...local.finalizations, ...server.finalizations },

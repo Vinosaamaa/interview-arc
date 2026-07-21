@@ -38,17 +38,17 @@ The website uses one cycling flag control:
 
 The control appears on coding, system-design, and behavioral activities so all Today cards keep the same layout. For LeetCode, green and yellow retain their canonical outcome names. For system-design and behavioral work, the interface reads the same D1 result values as `finished` and `finished after reviewing approach`; published mock artifacts describe them as qualitative review signals rather than LeetCode acceptance claims.
 
-The control provides an accessible label and a hover/focus legend. Its legend must escape the card visually rather than being clipped by the swipe container. A result flag and timer completion are separate signals. Red work remains in Past and is ready for publication so the specialist can write a useful postmortem and schedule review.
+The control provides an accessible label and a hover/focus legend. Its legend must escape the card visually rather than being clipped by its card. A result flag and timer completion are separate signals. A red flag does not appear in Past or become publication-ready until the already-started stopwatch is explicitly finished; completed red work remains useful for postmortems and scheduled review.
 
 ## Publication State
 
-Every activity exposes an owner-scoped publication state derived from lifecycle, outcome, and artifact existence:
+Every activity exposes an owner-scoped publication state derived from timer lifecycle and artifact existence:
 
 - `draft`: unfinished and not offered to a specialist task;
 - `ready`: finished and automatically included in the publication queue;
 - `published`: the coordinator wrote/imported the artifact and reported its path back to Interview Arc.
 
-Finishing a timer or choosing an outcome changes the effective state to **Ready for journal** (`ready`) automatically. The coordinator changes it to **In journal** (`published`) only after the repository artifact actually exists and is importable. Failed attempts are eligible and produce useful postmortems.
+Finishing an already-started activity stopwatch changes the effective state to **Ready for journal** (`ready`) automatically. Choosing or clearing an outcome does not change lifecycle state. The coordinator changes it to **In journal** (`published`) only after the repository artifact actually exists and is importable. Completed failed attempts are eligible and produce useful postmortems.
 
 ## Sessions
 
@@ -60,9 +60,9 @@ A session is a named collection of activities. The default session contains:
 
 Each session declares `allocatedSeconds`. The default recipe uses `21600`; a configured recipe uses `(codingCount * 2400) + (systemDesignCount * 3600) + (behavioralCount * 3600)`.
 
-The user may add another session, configure its three category counts, or add a standalone activity. A website-created session recipe can be edited only before its timer, activity work, results, or publication state begin. Editing replaces its unstarted picks while preserving the session identity. Locally added activities can be edited or removed before publication.
+The user may add another session, configure its three category counts, or add a standalone activity. A website-created session recipe can be edited only before its timer, activity work, completion, or publication state begin. A result flag alone does not lock the recipe. Editing replaces its unstarted picks while preserving the session identity. Locally added activities can be removed with their compact cross control before publication.
 
-Standalone cards reveal Edit and Remove by swiping left. A compact overflow control provides the same action for pointer, keyboard, and assistive-technology users.
+Standalone cards expose one compact, accessible cross control for removal. They do not hide edit or destructive actions behind swipe gestures.
 
 Session membership and journal date are independent. A session that starts at
 9:00 PM Pacific may continue after midnight with the same session ID. Each
