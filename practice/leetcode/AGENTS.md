@@ -31,7 +31,10 @@ later in this guide.
   references actually consulted. Include all observed activity Q&A. When no
   coding conversation occurred, use `transcript_scope: none_observed` and still
   generate the best approach, code, up to two meaningful alternatives, and
-  complexity; never invent a user attempt.
+  complexity; never invent a user attempt. Generate against an available
+  canonical prompt or user-supplied statement; never infer missing constraints
+  from only a title or inaccessible URL. Keep finalization incomplete and ask
+  for the statement when the exact problem cannot be established.
 - Schedule failed/full-walkthrough review in 4 days, approach-review completion
   in 7 days, and successful reimplementation in 21 then 60 days.
 

@@ -88,7 +88,10 @@ include the complete two-sided activity transcript. LeetCode uses
 An unasked LeetCode problem still receives an original problem summary, best
 approach, generated reference code, time/space complexity, edge cases, and up
 to two meaningful alternatives. It must explicitly say no coaching
-conversation was observed.
+conversation was observed. This requires an available canonical prompt or
+user-supplied problem statement; a title or inaccessible URL alone is not
+permission to invent missing constraints. Leave the bundle incomplete and ask
+for the statement when the exact problem cannot be established.
 
 The model answer is generated during specialist finalization, not reconstructed
 by the coordinator. For LeetCode it is the complete original solution and
