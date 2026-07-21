@@ -14,6 +14,7 @@ import {
   type TimerKind,
 } from "../../../db/live-state";
 import { resolveOwnerId } from "../../../db/owner";
+import { buildPracticeSnapshot } from "../../../db/practice-snapshot";
 import { toRouteErrorMessage } from "../route-helpers";
 import { clearActivityReviewSchedules, scheduleReview, setProblemStar, upsertOwnerBankQuestion } from "../../../db/durable-practice";
 
@@ -40,6 +41,36 @@ const TIMER_ACTIONS: TimerAction[] = ["start", "pause", "finish"];
 const TIMER_KINDS: TimerKind[] = ["activity", "session"];
 const PUBLICATION_STATUSES: PublicationStatusValue[] = ["draft", "ready", "published"];
 
+async function syncCompletedReview(ownerId: string, date: string, activityId: string, now: number) {
+  const snapshot = await buildPracticeSnapshot(ownerId, date);
+  const activity = snapshot.activities.find((item) => item.id === activityId);
+  const timer = activity?.timer;
+  if (!timer?.completed) {
+    await clearActivityReviewSchedules(ownerId, activityId);
+    return;
+  }
+  const outcome = activity.outcome;
+  if (outcome === "failed" || outcome === "solved_after_reviewing_approach") {
+    await scheduleReview(ownerId, {
+      activityId,
+      questionId: activity?.questionId,
+      specialty: activity?.type ?? "leetcode",
+      completedDate: date,
+      reason: outcome === "failed" ? "failed" : "approach_review",
+    }, now);
+  } else if (outcome === "solved" && activity?.reviewOfActivityId) {
+    await scheduleReview(ownerId, {
+      activityId,
+      questionId: activity.questionId,
+      specialty: activity.type ?? "leetcode",
+      completedDate: date,
+      reason: "successful_recall",
+    }, now);
+  } else {
+    await clearActivityReviewSchedules(ownerId, activityId);
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { date?: string; mutation?: Mutation };
@@ -60,38 +91,30 @@ export async function POST(request: Request) {
         if (!mutation.subjectId || !TIMER_KINDS.includes(mutation.kind) || !TIMER_ACTIONS.includes(mutation.action)) {
           return Response.json({ error: "Invalid timer mutation." }, { status: 400 });
         }
+        if (mutation.action === "finish") {
+          const before = await readLiveState(ownerId, date);
+          const timer = mutation.kind === "activity"
+            ? before.timers[mutation.subjectId]
+            : before.sessionTimers[mutation.subjectId];
+          if (!timer?.startedAt) {
+            return Response.json({ error: `Start the ${mutation.kind === "activity" ? "activity stopwatch" : "session countdown"} before finishing it.` }, { status: 409 });
+          }
+        }
         await applyTimerAction(ownerId, mutation.subjectId, mutation.kind, mutation.action, now, {
           sessionId: mutation.sessionId,
           activityIds: mutation.activityIds,
         });
+        if (mutation.kind === "activity" && mutation.action === "finish") {
+          await syncCompletedReview(ownerId, date, mutation.subjectId, now);
+        }
         break;
       }
       case "outcome": {
         if (!mutation.activityId) {
           return Response.json({ error: "Invalid outcome mutation." }, { status: 400 });
         }
-        await setOutcome(ownerId, mutation.activityId, mutation.outcome ?? null, now, mutation.sessionId);
-        const live = await readLiveState(ownerId, date);
-        const activity = (live.extraActivities as Array<{ id: string; questionId?: string; reviewOfActivityId?: string; type?: "leetcode" | "system_design" | "behavioral" }>).find((item) => item.id === mutation.activityId);
-        if (mutation.outcome === "failed" || mutation.outcome === "solved_after_reviewing_approach") {
-          await scheduleReview(ownerId, {
-            activityId: mutation.activityId,
-            questionId: activity?.questionId,
-            specialty: activity?.type ?? "leetcode",
-            completedDate: date,
-            reason: mutation.outcome === "failed" ? "failed" : "approach_review",
-          }, now);
-        } else if (mutation.outcome === "solved" && activity?.reviewOfActivityId) {
-          await scheduleReview(ownerId, {
-            activityId: mutation.activityId,
-            questionId: activity.questionId,
-            specialty: activity.type ?? "leetcode",
-            completedDate: date,
-            reason: "successful_recall",
-          }, now);
-        } else {
-          await clearActivityReviewSchedules(ownerId, mutation.activityId);
-        }
+        await setOutcome(ownerId, mutation.activityId, mutation.outcome ?? null, now);
+        await syncCompletedReview(ownerId, date, mutation.activityId, now);
         break;
       }
       case "publication-status": {

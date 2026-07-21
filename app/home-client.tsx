@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -48,7 +48,7 @@ type View = "today" | "journey" | "library" | "banks";
 type ComposerMode = "session" | "activity";
 type JourneyRange = 30 | 90 | 365 | "all";
 type JourneyMetric = "activities" | "time";
-type LibraryAttentionFilter = "all" | "due" | "needs_review" | "helped" | "failed" | "notes";
+type LibraryAttentionFilter = "all" | "due" | "needs_review" | "independent" | "helped" | "failed" | "notes";
 type DocumentPiP = { requestWindow: (options?: { width?: number; height?: number }) => Promise<Window> };
 type ComposerState = {
   open: boolean;
@@ -176,6 +176,14 @@ function normalizedIdentity(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+function questionHasFinishedAttempt(entries: LogEntry[], type: ActivityType, question: QuestionBankItem) {
+  return entries.some((record) => record.type === type && (
+    record.questionId === question.id ||
+    Boolean(question.url && record.url && question.url.replace(/\/$/, "") === record.url.replace(/\/$/, "")) ||
+    normalizedIdentity(question.title) === normalizedIdentity(record.title)
+  ));
+}
+
 function blockKeysForQuestion(question: QuestionBankItem) {
   const keys = [`id:${question.id}`, `title:${normalizedIdentity(question.title)}`, `slug:${slugify(question.title)}`];
   if (question.url) keys.push(`url:${question.url.replace(/\/$/, "").toLowerCase()}`);
@@ -247,6 +255,75 @@ function displayComplexity(value?: QuestionBankItem["complexity"]) {
   return value?.replace("_", " ");
 }
 
+function meaningfulSubtitle(value?: string) {
+  const normalized = value?.trim();
+  return normalized && !/^[o0]$/i.test(normalized) ? normalized : "";
+}
+
+function isResumeCurriculumQuestion(question: QuestionBankItem) {
+  const tags = [...question.topics, ...(question.tags ?? [])];
+  return tags.includes("resume-foundation") || tags.includes("resume-bullet");
+}
+
+function inferredQuestionTags(type: ActivityType, question: QuestionBankItem) {
+  const explicit = [...question.topics, ...(question.tags ?? [])].filter(Boolean);
+  if (explicit.length) return [...new Set(explicit)];
+  const text = `${question.title} ${question.prompt ?? ""}`.toLowerCase();
+  const rules: Array<[RegExp, string]> = type === "leetcode"
+    ? [
+        [/island|grid|matrix|flood|maze/, "Graph traversal"],
+        [/course schedule|dependency|topological/, "Topological sort"],
+        [/tree|bst|ancestor|path sum/, "Trees"],
+        [/substring|subarray|window/, "Sliding window"],
+        [/interval|meeting|calendar/, "Intervals"],
+        [/linked list|lru|cache/, "Linked structures"],
+        [/heap|priority|top k|median/, "Heap"],
+        [/binary search|rotated|search/, "Binary search"],
+        [/dynamic|subsequence|partition|coin|robber/, "Dynamic programming"],
+        [/permutation|combination|n-queens|backtrack/, "Backtracking"],
+        [/graph|network|clone|connected/, "Graphs"],
+        [/trie|word search|prefix/, "Trie"],
+        [/stack|parentheses|histogram|rain water/, "Stack"],
+        [/two sum|3sum|4sum|pair/, "Two pointers"],
+        [/sort|merge/, "Sorting"],
+        [/string|anagram|palindrome/, "Strings"],
+        [/array|duplicate|missing/, "Arrays"],
+      ]
+    : type === "system_design"
+      ? [
+          [/feed|timeline|social|facebook|twitter|instagram|tiktok/, "Feed systems"],
+          [/chat|message|notification|email/, "Messaging"],
+          [/search|autocomplete|typeahead/, "Search"],
+          [/payment|bank|wallet|checkout|billing/, "Payments"],
+          [/video|youtube|stream|media/, "Media delivery"],
+          [/location|uber|maps|nearby|delivery/, "Geospatial"],
+          [/storage|drive|dropbox|file|photo/, "Storage"],
+          [/metric|log|monitor|analytics|counter/, "Observability"],
+          [/rate limit|cache|cdn|proxy/, "Traffic control"],
+          [/booking|reservation|ticket/, "Reservations"],
+          [/auth|permission|security/, "Identity & security"],
+        ]
+      : [];
+  const inferred = rules.filter(([pattern]) => pattern.test(text)).map(([, tag]) => tag);
+  return inferred.length ? [...new Set(inferred)] : [type === "leetcode" ? "General coding" : type === "system_design" ? "Distributed systems" : "Behavioral signal"];
+}
+
+function Icon({ name }: { name: "close" | "star" | "book" | "plus" | "filter" | "sort" | "note" | "edit" | "trash" | "chevron" }) {
+  const paths: Record<typeof name, ReactNode> = {
+    close: <><path d="M5 5l14 14M19 5 5 19" /></>,
+    star: <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" />,
+    book: <><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z" /><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z" /></>,
+    plus: <><path d="M12 5v14M5 12h14" /></>,
+    filter: <path d="M4 6h16l-6.2 7v5l-3.6 2v-7L4 6Z" />,
+    sort: <><path d="M8 5v14M5 8l3-3 3 3M16 19V5m-3 11 3 3 3-3" /></>,
+    note: <><path d="M5 3h11l3 3v15H5V3Z" /><path d="M15 3v4h4M8 11h8M8 15h8" /></>,
+    edit: <><path d="m4 20 4.5-1 10-10-3.5-3.5-10 10L4 20Z" /><path d="m13.5 7 3.5 3.5" /></>,
+    trash: <><path d="M5 7h14M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" /></>,
+    chevron: <path d="m8 10 4 4 4-4" />,
+  };
+  return <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
+}
+
 function deriveLeetCodeFromUrl(value: string, bank: QuestionBankItem[]) {
   try {
     const url = new URL(value.trim());
@@ -280,6 +357,7 @@ function ActivityTimer({
   const used = elapsed(timer, now);
   const running = Boolean(timer?.runningSince);
   const complete = Boolean(timer?.completed);
+  const started = Boolean(timer?.startedAt);
   return (
     <div className={`activity-timer ${running ? "running" : ""} ${complete ? "complete" : ""}`}>
       <div className="activity-time-copy">
@@ -291,7 +369,7 @@ function ActivityTimer({
         <button className="start-timer icon-control" onClick={() => onToggle(activity.id)} disabled={complete} aria-label={running ? `Pause ${activity.title}` : `Start ${activity.title}`} title={running ? "Pause stopwatch" : complete ? "Finished activities cannot be resumed" : "Start stopwatch"}>
           <span aria-hidden="true">{running ? "Ⅱ" : "▶"}</span>
         </button>
-        <button className="finish-timer icon-control" onClick={() => onComplete(activity.id)} disabled={complete} aria-label={`Finish ${activity.title}`} title={complete ? "Activity finished" : "Finish and lock stopwatch"}>
+        <button className="finish-timer icon-control" onClick={() => onComplete(activity.id)} disabled={complete || !started} aria-label={`Finish ${activity.title}`} title={complete ? "Activity finished" : !started ? "Start the stopwatch before finishing" : "Finish and lock stopwatch"}>
           <span aria-hidden="true">{complete ? "✓" : "■"}</span>
         </button>
       </div>
@@ -317,6 +395,7 @@ function SessionCountdown({
   const overtimeSeconds = overtime(timer, now, allocated);
   const running = Boolean(timer?.runningSince);
   const complete = Boolean(timer?.completed);
+  const started = Boolean(timer?.startedAt);
   const progress = Math.min(100, (elapsed(timer, now) / allocated) * 100);
   return (
     <div className={`session-countdown ${running ? "running" : ""} ${complete ? "complete" : ""}`}>
@@ -327,7 +406,7 @@ function SessionCountdown({
       </div>
       <div className="countdown-controls">
         <button onClick={() => onToggle(session.id)} disabled={complete} aria-label={running ? `Pause ${session.label}` : `Start ${session.label}`} title={running ? "Pause session countdown" : "Start session countdown"}><span aria-hidden="true">{running ? "Ⅱ" : "▶"}</span></button>
-        <button onClick={() => onComplete(session.id)} disabled={complete} aria-label={`Finish ${session.label}`} title={complete ? "Session finished" : "Finish session now"}><span aria-hidden="true">{complete ? "✓" : "■"}</span></button>
+        <button onClick={() => onComplete(session.id)} disabled={complete || !started} aria-label={`Finish ${session.label}`} title={complete ? "Session finished" : !started ? "Start the session countdown before finishing" : "Finish session now"}><span aria-hidden="true">{complete ? "✓" : "■"}</span></button>
       </div>
       <span className="countdown-track" aria-hidden="true"><i style={{ width: `${progress}%` }} /></span>
     </div>
@@ -413,9 +492,9 @@ function PublicationControl({
   return (
     <div
       className={`publication-control ${status}`}
-      data-tooltip={status === "published" ? "A permanent solution or transcript exists in your journal." : status === "ready" ? "This finished activity will be included automatically the next time its specialist publishes." : "Finish the stopwatch or choose a result to include this activity in the specialist journal queue."}
+      data-tooltip={status === "published" ? "A permanent solution or transcript exists in your journal." : status === "ready" ? "This finished activity will be included automatically the next time its specialist publishes." : "Finish the stopwatch to include this activity in the specialist journal queue."}
       aria-label={publicationLabel(status)}
-      title={status === "published" ? "The specialist task created the permanent journal record" : status === "ready" ? "Automatically included in the next specialist publication" : "Finish this activity to make it ready for publication"}
+      title={status === "published" ? "The specialist task created the permanent journal record" : status === "ready" ? "Automatically included in the next specialist publication" : "Finish the stopwatch to make this ready for publication"}
     >
       <span aria-hidden="true">{status === "published" ? "✓" : status === "ready" ? "↑" : "◇"}</span>
       {publicationLabel(status)}
@@ -452,10 +531,12 @@ function PipNowPanel({
   const sessionLeft = session ? remaining(sessionTimer, now, sessionAllocated) : 0;
   const sessionRunning = Boolean(session && sessionTimer?.runningSince && sessionLeft > 0);
   const sessionComplete = Boolean(session && (sessionTimer?.completed || sessionLeft === 0));
+  const sessionStarted = Boolean(sessionTimer?.startedAt);
   const sessionProgress = session ? Math.min(100, (elapsed(sessionTimer, now) / sessionAllocated) * 100) : 0;
   const activityUsed = activity ? elapsed(activityTimer, now) : 0;
   const activityRunning = Boolean(activityTimer?.runningSince);
   const activityComplete = Boolean(activityTimer?.completed);
+  const activityStarted = Boolean(activityTimer?.startedAt);
   const live = sessionRunning || activityRunning;
 
   return (
@@ -479,7 +560,7 @@ function PipNowPanel({
             <button type="button" className="pip-btn primary" onClick={() => onToggleSession(session.id)} disabled={sessionComplete} aria-label={sessionRunning ? `Pause ${session.label}` : `Start ${session.label}`}>
               <span aria-hidden="true">{sessionRunning ? "Ⅱ" : "▶"}</span>
             </button>
-            <button type="button" className="pip-btn" onClick={() => onCompleteSession(session.id)} disabled={sessionComplete} aria-label={`Finish ${session.label}`}>
+            <button type="button" className="pip-btn" onClick={() => onCompleteSession(session.id)} disabled={sessionComplete || !sessionStarted} aria-label={`Finish ${session.label}`} title={!sessionStarted ? "Start the session countdown before finishing" : "Finish session"}>
               <span aria-hidden="true">{sessionComplete ? "✓" : "■"}</span>
             </button>
           </div>
@@ -502,7 +583,7 @@ function PipNowPanel({
               <button type="button" className="pip-btn primary" onClick={() => onToggleActivity(activity.id)} disabled={activityComplete} aria-label={activityRunning ? `Pause ${activity.title}` : `Start ${activity.title}`}>
                 <span aria-hidden="true">{activityRunning ? "Ⅱ" : "▶"}</span>
               </button>
-              <button type="button" className="pip-btn" onClick={() => onCompleteActivity(activity.id)} disabled={activityComplete} aria-label={`Finish ${activity.title}`}>
+              <button type="button" className="pip-btn" onClick={() => onCompleteActivity(activity.id)} disabled={activityComplete || !activityStarted} aria-label={`Finish ${activity.title}`} title={!activityStarted ? "Start the stopwatch before finishing" : "Finish activity"}>
                 <span aria-hidden="true">{activityComplete ? "✓" : "■"}</span>
               </button>
               <ResultFlag activityType={activity.type} outcome={outcome} onChange={(next) => onOutcome(activity.id, next)} />
@@ -517,26 +598,11 @@ function PipNowPanel({
   );
 }
 
-function SwipeActivityCard({ children, title, onEdit, onRemove }: { children: ReactNode; title: string; onEdit: () => void; onRemove: () => void }) {
-  const [revealed, setRevealed] = useState(false);
-  const [pointerStart, setPointerStart] = useState<number | null>(null);
-  function finishGesture(event: ReactPointerEvent<HTMLDivElement>) {
-    if (pointerStart === null) return;
-    const distance = event.clientX - pointerStart;
-    if (distance < -42) setRevealed(true);
-    if (distance > 42) setRevealed(false);
-    setPointerStart(null);
-  }
+function StandaloneActivityCard({ children, title, onRemove }: { children: ReactNode; title: string; onRemove: () => void }) {
   return (
-    <article className={`swipe-activity-card ${revealed ? "revealed" : ""}`}>
-      <div className="swipe-actions" aria-hidden={!revealed}>
-        <button onClick={onEdit} tabIndex={revealed ? 0 : -1}>Edit</button>
-        <button onClick={onRemove} tabIndex={revealed ? 0 : -1}>Remove</button>
-      </div>
-      <div className="swipe-card-face" onPointerDown={(event) => setPointerStart(event.clientX)} onPointerUp={finishGesture} onPointerCancel={() => setPointerStart(null)}>
-        {children}
-        <button className="swipe-more" onClick={() => setRevealed((current) => !current)} aria-label={`${revealed ? "Hide" : "Show"} actions for ${title}`} title="Swipe left for actions">•••</button>
-      </div>
+    <article className="standalone-activity-card">
+      {children}
+      <button className="icon-action danger" onClick={onRemove} aria-label={`Remove ${title}`} title="Remove activity"><Icon name="close" /></button>
     </article>
   );
 }
@@ -546,19 +612,11 @@ function MarkdownBody({ source }: { source: string }) {
 }
 
 function ActivityTranscript({
-  activityId,
   turns,
   clips,
-  audioBusy,
-  onUpload,
-  onRemove,
 }: {
-  activityId: string;
   turns: TranscriptTurn[];
   clips: AudioClip[];
-  audioBusy: boolean;
-  onUpload: (activityId: string, files: File[], transcriptTurnId: string) => void;
-  onRemove: (activityId: string, clipId: string) => void;
 }) {
   return (
     <section className="case-transcript" aria-label="Conversation transcript and answer recordings">
@@ -569,13 +627,11 @@ function ActivityTranscript({
             ? clips.filter((clip) => clip.transcriptTurnId === turn.turnId)
             : [];
           return <div className={`transcript-turn ${turn.speaker}`} key={turn.turnId} data-answer-turn-id={turn.speaker === "user" ? turn.turnId : undefined}>
-            {turn.speaker === "user" && <div className={`answer-playback ${answerClips.length ? "has-audio" : "empty"}`}>
+            {turn.speaker === "user" && answerClips.length > 0 && <div className="answer-playback has-audio">
               {answerClips.map((clip) => <div className="answer-take" key={clip.id}>
                 <div><strong>{clip.label}</strong><small>{clip.filename}</small></div>
                 {clip.status === "available" ? <audio controls preload="metadata" src={`/api/audio/${encodeURIComponent(clip.id)}`} /> : <em>{clip.status.replaceAll("_", " ")}</em>}
-                <button type="button" className="audio-remove" onClick={() => onRemove(activityId, clip.id)} aria-label={`Remove ${clip.label}`}>Remove</button>
               </div>)}
-              <label className="answer-audio-attach"><span aria-hidden="true">＋</span>{audioBusy ? "Uploading securely…" : answerClips.length ? "Add another take" : "Attach your recording"}<input type="file" accept="audio/*" multiple disabled={audioBusy} onChange={(event) => { onUpload(activityId, [...(event.target.files ?? [])], turn.turnId); event.currentTarget.value = ""; }} /></label>
             </div>}
             <article>
               <header><span>{turn.speaker === "specialist" ? "Specialist" : "Your answer"}</span><time>{formatPracticeTimestamp(new Date(turn.occurredAt).toISOString())}</time></header>
@@ -622,6 +678,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [bankSearch, setBankSearch] = useState("");
   const [bankTagFilter, setBankTagFilter] = useState("all");
   const [bankStarFilter, setBankStarFilter] = useState<"all" | "starred">("all");
+  const [bankTopicsExpanded, setBankTopicsExpanded] = useState(false);
   const [journeyRange, setJourneyRange] = useState<JourneyRange>(90);
   const [journeyMetric, setJourneyMetric] = useState<JourneyMetric>("activities");
   const [journeyDate, setJourneyDate] = useState("");
@@ -634,8 +691,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [integrationOpen, setIntegrationOpen] = useState(false);
   const [integrationToken, setIntegrationToken] = useState("");
   const [integrationBusy, setIntegrationBusy] = useState(false);
-  const [audioBusy, setAudioBusy] = useState(false);
   const [loadedPracticeRecordId, setLoadedPracticeRecordId] = useState("");
+  const [noteComposerOpen, setNoteComposerOpen] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState("");
+  const [noteDraft, setNoteDraft] = useState("");
+  const [noteBusy, setNoteBusy] = useState(false);
   const {
     playing: ambientPlaying,
     playlist: ambientPlaylist,
@@ -981,11 +1041,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function completeSessionTimer(sessionId: string) {
     const timestamp = Date.now();
+    const existing = draft.sessionTimers[sessionId];
+    if (!existing?.startedAt || existing.completed) return;
     setNow(timestamp);
     const session = allSessions.find((candidate) => candidate.id === sessionId);
     enqueue({ type: "timer", subjectId: sessionId, kind: "session", action: "finish", activityIds: session?.activityIds ?? [] });
     setDraft((current) => {
-      const prior = current.sessionTimers[sessionId] ?? { elapsedSeconds: 0, runningSince: null, completed: false };
+      const prior = current.sessionTimers[sessionId];
+      if (!prior?.startedAt || prior.completed) return current;
       const timers = { ...current.timers };
       session?.activityIds.forEach((activityId) => {
         const activityTimer = timers[activityId];
@@ -1001,7 +1064,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           [sessionId]: {
             ...prior,
             elapsedSeconds: elapsed(prior, timestamp),
-            startedAt: prior.startedAt ?? timestamp,
+            startedAt: prior.startedAt,
             runningSince: null,
             completed: true,
             completedAt: timestamp,
@@ -1013,6 +1076,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function completeTimer(activityId: string) {
     const timestamp = Date.now();
+    const existing = draft.timers[activityId];
+    if (!existing?.startedAt || existing.completed) return;
     setNow(timestamp);
     enqueue({
       type: "timer",
@@ -1022,7 +1087,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       sessionId: sessionByActivityId.get(activityId)?.id,
     });
     setDraft((current) => {
-      const prior = current.timers[activityId] ?? { elapsedSeconds: 0, runningSince: null, completed: false };
+      const prior = current.timers[activityId];
+      if (!prior?.startedAt || prior.completed) return current;
       return {
         ...current,
         timers: {
@@ -1049,25 +1115,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       const outcomes = { ...current.outcomes };
       if (outcome) outcomes[activityId] = outcome;
       else delete outcomes[activityId];
-      if (!outcome) return { ...current, outcomes };
-      const timestamp = Date.now();
-      const timers = { ...current.timers };
-      const prior = timers[activityId] ?? { elapsedSeconds: 0, runningSince: null, completed: false };
-      timers[activityId] = {
-        ...prior,
-        elapsedSeconds: elapsed(prior, timestamp),
-        startedAt: prior.startedAt ?? timestamp,
-        runningSince: null,
-        completed: true,
-        completedAt: prior.completedAt ?? timestamp,
-      };
       return {
         ...current,
         outcomes,
-        timers,
-        focusedActivityId: activityId,
-        focusedSessionId: sessionByActivityId.get(activityId)?.id ?? current.focusedSessionId,
-        focusedAt: timestamp,
       };
     });
   }
@@ -1095,42 +1145,76 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function isActivityComplete(activity: JournalActivity) {
     if (activity.status === "completed") return true;
-    return Boolean(draft.outcomes[activity.id] ?? activity.outcome ?? draft.timers[activity.id]?.completed);
+    return Boolean(activity.artifactPath || draft.timers[activity.id]?.completed);
   }
 
   function savePersonalNote(activityId: string, note: string) {
     setDraft((current) => ({ ...current, notes: { ...current.notes, [activityId]: note } }));
     enqueue({ type: "activity-note", activityId, note });
-    setSelectedEntry((current) => current?.id === activityId ? { ...current, personalNote: note } : current);
+    setSelectedEntry((current) => current && (current.artifact?.activityId || current.id) === activityId
+      ? { ...current, personalNote: note }
+      : current);
   }
 
-  async function uploadActivityAudio(activityId: string, files: File[], transcriptTurnId?: string) {
-    const audioFiles = files.filter((file) => file.type.startsWith("audio/"));
-    if (!audioFiles.length) return;
-    setAudioBusy(true);
-    try {
-      for (const file of audioFiles) {
-        const form = new FormData();
-        form.set("activityId", activityId);
-        form.set("label", transcriptTurnId ? "Recorded answer" : "Practice answer");
-        if (transcriptTurnId) form.set("transcriptTurnId", transcriptTurnId);
-        form.set("file", file);
-        const response = await fetch("/api/audio", { method: "POST", body: form });
-        if (!response.ok) throw new Error((await response.json() as { error?: string }).error ?? "Audio upload failed.");
-        const clip = await response.json() as AudioClip;
-        setDraft((current) => ({ ...current, audioClips: { ...current.audioClips, [activityId]: [...(current.audioClips[activityId] ?? []), clip] } }));
-        setSelectedEntry((current) => current && (current.artifact?.activityId || current.id) === activityId ? { ...current, audioClips: [...(current.audioClips ?? []), clip] } : current);
-      }
-    } finally {
-      setAudioBusy(false);
+  function openNoteComposer(note?: PracticeNote | "personal") {
+    setNoteComposerOpen(true);
+    if (note === "personal") {
+      setEditingNoteId("personal");
+      setNoteDraft(selectedEntry?.personalNote ?? "");
+    } else if (note) {
+      setEditingNoteId(note.id);
+      setNoteDraft(note.body);
+    } else {
+      setEditingNoteId("");
+      setNoteDraft("");
     }
   }
 
-  async function removeActivityAudio(activityId: string, clipId: string) {
-    const response = await fetch(`/api/audio/${encodeURIComponent(clipId)}`, { method: "DELETE" });
+  async function saveCaseNote() {
+    if (!selectedEntryActivityId || !noteDraft.trim()) return;
+    setNoteBusy(true);
+    try {
+      if (editingNoteId === "personal") {
+        savePersonalNote(selectedEntryActivityId, noteDraft.trim());
+      } else if (editingNoteId) {
+        const response = await fetch("/api/practice-notes", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ noteId: editingNoteId, body: noteDraft.trim() }),
+        });
+        if (!response.ok) throw new Error("Unable to update note");
+        const updatedAt = Date.now();
+        setDraft((current) => ({ ...current, structuredNotes: { ...current.structuredNotes, [selectedEntryActivityId]: (current.structuredNotes[selectedEntryActivityId] ?? []).map((note) => note.id === editingNoteId ? { ...note, body: noteDraft.trim(), updatedAt } : note) } }));
+        setSelectedEntry((current) => current ? { ...current, pinnedNotes: (current.pinnedNotes ?? []).map((note) => note.id === editingNoteId ? { ...note, body: noteDraft.trim(), updatedAt } : note) } : current);
+      } else {
+        const response = await fetch("/api/practice-notes", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ activityId: selectedEntryActivityId, date: selectedEntry?.date, body: noteDraft.trim(), kind: "remember" }),
+        });
+        if (!response.ok) throw new Error("Unable to add note");
+        const note = await response.json() as PracticeNote;
+        setDraft((current) => ({ ...current, structuredNotes: { ...current.structuredNotes, [selectedEntryActivityId]: [...(current.structuredNotes[selectedEntryActivityId] ?? []), note] } }));
+        setSelectedEntry((current) => current ? { ...current, pinnedNotes: [...(current.pinnedNotes ?? []), note] } : current);
+      }
+    } finally {
+      setNoteBusy(false);
+      setNoteComposerOpen(false);
+      setEditingNoteId("");
+      setNoteDraft("");
+    }
+  }
+
+  async function deleteCaseNote(noteId: string) {
+    if (!selectedEntryActivityId) return;
+    if (noteId === "personal") {
+      savePersonalNote(selectedEntryActivityId, "");
+      return;
+    }
+    const response = await fetch(`/api/practice-notes?noteId=${encodeURIComponent(noteId)}`, { method: "DELETE" });
     if (!response.ok) return;
-    setDraft((current) => ({ ...current, audioClips: { ...current.audioClips, [activityId]: (current.audioClips[activityId] ?? []).filter((clip) => clip.id !== clipId) } }));
-    setSelectedEntry((current) => current && (current.artifact?.activityId || current.id) === activityId ? { ...current, audioClips: (current.audioClips ?? []).filter((clip) => clip.id !== clipId) } : current);
+    setDraft((current) => ({ ...current, structuredNotes: { ...current.structuredNotes, [selectedEntryActivityId]: (current.structuredNotes[selectedEntryActivityId] ?? []).filter((note) => note.id !== noteId) } }));
+    setSelectedEntry((current) => current ? { ...current, pinnedNotes: (current.pinnedNotes ?? []).filter((note) => note.id !== noteId) } : current);
   }
 
   function publicationStatusFor(activity: JournalActivity): PublicationStatus {
@@ -1148,21 +1232,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     setComposer({ ...EMPTY_COMPOSER, open: true, mode: "session" });
   }
 
-  function openEditActivity(activity: ExtraActivity) {
-    const bank = bankFor(activity.type);
-    const known = bank.find((question) => question.title === activity.title || question.url === activity.url);
-    setComposer({
-      ...EMPTY_COMPOSER,
-      open: true,
-      mode: "activity",
-      type: activity.type,
-      query: activity.type === "leetcode" ? activity.url ?? activity.title : activity.title,
-      selectedId: known?.id ?? "",
-      minutes: String(Math.round(activity.allocatedSeconds / 60)),
-      editingId: activity.id,
-    });
-  }
-
   function isSessionEditable(session: LocalSession) {
     const sessionTimer = draft.sessionTimers[session.id];
     if (sessionTimer?.runningSince || sessionTimer?.completed || sessionTimer?.elapsedSeconds) return false;
@@ -1170,7 +1239,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       const activity = allTodayActivities.find((candidate) => candidate.id === activityId);
       const timer = draft.timers[activityId];
       return !timer?.runningSince && !timer?.completed && !timer?.elapsedSeconds &&
-        !draft.outcomes[activityId] && !activity?.outcome && activity?.status !== "completed" &&
+        activity?.status !== "completed" &&
         !activity?.artifactPath && !draft.publicationStatuses[activityId];
     });
   }
@@ -1202,9 +1271,21 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function availableSessionQuestions(type: ActivityType, editingSessionId = "") {
     const blocked = sessionBlockedQuestions(editingSessionId);
-    return bankFor(type).filter((question) => question.active
+    const bank = bankFor(type);
+    const dueQuestionIds = new Set(Object.values(draft.reviews)
+      .filter((review) => review.specialty === type && review.questionId
+        && (review.status === "due" || (review.status === "scheduled" && review.dueDate <= journal.date)))
+      .map((review) => review.questionId as string));
+    const available = bank.filter((question) => question.active
       && !isQuestionBlocked(question, blocked)
-      && !((question.priority ?? 0) > 0 && profileFor(type, question.id)));
+      && (!((question.priority ?? 0) > 0 && profileFor(type, question.id)) || dueQuestionIds.has(question.id)));
+    if (type !== "behavioral") return available;
+    const curriculum = bank.filter(isResumeCurriculumQuestion);
+    if (!curriculum.length) return [];
+    const unfinishedCurriculum = available.filter(isResumeCurriculumQuestion);
+    return unfinishedCurriculum.length
+      ? unfinishedCurriculum
+      : available.filter((question) => !isResumeCurriculumQuestion(question));
   }
 
   function selectBankQuestion(question: QuestionBankItem) {
@@ -1630,7 +1711,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         const localOutcome = liveDraft?.outcomes[activity.id];
         const artifact = artifactByActivity.get(activity.id);
         const running = Boolean(localTimer?.runningSince);
-        const complete = activity.status === "completed" || Boolean(localOutcome) || Boolean(localTimer?.completed) || Boolean(artifact);
+        const complete = activity.status === "completed" || Boolean(localTimer?.completed) || Boolean(artifact);
         const startedAt = localTimer?.startedAt ? new Date(localTimer.startedAt).toISOString() : activity.startedAt;
         const endedAt = localTimer?.completedAt ? new Date(localTimer.completedAt).toISOString() : activity.endedAt;
         entries.push({
@@ -1670,7 +1751,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         type: activity.type,
         title: activity.title,
         subtitle: activity.notes ?? activity.prompt ?? "Locally added activity",
-        status: outcome || timer?.completed ? "completed" : timer?.runningSince ? "running" : "planned",
+        status: timer?.completed ? "completed" : timer?.runningSince ? "running" : "planned",
         outcome,
         elapsedSeconds: elapsed(timer, now),
         allocatedSeconds: activity.allocatedSeconds,
@@ -1699,7 +1780,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         type: activity.type,
         title: activity.title,
         subtitle: activity.notes ?? activity.prompt ?? "Website-created activity",
-        status: outcome || timer?.completed ? "completed" : timer?.runningSince ? "running" : "planned",
+        status: timer?.completed ? "completed" : timer?.runningSince ? "running" : "planned",
         outcome,
         elapsedSeconds: elapsed(timer, now),
         allocatedSeconds: activity.allocatedSeconds,
@@ -1740,6 +1821,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       const needsReview = Boolean(entry.review && entry.review.status !== "dismissed" && entry.review.status !== "completed");
       if (libraryAttentionFilter === "due" && entry.review?.status !== "due") continue;
       if (libraryAttentionFilter === "needs_review" && !needsReview) continue;
+      if (libraryAttentionFilter === "independent" && entry.outcome !== "solved") continue;
       if (libraryAttentionFilter === "helped" && entry.outcome !== "solved_after_reviewing_approach") continue;
       if (libraryAttentionFilter === "failed" && entry.outcome !== "failed") continue;
       if (libraryAttentionFilter === "notes" && !hasNotes) continue;
@@ -1931,7 +2013,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           <div className="session-heading-copy"><p>Practice session</p><h2>{session.label}</h2><span>{activities.length} activities · {formatDuration(session.allocatedSeconds)} window</span></div>
           <SessionCountdown session={session} timer={draft.sessionTimers[session.id]} now={now} onToggle={toggleSessionTimer} onComplete={completeSessionTimer} />
           <div className="session-progress"><strong>{complete}/{activities.length}</strong><span>finished</span></div>
-          {localSession && <div className="session-header-actions"><button className="edit-session" onClick={() => openEditSession(localSession)} disabled={!isSessionEditable(localSession)} title={isSessionEditable(localSession) ? "Change this session recipe" : "A session recipe locks after timing or results begin"}>Edit recipe</button><button className="remove-session" onClick={() => removeSession(localSession)}>Remove</button></div>}
+          {localSession && <div className="session-header-actions"><button className="edit-session" onClick={() => openEditSession(localSession)} disabled={!isSessionEditable(localSession)} title={isSessionEditable(localSession) ? "Change this session recipe" : "A session recipe locks after timing or completion begins"}>Edit recipe</button><button className="icon-action danger" onClick={() => removeSession(localSession)} aria-label={`Remove ${localSession.label}`} title="Remove session"><Icon name="close" /></button></div>}
         </header>
 
         {coding.length > 0 && <section className="coding-ledger">
@@ -1950,7 +2032,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                   <ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} />
                   <PublicationControl status={publicationStatusFor(activity)} />
                   <button className={`star-control ${isStarred(activity.type, activity.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(activity.type, activity.questionId)} disabled={!activity.questionId} aria-label={`${isStarred(activity.type, activity.questionId) ? "Unstar" : "Star"} ${activity.title}`} title={activity.questionId ? "Keep this problem in your starred review set" : "A stable bank question is required to star this activity"}>★</button>
-                  {isExtra && <div className="row-edit-actions"><button onClick={() => openEditActivity(activity as ExtraActivity)}>Edit</button><button onClick={() => removeActivity(activity.id)}>Remove</button></div>}
+                  {isExtra && <button className="icon-action danger row-remove" onClick={() => removeActivity(activity.id)} aria-label={`Remove ${activity.title}`} title="Remove activity"><Icon name="close" /></button>}
                 </div>
               );
             })}
@@ -1963,7 +2045,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             const isExtra = item.source === "extra";
             return (
               <section className={`mock-sheet ${item.type}`} key={item.id}>
-                <div className="mock-topline"><span className={`type-chip ${item.type}`}>{typeLabel(item.type)}</span>{isExtra && <div className="row-edit-actions"><button onClick={() => openEditActivity(item as ExtraActivity)}>Edit</button><button onClick={() => removeActivity(item.id)}>Remove</button></div>}</div>
+                <div className="mock-topline"><span className={`type-chip ${item.type}`}>{typeLabel(item.type)}</span>{isExtra && <button className="icon-action danger" onClick={() => removeActivity(item.id)} aria-label={`Remove ${item.title}`} title="Remove activity"><Icon name="close" /></button>}</div>
                 <h3>{item.title}</h3>
                 <p>{item.prompt}</p>
                 <div className="mock-controls">
@@ -2010,8 +2092,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         <section className="session-stack">{allSessions.length ? allSessions.map(renderSession) : <div className="quiet-empty session-empty"><strong>No session planned yet.</strong><span>Add another session to choose up to six coding questions and one question from each available interview bank.</span></div>}</section>
 
         <section className="loose-section">
-          <div className="section-title"><div><span className="eyebrow">STANDALONE PRACTICE</span><h2>Outside a full session</h2><p>Swipe a card left, or use its ••• control, to edit or remove it.</p></div></div>
-          {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add one activity” above to search a bank or paste a public LeetCode problem URL.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <SwipeActivityCard key={activity.id} title={activity.title} onEdit={() => openEditActivity(activity)} onRemove={() => removeActivity(activity.id)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><small>{typeLabel(activity.type)} · local draft</small><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} /><ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} /><PublicationControl status={publicationStatusFor(activity)} /><button className={`star-control ${isStarred(activity.type, activity.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(activity.type, activity.questionId)} disabled={!activity.questionId} aria-label={`${isStarred(activity.type, activity.questionId) ? "Unstar" : "Star"} ${activity.title}`}>★</button></SwipeActivityCard>)}</div>}
+          <div className="section-title"><div><span className="eyebrow">STANDALONE PRACTICE</span><h2>Outside a full session</h2><p>Each card keeps only the controls you need: stopwatch, result, journal state, star, and remove.</p></div></div>
+          {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add one activity” above to search a bank or paste a public LeetCode problem URL.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <StandaloneActivityCard key={activity.id} title={activity.title} onRemove={() => removeActivity(activity.id)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><small>{typeLabel(activity.type)} · local draft</small><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} /><ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} /><PublicationControl status={publicationStatusFor(activity)} /><button className={`star-control ${isStarred(activity.type, activity.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(activity.type, activity.questionId)} disabled={!activity.questionId} aria-label={`${isStarred(activity.type, activity.questionId) ? "Unstar" : "Star"} ${activity.title}`}>★</button></StandaloneActivityCard>)}</div>}
         </section>
       </>
     );
@@ -2146,17 +2228,29 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function renderLibrary() {
+    const attentionOptions: Array<{ value: LibraryAttentionFilter; label: string; description: string }> = [
+      { value: "all", label: "All completed", description: "Every finished attempt." },
+      { value: "due", label: "Due now", description: "The scheduled review date has arrived." },
+      { value: "needs_review", label: "Needs review", description: "Any active review plan, including future dates." },
+      { value: "independent", label: "Independent", description: "Solved without reviewing the approach." },
+      { value: "helped", label: "Solved with help", description: "Completed after reviewing the approach." },
+      { value: "failed", label: "Failed", description: "Finished attempts marked failed." },
+      { value: "notes", label: "Has notes", description: "Attempts with at least one pinned note." },
+    ];
     return (
       <section className="view-page library-page">
-        <header className="view-masthead"><span className="eyebrow">PAST · COMPLETED WORK</span><h1>Read the journey<br /><em>like a field journal.</em></h1><p>Every completed attempt belongs here—including failures worth learning from. Use the attention filters to find due reviews, assisted solves, and pinned notes.</p></header>
-        <div className="library-toolbar library-toolbar-stacked">
-          <div><span>Practice type</span><div className="filter-row" role="group" aria-label="Filter past practice by type">{(["all", "leetcode", "system_design", "behavioral"] as const).map((filter) => <button key={filter} className={libraryFilter === filter ? "active" : ""} onClick={() => setLibraryFilter(filter)}>{filter === "all" ? "All" : typeLabel(filter)}</button>)}</div></div>
-          <div><span>Attention</span><div className="filter-row attention-filters" role="group" aria-label="Filter past practice by attention">{(["all", "due", "needs_review", "helped", "failed", "notes"] as const).map((filter) => <button key={filter} className={libraryAttentionFilter === filter ? "active" : ""} onClick={() => setLibraryAttentionFilter(filter)}>{filter === "all" ? "All" : filter === "needs_review" ? "Needs review" : filter === "helped" ? "Solved with help" : filter === "notes" ? "Has notes" : filter[0].toUpperCase() + filter.slice(1)}</button>)}</div></div>
-          <strong>{groupedLog.reduce((sum, [, entries]) => sum + entries.length, 0)} records shown</strong>
+        <header className="view-masthead"><span className="eyebrow">PAST · COMPLETED WORK</span><h1>Read the journey<br /><em>like a field journal.</em></h1><p>Past contains finished activity timers and published case files—never planned work or result flags by themselves.</p></header>
+        <div className="library-toolbar compact-toolbar">
+          <div className="filter-row" role="group" aria-label="Filter past practice by type">{(["all", "leetcode", "system_design", "behavioral"] as const).map((filter) => <button key={filter} className={libraryFilter === filter ? "active" : ""} onClick={() => setLibraryFilter(filter)}>{filter === "all" ? "All" : typeLabel(filter)}</button>)}</div>
+          <details className="control-menu">
+            <summary><Icon name="filter" /> Filter{libraryAttentionFilter !== "all" && <i>1</i>}</summary>
+            <div className="control-popover attention-menu">{attentionOptions.map((option) => <button key={option.value} className={libraryAttentionFilter === option.value ? "active" : ""} onClick={(event) => { setLibraryAttentionFilter(option.value); event.currentTarget.closest("details")?.removeAttribute("open"); }}><span>{option.label}</span><small>{option.description}</small></button>)}</div>
+          </details>
+          <strong>{groupedLog.reduce((sum, [, entries]) => sum + entries.length, 0)} records</strong>
         </div>
         <div className="log-layout">
           <div className="dated-log">
-            {groupedLog.length ? groupedLog.map(([date, entries]) => <section className="log-day" id={`log-date-${date}`} key={date}><header><time>{readableDate(date)}</time><span>{entries.length} record{entries.length === 1 ? "" : "s"} · Pacific day</span></header><div className="log-day-entries">{entries.map((entry) => <button className={`log-entry ${entry.type}`} key={entry.id} onClick={() => setSelectedEntry(entry)}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><div className="log-entry-copy"><small>{typeLabel(entry.type)} · {entry.status}{entry.sessionId ? " · session activity" : " · standalone"}</small><strong>{entry.title}</strong><span>{entry.subtitle}</span><div className="entry-badges">{entry.review?.status === "due" && <i className="review-badge due">Due now</i>}{entry.review?.status === "scheduled" && <i className="review-badge">Review {entry.review.dueDate}</i>}{(entry.personalNote?.trim() || entry.pinnedNotes?.length) && <i className="note-badge">Pinned note</i>}{entry.outcome === "solved_after_reviewing_approach" && <i className="help-badge">Solved with help</i>}{entry.outcome === "failed" && <i className="failure-badge">Failed attempt</i>}</div>{entry.startedAt && <span className="entry-time-range">{formatPracticeTimestamp(entry.startedAt, true)} → {entry.endedAt ? formatPracticeTimestamp(entry.endedAt, true) : "Paused"}</span>}</div><div className="log-entry-meta"><strong>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "—"}</strong><span>{entry.type === "leetcode" ? outcomeLabel(entry.outcome) : entry.artifact ? "Published record" : entry.status}</span></div><span className="open-letter">Read →</span></button>)}</div></section>) : <div className="quiet-empty library-empty"><strong>No completed work in this filter yet.</strong><span>Try another filter, or finish an activity to add it to the field journal.</span></div>}
+            {groupedLog.length ? groupedLog.map(([date, entries]) => <section className="log-day" id={`log-date-${date}`} key={date}><header><time>{readableDate(date)}</time><span>{entries.length} record{entries.length === 1 ? "" : "s"} · Pacific day</span></header><div className="log-day-entries">{entries.map((entry) => <article className={`log-entry ${entry.type}`} key={entry.id}><button className="log-entry-open" onClick={() => setSelectedEntry(entry)} aria-label={`Read ${entry.title}`}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><div className="log-entry-copy"><small>{typeLabel(entry.type)} · {entry.status}{entry.sessionId ? " · session activity" : " · standalone"}</small><strong>{entry.title}</strong>{meaningfulSubtitle(entry.subtitle) && <span>{meaningfulSubtitle(entry.subtitle)}</span>}<div className="entry-badges">{entry.review?.status === "due" && <i className="review-badge due">Due now</i>}{entry.review?.status === "scheduled" && <i className="review-badge">Review {entry.review.dueDate}</i>}{(entry.personalNote?.trim() || entry.pinnedNotes?.length) && <i className="note-badge">Pinned note</i>}{entry.outcome === "solved" && <i className="independent-badge">Independent</i>}{entry.outcome === "solved_after_reviewing_approach" && <i className="help-badge">Solved with help</i>}{entry.outcome === "failed" && <i className="failure-badge">Failed attempt</i>}</div>{entry.startedAt && <span className="entry-time-range">{formatPracticeTimestamp(entry.startedAt, true)} → {entry.endedAt ? formatPracticeTimestamp(entry.endedAt, true) : "Paused"}</span>}</div><div className="log-entry-meta"><strong>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "—"}</strong><span>{entry.type === "leetcode" ? outcomeLabel(entry.outcome) : entry.artifact ? "Published record" : entry.status}</span></div></button><button className={`star-control ${isStarred(entry.type, entry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(entry.type, entry.questionId)} disabled={!entry.questionId} aria-label={`${isStarred(entry.type, entry.questionId) ? "Unstar" : "Star"} ${entry.title}`} title="Star this problem"><Icon name="star" /></button></article>)}</div></section>) : <div className="quiet-empty library-empty"><strong>No completed work in this filter yet.</strong><span>Try another filter, or finish an activity to add it to the field journal.</span></div>}
           </div>
           <aside className="log-calendar"><span className="eyebrow">JUMP TO A DAY</span><h2>{new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${journal.date}T12:00:00Z`))}</h2><div className="calendar-week"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div><div className="calendar-mini">{calendarDays.map((day) => day.hasEntries ? <button key={day.key} onClick={() => scrollToLogDate(day.key)} title={`Jump to ${day.key}`}>{day.day}<i /></button> : <span key={day.key}>{day.day}</span>)}</div><div className="calendar-dates">{groupedLog.map(([date]) => <button key={date} onClick={() => scrollToLogDate(date)}>{readableDate(date, true)} <span>↘</span></button>)}</div></aside>
         </div>
@@ -2169,19 +2263,21 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       ...bankFor("leetcode").map((question) => ({ type: "leetcode" as const, question })),
       ...bankFor("system_design").map((question) => ({ type: "system_design" as const, question })),
       ...bankFor("behavioral").map((question) => ({ type: "behavioral" as const, question })),
-    ].map((entry) => ({
-      ...entry,
-      finished: libraryEntries.some((record) => record.type === entry.type && (
-        record.questionId === entry.question.id ||
-        Boolean(entry.question.url && record.url && entry.question.url.replace(/\/$/, "") === record.url.replace(/\/$/, "")) ||
-        normalizedIdentity(entry.question.title) === normalizedIdentity(record.title)
-      )),
-    }));
-    const bankTags = [...new Set(bankEntries.flatMap(({ type, question }) => [
-      ...question.topics,
-      ...(question.tags ?? []),
+    ].map((entry) => ({ ...entry, finished: questionHasFinishedAttempt(libraryEntries, entry.type, entry.question) }));
+    const tagsForEntry = (type: ActivityType, question: QuestionBankItem) => [...new Set([
+      ...inferredQuestionTags(type, question),
       ...(profileFor(type, question.id)?.tags ?? []),
-    ]))].sort((left, right) => left.localeCompare(right));
+    ])];
+    const tagCatalog = (["leetcode", "system_design", "behavioral"] as const).map((type) => {
+      const counts = new Map<string, number>();
+      bankEntries.filter((entry) => entry.type === type).forEach((entry) => {
+        tagsForEntry(type, entry.question).forEach((tag) => counts.set(tag, (counts.get(tag) ?? 0) + 1));
+      });
+      return {
+        type,
+        tags: [...counts.entries()].map(([tag, count]) => ({ tag, count })).sort((left, right) => right.count - left.count || left.tag.localeCompare(right.tag)),
+      };
+    });
     const searchNeedle = bankSearch.toLowerCase().trim();
     const filteredEntries = bankEntries.filter((entry) => {
       const level = questionLevel(entry.question);
@@ -2189,12 +2285,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         && (bankProgressFilter === "all" || (bankProgressFilter === "finished" ? entry.finished : !entry.finished))
         && (bankLevelFilter === "all" || level === bankLevelFilter)
         && (bankStarFilter === "all" || isStarred(entry.type, entry.question.id))
-        && (bankTagFilter === "all" || [...entry.question.topics, ...(entry.question.tags ?? []), ...(profileFor(entry.type, entry.question.id)?.tags ?? [])].includes(bankTagFilter))
+        && (bankTagFilter === "all" || tagsForEntry(entry.type, entry.question).some((tag) => `${entry.type}:${tag}` === bankTagFilter))
         && (!searchNeedle
           || entry.question.title.toLowerCase().includes(searchNeedle)
           || (entry.question.prompt?.toLowerCase().includes(searchNeedle) ?? false)
-          || entry.question.topics.some((topic) => topic.toLowerCase().includes(searchNeedle))
-          || (entry.question.tags?.some((tag) => tag.toLowerCase().includes(searchNeedle)) ?? false)
+          || tagsForEntry(entry.type, entry.question).some((tag) => tag.toLowerCase().includes(searchNeedle))
           || (profileFor(entry.type, entry.question.id)?.tags.some((tag) => tag.includes(searchNeedle)) ?? false)
           || (entry.question.problemNumber !== undefined && String(entry.question.problemNumber).includes(searchNeedle))
           || (entry.question.companyTags?.some((tag) => tag.toLowerCase().includes(searchNeedle)) ?? false));
@@ -2224,16 +2319,19 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       { key: "recent" as const, label: "Recent", icon: "recent" },
       { key: "acceptance" as const, label: "Acceptance", icon: "accept" },
     ];
+    const finishedCount = bankEntries.filter((entry) => entry.finished).length;
+    const finishedPercent = bankEntries.length ? Math.round((finishedCount / bankEntries.length) * 100) : 0;
+    const selectedTag = bankTagFilter === "all" ? null : bankTagFilter.split(":").slice(1).join(":");
     return (
       <section className="view-page banks-page">
         <header className="view-masthead"><span className="eyebrow">PROBLEM BANKS · ALL PRACTICE SOURCES</span><h1>Choose the next thing<br /><em>worth practicing.</em></h1><p>Browse every coding, system-design, and behavioral prompt in one place. “Practice today” adds the question to standalone practice and takes you directly to Today.</p></header>
         <div className="bank-totals" aria-label="Question bank totals">
-          <article className="leetcode"><strong>{content.questionBanks.leetcode.length}</strong><span>Coding problems</span></article>
-          <article className="system_design"><strong>{content.questionBanks.systemDesign.length}</strong><span>System designs</span></article>
-          <article className="behavioral"><strong>{content.questionBanks.behavioral.length}</strong><span>Behavioral prompts</span></article>
+          <article className="leetcode"><strong>{bankFor("leetcode").length}</strong><span>Coding problems</span></article>
+          <article className="system_design"><strong>{bankFor("system_design").length}</strong><span>System designs</span></article>
+          <article className="behavioral"><strong>{bankFor("behavioral").length}</strong><span>Behavioral prompts</span></article>
         </div>
         <div className="bank-control-deck">
-          <label className="bank-search-bar">
+          <div className="bank-search-row"><label className="bank-search-bar">
             <span className="bank-search-icon" aria-hidden="true">
               <svg viewBox="0 0 20 20" width="16" height="16" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.8"/><path d="M12.8 12.8 17 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
             </span>
@@ -2248,55 +2346,30 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
               <button type="button" className="bank-search-clear" onClick={() => setBankSearch("")} aria-label="Clear search">×</button>
             ) : <span className="bank-search-clear-spacer" aria-hidden="true" />}
             <span className="bank-result-count" aria-live="polite">{visibleEntries.length} result{visibleEntries.length === 1 ? "" : "s"}</span>
-          </label>
-          <div className="library-toolbar bank-toolbar">
-            <div className="bank-filter-rail">
-              <div className="bank-filter-group">
-                <span>Type</span>
-                <div className="filter-row" role="group" aria-label="Filter problem banks by question type">
+          </label><div className="bank-progress-meter" style={{ background: `conic-gradient(var(--signal-dark) ${finishedPercent}%, #e4e9e1 ${finishedPercent}% 100%)` }}><span><strong>{finishedCount}</strong><small>of {bankEntries.length}</small></span></div></div>
+          <div className={`topic-ribbon ${bankTopicsExpanded ? "expanded" : ""}`}>
+            <div className="topic-ribbon-head"><span>Patterns & competencies</span>{selectedTag && <button className="clear-topic" onClick={() => setBankTagFilter("all")}>Clear “{selectedTag}”</button>}<button className="topic-expand" onClick={() => setBankTopicsExpanded((current) => !current)}>{bankTopicsExpanded ? "Collapse" : "Explore all"}<Icon name="chevron" /></button></div>
+            <div className="topic-ribbon-columns">{tagCatalog.map((group) => <section className={group.type} key={group.type}><header><i className={`type-mark ${group.type}`}>{typeMark(group.type)}</i><strong>{typeLabel(group.type)}</strong></header><div>{group.tags.slice(0, bankTopicsExpanded ? undefined : 4).map(({ tag, count }) => <button key={tag} className={bankTagFilter === `${group.type}:${tag}` ? "active" : ""} onClick={() => setBankTagFilter((current) => current === `${group.type}:${tag}` ? "all" : `${group.type}:${tag}`)}><span>{tag}</span><small>{count}</small></button>)}</div></section>)}</div>
+          </div>
+          <div className="library-toolbar bank-toolbar compact-toolbar">
+            <div className="bank-filter-rail primary-bank-controls">
+              <div className="filter-row" role="group" aria-label="Filter problem banks by question type">
                   {(["all", "leetcode", "system_design", "behavioral"] as const).map((filter) => (
                     <button key={filter} className={bankFilter === filter ? "active" : ""} onClick={() => setBankFilter(filter)}>
                       {filter === "all" ? "All" : typeLabel(filter)}
                     </button>
                   ))}
-                </div>
               </div>
-              <div className="bank-filter-group">
-                <span>Progress</span>
-                <div className="filter-row" role="group" aria-label="Filter problem banks by progress">
+              <div className="filter-row progress-control" role="group" aria-label="Filter problem banks by progress">
                   {(["all", "todo", "finished"] as const).map((filter) => (
                     <button key={filter} className={bankProgressFilter === filter ? "active" : ""} onClick={() => setBankProgressFilter(filter)}>
                       {filter === "all" ? "All" : filter === "todo" ? "To practice" : "Finished"}
                     </button>
                   ))}
-                </div>
               </div>
-              <div className="bank-filter-group">
-                <span>Level</span>
-                <div className="filter-row" role="group" aria-label="Filter problem banks by level">
-                  {(["all", "easy", "medium", "hard"] as const).map((filter) => (
-                    <button key={filter} className={bankLevelFilter === filter ? "active" : ""} onClick={() => setBankLevelFilter(filter)}>
-                      {filter === "all" ? "All" : filter[0].toUpperCase() + filter.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="bank-filter-group">
-                <span>Collection</span>
-                <div className="filter-row" role="group" aria-label="Filter starred problems">
-                  {(["all", "starred"] as const).map((filter) => <button key={filter} className={bankStarFilter === filter ? "active" : ""} onClick={() => setBankStarFilter(filter)}>{filter === "all" ? "All" : "★ Starred"}</button>)}
-                </div>
-              </div>
-              <label className="bank-filter-group bank-tag-select">
-                <span>Pattern / competency</span>
-                <select value={bankTagFilter} onChange={(event) => setBankTagFilter(event.target.value)} aria-label="Filter problem banks by tag">
-                  <option value="all">All tags</option>
-                  {bankTags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
-                </select>
-              </label>
-              <div className="bank-filter-group">
-                <span>Order</span>
-                <div className="filter-row bank-sort-row" role="group" aria-label="Order problem banks">
+              <button className={`collection-toggle ${bankStarFilter === "starred" ? "active" : ""}`} onClick={() => setBankStarFilter((current) => current === "starred" ? "all" : "starred")} aria-pressed={bankStarFilter === "starred"}><Icon name="star" /> Starred</button>
+              <details className="control-menu"><summary><Icon name="filter" /> Filter{bankLevelFilter !== "all" && <i>1</i>}</summary><div className="control-popover"><strong>Difficulty</strong>{(["all", "easy", "medium", "hard"] as const).map((filter) => <button key={filter} className={bankLevelFilter === filter ? "active" : ""} onClick={(event) => { setBankLevelFilter(filter); event.currentTarget.closest("details")?.removeAttribute("open"); }}>{filter === "all" ? "Any difficulty" : filter[0].toUpperCase() + filter.slice(1)}</button>)}</div></details>
+              <details className="control-menu sort-menu"><summary><Icon name="sort" /> Sort <small>{sortOptions.find((option) => option.key === bankSortKey)?.label} {bankSortDir === "asc" ? "↑" : "↓"}</small></summary><div className="control-popover"><strong>Order by</strong>
                   {sortOptions.map((option) => {
                     const active = bankSortKey === option.key;
                     const direction = active ? bankSortDir : null;
@@ -2304,19 +2377,17 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                       <button
                         key={option.key}
                         type="button"
-                        className={`bank-sort-pill ${active ? "active" : ""}`}
+                        className={active ? "active" : ""}
                         onClick={() => toggleSort(option.key)}
                         aria-pressed={active}
                         aria-label={`${option.label}: ${active ? (direction === "asc" ? "low to high, click to reverse" : "high to low, click to reverse") : "sort low to high"}`}
                         title={`${option.label} · ${active ? (direction === "asc" ? "↑ low→high" : "↓ high→low") : "click to sort"}`}
                       >
-                        <span className={`bank-sort-glyph ${option.icon}`} aria-hidden="true" />
-                        <span className="bank-sort-dir" aria-hidden="true">{active ? (direction === "asc" ? "↑" : "↓") : "·"}</span>
+                        <span>{option.label}</span><small aria-hidden="true">{active ? (direction === "asc" ? "↑ low to high" : "↓ high to low") : ""}</small>
                       </button>
                     );
                   })}
-                </div>
-              </div>
+              </div></details>
             </div>
           </div>
         </div>
@@ -2324,8 +2395,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           {visibleEntries.map(({ type, question, finished }) => <article className={`problem-bank-entry ${type}`} key={`${type}-${question.id}`}>
             <span className={`type-mark ${type}`}>{typeMark(type)}</span>
             <div className="problem-bank-copy"><small>{typeLabel(type)}{question.difficulty ? ` · ${question.difficulty}` : ""}{question.complexity ? ` · ${displayComplexity(question.complexity)}` : ""} · {finished ? "finished" : "to practice"}</small><button className="problem-title-button" onClick={() => setSelectedProblem({ type, question })}>{question.title}</button>{question.prompt && question.prompt !== question.title && <p>{question.prompt}</p>}{question.url && <a href={question.url} target="_blank" rel="noreferrer">{question.solutionReference ? "Open question & solution references ↗" : "Open problem ↗"}</a>}</div>
-            <div className="bank-entry-meta"><span>{question.targetMinutes} min estimate</span>{question.problemNumber && <small>#{question.problemNumber}{typeof question.acceptanceRate === "number" ? ` · ${question.acceptanceRate.toFixed(1)}% acceptance` : ""}</small>}{question.companySignals?.[0] && <small>{question.companySignals[0].company} frequency {question.companySignals[0].frequencyScore}/{question.companySignals[0].frequencyScale} · {question.companySignals[0].window}</small>}{question.answerFormat && <small>{question.answerFormat} answer · {question.frequency ?? "medium"} frequency</small>}{question.solutionReference && <small>Reference solution{question.referenceAccess === "may_require_sign_in" ? " may require sign-in" : " available"}</small>}{question.topics.length > 0 && <small>{question.topics.slice(0, 3).join(" · ")}</small>}{profileFor(type, question.id)?.tags.length ? <small className="content-tags">{profileFor(type, question.id)?.tags.slice(0, 4).map((tag) => `#${tag}`).join("  ")}</small> : null}</div>
-            <div className="bank-entry-actions"><button className={`star-control ${isStarred(type, question.id) ? "starred" : ""}`} onClick={() => toggleProblemStar(type, question.id)} aria-label={`${isStarred(type, question.id) ? "Unstar" : "Star"} ${question.title}`}>★</button><button className="open-solution" onClick={() => setSelectedProblem({ type, question })}>{profileFor(type, question.id) ? "Read solution" : "View problem"}</button><button onClick={() => addBankQuestionToToday(question, type)}>Practice today</button></div>
+            <div className="bank-entry-meta"><span>{question.targetMinutes} min estimate</span>{question.problemNumber && <small>#{question.problemNumber}{typeof question.acceptanceRate === "number" ? ` · ${question.acceptanceRate.toFixed(1)}% acceptance` : ""}</small>}{question.companySignals?.[0] && <small>{question.companySignals[0].company} frequency {question.companySignals[0].frequencyScore}/{question.companySignals[0].frequencyScale} · {question.companySignals[0].window}</small>}{question.answerFormat && <small>{question.answerFormat} answer · {question.frequency ?? "medium"} frequency</small>}{question.solutionReference && <small>Reference solution{question.referenceAccess === "may_require_sign_in" ? " may require sign-in" : " available"}</small>}<small className={`content-tags ${type}`}>{tagsForEntry(type, question).slice(0, 4).map((tag) => `#${tag}`).join("  ")}</small></div>
+            <div className="bank-entry-actions"><button className={`icon-action ${isStarred(type, question.id) ? "active starred" : ""}`} onClick={() => toggleProblemStar(type, question.id)} aria-label={`${isStarred(type, question.id) ? "Unstar" : "Star"} ${question.title}`} title={isStarred(type, question.id) ? "Unstar" : "Star"}><Icon name="star" /></button><button className="icon-action" onClick={() => setSelectedProblem({ type, question })} aria-label={`View solution for ${question.title}`} title="View solution"><Icon name="book" /></button><button className="icon-action practice" onClick={() => addBankQuestionToToday(question, type)} aria-label={`Practice ${question.title} today`} title="Practice today"><Icon name="plus" /></button></div>
           </article>)}
           {!visibleEntries.length && <div className="quiet-empty bank-empty"><strong>No questions match these filters.</strong><span>Change type, progress, level, or search text.</span></div>}
         </div>
@@ -2364,7 +2435,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const selectedEntryActivityId = selectedEntry?.artifact?.activityId || (selectedEntry && !selectedEntry.id.includes("/") ? selectedEntry.id : "");
   const selectedEntryTurns = selectedEntry?.transcriptTurns ?? [];
   const selectedEntryClips = selectedEntry?.audioClips ?? [];
-  const selectedEntryUnlinkedClips = selectedEntryClips.filter((clip) => !clip.transcriptTurnId);
   const selectedArtifactTranscriptIndex = selectedEntry?.artifact?.sections.findIndex((section) => /conversation transcript|full transcript|raw exchange/i.test(section.title)) ?? -1;
   const practiceRecordLoading = Boolean(selectedEntryActivityId && loadedPracticeRecordId !== selectedEntryActivityId);
 
@@ -2372,14 +2442,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (!selectedEntryActivityId) return;
     const controller = new AbortController();
     void fetch(`/api/practice-record?activityId=${encodeURIComponent(selectedEntryActivityId)}`, { signal: controller.signal })
-      .then(async (response) => response.ok ? response.json() as Promise<{ turns: TranscriptTurn[]; audioClips: AudioClip[] }> : null)
+      .then(async (response) => response.ok ? response.json() as Promise<{ turns: TranscriptTurn[]; notes: PracticeNote[]; audioClips: AudioClip[] }> : null)
       .then((record) => {
         if (!record) {
           setLoadedPracticeRecordId(selectedEntryActivityId);
           return;
         }
         setSelectedEntry((current) => current && (current.artifact?.activityId || current.id) === selectedEntryActivityId
-          ? { ...current, transcriptTurns: record.turns, audioClips: record.audioClips }
+          ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips }
           : current);
         setLoadedPracticeRecordId(selectedEntryActivityId);
       })
@@ -2434,6 +2504,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           </div>}
           {composer.mode === "session" && !composer.editingId ? <div className="session-composer">
             <p>Shape the session you need. The default is six coding problems, one system-design mock, and one behavioral mock. When available, Interview Arc places up to two due reviews first and fills the remaining slots with new bank questions.</p>
+            {bankFor("behavioral").filter(isResumeCurriculumQuestion).length === 0 && <div className="resume-setup-warning"><strong>Résumé foundation is not ready yet.</strong><span>Interview Arc will not substitute a random behavioral prompt. Connect the Behavioral specialist once to build the private résumé curriculum.</span></div>}
             {dueReviewCount > 0 && <div className="review-composer-strip"><span>RECALL QUEUE</span><strong>Up to {Math.min(2, dueReviewCount)} due review{Math.min(2, dueReviewCount) === 1 ? "" : "s"} will be included</strong><small>{dueReviewCount} total due now · oldest eligible first</small></div>}
             <div className="session-recipe" aria-label="Session recipe">
               <SessionCountControl label="Coding" mark="C" value={composer.sessionCoding} minutesEach={CODING_SESSION_MINUTES} max={sessionAvailability.coding} onChange={(value) => setComposer((current) => ({ ...current, sessionCoding: value }))} />
@@ -2444,7 +2515,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
               <div><span>SESSION COUNTDOWN</span><small>{composer.sessionCoding * CODING_SESSION_MINUTES}m coding + {composer.sessionSystemDesign * INTERVIEW_SESSION_MINUTES}m system design + {composer.sessionBehavioral * INTERVIEW_SESSION_MINUTES}m behavioral</small></div>
               <strong>{formatDuration(sessionTotalSeconds)}</strong>
             </div>
-            <small>{sessionAvailability.coding} coding, {sessionAvailability.systemDesign} system-design, and {sessionAvailability.behavioral} behavioral questions are available after today&apos;s other picks. A recipe locks once its timer, activity work, or results begin.</small>
+            <small>{sessionAvailability.coding} coding, {sessionAvailability.systemDesign} system-design, and {sessionAvailability.behavioral} behavioral questions are available after today&apos;s other picks. A recipe locks once its timer, activity work, or completion begins.</small>
             <button className="primary-action full-width" onClick={saveFullSession} disabled={!canSaveSession}>{composer.editingSessionId ? "Save session recipe" : `Add session ${allSessions.length + 1}`}</button>
           </div> : <form onSubmit={saveActivity}>
             <div className="type-selector" role="group" aria-label="Practice type">{(["leetcode", "system_design", "behavioral"] as const).map((type) => <button type="button" key={type} className={`${type} ${composer.type === type ? "active" : ""}`} onClick={() => setComposer((current) => ({ ...current, type, query: "", selectedId: "", minutes: type === "leetcode" ? "30" : type === "system_design" ? "90" : "60" }))}>{typeLabel(type)}</button>)}</div>
@@ -2460,27 +2531,29 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       {integrationOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setIntegrationOpen(false)}><section className="composer integration-dialog" role="dialog" aria-modal="true" aria-labelledby="integration-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setIntegrationOpen(false)} aria-label="Close">×</button><span className="eyebrow">ONE DURABLE PRACTICE RECORD</span><h2 id="integration-title">Connect Interview Arc tools</h2><p>One personal token connects two separate tools to the same Interview Arc record. Codex specialists save activity transcripts, pinned notes, reviews, and finalization drafts; the coordinator alone turns those drafts into the published journal. The Chrome companion controls LeetCode timers and results. The token is shown once and stored as a secure digest.</p>{integrationToken ? <><label className="token-field"><span>Personal connection token</span><input readOnly value={integrationToken} onFocus={(event) => event.currentTarget.select()} /></label><button className="primary-action full-width" onClick={copyConnectionToken}>Copy token</button><div className="integration-steps"><strong>Connect each tool separately</strong><ol><li><strong>Codex practice bridge:</strong> set <code>INTERVIEW_ARC_MCP_TOKEN</code> before opening Codex in this trusted project. Specialists append only activity-related exchanges to D1; the coordinator creates the Git case files when you say “Publish all pending practice.”</li><li><strong>LeetCode Chrome companion:</strong> paste the same token into the loaded extension. The side panel can control the current coding activity while you work on LeetCode.</li></ol></div></> : <button className="primary-action full-width" disabled={integrationBusy} onClick={createConnectionToken}>{integrationBusy ? "Creating…" : "Create personal connection token"}</button>}<small className="integration-warning">Treat this token like a password. Create a new one if it is ever shared accidentally.</small></section></div>}
 
       {selectedEntry && <div className="letter-backdrop" role="presentation" onMouseDown={() => setSelectedEntry(null)}>
-        <article className="reading-letter" role="dialog" aria-modal="true" aria-labelledby="letter-title" onMouseDown={(event) => event.stopPropagation()} onPaste={(event) => { const files = [...event.clipboardData.files]; if (files.some((file) => file.type.startsWith("audio/")) && selectedEntryActivityId) { event.preventDefault(); const target = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-answer-turn-id]") : null; void uploadActivityAudio(selectedEntryActivityId, files, target?.dataset.answerTurnId); } }}>
-          <button className="letter-close" onClick={() => setSelectedEntry(null)} aria-label="Close letter">Close ×</button>
-          <header><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time><button className={`star-control ${isStarred(selectedEntry.type, selectedEntry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedEntry.type, selectedEntry.questionId)} disabled={!selectedEntry.questionId} aria-label={`${isStarred(selectedEntry.type, selectedEntry.questionId) ? "Unstar" : "Star"} ${selectedEntry.title}`}>★</button></div><h2 id="letter-title">{selectedEntry.title}</h2><p>{selectedEntry.subtitle}</p>{selectedEntry.questionId && <button className="solution-link-button" onClick={() => { const question = bankFor(selectedEntry.type).find((candidate) => candidate.id === selectedEntry.questionId); if (question) { setSelectedEntry(null); setSelectedProblem({ type: selectedEntry.type, question }); } }}>Open reusable Solution Profile →</button>}</header>
-          {(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <aside className="pinned-notes" aria-label="Pinned practice notes"><span>PINNED TO THIS CASE</span>{selectedEntry.personalNote?.trim() && <MarkdownBody source={selectedEntry.personalNote} />}{selectedEntry.pinnedNotes?.map((note) => <blockquote key={note.id}><small>{note.kind}</small><p>{note.body}</p></blockquote>)}</aside>}
-          <div className="letter-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.startedAt && <div><span>Started</span><strong>{formatPracticeTimestamp(selectedEntry.startedAt)}</strong></div>}{selectedEntry.endedAt && <div><span>Finished</span><strong>{formatPracticeTimestamp(selectedEntry.endedAt)}</strong></div>}{selectedEntry.sessionId && <div><span>Session</span><strong>{selectedEntry.sessionId}</strong></div>}{selectedEntry.outcome && <div><span>Result</span><strong>{resultLabel(selectedEntry.outcome, selectedEntry.type)}</strong></div>}{selectedEntry.review && <div className="review-fact"><span>{selectedEntry.review.status === "due" ? "Review due" : "Next review"}</span><strong>{selectedEntry.review.dueDate}</strong><small>{selectedEntry.review.reason.replaceAll("_", " ")} · {selectedEntry.review.intervalDays} day interval</small></div>}</div>
-          {selectedEntryActivityId && <form className="letter-note-editor" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); savePersonalNote(selectedEntryActivityId, String(form.get("note") ?? "")); }}><label htmlFor="case-note">Personal note for this activity</label><textarea id="case-note" name="note" defaultValue={selectedEntry.personalNote ?? ""} placeholder="A concise reminder, mistake, or pattern to keep visible…" /><button type="submit">Pin note</button></form>}
-          {practiceRecordLoading && <div className="transcript-loading"><span />Loading conversation and recordings…</div>}
-          {selectedEntry.artifact ? <div className="letter-sections">{selectedEntry.artifact.sections.map((section, index) => {
-            if (selectedEntryTurns.length && index === selectedArtifactTranscriptIndex) return <ActivityTranscript key="structured-transcript" activityId={selectedEntryActivityId} turns={selectedEntryTurns} clips={selectedEntryClips} audioBusy={audioBusy} onUpload={(activityId, files, turnId) => void uploadActivityAudio(activityId, files, turnId)} onRemove={(activityId, clipId) => void removeActivityAudio(activityId, clipId)} />;
-            if (selectedEntryTurns.length && /conversation transcript|full transcript|raw exchange/i.test(section.title)) return null;
-            return /generated code|solution|raw exchange/i.test(section.title) ? <details key={section.title} open={/solution/i.test(section.title)}><summary>{section.title}</summary><MarkdownBody source={section.body} /></details> : <section key={section.title}><h3>{section.title}</h3><MarkdownBody source={section.body} /></section>;
-          })}</div> : <div className="unpublished-letter"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to flush any unsaved activity exchanges, then publish the transcript, review, improved answer or walkthrough, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
-          {selectedEntryTurns.length > 0 && selectedArtifactTranscriptIndex < 0 && <ActivityTranscript activityId={selectedEntryActivityId} turns={selectedEntryTurns} clips={selectedEntryClips} audioBusy={audioBusy} onUpload={(activityId, files, turnId) => void uploadActivityAudio(activityId, files, turnId)} onRemove={(activityId, clipId) => void removeActivityAudio(activityId, clipId)} />}
-          {selectedEntryTurns.length > 0 && selectedEntryUnlinkedClips.length > 0 && <section className="delivery-recordings unlinked-recordings"><span className="eyebrow">UNLINKED RECORDINGS · PRIVATE R2</span><p>These older clips belong to this attempt but are not attached to one transcript answer.</p>{selectedEntryUnlinkedClips.map((clip) => <div key={clip.id}><div><strong>{clip.label}</strong><small>{clip.filename} · {clip.status.replaceAll("_", " ")}</small></div>{clip.status === "available" ? <audio controls preload="metadata" src={`/api/audio/${encodeURIComponent(clip.id)}`} /> : <em>Upload is not available yet.</em>}<button type="button" className="audio-remove" onClick={() => void removeActivityAudio(selectedEntryActivityId, clip.id)}>Remove</button></div>)}</section>}
-          {!practiceRecordLoading && selectedEntryTurns.length === 0 && selectedEntryActivityId && <section className="delivery-recordings"><span className="eyebrow">DELIVERY RECORDINGS · PRIVATE R2</span><p>A structured transcript is not available yet, so recordings remain at the activity level.</p>{selectedEntryClips.map((clip) => <div key={clip.id}><div><strong>{clip.label}</strong><small>{clip.filename} · {clip.status.replaceAll("_", " ")}</small></div>{clip.status === "available" ? <audio controls preload="metadata" src={`/api/audio/${encodeURIComponent(clip.id)}`} /> : <em>Upload is not available yet.</em>}<button type="button" className="audio-remove" onClick={() => void removeActivityAudio(selectedEntryActivityId, clip.id)}>Remove</button></div>)}<label className="audio-upload"><strong>{audioBusy ? "Uploading securely…" : "Add an answer recording"}</strong><span>Choose or paste an audio file here. It stays private and is streamed only after login.</span><input type="file" accept="audio/*" multiple disabled={audioBusy} onChange={(event) => { void uploadActivityAudio(selectedEntryActivityId, [...(event.target.files ?? [])]); event.currentTarget.value = ""; }} /></label></section>}
-          <footer>Interview Arc · {selectedEntry.id}</footer>
+        <article className="reading-letter case-file-shell" role="dialog" aria-modal="true" aria-labelledby="letter-title" onMouseDown={(event) => event.stopPropagation()}>
+          <button className="letter-close icon-action" onClick={() => setSelectedEntry(null)} aria-label="Close case file" title="Close"><Icon name="close" /></button>
+          <aside className="case-toc" aria-label="Case file contents"><span>Contents</span><nav><a href="#case-summary">Overview</a>{(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedEntry.artifact?.sections.map((section, index) => <a key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}{selectedEntryTurns.length > 0 && selectedArtifactTranscriptIndex < 0 && <a href="#case-transcript">Conversation transcript</a>}</nav></aside>
+          <div className="case-document">
+            <header id="case-summary"><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time></div><div className="case-title-row"><h2 id="letter-title">{selectedEntry.title}</h2><button className={`star-control ${isStarred(selectedEntry.type, selectedEntry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedEntry.type, selectedEntry.questionId)} disabled={!selectedEntry.questionId} aria-label={`${isStarred(selectedEntry.type, selectedEntry.questionId) ? "Unstar" : "Star"} ${selectedEntry.title}`} title="Star this problem"><Icon name="star" /></button><button className="icon-action note-add" onClick={() => openNoteComposer()} disabled={!selectedEntryActivityId} aria-label="Add a note" title="Add a note"><Icon name="note" /><i><Icon name="plus" /></i></button></div>{meaningfulSubtitle(selectedEntry.subtitle) && <p>{meaningfulSubtitle(selectedEntry.subtitle)}</p>}{selectedEntry.questionId && <button className="solution-link-button" onClick={() => { const question = bankFor(selectedEntry.type).find((candidate) => candidate.id === selectedEntry.questionId); if (question) { setSelectedEntry(null); setSelectedProblem({ type: selectedEntry.type, question }); } }}>View solution →</button>}</header>
+            {(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <aside className="pinned-notes" id="case-notes" aria-label="Pinned practice notes"><span>NOTES</span>{selectedEntry.personalNote?.trim() && <article><div className="note-actions"><button onClick={() => openNoteComposer("personal")} aria-label="Edit personal note" title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote("personal")} aria-label="Delete personal note" title="Delete"><Icon name="trash" /></button></div><MarkdownBody source={selectedEntry.personalNote} /></article>}{selectedEntry.pinnedNotes?.map((note) => <article key={note.id}><header><small>{note.kind}</small><div className="note-actions"><button onClick={() => openNoteComposer(note)} aria-label={`Edit ${note.kind} note`} title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote(note.id)} aria-label={`Delete ${note.kind} note`} title="Delete"><Icon name="trash" /></button></div></header><MarkdownBody source={note.body} /></article>)}</aside>}
+            {noteComposerOpen && <form className="case-note-composer" onSubmit={(event) => { event.preventDefault(); void saveCaseNote(); }}><label htmlFor="case-note">{editingNoteId ? "Edit note" : "Add a note"}</label><textarea id="case-note" autoFocus value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} placeholder="A concise reminder, mistake, or pattern to keep visible…" /><div><button type="button" onClick={() => { setNoteComposerOpen(false); setEditingNoteId(""); setNoteDraft(""); }}>Cancel</button><button type="submit" disabled={noteBusy || !noteDraft.trim()}>{noteBusy ? "Saving…" : "Save note"}</button></div></form>}
+            <div className="letter-facts" id="case-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.startedAt && <div><span>Started</span><strong>{formatPracticeTimestamp(selectedEntry.startedAt)}</strong></div>}{selectedEntry.endedAt && <div><span>Finished</span><strong>{formatPracticeTimestamp(selectedEntry.endedAt)}</strong></div>}{selectedEntry.sessionId && <div><span>Session</span><strong>{selectedEntry.sessionId}</strong></div>}{selectedEntry.outcome && <div><span>Result</span><strong>{resultLabel(selectedEntry.outcome, selectedEntry.type)}</strong></div>}{selectedEntry.review && <div className="review-fact"><span>{selectedEntry.review.status === "due" ? "Review due" : "Next review"}</span><strong>{selectedEntry.review.dueDate}</strong><small>{selectedEntry.review.reason.replaceAll("_", " ")} · {selectedEntry.review.intervalDays} day interval</small></div>}</div>
+            {practiceRecordLoading && <div className="transcript-loading"><span />Loading conversation and recordings…</div>}
+            {selectedEntry.artifact ? <div className="letter-sections">{selectedEntry.artifact.sections.map((section, index) => {
+              const sectionId = `case-${slugify(section.title)}-${index}`;
+              if (selectedEntryTurns.length && index === selectedArtifactTranscriptIndex) return <div id={sectionId} key="structured-transcript"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} /></div>;
+              if (selectedEntryTurns.length && /conversation transcript|full transcript|raw exchange/i.test(section.title)) return null;
+              return /generated code|solution|raw exchange/i.test(section.title) ? <details id={sectionId} key={section.title} open={/solution/i.test(section.title)}><summary>{section.title}</summary><MarkdownBody source={section.body} /></details> : <section id={sectionId} key={section.title}><h3>{section.title}</h3><MarkdownBody source={section.body} /></section>;
+            })}</div> : <div className="unpublished-letter" id="case-draft"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to finalize the transcript, review, solution, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
+            {selectedEntryTurns.length > 0 && selectedArtifactTranscriptIndex < 0 && <div id="case-transcript"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} /></div>}
+            <footer>Interview Arc · {selectedEntry.id}</footer>
+          </div>
         </article>
       </div>}
       {selectedProblem && <div className="letter-backdrop" role="presentation" onMouseDown={() => setSelectedProblem(null)}>
         <article className="reading-letter solution-profile-letter" role="dialog" aria-modal="true" aria-labelledby="solution-profile-title" onMouseDown={(event) => event.stopPropagation()}>
-          <button className="letter-close" onClick={() => setSelectedProblem(null)} aria-label="Close solution profile">Close ×</button>
+          <button className="letter-close icon-action" onClick={() => setSelectedProblem(null)} aria-label="Close solution profile" title="Close"><Icon name="close" /></button>
           <header><div><span className={`type-chip ${selectedProblem.type}`}>{typeLabel(selectedProblem.type)}</span><span className="profile-revision">{selectedProblemProfile ? `Solution revision ${selectedProblemProfile.currentRevision}` : "No solution yet"}</span><button className={`star-control ${isStarred(selectedProblem.type, selectedProblem.question.id) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedProblem.type, selectedProblem.question.id)} aria-label={`${isStarred(selectedProblem.type, selectedProblem.question.id) ? "Unstar" : "Star"} ${selectedProblem.question.title}`}>★</button></div><h2 id="solution-profile-title">{selectedProblem.question.title}</h2><p>{selectedProblemProfile?.payload.summary ?? selectedProblem.question.prompt ?? "Finish and finalize an attempt to build this reusable Solution Profile."}</p></header>
           <div className="profile-tags">{[...new Set([...selectedProblem.question.topics, ...(selectedProblem.question.tags ?? []), ...(selectedProblemProfile?.tags ?? [])])].map((tag) => <span key={tag}>{tag}</span>)}</div>
           {selectedProblemProfile?.payload.behavioralAnswer && <section className="canonical-answer-card"><span className="eyebrow">YOUR PREFERRED ANSWER</span><h3>{selectedProblemProfile.payload.behavioralAnswer.preferred.label}</h3><MarkdownBody source={selectedProblemProfile.payload.behavioralAnswer.preferred.answer} />{selectedProblemProfile.payload.behavioralAnswer.preferred.evidence.length > 0 && <div className="answer-evidence"><strong>Verified evidence</strong><ul>{selectedProblemProfile.payload.behavioralAnswer.preferred.evidence.map((item) => <li key={item}>{item}</li>)}</ul></div>}{selectedProblemProfile.payload.behavioralAnswer.preferred.evidenceGaps.length > 0 && <div className="answer-gaps"><strong>Evidence still needed</strong><ul>{selectedProblemProfile.payload.behavioralAnswer.preferred.evidenceGaps.map((item) => <li key={item}>{item}</li>)}</ul></div>}{selectedProblemProfile.payload.behavioralAnswer.alternatives.length > 0 && <details className="answer-alternatives"><summary>{selectedProblemProfile.payload.behavioralAnswer.alternatives.length} alternative story {selectedProblemProfile.payload.behavioralAnswer.alternatives.length === 1 ? "variant" : "variants"}</summary>{selectedProblemProfile.payload.behavioralAnswer.alternatives.map((variant) => <article key={variant.label}><h4>{variant.label}</h4>{variant.whenToUse && <small>Best when: {variant.whenToUse}</small>}<MarkdownBody source={variant.answer} /></article>)}</details>}</section>}

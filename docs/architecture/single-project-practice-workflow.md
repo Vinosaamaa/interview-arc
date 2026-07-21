@@ -46,7 +46,7 @@ activity pauses the previously running activity, and starting a child resumes
 its parent when needed. Starting a standalone activity pauses any running
 session so standalone time is never counted in a session rollup.
 
-The user may create multiple sessions in one day. A session starts with six coding problems, one system-design question, and one behavioral question selected from their respective banks, but the user may configure those counts before starting. Standalone extra activities remain supported and reveal edit/remove actions with a left swipe.
+The user may create multiple sessions in one day. A session starts with six coding problems, one system-design question, and one behavioral question selected from their respective banks, but the user may configure those counts before starting. Standalone extra activities remain supported and expose one compact cross control for removal.
 
 ## LeetCode Records
 

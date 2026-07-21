@@ -74,8 +74,8 @@ export const outcomes = sqliteTable(
 );
 
 // Publication state persists specialist completion and legacy explicit readiness.
-// The read model also derives `ready` from any finished timer or selected result,
-// so failed attempts receive useful postmortems without a second queue action.
+// The read model also derives `ready` from a finished activity timer. Outcome is
+// separate metadata, so a flag alone cannot move planned work into the queue.
 export const publicationStatuses = sqliteTable(
   "publication_statuses",
   {

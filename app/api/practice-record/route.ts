@@ -20,6 +20,16 @@ export async function GET(request: Request) {
         occurredAt: turn.occurredAt,
         updatedAt: turn.updatedAt,
       })),
+      notes: record.notes.map((note) => ({
+        id: note.id,
+        activityId: note.activityId,
+        date: note.date,
+        body: note.body,
+        kind: note.kind,
+        pinned: note.pinned,
+        createdAt: note.createdAt,
+        updatedAt: note.updatedAt,
+      })),
       audioClips: record.audioClips.map((clip) => ({
         id: clip.id,
         activityId: clip.activityId,

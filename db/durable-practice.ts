@@ -173,6 +173,26 @@ export async function addPracticeNote(
     });
 }
 
+export async function updatePracticeNote(
+  ownerId: string,
+  noteId: string,
+  body: string,
+  nowMs: number,
+) {
+  const db = getDb();
+  await db
+    .update(practiceNotes)
+    .set({ body, updatedAt: nowMs })
+    .where(and(eq(practiceNotes.ownerId, ownerId), eq(practiceNotes.id, noteId)));
+}
+
+export async function deletePracticeNote(ownerId: string, noteId: string) {
+  const db = getDb();
+  await db
+    .delete(practiceNotes)
+    .where(and(eq(practiceNotes.ownerId, ownerId), eq(practiceNotes.id, noteId)));
+}
+
 export async function saveSpecialistFinalization(
   ownerId: string,
   activityId: string,

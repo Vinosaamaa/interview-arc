@@ -33,7 +33,7 @@ export async function buildPracticeSnapshot(ownerId: string, date = dateInPracti
     const timer = live.timers[activity.id];
     const outcome = live.outcomes[activity.id] ?? activity.outcome;
     const storedPublication = live.publicationStatuses[activity.id];
-    const completed = activity.status === "completed" || Boolean(timer?.completed) || Boolean(outcome);
+    const completed = activity.status === "completed" || Boolean(timer?.completed);
     const publicationStatus = derivePublicationStatus({ hasArtifact: Boolean(artifact), storedPublication, completed });
     const practiceDate = timer?.completedAt ? practiceDateAt(timer.completedAt) : activity.date;
     const sessionId = activity.sessionId ?? sessionForActivity.get(activity.id);
@@ -94,7 +94,7 @@ export async function buildPublicationQueue(ownerId: string, requestedDate?: str
     const timer = live.timers[activity.id];
     const outcome = live.outcomes[activity.id] ?? activity.outcome;
     const artifact = artifacts.get(activity.id);
-    const completed = activity.status === "completed" || Boolean(timer?.completed) || Boolean(outcome);
+    const completed = activity.status === "completed" || Boolean(timer?.completed);
     const publicationStatus = derivePublicationStatus({
       hasArtifact: Boolean(artifact),
       storedPublication: live.publicationStatuses[activity.id],

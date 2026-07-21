@@ -59,6 +59,16 @@ test("finished activities enter the journal queue without a second toggle", () =
   assert.equal(derivePublicationStatus({ hasArtifact: true, completed: true, storedPublication: "published" }), "published");
 });
 
+test("result flags stay separate from timer completion and publication readiness", async () => {
+  const liveState = await readFile(new URL("../db/live-state.ts", import.meta.url), "utf8");
+  const snapshot = await readFile(new URL("../db/practice-snapshot.ts", import.meta.url), "utf8");
+  const mutationRoute = await readFile(new URL("../app/api/mutations/route.ts", import.meta.url), "utf8");
+  const setOutcomeBody = liveState.slice(liveState.indexOf("export async function setOutcome"), liveState.indexOf("export async function setPublicationStatus"));
+  assert.doesNotMatch(setOutcomeBody, /applyTimerAction|setPracticeFocus/);
+  assert.doesNotMatch(snapshot, /Boolean\(outcome\)/);
+  assert.match(mutationRoute, /Start the .* before finishing it/);
+});
+
 test("daily checkpoint guard recognizes only journal-owned changes", () => {
   assert.equal(journalBranch("2026-07-20"), "journal/2026-07-20");
   assert.throws(() => journalBranch("July-20"), /ISO date/);
@@ -163,7 +173,9 @@ test("private R2 audio stays owner-authorized and seekable", async () => {
   assert.match(stream, /content-range/);
   assert.match(stream, /cache-control": "private, no-store/);
   assert.ok(client.indexOf("answer-playback") < client.indexOf('"Your answer"'));
-  assert.match(client, /UNLINKED RECORDINGS · PRIVATE R2/);
+  assert.doesNotMatch(client, /type="file"/);
+  assert.doesNotMatch(client, /Add an answer recording/);
+  assert.doesNotMatch(client, /UNLINKED RECORDINGS · PRIVATE R2/);
 });
 
 test("the Chrome companion is scoped to public LeetCode pages and the bridge host", async () => {
