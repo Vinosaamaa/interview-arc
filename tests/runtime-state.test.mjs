@@ -7,6 +7,7 @@ import { dateInTimeZone, emptyJournal } from "../app/current-day.ts";
 import { SESSION_SECONDS, sessionAllocationSeconds } from "../app/live-types.ts";
 import { formatPracticeTimerTimestamp, formatPracticeTimestamp, practiceDateAt, practicePeriodAt } from "../app/practice-time.ts";
 import { resolveOwnerId, TRUSTED_EMAIL_HEADER } from "../db/owner.ts";
+import { dedupeSnapshotRows } from "../db/snapshot-rows.ts";
 import { derivePublicationStatus } from "../db/publication-state.ts";
 import { foldElapsed, nextTimerState } from "../db/timer-state.ts";
 import { reviewIntervalDays } from "../db/review-cadence.ts";
@@ -16,6 +17,18 @@ test("today follows the practice timezone instead of the Worker UTC date", () =>
   assert.equal(dateInTimeZone(new Date("2026-07-20T05:30:00Z")), "2026-07-19");
   assert.equal(dateInTimeZone(new Date("2026-07-20T08:00:00Z")), "2026-07-20");
   assert.deepEqual(emptyJournal("2026-07-20").activities, []);
+});
+
+test("a published live activity appears only once in the practice snapshot", () => {
+  const rows = dedupeSnapshotRows([
+    { id: "activity-1", status: "planned", source: "live" },
+    { id: "activity-1", status: "completed", source: "journal" },
+    { id: "activity-2", status: "planned", source: "live" },
+  ]);
+  assert.deepEqual(rows, [
+    { id: "activity-1", status: "completed", source: "journal" },
+    { id: "activity-2", status: "planned", source: "live" },
+  ]);
 });
 
 test("activity completion dates and rhythm periods follow Pacific time across midnight", () => {
