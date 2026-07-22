@@ -23,6 +23,10 @@ Read `../../docs/contracts/solution-profiles.md` before finalizing.
 - Append every meaningful two-sided mock exchange to D1 in small idempotent
   batches with `append_practice_transcript`. Flush every few short turns and on
   long answer, activity switch, pause, finish, or coordinator request.
+- A message with an `Interview Arc Voice capture` envelope already has its user
+  turn stored by `POST /voice/captures`. Do not append that supplied `turnId`
+  again. Treat its transcript as the user's verbatim answer, respond normally,
+  and use the private local audio path only when delivery analysis is needed.
 - “Please note for this question” calls `add_practice_note` with the user's exact
   wording. Notes lead the final case file.
 - `Publish this session` finalizes the current activity in D1.

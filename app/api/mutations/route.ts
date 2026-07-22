@@ -44,8 +44,7 @@ const PUBLICATION_STATUSES: PublicationStatusValue[] = ["draft", "ready", "publi
 async function syncCompletedReview(ownerId: string, date: string, activityId: string, now: number) {
   const snapshot = await buildPracticeSnapshot(ownerId, date);
   const activity = snapshot.activities.find((item) => item.id === activityId);
-  const timer = activity?.timer;
-  if (!timer?.completed) {
+  if (!activity?.timer?.completed) {
     await clearActivityReviewSchedules(ownerId, activityId);
     return;
   }

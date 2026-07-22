@@ -24,6 +24,10 @@ later in this guide.
 - Append only relevant coding exchanges with `append_practice_transcript` every
   few turns and on activity switch/pause/finish. Do not copy unrelated task or
   website discussion.
+- A message with an `Interview Arc Voice capture` envelope already has its user
+  turn stored by `POST /voice/captures`. Do not append that supplied `turnId`
+  again. Treat its transcript as the user's verbatim answer, respond normally,
+  and use the private local audio path only when delivery analysis is needed.
 - “Please note for this problem” calls `add_practice_note` with the user's exact
   wording. Notes apply to all practice types and lead the final case file.
 - When the user supplies audio and transcript text for one coding explanation,

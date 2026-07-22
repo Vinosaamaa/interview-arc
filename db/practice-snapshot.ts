@@ -14,6 +14,7 @@ export type ConnectedActivity = JournalActivity & {
   review: unknown | null;
   specialistFinalization: unknown | null;
   audioClips: unknown[];
+  deliveryAnalyses: unknown[];
   sessionId?: string;
   practiceDate: string;
 };
@@ -47,6 +48,7 @@ export async function buildPracticeSnapshot(ownerId: string, date = dateInPracti
       review: live.reviews[activity.id] ?? null,
       specialistFinalization: live.finalizations[activity.id] ?? null,
       audioClips: live.audioClips[activity.id] ?? [],
+      deliveryAnalyses: live.deliveryAnalyses[activity.id] ?? [],
       practiceDate,
       ...(sessionId ? { sessionId } : {}),
       ...(timer?.startedAt ? { startedAt: new Date(timer.startedAt).toISOString() } : {}),
@@ -115,6 +117,7 @@ export async function buildPublicationQueue(ownerId: string, requestedDate?: str
       review: live.reviews[activity.id] ?? null,
       specialistFinalization: live.finalizations[activity.id] ?? null,
       audioClips: live.audioClips[activity.id] ?? [],
+      deliveryAnalyses: live.deliveryAnalyses[activity.id] ?? [],
       ...(sessionId ? { sessionId } : {}),
       ...(timer?.startedAt ? { startedAt: new Date(timer.startedAt).toISOString() } : {}),
       ...(timer?.completedAt ? { endedAt: new Date(timer.completedAt).toISOString() } : {}),

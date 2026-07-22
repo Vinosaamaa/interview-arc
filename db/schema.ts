@@ -227,6 +227,28 @@ export const activityAudioClips = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.id] })],
 );
 
+// Delivery coaching is stored beside the private clip it evaluates. The JSON
+// payload contains observable speech evidence only (pace, pauses, fillers,
+// clarity, organization, and vocal variation); it must never infer a user's
+// mental state or other sensitive traits.
+export const activityDeliveryAnalyses = sqliteTable(
+  "activity_delivery_analyses",
+  {
+    ownerId,
+    id: text("id").notNull(),
+    activityId: text("activity_id").notNull(),
+    audioClipId: text("audio_clip_id").notNull(),
+    transcriptTurnId: text("transcript_turn_id").notNull(),
+    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
+    status: text("status", { enum: ["queued", "processing", "available", "failed"] }).notNull().default("queued"),
+    payload: text("payload", { mode: "json" }),
+    error: text("error"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.id] })],
+);
+
 // A star is an owner-specific preference on the stable bank question, never on
 // one dated attempt. Every surface joins through specialty + question id.
 export const problemPreferences = sqliteTable(
@@ -401,6 +423,7 @@ export type ActivityFinalizationRow = typeof activityFinalizations.$inferSelect;
 export type ReviewScheduleRow = typeof reviewSchedules.$inferSelect;
 export type SpecialistTaskRow = typeof specialistTasks.$inferSelect;
 export type ActivityAudioClipRow = typeof activityAudioClips.$inferSelect;
+export type ActivityDeliveryAnalysisRow = typeof activityDeliveryAnalyses.$inferSelect;
 export type ProblemPreferenceRow = typeof problemPreferences.$inferSelect;
 export type ProblemSolutionProfileRow = typeof problemSolutionProfiles.$inferSelect;
 export type ProblemSolutionRevisionRow = typeof problemSolutionRevisions.$inferSelect;

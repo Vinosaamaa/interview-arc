@@ -40,6 +40,18 @@ export async function GET(request: Request) {
         durationSeconds: clip.durationSeconds,
         status: clip.status,
       })),
+      deliveryAnalyses: record.deliveryAnalyses.map((analysis) => ({
+        id: analysis.id,
+        activityId: analysis.activityId,
+        audioClipId: analysis.audioClipId,
+        transcriptTurnId: analysis.transcriptTurnId,
+        specialty: analysis.specialty,
+        status: analysis.status,
+        payload: analysis.payload,
+        error: analysis.error,
+        createdAt: analysis.createdAt,
+        updatedAt: analysis.updatedAt,
+      })),
     }, { headers: { "cache-control": "private, no-store" } });
   } catch (error) {
     return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 });

@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import {
+  activityDeliveryAnalyses,
   activityAudioClips,
   activityFinalizations,
   activitySolutionLinks,
@@ -21,6 +22,22 @@ export type NoteKind = "remember" | "insight" | "mistake" | "pattern" | "questio
 export type TranscriptSpeaker = "user" | "specialist";
 export type TranscriptSource = "codex" | "dictation" | "audio_transcript";
 export type { ReviewReason } from "./review-cadence";
+
+export type DeliveryAnalysisPayload = {
+  schemaVersion: 1;
+  summary: string;
+  durationSeconds?: number;
+  wordsPerMinute?: number;
+  fillerWords?: Array<{ word: string; count: number }>;
+  longPauses?: Array<{ startSeconds: number; durationSeconds: number }>;
+  strengths: string[];
+  improvements: string[];
+  observations: Array<{
+    dimension: "pace" | "pauses" | "fillers" | "clarity" | "organization" | "vocal_variation" | "perceived_confidence";
+    evidence: string;
+    coaching: string;
+  }>;
+};
 
 export type SpecialistFinalization = {
   title: string;
@@ -133,6 +150,47 @@ export async function appendTranscriptTurns(
         },
       });
   }
+}
+
+// The native voice bridge owns the stable turn id and writes the transcript
+// before opening the Codex turn. This makes recording delivery idempotent and
+// lets an R2 clip reference the user turn without waiting for the specialist.
+export async function appendVoiceTranscriptTurn(
+  ownerId: string,
+  input: {
+    activityId: string;
+    specialty: Specialty;
+    turnId: string;
+    body: string;
+    occurredAt: number;
+  },
+  nowMs: number,
+) {
+  const db = getDb();
+  const existing = await db.select().from(practiceTranscriptTurns).where(and(
+    eq(practiceTranscriptTurns.ownerId, ownerId),
+    eq(practiceTranscriptTurns.activityId, input.activityId),
+    eq(practiceTranscriptTurns.turnId, input.turnId),
+  ));
+  const latest = await db
+    .select({ sequence: practiceTranscriptTurns.sequence })
+    .from(practiceTranscriptTurns)
+    .where(and(
+      eq(practiceTranscriptTurns.ownerId, ownerId),
+      eq(practiceTranscriptTurns.activityId, input.activityId),
+    ))
+    .orderBy(desc(practiceTranscriptTurns.sequence))
+    .limit(1);
+  const sequence = existing[0]?.sequence ?? (latest[0]?.sequence ?? -1) + 1;
+  await appendTranscriptTurns(ownerId, input.activityId, input.specialty, [{
+    turnId: input.turnId,
+    speaker: "user",
+    body: input.body,
+    source: "audio_transcript",
+    sequence,
+    occurredAt: input.occurredAt,
+  }], nowMs);
+  return { ...input, speaker: "user" as const, source: "audio_transcript" as const, sequence };
 }
 
 export async function addPracticeNote(
@@ -459,8 +517,65 @@ export async function updateActivityAudioClipStatus(
   await db.update(activityAudioClips).set({ status, updatedAt: nowMs }).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.id, id)));
 }
 
+export async function saveActivityDeliveryAnalysis(
+  ownerId: string,
+  input: {
+    id: string;
+    activityId: string;
+    audioClipId: string;
+    transcriptTurnId: string;
+    specialty: Specialty;
+    status: "queued" | "processing" | "available" | "failed";
+    payload?: DeliveryAnalysisPayload;
+    error?: string;
+  },
+  nowMs: number,
+) {
+  const db = getDb();
+  const clips = await db.select().from(activityAudioClips).where(and(
+    eq(activityAudioClips.ownerId, ownerId),
+    eq(activityAudioClips.id, input.audioClipId),
+    eq(activityAudioClips.activityId, input.activityId),
+  ));
+  if (!clips[0] || clips[0].transcriptTurnId !== input.transcriptTurnId) {
+    throw new Error("Delivery analysis must reference a private clip linked to the same user transcript turn.");
+  }
+  if (input.status === "available" && !input.payload) {
+    throw new Error("Available delivery analysis requires an evidence payload.");
+  }
+  await db.insert(activityDeliveryAnalyses).values({
+    ownerId,
+    id: input.id,
+    activityId: input.activityId,
+    audioClipId: input.audioClipId,
+    transcriptTurnId: input.transcriptTurnId,
+    specialty: input.specialty,
+    status: input.status,
+    payload: input.payload ?? null,
+    error: input.error?.slice(0, 2_000) ?? null,
+    createdAt: nowMs,
+    updatedAt: nowMs,
+  }).onConflictDoUpdate({
+    target: [activityDeliveryAnalyses.ownerId, activityDeliveryAnalyses.id],
+    set: {
+      activityId: input.activityId,
+      audioClipId: input.audioClipId,
+      transcriptTurnId: input.transcriptTurnId,
+      specialty: input.specialty,
+      status: input.status,
+      payload: input.payload ?? null,
+      error: input.error?.slice(0, 2_000) ?? null,
+      updatedAt: nowMs,
+    },
+  });
+}
+
 export async function deleteActivityAudioClip(ownerId: string, id: string) {
   const db = getDb();
+  await db.delete(activityDeliveryAnalyses).where(and(
+    eq(activityDeliveryAnalyses.ownerId, ownerId),
+    eq(activityDeliveryAnalyses.audioClipId, id),
+  ));
   await db.delete(activityAudioClips).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.id, id)));
 }
 
@@ -522,7 +637,7 @@ export async function readSpecialistTasks(ownerId: string) {
 
 export async function readActivityPracticeRecord(ownerId: string, activityId: string) {
   const db = getDb();
-  const [turns, notes, finalizations, reviews, clips] = await Promise.all([
+  const [turns, notes, finalizations, reviews, clips, deliveryAnalyses] = await Promise.all([
     db
       .select()
       .from(practiceTranscriptTurns)
@@ -532,8 +647,9 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
     db.select().from(activityFinalizations).where(and(eq(activityFinalizations.ownerId, ownerId), eq(activityFinalizations.activityId, activityId))),
     db.select().from(reviewSchedules).where(and(eq(reviewSchedules.ownerId, ownerId), eq(reviewSchedules.activityId, activityId))),
     db.select().from(activityAudioClips).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.activityId, activityId))),
+    db.select().from(activityDeliveryAnalyses).where(and(eq(activityDeliveryAnalyses.ownerId, ownerId), eq(activityDeliveryAnalyses.activityId, activityId))),
   ]);
-  return { turns, notes, finalization: finalizations[0] ?? null, reviews, audioClips: clips };
+  return { turns, notes, finalization: finalizations[0] ?? null, reviews, audioClips: clips, deliveryAnalyses };
 }
 
 export async function readProblemSolutionProfile(ownerId: string, specialty: Specialty, questionId: string) {
@@ -580,11 +696,12 @@ export async function readProblemSolutionProfile(ownerId: string, specialty: Spe
 
 export async function readDurablePracticeSummary(ownerId: string, _activityIds: string[], today: string) {
   const db = getDb();
-  const [notes, reviews, finalizations, clips, preferences, profiles, revisions, links, personalQuestions] = await Promise.all([
+  const [notes, reviews, finalizations, clips, deliveryAnalyses, preferences, profiles, revisions, links, personalQuestions] = await Promise.all([
     db.select().from(practiceNotes).where(eq(practiceNotes.ownerId, ownerId)),
     db.select().from(reviewSchedules).where(eq(reviewSchedules.ownerId, ownerId)),
     db.select().from(activityFinalizations).where(eq(activityFinalizations.ownerId, ownerId)),
     db.select().from(activityAudioClips).where(eq(activityAudioClips.ownerId, ownerId)),
+    db.select().from(activityDeliveryAnalyses).where(eq(activityDeliveryAnalyses.ownerId, ownerId)),
     db.select().from(problemPreferences).where(eq(problemPreferences.ownerId, ownerId)),
     db.select().from(problemSolutionProfiles).where(eq(problemSolutionProfiles.ownerId, ownerId)),
     db.select().from(problemSolutionRevisions).where(eq(problemSolutionRevisions.ownerId, ownerId)).orderBy(desc(problemSolutionRevisions.createdAt)),
@@ -606,6 +723,7 @@ export async function readDurablePracticeSummary(ownerId: string, _activityIds: 
       return result;
     }, {}),
     audioClips: group(clips),
+    deliveryAnalyses: group(deliveryAnalyses),
     problemPreferences: preferences,
     solutionProfiles: profiles,
     solutionRevisions: revisions,

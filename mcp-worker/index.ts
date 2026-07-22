@@ -17,6 +17,7 @@ import { buildPracticeSnapshot, buildPublicationQueue, dateInPracticeTimeZone } 
 import {
   addPracticeNote,
   appendTranscriptTurns,
+  appendVoiceTranscriptTurn,
   clearActivityReviewSchedules,
   markFinalizationPublished,
   readActivityPracticeRecord,
@@ -24,6 +25,7 @@ import {
   readSpecialistTasks,
   registerActivityAudioClip,
   registerSpecialistTask,
+  saveActivityDeliveryAnalysis,
   saveSpecialistFinalization,
   scheduleReview,
   updateActivityAudioClipStatus,
@@ -41,17 +43,21 @@ function safeAudioFilename(value: string) {
 
 async function uploadPracticeAudio(ownerId: string, request: Request, env: Env) {
   const form = await request.formData();
+  const requestedClipId = String(form.get("clipId") ?? "").trim();
   const activityId = String(form.get("activityId") ?? "").trim();
   const transcriptTurnId = String(form.get("transcriptTurnId") ?? "").trim() || undefined;
   const label = String(form.get("label") ?? "Practice answer").trim().slice(0, 120) || "Practice answer";
+  const durationValue = Number(form.get("durationSeconds") ?? "");
+  const durationSeconds = Number.isFinite(durationValue) && durationValue >= 0 ? Math.round(durationValue) : undefined;
   const file = form.get("file");
-  if (!activityId || !(file instanceof File) || !file.type.startsWith("audio/") || file.size === 0 || file.size > 100 * 1024 * 1024) {
+  if ((requestedClipId && !/^[a-zA-Z0-9._-]{1,120}$/.test(requestedClipId))
+      || !activityId || !(file instanceof File) || !file.type.startsWith("audio/") || file.size === 0 || file.size > 100 * 1024 * 1024) {
     return json(request, { error: "An activityId and non-empty audio file no larger than 100 MB are required." }, { status: 400 });
   }
-  const clipId = crypto.randomUUID();
+  const clipId = requestedClipId || crypto.randomUUID();
   const filename = safeAudioFilename(file.name);
   const objectKey = `${ownerId}/${activityId}/${clipId}-${filename}`;
-  await registerActivityAudioClip(ownerId, { id: clipId, activityId, transcriptTurnId, filename, mimeType: file.type, label, objectKey, status: "uploading" }, Date.now());
+  await registerActivityAudioClip(ownerId, { id: clipId, activityId, transcriptTurnId, filename, mimeType: file.type, label, durationSeconds, objectKey, status: "uploading" }, Date.now());
   try {
     await env.AUDIO.put(objectKey, file.stream(), {
       httpMetadata: { contentType: file.type, contentDisposition: `inline; filename="${filename}"` },
@@ -62,7 +68,107 @@ async function uploadPracticeAudio(ownerId: string, request: Request, env: Env) 
     await updateActivityAudioClipStatus(ownerId, clipId, "failed", Date.now());
     throw error;
   }
-  return json(request, { clipId, activityId, transcriptTurnId: transcriptTurnId ?? null, filename, mimeType: file.type, label, status: "available" }, { status: 201 });
+  return json(request, { clipId, activityId, transcriptTurnId: transcriptTurnId ?? null, filename, mimeType: file.type, label, durationSeconds: durationSeconds ?? null, status: "available" }, { status: 201 });
+}
+
+const VOICE_PROTOCOL_VERSION = 1;
+
+function voiceSpecialty(value: "leetcode" | "system_design" | "behavioral") {
+  return value === "leetcode" ? "coding" : value === "system_design" ? "system-design" : "behavioral";
+}
+
+async function voiceContext(ownerId: string, request: Request) {
+  const date = new URL(request.url).searchParams.get("date") ?? dateInPracticeTimeZone();
+  const [snapshot, content, specialists] = await Promise.all([
+    buildPracticeSnapshot(ownerId, date),
+    loadContentIndex(),
+    readSpecialistTasks(ownerId),
+  ]);
+  const activity = snapshot.focusedActivity;
+  if (!activity) {
+    return json(request, {
+      protocolVersion: VOICE_PROTOCOL_VERSION,
+      date,
+      focusedActivity: null,
+      specialist: null,
+      message: "Focus an activity in Interview Arc before recording.",
+    });
+  }
+  const bank = activity.type === "system_design"
+    ? content.questionBanks.systemDesign
+    : activity.type === "behavioral"
+      ? content.questionBanks.behavioral
+      : content.questionBanks.leetcode;
+  const question = bank.find((candidate) => candidate.id === activity.questionId)
+    ?? bank.find((candidate) => activity.url && candidate.url === activity.url)
+    ?? null;
+  const specialist = specialists.find((candidate) => candidate.specialty === activity.type) ?? null;
+  return json(request, {
+    protocolVersion: VOICE_PROTOCOL_VERSION,
+    date,
+    focusedActivity: {
+      activityId: activity.id,
+      questionId: activity.questionId ?? null,
+      specialty: voiceSpecialty(activity.type),
+      interviewArcSpecialty: activity.type,
+      title: activity.title,
+      prompt: activity.prompt ?? question?.prompt ?? null,
+      topics: question?.topics ?? [],
+      tags: [...new Set([...(question?.tags ?? []), ...(question?.companyTags ?? [])])],
+      companies: question?.companyTags ?? [],
+      projects: [],
+      vocabularyPackIds: activity.vocabularyPackIds ?? question?.vocabularyPackIds ?? [],
+      speechTerms: activity.speechTerms ?? question?.speechTerms ?? [],
+    },
+    specialist: specialist ? {
+      specialty: specialist.specialty,
+      threadId: specialist.threadId,
+      hostId: specialist.hostId,
+      title: specialist.title,
+    } : null,
+    message: specialist ? null : `Connect the ${activity.type} specialist task before sending a recording.`,
+  });
+}
+
+async function saveVoiceCapture(ownerId: string, request: Request) {
+  const body = (await request.json()) as {
+    protocolVersion?: number;
+    activityId?: string;
+    specialty?: "leetcode" | "system_design" | "behavioral";
+    turnId?: string;
+    transcript?: string;
+    occurredAt?: number;
+  };
+  if (body.protocolVersion !== VOICE_PROTOCOL_VERSION) {
+    return json(request, { error: "Unsupported Interview Arc Voice protocol version." }, { status: 409 });
+  }
+  const activityId = body.activityId?.trim() ?? "";
+  const turnId = body.turnId?.trim() ?? "";
+  const transcript = body.transcript?.trim() ?? "";
+  const specialty = body.specialty;
+  const occurredAt = Number.isFinite(body.occurredAt) ? Number(body.occurredAt) : Date.now();
+  if (!activityId || !specialty || !turnId || !transcript || transcript.length > 200_000) {
+    return json(request, { error: "A focused activity, specialty, stable turnId, and transcript are required." }, { status: 400 });
+  }
+  const snapshot = await buildPracticeSnapshot(ownerId);
+  if (snapshot.focusedActivity?.id !== activityId || snapshot.focusedActivity.type !== specialty) {
+    return json(request, { error: "The recording no longer matches the focused Interview Arc activity." }, { status: 409 });
+  }
+  const turn = await appendVoiceTranscriptTurn(ownerId, { activityId, specialty, turnId, body: transcript, occurredAt }, Date.now());
+  return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, turn }, { status: 201 });
+}
+
+async function saveVoiceDelivery(ownerId: string, request: Request) {
+  const body = (await request.json()) as Parameters<typeof saveActivityDeliveryAnalysis>[1] & { protocolVersion?: number };
+  if (body.protocolVersion !== VOICE_PROTOCOL_VERSION) {
+    return json(request, { error: "Unsupported Interview Arc Voice protocol version." }, { status: 409 });
+  }
+  if (!body.id || !body.activityId || !body.audioClipId || !body.transcriptTurnId || !body.specialty
+      || !["queued", "processing", "available", "failed"].includes(body.status)) {
+    return json(request, { error: "Complete delivery-analysis identity and status are required." }, { status: 400 });
+  }
+  await saveActivityDeliveryAnalysis(ownerId, body, Date.now());
+  return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, analysisId: body.id, status: body.status }, { status: 201 });
 }
 
 function bearerToken(request: Request) {
@@ -508,6 +614,45 @@ function createServer(ownerId: string) {
   );
 
   server.registerTool(
+    "save_delivery_analysis",
+    {
+      description: "Create or update the private, activity-scoped delivery-coaching result for one recorded user answer. Report observable speech evidence only; never infer mental state or sensitive traits.",
+      inputSchema: {
+        analysisId: z.string().min(1),
+        activityId: z.string().min(1),
+        audioClipId: z.string().min(1),
+        transcriptTurnId: z.string().min(1),
+        specialty: z.enum(["leetcode", "system_design", "behavioral"]),
+        status: z.enum(["queued", "processing", "available", "failed"]),
+        payload: z.object({
+          schemaVersion: z.literal(1),
+          summary: z.string().min(1),
+          durationSeconds: z.number().nonnegative().optional(),
+          wordsPerMinute: z.number().nonnegative().optional(),
+          fillerWords: z.array(z.object({ word: z.string().min(1), count: z.number().int().nonnegative() })).optional(),
+          longPauses: z.array(z.object({ startSeconds: z.number().nonnegative(), durationSeconds: z.number().nonnegative() })).optional(),
+          strengths: z.array(z.string()),
+          improvements: z.array(z.string()),
+          observations: z.array(z.object({
+            dimension: z.enum(["pace", "pauses", "fillers", "clarity", "organization", "vocal_variation", "perceived_confidence"]),
+            evidence: z.string().min(1),
+            coaching: z.string().min(1),
+          })),
+        }).optional(),
+        error: z.string().max(2_000).optional(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ analysisId, ...input }) => {
+      await saveActivityDeliveryAnalysis(ownerId, { id: analysisId, ...input }, Date.now());
+      return {
+        content: [{ type: "text", text: `Saved ${input.status} delivery analysis for ${input.activityId}.` }],
+        structuredContent: { analysisId, activityId: input.activityId, status: input.status },
+      };
+    },
+  );
+
+  server.registerTool(
     "get_today_practice",
     {
       description: "Read the authenticated owner's Interview Arc plan, timers, outcomes, notes, and publication state for one day.",
@@ -587,6 +732,15 @@ export default {
     }
     if (url.pathname === "/audio/upload" && request.method === "POST") {
       return uploadPracticeAudio(ownerId, request, env);
+    }
+    if (url.pathname === "/voice/context" && request.method === "GET") {
+      return voiceContext(ownerId, request);
+    }
+    if (url.pathname === "/voice/captures" && request.method === "POST") {
+      return saveVoiceCapture(ownerId, request);
+    }
+    if (url.pathname === "/voice/delivery" && request.method === "POST") {
+      return saveVoiceDelivery(ownerId, request);
     }
     if (url.pathname === "/mcp" || url.pathname.startsWith("/mcp/")) {
       return createMcpHandler(createServer(ownerId))(request, env, ctx);

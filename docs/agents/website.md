@@ -50,7 +50,8 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
   narrative content.
 - D1 also owns activity-scoped draft transcript turns, pinned notes,
   specialist finalization bundles, review schedules, the stable specialist-task
-  registry, and private audio metadata. These rows are working state—not the
+  registry, private audio metadata, and per-answer delivery-analysis records.
+  These rows are working state—not the
   published journal. Follow `../contracts/durable-practice-publishing.md`.
 - The Today view uses the current date in `America/Los_Angeles`. If no imported
   manifest exists for that date, render an empty current-day journal and let
@@ -86,7 +87,8 @@ The website must not imply that browser draft state has already been published t
 - Treat activity detail as a case file: pinned notes first, then facts, review
   date, summary/solution, review, transcript/code, and references. A linked
   delivery recording belongs inline between its specialist prompt and user
-  answer; an unlinked legacy recording follows the transcript. Notes apply
+  answer. Its observable-evidence delivery review follows the player and stays
+  before the written answer; an unlinked legacy recording follows the transcript. Notes apply
   equally to coding, system design, and behavioral.
 - The session clock is a countdown. Activity clocks are stopwatches with compact icon controls for start/pause and finish.
 - Use `America/Los_Angeles` as the canonical practice timezone. Display exact

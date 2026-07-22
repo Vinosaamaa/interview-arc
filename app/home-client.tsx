@@ -29,6 +29,7 @@ import {
   type ReviewSchedule,
   type FinalizationSummary,
   type AudioClip,
+  type DeliveryAnalysis,
   type TimerDraft,
   type TranscriptTurn,
 } from "./live-types";
@@ -89,6 +90,7 @@ type LogEntry = {
   finalization?: FinalizationSummary;
   transcriptTurns?: TranscriptTurn[];
   audioClips?: AudioClip[];
+  deliveryAnalyses?: DeliveryAnalysis[];
 };
 
 const EMPTY_COMPOSER: ComposerState = {
@@ -646,9 +648,11 @@ function MarkdownBody({ source }: { source: string }) {
 function ActivityTranscript({
   turns,
   clips,
+  deliveryAnalyses,
 }: {
   turns: TranscriptTurn[];
   clips: AudioClip[];
+  deliveryAnalyses: DeliveryAnalysis[];
 }) {
   return (
     <section className="case-transcript" aria-label="Conversation transcript and answer recordings">
@@ -663,6 +667,7 @@ function ActivityTranscript({
               {answerClips.map((clip) => <div className="answer-take" key={clip.id}>
                 <div><strong>{clip.label}</strong><small>{clip.filename}</small></div>
                 {clip.status === "available" ? <audio controls preload="metadata" src={`/api/audio/${encodeURIComponent(clip.id)}`} /> : <em>{clip.status.replaceAll("_", " ")}</em>}
+                {deliveryAnalyses.filter((analysis) => analysis.audioClipId === clip.id).map((analysis) => <DeliveryReview key={analysis.id} analysis={analysis} />)}
               </div>)}
             </div>}
             <article>
@@ -674,6 +679,19 @@ function ActivityTranscript({
       </div>
     </section>
   );
+}
+
+function DeliveryReview({ analysis }: { analysis: DeliveryAnalysis }) {
+  if (analysis.status !== "available" || !analysis.payload) {
+    return <div className={`delivery-review-status ${analysis.status}`}><span>Delivery coach</span><small>{analysis.status === "failed" ? analysis.error ?? "Analysis will retry." : analysis.status}</small></div>;
+  }
+  const payload = analysis.payload;
+  return <details className="delivery-review" open>
+    <summary><span>Delivery review</span><small>{payload.wordsPerMinute ? `${Math.round(payload.wordsPerMinute)} words/min` : "Observable speech evidence"}</small></summary>
+    <p>{payload.summary}</p>
+    <div className="delivery-review-columns"><section><strong>Working well</strong><ul>{payload.strengths.map((item) => <li key={item}>{item}</li>)}</ul></section><section><strong>Try next</strong><ul>{payload.improvements.map((item) => <li key={item}>{item}</li>)}</ul></section></div>
+    {payload.observations.length > 0 && <div className="delivery-observations">{payload.observations.map((observation, index) => <article key={`${observation.dimension}-${index}`}><span>{observation.dimension.replaceAll("_", " ")}</span><p>{observation.evidence}</p><small>{observation.coaching}</small></article>)}</div>}
+  </details>;
 }
 
 function MetricRing({ label, value, detail, color }: { label: string; value: number; detail: string; color: string }) {
@@ -1818,6 +1836,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           review: liveDraft?.reviews[activity.id],
           finalization: liveDraft?.finalizations[activity.id],
           audioClips: draft.audioClips[activity.id] ?? [],
+          deliveryAnalyses: liveDraft?.deliveryAnalyses[activity.id] ?? [],
         });
       }
     }
@@ -1847,6 +1866,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         review: draft.reviews[activity.id],
         finalization: draft.finalizations[activity.id],
         audioClips: draft.audioClips[activity.id] ?? [],
+        deliveryAnalyses: draft.deliveryAnalyses[activity.id] ?? [],
       });
     }
     for (const activity of yesterdayDraft?.extraActivities ?? []) {
@@ -1876,6 +1896,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         review: yesterdayDraft?.reviews[activity.id],
         finalization: yesterdayDraft?.finalizations[activity.id],
         audioClips: draft.audioClips[activity.id] ?? yesterdayDraft?.audioClips[activity.id] ?? [],
+        deliveryAnalyses: draft.deliveryAnalyses[activity.id] ?? yesterdayDraft?.deliveryAnalyses[activity.id] ?? [],
       });
     }
     for (const artifact of content.artifacts) {
@@ -1883,7 +1904,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       const inferredType: ActivityType = artifact.type === "leetcode" || artifact.type === "behavioral" ? artifact.type : "system_design";
       const preview = artifact.sections.find((section) => /summary|short answer|question/i.test(section.title))?.body ?? "Published interview record";
       const noteSection = artifact.sections.find((section) => /pinned notes?|notes to remember/i.test(section.title));
-      entries.push({ id: artifact.path, date: artifact.date, type: inferredType, title: artifact.title, subtitle: plainText(preview).slice(0, 160), status: "published", elapsedSeconds: 0, allocatedSeconds: 0, artifact, personalNote: noteSection?.body ?? "", audioClips: draft.audioClips[artifact.activityId] ?? [] });
+      entries.push({ id: artifact.path, date: artifact.date, type: inferredType, title: artifact.title, subtitle: plainText(preview).slice(0, 160), status: "published", elapsedSeconds: 0, allocatedSeconds: 0, artifact, personalNote: noteSection?.body ?? "", audioClips: draft.audioClips[artifact.activityId] ?? [], deliveryAnalyses: draft.deliveryAnalyses[artifact.activityId] ?? [] });
     }
     return entries.sort((left, right) => right.date.localeCompare(left.date)
       || (right.endedAt ?? "").localeCompare(left.endedAt ?? "")
@@ -2679,6 +2700,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const selectedEntryActivityId = selectedEntry?.artifact?.activityId || (selectedEntry && !selectedEntry.id.includes("/") ? selectedEntry.id : "");
   const selectedEntryTurns = selectedEntry?.transcriptTurns ?? [];
   const selectedEntryClips = selectedEntry?.audioClips ?? [];
+  const selectedEntryDeliveryAnalyses = selectedEntry?.deliveryAnalyses ?? [];
   const selectedArtifactTranscriptIndex = selectedEntry?.artifact?.sections.findIndex((section) => /conversation transcript|full transcript|raw exchange/i.test(section.title)) ?? -1;
   const practiceRecordLoading = Boolean(selectedEntryActivityId && loadedPracticeRecordId !== selectedEntryActivityId);
 
@@ -2686,14 +2708,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (!selectedEntryActivityId) return;
     const controller = new AbortController();
     void fetch(`/api/practice-record?activityId=${encodeURIComponent(selectedEntryActivityId)}`, { signal: controller.signal })
-      .then(async (response) => response.ok ? response.json() as Promise<{ turns: TranscriptTurn[]; notes: PracticeNote[]; audioClips: AudioClip[] }> : null)
+      .then(async (response) => response.ok ? response.json() as Promise<{ turns: TranscriptTurn[]; notes: PracticeNote[]; audioClips: AudioClip[]; deliveryAnalyses: DeliveryAnalysis[] }> : null)
       .then((record) => {
         if (!record) {
           setLoadedPracticeRecordId(selectedEntryActivityId);
           return;
         }
         setSelectedEntry((current) => current && (current.artifact?.activityId || current.id) === selectedEntryActivityId
-          ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips }
+          ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips, deliveryAnalyses: record.deliveryAnalyses }
           : current);
         setLoadedPracticeRecordId(selectedEntryActivityId);
       })
@@ -2789,11 +2811,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             {practiceRecordLoading && <div className="transcript-loading"><span />Loading conversation and recordings…</div>}
             {selectedEntry.artifact ? <div className="letter-sections">{selectedEntry.artifact.sections.map((section, index) => {
               const sectionId = `case-${slugify(section.title)}-${index}`;
-              if (selectedEntryTurns.length && index === selectedArtifactTranscriptIndex) return <div id={sectionId} key="structured-transcript"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} /></div>;
+              if (selectedEntryTurns.length && index === selectedArtifactTranscriptIndex) return <div id={sectionId} key="structured-transcript"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} /></div>;
               if (selectedEntryTurns.length && /conversation transcript|full transcript|raw exchange/i.test(section.title)) return null;
               return /generated code|solution|raw exchange/i.test(section.title) ? <details id={sectionId} key={section.title} open={/solution/i.test(section.title)}><summary>{section.title}</summary><MarkdownBody source={section.body} /></details> : <section id={sectionId} key={section.title}><h3>{section.title}</h3><MarkdownBody source={section.body} /></section>;
             })}</div> : <div className="unpublished-letter" id="case-draft"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to finalize the transcript, review, solution, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
-            {selectedEntryTurns.length > 0 && selectedArtifactTranscriptIndex < 0 && <div id="case-transcript"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} /></div>}
+            {selectedEntryTurns.length > 0 && selectedArtifactTranscriptIndex < 0 && <div id="case-transcript"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} /></div>}
             <footer>Interview Arc · {selectedEntry.id}</footer>
           </div>
         </article>

@@ -26,6 +26,8 @@ export type JournalActivity = {
   reviewDates?: string[];
   reviewOfActivityId?: string;
   reviewReason?: "failed" | "full_walkthrough" | "approach_review" | "manual" | "successful_recall";
+  vocabularyPackIds?: string[];
+  speechTerms?: string[];
 };
 
 export type TimerGroup = {
@@ -72,6 +74,21 @@ export type QuestionBankItem = {
     sections: Array<{ title: string; body: string }>;
     tags: string[];
     references: Array<{ title: string; url: string; accessedAt: string }>;
+    behavioralAnswer?: {
+      preferred: {
+        label: string;
+        answer: string;
+        evidence: string[];
+        evidenceGaps: string[];
+      };
+      alternatives: Array<{
+        label: string;
+        answer: string;
+        whenToUse?: string;
+        evidence: string[];
+        evidenceGaps: string[];
+      }>;
+    };
   };
   frequency?: "low" | "medium" | "high";
   answerFormat?: "SIMPLE" | "STAR" | "STARL" | "PPF" | "IFV";
@@ -80,6 +97,8 @@ export type QuestionBankItem = {
   companySignals?: { company: string; window: string; frequencyScore: number; frequencyScale: number; capturedAt: string }[];
   topics: string[];
   tags?: string[];
+  vocabularyPackIds?: string[];
+  speechTerms?: string[];
   priority?: number;
   targetMinutes: number;
   active: boolean;

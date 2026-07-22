@@ -14,6 +14,7 @@ enabled_tools = [
   "register_specialist_task",
   "get_specialist_tasks",
   "register_activity_audio_clip",
+  "save_delivery_analysis",
   "get_today_practice",
   "get_publication_queue",
   "mark_activities_published",

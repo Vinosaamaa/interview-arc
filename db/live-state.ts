@@ -4,6 +4,7 @@ import { getDb } from "./index";
 import {
   activityNotes,
   activityAudioClips,
+  activityDeliveryAnalyses,
   activityFinalizations,
   extraActivities,
   liveSessions,
@@ -48,6 +49,7 @@ export type LiveState = {
   reviews: Record<string, unknown>;
   finalizations: Record<string, unknown>;
   audioClips: Record<string, unknown[]>;
+  deliveryAnalyses: Record<string, unknown[]>;
   problemPreferences: unknown[];
   solutionProfiles: unknown[];
   solutionRevisions: unknown[];
@@ -174,6 +176,18 @@ export async function readLiveState(
       label: row.label,
       durationSeconds: row.durationSeconds,
       status: row.status,
+    }))])),
+    deliveryAnalyses: Object.fromEntries(Object.entries(durable.deliveryAnalyses).map(([activityId, rows]) => [activityId, rows.map((row) => ({
+      id: row.id,
+      activityId,
+      audioClipId: row.audioClipId,
+      transcriptTurnId: row.transcriptTurnId,
+      specialty: row.specialty,
+      status: row.status,
+      payload: row.payload,
+      error: row.error,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
     }))])),
     problemPreferences: durable.problemPreferences,
     solutionProfiles: durable.solutionProfiles,
@@ -542,6 +556,7 @@ export async function removeExtraActivity(ownerId: string, id: string) {
   await db.delete(practiceTranscriptTurns).where(and(eq(practiceTranscriptTurns.ownerId, ownerId), eq(practiceTranscriptTurns.activityId, id)));
   await db.delete(activityFinalizations).where(and(eq(activityFinalizations.ownerId, ownerId), eq(activityFinalizations.activityId, id)));
   await db.delete(activityAudioClips).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.activityId, id)));
+  await db.delete(activityDeliveryAnalyses).where(and(eq(activityDeliveryAnalyses.ownerId, ownerId), eq(activityDeliveryAnalyses.activityId, id)));
   await db.delete(reviewSchedules).where(and(eq(reviewSchedules.ownerId, ownerId), eq(reviewSchedules.activityId, id)));
   await db.delete(timers).where(and(eq(timers.ownerId, ownerId), eq(timers.subjectId, id), eq(timers.kind, "activity")));
   await db.delete(timerIntervals).where(and(eq(timerIntervals.ownerId, ownerId), eq(timerIntervals.subjectId, id), eq(timerIntervals.kind, "activity")));

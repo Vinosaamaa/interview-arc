@@ -187,7 +187,8 @@ preferred review identity; activity ID is the fallback.
 7. What To Improve
 8. Review Plan
 9. Delivery Recordings
-10. References
+10. Delivery Review
+11. References
 
 Raw transcripts and long code remain expandable in the website, but they are
 still part of the published artifact.
@@ -214,3 +215,36 @@ the preceding specialist prompt and immediately before the linked answer text.
 Multiple takes may share one user turn. Older clips without a turn link remain
 readable in an unlinked activity-level recording section; never guess their
 answer association.
+
+## Interview Arc Voice
+
+Interview Arc Voice uses protocol version `1` and the same personal integration
+token as MCP and the Chrome companion.
+
+1. `GET /voice/context` returns the focused activity, deterministic speech
+   metadata, and registered specialist task. It never returns credentials.
+2. The client records one continuous local M4A and transcribes it with Groq
+   `whisper-large-v3`. Temporary derivatives or chunks are not durable clips.
+3. `POST /voice/captures` writes the verbatim user transcript first with a
+   client-generated, idempotent `turnId` and `source: audio_transcript`.
+4. `POST /audio/upload` uploads the original recording and links it to that
+   same user turn. Upload retries do not duplicate the transcript.
+5. The client resumes the registered Codex task and sends the transcript plus
+   an `Interview Arc Voice` envelope containing `activityId`, `turnId`, and the
+   private local audio path. The envelope states that the user turn already
+   exists in D1; the specialist must not append it again.
+6. Delivery Coach runs asynchronously. Its owner-scoped result is saved with
+   `save_delivery_analysis` and references the same activity, turn, and clip.
+
+Codex app-server accepts text and image input items, not generic audio
+attachments. The supported automated path therefore sends the audio as a
+private local-file reference for tool-based analysis while R2 provides the
+playable website attachment. Raw audio is never embedded in Git or exposed
+through a public URL.
+
+Each linked clip may have one delivery-analysis record. Past renders that
+review with its player and before the written answer. Analysis is limited to
+observable evidence: pace, pauses, fillers, clarity, organization, vocal
+variation, and perceived confidence. It must not infer mental state, health,
+identity, or other sensitive traits. Queued or failed analysis never blocks the
+specialist response, finalization, publication, or audio playback.
