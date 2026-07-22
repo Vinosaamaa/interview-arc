@@ -55,6 +55,8 @@ type LibraryAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "fa
 type BankAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "failed" | "todo" | "notes";
 type ComposerAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "failed" | "todo";
 type DocumentPiP = { requestWindow: (options?: { width?: number; height?: number }) => Promise<Window> };
+type ContentHighlight = { id: string; scopeType: "activity" | "solution"; scopeId: string; quote: string; prefix: string; suffix: string; color: "yellow" | "green" | "pink"; createdAt: number; updatedAt: number };
+type PendingHighlight = { quote: string; prefix: string; suffix: string };
 type ComposerState = {
   open: boolean;
   mode: ComposerMode;
@@ -642,8 +644,42 @@ function StandaloneActivityCard({ children, title, onRemove }: { children: React
   );
 }
 
+const CODE_KEYWORDS = new Set([
+  "abstract", "async", "await", "boolean", "break", "case", "catch", "class", "const", "continue", "def", "do", "else", "enum", "extends", "false", "final", "finally", "float", "for", "from", "if", "implements", "import", "in", "instanceof", "int", "interface", "let", "list", "long", "map", "new", "none", "null", "private", "protected", "public", "raise", "return", "self", "static", "string", "super", "switch", "this", "throw", "true", "try", "var", "void", "while", "yield",
+]);
+
+function highlightedCode(code: string) {
+  const tokenPattern = /(\/\/.*$|#.*$|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b\d+(?:\.\d+)?\b|\b[A-Za-z_$][\w$]*\b)/gm;
+  return code.split(tokenPattern).filter(Boolean).map((token, index) => {
+    const kind = token.startsWith("//") || token.startsWith("#")
+      ? "comment"
+      : token.startsWith('"') || token.startsWith("'")
+        ? "string"
+        : /^\d/.test(token)
+          ? "number"
+          : CODE_KEYWORDS.has(token.toLowerCase())
+            ? "keyword"
+            : "plain";
+    return kind === "plain" ? token : <span className={`syntax-${kind}`} key={`${index}-${token.slice(0, 8)}`}>{token}</span>;
+  });
+}
+
+function CodeBlock({ language, code }: { language: string; code: string }) {
+  return <figure className="code-stage"><figcaption><span>{language || "code"}</span><button type="button" onClick={() => void navigator.clipboard.writeText(code)}>Copy</button></figcaption><pre><code>{highlightedCode(code.replace(/\n$/, ""))}</code></pre></figure>;
+}
+
 function MarkdownBody({ source }: { source: string }) {
-  return <div className="markdown-body"><Markdown remarkPlugins={[remarkGfm]}>{source}</Markdown></div>;
+  return <div className="markdown-body"><Markdown
+    remarkPlugins={[remarkGfm]}
+    components={{
+      pre: ({ children }) => <>{children}</>,
+      code: ({ className, children }) => {
+        const language = className?.match(/language-([\w-]+)/)?.[1];
+        if (!language) return <code className={className}>{children}</code>;
+        return <CodeBlock language={language} code={String(children)} />;
+      },
+    }}
+  >{source}</Markdown></div>;
 }
 
 function formatAudioDuration(seconds: number | null) {
@@ -683,27 +719,8 @@ function GroupedAnswerPlayback({ clips, deliveryAnalyses }: { clips: AudioClip[]
   }
 
   return <div className="answer-playback has-audio grouped-answer-playback">
-    <div className="answer-deck-head">
-      <div><span>Recorded answer</span><strong>{clips.length} segment{clips.length === 1 ? "" : "s"}</strong></div>
-      <small>{totalSeconds > 0 ? formatAudioDuration(totalSeconds) : "Continuous playback"}</small>
-    </div>
-    <div className="answer-segments" aria-label="Recorded answer segments">
-      {clips.map((clip, index) => <button
-        type="button"
-        className={clip.id === activeClip?.id ? "active" : ""}
-        key={clip.id}
-        disabled={clip.status !== "available"}
-        onClick={() => selectSegment(clip)}
-        aria-label={`Play answer segment ${index + 1}`}
-        title={clip.status === "available" ? clip.filename : clip.status.replaceAll("_", " ")}
-      >
-        <span>{String(index + 1).padStart(2, "0")}</span>
-        <i aria-hidden="true" />
-        <small>{formatAudioDuration(clip.durationSeconds)}</small>
-      </button>)}
-    </div>
     {activeClip?.status === "available" ? <div className="answer-player">
-      <div className="answer-player-copy"><strong>Segment {activeIndex + 1}</strong><small>{activeClip.label}</small></div>
+      <div className="answer-player-copy"><strong>Play your answer</strong><small>{clips.length} segment{clips.length === 1 ? "" : "s"} · {totalSeconds > 0 ? formatAudioDuration(totalSeconds) : "continuous"}</small></div>
       <audio
         key={activeClip.id}
         ref={audioRef}
@@ -713,9 +730,7 @@ function GroupedAnswerPlayback({ clips, deliveryAnalyses }: { clips: AudioClip[]
         onEnded={continueToNextSegment}
       />
     </div> : <div className="answer-player-status"><strong>Recording unavailable</strong><small>{activeClip?.status.replaceAll("_", " ")}</small></div>}
-    {activeAnalyses.length > 0 && <div className="answer-segment-coaching">
-      {activeAnalyses.map((analysis) => <DeliveryReview key={analysis.id} analysis={analysis} segmentLabel={`Segment ${activeIndex + 1}`} />)}
-    </div>}
+    {(clips.length > 1 || activeAnalyses.length > 0) && <details className="answer-recording-details"><summary>Recording details and delivery coaching</summary><div className="answer-segments" aria-label="Recorded answer segments">{clips.map((clip, index) => <button type="button" className={clip.id === activeClip?.id ? "active" : ""} key={clip.id} disabled={clip.status !== "available"} onClick={() => selectSegment(clip)} aria-label={`Play answer segment ${index + 1}`} title={clip.status === "available" ? clip.filename : clip.status.replaceAll("_", " ")}><span>{String(index + 1).padStart(2, "0")}</span><i aria-hidden="true" /><small>{formatAudioDuration(clip.durationSeconds)}</small></button>)}</div>{activeAnalyses.length > 0 && <div className="answer-segment-coaching">{activeAnalyses.map((analysis) => <DeliveryReview key={analysis.id} analysis={analysis} segmentLabel={`Segment ${activeIndex + 1}`} />)}</div>}</details>}
   </div>;
 }
 
@@ -769,12 +784,81 @@ function DeliveryReview({ analysis, segmentLabel }: { analysis: DeliveryAnalysis
     return <div className={`delivery-review-status ${analysis.status}`}><span>{segmentLabel ? `${segmentLabel} coach` : "Delivery coach"}</span><small>{analysis.status === "failed" ? analysis.error ?? "Analysis will retry." : analysis.status}</small></div>;
   }
   const payload = analysis.payload;
-  return <details className="delivery-review" open>
+  return <details className="delivery-review">
     <summary><span>{segmentLabel ? `${segmentLabel} delivery` : "Delivery review"}</span><small>{payload.wordsPerMinute ? `${Math.round(payload.wordsPerMinute)} words/min` : "Observable speech evidence"}</small></summary>
     <p>{payload.summary}</p>
     <div className="delivery-review-columns"><section><strong>Working well</strong><ul>{payload.strengths.map((item) => <li key={item}>{item}</li>)}</ul></section><section><strong>Try next</strong><ul>{payload.improvements.map((item) => <li key={item}>{item}</li>)}</ul></section></div>
     {payload.observations.length > 0 && <div className="delivery-observations">{payload.observations.map((observation, index) => <article key={`${observation.dimension}-${index}`}><span>{observation.dimension.replaceAll("_", " ")}</span><p>{observation.evidence}</p><small>{observation.coaching}</small></article>)}</div>}
   </details>;
+}
+
+type ReaderSection = ContentArtifact["sections"][number];
+type ReaderGroupKey = "record" | "conversation" | "solution" | "reflection" | "review";
+
+const READER_GROUPS: Array<{ key: ReaderGroupKey; title: string }> = [
+  { key: "record", title: "Attempt record" },
+  { key: "conversation", title: "Conversation" },
+  { key: "solution", title: "Reference solution" },
+  { key: "reflection", title: "Feedback and interview answer" },
+  { key: "review", title: "Review and evidence" },
+];
+
+function isTranscriptSection(title: string) {
+  return /conversation transcript|full (activity )?transcript|activity exchanges?|raw exchanges?/i.test(title);
+}
+
+function readerGroupFor(title: string): ReaderGroupKey {
+  if (isTranscriptSection(title)) return "conversation";
+  if (/what went well|what to improve|improved interview answer|interview-ready|closing summary/i.test(title)) return "reflection";
+  if (/review plan|delivery recordings?|delivery review|references/i.test(title)) return "review";
+  if (/complete reference|generated reference|problem framing|functional requirements|non-functional|scale|capacity|api contract|data model|architecture|read and write|scaling|reliability|failure|security|privacy|tradeoffs|problem summary|pattern recognition|best approach|correctness|implementation|complexity|edge cases?|alternatives?|recall cue/i.test(title)) return "solution";
+  return "record";
+}
+
+function groupReaderSections(sections: ReaderSection[]) {
+  const groups = new Map<ReaderGroupKey, ReaderSection[]>();
+  sections.forEach((section) => {
+    const key = readerGroupFor(section.title);
+    groups.set(key, [...(groups.get(key) ?? []), section]);
+  });
+  return READER_GROUPS.flatMap((group) => {
+    const items = groups.get(group.key) ?? [];
+    return items.length ? [{ ...group, sections: items }] : [];
+  });
+}
+
+function dedupeReaderSections(sections: ReaderSection[]) {
+  const byTitle = new Map<string, ReaderSection>();
+  sections.forEach((section) => {
+    const key = section.title.trim().toLowerCase();
+    if (!byTitle.has(key)) byTitle.set(key, section);
+  });
+  return [...byTitle.values()];
+}
+
+function ReaderSectionBody({ section, id }: { section: ReaderSection; id: string }) {
+  return <section className="reader-subsection" id={id}><h3>{section.title}</h3><MarkdownBody source={section.body} /></section>;
+}
+
+function LanguageCodeTabs({ sections, idPrefix }: { sections: ReaderSection[]; idPrefix: string }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const active = sections[activeIndex] ?? sections[0];
+  const match = active?.body.match(/```([\w-]+)\n([\s\S]*?)```/);
+  if (!active || !match) return null;
+  return <section className="language-code-tabs" id={`${idPrefix}-${slugify(sections[0].title)}-0`}><header><h3>Reference implementation</h3><div role="tablist" aria-label="Implementation language">{sections.map((section, index) => <button type="button" role="tab" aria-selected={activeIndex === index} className={activeIndex === index ? "active" : ""} onClick={() => setActiveIndex(index)} key={section.title}>{section.title.split(/—|-/).at(-1)?.trim() ?? `Option ${index + 1}`}</button>)}</div></header><CodeBlock language={match[1]} code={match[2]} /></section>;
+}
+
+function SolutionReaderGroup({ group, idPrefix, coding }: { group: ReturnType<typeof groupReaderSections>[number]; idPrefix: string; coding: boolean }) {
+  const implementationSections = coding ? group.sections.filter((section) => /reference implementation\s*[—-]/i.test(section.title)) : [];
+  const regularSections = implementationSections.length > 1
+    ? group.sections.filter((section) => !implementationSections.includes(section))
+    : group.sections;
+  return <section className={`reader-group solution-reader-group ${group.key}-group`} id={`${idPrefix}-group-${group.key}`}><h2>{group.title}</h2>{regularSections.map((section, index) => <ReaderSectionBody section={section} id={`${idPrefix}-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />)}{implementationSections.length > 1 && <LanguageCodeTabs sections={implementationSections} idPrefix={idPrefix} />}</section>;
+}
+
+function HighlightShelf({ highlights, onRemove }: { highlights: ContentHighlight[]; onRemove: (id: string) => void }) {
+  if (!highlights.length) return null;
+  return <details className="highlight-shelf"><summary>{highlights.length} saved highlight{highlights.length === 1 ? "" : "s"}</summary><div>{highlights.map((highlight) => <article key={highlight.id}><mark>{highlight.quote}</mark><button type="button" onClick={() => onRemove(highlight.id)} aria-label="Remove highlight" title="Remove highlight"><Icon name="trash" /></button></article>)}</div></details>;
 }
 
 function MetricRing({ label, value, detail, color }: { label: string; value: number; detail: string; color: string }) {
@@ -835,6 +919,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [editingNoteId, setEditingNoteId] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
   const [noteBusy, setNoteBusy] = useState(false);
+  const [contentHighlights, setContentHighlights] = useState<ContentHighlight[]>([]);
+  const [pendingHighlight, setPendingHighlight] = useState<PendingHighlight | null>(null);
+  const readerDocumentRef = useRef<HTMLDivElement>(null);
   const {
     playing: ambientPlaying,
     playlist: ambientPlaylist,
@@ -956,21 +1043,26 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     });
   }
 
-  const allTodayActivities = useMemo(
-    () => [...journal.activities, ...draft.extraActivities],
-    [journal.activities, draft.extraActivities],
-  );
-  const allSessions: PracticeSession[] = useMemo(
-    () => [...journal.sessions, ...draft.sessions],
-    [journal.sessions, draft.sessions],
-  );
+  const allTodayActivities = useMemo(() => {
+    const byId = new Map(draft.extraActivities.map((activity) => [activity.id, activity]));
+    // Published journal data is the narrative source of truth. A matching D1
+    // row remains available through draft timers/outcomes, but it must not
+    // render as a second activity.
+    journal.activities.forEach((activity) => byId.set(activity.id, activity));
+    return [...byId.values()];
+  }, [journal.activities, draft.extraActivities]);
+  const allSessions: PracticeSession[] = useMemo(() => {
+    const byId = new Map(draft.sessions.map((session) => [session.id, session]));
+    journal.sessions.forEach((session) => byId.set(session.id, session));
+    return [...byId.values()];
+  }, [journal.sessions, draft.sessions]);
   const sessionByActivityId = useMemo(() => {
     const membership = new Map<string, PracticeSession>();
     allSessions.forEach((session) => session.activityIds.forEach((activityId) => membership.set(activityId, session)));
     return membership;
   }, [allSessions]);
-  const assignedExtraIds = new Set(draft.sessions.flatMap((session) => session.activityIds));
-  const looseActivities = draft.extraActivities.filter((activity) => !assignedExtraIds.has(activity.id));
+  const assignedExtraIds = new Set(allSessions.flatMap((session) => session.activityIds));
+  const looseActivities = allTodayActivities.filter((activity) => !assignedExtraIds.has(activity.id));
 
   // Pacific midnight is the journal boundary even when a session continues.
   // Reloading swaps the Today shell while D1 carries the focused unfinished
@@ -1015,17 +1107,20 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     }));
   }, [allSessions, draft.sessionTimers, draft.timers, enqueue, setDraft]);
 
-  const focusedActivity =
-    allTodayActivities.find((activity) => activity.id === draft.focusedActivityId) ??
-    allTodayActivities.find((activity) => draft.timers[activity.id]?.runningSince) ??
+  const activeActivity =
+    allTodayActivities.find((activity) => Boolean(draft.timers[activity.id]?.runningSince) && !draft.timers[activity.id]?.completed) ??
     null;
-  const focusedSession =
-    allSessions.find((session) => session.id === draft.focusedSessionId) ??
-    (focusedActivity ? sessionByActivityId.get(focusedActivity.id) ?? null : null);
+  const lastFocusedActivity =
+    allTodayActivities.find((activity) => activity.id === draft.focusedActivityId) ?? null;
+  const focusedSession = activeActivity
+    ? sessionByActivityId.get(activeActivity.id) ?? null
+    : allSessions.find((session) => session.id === draft.focusedSessionId) ?? null;
 
-  // The pop-out follows durable focus even while the current activity is paused.
+  // The pop-out may offer the last paused activity as a resume target, but only
+  // an actively running stopwatch is exposed to Voice as linked work.
   const pipActivity =
-    focusedActivity ??
+    activeActivity ??
+    lastFocusedActivity ??
     allTodayActivities.find((activity) => !draft.timers[activity.id]?.completed) ??
     allTodayActivities[0] ??
     null;
@@ -1076,6 +1171,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function toggleTimer(activityId: string) {
+    // Event-handler timestamp; this is not evaluated during render.
+    // eslint-disable-next-line react-hooks/purity
     const timestamp = Date.now();
     setNow(timestamp);
     const priorTimer = draft.timers[activityId];
@@ -1924,6 +2021,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       }
     }
     for (const activity of draft.extraActivities) {
+      if (entries.some((entry) => entry.id === activity.id)) continue;
       const timer = draft.timers[activity.id];
       const outcome = draft.outcomes[activity.id];
       const startedAt = timer?.startedAt ? new Date(timer.startedAt).toISOString() : activity.startedAt;
@@ -2264,11 +2362,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function renderToday() {
     const totalToday = allTodayActivities.length;
-    const focusTimer = focusedActivity ? draft.timers[focusedActivity.id] : undefined;
-    const focusPublication = focusedActivity ? publicationStatusFor(focusedActivity) : "draft";
+    const railActivity = activeActivity ?? lastFocusedActivity;
+    const focusTimer = railActivity ? draft.timers[railActivity.id] : undefined;
+    const focusPublication = railActivity ? publicationStatusFor(railActivity) : "draft";
     const focusPhase = focusTimer?.completed
       ? focusPublication === "published" ? "In journal" : "Ready to publish"
-      : focusTimer?.runningSince ? "Running now" : focusTimer?.startedAt ? "Paused, still focused" : "Not started";
+      : focusTimer?.runningSince ? "Running now" : focusTimer?.startedAt ? "Last activity · paused" : "Not started";
+    const railSession = railActivity ? sessionByActivityId.get(railActivity.id) ?? focusedSession : focusedSession;
+    const railSessionTimer = railSession ? draft.sessionTimers[railSession.id] : undefined;
     return (
       <>
         <section className="today-masthead">
@@ -2277,14 +2378,17 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           <div className="today-tally"><span className="yesterday-label">YESTERDAY · {readableDate(yesterdayDate, true)}</span><div><strong>{yesterdayCompleted.length}/{yesterdayEntries.length}</strong><span>activities finished</span></div><div><strong>{formatDuration(yesterdaySeconds)}</strong><span>time recorded</span></div><div><strong>{yesterdaySessions}</strong><span>session{yesterdaySessions === 1 ? "" : "s"} planned</span></div></div>
         </section>
 
-        <section className={`orchestrator-rail ${focusedActivity ? "has-focus" : "empty"}`} aria-label="Current practice activity">
+        <section className={`orchestrator-rail ${activeActivity ? "has-focus" : "empty"}`} aria-label="Current practice activity">
           <div className="orchestrator-signal"><span className={focusTimer?.runningSince ? "live" : ""} /><small>NOW</small></div>
-          {focusedActivity ? <>
-            <div className="orchestrator-focus"><span className={`type-mark ${focusedActivity.type}`}>{typeMark(focusedActivity.type)}</span><div><small>{focusPhase} · {focusedSession?.label ?? "Standalone practice"}</small><strong>{focusedActivity.title}</strong><span>{focusTimer?.startedAt ? `Started ${formatPracticeTimestamp(focusTimer.startedAt, true)}` : "The first start establishes the Pacific timeline."}</span></div></div>
+          {railActivity ? <>
+            <div className="orchestrator-focus"><span className={`type-mark ${railActivity.type}`}>{typeMark(railActivity.type)}</span><div><small>{focusPhase} · {railSession?.label ?? "Standalone practice"}</small><strong>{activeActivity ? railActivity.title : "No activity running"}</strong><span>{activeActivity ? railActivity.title : `${railActivity.title} was the last focused activity.`}</span></div></div>
             <div className="orchestrator-clock"><span>Recorded</span><strong>{formatClock(elapsed(focusTimer, now))}</strong><small>{PRACTICE_TIME_ZONE}</small></div>
             <div className="orchestrator-lifecycle" aria-label={`Lifecycle: ${focusPhase}`}><i className="done">Planned</i><b /><i className={focusTimer?.startedAt ? "done" : ""}>In progress</i><b /><i className={focusTimer?.completed ? "done" : ""}>Ready</i><b /><i className={focusPublication === "published" ? "done" : ""}>Journal</i></div>
-            {focusedActivity.url && <a href={focusedActivity.url} target="_blank" rel="noreferrer">Open workspace ↗</a>}
-          </> : <div className="orchestrator-empty"><strong>No focused activity.</strong><span>Start any stopwatch. Interview Arc will preserve that focus through pauses, app switches, and Pacific midnight.</span></div>}
+            {!activeActivity && !focusTimer?.completed && !railSessionTimer?.completed && <button className="orchestrator-resume" onClick={() => toggleTimer(railActivity.id)}>Resume</button>}
+            {activeActivity && railActivity.url && <a href={railActivity.url} target="_blank" rel="noreferrer">Open workspace ↗</a>}
+          </> : railSessionTimer?.runningSince
+            ? <div className="orchestrator-empty"><strong>No activity running.</strong><span>Your session clock is running. Start one activity stopwatch to link Voice and begin focused work.</span></div>
+            : <div className="orchestrator-empty"><strong>No activity running.</strong><span>Start any activity stopwatch when you are ready. Voice stays unlinked until then.</span></div>}
         </section>
 
         <div className="today-actions"><div><h2>Today&apos;s sessions</h2><p>Each session countdown follows its activity recipe; activity stopwatches stay compact and independent.</p></div><div><button className="secondary-action" onClick={openNewActivity}>Add one activity</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
@@ -2765,13 +2869,29 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     composer.sessionSystemDesign <= sessionAvailability.systemDesign &&
     composer.sessionBehavioral <= sessionAvailability.behavioral;
   const ownerProblemProfile = selectedProblem ? profileFor(selectedProblem.type, selectedProblem.question.id) : undefined;
-  const selectedProblemProfile = ownerProblemProfile ?? (selectedProblem?.question.solutionProfile ? {
+  const canonicalProblemProfile = selectedProblem?.question.solutionProfile;
+  const selectedProblemProfile = ownerProblemProfile && canonicalProblemProfile ? {
+    ...ownerProblemProfile,
+    tags: [...new Set([...canonicalProblemProfile.tags, ...ownerProblemProfile.tags])],
+    payload: {
+      ...canonicalProblemProfile,
+      ...ownerProblemProfile.payload,
+      sections: [...new Map([
+        ...canonicalProblemProfile.sections.map((section) => [section.title.trim().toLowerCase(), section] as const),
+        ...ownerProblemProfile.payload.sections.map((section) => [section.title.trim().toLowerCase(), section] as const),
+      ]).values()],
+      references: [...new Map([
+        ...canonicalProblemProfile.references.map((reference) => [reference.url, reference] as const),
+        ...ownerProblemProfile.payload.references.map((reference) => [reference.url, reference] as const),
+      ]).values()],
+    },
+  } : ownerProblemProfile ?? (canonicalProblemProfile ? {
     specialty: selectedProblem.type,
     questionId: selectedProblem.question.id,
     title: selectedProblem.question.title,
     currentRevision: 1,
-    tags: selectedProblem.question.solutionProfile.tags,
-    payload: selectedProblem.question.solutionProfile,
+    tags: canonicalProblemProfile.tags,
+    payload: canonicalProblemProfile,
     updatedAt: 0,
   } : undefined);
   const selectedProblemAttempts = selectedProblem
@@ -2784,8 +2904,94 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const selectedEntryTurns = selectedEntry?.transcriptTurns ?? [];
   const selectedEntryClips = selectedEntry?.audioClips ?? [];
   const selectedEntryDeliveryAnalyses = selectedEntry?.deliveryAnalyses ?? [];
-  const selectedArtifactTranscriptIndex = selectedEntry?.artifact?.sections.findIndex((section) => /conversation transcript|full transcript|raw exchange/i.test(section.title)) ?? -1;
+  const selectedCaseSections = dedupeReaderSections(selectedEntry?.artifact?.sections.filter((section) => !(selectedEntryTurns.length && isTranscriptSection(section.title))) ?? []);
+  const selectedCaseGroups = groupReaderSections(selectedCaseSections);
+  const selectedSolutionGroups = groupReaderSections(selectedProblemProfile?.payload.sections ?? []);
   const practiceRecordLoading = Boolean(selectedEntryActivityId && loadedPracticeRecordId !== selectedEntryActivityId);
+  const highlightScope = selectedEntry
+    ? { scopeType: "activity" as const, scopeId: selectedEntryActivityId || selectedEntry.id }
+    : selectedProblem
+      ? { scopeType: "solution" as const, scopeId: `${selectedProblem.type}:${selectedProblem.question.id}` }
+      : null;
+  const highlightScopeType = highlightScope?.scopeType;
+  const highlightScopeId = highlightScope?.scopeId;
+
+  useEffect(() => {
+    queueMicrotask(() => setPendingHighlight(null));
+    if (!highlightScopeType || !highlightScopeId) { queueMicrotask(() => setContentHighlights([])); return; }
+    const controller = new AbortController();
+    void fetch(`/api/highlights?scopeType=${highlightScopeType}&scopeId=${encodeURIComponent(highlightScopeId)}`, { signal: controller.signal })
+      .then((response) => response.ok ? response.json() as Promise<ContentHighlight[]> : [])
+      .then((rows) => setContentHighlights(rows))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [highlightScopeId, highlightScopeType]);
+
+  useEffect(() => {
+    const root = readerDocumentRef.current;
+    const css = CSS as typeof CSS & { highlights?: Map<string, unknown> };
+    const HighlightConstructor = (window as Window & { Highlight?: new (...ranges: Range[]) => unknown }).Highlight;
+    if (!root || !css.highlights || !HighlightConstructor) return;
+    const ranges: Range[] = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes: Text[] = [];
+    let combined = "";
+    while (walker.nextNode()) { const node = walker.currentNode as Text; nodes.push(node); combined += node.data; }
+    const locate = (offset: number) => {
+      let seen = 0;
+      for (const node of nodes) {
+        if (offset <= seen + node.data.length) return { node, offset: Math.max(0, offset - seen) };
+        seen += node.data.length;
+      }
+      return null;
+    };
+    contentHighlights.forEach((highlight) => {
+      let index = combined.indexOf(highlight.quote);
+      while (index >= 0 && highlight.prefix && !combined.slice(Math.max(0, index - highlight.prefix.length), index).endsWith(highlight.prefix)) index = combined.indexOf(highlight.quote, index + 1);
+      if (index < 0) return;
+      const start = locate(index); const end = locate(index + highlight.quote.length);
+      if (!start || !end) return;
+      const range = new Range(); range.setStart(start.node, start.offset); range.setEnd(end.node, end.offset); ranges.push(range);
+    });
+    css.highlights.set("interview-arc-saved", new HighlightConstructor(...ranges));
+    return () => { css.highlights?.delete("interview-arc-saved"); };
+  }, [contentHighlights, selectedEntry?.id, selectedProblem?.question.id]);
+
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.dataset.interviewArcHighlights = "saved";
+    style.textContent = "::highlight(interview-arc-saved){color:inherit;background:rgba(250,207,72,.62);text-decoration:underline rgba(186,137,17,.45) 2px}";
+    document.head.append(style);
+    return () => style.remove();
+  }, []);
+
+  function captureHighlightSelection() {
+    const root = readerDocumentRef.current;
+    const selection = window.getSelection();
+    if (!root || !selection || selection.isCollapsed || !selection.rangeCount) { setPendingHighlight(null); return; }
+    const range = selection.getRangeAt(0);
+    if (!root.contains(range.commonAncestorContainer)) return;
+    const quote = selection.toString().trim();
+    if (!quote) return;
+    const allText = root.textContent ?? "";
+    const index = allText.indexOf(quote);
+    setPendingHighlight({ quote, prefix: index >= 0 ? allText.slice(Math.max(0, index - 80), index) : "", suffix: index >= 0 ? allText.slice(index + quote.length, index + quote.length + 80) : "" });
+  }
+
+  async function saveHighlight() {
+    if (!highlightScope || !pendingHighlight) return;
+    const response = await fetch("/api/highlights", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...highlightScope, ...pendingHighlight }) });
+    if (!response.ok) return;
+    const row = await response.json() as ContentHighlight;
+    setContentHighlights((current) => [...current, row]);
+    setPendingHighlight(null);
+    window.getSelection()?.removeAllRanges();
+  }
+
+  async function removeHighlight(id: string) {
+    const response = await fetch(`/api/highlights?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (response.ok) setContentHighlights((current) => current.filter((highlight) => highlight.id !== id));
+  }
 
   useEffect(() => {
     if (!selectedEntryActivityId) return;
@@ -2885,35 +3091,39 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       {selectedEntry && <div className="letter-backdrop" role="presentation" onMouseDown={() => setSelectedEntry(null)}>
         <article className="reading-letter case-file-shell" role="dialog" aria-modal="true" aria-labelledby="letter-title" onMouseDown={(event) => event.stopPropagation()}>
           <button className="letter-close icon-action" onClick={() => setSelectedEntry(null)} aria-label="Close case file" title="Close"><Icon name="close" /></button>
-          <aside className="case-toc" aria-label="Case file contents"><span>Contents</span><nav><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedEntry.artifact?.sections.map((section, index) => <a key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}{selectedEntryTurns.length > 0 && selectedArtifactTranscriptIndex < 0 && <a href="#case-transcript">Conversation transcript</a>}</nav></aside>
-          <div className="case-document">
+          <aside className="case-toc" aria-label="Case file contents"><span>Contents</span><nav><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}</nav></aside>
+          <div className="case-document" ref={readerDocumentRef} onMouseUp={captureHighlightSelection}>
             <header id="case-summary"><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time></div><div className="case-title-row"><h2 id="letter-title">{selectedEntry.title}</h2><div className="case-title-actions"><button className={`star-control ${isStarred(selectedEntry.type, selectedEntry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedEntry.type, selectedEntry.questionId)} disabled={!selectedEntry.questionId} aria-label={`${isStarred(selectedEntry.type, selectedEntry.questionId) ? "Unstar" : "Star"} ${selectedEntry.title}`} title="Star this problem"><Icon name="star" /></button><button className="icon-action note-add" onClick={() => openNoteComposer()} disabled={!selectedEntryActivityId} aria-label="Add a note" title="Add a note"><Icon name="note" /><i><Icon name="plus" /></i></button></div></div>{meaningfulSubtitle(selectedEntry.subtitle) && <p>{meaningfulSubtitle(selectedEntry.subtitle)}</p>}{selectedEntry.questionId && <button className="solution-link-button" onClick={() => { const question = bankFor(selectedEntry.type).find((candidate) => candidate.id === selectedEntry.questionId); if (question) { setSelectedEntry(null); setSelectedProblem({ type: selectedEntry.type, question }); } }}>View solution →</button>}</header>
+            {pendingHighlight && <button className="selection-highlight-action" type="button" onClick={() => void saveHighlight()}>Highlight selection</button>}
+            <HighlightShelf highlights={contentHighlights} onRemove={(id) => void removeHighlight(id)} />
             {Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <aside className="pinned-notes" id="case-notes" aria-label="Pinned practice notes"><span>NOTES</span>{selectedEntry.personalNote?.trim() && <article><div className="note-actions"><button onClick={() => openNoteComposer("personal")} aria-label="Edit personal note" title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote("personal")} aria-label="Delete personal note" title="Delete"><Icon name="trash" /></button></div><MarkdownBody source={selectedEntry.personalNote} /></article>}{selectedEntry.pinnedNotes?.map((note) => <article key={note.id}><header><small>{note.kind}</small><div className="note-actions"><button onClick={() => openNoteComposer(note)} aria-label={`Edit ${note.kind} note`} title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote(note.id)} aria-label={`Delete ${note.kind} note`} title="Delete"><Icon name="trash" /></button></div></header><MarkdownBody source={note.body} /></article>)}</aside>}
             {noteComposerOpen && <form className="case-note-composer" onSubmit={(event) => { event.preventDefault(); void saveCaseNote(); }}><label htmlFor="case-note">{editingNoteId ? "Edit note" : "Add a note"}</label><textarea id="case-note" autoFocus value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} placeholder="A concise reminder, mistake, or pattern to keep visible…" /><div><button type="button" onClick={() => { setNoteComposerOpen(false); setEditingNoteId(""); setNoteDraft(""); }}>Cancel</button><button type="submit" disabled={noteBusy || !noteDraft.trim()}>{noteBusy ? "Saving…" : "Save note"}</button></div></form>}
             <div className="letter-facts" id="case-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.startedAt && <div><span>Started</span><strong>{formatPracticeTimestamp(selectedEntry.startedAt)}</strong></div>}{selectedEntry.endedAt && <div><span>Finished</span><strong>{formatPracticeTimestamp(selectedEntry.endedAt)}</strong></div>}{selectedEntry.sessionId && <div><span>Session</span><strong>{selectedEntry.sessionId}</strong></div>}{selectedEntry.outcome && <div><span>Result</span><strong>{resultLabel(selectedEntry.outcome, selectedEntry.type)}</strong></div>}{selectedEntry.review && <div className="review-fact"><span>{selectedEntry.review.status === "due" ? "Review due" : "Next review"}</span><strong>{selectedEntry.review.dueDate}</strong><small>{selectedEntry.review.reason.replaceAll("_", " ")} · {selectedEntry.review.intervalDays} day interval</small></div>}</div>
             {practiceRecordLoading && <div className="transcript-loading"><span />Loading conversation and recordings…</div>}
-            {selectedEntry.artifact ? <div className="letter-sections">{selectedEntry.artifact.sections.map((section, index) => {
-              const sectionId = `case-${slugify(section.title)}-${index}`;
-              if (selectedEntryTurns.length && index === selectedArtifactTranscriptIndex) return <div id={sectionId} key="structured-transcript"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} /></div>;
-              if (selectedEntryTurns.length && /conversation transcript|full transcript|raw exchange/i.test(section.title)) return null;
-              return /generated code|solution|raw exchange/i.test(section.title) ? <details id={sectionId} key={section.title} open={/solution/i.test(section.title)}><summary>{section.title}</summary><MarkdownBody source={section.body} /></details> : <section id={sectionId} key={section.title}><h3>{section.title}</h3><MarkdownBody source={section.body} /></section>;
-            })}</div> : <div className="unpublished-letter" id="case-draft"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to finalize the transcript, review, solution, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
-            {selectedEntryTurns.length > 0 && selectedArtifactTranscriptIndex < 0 && <div id="case-transcript"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} /></div>}
+            {selectedEntry.artifact ? <div className="letter-sections layered-reader">{selectedCaseGroups.map((group) => group.key === "record"
+              ? <section className="reader-group record-group" id={`case-group-${group.key}`} key={group.key}><h2>{group.title}</h2>{group.sections.map((section, index) => <ReaderSectionBody section={section} id={`case-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />)}</section>
+              : <details className={`reader-group ${group.key}-group`} id={`case-group-${group.key}`} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div>{group.sections.map((section, index) => <ReaderSectionBody section={section} id={`case-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />)}</div></details>)}</div> : <div className="unpublished-letter" id="case-draft"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to finalize the transcript, review, solution, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
+            {selectedEntryTurns.length > 0 && <details className="reader-group conversation-group" id="case-transcript"><summary><span>Conversation</span><small>{selectedEntryTurns.length} exchange{selectedEntryTurns.length === 1 ? "" : "s"} · recordings inline</small></summary><div id="case-transcript-thread"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} /></div></details>}
             <footer>Interview Arc · {selectedEntry.id}</footer>
           </div>
         </article>
       </div>}
       {selectedProblem && <div className="letter-backdrop" role="presentation" onMouseDown={() => setSelectedProblem(null)}>
-        <article className="reading-letter solution-profile-letter" role="dialog" aria-modal="true" aria-labelledby="solution-profile-title" onMouseDown={(event) => event.stopPropagation()}>
+        <article className="reading-letter case-file-shell solution-profile-letter solution-profile-shell" role="dialog" aria-modal="true" aria-labelledby="solution-profile-title" onMouseDown={(event) => event.stopPropagation()}>
           <button className="letter-close icon-action" onClick={() => setSelectedProblem(null)} aria-label="Close solution profile" title="Close"><Icon name="close" /></button>
-          <header><div><span className={`type-chip ${selectedProblem.type}`}>{typeLabel(selectedProblem.type)}</span><span className="profile-revision">{selectedProblemProfile ? `Solution revision ${selectedProblemProfile.currentRevision}` : "No solution yet"}</span><button className={`star-control ${isStarred(selectedProblem.type, selectedProblem.question.id) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedProblem.type, selectedProblem.question.id)} aria-label={`${isStarred(selectedProblem.type, selectedProblem.question.id) ? "Unstar" : "Star"} ${selectedProblem.question.title}`}>★</button></div><h2 id="solution-profile-title">{selectedProblem.question.title}</h2><p>{selectedProblemProfile?.payload.summary ?? selectedProblem.question.prompt ?? "Finish and finalize an attempt to build this reusable Solution Profile."}</p></header>
+          <aside className="case-toc solution-toc" aria-label="Solution contents"><span>Contents</span><nav><a href="#solution-profile-summary">Overview</a>{selectedSolutionGroups.map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#solution-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#solution-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}<a href="#solution-attempts">Past attempts</a></nav></aside>
+          <div className="case-document solution-profile-document" ref={readerDocumentRef} onMouseUp={captureHighlightSelection}>
+          <header id="solution-profile-summary"><div><span className={`type-chip ${selectedProblem.type}`}>{typeLabel(selectedProblem.type)}</span><span className="profile-revision">{selectedProblemProfile ? `Solution revision ${selectedProblemProfile.currentRevision}` : "No solution yet"}</span><button className={`star-control ${isStarred(selectedProblem.type, selectedProblem.question.id) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedProblem.type, selectedProblem.question.id)} aria-label={`${isStarred(selectedProblem.type, selectedProblem.question.id) ? "Unstar" : "Star"} ${selectedProblem.question.title}`}>★</button></div><h2 id="solution-profile-title">{selectedProblem.question.title}</h2><p>{selectedProblemProfile?.payload.summary ?? selectedProblem.question.prompt ?? "Finish and finalize an attempt to build this reusable Solution Profile."}</p></header>
           <div className="profile-tags">{[...new Set([...selectedProblem.question.topics, ...(selectedProblem.question.tags ?? []), ...(selectedProblemProfile?.tags ?? [])])].map((tag) => <span key={tag}>{tag}</span>)}</div>
+          {pendingHighlight && <button className="selection-highlight-action" type="button" onClick={() => void saveHighlight()}>Highlight selection</button>}
+          <HighlightShelf highlights={contentHighlights} onRemove={(id) => void removeHighlight(id)} />
           {selectedProblemProfile?.payload.behavioralAnswer && <section className="canonical-answer-card"><span className="eyebrow">YOUR PREFERRED ANSWER</span><h3>{selectedProblemProfile.payload.behavioralAnswer.preferred.label}</h3><MarkdownBody source={selectedProblemProfile.payload.behavioralAnswer.preferred.answer} />{selectedProblemProfile.payload.behavioralAnswer.preferred.evidence.length > 0 && <div className="answer-evidence"><strong>Verified evidence</strong><ul>{selectedProblemProfile.payload.behavioralAnswer.preferred.evidence.map((item) => <li key={item}>{item}</li>)}</ul></div>}{selectedProblemProfile.payload.behavioralAnswer.preferred.evidenceGaps.length > 0 && <div className="answer-gaps"><strong>Evidence still needed</strong><ul>{selectedProblemProfile.payload.behavioralAnswer.preferred.evidenceGaps.map((item) => <li key={item}>{item}</li>)}</ul></div>}{selectedProblemProfile.payload.behavioralAnswer.alternatives.length > 0 && <details className="answer-alternatives"><summary>{selectedProblemProfile.payload.behavioralAnswer.alternatives.length} alternative story {selectedProblemProfile.payload.behavioralAnswer.alternatives.length === 1 ? "variant" : "variants"}</summary>{selectedProblemProfile.payload.behavioralAnswer.alternatives.map((variant) => <article key={variant.label}><h4>{variant.label}</h4>{variant.whenToUse && <small>Best when: {variant.whenToUse}</small>}<MarkdownBody source={variant.answer} /></article>)}</details>}</section>}
-          {selectedProblemProfile ? <div className="letter-sections solution-sections">{selectedProblemProfile.payload.sections.map((section) => <section key={section.title}><h3>{section.title}</h3><MarkdownBody source={section.body} /></section>)}</div> : <div className="unpublished-letter"><span className="eyebrow">KNOWLEDGE PROFILE</span><h3>This problem has no finalized solution yet.</h3><p>The matching specialist creates it when a completed attempt is finalized. Past will keep the transcript; this bank page will keep the reusable answer.</p></div>}
-          <section className="attempt-history"><span className="eyebrow">PAST ATTEMPTS</span>{selectedProblemAttempts.length ? selectedProblemAttempts.map((entry) => <button key={entry.id} onClick={() => { setSelectedProblem(null); setSelectedEntry(entry); }}><span>{readableDate(entry.date, true)}</span><strong>{resultLabel(entry.outcome, entry.type)}</strong><small>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "No timer"} · Read case →</small></button>) : <p>No completed attempt is linked yet.</p>}</section>
+          {selectedProblemProfile ? <div className="letter-sections solution-sections layered-reader">{selectedSolutionGroups.map((group) => <SolutionReaderGroup group={group} idPrefix="solution" coding={selectedProblem.type === "leetcode"} key={group.key} />)}</div> : <div className="unpublished-letter"><span className="eyebrow">KNOWLEDGE PROFILE</span><h3>This problem has no finalized solution yet.</h3><p>The matching specialist creates it when a completed attempt is finalized. Past will keep the transcript; this bank page will keep the reusable answer.</p></div>}
+          <section className="attempt-history" id="solution-attempts"><span className="eyebrow">PAST ATTEMPTS</span>{selectedProblemAttempts.length ? selectedProblemAttempts.map((entry) => <button key={entry.id} onClick={() => { setSelectedProblem(null); setSelectedEntry(entry); }}><span>{readableDate(entry.date, true)}</span><strong>{resultLabel(entry.outcome, entry.type)}</strong><small>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "No timer"} · Read case →</small></button>) : <p>No completed attempt is linked yet.</p>}</section>
           {selectedProblemRevisions.length > 1 && <section className="revision-history"><span className="eyebrow">SOLUTION HISTORY</span><p>{selectedProblemRevisions.length} immutable revisions are linked to past attempts. The profile above is the current revision.</p></section>}
           {selectedProblemProfile?.payload.references.length ? <section className="profile-references"><span className="eyebrow">REFERENCES CONSULTED</span>{selectedProblemProfile.payload.references.map((reference) => <a key={`${reference.url}-${reference.accessedAt}`} href={reference.url} target="_blank" rel="noreferrer">{reference.title} ↗<small>{reference.accessedAt}</small></a>)}</section> : null}
           <footer>Interview Arc · {selectedProblem.type}:{selectedProblem.question.id}</footer>
+          </div>
         </article>
       </div>}
     {pipWindow && createPortal(

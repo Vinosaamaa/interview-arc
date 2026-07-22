@@ -193,6 +193,19 @@ preferred review identity; activity ID is the fallback.
 Raw transcripts and long code remain expandable in the website, but they are
 still part of the published artifact.
 
+The website presents all observed transcript sources as one collapsed
+**Conversation** layer. Structured D1 turns win over repeated Markdown
+transcript sections because they preserve answer-to-audio links. Each answer's
+authenticated player remains immediately above its transcript; segment details
+and Delivery Coach evidence are nested and collapsed by default. Reference
+solutions form a separate collapsed layer in Past and a hierarchical,
+contents-navigable document in the Problem Bank.
+
+User text highlights are owner-scoped D1 annotations. Store a quote selector
+with prefix and suffix context, never an unstable DOM offset. Re-anchor after a
+profile or artifact revision so highlights survive content updates; users can
+list and remove saved highlights.
+
 The web experience may replace item 5 with a stable link to the corresponding
 Problem Bank Solution Profile. This avoids duplicating the same canonical
 solution across repeated attempts while preserving the exact profile revision
@@ -221,7 +234,8 @@ answer association.
 Interview Arc Voice uses protocol version `1` and the same personal integration
 token as MCP and the Chrome companion.
 
-1. `GET /voice/context` returns the focused activity, deterministic speech
+1. `GET /voice/context` returns the **single activity whose stopwatch is
+   currently running**, deterministic speech
    metadata, and registered specialist task. It never returns credentials.
 2. The client records one continuous local M4A and transcribes it with Groq
    `whisper-large-v3`. Temporary derivatives or chunks are not durable clips.
@@ -242,6 +256,13 @@ Focused activity lookup is global rather than limited to the current calendar
 day. A mock that crosses Pacific midnight keeps its original activity and
 transcript boundary; its eventual Past/publication date still comes from the
 activity completion timestamp.
+
+Persistent dashboard focus is only navigation history. A paused, unstarted, or
+finished activity is never a Voice target. Voice refreshes context on launch,
+wake, link-mode changes, immediately before recording, and by short background
+polling. The recording locks its activity at capture start; the server accepts
+it after a later pause only when an immutable activity timer interval proves
+the stopwatch was running at that start timestamp.
 
 Codex app-server accepts text and image input items, not generic audio
 attachments. The background Delivery Coach therefore receives a private local

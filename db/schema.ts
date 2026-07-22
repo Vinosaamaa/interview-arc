@@ -9,6 +9,25 @@ import { integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core"
 const ownerId = text("owner_id").notNull();
 const updatedAt = integer("updated_at").notNull().default(0);
 
+// Quote selectors keep user highlights stable even when a published artifact
+// is revised. Prefix and suffix disambiguate repeated text during re-anchoring.
+export const contentHighlights = sqliteTable(
+  "content_highlights",
+  {
+    ownerId,
+    id: text("id").notNull(),
+    scopeType: text("scope_type", { enum: ["activity", "solution"] }).notNull(),
+    scopeId: text("scope_id").notNull(),
+    quote: text("quote").notNull(),
+    prefix: text("prefix").notNull().default(""),
+    suffix: text("suffix").notNull().default(""),
+    color: text("color", { enum: ["yellow", "green", "pink"] }).notNull().default("yellow"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.id] })],
+);
+
 // One row per running clock. `kind` distinguishes a per-activity stopwatch from
 // a six-hour session countdown. Elapsed time is derived, never ticked: the
 // display is `accumulatedSeconds + (now - runningSince)` while running.

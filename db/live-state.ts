@@ -362,6 +362,24 @@ export async function applyTimerAction(
   return toTimerState(updated!);
 }
 
+// Voice locks its destination when recording begins. This check deliberately
+// consults immutable timer intervals rather than the current focus row, so a
+// valid recording can finish after the user pauses the stopwatch while stale
+// recordings can never attach to an unrelated or completed activity.
+export async function activityTimerWasRunningAt(ownerId: string, activityId: string, occurredAt: number) {
+  const db = getDb();
+  const intervals = await db
+    .select()
+    .from(timerIntervals)
+    .where(and(
+      eq(timerIntervals.ownerId, ownerId),
+      eq(timerIntervals.subjectId, activityId),
+      eq(timerIntervals.kind, "activity"),
+    ));
+  return intervals.some((interval) => interval.startedAt <= occurredAt
+    && (interval.endedAt == null || occurredAt <= interval.endedAt));
+}
+
 export async function pauseOtherActivityTimers(ownerId: string, exceptSubjectId: string, nowMs: number) {
   const db = getDb();
   const running = await db

@@ -73,6 +73,7 @@ export async function buildPracticeSnapshot(
   const focusedActivity = live.focusedActivityId
     ? activities.find((activity) => activity.id === live.focusedActivityId) ?? null
     : null;
+  const activeActivity = activities.find((activity) => Boolean(activity.timer?.runningSince) && !activity.timer?.completed) ?? null;
   return {
     date,
     serverNow: live.serverNow,
@@ -86,6 +87,8 @@ export async function buildPracticeSnapshot(
     focusedSessionId: live.focusedSessionId,
     focusedAt: live.focusedAt,
     focusedActivity,
+    activeActivityId: activeActivity?.id ?? null,
+    activeActivity,
   };
 }
 

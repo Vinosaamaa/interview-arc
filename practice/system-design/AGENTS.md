@@ -498,6 +498,13 @@ Then produce:
 - Realistic follow-up questions.
 - One concrete next drill.
 
+Every reusable system-design Solution Profile must use visible document
+hierarchy. Separate functional from non-functional requirements, give each API
+endpoint its own fenced `http` contract, format the data model as readable
+records rather than one paragraph, and include a real architecture diagram
+(versioned draw.io source plus exported SVG) instead of publishing raw Mermaid
+or ASCII arrows as the final visual.
+
 Do not invent things the user said. Clearly distinguish the user's original answer, the coach's feedback, and generated model material.
 
 ## Maintenance Rules
