@@ -236,6 +236,11 @@ token as MCP and the Chrome companion.
 6. Delivery Coach runs asynchronously. Its owner-scoped result is saved with
    `save_delivery_analysis` and references the same activity, turn, and clip.
 
+Focused activity lookup is global rather than limited to the current calendar
+day. A mock that crosses Pacific midnight keeps its original activity and
+transcript boundary; its eventual Past/publication date still comes from the
+activity completion timestamp.
+
 Codex app-server accepts text and image input items, not generic audio
 attachments. The supported automated path therefore sends the audio as a
 private local-file reference for tool-based analysis while R2 provides the

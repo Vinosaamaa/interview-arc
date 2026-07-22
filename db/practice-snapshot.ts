@@ -23,13 +23,19 @@ export function dateInPracticeTimeZone(now = new Date()) {
   return practiceDateAt(now);
 }
 
-export async function buildPracticeSnapshot(ownerId: string, date = dateInPracticeTimeZone()) {
-  const [content, live] = await Promise.all([loadContentIndex(), readLiveState(ownerId, date)]);
+export async function buildPracticeSnapshot(
+  ownerId: string,
+  date = dateInPracticeTimeZone(),
+  options: { includeAll?: boolean } = {},
+) {
+  const [content, live] = await Promise.all([loadContentIndex(), readLiveState(ownerId, date, options)]);
   const journal = content.journals.find((candidate) => candidate.date === date) ?? emptyJournal(date);
-  const sessions = [...journal.sessions, ...(live.sessions as PracticeSession[])];
+  const publishedSessions = options.includeAll ? content.journals.flatMap((candidate) => candidate.sessions) : journal.sessions;
+  const publishedActivities = options.includeAll ? content.journals.flatMap((candidate) => candidate.activities) : journal.activities;
+  const sessions = [...publishedSessions, ...(live.sessions as PracticeSession[])];
   const sessionForActivity = new Map<string, string>();
   sessions.forEach((session) => session.activityIds.forEach((activityId) => sessionForActivity.set(activityId, session.id)));
-  const activities = [...journal.activities, ...(live.extraActivities as JournalActivity[])].map((activity) => {
+  const activities = [...publishedActivities, ...(live.extraActivities as JournalActivity[])].map((activity) => {
     const artifact = content.artifacts.find((candidate) => candidate.activityId === activity.id);
     const timer = live.timers[activity.id];
     const outcome = live.outcomes[activity.id] ?? activity.outcome;

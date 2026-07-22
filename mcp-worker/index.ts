@@ -80,7 +80,7 @@ function voiceSpecialty(value: "leetcode" | "system_design" | "behavioral") {
 async function voiceContext(ownerId: string, request: Request) {
   const date = new URL(request.url).searchParams.get("date") ?? dateInPracticeTimeZone();
   const [snapshot, content, specialists] = await Promise.all([
-    buildPracticeSnapshot(ownerId, date),
+    buildPracticeSnapshot(ownerId, date, { includeAll: true }),
     loadContentIndex(),
     readSpecialistTasks(ownerId),
   ]);
@@ -150,7 +150,7 @@ async function saveVoiceCapture(ownerId: string, request: Request) {
   if (!activityId || !specialty || !turnId || !transcript || transcript.length > 200_000) {
     return json(request, { error: "A focused activity, specialty, stable turnId, and transcript are required." }, { status: 400 });
   }
-  const snapshot = await buildPracticeSnapshot(ownerId);
+  const snapshot = await buildPracticeSnapshot(ownerId, dateInPracticeTimeZone(), { includeAll: true });
   if (snapshot.focusedActivity?.id !== activityId || snapshot.focusedActivity.type !== specialty) {
     return json(request, { error: "The recording no longer matches the focused Interview Arc activity." }, { status: 409 });
   }
