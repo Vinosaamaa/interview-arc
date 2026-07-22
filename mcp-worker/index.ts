@@ -5,6 +5,7 @@ import { loadContentIndex } from "../db/content";
 import { resolveIntegrationOwner } from "../db/integrations";
 import {
   applyTimerAction,
+  activityTimerWasRunningAt,
   setActivityNote,
   setOutcome,
   setPublicationStatus,
@@ -84,14 +85,14 @@ async function voiceContext(ownerId: string, request: Request) {
     loadContentIndex(),
     readSpecialistTasks(ownerId),
   ]);
-  const activity = snapshot.focusedActivity;
+  const activity = snapshot.activeActivity;
   if (!activity) {
     return json(request, {
       protocolVersion: VOICE_PROTOCOL_VERSION,
       date,
       focusedActivity: null,
       specialist: null,
-      message: "Focus an activity in Interview Arc before recording.",
+      message: "Start an activity stopwatch in Interview Arc before recording a linked answer.",
     });
   }
   const bank = activity.type === "system_design"
@@ -151,8 +152,10 @@ async function saveVoiceCapture(ownerId: string, request: Request) {
     return json(request, { error: "A focused activity, specialty, stable turnId, and transcript are required." }, { status: 400 });
   }
   const snapshot = await buildPracticeSnapshot(ownerId, dateInPracticeTimeZone(), { includeAll: true });
-  if (snapshot.focusedActivity?.id !== activityId || snapshot.focusedActivity.type !== specialty) {
-    return json(request, { error: "The recording no longer matches the focused Interview Arc activity." }, { status: 409 });
+  const activity = snapshot.activities.find((candidate) => candidate.id === activityId);
+  const beganWhileRunning = await activityTimerWasRunningAt(ownerId, activityId, occurredAt);
+  if (!activity || activity.type !== specialty || !beganWhileRunning) {
+    return json(request, { error: "The recording did not begin while this Interview Arc activity stopwatch was running." }, { status: 409 });
   }
   const turn = await appendVoiceTranscriptTurn(ownerId, { activityId, specialty, turnId, body: transcript, occurredAt }, Date.now());
   return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, turn }, { status: 201 });

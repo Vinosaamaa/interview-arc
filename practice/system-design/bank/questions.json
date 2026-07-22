@@ -470,6 +470,7 @@
       "title": "Build a Marketplace Feature for Facebook",
       "prompt": "Build a Marketplace Feature for Facebook",
       "url": "https://systemdesign.io/question/build-a-marketplace-feature-for-facebook",
+      "solutionPath": "practice/system-design/solutions/build-a-marketplace-feature-for-facebook.md",
       "source": "SystemDesign.io",
       "complexity": "easy",
       "solutionReference": true,

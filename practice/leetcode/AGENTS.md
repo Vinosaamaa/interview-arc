@@ -187,6 +187,13 @@ A complete review may cover:
 
 Clearly distinguish user work from generated coaching material.
 
+Every created or revised reusable coding Solution Profile must be independently
+reviewable in the Problem Bank. Include, in order: problem summary, pattern and
+constraints, best approach, correctness argument, **Java first** and Python
+reference implementations, complexity, edge cases, at least one meaningful
+alternative with code when practical, a recall cue, and an improved concise
+interview answer. Use fenced code blocks with explicit language identifiers.
+
 ## Content Boundary
 
 - Do not crawl LeetCode, authenticated pages, private endpoints, cookies, editorials, or solutions.
