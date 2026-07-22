@@ -25,8 +25,15 @@ Read `../../docs/contracts/solution-profiles.md` before finalizing.
   long answer, activity switch, pause, finish, or coordinator request.
 - A message with an `Interview Arc Voice capture` envelope already has its user
   turn stored by `POST /voice/captures`. Do not append that supplied `turnId`
-  again. Treat its transcript as the user's verbatim answer, respond normally,
-  and use the private local audio path only when delivery analysis is needed.
+  again. Treat its transcript as the user's verbatim answer and respond normally.
+  The separate background Delivery Coach owns audio inspection and saves its
+  result to D1; do not rerun that work in the visible specialist task.
+  One visible message may contain several envelopes after an accidental stop
+  and restart. Reuse every supplied turn in order and treat consecutive
+  Voice-managed turns as one logical answer until the next specialist turn.
+- Before finalization, read the activity practice record and incorporate all
+  available delivery analyses into evidence-grounded `didWell` and `improve`
+  feedback. Queued or failed analysis never blocks finalization.
 - “Please note for this question” calls `add_practice_note` with the user's exact
   wording. Notes lead the final case file.
 - `Publish this session` finalizes the current activity in D1.

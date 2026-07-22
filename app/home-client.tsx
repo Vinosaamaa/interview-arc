@@ -1,9 +1,10 @@
 "use client";
 
-import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { groupTranscriptTurns } from "./transcript-groups";
 import type {
   ContentArtifact,
   ContentIndex,
@@ -645,6 +646,79 @@ function MarkdownBody({ source }: { source: string }) {
   return <div className="markdown-body"><Markdown remarkPlugins={[remarkGfm]}>{source}</Markdown></div>;
 }
 
+function formatAudioDuration(seconds: number | null) {
+  if (seconds == null) return "—:——";
+  const whole = Math.max(0, Math.round(seconds));
+  const minutes = Math.floor(whole / 60);
+  return `${minutes}:${String(whole % 60).padStart(2, "0")}`;
+}
+
+function GroupedAnswerPlayback({ clips, deliveryAnalyses }: { clips: AudioClip[]; deliveryAnalyses: DeliveryAnalysis[] }) {
+  const playable = clips.filter((clip) => clip.status === "available");
+  const [activeClipId, setActiveClipId] = useState(playable[0]?.id ?? clips[0]?.id ?? "");
+  const [continueAfterSwitch, setContinueAfterSwitch] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const activeClip = clips.find((clip) => clip.id === activeClipId) ?? playable[0] ?? clips[0];
+  const activeIndex = activeClip ? clips.findIndex((clip) => clip.id === activeClip.id) : -1;
+  const activePlayableIndex = activeClip ? playable.findIndex((clip) => clip.id === activeClip.id) : -1;
+  const totalSeconds = clips.reduce((total, clip) => total + (clip.durationSeconds ?? 0), 0);
+  const activeAnalyses = activeClip ? deliveryAnalyses.filter((analysis) => analysis.audioClipId === activeClip.id) : [];
+
+  useEffect(() => {
+    if (!continueAfterSwitch || !audioRef.current) return;
+    void audioRef.current.play().finally(() => setContinueAfterSwitch(false));
+  }, [activeClipId, continueAfterSwitch]);
+
+  function selectSegment(clip: AudioClip) {
+    if (clip.status !== "available") return;
+    setContinueAfterSwitch(false);
+    setActiveClipId(clip.id);
+  }
+
+  function continueToNextSegment() {
+    const next = playable[activePlayableIndex + 1];
+    if (!next) return;
+    setContinueAfterSwitch(true);
+    setActiveClipId(next.id);
+  }
+
+  return <div className="answer-playback has-audio grouped-answer-playback">
+    <div className="answer-deck-head">
+      <div><span>Recorded answer</span><strong>{clips.length} segment{clips.length === 1 ? "" : "s"}</strong></div>
+      <small>{totalSeconds > 0 ? formatAudioDuration(totalSeconds) : "Continuous playback"}</small>
+    </div>
+    <div className="answer-segments" aria-label="Recorded answer segments">
+      {clips.map((clip, index) => <button
+        type="button"
+        className={clip.id === activeClip?.id ? "active" : ""}
+        key={clip.id}
+        disabled={clip.status !== "available"}
+        onClick={() => selectSegment(clip)}
+        aria-label={`Play answer segment ${index + 1}`}
+        title={clip.status === "available" ? clip.filename : clip.status.replaceAll("_", " ")}
+      >
+        <span>{String(index + 1).padStart(2, "0")}</span>
+        <i aria-hidden="true" />
+        <small>{formatAudioDuration(clip.durationSeconds)}</small>
+      </button>)}
+    </div>
+    {activeClip?.status === "available" ? <div className="answer-player">
+      <div className="answer-player-copy"><strong>Segment {activeIndex + 1}</strong><small>{activeClip.label}</small></div>
+      <audio
+        key={activeClip.id}
+        ref={audioRef}
+        controls
+        preload="metadata"
+        src={`/api/audio/${encodeURIComponent(activeClip.id)}`}
+        onEnded={continueToNextSegment}
+      />
+    </div> : <div className="answer-player-status"><strong>Recording unavailable</strong><small>{activeClip?.status.replaceAll("_", " ")}</small></div>}
+    {activeAnalyses.length > 0 && <div className="answer-segment-coaching">
+      {activeAnalyses.map((analysis) => <DeliveryReview key={analysis.id} analysis={analysis} segmentLabel={`Segment ${activeIndex + 1}`} />)}
+    </div>}
+  </div>;
+}
+
 function ActivityTranscript({
   turns,
   clips,
@@ -654,22 +728,31 @@ function ActivityTranscript({
   clips: AudioClip[];
   deliveryAnalyses: DeliveryAnalysis[];
 }) {
+  const groups = useMemo(() => groupTranscriptTurns(turns), [turns]);
   return (
     <section className="case-transcript" aria-label="Conversation transcript and answer recordings">
       <div className="case-transcript-heading"><span className="eyebrow">CONVERSATION TRANSCRIPT</span><p>Your recording sits between the prompt and the answer it captures.</p></div>
       <div className="transcript-thread">
-        {turns.map((turn) => {
+        {groups.map((group) => {
+          if (group.kind === "voice_answer") {
+            const turnIds = new Set(group.turns.map((turn) => turn.turnId));
+            const answerClips = clips.filter((clip) => clip.transcriptTurnId && turnIds.has(clip.transcriptTurnId));
+            const combinedTranscript = group.turns.map((turn) => turn.body).join("\n\n");
+            const firstTurn = group.turns[0];
+            return <div className="transcript-turn user voice-answer-group" key={group.id} data-answer-turn-id={firstTurn.turnId}>
+              {answerClips.length > 0 && <GroupedAnswerPlayback clips={answerClips} deliveryAnalyses={deliveryAnalyses} />}
+              <article>
+                <header><span>Your answer{group.turns.length > 1 ? ` · ${group.turns.length} voice segments` : ""}</span><time>{formatPracticeTimestamp(new Date(firstTurn.occurredAt).toISOString())}</time></header>
+                <MarkdownBody source={combinedTranscript} />
+              </article>
+            </div>;
+          }
+          const turn = group.turn;
           const answerClips = turn.speaker === "user"
             ? clips.filter((clip) => clip.transcriptTurnId === turn.turnId)
             : [];
-          return <div className={`transcript-turn ${turn.speaker}`} key={turn.turnId} data-answer-turn-id={turn.speaker === "user" ? turn.turnId : undefined}>
-            {turn.speaker === "user" && answerClips.length > 0 && <div className="answer-playback has-audio">
-              {answerClips.map((clip) => <div className="answer-take" key={clip.id}>
-                <div><strong>{clip.label}</strong><small>{clip.filename}</small></div>
-                {clip.status === "available" ? <audio controls preload="metadata" src={`/api/audio/${encodeURIComponent(clip.id)}`} /> : <em>{clip.status.replaceAll("_", " ")}</em>}
-                {deliveryAnalyses.filter((analysis) => analysis.audioClipId === clip.id).map((analysis) => <DeliveryReview key={analysis.id} analysis={analysis} />)}
-              </div>)}
-            </div>}
+          return <div className={`transcript-turn ${turn.speaker}`} key={group.id} data-answer-turn-id={turn.speaker === "user" ? turn.turnId : undefined}>
+            {turn.speaker === "user" && answerClips.length > 0 && <GroupedAnswerPlayback clips={answerClips} deliveryAnalyses={deliveryAnalyses} />}
             <article>
               <header><span>{turn.speaker === "specialist" ? "Specialist" : "Your answer"}</span><time>{formatPracticeTimestamp(new Date(turn.occurredAt).toISOString())}</time></header>
               <MarkdownBody source={turn.body} />
@@ -681,13 +764,13 @@ function ActivityTranscript({
   );
 }
 
-function DeliveryReview({ analysis }: { analysis: DeliveryAnalysis }) {
+function DeliveryReview({ analysis, segmentLabel }: { analysis: DeliveryAnalysis; segmentLabel?: string }) {
   if (analysis.status !== "available" || !analysis.payload) {
-    return <div className={`delivery-review-status ${analysis.status}`}><span>Delivery coach</span><small>{analysis.status === "failed" ? analysis.error ?? "Analysis will retry." : analysis.status}</small></div>;
+    return <div className={`delivery-review-status ${analysis.status}`}><span>{segmentLabel ? `${segmentLabel} coach` : "Delivery coach"}</span><small>{analysis.status === "failed" ? analysis.error ?? "Analysis will retry." : analysis.status}</small></div>;
   }
   const payload = analysis.payload;
   return <details className="delivery-review" open>
-    <summary><span>Delivery review</span><small>{payload.wordsPerMinute ? `${Math.round(payload.wordsPerMinute)} words/min` : "Observable speech evidence"}</small></summary>
+    <summary><span>{segmentLabel ? `${segmentLabel} delivery` : "Delivery review"}</span><small>{payload.wordsPerMinute ? `${Math.round(payload.wordsPerMinute)} words/min` : "Observable speech evidence"}</small></summary>
     <p>{payload.summary}</p>
     <div className="delivery-review-columns"><section><strong>Working well</strong><ul>{payload.strengths.map((item) => <li key={item}>{item}</li>)}</ul></section><section><strong>Try next</strong><ul>{payload.improvements.map((item) => <li key={item}>{item}</li>)}</ul></section></div>
     {payload.observations.length > 0 && <div className="delivery-observations">{payload.observations.map((observation, index) => <article key={`${observation.dimension}-${index}`}><span>{observation.dimension.replaceAll("_", " ")}</span><p>{observation.evidence}</p><small>{observation.coaching}</small></article>)}</div>}

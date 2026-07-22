@@ -30,6 +30,10 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
   user transcript turn, place the full player after the preceding specialist
   prompt and immediately before that user's written answer. Keep only clips
   without a turn link in the activity-level fallback tray.
+  Consecutive Voice-managed user turns form one logical answer: join their text
+  in order and present one segmented player that advances through the original
+  clips without merging the R2 objects. Keep each clip's delivery analysis
+  attached to its matching segment.
 
 ## Data Sources
 
