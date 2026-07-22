@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { groupTranscriptTurns } from "../app/transcript-groups.ts";
 import test from "node:test";
 
 import { dateInTimeZone, emptyJournal } from "../app/current-day.ts";
@@ -211,6 +212,22 @@ test("Interview Arc Voice persists exact turns, idempotent clips, and per-answer
   assert.match(durableStore, /appendVoiceTranscriptTurn/);
   assert.match(durableStore, /Delivery analysis must reference a private clip linked to the same user transcript turn/);
   assert.ok(client.indexOf("<DeliveryReview") < client.indexOf('"Your answer"'));
+  assert.match(client, /GroupedAnswerPlayback/);
+  assert.match(client, /onEnded=\{continueToNextSegment\}/);
+});
+
+test("consecutive Voice captures form one logical answer without merging their durable turns", () => {
+  const base = { activityId: "activity-1", specialty: "system_design", updatedAt: 4 };
+  const groups = groupTranscriptTurns([
+    { ...base, turnId: "specialist-1", speaker: "specialist", body: "What would you clarify?", source: "codex", sequence: 1, occurredAt: 1 },
+    { ...base, turnId: "voice-1", speaker: "user", body: "First part.", source: "audio_transcript", sequence: 2, occurredAt: 2 },
+    { ...base, turnId: "voice-2", speaker: "user", body: "Second part.", source: "audio_transcript", sequence: 3, occurredAt: 3 },
+    { ...base, turnId: "specialist-2", speaker: "specialist", body: "Follow-up.", source: "codex", sequence: 4, occurredAt: 4 },
+  ]);
+
+  assert.equal(groups.length, 3);
+  assert.equal(groups[1].kind, "voice_answer");
+  assert.deepEqual(groups[1].turns.map((turn) => turn.turnId), ["voice-1", "voice-2"]);
 });
 
 test("the Chrome companion is scoped to public LeetCode pages and the bridge host", async () => {

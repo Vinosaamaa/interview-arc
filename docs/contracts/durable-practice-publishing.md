@@ -229,10 +229,12 @@ token as MCP and the Chrome companion.
    client-generated, idempotent `turnId` and `source: audio_transcript`.
 4. `POST /audio/upload` uploads the original recording and links it to that
    same user turn. Upload retries do not duplicate the transcript.
-5. The client resumes the registered Codex task and sends the transcript plus
-   an `Interview Arc Voice` envelope containing `activityId`, `turnId`, and the
-   private local audio path. The envelope states that the user turn already
-   exists in D1; the specialist must not append it again.
+5. The client inserts the transcript into the visible Codex editor followed by
+   an `Interview Arc Voice` Markdown comment envelope containing `activityId`
+   and `turnId`. The user presses Send. The envelope states that Voice owns the
+   durable D1 turn; the specialist must reuse that exact turn and must not append
+   the user text again. Voice never resumes or submits the specialist task
+   invisibly.
 6. Delivery Coach runs asynchronously. Its owner-scoped result is saved with
    `save_delivery_analysis` and references the same activity, turn, and clip.
 
@@ -242,9 +244,10 @@ transcript boundary; its eventual Past/publication date still comes from the
 activity completion timestamp.
 
 Codex app-server accepts text and image input items, not generic audio
-attachments. The supported automated path therefore sends the audio as a
-private local-file reference for tool-based analysis while R2 provides the
-playable website attachment. Raw audio is never embedded in Git or exposed
+attachments. The background Delivery Coach therefore receives a private local
+file reference for tool-based analysis while R2 provides the playable website
+attachment. The visible specialist receives only the transcript and its
+machine-readable Voice envelope. Raw audio is never embedded in Git or exposed
 through a public URL.
 
 Each linked clip may have one delivery-analysis record. Past renders that
@@ -253,3 +256,10 @@ observable evidence: pace, pauses, fillers, clarity, organization, vocal
 variation, and perceived confidence. It must not infer mental state, health,
 identity, or other sensitive traits. Queued or failed analysis never blocks the
 specialist response, finalization, publication, or audio playback.
+
+Every stop action remains one immutable transcript turn, R2 clip, and delivery
+analysis. When two or more Voice-managed user turns are consecutive within the
+same activity, with no specialist turn between them, they form one logical
+answer for presentation. Past joins their text in sequence and presents one
+segmented player that advances across the original clips without merging or
+rewriting the source M4A objects.
