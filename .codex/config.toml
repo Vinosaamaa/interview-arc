@@ -3,6 +3,20 @@ enabled = true
 required = false
 url = "https://limitless-mcp.vinosama.workers.dev/mcp"
 bearer_token_env_var = "INTERVIEW_ARC_MCP_TOKEN"
-enabled_tools = ["get_today_practice", "get_publication_queue", "mark_activities_published"]
+enabled_tools = [
+  "append_practice_transcript",
+  "add_practice_note",
+  "save_specialist_finalization",
+  "get_problem_solution_profile",
+  "get_activity_practice_record",
+  "upsert_personal_bank_question",
+  "schedule_practice_review",
+  "register_specialist_task",
+  "get_specialist_tasks",
+  "register_activity_audio_clip",
+  "get_today_practice",
+  "get_publication_queue",
+  "mark_activities_published",
+]
 startup_timeout_sec = 15.0
 tool_timeout_sec = 60.0

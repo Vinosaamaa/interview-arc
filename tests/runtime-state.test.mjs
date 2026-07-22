@@ -154,12 +154,17 @@ test("contracts preserve flexible session duration, membership, and exact timest
 test("durable publishing keeps transcripts, review, notes, and four-day walkthrough recall", async () => {
   const contract = await readFile(new URL("../docs/contracts/durable-practice-publishing.md", import.meta.url), "utf8");
   const bridge = await readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8");
+  const codexConfig = await readFile(new URL("../.codex/config.toml", import.meta.url), "utf8");
   assert.match(contract, /complete two-sided activity transcript/i);
   assert.match(contract, /complete standalone `modelAnswer`/i);
   assert.match(contract, /failed attempt or full walkthrough: first review in \*\*4 days\*\*/i);
   assert.match(contract, /Pinned Notes[\s\S]*What Went Well[\s\S]*What To Improve[\s\S]*References/);
   for (const tool of ["append_practice_transcript", "add_practice_note", "save_specialist_finalization", "get_activity_practice_record", "get_problem_solution_profile", "schedule_practice_review", "register_specialist_task", "register_activity_audio_clip"]) {
     assert.match(bridge, new RegExp(`"${tool}"`));
+    assert.match(codexConfig, new RegExp(`"${tool}"`));
+  }
+  for (const tool of ["upsert_personal_bank_question", "get_specialist_tasks", "get_today_practice", "get_publication_queue", "mark_activities_published"]) {
+    assert.match(codexConfig, new RegExp(`"${tool}"`));
   }
   assert.match(bridge, /modelAnswer: z\.string\(\)\.min\(1\)/);
   assert.match(bridge, /solutionProfile: z\.object/);
