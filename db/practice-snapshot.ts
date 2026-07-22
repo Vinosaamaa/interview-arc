@@ -4,6 +4,7 @@ import { practiceDateAt } from "../app/practice-time";
 import { loadContentIndex } from "./content";
 import { readLiveState, type PublicationStatusValue, type TimerState } from "./live-state";
 import { derivePublicationStatus } from "./publication-state";
+import { dedupeSnapshotRows } from "./snapshot-rows";
 
 export type ConnectedActivity = JournalActivity & {
   timer?: TimerState;
@@ -32,10 +33,16 @@ export async function buildPracticeSnapshot(
   const journal = content.journals.find((candidate) => candidate.date === date) ?? emptyJournal(date);
   const publishedSessions = options.includeAll ? content.journals.flatMap((candidate) => candidate.sessions) : journal.sessions;
   const publishedActivities = options.includeAll ? content.journals.flatMap((candidate) => candidate.activities) : journal.activities;
-  const sessions = [...publishedSessions, ...(live.sessions as PracticeSession[])];
+  const sessions = dedupeSnapshotRows([...publishedSessions, ...(live.sessions as PracticeSession[])]);
   const sessionForActivity = new Map<string, string>();
   sessions.forEach((session) => session.activityIds.forEach((activityId) => sessionForActivity.set(activityId, session.id)));
-  const activities = [...publishedActivities, ...(live.extraActivities as JournalActivity[])].map((activity) => {
+  // A just-published website activity exists in both owner-private live state
+  // and the imported journal. Keep one row and prefer the journal copy so its
+  // completed status, Pacific publication date, and artifact metadata win.
+  const activities = dedupeSnapshotRows([
+    ...(live.extraActivities as JournalActivity[]),
+    ...publishedActivities,
+  ]).map((activity) => {
     const artifact = content.artifacts.find((candidate) => candidate.activityId === activity.id);
     const timer = live.timers[activity.id];
     const outcome = live.outcomes[activity.id] ?? activity.outcome;
