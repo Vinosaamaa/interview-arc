@@ -14,6 +14,7 @@ export type ConnectedActivity = JournalActivity & {
   review: unknown | null;
   specialistFinalization: unknown | null;
   audioClips: unknown[];
+  deliveryAnalyses: unknown[];
   sessionId?: string;
   practiceDate: string;
 };
@@ -22,13 +23,19 @@ export function dateInPracticeTimeZone(now = new Date()) {
   return practiceDateAt(now);
 }
 
-export async function buildPracticeSnapshot(ownerId: string, date = dateInPracticeTimeZone()) {
-  const [content, live] = await Promise.all([loadContentIndex(), readLiveState(ownerId, date)]);
+export async function buildPracticeSnapshot(
+  ownerId: string,
+  date = dateInPracticeTimeZone(),
+  options: { includeAll?: boolean } = {},
+) {
+  const [content, live] = await Promise.all([loadContentIndex(), readLiveState(ownerId, date, options)]);
   const journal = content.journals.find((candidate) => candidate.date === date) ?? emptyJournal(date);
-  const sessions = [...journal.sessions, ...(live.sessions as PracticeSession[])];
+  const publishedSessions = options.includeAll ? content.journals.flatMap((candidate) => candidate.sessions) : journal.sessions;
+  const publishedActivities = options.includeAll ? content.journals.flatMap((candidate) => candidate.activities) : journal.activities;
+  const sessions = [...publishedSessions, ...(live.sessions as PracticeSession[])];
   const sessionForActivity = new Map<string, string>();
   sessions.forEach((session) => session.activityIds.forEach((activityId) => sessionForActivity.set(activityId, session.id)));
-  const activities = [...journal.activities, ...(live.extraActivities as JournalActivity[])].map((activity) => {
+  const activities = [...publishedActivities, ...(live.extraActivities as JournalActivity[])].map((activity) => {
     const artifact = content.artifacts.find((candidate) => candidate.activityId === activity.id);
     const timer = live.timers[activity.id];
     const outcome = live.outcomes[activity.id] ?? activity.outcome;
@@ -47,6 +54,7 @@ export async function buildPracticeSnapshot(ownerId: string, date = dateInPracti
       review: live.reviews[activity.id] ?? null,
       specialistFinalization: live.finalizations[activity.id] ?? null,
       audioClips: live.audioClips[activity.id] ?? [],
+      deliveryAnalyses: live.deliveryAnalyses[activity.id] ?? [],
       practiceDate,
       ...(sessionId ? { sessionId } : {}),
       ...(timer?.startedAt ? { startedAt: new Date(timer.startedAt).toISOString() } : {}),
@@ -115,6 +123,7 @@ export async function buildPublicationQueue(ownerId: string, requestedDate?: str
       review: live.reviews[activity.id] ?? null,
       specialistFinalization: live.finalizations[activity.id] ?? null,
       audioClips: live.audioClips[activity.id] ?? [],
+      deliveryAnalyses: live.deliveryAnalyses[activity.id] ?? [],
       ...(sessionId ? { sessionId } : {}),
       ...(timer?.startedAt ? { startedAt: new Date(timer.startedAt).toISOString() } : {}),
       ...(timer?.completedAt ? { endedAt: new Date(timer.completedAt).toISOString() } : {}),

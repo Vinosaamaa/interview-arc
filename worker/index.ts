@@ -236,8 +236,8 @@ async function verifyAccessJwt(token: string, env: Env): Promise<string | null> 
     };
 
     const audiences = Array.isArray(payload.aud) ? payload.aud : payload.aud ? [payload.aud] : [];
-    if (!env.POLICY_AUD || !audiences.includes(env.POLICY_AUD)) return null;
-    if (payload.iss !== env.TEAM_DOMAIN?.replace(/\/$/, "")) return null;
+    if (!env.POLICY_AUD || !env.TEAM_DOMAIN || !audiences.includes(env.POLICY_AUD)) return null;
+    if (payload.iss !== env.TEAM_DOMAIN.replace(/\/$/, "")) return null;
     if (!payload.exp || payload.exp * 1000 <= Date.now()) return null;
 
     const jwk = (await getAccessKeys(env.TEAM_DOMAIN)).find((k) => k.kid === header.kid);
@@ -253,7 +253,7 @@ async function verifyAccessJwt(token: string, env: Env): Promise<string | null> 
     const valid = await crypto.subtle.verify(
       "RSASSA-PKCS1-v1_5",
       key,
-      base64UrlToBytes(signatureB64),
+      base64UrlToBytes(signatureB64).buffer as ArrayBuffer,
       new TextEncoder().encode(`${headerB64}.${payloadB64}`),
     );
     if (!valid) return null;

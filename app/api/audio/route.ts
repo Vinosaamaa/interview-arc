@@ -18,17 +18,18 @@ export async function POST(request: Request) {
   try {
     ownerId = await resolveOwnerId(request);
     const form = await request.formData();
+    const requestedClipId = String(form.get("clipId") ?? "").trim();
     const activityId = String(form.get("activityId") ?? "").trim();
     const transcriptTurnId = String(form.get("transcriptTurnId") ?? "").trim() || undefined;
     const label = String(form.get("label") ?? "Practice answer").trim().slice(0, 120) || "Practice answer";
     const file = form.get("file");
-    if (!activityId || !(file instanceof File)) {
+    if ((requestedClipId && !/^[a-zA-Z0-9._-]{1,120}$/.test(requestedClipId)) || !activityId || !(file instanceof File)) {
       return Response.json({ error: "An activityId and audio file are required." }, { status: 400 });
     }
     if (!file.type.startsWith("audio/") || file.size === 0 || file.size > MAX_AUDIO_BYTES) {
       return Response.json({ error: "Choose a non-empty audio file no larger than 100 MB." }, { status: 400 });
     }
-    clipId = crypto.randomUUID();
+    clipId = requestedClipId || crypto.randomUUID();
     const filename = safeFilename(file.name);
     const objectKey = `${ownerId}/${activityId}/${clipId}-${filename}`;
     const now = Date.now();
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
     await updateActivityAudioClipStatus(ownerId, clipId, "available", Date.now());
     return Response.json({
       id: clipId,
+      clipId,
       activityId,
       transcriptTurnId: transcriptTurnId ?? null,
       filename,

@@ -40,6 +40,7 @@ type ServerLiveState = {
   reviews: Record<string, ReviewSchedule>;
   finalizations: Record<string, FinalizationSummary>;
   audioClips: Record<string, AudioClip[]>;
+  deliveryAnalyses: LocalDraft["deliveryAnalyses"];
   problemPreferences: ProblemPreference[];
   solutionProfiles: SolutionProfile[];
   solutionRevisions: SolutionRevision[];
@@ -124,6 +125,7 @@ function serverToDraft(state: ServerLiveState, offset: number, date = ""): Local
     reviews: state.reviews ?? {},
     finalizations: state.finalizations ?? {},
     audioClips: state.audioClips ?? {},
+    deliveryAnalyses: state.deliveryAnalyses ?? {},
     problemPreferences: state.problemPreferences ?? [],
     solutionProfiles: state.solutionProfiles ?? [],
     solutionRevisions: state.solutionRevisions ?? [],
@@ -163,6 +165,7 @@ function mergeDrafts(server: LocalDraft, local: LocalDraft) {
     reviews: { ...local.reviews, ...server.reviews },
     finalizations: { ...local.finalizations, ...server.finalizations },
     audioClips: { ...local.audioClips, ...server.audioClips },
+    deliveryAnalyses: { ...local.deliveryAnalyses, ...server.deliveryAnalyses },
     problemPreferences: server.problemPreferences,
     solutionProfiles: server.solutionProfiles,
     solutionRevisions: server.solutionRevisions,
@@ -198,6 +201,7 @@ function readDraft(date: string): LocalDraft {
       reviews: parsed.reviews ?? {},
       finalizations: parsed.finalizations ?? {},
       audioClips: parsed.audioClips ?? {},
+      deliveryAnalyses: parsed.deliveryAnalyses ?? {},
       problemPreferences: parsed.problemPreferences ?? [],
       solutionProfiles: parsed.solutionProfiles ?? [],
       solutionRevisions: parsed.solutionRevisions ?? [],

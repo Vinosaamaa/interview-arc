@@ -113,6 +113,7 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   const durable = await readFile(new URL("../drizzle/0004_lyrical_sinister_six.sql", import.meta.url), "utf8");
   const knowledge = await readFile(new URL("../drizzle/0005_colorful_nuke.sql", import.meta.url), "utf8");
   const answerAudio = await readFile(new URL("../drizzle/0006_shiny_legion.sql", import.meta.url), "utf8");
+  const deliveryCoach = await readFile(new URL("../drizzle/0007_flat_may_parker.sql", import.meta.url), "utf8");
   for (const table of ["timers", "outcomes", "extra_activities", "live_sessions"]) {
     assert.match(live, new RegExp("CREATE TABLE `" + table + "`"));
   }
@@ -135,6 +136,7 @@ test("D1 migrations cover owner-scoped live state and shared published content",
     assert.match(knowledge, new RegExp("CREATE TABLE `" + table + "`"));
   }
   assert.match(answerAudio, /ALTER TABLE `activity_audio_clips` ADD `transcript_turn_id` text/);
+  assert.match(deliveryCoach, /CREATE TABLE `activity_delivery_analyses`/);
 });
 
 test("contracts preserve flexible session duration, membership, and exact timestamps", async () => {
@@ -159,7 +161,7 @@ test("durable publishing keeps transcripts, review, notes, and four-day walkthro
   assert.match(contract, /complete standalone `modelAnswer`/i);
   assert.match(contract, /failed attempt or full walkthrough: first review in \*\*4 days\*\*/i);
   assert.match(contract, /Pinned Notes[\s\S]*What Went Well[\s\S]*What To Improve[\s\S]*References/);
-  for (const tool of ["append_practice_transcript", "add_practice_note", "save_specialist_finalization", "get_activity_practice_record", "get_problem_solution_profile", "schedule_practice_review", "register_specialist_task", "register_activity_audio_clip"]) {
+  for (const tool of ["append_practice_transcript", "add_practice_note", "save_specialist_finalization", "get_activity_practice_record", "get_problem_solution_profile", "schedule_practice_review", "register_specialist_task", "register_activity_audio_clip", "save_delivery_analysis"]) {
     assert.match(bridge, new RegExp(`"${tool}"`));
     assert.match(codexConfig, new RegExp(`"${tool}"`));
   }
@@ -196,6 +198,19 @@ test("private R2 audio stays owner-authorized and seekable", async () => {
   assert.doesNotMatch(client, /type="file"/);
   assert.doesNotMatch(client, /Add an answer recording/);
   assert.doesNotMatch(client, /UNLINKED RECORDINGS · PRIVATE R2/);
+});
+
+test("Interview Arc Voice persists exact turns, idempotent clips, and per-answer delivery evidence", async () => {
+  const bridge = await readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8");
+  const durableStore = await readFile(new URL("../db/durable-practice.ts", import.meta.url), "utf8");
+  const client = await readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8");
+  for (const route of ["/voice/context", "/voice/captures", "/voice/delivery"]) {
+    assert.match(bridge, new RegExp(route.replace("/", "\\/")));
+  }
+  assert.match(bridge, /requestedClipId \|\| crypto\.randomUUID\(\)/);
+  assert.match(durableStore, /appendVoiceTranscriptTurn/);
+  assert.match(durableStore, /Delivery analysis must reference a private clip linked to the same user transcript turn/);
+  assert.ok(client.indexOf("<DeliveryReview") < client.indexOf('"Your answer"'));
 });
 
 test("the Chrome companion is scoped to public LeetCode pages and the bridge host", async () => {

@@ -53,6 +53,33 @@ export type AudioClip = {
   durationSeconds: number | null;
   status: "local_only" | "uploading" | "available" | "failed";
 };
+export type DeliveryAnalysisPayload = {
+  schemaVersion: 1;
+  summary: string;
+  durationSeconds?: number;
+  wordsPerMinute?: number;
+  fillerWords?: Array<{ word: string; count: number }>;
+  longPauses?: Array<{ startSeconds: number; durationSeconds: number }>;
+  strengths: string[];
+  improvements: string[];
+  observations: Array<{
+    dimension: "pace" | "pauses" | "fillers" | "clarity" | "organization" | "vocal_variation" | "perceived_confidence";
+    evidence: string;
+    coaching: string;
+  }>;
+};
+export type DeliveryAnalysis = {
+  id: string;
+  activityId: string;
+  audioClipId: string;
+  transcriptTurnId: string;
+  specialty: ActivityType;
+  status: "queued" | "processing" | "available" | "failed";
+  payload: DeliveryAnalysisPayload | null;
+  error: string | null;
+  createdAt: number;
+  updatedAt: number;
+};
 export type ProblemPreference = { specialty: ActivityType; questionId: string; starred: boolean; updatedAt: number };
 export type SolutionProfilePayload = {
   schemaVersion: 1;
@@ -125,6 +152,7 @@ export type LocalDraft = {
   reviews: Record<string, ReviewSchedule>;
   finalizations: Record<string, FinalizationSummary>;
   audioClips: Record<string, AudioClip[]>;
+  deliveryAnalyses: Record<string, DeliveryAnalysis[]>;
   problemPreferences: ProblemPreference[];
   solutionProfiles: SolutionProfile[];
   solutionRevisions: SolutionRevision[];
@@ -161,6 +189,7 @@ export const EMPTY_DRAFT: LocalDraft = {
   reviews: {},
   finalizations: {},
   audioClips: {},
+  deliveryAnalyses: {},
   problemPreferences: [],
   solutionProfiles: [],
   solutionRevisions: [],

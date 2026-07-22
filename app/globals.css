@@ -684,6 +684,22 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .answer-take small, .answer-take em { color: #bfcac1; font-size: .72rem; font-style: normal; }
 .answer-take audio { width: 100%; min-width: 0; height: 38px; }
 .answer-playback .audio-remove { color: #f2b1a9; }
+.delivery-review, .delivery-review-status { grid-column: 1 / -1; margin-top: 4px; border-top: 1px solid rgba(220, 232, 222, .22); padding-top: 12px; }
+.delivery-review > summary { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #f4f7ef; cursor: pointer; }
+.delivery-review > summary span { font-size: .78rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.delivery-review > summary small { color: #c8d7ca; }
+.delivery-review > p { margin: 8px 0 14px; color: #e2e9e2; font-size: .82rem; line-height: 1.55; }
+.delivery-review-columns { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px !important; }
+.delivery-review-columns section { padding: 12px; border: 1px solid rgba(224, 235, 225, .17); background: rgba(255, 255, 255, .045); }
+.delivery-review-columns strong { display: block; margin-bottom: 7px; color: #d7e88b; font-size: .75rem; }
+.delivery-review-columns ul { margin: 0; padding-left: 18px; color: #e0e7e1; font-size: .76rem; line-height: 1.5; }
+.delivery-observations { margin-top: 12px; display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px !important; }
+.delivery-observations article { padding: 10px 11px; border-left: 2px solid #a8bc31; background: rgba(255, 255, 255, .035); }
+.delivery-observations span { color: #d7e88b; font-size: .66rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.delivery-observations p { margin: 5px 0; color: #edf1ed; font-size: .74rem; line-height: 1.45; }
+.delivery-observations small { color: #bfcac1; line-height: 1.45; }
+.delivery-review-status { display: flex !important; align-items: center; justify-content: space-between; gap: 12px; }
+.delivery-review-status span { color: #d7e88b; font-size: .72rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
 .answer-audio-attach { width: fit-content; display: inline-flex; align-items: center; gap: 7px; color: inherit; font-size: .75rem; font-weight: 760; cursor: pointer; }
 .answer-audio-attach span { color: #b6d23b; font-size: 1rem; line-height: 1; }
 .answer-audio-attach input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -1023,6 +1039,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .clear-topic { max-width: 52vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .answer-take { grid-template-columns: 1fr; }
   .answer-take audio { order: 2; }
+  .delivery-review-columns, .delivery-observations { grid-template-columns: 1fr; }
 }
 
 /* Document Picture-in-Picture "Now" window — dense ink cockpit */

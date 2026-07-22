@@ -28,15 +28,20 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     if (range === null) return new Response(null, { status: 416, headers: { "content-range": `bytes */${head.size}` } });
     const object = await env.AUDIO.get(clip.objectKey, range ? { range } : undefined);
     if (!object?.body) return Response.json({ error: "Audio object not found." }, { status: 404 });
+    const servedRange = range
+      ? "suffix" in range
+        ? { offset: head.size - range.suffix, length: range.suffix }
+        : range
+      : null;
     const headers = new Headers({
       "content-type": clip.mimeType,
       "content-disposition": `inline; filename="${clip.filename.replaceAll('"', '')}"`,
       "accept-ranges": "bytes",
       "cache-control": "private, no-store",
-      "content-length": String(object.range?.length ?? object.size),
+      "content-length": String(servedRange?.length ?? object.size),
     });
-    if (object.range) headers.set("content-range", `bytes ${object.range.offset}-${object.range.offset + object.range.length - 1}/${object.size}`);
-    return new Response(object.body, { status: object.range ? 206 : 200, headers });
+    if (servedRange) headers.set("content-range", `bytes ${servedRange.offset}-${servedRange.offset + servedRange.length - 1}/${object.size}`);
+    return new Response(object.body, { status: servedRange ? 206 : 200, headers });
   } catch (error) {
     return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 });
   }
