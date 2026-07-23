@@ -106,8 +106,14 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(css, /width: min\(525px, calc\(100vw - var\(--sidebar-size\) - 32px\)\)/);
   assert.match(client, /bank-master-detail \$\{masterPaneOpen && !readerFocusMode \? "master-pane-open" : ""\}/);
   assert.match(client, /past-master-detail \$\{masterPaneOpen && !readerFocusMode \? "master-pane-open" : ""\}/);
-  assert.match(client, /openProblemProfile\(entry\.type, question, true, true\)/);
-  assert.match(client, /openJournalEntry\(entry, true, true\)/);
+  assert.match(client, /function openEntrySolution\(entry: LogEntry\)/);
+  assert.match(client, /sourceView: "library"/);
+  assert.match(client, /function openAttemptFromSolution\(entry: LibraryEntry\)/);
+  assert.match(client, /sourceView: "banks"/);
+  assert.match(client, /function returnFromCrossReader\(\)/);
+  assert.doesNotMatch(client, /Go forward in reader history/);
+  assert.match(client, /restoreListPosition\("library"/);
+  assert.match(client, /ref=\{pastListRef\}/);
   assert.match(client, /className="past-entry-pane"/);
   assert.match(client, /className={`annotation-popover selection-annotation/);
   assert.match(client, /Underline selected text and add a note/);
@@ -137,8 +143,9 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(css, /\.highlight-note-card\.tone-0 \{ background: #fff2f1/);
   assert.match(css, /\.long-note-inspector/);
   assert.match(client, /Open full note/);
-  assert.match(client, /moveReaderNavigation\(-1\)/);
-  assert.match(client, /moveReaderNavigation\(1\)/);
+  assert.match(client, /reader-return-action/);
+  assert.match(client, /returnFromCrossReader/);
+  assert.doesNotMatch(client, /moveReaderNavigation/);
   assert.match(css, /\.annotation-popover \{ position: fixed;/);
   assert.match(client, /left\.type === "system_design" \? -1 : 1/);
   assert.match(client, /placeholder="Search"/);

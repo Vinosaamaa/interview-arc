@@ -9,7 +9,12 @@ let state = null;
 let activity = null;
 let renderInterval = null;
 let refreshInterval = null;
-let refreshSequence = 0;
+let refreshPromise = null;
+let refreshQueued = false;
+let mutationQueue = Promise.resolve();
+let pendingMutations = 0;
+let mutationSequence = 0;
+let contextRevision = 0;
 let renderedActivityId = "";
 let notesDirty = false;
 
@@ -57,6 +62,7 @@ async function activeTabContext() {
 async function api(path, init = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
+    cache: "no-store",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json", ...(init.headers ?? {}) },
   });
   if (response.status === 401) {
@@ -74,6 +80,19 @@ function showConnect() {
   elements["practice-view"].hidden = true;
   elements.disconnect.hidden = true;
   elements["sync-light"].classList.remove("live");
+  elements["sync-light"].classList.remove("syncing");
+  elements["sync-light"].classList.remove("error");
+}
+
+function setSyncStatus(status) {
+  elements["sync-light"].classList.toggle("live", status === "live");
+  elements["sync-light"].classList.toggle("syncing", status === "syncing");
+  elements["sync-light"].classList.toggle("error", status === "error");
+  elements["sync-light"].title = status === "syncing"
+    ? "Synchronizing with Interview Arc"
+    : status === "error"
+      ? "Interview Arc could not synchronize"
+      : "Connected to Interview Arc";
 }
 
 function outcomeCopy(outcome) {
@@ -91,7 +110,7 @@ function renderClock() {
   elements["toggle-timer"].textContent = timer?.runningSince ? "Ⅱ" : "▶";
   elements["toggle-timer"].disabled = Boolean(timer?.completed);
   elements["finish-timer"].textContent = timer?.completed ? "✓" : "■";
-  elements["finish-timer"].disabled = Boolean(timer?.completed);
+  elements["finish-timer"].disabled = Boolean(timer?.completed || !timer?.startedAt || !activity.outcome);
 }
 
 function render() {
@@ -99,7 +118,9 @@ function render() {
   elements["connect-view"].hidden = true;
   elements["practice-view"].hidden = false;
   elements.disconnect.hidden = false;
-  elements["sync-light"].classList.add("live");
+  if (!elements["sync-light"].classList.contains("syncing") && !elements["sync-light"].classList.contains("error")) {
+    setSyncStatus("live");
+  }
   const activityUrl = activity?.url?.match(/^https:\/\/(?:www\.)?leetcode\.com\/problems\/[a-z0-9-]+\/?/i)?.[0] ?? "";
   const openUrl = activityUrl || problemUrl;
   elements["problem-link"].href = openUrl || "#";
@@ -117,6 +138,12 @@ function render() {
   elements["outcome-button"].querySelector("span").textContent = flag;
   elements["outcome-button"].querySelector("strong").textContent = result;
   const publication = activity.publicationStatus ?? "draft";
+  elements["outcome-button"].disabled = Boolean(!activity.timer?.startedAt || publication === "published");
+  elements["outcome-button"].title = !activity.timer?.startedAt
+    ? "Start the stopwatch before choosing a result"
+    : publication === "published"
+      ? "Published results are read-only"
+      : "Cycle result";
   elements["publication-button"].className = `status-button publication ${publication}`;
   elements["publication-button"].querySelector("span").textContent = publication === "published" ? "✓" : publication === "ready" ? "↑" : "◇";
   elements["publication-button"].querySelector("strong").textContent = publication === "published" ? "In journal" : publication === "ready" ? "Ready for journal" : "Finish to journal";
@@ -128,8 +155,17 @@ function render() {
   renderClock();
 }
 
-async function refresh() {
-  const sequence = ++refreshSequence;
+function applyCompanionState(nextState, context) {
+  problemUrl = context.problemUrl;
+  state = nextState;
+  activity = state.currentActivity;
+  render();
+  setSyncStatus("live");
+}
+
+async function performRefresh() {
+  const expectedContextRevision = contextRevision;
+  const expectedMutationSequence = mutationSequence;
   const context = await activeTabContext();
   if (context.kind === "other") {
     problemUrl = "";
@@ -140,19 +176,98 @@ async function refresh() {
   const query = new URLSearchParams({ date: practiceDate() });
   if (context.problemUrl) query.set("url", context.problemUrl);
   const nextState = await api(`/companion/state?${query.toString()}`);
-  if (sequence !== refreshSequence) return;
-  problemUrl = context.problemUrl;
-  state = nextState;
-  activity = state.currentActivity;
+  if (expectedContextRevision !== contextRevision || expectedMutationSequence !== mutationSequence || pendingMutations > 0) {
+    refreshQueued = true;
+    return;
+  }
+  applyCompanionState(nextState, context);
+}
+
+function refresh() {
+  if (!token) return Promise.resolve();
+  if (pendingMutations > 0) {
+    refreshQueued = true;
+    return mutationQueue;
+  }
+  if (refreshPromise) {
+    refreshQueued = true;
+    return refreshPromise;
+  }
+  if (!state) setSyncStatus("syncing");
+  refreshPromise = performRefresh()
+    .catch((error) => {
+      setSyncStatus("error");
+      throw error;
+    })
+    .finally(() => {
+      refreshPromise = null;
+      if (refreshQueued && token && !document.hidden) {
+        refreshQueued = false;
+        queueMicrotask(() => refresh().catch(() => {}));
+      }
+    });
+  return refreshPromise;
+}
+
+function optimisticTimer(action) {
+  if (!activity?.timer && action !== "start") return;
+  const now = Date.now();
+  const current = activity.timer ?? {
+    accumulatedSeconds: 0,
+    startedAt: null,
+    runningSince: null,
+    completed: false,
+  };
+  const foldedSeconds = elapsed(current);
+  const timer = action === "start"
+    ? { ...current, startedAt: current.startedAt ?? now, runningSince: now, completed: false }
+    : action === "pause"
+      ? { ...current, accumulatedSeconds: foldedSeconds, runningSince: null }
+      : { ...current, accumulatedSeconds: foldedSeconds, runningSince: null, completed: true, completedAt: now };
+  activity = {
+    ...activity,
+    timer,
+    ...(action === "finish" ? { publicationStatus: "ready" } : {}),
+  };
   render();
 }
 
-async function mutate(mutation) {
-  await api("/companion/mutations", {
-    method: "POST",
-    body: JSON.stringify({ date: practiceDate(), mutation }),
-  });
-  await refresh();
+function mutate(mutation, optimisticUpdate) {
+  const sequence = ++mutationSequence;
+  const contextPromise = activeTabContext();
+  pendingMutations += 1;
+  refreshQueued = false;
+  if (optimisticUpdate) optimisticUpdate();
+  setSyncStatus("syncing");
+
+  mutationQueue = mutationQueue
+    .catch(() => {})
+    .then(async () => {
+      const context = await contextPromise;
+      const nextState = await api("/companion/mutations", {
+        method: "POST",
+        body: JSON.stringify({
+          date: practiceDate(),
+          url: context.problemUrl,
+          mutation,
+        }),
+      });
+      if (sequence === mutationSequence) applyCompanionState(nextState, context);
+      return nextState;
+    })
+    .catch((error) => {
+      setSyncStatus("error");
+      refreshQueued = true;
+      throw error;
+    })
+    .finally(() => {
+      pendingMutations -= 1;
+      if (pendingMutations === 0 && refreshQueued && token && !document.hidden) {
+        refreshQueued = false;
+        queueMicrotask(() => refresh().catch(() => {}));
+      }
+    });
+  return mutationQueue;
 }
 
 elements["connect-button"].addEventListener("click", async () => {
@@ -170,17 +285,47 @@ elements["problem-link"].addEventListener("click", (event) => {
     chrome.tabs.create({ url });
   }
 });
-elements["toggle-timer"].addEventListener("click", () => mutate({ type: "timer", activityId: activity.id, action: activity.timer?.runningSince ? "pause" : "start" }));
-elements["finish-timer"].addEventListener("click", () => mutate({ type: "timer", activityId: activity.id, action: "finish" }));
+elements["toggle-timer"].addEventListener("click", () => {
+  if (!activity) return;
+  const action = activity.timer?.runningSince ? "pause" : "start";
+  const activityId = activity.id;
+  mutate({ type: "timer", activityId, action }, () => optimisticTimer(action)).catch(() => {});
+});
+elements["finish-timer"].addEventListener("click", () => {
+  if (!activity) return;
+  const activityId = activity.id;
+  mutate({ type: "timer", activityId, action: "finish" }, () => optimisticTimer("finish")).catch(() => {});
+});
 elements["outcome-button"].addEventListener("click", () => {
+  if (!activity) return;
   const current = OUTCOMES.indexOf(activity.outcome ?? null);
-  mutate({ type: "outcome", activityId: activity.id, outcome: OUTCOMES[(current + 1) % OUTCOMES.length] });
+  const nextOutcome = OUTCOMES[(current + 1) % OUTCOMES.length];
+  const activityId = activity.id;
+  mutate(
+    { type: "outcome", activityId, outcome: nextOutcome },
+    () => {
+      activity = { ...activity, outcome: nextOutcome };
+      render();
+    },
+  ).catch(() => {});
 });
 elements["save-note"].addEventListener("click", async () => {
   elements["note-state"].textContent = "Saving…";
-  await mutate({ type: "activity-note", activityId: activity.id, note: elements.notes.value });
-  notesDirty = false;
-  elements["note-state"].textContent = "Saved to Interview Arc";
+  const activityId = activity.id;
+  const note = elements.notes.value;
+  try {
+    await mutate(
+      { type: "activity-note", activityId, note },
+      () => {
+        activity = { ...activity, personalNote: note };
+        render();
+      },
+    );
+    notesDirty = false;
+    elements["note-state"].textContent = "Saved to Interview Arc";
+  } catch {
+    elements["note-state"].textContent = "Could not save";
+  }
 });
 elements.notes.addEventListener("input", () => {
   notesDirty = true;
@@ -194,8 +339,15 @@ elements.disconnect.addEventListener("click", async () => {
   showConnect();
 });
 
-chrome.tabs.onActivated.addListener(() => token && refresh().catch(() => {}));
-chrome.tabs.onUpdated.addListener((_tabId, changeInfo) => changeInfo.url && token && refresh().catch(() => {}));
+chrome.tabs.onActivated.addListener(() => {
+  contextRevision += 1;
+  if (token) refresh().catch(() => {});
+});
+chrome.tabs.onUpdated.addListener((_tabId, changeInfo) => {
+  if (!changeInfo.url) return;
+  contextRevision += 1;
+  if (token) refresh().catch(() => {});
+});
 
 (async () => {
   token = (await chrome.storage.local.get("interviewArcToken")).interviewArcToken ?? "";

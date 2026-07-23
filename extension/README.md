@@ -14,8 +14,11 @@ The token is kept in Chrome extension storage. The server stores only its SHA-25
 
 On a LeetCode page, the panel follows that page's canonical problem. On the
 Interview Arc dashboard, it follows the currently running or paused coding
-activity and refreshes automatically when focus changes. The panel can add the
-current public LeetCode URL to Today, run and finish its D1-backed stopwatch,
-cycle the user-owned result, and save personal notes. Finishing the stopwatch
-makes the attempt **Ready for journal** automatically; the result remains
-separate attempt metadata.
+activity and refreshes automatically when focus changes. Refreshes are
+single-flight so a slow response cannot create a polling backlog or overwrite a
+newer problem. Timer and result actions update immediately in the panel, then
+reconcile against the authenticated server response without issuing a second
+state request. The panel can add the current public LeetCode URL to Today, run
+and finish its D1-backed stopwatch, cycle the user-owned result, and save
+personal notes. Finishing the stopwatch makes the attempt **Ready for journal**
+automatically; the result remains separate attempt metadata.
