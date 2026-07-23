@@ -140,6 +140,8 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /listRestoring === "library" \? "list-restoring" : ""/);
   assert.match(client, /pendingListRestoreRef\.current = \{ surface: "library", \.\.\.position \}/);
   assert.match(client, /useLayoutEffect\(\(\) => \{[\s\S]*window\.scrollTo\(\{ top: pending\.pageScrollTop/);
+  assert.match(client, /pendingListRestoreRef\.current = null;\s*setListRestoring\(null\);/);
+  assert.match(client, /pendingSelectedRevealRef\.current !== surface/);
   assert.match(client, /data-list-item-id=\{`library:\$\{entry\.id\}`\}/);
   assert.match(client, /data-list-item-id=\{`banks:\$\{type\}:\$\{question\.id\}`\}/);
   assert.match(client, /anchorOffset: anchor\.getBoundingClientRect\(\)\.top - referenceTop/);
@@ -154,8 +156,10 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(css, /--master-pane-width: 525px/);
   assert.doesNotMatch(css, /@keyframes page-enter-(?:forward|backward) \{[^}]*translate3d/);
   assert.match(client, /function transitionToView\(nextView: View\) \{\s*if \(nextView === view\) return;/);
-  assert.doesNotMatch(css, /\.library-page\.has-open-entry \.past-entry-pane,\s*\.banks-page\.has-open-solution \.bank-solution-pane \{\s*animation: reader-pane-enter/);
+  assert.doesNotMatch(css, /reader-pane-(?:enter|exit)/);
   assert.match(css, /@keyframes reader-workspace-exit/);
+  assert.match(css, /\.past-master-detail\.reader-closing,[\s\S]*animation: reader-workspace-exit/);
+  assert.doesNotMatch(css, /list-view-return/);
   assert.match(client, /answer-player-unified/);
   assert.match(client, /problem-bank-entry.*role="button" tabIndex=\{0\} aria-label=/);
   assert.match(client, /function ReaderOutline/);
