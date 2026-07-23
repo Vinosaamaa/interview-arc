@@ -130,6 +130,11 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.doesNotMatch(client, /startViewTransition/);
   assert.match(client, /activeActivity \? "has-focus" : railActivity \? "has-history" : "empty"/);
   assert.match(client, /readerClosing \? "reader-closing" : ""/);
+  assert.match(client, /listRestoring === "library" \? "list-restoring" : ""/);
+  assert.match(client, /pendingListRestoreRef\.current = \{ surface: "library", \.\.\.position \}/);
+  assert.match(client, /useEffect\(\(\) => \{[\s\S]*window\.scrollTo\(\{ top: pending\.pageScrollTop/);
+  assert.doesNotMatch(client, /kind: "activity-result"/);
+  assert.doesNotMatch(client, /Choose a result first/);
   assert.match(css, /@keyframes page-enter/);
   assert.match(css, /@keyframes reader-workspace-exit/);
   assert.match(client, /answer-player-unified/);
@@ -139,7 +144,12 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /setEveryReaderGroup\(true\)/);
   assert.match(css, /\.workspace-reader-scroll \.markdown-body \{ font-size: 1\.0625rem; line-height: 1\.7; \}/);
   assert.match(css, /max-width: 970px/);
-  assert.match(css, /\.journal-entry\.log-entry,\s*\.problem-bank-entry \{ min-height: 150px; \}/);
+  assert.match(css, /\.log-entry,\s*\.problem-bank-entry \{ min-height: 150px; \}/);
+  assert.match(css, /\.library-page\.has-open-entry \.dated-log \{[^}]*grid-auto-rows: max-content;[^}]*align-content: start;/);
+  assert.match(css, /\.library-page\.has-open-entry \.log-day \{[^}]*height: max-content;/);
+  assert.match(css, /\.problem-bank-list \{[^}]*max-height: none;[^}]*overflow-y: visible;/);
+  assert.match(css, /\.banks-page\.has-open-solution \.problem-bank-list \{[^}]*overflow-y: auto;/);
+  assert.match(client, /entry\.artifact \? "Published record" : entry\.status/);
   assert.match(css, /\.highlight-note-card\.tone-0 \{ background: #fff2f1/);
   assert.match(css, /\.long-note-inspector/);
   assert.match(client, /Open full note/);
