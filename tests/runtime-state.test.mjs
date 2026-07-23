@@ -161,6 +161,8 @@ test("content highlights persist editable notes", async () => {
   assert.match(schema, /note: text\("note"\)\.notNull\(\)\.default\(""\)/);
   assert.match(route, /export async function PATCH/);
   assert.match(route, /updateContentHighlightNote/);
+  assert.match(route, /body\.quote\.length > 100_000/);
+  assert.match(route, /validColor\(body\.color\)/);
 });
 
 test("contracts preserve flexible session duration, membership, and exact timestamps", async () => {

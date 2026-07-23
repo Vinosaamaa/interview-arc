@@ -55,7 +55,8 @@ type LibraryAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "fa
 type BankAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "failed" | "todo" | "notes";
 type ComposerAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "failed" | "todo";
 type DocumentPiP = { requestWindow: (options?: { width?: number; height?: number }) => Promise<Window> };
-type ContentHighlight = { id: string; scopeType: "activity" | "solution"; scopeId: string; quote: string; prefix: string; suffix: string; color: "yellow" | "green" | "pink"; note: string; createdAt: number; updatedAt: number };
+type HighlightColor = "yellow" | "green" | "pink";
+type ContentHighlight = { id: string; scopeType: "activity" | "solution"; scopeId: string; quote: string; prefix: string; suffix: string; color: HighlightColor; note: string; createdAt: number; updatedAt: number };
 type AnnotationPosition = { x: number; y: number; placement: "above" | "below" };
 type PendingHighlight = { quote: string; prefix: string; suffix: string; position: AnnotationPosition };
 type ComposerState = {
@@ -926,9 +927,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [annotationPosition, setAnnotationPosition] = useState<AnnotationPosition | null>(null);
   const [highlightNoteDraft, setHighlightNoteDraft] = useState("");
   const [highlightNoteEditing, setHighlightNoteEditing] = useState(false);
+  const [highlightPaletteOpen, setHighlightPaletteOpen] = useState(false);
+  const [highlightColorDraft, setHighlightColorDraft] = useState<HighlightColor>("yellow");
   const [highlightBusy, setHighlightBusy] = useState(false);
   const readerDocumentRef = useRef<HTMLDivElement>(null);
-  const highlightRangesRef = useRef(new Map<string, Range>());
+  const highlightRangesRef = useRef(new Map<string, Range[]>());
   const {
     playing: ambientPlaying,
     playlist: ambientPlaylist,
@@ -2968,7 +2971,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const rangeMap = highlightRangesRef.current;
     rangeMap.clear();
     if (!root || !css.highlights || !HighlightConstructor) return;
-    const ranges: Range[] = [];
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     const nodes: Text[] = [];
     let combined = "";
@@ -2981,22 +2983,55 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       }
       return null;
     };
+    const styleRanges = new Map<string, Range[]>();
+    const addStyledRange = (name: string, range: Range) => styleRanges.set(name, [...(styleRanges.get(name) ?? []), range]);
     contentHighlights.forEach((highlight) => {
       let index = combined.indexOf(highlight.quote);
-      while (index >= 0 && highlight.prefix && !combined.slice(Math.max(0, index - highlight.prefix.length), index).endsWith(highlight.prefix)) index = combined.indexOf(highlight.quote, index + 1);
+      while (index >= 0) {
+        const prefixMatches = !highlight.prefix || combined.slice(Math.max(0, index - highlight.prefix.length), index).endsWith(highlight.prefix);
+        const suffixMatches = !highlight.suffix || combined.slice(index + highlight.quote.length, index + highlight.quote.length + highlight.suffix.length).startsWith(highlight.suffix);
+        if (prefixMatches && suffixMatches) break;
+        index = combined.indexOf(highlight.quote, index + 1);
+      }
       if (index < 0) return;
       const start = locate(index); const end = locate(index + highlight.quote.length);
       if (!start || !end) return;
-      const range = new Range(); range.setStart(start.node, start.offset); range.setEnd(end.node, end.offset); ranges.push(range); rangeMap.set(highlight.id, range);
+      const fullRange = new Range(); fullRange.setStart(start.node, start.offset); fullRange.setEnd(end.node, end.offset);
+      const segments: Range[] = [];
+      let seen = 0;
+      const highlightEnd = index + highlight.quote.length;
+      nodes.forEach((node) => {
+        const nodeStart = seen;
+        const nodeEnd = seen + node.data.length;
+        seen = nodeEnd;
+        const segmentStart = Math.max(index, nodeStart);
+        const segmentEnd = Math.min(highlightEnd, nodeEnd);
+        if (segmentStart >= segmentEnd) return;
+        const segment = new Range();
+        segment.setStart(node, segmentStart - nodeStart);
+        segment.setEnd(node, segmentEnd - nodeStart);
+        segments.push(segment);
+      });
+      if (!segments.length) segments.push(fullRange);
+      rangeMap.set(highlight.id, segments);
+      const styleName = `interview-arc-${highlight.note ? "note-" : ""}${highlight.color}`;
+      segments.forEach((segment) => addStyledRange(styleName, segment));
     });
-    css.highlights.set("interview-arc-saved", new HighlightConstructor(...ranges));
-    return () => { css.highlights?.delete("interview-arc-saved"); rangeMap.clear(); };
+    styleRanges.forEach((ranges, name) => css.highlights?.set(name, new HighlightConstructor(...ranges)));
+    return () => { styleRanges.forEach((_, name) => css.highlights?.delete(name)); rangeMap.clear(); };
   }, [contentHighlights, selectedEntry?.id, selectedProblem?.question.id]);
 
   useEffect(() => {
     const style = document.createElement("style");
     style.dataset.interviewArcHighlights = "saved";
-    style.textContent = "::highlight(interview-arc-saved){color:inherit;background:rgba(250,207,72,.62);text-decoration:underline rgba(186,137,17,.45) 2px}";
+    style.textContent = `
+      ::highlight(interview-arc-yellow){color:inherit;background:rgba(250,207,72,.62)}
+      ::highlight(interview-arc-green){color:inherit;background:rgba(105,211,148,.48)}
+      ::highlight(interview-arc-pink){color:inherit;background:rgba(246,149,185,.5)}
+      ::highlight(interview-arc-note-yellow){color:inherit;background:transparent;text-decoration:underline #d39a00 3px;text-underline-offset:4px}
+      ::highlight(interview-arc-note-green){color:inherit;background:transparent;text-decoration:underline #2b9b62 3px;text-underline-offset:4px}
+      ::highlight(interview-arc-note-pink){color:inherit;background:transparent;text-decoration:underline #d45083 3px;text-underline-offset:4px}
+    `;
     document.head.append(style);
     return () => style.remove();
   }, []);
@@ -3014,10 +3049,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     setAnnotationPosition(null);
     setHighlightNoteDraft("");
     setHighlightNoteEditing(false);
+    setHighlightPaletteOpen(false);
+    setHighlightColorDraft("yellow");
   }
 
   function highlightAtPoint(x: number, y: number) {
-    return [...highlightRangesRef.current.entries()].reverse().find(([, range]) => [...range.getClientRects()].some((rect) => x >= rect.left - 3 && x <= rect.right + 3 && y >= rect.top - 3 && y <= rect.bottom + 3));
+    return [...highlightRangesRef.current.entries()].reverse().find(([, ranges]) => ranges.some((range) => [...range.getClientRects()].some((rect) => x >= rect.left - 3 && x <= rect.right + 3 && y >= rect.top - 3 && y <= rect.bottom + 3)));
   }
 
   function captureHighlightSelection(clientX?: number, clientY?: number) {
@@ -3029,11 +3066,15 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         const match = highlightAtPoint(clientX, clientY);
         if (match) {
           const highlight = contentHighlights.find((candidate) => candidate.id === match[0]);
-          const rect = [...match[1].getClientRects()].find((candidate) => clientX >= candidate.left - 3 && clientX <= candidate.right + 3 && clientY >= candidate.top - 3 && clientY <= candidate.bottom + 3) ?? match[1].getBoundingClientRect();
+          const rects = match[1].flatMap((range) => [...range.getClientRects()]);
+          const rect = rects.find((candidate) => clientX >= candidate.left - 3 && clientX <= candidate.right + 3 && clientY >= candidate.top - 3 && clientY <= candidate.bottom + 3) ?? rects.at(-1);
+          if (!rect) return;
           setSelectedHighlightId(match[0]);
           setAnnotationPosition(annotationPositionFor(rect));
           setHighlightNoteDraft(highlight?.note ?? "");
+          setHighlightColorDraft(highlight?.color ?? "yellow");
           setHighlightNoteEditing(false);
+          setHighlightPaletteOpen(false);
           return;
         }
       }
@@ -3043,22 +3084,29 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     }
     const range = selection.getRangeAt(0);
     if (!root.contains(range.commonAncestorContainer)) return;
-    const quote = selection.toString().trim();
-    if (!quote) return;
+    const quote = range.cloneContents().textContent ?? "";
+    if (!quote.trim()) return;
     const allText = root.textContent ?? "";
-    const index = allText.indexOf(quote);
+    const before = new Range();
+    before.selectNodeContents(root);
+    before.setEnd(range.startContainer, range.startOffset);
+    const index = (before.cloneContents().textContent ?? "").length;
+    const visibleRects = [...range.getClientRects()].filter((rect) => rect.width > 0 && rect.height > 0);
+    const anchorRect = visibleRects.at(-1) ?? range.getBoundingClientRect();
     setSelectedHighlightId("");
     setAnnotationPosition(null);
     setHighlightNoteDraft("");
     setHighlightNoteEditing(false);
-    setPendingHighlight({ quote, prefix: index >= 0 ? allText.slice(Math.max(0, index - 80), index) : "", suffix: index >= 0 ? allText.slice(index + quote.length, index + quote.length + 80) : "", position: annotationPositionFor(range.getBoundingClientRect()) });
+    setHighlightPaletteOpen(false);
+    setHighlightColorDraft("yellow");
+    setPendingHighlight({ quote, prefix: allText.slice(Math.max(0, index - 120), index), suffix: allText.slice(index + quote.length, index + quote.length + 120), position: annotationPositionFor(anchorRect) });
   }
 
-  async function saveHighlight(note = "") {
+  async function saveHighlight(note = "", color: HighlightColor = highlightColorDraft) {
     if (!highlightScope || !pendingHighlight) return;
     setHighlightBusy(true);
     const selector = { quote: pendingHighlight.quote, prefix: pendingHighlight.prefix, suffix: pendingHighlight.suffix };
-    const response = await fetch("/api/highlights", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...highlightScope, ...selector, note }) });
+    const response = await fetch("/api/highlights", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...highlightScope, ...selector, color, note }) });
     setHighlightBusy(false);
     if (!response.ok) return;
     const row = await response.json() as ContentHighlight;
@@ -3092,20 +3140,22 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const style = { left: position.x, top: position.y };
     const portal = (content: ReactNode) => typeof document === "undefined" ? null : createPortal(content, document.body);
     if (pendingHighlight && !highlightNoteEditing) return portal(<div className={`annotation-popover selection-annotation ${position.placement}`} style={style} role="toolbar" aria-label="Selected text actions" onMouseDown={(event) => event.preventDefault()}>
-      <button type="button" onClick={() => void saveHighlight()} disabled={highlightBusy} aria-label="Highlight selected text" title="Highlight"><Icon name="edit" /></button>
-      <button type="button" onClick={() => { setHighlightNoteDraft(""); setHighlightNoteEditing(true); }} disabled={highlightBusy} aria-label="Highlight selected text and add a note" title="Add note"><Icon name="note" /></button>
+      {highlightPaletteOpen ? <div className="annotation-colors" role="group" aria-label="Highlight color">
+        {(["yellow", "green", "pink"] as HighlightColor[]).map((color) => <button className={color} type="button" onClick={() => void saveHighlight("", color)} disabled={highlightBusy} aria-label={`Save ${color} highlight`} title={`${color[0].toUpperCase()}${color.slice(1)}`} key={color}><span /></button>)}
+      </div> : <>
+        <button type="button" onClick={() => setHighlightPaletteOpen(true)} disabled={highlightBusy} aria-label="Choose a highlight color" title="Highlight"><Icon name="edit" /></button>
+        <button type="button" onClick={() => { setHighlightNoteDraft(""); setHighlightColorDraft("yellow"); setHighlightNoteEditing(true); }} disabled={highlightBusy} aria-label="Underline selected text and add a note" title="Add note"><Icon name="note" /></button>
+      </>}
     </div>);
     if (pendingHighlight) return portal(<form className={`annotation-popover annotation-note-editor ${position.placement}`} style={style} onSubmit={(event) => { event.preventDefault(); void saveHighlight(highlightNoteDraft); }} onMouseDown={(event) => event.stopPropagation()}>
       <label htmlFor="new-highlight-note">Add a note to this highlight</label>
+      <div className="annotation-colors" role="group" aria-label="Underline color">{(["yellow", "green", "pink"] as HighlightColor[]).map((color) => <button className={`${color} ${highlightColorDraft === color ? "selected" : ""}`} type="button" onClick={() => setHighlightColorDraft(color)} aria-pressed={highlightColorDraft === color} aria-label={`Use ${color} underline`} key={color}><span /></button>)}</div>
       <textarea id="new-highlight-note" autoFocus value={highlightNoteDraft} onChange={(event) => setHighlightNoteDraft(event.target.value)} placeholder="Why does this matter?" />
       <div><button type="button" onClick={() => setHighlightNoteEditing(false)}>Cancel</button><button type="submit" disabled={highlightBusy || !highlightNoteDraft.trim()}>{highlightBusy ? "Saving…" : "Save note"}</button></div>
     </form>);
     if (!selectedHighlight) return null;
-    return portal(<section className={`annotation-popover saved-annotation ${position.placement}`} style={style} aria-label="Saved highlight" onMouseDown={(event) => event.stopPropagation()}>
-      <header><span>Saved highlight</span><button type="button" onClick={closeAnnotationPopover} aria-label="Close highlight actions"><Icon name="close" /></button></header>
-      <mark>{selectedHighlight.quote}</mark>
-      {highlightNoteEditing ? <form onSubmit={(event) => { event.preventDefault(); void updateHighlightNote(selectedHighlight.id, highlightNoteDraft); }}><label htmlFor="saved-highlight-note">Note</label><textarea id="saved-highlight-note" autoFocus value={highlightNoteDraft} onChange={(event) => setHighlightNoteDraft(event.target.value)} placeholder="Add a note…" /><div><button type="button" onClick={() => { setHighlightNoteDraft(selectedHighlight.note); setHighlightNoteEditing(false); }}>Cancel</button><button type="submit" disabled={highlightBusy || !highlightNoteDraft.trim()}>{highlightBusy ? "Saving…" : "Save note"}</button></div></form> : <p>{selectedHighlight.note || "No note attached."}</p>}
-      {!highlightNoteEditing && <div className="annotation-actions"><button type="button" onClick={() => setHighlightNoteEditing(true)} aria-label={selectedHighlight.note ? "Edit highlight note" : "Add a note to highlight"} title={selectedHighlight.note ? "Edit note" : "Add note"}><Icon name={selectedHighlight.note ? "edit" : "note"} /></button>{selectedHighlight.note && <button type="button" onClick={() => void updateHighlightNote(selectedHighlight.id, "")} disabled={highlightBusy} aria-label="Remove highlight note" title="Remove note"><Icon name="close" /></button>}<button className="danger" type="button" onClick={() => void removeHighlight(selectedHighlight.id)} disabled={highlightBusy} aria-label="Remove highlight" title="Remove highlight"><Icon name="trash" /></button></div>}
+    return portal(<section className={`annotation-popover saved-annotation compact ${position.placement}`} style={style} aria-label="Highlight actions" onMouseDown={(event) => event.stopPropagation()}>
+      {highlightNoteEditing ? <form onSubmit={(event) => { event.preventDefault(); void updateHighlightNote(selectedHighlight.id, highlightNoteDraft); }}><label htmlFor="saved-highlight-note">Note</label><textarea id="saved-highlight-note" autoFocus value={highlightNoteDraft} onChange={(event) => setHighlightNoteDraft(event.target.value)} placeholder="Add a note…" /><div><button type="button" onClick={() => { setHighlightNoteDraft(selectedHighlight.note); setHighlightNoteEditing(false); }}>Cancel</button><button type="submit" disabled={highlightBusy}>{highlightBusy ? "Saving…" : selectedHighlight.note && !highlightNoteDraft.trim() ? "Remove note" : "Save note"}</button></div></form> : <>{selectedHighlight.note && <p>{selectedHighlight.note}</p>}<div className="annotation-actions"><button type="button" onClick={() => setHighlightNoteEditing(true)} aria-label={selectedHighlight.note ? "Edit highlight note" : "Add a note to highlight"} title={selectedHighlight.note ? "Edit note" : "Add note"}><Icon name="note" /></button><button className="danger" type="button" onClick={() => void removeHighlight(selectedHighlight.id)} disabled={highlightBusy} aria-label="Remove highlight" title="Remove highlight"><Icon name="trash" /></button></div></>}
     </section>);
   }
 
