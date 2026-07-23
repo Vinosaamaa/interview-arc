@@ -275,7 +275,11 @@ type AuthResult = { response: Response | null; email: string | null };
 
 async function authGate(request: Request, env: Env): Promise<AuthResult> {
   const hostname = new URL(request.url).hostname;
-  const isLocalRequest = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  const isLocalRequest = hostname === "localhost"
+    || hostname.endsWith(".localhost")
+    || hostname === "127.0.0.1"
+    || hostname === "0.0.0.0"
+    || hostname === "::1";
   if (env.LOCAL_DEV_AUTH_BYPASS === "true" && isLocalRequest) {
     return { response: null, email: null };
   }

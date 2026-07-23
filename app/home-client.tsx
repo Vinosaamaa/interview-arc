@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -66,21 +66,24 @@ type ReaderMemory = {
   anchorOffset?: number;
   scrollTop?: number;
 };
+type ListSurface = "library" | "banks";
+type ListPosition = {
+  pageScrollTop: number;
+  listScrollTop: number;
+  anchorId?: string;
+  anchorOffset?: number;
+};
 type CrossReaderReturn =
   | {
     sourceView: "library";
     sourceMasterPaneOpen: boolean;
     destinationProblem: { type: ActivityType; question: QuestionBankItem } | null;
-    pageScrollTop: number;
-    listScrollTop: number;
-  }
+  } & ListPosition
   | {
     sourceView: "banks";
     sourceMasterPaneOpen: boolean;
     destinationEntry: LogEntry | null;
-    pageScrollTop: number;
-    listScrollTop: number;
-  };
+  } & ListPosition;
 type LifecycleDialog =
   | { kind: "session-results"; sessionId: string; missingCount: number }
   | { kind: "workbench-results"; missingCount: number }
@@ -1066,6 +1069,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return stored === "journey" || stored === "library" || stored === "banks" ? stored : "today";
   });
   const [viewDirection, setViewDirection] = useState<"forward" | "backward">("forward");
+  const [viewTransitionId, setViewTransitionId] = useState(0);
   const { draft, setDraft, now, setNow, hydrated, enqueue } = useLiveState(journal.date);
   const yesterdayDate = shiftDate(journal.date, -1);
   const yesterdayDraft = useReadOnlyLiveState(yesterdayDate);
@@ -1080,7 +1084,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     readSessionJson<WorkspaceUiMemory>("interview-arc-workspace-ui-v1", {})
   );
   const [readerClosing, setReaderClosing] = useState(false);
-  const [listRestoring, setListRestoring] = useState<"library" | "banks" | null>(null);
+  const [listRestoring, setListRestoring] = useState<ListSurface | null>(null);
   const [crossReaderReturn, setCrossReaderReturn] = useState<CrossReaderReturn>(null);
   const [lifecycleDialog, setLifecycleDialog] = useState<LifecycleDialog>(null);
   const [uiToast, setUiToast] = useState<UiToast>(null);
@@ -1151,12 +1155,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const toastTimerRef = useRef<number | null>(null);
   const pastListRef = useRef<HTMLDivElement>(null);
   const bankListRef = useRef<HTMLDivElement>(null);
-  const pendingListRestoreRef = useRef<{
-    surface: "library" | "banks";
-    pageScrollTop: number;
-    listScrollTop: number;
-  } | null>(null);
-  const listPositionMemoryRef = useRef({
+  const pendingListRestoreRef = useRef<(ListPosition & { surface: ListSurface }) | null>(null);
+  const listPositionMemoryRef = useRef<Record<ListSurface, ListPosition>>({
     library: { pageScrollTop: 0, listScrollTop: 0 },
     banks: { pageScrollTop: 0, listScrollTop: 0 },
   });
@@ -1205,16 +1205,56 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const pending = pendingListRestoreRef.current;
     if (!listRestoring || !pending || pending.surface !== listRestoring) return;
-    window.scrollTo({ top: pending.pageScrollTop, behavior: "instant" });
     const list = pending.surface === "library" ? pastListRef.current : bankListRef.current;
-    if (list) list.scrollTop = pending.listScrollTop;
+    window.scrollTo({ top: pending.pageScrollTop, behavior: "instant" });
+    if (list) {
+      list.scrollTop = pending.listScrollTop;
+      const anchor = pending.anchorId
+        ? [...list.querySelectorAll<HTMLElement>("[data-list-item-id]")].find((item) => item.dataset.listItemId === pending.anchorId)
+        : null;
+      if (anchor && typeof pending.anchorOffset === "number") {
+        const overflowY = window.getComputedStyle(list).overflowY;
+        const internallyScrollable = (overflowY === "auto" || overflowY === "scroll")
+          && list.scrollHeight > list.clientHeight + 2;
+        const referenceTop = internallyScrollable ? list.getBoundingClientRect().top : 0;
+        const delta = anchor.getBoundingClientRect().top - referenceTop - pending.anchorOffset;
+        if (internallyScrollable) list.scrollTop += delta;
+        else window.scrollBy({ top: delta, behavior: "instant" });
+      }
+    }
     pendingListRestoreRef.current = null;
     const frame = window.requestAnimationFrame(() => setListRestoring(null));
     return () => window.cancelAnimationFrame(frame);
   }, [listRestoring]);
+
+  useLayoutEffect(() => {
+    if (readerClosing || readerFocusMode) return;
+    const surface: ListSurface | null = view === "library" && selectedEntry
+      ? "library"
+      : view === "banks" && selectedProblem
+        ? "banks"
+        : null;
+    if (!surface) return;
+    const list = surface === "library" ? pastListRef.current : bankListRef.current;
+    const itemId = surface === "library"
+      ? `library:${selectedEntry!.id}`
+      : `banks:${selectedProblem!.type}:${selectedProblem!.question.id}`;
+    const frame = window.requestAnimationFrame(() => {
+      if (!list || list.clientHeight === 0) return;
+      const selected = [...list.querySelectorAll<HTMLElement>("[data-list-item-id]")]
+        .find((item) => item.dataset.listItemId === itemId);
+      if (!selected) return;
+      const target = list.scrollTop
+        + selected.getBoundingClientRect().top
+        - list.getBoundingClientRect().top
+        - Math.max(0, (list.clientHeight - selected.offsetHeight) / 2);
+      list.scrollTo({ top: Math.max(0, target), behavior: "instant" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [masterPaneOpen, readerClosing, readerFocusMode, selectedEntry, selectedProblem, view]);
 
   useEffect(() => {
     window.sessionStorage.setItem("interview-arc-reader-memory-v1", JSON.stringify(readerMemory));
@@ -1887,22 +1927,48 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     });
   }
 
-  function captureListPosition(surface: "library" | "banks") {
+  function captureListPosition(surface: ListSurface, remember = true): ListPosition {
+    const list = surface === "library" ? pastListRef.current : bankListRef.current;
+    const overflowY = list ? window.getComputedStyle(list).overflowY : "";
+    const internallyScrollable = Boolean(
+      list
+      && (overflowY === "auto" || overflowY === "scroll")
+      && list.scrollHeight > list.clientHeight + 2
+    );
+    const referenceTop = internallyScrollable && list ? list.getBoundingClientRect().top : 0;
+    const anchor = list
+      ? [...list.querySelectorAll<HTMLElement>("[data-list-item-id]")]
+        .find((item) => item.getBoundingClientRect().bottom > referenceTop + 1)
+      : null;
     const position = {
       pageScrollTop: window.scrollY,
-      listScrollTop: surface === "library"
-        ? (pastListRef.current?.scrollTop ?? 0)
-        : (bankListRef.current?.scrollTop ?? 0),
+      listScrollTop: list?.scrollTop ?? 0,
+      ...(anchor ? {
+        anchorId: anchor.dataset.listItemId,
+        anchorOffset: anchor.getBoundingClientRect().top - referenceTop,
+      } : {}),
     };
-    listPositionMemoryRef.current[surface] = position;
+    if (remember) listPositionMemoryRef.current[surface] = position;
     return position;
   }
 
-  function restoreListPosition(surface: "library" | "banks", pageScrollTop: number, listScrollTop: number) {
+  function restoreListPosition(surface: ListSurface, position: ListPosition) {
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
-      window.scrollTo({ top: pageScrollTop, behavior: "instant" });
+      window.scrollTo({ top: position.pageScrollTop, behavior: "instant" });
       const list = surface === "library" ? pastListRef.current : bankListRef.current;
-      if (list) list.scrollTop = listScrollTop;
+      if (!list) return;
+      list.scrollTop = position.listScrollTop;
+      const anchor = position.anchorId
+        ? [...list.querySelectorAll<HTMLElement>("[data-list-item-id]")].find((item) => item.dataset.listItemId === position.anchorId)
+        : null;
+      if (!anchor || typeof position.anchorOffset !== "number") return;
+      const overflowY = window.getComputedStyle(list).overflowY;
+      const internallyScrollable = (overflowY === "auto" || overflowY === "scroll")
+        && list.scrollHeight > list.clientHeight + 2;
+      const referenceTop = internallyScrollable ? list.getBoundingClientRect().top : 0;
+      const delta = anchor.getBoundingClientRect().top - referenceTop - position.anchorOffset;
+      if (internallyScrollable) list.scrollTop += delta;
+      else window.scrollBy({ top: delta, behavior: "instant" });
     }));
   }
 
@@ -1911,7 +1977,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       window.clearTimeout(readerCloseTimerRef.current);
       readerCloseTimerRef.current = null;
     }
-    if (view === "library") captureListPosition("library");
+    if (view === "library" && !selectedEntry) captureListPosition("library");
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 1976px)").matches) setMasterPaneOpen(false);
     setReaderFocusMode(false);
     setReaderClosing(false);
@@ -1984,6 +2050,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       window.clearTimeout(readerCloseTimerRef.current);
       readerCloseTimerRef.current = null;
     }
+    if (view === "banks" && !selectedProblem) captureListPosition("banks");
     closeMasterAfterSelection();
     setReaderFocusMode(false);
     setReaderClosing(false);
@@ -1991,7 +2058,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function openAttemptFromSolution(entry: LibraryEntry) {
-    const position = captureListPosition("banks");
+    const position = captureListPosition("banks", false);
     setCrossReaderReturn({
       sourceView: "banks",
       sourceMasterPaneOpen: masterPaneOpen,
@@ -2015,7 +2082,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   function openEntrySolution(entry: LogEntry) {
     const question = bankQuestionForEntry(entry);
     if (!question || !hasReusableSolution(entry.type, question)) return;
-    const position = captureListPosition("library");
+    const position = captureListPosition("library", false);
     setCrossReaderReturn({
       sourceView: "library",
       sourceMasterPaneOpen: masterPaneOpen,
@@ -2038,12 +2105,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (target.sourceView === "library") {
       setSelectedProblem(target.destinationProblem);
       transitionToView("library");
-      restoreListPosition("library", target.pageScrollTop, target.listScrollTop);
+      restoreListPosition("library", target);
       return;
     }
     setSelectedEntry(target.destinationEntry);
     transitionToView("banks");
-    restoreListPosition("banks", target.pageScrollTop, target.listScrollTop);
+    restoreListPosition("banks", target);
   }
 
   function dismissCrossReader() {
@@ -2666,6 +2733,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   function transitionToView(nextView: View) {
     const order: View[] = ["today", "journey", "library", "banks"];
     setViewDirection(order.indexOf(nextView) >= order.indexOf(view) ? "forward" : "backward");
+    setViewTransitionId((current) => current + 1);
     setView(nextView);
   }
 
@@ -3225,12 +3293,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             </div>
             <div className="log-layout">
               <div className="dated-log" ref={pastListRef} onScroll={() => {
+                if (selectedEntry) return;
                 listPositionMemoryRef.current.library = {
                   pageScrollTop: window.scrollY,
                   listScrollTop: pastListRef.current?.scrollTop ?? 0,
                 };
               }}>
-                {groupedLog.length ? groupedLog.map(([date, entries]) => <section className="log-day" id={`log-date-${date}`} key={date}><header><time>{readableDate(date)}</time><span>{entries.length} record{entries.length === 1 ? "" : "s"} · Pacific day</span></header><div className="log-day-entries">{entries.map((entry) => { const reusableQuestion = bankQuestionForEntry(entry); const reusableSolution = Boolean(reusableQuestion && hasReusableSolution(entry.type, reusableQuestion)); return <article className={`log-entry ${entry.type} ${selectedEntry?.id === entry.id ? "selected" : ""}`} key={entry.id}><button className="log-entry-open" onClick={() => openJournalEntry(entry)} aria-label={`Read ${entry.title}`}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><div className="log-entry-copy"><small>{typeLabel(entry.type)} · {entry.status}{entry.sessionId ? " · session activity" : " · standalone"}</small><strong>{entry.title}</strong>{meaningfulSubtitle(entry.subtitle) && <span>{meaningfulSubtitle(entry.subtitle)}</span>}<div className="entry-badges">{entry.review?.status === "due" && <i className="review-badge due">Due now</i>}{entry.review?.status === "scheduled" && <i className="review-badge">Review {entry.review.dueDate}</i>}{Boolean(entry.personalNote?.trim() || entry.pinnedNotes?.length) && <i className="note-badge">Pinned note</i>}{entry.outcome === "solved" && <i className="independent-badge">Solved</i>}{entry.outcome === "solved_after_reviewing_approach" && <i className="help-badge">Solved with help</i>}{entry.outcome === "failed" && <i className="failure-badge">Failed attempt</i>}</div>{entry.startedAt && <span className="entry-time-range">{formatPracticeTimestamp(entry.startedAt, true)} → {entry.endedAt ? formatPracticeTimestamp(entry.endedAt, true) : "Paused"}</span>}</div><div className="log-entry-meta"><strong>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "—"}</strong><span>{entry.artifact ? "Published record" : entry.status}</span></div></button><div className="log-entry-actions"><StaticResultFlag outcome={entry.outcome} label={resultLabel(entry.outcome, entry.type)} /><button className={`star-control ${isStarred(entry.type, entry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(entry.type, entry.questionId)} disabled={!entry.questionId} aria-label={`${isStarred(entry.type, entry.questionId) ? "Unstar" : "Star"} ${entry.title}`} title="Star this problem"><Icon name="star" /></button><button className={`icon-action solution-control ${reusableSolution ? "solution-available" : ""}`} onClick={() => openEntrySolution(entry)} disabled={!reusableSolution} aria-label={reusableSolution ? `Open reusable solution for ${entry.title}` : `No reusable solution for ${entry.title}`} title={reusableSolution ? "Open reusable solution" : "No reusable solution yet"}><Icon name="book" /></button><button className="icon-action add-practice-control" onClick={() => addEntryToToday(entry)} disabled={!reusableQuestion || Boolean(reusableQuestion && isQuestionBlocked(reusableQuestion, todayBlockedQuestions()))} aria-label={`Add ${entry.title} to Today`} title="Add to Today"><Icon name="plus" /></button></div></article>; })}</div></section>) : <div className="quiet-empty library-empty"><strong>No completed work in this filter yet.</strong><span>Try another filter, or finish an activity to add it to the field journal.</span></div>}
+                {groupedLog.length ? groupedLog.map(([date, entries]) => <section className="log-day" id={`log-date-${date}`} key={date}><header><time>{readableDate(date)}</time><span>{entries.length} record{entries.length === 1 ? "" : "s"} · Pacific day</span></header><div className="log-day-entries">{entries.map((entry) => { const reusableQuestion = bankQuestionForEntry(entry); const reusableSolution = Boolean(reusableQuestion && hasReusableSolution(entry.type, reusableQuestion)); return <article className={`log-entry ${entry.type} ${selectedEntry?.id === entry.id ? "selected" : ""}`} data-list-item-id={`library:${entry.id}`} key={entry.id}><button className="log-entry-open" onClick={() => openJournalEntry(entry)} aria-label={`Read ${entry.title}`}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><div className="log-entry-copy"><small>{typeLabel(entry.type)} · {entry.status}{entry.sessionId ? " · session activity" : " · standalone"}</small><strong>{entry.title}</strong>{meaningfulSubtitle(entry.subtitle) && <span>{meaningfulSubtitle(entry.subtitle)}</span>}<div className="entry-badges">{entry.review?.status === "due" && <i className="review-badge due">Due now</i>}{entry.review?.status === "scheduled" && <i className="review-badge">Review {entry.review.dueDate}</i>}{Boolean(entry.personalNote?.trim() || entry.pinnedNotes?.length) && <i className="note-badge">Pinned note</i>}{entry.outcome === "solved" && <i className="independent-badge">Solved</i>}{entry.outcome === "solved_after_reviewing_approach" && <i className="help-badge">Solved with help</i>}{entry.outcome === "failed" && <i className="failure-badge">Failed attempt</i>}</div>{entry.startedAt && <span className="entry-time-range">{formatPracticeTimestamp(entry.startedAt, true)} → {entry.endedAt ? formatPracticeTimestamp(entry.endedAt, true) : "Paused"}</span>}</div><div className="log-entry-meta"><strong>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "—"}</strong><span>{entry.artifact ? "Published record" : entry.status}</span></div></button><div className="log-entry-actions"><StaticResultFlag outcome={entry.outcome} label={resultLabel(entry.outcome, entry.type)} /><button className={`star-control ${isStarred(entry.type, entry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(entry.type, entry.questionId)} disabled={!entry.questionId} aria-label={`${isStarred(entry.type, entry.questionId) ? "Unstar" : "Star"} ${entry.title}`} title="Star this problem"><Icon name="star" /></button><button className={`icon-action solution-control ${reusableSolution ? "solution-available" : ""}`} onClick={() => openEntrySolution(entry)} disabled={!reusableSolution} aria-label={reusableSolution ? `Open reusable solution for ${entry.title}` : `No reusable solution for ${entry.title}`} title={reusableSolution ? "Open reusable solution" : "No reusable solution yet"}><Icon name="book" /></button><button className="icon-action add-practice-control" onClick={() => addEntryToToday(entry)} disabled={!reusableQuestion || Boolean(reusableQuestion && isQuestionBlocked(reusableQuestion, todayBlockedQuestions()))} aria-label={`Add ${entry.title} to Today`} title="Add to Today"><Icon name="plus" /></button></div></article>; })}</div></section>) : <div className="quiet-empty library-empty"><strong>No completed work in this filter yet.</strong><span>Try another filter, or finish an activity to add it to the field journal.</span></div>}
               </div>
               <aside className="log-calendar"><span className="eyebrow">JUMP TO A DAY</span><h2>{new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${journal.date}T12:00:00Z`))}</h2><div className="calendar-week"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div><div className="calendar-mini">{calendarDays.map((day) => day.hasEntries ? <button key={day.key} onClick={() => scrollToLogDate(day.key)} title={`Jump to ${day.key}`}>{day.day}<i /></button> : <span key={day.key}>{day.day}</span>)}</div><div className="calendar-dates">{groupedLog.map(([date]) => <button key={date} onClick={() => scrollToLogDate(date)}>{readableDate(date, true)} <span>↘</span></button>)}</div></aside>
             </div>
@@ -3438,12 +3507,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           </div>
         </div>
         <div className="problem-bank-list" ref={bankListRef} onScroll={() => {
+          if (selectedProblem) return;
           listPositionMemoryRef.current.banks = {
             pageScrollTop: window.scrollY,
             listScrollTop: bankListRef.current?.scrollTop ?? 0,
           };
         }} tabIndex={0} aria-label="Problem bank results">
-          {visibleEntries.map(({ type, question, finished, latestAttempt }) => { const blockedToday = isQuestionBlocked(question, todayBlocked); const active = selectedProblem?.type === type && selectedProblem.question.id === question.id; const reusableSolution = hasReusableSolution(type, question); return <article className={`problem-bank-entry ${type} ${active ? "selected" : ""}`} role="button" tabIndex={0} aria-label={`View solution for ${question.title}`} onClick={(event) => { if (event.target instanceof Element && event.target.closest("button, a, input, summary")) return; openProblemProfile(type, question); }} onKeyDown={(event) => { if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) { event.preventDefault(); openProblemProfile(type, question); } }} key={`${type}-${question.id}`}>
+          {visibleEntries.map(({ type, question, finished, latestAttempt }) => { const blockedToday = isQuestionBlocked(question, todayBlocked); const active = selectedProblem?.type === type && selectedProblem.question.id === question.id; const reusableSolution = hasReusableSolution(type, question); return <article className={`problem-bank-entry ${type} ${active ? "selected" : ""}`} data-list-item-id={`banks:${type}:${question.id}`} role="button" tabIndex={0} aria-label={`View solution for ${question.title}`} onClick={(event) => { if (event.target instanceof Element && event.target.closest("button, a, input, summary")) return; openProblemProfile(type, question); }} onKeyDown={(event) => { if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) { event.preventDefault(); openProblemProfile(type, question); } }} key={`${type}-${question.id}`}>
             <span className={`type-mark ${type}`}>{typeMark(type)}</span>
             <div className="problem-bank-copy"><small>{typeLabel(type)}{question.difficulty ? ` · ${question.difficulty}` : ""}{question.complexity ? ` · ${displayComplexity(question.complexity)}` : ""} · {finished ? "finished" : "to practice"}</small><strong className="problem-title">{question.title}</strong>{question.prompt && question.prompt !== question.title && <p>{question.prompt}</p>}{question.url && <a className="nested-card-link" href={question.url} target="_blank" rel="noreferrer">{question.solutionReference ? "Open question & solution references ↗" : "Open problem ↗"}</a>}</div>
             <div className="bank-entry-meta"><span>{question.targetMinutes} min estimate</span>{question.problemNumber && <small>#{question.problemNumber}{typeof question.acceptanceRate === "number" ? ` · ${question.acceptanceRate.toFixed(1)}% acceptance` : ""}</small>}{question.companySignals?.[0] && <small>{question.companySignals[0].company} frequency {question.companySignals[0].frequencyScore}/{question.companySignals[0].frequencyScale} · {question.companySignals[0].window}</small>}{question.answerFormat && <small>{question.answerFormat} answer · {question.frequency ?? "medium"} frequency</small>}{question.solutionReference && <small>Reference solution{question.referenceAccess === "may_require_sign_in" ? " may require sign-in" : " available"}</small>}<small className={`content-tags ${type}`}>{tagsForEntry(type, question).slice(0, 4).map((tag) => `#${tag}`).join("  ")}</small></div>
@@ -4113,7 +4183,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             <button className="secondary-action" onClick={exportDraft}>Export today</button>
           </div>
         </header>
-        <div className={`page-content page-enter-stage page-enter-${viewDirection}`} id="practice-content" key={view}>{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
+        <div className={`page-content page-enter-stage page-enter-${viewDirection}`} id="practice-content" key={`${view}-${viewTransitionId}`}>{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
       </section>
 
       {composer.open && <div className="modal-backdrop" role="presentation" onMouseDown={() => setComposer(EMPTY_COMPOSER)}>

@@ -78,11 +78,18 @@ test("local development bypasses Access without weakening the production config"
 
   assert.match(viteConfig, /command === "serve" \? "wrangler\.dev\.jsonc" : "wrangler\.jsonc"/);
   assert.match(worker, /LOCAL_DEV_AUTH_BYPASS === "true" && isLocalRequest/);
+  assert.match(worker, /hostname\.endsWith\("\.localhost"\)/);
+  assert.match(worker, /hostname === "0\.0\.0\.0"/);
   assert.match(localConfig, /"LOCAL_DEV_AUTH_BYPASS": "true"/);
   assert.doesNotMatch(localConfig, /POLICY_AUD|TEAM_DOMAIN/);
   assert.match(productionConfig, /"POLICY_AUD"/);
   assert.match(productionConfig, /"TEAM_DOMAIN"/);
   assert.doesNotMatch(productionConfig, /LOCAL_DEV_AUTH_BYPASS/);
+
+  const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  assert.match(packageJson.scripts.dev, /pnpm dev:prepare/);
+  assert.match(packageJson.scripts["dev:prepare"], /db:migrate:local/);
+  assert.match(packageJson.scripts["dev:prepare"], /content:import:local/);
 });
 
 test("the refined analytics and composer layouts keep their intended grouping", async () => {
@@ -132,7 +139,12 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /readerClosing \? "reader-closing" : ""/);
   assert.match(client, /listRestoring === "library" \? "list-restoring" : ""/);
   assert.match(client, /pendingListRestoreRef\.current = \{ surface: "library", \.\.\.position \}/);
-  assert.match(client, /useEffect\(\(\) => \{[\s\S]*window\.scrollTo\(\{ top: pending\.pageScrollTop/);
+  assert.match(client, /useLayoutEffect\(\(\) => \{[\s\S]*window\.scrollTo\(\{ top: pending\.pageScrollTop/);
+  assert.match(client, /data-list-item-id=\{`library:\$\{entry\.id\}`\}/);
+  assert.match(client, /data-list-item-id=\{`banks:\$\{type\}:\$\{question\.id\}`\}/);
+  assert.match(client, /anchorOffset: anchor\.getBoundingClientRect\(\)\.top - referenceTop/);
+  assert.match(client, /list\.scrollTo\(\{ top: Math\.max\(0, target\), behavior: "instant" \}\)/);
+  assert.match(client, /key=\{`\$\{view\}-\$\{viewTransitionId\}`\}/);
   assert.doesNotMatch(client, /kind: "activity-result"/);
   assert.doesNotMatch(client, /Choose a result first/);
   assert.match(css, /@keyframes page-enter/);
@@ -147,7 +159,7 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(css, /\.log-entry,\s*\.problem-bank-entry \{ min-height: 150px; \}/);
   assert.match(css, /\.library-page\.has-open-entry \.dated-log \{[^}]*grid-auto-rows: max-content;[^}]*align-content: start;/);
   assert.match(css, /\.library-page\.has-open-entry \.log-day \{[^}]*height: max-content;/);
-  assert.match(css, /\.problem-bank-list \{[^}]*max-height: none;[^}]*overflow-y: visible;/);
+  assert.match(css, /\.problem-bank-list \{[^}]*height: clamp\(480px,[^}]*max-height: 720px;[^}]*overflow-y: auto;/);
   assert.match(css, /\.banks-page\.has-open-solution \.problem-bank-list \{[^}]*overflow-y: auto;/);
   assert.match(client, /entry\.artifact \? "Published record" : entry\.status/);
   assert.match(css, /\.highlight-note-card\.tone-0 \{ background: #fff2f1/);

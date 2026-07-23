@@ -7,7 +7,7 @@ export function toRouteErrorMessage(error: unknown) {
   const combined = `${message}\n${detail}`;
 
   if (combined.includes("no such table") || combined.includes("D1 binding")) {
-    return "Live-state tables are unavailable. Generate the migration with `pnpm db:generate`, then deploy so the platform applies the SQL to the real D1 database.";
+    return "Live-state tables are unavailable. For local development run `pnpm dev:prepare`; production applies migrations through the deployment workflow.";
   }
 
   return message;
