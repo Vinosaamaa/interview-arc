@@ -1,0 +1,35 @@
+{
+  // Local-only Worker configuration. It keeps the same binding names as
+  // production but uses Miniflare's local D1/R2 state and intentionally omits
+  // Cloudflare Access identifiers, which cannot authenticate localhost.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "limitless-local",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-05-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "dist/client",
+    "not_found_handling": "none",
+    "binding": "ASSETS"
+  },
+  "images": {
+    "binding": "IMAGES"
+  },
+  "vars": {
+    "LOCAL_DEV_AUTH_BYPASS": "true"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "interview-arc-local",
+      "database_id": "28834aae-e412-4046-913b-02684f1e11cf",
+      "migrations_dir": "drizzle"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "AUDIO",
+      "bucket_name": "interview-arc-audio-local"
+    }
+  ]
+}

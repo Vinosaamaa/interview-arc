@@ -153,6 +153,16 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   assert.match(deliveryCoach, /CREATE TABLE `activity_delivery_analyses`/);
 });
 
+test("content highlights persist editable notes", async () => {
+  const migration = await readFile(new URL("../drizzle/0009_left_spyke.sql", import.meta.url), "utf8");
+  const schema = await readFile(new URL("../db/schema.ts", import.meta.url), "utf8");
+  const route = await readFile(new URL("../app/api/highlights/route.ts", import.meta.url), "utf8");
+  assert.match(migration, /ADD `note` text DEFAULT '' NOT NULL/);
+  assert.match(schema, /note: text\("note"\)\.notNull\(\)\.default\(""\)/);
+  assert.match(route, /export async function PATCH/);
+  assert.match(route, /updateContentHighlightNote/);
+});
+
 test("contracts preserve flexible session duration, membership, and exact timestamps", async () => {
   const activity = JSON.parse(await readFile(new URL("../docs/contracts/activity.schema.json", import.meta.url), "utf8"));
   const journal = JSON.parse(await readFile(new URL("../docs/contracts/daily-journal.schema.json", import.meta.url), "utf8"));

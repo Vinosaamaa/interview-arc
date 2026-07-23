@@ -55,8 +55,9 @@ type LibraryAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "fa
 type BankAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "failed" | "todo" | "notes";
 type ComposerAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "failed" | "todo";
 type DocumentPiP = { requestWindow: (options?: { width?: number; height?: number }) => Promise<Window> };
-type ContentHighlight = { id: string; scopeType: "activity" | "solution"; scopeId: string; quote: string; prefix: string; suffix: string; color: "yellow" | "green" | "pink"; createdAt: number; updatedAt: number };
-type PendingHighlight = { quote: string; prefix: string; suffix: string };
+type ContentHighlight = { id: string; scopeType: "activity" | "solution"; scopeId: string; quote: string; prefix: string; suffix: string; color: "yellow" | "green" | "pink"; note: string; createdAt: number; updatedAt: number };
+type AnnotationPosition = { x: number; y: number; placement: "above" | "below" };
+type PendingHighlight = { quote: string; prefix: string; suffix: string; position: AnnotationPosition };
 type ComposerState = {
   open: boolean;
   mode: ComposerMode;
@@ -921,7 +922,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [noteBusy, setNoteBusy] = useState(false);
   const [contentHighlights, setContentHighlights] = useState<ContentHighlight[]>([]);
   const [pendingHighlight, setPendingHighlight] = useState<PendingHighlight | null>(null);
+  const [selectedHighlightId, setSelectedHighlightId] = useState("");
+  const [annotationPosition, setAnnotationPosition] = useState<AnnotationPosition | null>(null);
+  const [highlightNoteDraft, setHighlightNoteDraft] = useState("");
+  const [highlightNoteEditing, setHighlightNoteEditing] = useState(false);
+  const [highlightBusy, setHighlightBusy] = useState(false);
   const readerDocumentRef = useRef<HTMLDivElement>(null);
+  const highlightRangesRef = useRef(new Map<string, Range>());
   const {
     playing: ambientPlaying,
     playlist: ambientPlaylist,
@@ -2943,11 +2950,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   useEffect(() => {
     queueMicrotask(() => setPendingHighlight(null));
+    queueMicrotask(() => setSelectedHighlightId(""));
+    queueMicrotask(() => setAnnotationPosition(null));
     if (!highlightScopeType || !highlightScopeId) { queueMicrotask(() => setContentHighlights([])); return; }
     const controller = new AbortController();
     void fetch(`/api/highlights?scopeType=${highlightScopeType}&scopeId=${encodeURIComponent(highlightScopeId)}`, { signal: controller.signal })
       .then((response) => response.ok ? response.json() as Promise<ContentHighlight[]> : [])
-      .then((rows) => setContentHighlights(rows))
+      .then((rows) => setContentHighlights(rows.map((row) => ({ ...row, note: row.note ?? "" }))))
       .catch(() => undefined);
     return () => controller.abort();
   }, [highlightScopeId, highlightScopeType]);
@@ -2956,6 +2965,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const root = readerDocumentRef.current;
     const css = CSS as typeof CSS & { highlights?: Map<string, unknown> };
     const HighlightConstructor = (window as Window & { Highlight?: new (...ranges: Range[]) => unknown }).Highlight;
+    const rangeMap = highlightRangesRef.current;
+    rangeMap.clear();
     if (!root || !css.highlights || !HighlightConstructor) return;
     const ranges: Range[] = [];
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -2976,10 +2987,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       if (index < 0) return;
       const start = locate(index); const end = locate(index + highlight.quote.length);
       if (!start || !end) return;
-      const range = new Range(); range.setStart(start.node, start.offset); range.setEnd(end.node, end.offset); ranges.push(range);
+      const range = new Range(); range.setStart(start.node, start.offset); range.setEnd(end.node, end.offset); ranges.push(range); rangeMap.set(highlight.id, range);
     });
     css.highlights.set("interview-arc-saved", new HighlightConstructor(...ranges));
-    return () => { css.highlights?.delete("interview-arc-saved"); };
+    return () => { css.highlights?.delete("interview-arc-saved"); rangeMap.clear(); };
   }, [contentHighlights, selectedEntry?.id, selectedProblem?.question.id]);
 
   useEffect(() => {
@@ -2990,32 +3001,112 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return () => style.remove();
   }, []);
 
-  function captureHighlightSelection() {
+  function annotationPositionFor(rect: DOMRect): AnnotationPosition {
+    const popoverHalfWidth = 158;
+    const x = Math.min(window.innerWidth - popoverHalfWidth - 12, Math.max(popoverHalfWidth + 12, rect.left + rect.width / 2));
+    const placement = rect.top >= 210 ? "above" : "below";
+    return { x, y: placement === "above" ? rect.top - 10 : rect.bottom + 10, placement };
+  }
+
+  function closeAnnotationPopover() {
+    setPendingHighlight(null);
+    setSelectedHighlightId("");
+    setAnnotationPosition(null);
+    setHighlightNoteDraft("");
+    setHighlightNoteEditing(false);
+  }
+
+  function highlightAtPoint(x: number, y: number) {
+    return [...highlightRangesRef.current.entries()].reverse().find(([, range]) => [...range.getClientRects()].some((rect) => x >= rect.left - 3 && x <= rect.right + 3 && y >= rect.top - 3 && y <= rect.bottom + 3));
+  }
+
+  function captureHighlightSelection(clientX?: number, clientY?: number) {
     const root = readerDocumentRef.current;
     const selection = window.getSelection();
-    if (!root || !selection || selection.isCollapsed || !selection.rangeCount) { setPendingHighlight(null); return; }
+    if (!root || !selection || selection.isCollapsed || !selection.rangeCount) {
+      setPendingHighlight(null);
+      if (typeof clientX === "number" && typeof clientY === "number") {
+        const match = highlightAtPoint(clientX, clientY);
+        if (match) {
+          const highlight = contentHighlights.find((candidate) => candidate.id === match[0]);
+          const rect = [...match[1].getClientRects()].find((candidate) => clientX >= candidate.left - 3 && clientX <= candidate.right + 3 && clientY >= candidate.top - 3 && clientY <= candidate.bottom + 3) ?? match[1].getBoundingClientRect();
+          setSelectedHighlightId(match[0]);
+          setAnnotationPosition(annotationPositionFor(rect));
+          setHighlightNoteDraft(highlight?.note ?? "");
+          setHighlightNoteEditing(false);
+          return;
+        }
+      }
+      setSelectedHighlightId("");
+      setAnnotationPosition(null);
+      return;
+    }
     const range = selection.getRangeAt(0);
     if (!root.contains(range.commonAncestorContainer)) return;
     const quote = selection.toString().trim();
     if (!quote) return;
     const allText = root.textContent ?? "";
     const index = allText.indexOf(quote);
-    setPendingHighlight({ quote, prefix: index >= 0 ? allText.slice(Math.max(0, index - 80), index) : "", suffix: index >= 0 ? allText.slice(index + quote.length, index + quote.length + 80) : "" });
+    setSelectedHighlightId("");
+    setAnnotationPosition(null);
+    setHighlightNoteDraft("");
+    setHighlightNoteEditing(false);
+    setPendingHighlight({ quote, prefix: index >= 0 ? allText.slice(Math.max(0, index - 80), index) : "", suffix: index >= 0 ? allText.slice(index + quote.length, index + quote.length + 80) : "", position: annotationPositionFor(range.getBoundingClientRect()) });
   }
 
-  async function saveHighlight() {
+  async function saveHighlight(note = "") {
     if (!highlightScope || !pendingHighlight) return;
-    const response = await fetch("/api/highlights", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...highlightScope, ...pendingHighlight }) });
+    setHighlightBusy(true);
+    const selector = { quote: pendingHighlight.quote, prefix: pendingHighlight.prefix, suffix: pendingHighlight.suffix };
+    const response = await fetch("/api/highlights", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...highlightScope, ...selector, note }) });
+    setHighlightBusy(false);
     if (!response.ok) return;
     const row = await response.json() as ContentHighlight;
     setContentHighlights((current) => [...current, row]);
-    setPendingHighlight(null);
+    closeAnnotationPopover();
     window.getSelection()?.removeAllRanges();
   }
 
   async function removeHighlight(id: string) {
+    setHighlightBusy(true);
     const response = await fetch(`/api/highlights?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (response.ok) setContentHighlights((current) => current.filter((highlight) => highlight.id !== id));
+    setHighlightBusy(false);
+    if (response.ok) { setContentHighlights((current) => current.filter((highlight) => highlight.id !== id)); closeAnnotationPopover(); }
+  }
+
+  async function updateHighlightNote(id: string, note: string) {
+    setHighlightBusy(true);
+    const response = await fetch("/api/highlights", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, note }) });
+    setHighlightBusy(false);
+    if (!response.ok) return;
+    const row = await response.json() as ContentHighlight;
+    setContentHighlights((current) => current.map((highlight) => highlight.id === id ? row : highlight));
+    setHighlightNoteDraft(row.note);
+    setHighlightNoteEditing(false);
+  }
+
+  function renderAnnotationPopover() {
+    const selectedHighlight = contentHighlights.find((highlight) => highlight.id === selectedHighlightId);
+    const position = pendingHighlight?.position ?? annotationPosition;
+    if (!position || (!pendingHighlight && !selectedHighlight)) return null;
+    const style = { left: position.x, top: position.y };
+    const portal = (content: ReactNode) => typeof document === "undefined" ? null : createPortal(content, document.body);
+    if (pendingHighlight && !highlightNoteEditing) return portal(<div className={`annotation-popover selection-annotation ${position.placement}`} style={style} role="toolbar" aria-label="Selected text actions" onMouseDown={(event) => event.preventDefault()}>
+      <button type="button" onClick={() => void saveHighlight()} disabled={highlightBusy} aria-label="Highlight selected text" title="Highlight"><Icon name="edit" /></button>
+      <button type="button" onClick={() => { setHighlightNoteDraft(""); setHighlightNoteEditing(true); }} disabled={highlightBusy} aria-label="Highlight selected text and add a note" title="Add note"><Icon name="note" /></button>
+    </div>);
+    if (pendingHighlight) return portal(<form className={`annotation-popover annotation-note-editor ${position.placement}`} style={style} onSubmit={(event) => { event.preventDefault(); void saveHighlight(highlightNoteDraft); }} onMouseDown={(event) => event.stopPropagation()}>
+      <label htmlFor="new-highlight-note">Add a note to this highlight</label>
+      <textarea id="new-highlight-note" autoFocus value={highlightNoteDraft} onChange={(event) => setHighlightNoteDraft(event.target.value)} placeholder="Why does this matter?" />
+      <div><button type="button" onClick={() => setHighlightNoteEditing(false)}>Cancel</button><button type="submit" disabled={highlightBusy || !highlightNoteDraft.trim()}>{highlightBusy ? "Saving…" : "Save note"}</button></div>
+    </form>);
+    if (!selectedHighlight) return null;
+    return portal(<section className={`annotation-popover saved-annotation ${position.placement}`} style={style} aria-label="Saved highlight" onMouseDown={(event) => event.stopPropagation()}>
+      <header><span>Saved highlight</span><button type="button" onClick={closeAnnotationPopover} aria-label="Close highlight actions"><Icon name="close" /></button></header>
+      <mark>{selectedHighlight.quote}</mark>
+      {highlightNoteEditing ? <form onSubmit={(event) => { event.preventDefault(); void updateHighlightNote(selectedHighlight.id, highlightNoteDraft); }}><label htmlFor="saved-highlight-note">Note</label><textarea id="saved-highlight-note" autoFocus value={highlightNoteDraft} onChange={(event) => setHighlightNoteDraft(event.target.value)} placeholder="Add a note…" /><div><button type="button" onClick={() => { setHighlightNoteDraft(selectedHighlight.note); setHighlightNoteEditing(false); }}>Cancel</button><button type="submit" disabled={highlightBusy || !highlightNoteDraft.trim()}>{highlightBusy ? "Saving…" : "Save note"}</button></div></form> : <p>{selectedHighlight.note || "No note attached."}</p>}
+      {!highlightNoteEditing && <div className="annotation-actions"><button type="button" onClick={() => setHighlightNoteEditing(true)} aria-label={selectedHighlight.note ? "Edit highlight note" : "Add a note to highlight"} title={selectedHighlight.note ? "Edit note" : "Add note"}><Icon name={selectedHighlight.note ? "edit" : "note"} /></button>{selectedHighlight.note && <button type="button" onClick={() => void updateHighlightNote(selectedHighlight.id, "")} disabled={highlightBusy} aria-label="Remove highlight note" title="Remove note"><Icon name="close" /></button>}<button className="danger" type="button" onClick={() => void removeHighlight(selectedHighlight.id)} disabled={highlightBusy} aria-label="Remove highlight" title="Remove highlight"><Icon name="trash" /></button></div>}
+    </section>);
   }
 
   useEffect(() => {
@@ -3047,21 +3138,25 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return (
       <article className="workspace-reader journal-case-reader" aria-labelledby="journal-reader-title" aria-label="Case file contents">
         <div className="reader-chrome">
-          <details className="reader-outline"><summary>Contents</summary><nav><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <a href="#case-transcript">Conversation</a>}</nav></details>
+          <details className="reader-outline"><summary>Contents</summary><nav><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</nav></details>
           <button className="reader-close icon-action" onClick={() => setSelectedEntry(null)} aria-label="Close case file" title="Close"><Icon name="close" /></button>
         </div>
-        <div className="case-document workspace-reader-scroll" ref={readerDocumentRef} onMouseUp={captureHighlightSelection}>
+        <div className="case-document workspace-reader-scroll" ref={readerDocumentRef} onMouseUp={(event) => captureHighlightSelection(event.clientX, event.clientY)} onKeyUp={() => captureHighlightSelection()}>
           <header id="case-summary"><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time></div><div className="case-title-row"><h2 id="journal-reader-title">{selectedEntry.title}</h2><div className="case-title-actions"><button className={`star-control ${isStarred(selectedEntry.type, selectedEntry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedEntry.type, selectedEntry.questionId)} disabled={!selectedEntry.questionId} aria-label={`${isStarred(selectedEntry.type, selectedEntry.questionId) ? "Unstar" : "Star"} ${selectedEntry.title}`} title="Star this problem"><Icon name="star" /></button><button className="icon-action note-add" onClick={() => openNoteComposer()} disabled={!selectedEntryActivityId} aria-label="Add a note" title="Add a note"><Icon name="note" /><i><Icon name="plus" /></i></button></div></div>{meaningfulSubtitle(selectedEntry.subtitle) && <p>{meaningfulSubtitle(selectedEntry.subtitle)}</p>}{selectedEntry.questionId && <button className="solution-link-button" onClick={() => { const question = bankFor(selectedEntry.type).find((candidate) => candidate.id === selectedEntry.questionId); if (question) { setSelectedEntry(null); setSelectedProblem({ type: selectedEntry.type, question }); setView("banks"); } }}>Open reusable solution →</button>}</header>
-          {pendingHighlight && <button className="selection-highlight-action" type="button" onClick={() => void saveHighlight()}>Highlight selection</button>}
-          <HighlightShelf highlights={contentHighlights} onRemove={(id) => void removeHighlight(id)} />
           {Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <aside className="pinned-notes" id="case-notes" aria-label="Pinned practice notes"><span>NOTES</span>{selectedEntry.personalNote?.trim() && <article><div className="note-actions"><button onClick={() => openNoteComposer("personal")} aria-label="Edit personal note" title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote("personal")} aria-label="Delete personal note" title="Delete"><Icon name="trash" /></button></div><MarkdownBody source={selectedEntry.personalNote} /></article>}{selectedEntry.pinnedNotes?.map((note) => <article key={note.id}><header><small>{note.kind}</small><div className="note-actions"><button onClick={() => openNoteComposer(note)} aria-label={`Edit ${note.kind} note`} title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote(note.id)} aria-label={`Delete ${note.kind} note`} title="Delete"><Icon name="trash" /></button></div></header><MarkdownBody source={note.body} /></article>)}</aside>}
           {noteComposerOpen && <form className="case-note-composer" onSubmit={(event) => { event.preventDefault(); void saveCaseNote(); }}><label htmlFor="case-note">{editingNoteId ? "Edit note" : "Add a note"}</label><textarea id="case-note" autoFocus value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} placeholder="A concise reminder, mistake, or pattern to keep visible…" /><div><button type="button" onClick={() => { setNoteComposerOpen(false); setEditingNoteId(""); setNoteDraft(""); }}>Cancel</button><button type="submit" disabled={noteBusy || !noteDraft.trim()}>{noteBusy ? "Saving…" : "Save note"}</button></div></form>}
           <div className="letter-facts" id="case-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.startedAt && <div><span>Started</span><strong>{formatPracticeTimestamp(selectedEntry.startedAt)}</strong></div>}{selectedEntry.endedAt && <div><span>Finished</span><strong>{formatPracticeTimestamp(selectedEntry.endedAt)}</strong></div>}{selectedEntry.sessionId && <div><span>Session</span><strong>{selectedEntry.sessionId}</strong></div>}{selectedEntry.outcome && <div><span>Result</span><strong>{resultLabel(selectedEntry.outcome, selectedEntry.type)}</strong></div>}{selectedEntry.review && <div className="review-fact"><span>{selectedEntry.review.status === "due" ? "Review due" : "Next review"}</span><strong>{selectedEntry.review.dueDate}</strong><small>{selectedEntry.review.reason.replaceAll("_", " ")} · {selectedEntry.review.intervalDays} day interval</small></div>}</div>
           {practiceRecordLoading && <div className="transcript-loading"><span />Loading conversation and recordings…</div>}
-          {selectedEntry.artifact ? <div className="letter-sections layered-reader">{selectedCaseGroups.map((group) => group.key === "record" ? <section className="reader-group record-group" id={`case-group-${group.key}`} key={group.key}><h2>{group.title}</h2>{group.sections.map((section, index) => <ReaderSectionBody section={section} id={`case-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />)}</section> : <details className={`reader-group ${group.key}-group`} id={`case-group-${group.key}`} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div>{group.sections.map((section, index) => <ReaderSectionBody section={section} id={`case-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />)}</div></details>)}</div> : <div className="unpublished-letter" id="case-draft"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to finalize the transcript, review, solution, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
-          {selectedEntryTurns.length > 0 && <details className="reader-group conversation-group" id="case-transcript"><summary><span>Conversation</span><small>{selectedEntryTurns.length} exchange{selectedEntryTurns.length === 1 ? "" : "s"} · recordings inline</small></summary><div id="case-transcript-thread"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} /></div></details>}
+          <div className="letter-sections layered-reader">
+            {selectedEntry.artifact
+              ? selectedCaseGroups.filter((group) => group.key === "record").map((group) => <section className="reader-group record-group" id={`case-group-${group.key}`} key={group.key}><h2>{group.title}</h2>{group.sections.map((section, index) => <ReaderSectionBody section={section} id={`case-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />)}</section>)
+              : <div className="unpublished-letter" id="case-draft"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to finalize the transcript, review, solution, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
+            {selectedEntryTurns.length > 0 && <details className="reader-group conversation-group" id="case-transcript"><summary><span>Conversation</span><small>{selectedEntryTurns.length} exchange{selectedEntryTurns.length === 1 ? "" : "s"} · recordings inline</small></summary><div id="case-transcript-thread"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} /></div></details>}
+            {selectedEntry.artifact && selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <details className={`reader-group ${group.key}-group`} id={`case-group-${group.key}`} defaultOpen={group.key !== "conversation"} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div>{group.sections.map((section, index) => <ReaderSectionBody section={section} id={`case-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />)}</div></details>)}
+          </div>
           <footer>Interview Arc · {selectedEntry.id}</footer>
         </div>
+        {renderAnnotationPopover()}
       </article>
     );
   }
@@ -3071,11 +3166,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return (
       <article className="workspace-reader knowledge-reader" aria-labelledby="solution-profile-title">
         <div className="reader-chrome"><details className="reader-outline"><summary>Contents</summary><nav><a href="#solution-profile-summary">Overview</a>{selectedSolutionGroups.map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#solution-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#solution-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}<a href="#solution-attempts">Past attempts</a></nav></details><button className="reader-close icon-action" onClick={() => setSelectedProblem(null)} aria-label="Close solution profile" title="Close"><Icon name="close" /></button></div>
-        <div className="case-document solution-profile-document workspace-reader-scroll" ref={readerDocumentRef} onMouseUp={captureHighlightSelection}>
+        <div className="case-document solution-profile-document workspace-reader-scroll" ref={readerDocumentRef} onMouseUp={(event) => captureHighlightSelection(event.clientX, event.clientY)} onKeyUp={() => captureHighlightSelection()}>
           <header id="solution-profile-summary"><div><span className={`type-chip ${selectedProblem.type}`}>{typeLabel(selectedProblem.type)}</span><span className="profile-revision">{selectedProblemProfile ? `Solution revision ${selectedProblemProfile.currentRevision}` : "No solution yet"}</span><button className={`star-control ${isStarred(selectedProblem.type, selectedProblem.question.id) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedProblem.type, selectedProblem.question.id)} aria-label={`${isStarred(selectedProblem.type, selectedProblem.question.id) ? "Unstar" : "Star"} ${selectedProblem.question.title}`}><Icon name="star" /></button></div><h2 id="solution-profile-title">{selectedProblem.question.title}</h2><p>{selectedProblemProfile?.payload.summary ?? selectedProblem.question.prompt ?? "Finish and finalize an attempt to build this reusable Solution Profile."}</p></header>
           <div className="profile-tags">{[...new Set([...selectedProblem.question.topics, ...(selectedProblem.question.tags ?? []), ...(selectedProblemProfile?.tags ?? [])])].map((tag) => <span key={tag}>{tag}</span>)}</div>
-          {pendingHighlight && <button className="selection-highlight-action" type="button" onClick={() => void saveHighlight()}>Highlight selection</button>}
-          <HighlightShelf highlights={contentHighlights} onRemove={(id) => void removeHighlight(id)} />
           {selectedProblemProfile?.payload.behavioralAnswer && <section className="canonical-answer-card"><span className="eyebrow">YOUR PREFERRED ANSWER</span><h3>{selectedProblemProfile.payload.behavioralAnswer.preferred.label}</h3><MarkdownBody source={selectedProblemProfile.payload.behavioralAnswer.preferred.answer} />{selectedProblemProfile.payload.behavioralAnswer.preferred.evidence.length > 0 && <div className="answer-evidence"><strong>Verified evidence</strong><ul>{selectedProblemProfile.payload.behavioralAnswer.preferred.evidence.map((item) => <li key={item}>{item}</li>)}</ul></div>}{selectedProblemProfile.payload.behavioralAnswer.preferred.evidenceGaps.length > 0 && <div className="answer-gaps"><strong>Evidence still needed</strong><ul>{selectedProblemProfile.payload.behavioralAnswer.preferred.evidenceGaps.map((item) => <li key={item}>{item}</li>)}</ul></div>}{selectedProblemProfile.payload.behavioralAnswer.alternatives.length > 0 && <details className="answer-alternatives"><summary>{selectedProblemProfile.payload.behavioralAnswer.alternatives.length} alternative story {selectedProblemProfile.payload.behavioralAnswer.alternatives.length === 1 ? "variant" : "variants"}</summary>{selectedProblemProfile.payload.behavioralAnswer.alternatives.map((variant) => <article key={variant.label}><h4>{variant.label}</h4>{variant.whenToUse && <small>Best when: {variant.whenToUse}</small>}<MarkdownBody source={variant.answer} /></article>)}</details>}</section>}
           {selectedProblemProfile ? <div className="letter-sections solution-sections layered-reader">{selectedSolutionGroups.map((group) => <SolutionReaderGroup group={group} idPrefix="solution" coding={selectedProblem.type === "leetcode"} key={group.key} />)}</div> : <div className="unpublished-letter"><span className="eyebrow">KNOWLEDGE PROFILE</span><h3>This problem has no finalized solution yet.</h3><p>The matching specialist creates it when a completed attempt is finalized. Past keeps the transcript; this reader keeps the reusable answer.</p></div>}
           <section className="attempt-history" id="solution-attempts"><span className="eyebrow">PAST ATTEMPTS</span>{selectedProblemAttempts.length ? selectedProblemAttempts.map((entry) => <button key={entry.id} onClick={() => { setSelectedProblem(null); setSelectedEntry(entry); setView("library"); }}><span>{readableDate(entry.date, true)}</span><strong>{resultLabel(entry.outcome, entry.type)}</strong><small>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "No timer"} · Read case →</small></button>) : <p>No completed attempt is linked yet.</p>}</section>
@@ -3083,6 +3176,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           {selectedProblemProfile?.payload.references.length ? <section className="profile-references"><span className="eyebrow">REFERENCES CONSULTED</span>{selectedProblemProfile.payload.references.map((reference) => <a key={`${reference.url}-${reference.accessedAt}`} href={reference.url} target="_blank" rel="noreferrer">{reference.title} ↗<small>{reference.accessedAt}</small></a>)}</section> : null}
           <footer>Interview Arc · {selectedProblem.type}:{selectedProblem.question.id}</footer>
         </div>
+        {renderAnnotationPopover()}
       </article>
     );
   }

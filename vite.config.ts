@@ -5,7 +5,7 @@ import { sites } from "./build/sites-vite-plugin";
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 
-export default defineConfig(async () => {
+export default defineConfig(async ({ command }) => {
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.
   process.env.WRANGLER_WRITE_LOGS ??= "false";
@@ -23,8 +23,11 @@ export default defineConfig(async () => {
       vinext(),
       sites(),
       // Bindings (ASSETS, IMAGES, DB) are read from the discovered
-      // `wrangler.jsonc`, so local dev/build and `vinext deploy` stay in sync.
+      // Wrangler config. Local development deliberately omits Cloudflare
+      // Access because localhost cannot receive an Access JWT; production
+      // builds and deploys continue to use the protected `wrangler.jsonc`.
       cloudflare({
+        configPath: command === "serve" ? "wrangler.dev.jsonc" : "wrangler.jsonc",
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
       }),
     ],

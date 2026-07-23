@@ -1,0 +1,1 @@
+ALTER TABLE `content_highlights` ADD `note` text DEFAULT '' NOT NULL;

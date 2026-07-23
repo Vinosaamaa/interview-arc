@@ -19,3 +19,11 @@ export async function addContentHighlight(ownerId: string, input: Omit<typeof co
 export async function deleteContentHighlight(ownerId: string, id: string) {
   await getDb().delete(contentHighlights).where(and(eq(contentHighlights.ownerId, ownerId), eq(contentHighlights.id, id)));
 }
+
+export async function updateContentHighlightNote(ownerId: string, id: string, note: string, timestamp: number) {
+  const rows = await getDb().update(contentHighlights)
+    .set({ note, updatedAt: timestamp })
+    .where(and(eq(contentHighlights.ownerId, ownerId), eq(contentHighlights.id, id)))
+    .returning();
+  return rows[0];
+}

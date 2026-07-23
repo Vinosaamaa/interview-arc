@@ -25,6 +25,10 @@ interface Env {
   // shown when you click "Enable Cloudflare Access" on the Worker.
   POLICY_AUD?: string;
   TEAM_DOMAIN?: string;
+  // Set only by the checked-in local Wrangler config. The hostname check in
+  // authGate prevents this switch from weakening a deployed Worker if the
+  // binding is ever copied accidentally.
+  LOCAL_DEV_AUTH_BYPASS?: string;
 }
 
 interface ExecutionContext {
@@ -270,6 +274,12 @@ async function verifyAccessJwt(token: string, env: Env): Promise<string | null> 
 type AuthResult = { response: Response | null; email: string | null };
 
 async function authGate(request: Request, env: Env): Promise<AuthResult> {
+  const hostname = new URL(request.url).hostname;
+  const isLocalRequest = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  if (env.LOCAL_DEV_AUTH_BYPASS === "true" && isLocalRequest) {
+    return { response: null, email: null };
+  }
+
   if (env.POLICY_AUD && env.TEAM_DOMAIN) {
     const token = request.headers.get(JWT_HEADER) ?? readCookie(request, ACCESS_COOKIE);
     const email = token ? await verifyAccessJwt(token, env) : null;
