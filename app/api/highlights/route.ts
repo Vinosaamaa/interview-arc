@@ -1,4 +1,4 @@
-import { addContentHighlight, deleteContentHighlight, readContentHighlights, updateContentHighlightNote, type HighlightScope } from "../../../db/content-highlights";
+import { addContentHighlight, addContentHighlightNote, deleteContentHighlight, readContentHighlights, type HighlightScope } from "../../../db/content-highlights";
 import { resolveOwnerId } from "../../../db/owner";
 import { toRouteErrorMessage } from "../route-helpers";
 
@@ -24,21 +24,20 @@ export async function POST(request: Request) {
     }
     const now = Date.now();
     const row = { id: crypto.randomUUID(), scopeType: body.scopeType, scopeId: body.scopeId.trim(), quote: body.quote, prefix: (body.prefix ?? "").slice(-120), suffix: (body.suffix ?? "").slice(0, 120), color: validColor(body.color) ? body.color : "yellow" as const, note: (body.note ?? "").trim().slice(0, 4_000), createdAt: now, updatedAt: now };
-    await addContentHighlight(await resolveOwnerId(request), row);
-    return Response.json(row, { status: 201, headers: { "cache-control": "private, no-store" } });
-  } catch (error) { return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 }); }
-}
-
-export async function PATCH(request: Request) {
-  try {
-    const body = await request.json() as { id?: string; note?: string };
-    const id = body.id?.trim() ?? "";
-    if (!id || typeof body.note !== "string" || body.note.length > 4_000) {
-      return Response.json({ error: "A highlight ID and note are required." }, { status: 400 });
+    const ownerId = await resolveOwnerId(request);
+    await addContentHighlight(ownerId, row);
+    const notes = [];
+    if (row.note) {
+      const note = await addContentHighlightNote(ownerId, {
+        id: crypto.randomUUID(),
+        highlightId: row.id,
+        body: row.note,
+        createdAt: now,
+        updatedAt: now,
+      });
+      notes.push(note);
     }
-    const row = await updateContentHighlightNote(await resolveOwnerId(request), id, body.note.trim(), Date.now());
-    if (!row) return Response.json({ error: "Highlight not found." }, { status: 404 });
-    return Response.json(row, { headers: { "cache-control": "private, no-store" } });
+    return Response.json({ ...row, notes }, { status: 201, headers: { "cache-control": "private, no-store" } });
   } catch (error) { return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 }); }
 }
 

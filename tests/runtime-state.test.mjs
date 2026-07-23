@@ -154,15 +154,17 @@ test("D1 migrations cover owner-scoped live state and shared published content",
 });
 
 test("content highlights persist editable notes", async () => {
-  const migration = await readFile(new URL("../drizzle/0009_left_spyke.sql", import.meta.url), "utf8");
+  const migration = await readFile(new URL("../drizzle/0010_highlight_notes.sql", import.meta.url), "utf8");
   const schema = await readFile(new URL("../db/schema.ts", import.meta.url), "utf8");
-  const route = await readFile(new URL("../app/api/highlights/route.ts", import.meta.url), "utf8");
-  assert.match(migration, /ADD `note` text DEFAULT '' NOT NULL/);
-  assert.match(schema, /note: text\("note"\)\.notNull\(\)\.default\(""\)/);
+  const route = await readFile(new URL("../app/api/highlight-notes/route.ts", import.meta.url), "utf8");
+  assert.match(migration, /CREATE TABLE `content_highlight_notes`/);
+  assert.match(migration, /legacy-note/);
+  assert.match(schema, /export const contentHighlightNotes/);
+  assert.match(route, /export async function POST/);
   assert.match(route, /export async function PATCH/);
   assert.match(route, /updateContentHighlightNote/);
-  assert.match(route, /body\.quote\.length > 100_000/);
-  assert.match(route, /validColor\(body\.color\)/);
+  assert.match(route, /export async function DELETE/);
+  assert.match(route, /MAX_NOTE_LENGTH/);
 });
 
 test("contracts preserve flexible session duration, membership, and exact timestamps", async () => {
