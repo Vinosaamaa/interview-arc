@@ -102,11 +102,52 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .today-tally .yesterday-label { color: var(--primary-deep); }
 .orchestrator-rail { margin-top: 18px; border: 1px solid #bed0cb; border-radius: 14px; background: rgba(251,252,250,.92); box-shadow: var(--shadow-sm); }
 .orchestrator-rail.has-focus { border-color: rgba(13,148,136,.48); box-shadow: inset 4px 0 var(--primary), var(--shadow-sm); }
+.orchestrator-rail.has-history { border-left-color: #9db0aa; }
 .orchestrator-signal small, .orchestrator-clock strong { color: var(--primary-deep); }
 .orchestrator-focus strong { color: #163735; }
 .orchestrator-clock { border-left-color: var(--line); }
 .orchestrator-lifecycle i.done { color: var(--primary-deep); }
 .orchestrator-lifecycle b { background: #c7d7d2; }
+@media (max-width: 1500px) {
+  .orchestrator-rail.has-focus,
+  .orchestrator-rail.has-history {
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "signal focus clock"
+      "signal lifecycle lifecycle"
+      "signal action action";
+    align-items: center;
+    row-gap: 12px;
+  }
+  .orchestrator-rail.has-focus .orchestrator-signal,
+  .orchestrator-rail.has-history .orchestrator-signal { grid-area: signal; }
+  .orchestrator-rail.has-focus .orchestrator-focus,
+  .orchestrator-rail.has-history .orchestrator-focus { grid-area: focus; }
+  .orchestrator-rail.has-focus .orchestrator-clock,
+  .orchestrator-rail.has-history .orchestrator-clock { grid-area: clock; }
+  .orchestrator-rail.has-focus .orchestrator-lifecycle,
+  .orchestrator-rail.has-history .orchestrator-lifecycle { grid-area: lifecycle; min-width: 0; }
+  .orchestrator-rail.has-focus > a,
+  .orchestrator-rail.has-history > a,
+  .orchestrator-rail.has-focus .orchestrator-resume,
+  .orchestrator-rail.has-history .orchestrator-resume { grid-area: action; justify-self: start; }
+}
+@media (max-width: 680px) {
+  .orchestrator-rail.has-focus,
+  .orchestrator-rail.has-history {
+    grid-template-columns: 34px minmax(0, 1fr);
+    grid-template-areas:
+      "signal focus"
+      ". clock"
+      ". lifecycle"
+      ". action";
+    align-items: start;
+  }
+  .orchestrator-rail.has-focus .orchestrator-clock,
+  .orchestrator-rail.has-history .orchestrator-clock { width: 100%; padding: 10px 0 0; border-top: 1px solid #d8ded3; border-left: 0; }
+  .orchestrator-rail.has-focus .orchestrator-lifecycle,
+  .orchestrator-rail.has-history .orchestrator-lifecycle { width: 100%; overflow-x: auto; }
+}
 .today-actions { margin: 38px 0 16px; }
 .today-actions h2, .section-title h2 { font-size: 1.6rem; color: #163432; }
 .session-stack { gap: 22px; }
@@ -1037,40 +1078,29 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
 
-/* Persistent reader workspace ------------------------------------------------ */
-.view-transition-stage { view-transition-name: interview-page; }
-.workspace-reader { view-transition-name: interview-reader; }
-::view-transition-old(interview-page) { animation: interview-page-out .2s ease both; }
-::view-transition-new(interview-page) { animation: interview-page-in .22s ease both; }
-::view-transition-old(interview-reader) { animation: reader-leave .22s cubic-bezier(.4,0,.2,1) both; }
-::view-transition-new(interview-reader) { animation: reader-enter .24s cubic-bezier(.2,.8,.2,1) both; }
-@keyframes interview-page-out { to { opacity: 0; transform: translateY(-5px); } }
-@keyframes interview-page-in { from { opacity: 0; transform: translateY(8px); } }
-@keyframes reader-enter { from { opacity: 0; transform: translateX(14px) scale(.992); } }
-@keyframes reader-leave { to { opacity: 0; transform: translateX(14px) scale(.992); } }
-
-.workspace-drawer-toggle {
-  width: 34px;
-  height: 66px;
-  padding: 0;
-  border: 1px solid #a9c1bb;
-  border-left: 0;
-  border-radius: 0 12px 12px 0;
-  background: rgba(250,253,251,.98);
-  color: #164a42;
-  display: grid;
-  place-items: center;
-  position: fixed;
-  top: 126px;
-  left: var(--sidebar-size);
-  z-index: 64;
-  cursor: pointer;
-  box-shadow: 8px 8px 24px rgba(16,55,48,.12);
-  transition: background .2s ease, box-shadow .2s ease;
+/* Reader workspace motion --------------------------------------------------- */
+.page-enter-stage { animation: page-enter .26s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes page-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
-.workspace-drawer-toggle:hover { background: #e7f3ef; box-shadow: 10px 10px 28px rgba(16,55,48,.17); }
-.workspace-drawer-toggle .ui-icon { width: 19px; height: 19px; transform: rotate(-90deg); transition: transform .28s cubic-bezier(.2,.8,.2,1); }
-.workspace-drawer-toggle.open .ui-icon { transform: rotate(90deg); }
+@keyframes reader-workspace-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes reader-workspace-exit {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes reader-pane-enter {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes reader-pane-exit {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(18px); }
+}
+.master-pane-toggle { display: inline-grid; place-items: center; }
 
 .library-page.has-open-entry .past-master-detail,
 .banks-page.has-open-solution .bank-master-detail {
@@ -1080,11 +1110,24 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   grid-template-columns: 0 minmax(0, 1200px);
   gap: 0;
   overflow: visible;
-  animation: none;
+  animation: reader-workspace-enter .28s cubic-bezier(.2,.8,.2,1) both;
   transition:
     width .3s cubic-bezier(.2,.8,.2,1),
     grid-template-columns .3s cubic-bezier(.2,.8,.2,1),
     gap .3s cubic-bezier(.2,.8,.2,1);
+}
+.library-page.has-open-entry .past-master-detail.reader-closing,
+.banks-page.has-open-solution .bank-master-detail.reader-closing {
+  animation: reader-workspace-exit .22s cubic-bezier(.4,0,.2,1) both;
+  pointer-events: none;
+}
+.library-page.has-open-entry .past-entry-pane,
+.banks-page.has-open-solution .bank-solution-pane {
+  animation: reader-pane-enter .28s cubic-bezier(.2,.8,.2,1) both;
+}
+.library-page.has-open-entry .reader-closing .past-entry-pane,
+.banks-page.has-open-solution .reader-closing .bank-solution-pane {
+  animation: reader-pane-exit .22s cubic-bezier(.4,0,.2,1) both;
 }
 .library-page.has-open-entry .past-master-detail.master-pane-open,
 .banks-page.has-open-solution .bank-master-detail.master-pane-open {
@@ -1129,10 +1172,10 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .library-page.has-open-entry .past-master-pane,
   .banks-page.has-open-solution .bank-master-pane {
     width: min(525px, calc(100vw - var(--sidebar-size) - 24px));
-    height: calc(100vh - 120px);
+    height: 100%;
     display: grid;
-    position: fixed;
-    inset: 96px auto auto calc(var(--sidebar-size) + 12px);
+    position: absolute;
+    inset: 0 auto 0 0;
     z-index: 48;
     transform: translateX(calc(-100% - 28px));
     opacity: 0;
@@ -1142,8 +1185,8 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .library-page.has-open-entry .master-pane-open .past-master-pane,
   .banks-page.has-open-solution .master-pane-open .bank-master-pane {
     width: min(525px, calc(100vw - var(--sidebar-size) - 24px));
-    height: calc(100vh - 120px);
-    inset: 96px auto auto calc(var(--sidebar-size) + 12px);
+    height: 100%;
+    inset: 0 auto 0 0;
     transform: translateX(0);
     opacity: 1;
     pointer-events: auto;
@@ -1151,7 +1194,6 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 }
 
 @media (max-width: 760px) {
-  .workspace-drawer-toggle { top: 82px; left: 0; }
   .library-page.has-open-entry .past-master-detail,
   .banks-page.has-open-solution .bank-master-detail,
   .library-page.has-open-entry .past-master-detail.master-pane-open,
@@ -1161,8 +1203,8 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .library-page.has-open-entry .master-pane-open .past-master-pane,
   .banks-page.has-open-solution .master-pane-open .bank-master-pane {
     width: 100%;
-    height: auto;
-    inset: 66px 0 72px;
+    height: 100%;
+    inset: 0;
     border-radius: 0;
   }
 }
@@ -1269,7 +1311,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .annotation-form-actions { justify-content: flex-end !important; }
 
 @media (prefers-reduced-motion: reduce) {
-  ::view-transition-group(*),
-  ::view-transition-old(*),
-  ::view-transition-new(*) { animation-duration: .01ms !important; }
+  .page-enter-stage,
+  .library-page.has-open-entry .past-master-detail,
+  .banks-page.has-open-solution .bank-master-detail { animation-duration: .01ms !important; }
 }

@@ -116,7 +116,14 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /Remove highlight/);
   assert.match(client, /readerGroupOpen\(groupId, group\.key !== "conversation"\)/);
   assert.match(client, /interview-arc-reader-memory-v1/);
-  assert.match(client, /workspace-drawer-toggle/);
+  assert.doesNotMatch(client, /workspace-drawer-toggle/);
+  assert.match(client, /master-pane-toggle icon-action/);
+  assert.match(client, /navigateToPrimaryView/);
+  assert.doesNotMatch(client, /startViewTransition/);
+  assert.match(client, /activeActivity \? "has-focus" : railActivity \? "has-history" : "empty"/);
+  assert.match(client, /readerClosing \? "reader-closing" : ""/);
+  assert.match(css, /@keyframes page-enter/);
+  assert.match(css, /@keyframes reader-workspace-exit/);
   assert.match(client, /answer-player-unified/);
   assert.match(client, /problem-bank-entry.*role="button" tabIndex=\{0\} aria-label=/);
   assert.match(client, /function ReaderOutline/);
