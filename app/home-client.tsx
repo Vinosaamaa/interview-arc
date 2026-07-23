@@ -72,6 +72,7 @@ type ListPosition = {
   listScrollTop: number;
   anchorId?: string;
   anchorOffset?: number;
+  centerAnchor?: boolean;
 };
 type CrossReaderReturn =
   | {
@@ -1119,7 +1120,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [integrationOpen, setIntegrationOpen] = useState(false);
   const [integrationToken, setIntegrationToken] = useState("");
   const [integrationBusy, setIntegrationBusy] = useState(false);
-  const [loadedPracticeRecordId, setLoadedPracticeRecordId] = useState("");
   const [noteComposerOpen, setNoteComposerOpen] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
@@ -1216,14 +1216,19 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       const anchor = pending.anchorId
         ? [...list.querySelectorAll<HTMLElement>("[data-list-item-id]")].find((item) => item.dataset.listItemId === pending.anchorId)
         : null;
-      if (anchor && typeof pending.anchorOffset === "number") {
+      if (anchor) {
         const overflowY = window.getComputedStyle(list).overflowY;
         const internallyScrollable = (overflowY === "auto" || overflowY === "scroll")
           && list.scrollHeight > list.clientHeight + 2;
         const referenceTop = internallyScrollable ? list.getBoundingClientRect().top : 0;
-        const delta = anchor.getBoundingClientRect().top - referenceTop - pending.anchorOffset;
-        if (internallyScrollable) list.scrollTop += delta;
-        else window.scrollBy({ top: delta, behavior: "instant" });
+        const targetOffset = pending.centerAnchor
+          ? Math.max(0, ((internallyScrollable ? list.clientHeight : window.innerHeight) - anchor.offsetHeight) / 2)
+          : pending.anchorOffset;
+        if (typeof targetOffset === "number") {
+          const delta = anchor.getBoundingClientRect().top - referenceTop - targetOffset;
+          if (internallyScrollable) list.scrollTop += delta;
+          else window.scrollBy({ top: delta, behavior: "instant" });
+        }
       }
     }
     pendingListRestoreRef.current = null;
@@ -1980,6 +1985,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     }
     const openingReader = view !== "library" || !selectedEntry;
     if (view === "library" && !selectedEntry) captureListPosition("library");
+    if (view === "library" && selectedEntry) {
+      listPositionMemoryRef.current.library = {
+        ...listPositionMemoryRef.current.library,
+        anchorId: `library:${entry.id}`,
+        centerAnchor: true,
+      };
+    }
     if (openingReader) pendingSelectedRevealRef.current = "library";
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 1976px)").matches) setMasterPaneOpen(false);
     setReaderFocusMode(false);
@@ -2057,6 +2069,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     }
     const openingReader = view !== "banks" || !selectedProblem;
     if (view === "banks" && !selectedProblem) captureListPosition("banks");
+    if (view === "banks" && selectedProblem) {
+      listPositionMemoryRef.current.banks = {
+        ...listPositionMemoryRef.current.banks,
+        anchorId: `banks:${type}:${question.id}`,
+        centerAnchor: true,
+      };
+    }
     if (openingReader) pendingSelectedRevealRef.current = "banks";
     closeMasterAfterSelection();
     setReaderFocusMode(false);
@@ -3644,7 +3663,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const selectedCaseSections = dedupeReaderSections(selectedEntry?.artifact?.sections.filter((section) => !(selectedEntryTurns.length && isTranscriptSection(section.title))) ?? []);
   const selectedCaseGroups = groupReaderSections(selectedCaseSections);
   const selectedSolutionGroups = groupReaderSections(selectedProblemProfile?.payload.sections ?? []);
-  const practiceRecordLoading = Boolean(selectedEntryActivityId && loadedPracticeRecordId !== selectedEntryActivityId);
   const highlightScope = view === "library" && selectedEntry
     ? { scopeType: "activity" as const, scopeId: selectedEntryActivityId || selectedEntry.id }
     : view === "banks" && selectedProblem
@@ -3991,19 +4009,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     void fetch(`/api/practice-record?activityId=${encodeURIComponent(selectedEntryActivityId)}`, { signal: controller.signal })
       .then(async (response) => response.ok ? response.json() as Promise<{ turns: TranscriptTurn[]; notes: PracticeNote[]; audioClips: AudioClip[]; deliveryAnalyses: DeliveryAnalysis[] }> : null)
       .then((record) => {
-        if (!record) {
-          setLoadedPracticeRecordId(selectedEntryActivityId);
-          return;
-        }
+        if (!record) return;
         setSelectedEntry((current) => current && (current.artifact?.activityId || current.id) === selectedEntryActivityId
           ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips, deliveryAnalyses: record.deliveryAnalyses }
           : current);
-        setLoadedPracticeRecordId(selectedEntryActivityId);
       })
       .catch((error: unknown) => {
         if (!(error instanceof DOMException && error.name === "AbortError")) {
           console.error("Unable to load the practice transcript.");
-          setLoadedPracticeRecordId(selectedEntryActivityId);
         }
       });
     return () => controller.abort();
@@ -4079,7 +4092,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           {Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <aside className="pinned-notes" id="case-notes" aria-label="Pinned practice notes"><span>NOTES</span>{selectedEntry.personalNote?.trim() && <article><div className="note-actions"><button onClick={() => openNoteComposer("personal")} aria-label="Edit personal note" title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote("personal")} aria-label="Delete personal note" title="Delete"><Icon name="trash" /></button></div><MarkdownBody source={selectedEntry.personalNote} /></article>}{selectedEntry.pinnedNotes?.map((note) => <article key={note.id}><header><small>{note.kind}</small><div className="note-actions"><button onClick={() => openNoteComposer(note)} aria-label={`Edit ${note.kind} note`} title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote(note.id)} aria-label={`Delete ${note.kind} note`} title="Delete"><Icon name="trash" /></button></div></header><MarkdownBody source={note.body} /></article>)}</aside>}
           {noteComposerOpen && <form className="case-note-composer" onSubmit={(event) => { event.preventDefault(); void saveCaseNote(); }}><label htmlFor="case-note">{editingNoteId ? "Edit note" : "Add a note"}</label><textarea id="case-note" autoFocus value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} placeholder="A concise reminder, mistake, or pattern to keep visible…" /><div><button type="button" onClick={() => { setNoteComposerOpen(false); setEditingNoteId(""); setNoteDraft(""); }}>Cancel</button><button type="submit" disabled={noteBusy || !noteDraft.trim()}>{noteBusy ? "Saving…" : "Save note"}</button></div></form>}
           <div className="letter-facts" id="case-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.startedAt && <div><span>Started</span><strong>{formatPracticeTimestamp(selectedEntry.startedAt)}</strong></div>}{selectedEntry.endedAt && <div><span>Finished</span><strong>{formatPracticeTimestamp(selectedEntry.endedAt)}</strong></div>}{selectedEntry.sessionId && <div><span>Session</span><strong>{selectedEntry.sessionId}</strong></div>}{selectedEntry.outcome && <div><span>Result</span><strong>{resultLabel(selectedEntry.outcome, selectedEntry.type)}</strong></div>}{selectedEntry.review && <div className="review-fact"><span>{selectedEntry.review.status === "due" ? "Review due" : "Next review"}</span><strong>{selectedEntry.review.dueDate}</strong><small>{selectedEntry.review.reason.replaceAll("_", " ")} · {selectedEntry.review.intervalDays} day interval</small></div>}</div>
-          {practiceRecordLoading && <div className="transcript-loading"><span />Loading conversation and recordings…</div>}
           <div className="letter-sections layered-reader">
             {selectedEntry.artifact
               ? selectedCaseGroups.filter((group) => group.key === "record").map((group) => { const groupId = `case-group-${group.key}`; return <details className="reader-group record-group" id={groupId} open={readerGroupOpen(groupId, true)} onToggle={(event) => rememberReaderGroup(groupId, event.currentTarget.open)} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div>{group.sections.map((section, index) => <ReaderSectionBody section={section} id={`case-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />)}</div></details>; })
@@ -4256,7 +4268,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             {Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <aside className="pinned-notes" id="case-notes" aria-label="Pinned practice notes"><span>NOTES</span>{selectedEntry.personalNote?.trim() && <article><div className="note-actions"><button onClick={() => openNoteComposer("personal")} aria-label="Edit personal note" title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote("personal")} aria-label="Delete personal note" title="Delete"><Icon name="trash" /></button></div><MarkdownBody source={selectedEntry.personalNote} /></article>}{selectedEntry.pinnedNotes?.map((note) => <article key={note.id}><header><small>{note.kind}</small><div className="note-actions"><button onClick={() => openNoteComposer(note)} aria-label={`Edit ${note.kind} note`} title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote(note.id)} aria-label={`Delete ${note.kind} note`} title="Delete"><Icon name="trash" /></button></div></header><MarkdownBody source={note.body} /></article>)}</aside>}
             {noteComposerOpen && <form className="case-note-composer" onSubmit={(event) => { event.preventDefault(); void saveCaseNote(); }}><label htmlFor="case-note">{editingNoteId ? "Edit note" : "Add a note"}</label><textarea id="case-note" autoFocus value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} placeholder="A concise reminder, mistake, or pattern to keep visible…" /><div><button type="button" onClick={() => { setNoteComposerOpen(false); setEditingNoteId(""); setNoteDraft(""); }}>Cancel</button><button type="submit" disabled={noteBusy || !noteDraft.trim()}>{noteBusy ? "Saving…" : "Save note"}</button></div></form>}
             <div className="letter-facts" id="case-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.startedAt && <div><span>Started</span><strong>{formatPracticeTimestamp(selectedEntry.startedAt)}</strong></div>}{selectedEntry.endedAt && <div><span>Finished</span><strong>{formatPracticeTimestamp(selectedEntry.endedAt)}</strong></div>}{selectedEntry.sessionId && <div><span>Session</span><strong>{selectedEntry.sessionId}</strong></div>}{selectedEntry.outcome && <div><span>Result</span><strong>{resultLabel(selectedEntry.outcome, selectedEntry.type)}</strong></div>}{selectedEntry.review && <div className="review-fact"><span>{selectedEntry.review.status === "due" ? "Review due" : "Next review"}</span><strong>{selectedEntry.review.dueDate}</strong><small>{selectedEntry.review.reason.replaceAll("_", " ")} · {selectedEntry.review.intervalDays} day interval</small></div>}</div>
-            {practiceRecordLoading && <div className="transcript-loading"><span />Loading conversation and recordings…</div>}
             {selectedEntry.artifact ? <div className="letter-sections layered-reader">{selectedCaseGroups.map((group) => group.key === "record"
               ? <section className="reader-group record-group" id={`case-group-${group.key}`} key={group.key}><h2>{group.title}</h2>{group.sections.map((section, index) => <ReaderSectionBody section={section} id={`case-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />)}</section>
               : <details className={`reader-group ${group.key}-group`} id={`case-group-${group.key}`} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div>{group.sections.map((section, index) => <ReaderSectionBody section={section} id={`case-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />)}</div></details>)}</div> : <div className="unpublished-letter" id="case-draft"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to finalize the transcript, review, solution, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
