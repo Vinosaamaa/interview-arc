@@ -3,6 +3,7 @@ import { resolveOwnerId } from "../../../db/owner";
 import { toRouteErrorMessage } from "../route-helpers";
 
 function validScope(value: string): value is HighlightScope { return value === "activity" || value === "solution"; }
+function validColor(value: string | undefined): value is "yellow" | "green" | "pink" { return value === "yellow" || value === "green" || value === "pink"; }
 
 export async function GET(request: Request) {
   try {
@@ -17,12 +18,12 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as { scopeType?: string; scopeId?: string; quote?: string; prefix?: string; suffix?: string; note?: string };
-    if (!body.scopeType || !validScope(body.scopeType) || !body.scopeId?.trim() || !body.quote?.trim() || body.quote.length > 5_000) {
+    const body = await request.json() as { scopeType?: string; scopeId?: string; quote?: string; prefix?: string; suffix?: string; color?: string; note?: string };
+    if (!body.scopeType || !validScope(body.scopeType) || !body.scopeId?.trim() || !body.quote?.trim() || body.quote.length > 100_000) {
       return Response.json({ error: "Scope and selected text are required." }, { status: 400 });
     }
     const now = Date.now();
-    const row = { id: crypto.randomUUID(), scopeType: body.scopeType, scopeId: body.scopeId.trim(), quote: body.quote, prefix: (body.prefix ?? "").slice(-80), suffix: (body.suffix ?? "").slice(0, 80), color: "yellow" as const, note: (body.note ?? "").trim().slice(0, 4_000), createdAt: now, updatedAt: now };
+    const row = { id: crypto.randomUUID(), scopeType: body.scopeType, scopeId: body.scopeId.trim(), quote: body.quote, prefix: (body.prefix ?? "").slice(-120), suffix: (body.suffix ?? "").slice(0, 120), color: validColor(body.color) ? body.color : "yellow" as const, note: (body.note ?? "").trim().slice(0, 4_000), createdAt: now, updatedAt: now };
     await addContentHighlight(await resolveOwnerId(request), row);
     return Response.json(row, { status: 201, headers: { "cache-control": "private, no-store" } });
   } catch (error) { return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 }); }
