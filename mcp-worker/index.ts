@@ -27,6 +27,7 @@ import {
   registerActivityAudioClip,
   registerSpecialistTask,
   saveActivityDeliveryAnalysis,
+  saveProvisionalSolutionProfile,
   saveSpecialistFinalization,
   scheduleReview,
   updateActivityAudioClipStatus,
@@ -433,6 +434,12 @@ function createServer(ownerId: string) {
             accessedAt: z.string().min(1),
           })),
           solutionProfileAction: z.enum(["create_or_revise", "reuse_current"]).optional(),
+          solutionProfileDecision: z.object({
+            reason: z.string().min(1),
+            changedSections: z.array(z.string()),
+            researchPerformed: z.boolean(),
+            sourcesChecked: z.array(z.string()),
+          }).optional(),
           solutionProfile: z.object({
             schemaVersion: z.literal(1),
             summary: z.string().min(1),
@@ -469,9 +476,66 @@ function createServer(ownerId: string) {
   );
 
   server.registerTool(
+    "save_provisional_solution_profile",
+    {
+      description: "Save a reusable reference-preflight profile before an attempt is finalized. Use only when no current or provisional profile exists; this prepares later attempts without creating a numbered revision.",
+      inputSchema: {
+        activityId: z.string().min(1).optional(),
+        specialty: z.enum(["leetcode", "system_design", "behavioral"]),
+        questionId: z.string().min(1),
+        title: z.string().min(1),
+        decision: z.object({
+          reason: z.string().min(1),
+          changedSections: z.array(z.string()),
+          researchPerformed: z.boolean(),
+          sourcesChecked: z.array(z.string()),
+        }).optional(),
+        profile: z.object({
+          schemaVersion: z.literal(1),
+          summary: z.string().min(1),
+          sections: z.array(z.object({ title: z.string().min(1), body: z.string().min(1) })).min(1),
+          tags: z.array(z.string().min(1)).max(32),
+          references: z.array(z.object({ title: z.string().min(1), url: z.string().url(), accessedAt: z.string().min(1) })),
+          behavioralAnswer: z.object({
+            preferred: z.object({
+              label: z.string().min(1),
+              answer: z.string().min(1),
+              evidence: z.array(z.string()),
+              evidenceGaps: z.array(z.string()),
+            }),
+            alternatives: z.array(z.object({
+              label: z.string().min(1),
+              answer: z.string().min(1),
+              whenToUse: z.string().optional(),
+              evidence: z.array(z.string()),
+              evidenceGaps: z.array(z.string()),
+            })).max(5),
+          }).optional(),
+        }),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ activityId, specialty, questionId, title, decision, profile }) => {
+      await saveProvisionalSolutionProfile(
+        ownerId,
+        specialty,
+        questionId,
+        title,
+        profile,
+        { activityId, decision, references: profile.references },
+        Date.now(),
+      );
+      return {
+        content: [{ type: "text", text: `Prepared a provisional Solution Profile for ${specialty}:${questionId}.` }],
+        structuredContent: { specialty, questionId, status: "provisional" },
+      };
+    },
+  );
+
+  server.registerTool(
     "get_problem_solution_profile",
     {
-      description: "Load the owner-private current Solution Profile and immutable revision history for a stable bank question. Every specialist calls this after resolving questionId and before preparing a first attempt or revisit.",
+      description: "Load the current, provisional, and immutable Solution Profile history for a stable bank question. Every specialist calls this after resolving questionId and before preparing a first attempt or revisit.",
       inputSchema: {
         specialty: z.enum(["leetcode", "system_design", "behavioral"]),
         questionId: z.string().min(1),

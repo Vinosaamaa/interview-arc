@@ -1,5 +1,4 @@
 import { and, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
-import { practiceDateAt } from "../app/practice-time";
 import { getDb } from "./index";
 import {
   activityNotes,
@@ -10,6 +9,7 @@ import {
   liveSessions,
   outcomes,
   practiceFocus,
+  practiceWorkbenches,
   practiceNotes,
   practiceTranscriptTurns,
   publicationStatuses,
@@ -26,6 +26,13 @@ export type TimerKind = "activity" | "session";
 export type TimerAction = "start" | "pause" | "finish";
 export type OutcomeValue = "solved" | "solved_after_reviewing_approach" | "failed";
 export type PublicationStatusValue = "draft" | "ready" | "published";
+export type WorkbenchState = {
+  id: string;
+  status: "open" | "archived";
+  openedPacificDate: string;
+  openedAt: number;
+  closedAt: number | null;
+};
 
 // Serialized clock as the client consumes it. `runningSince` is server epoch ms;
 // the client corrects for clock skew using `serverNow` from the state response.
@@ -40,6 +47,7 @@ export type TimerState = {
 
 export type LiveState = {
   serverNow: number;
+  workbench: WorkbenchState | null;
   timers: Record<string, TimerState>;
   sessionTimers: Record<string, TimerState>;
   outcomes: Record<string, OutcomeValue>;
@@ -85,8 +93,47 @@ function toTimerState(row: {
 type ActivityPayload = { id: string; date: string; sessionId?: string } & Record<string, unknown>;
 type SessionPayload = { id: string; date?: string; activityIds: string[] } & Record<string, unknown>;
 
-function timerBelongsToPracticeDate(timer: TimerState | undefined, date: string) {
-  return Boolean(timer?.completedAt && practiceDateAt(timer.completedAt) === date);
+function toWorkbenchState(row: typeof practiceWorkbenches.$inferSelect): WorkbenchState {
+  return {
+    id: row.id,
+    status: row.status,
+    openedPacificDate: row.openedPacificDate,
+    openedAt: row.openedAt,
+    closedAt: row.closedAt,
+  };
+}
+
+export async function ensureOpenWorkbench(ownerId: string, date: string, nowMs = Date.now()) {
+  const db = getDb();
+  const rows = await db.select().from(practiceWorkbenches).where(eq(practiceWorkbenches.ownerId, ownerId));
+  const current = rows
+    .filter((row) => row.status === "open")
+    .sort((left, right) => right.openedAt - left.openedAt)[0];
+  if (current) return toWorkbenchState(current);
+
+  const id = `workbench-${date}-${crypto.randomUUID()}`;
+  await db.insert(practiceWorkbenches).values({
+    ownerId,
+    id,
+    status: "open",
+    openedPacificDate: date,
+    openedAt: nowMs,
+    closedAt: null,
+    updatedAt: nowMs,
+  });
+
+  // One-time legacy adoption: rows created before workbenches existed become
+  // part of the first open workbench instead of disappearing after migration.
+  await db
+    .update(extraActivities)
+    .set({ workbenchId: id, updatedAt: nowMs })
+    .where(and(eq(extraActivities.ownerId, ownerId), isNull(extraActivities.workbenchId)));
+  await db
+    .update(liveSessions)
+    .set({ workbenchId: id, updatedAt: nowMs })
+    .where(and(eq(liveSessions.ownerId, ownerId), isNull(liveSessions.workbenchId)));
+
+  return { id, status: "open" as const, openedPacificDate: date, openedAt: nowMs, closedAt: null };
 }
 
 export async function readLiveState(
@@ -95,6 +142,7 @@ export async function readLiveState(
   options: { includeAll?: boolean } = {},
 ): Promise<LiveState> {
   const db = getDb();
+  const workbench = await ensureOpenWorkbench(ownerId, date);
   const [timerRows, outcomeRows, publicationRows, noteRows, extraRows, sessionRows, focusRows] = await Promise.all([
     db.select().from(timers).where(eq(timers.ownerId, ownerId)),
     db.select().from(outcomes).where(eq(outcomes.ownerId, ownerId)),
@@ -111,27 +159,17 @@ export async function readLiveState(
     (row.kind === "session" ? sessionTimers : activityTimers)[row.subjectId] = toTimerState(row);
   }
 
-  const allSessions = sessionRows.map((row: LiveSessionRow) => row.payload as SessionPayload);
-  const activeSessionIds = new Set(allSessions.filter((session) => {
-    const timer = sessionTimers[session.id];
-    return Boolean(timer?.startedAt && !timer.completed);
-  }).map((session) => session.id));
-  const sessionForActivity = new Map<string, string>();
-  allSessions.forEach((session) => session.activityIds.forEach((activityId) => sessionForActivity.set(activityId, session.id)));
+  const workbenchSessionRows = options.includeAll
+    ? sessionRows
+    : sessionRows.filter((row) => row.workbenchId === workbench.id);
+  const allSessions = workbenchSessionRows.map((row: LiveSessionRow) => row.payload as SessionPayload);
 
-  const visibleSessions = options.includeAll ? allSessions : allSessions.filter((session) => {
-    const timer = sessionTimers[session.id];
-    return session.date === date || timerBelongsToPracticeDate(timer, date) || Boolean(timer?.startedAt && !timer.completed);
-  });
-  const allActivities = extraRows.map((row: ExtraActivityRow) => row.payload as ActivityPayload);
-  const visibleActivities = options.includeAll ? allActivities : allActivities.filter((activity) => {
-    const timer = activityTimers[activity.id];
-    const sessionId = activity.sessionId ?? sessionForActivity.get(activity.id);
-    return activity.date === date
-      || timerBelongsToPracticeDate(timer, date)
-      || Boolean(timer?.startedAt && !timer.completed)
-      || Boolean(sessionId && activeSessionIds.has(sessionId));
-  });
+  const visibleSessions = allSessions;
+  const workbenchExtraRows = options.includeAll
+    ? extraRows
+    : extraRows.filter((row) => row.workbenchId === workbench.id);
+  const allActivities = workbenchExtraRows.map((row: ExtraActivityRow) => row.payload as ActivityPayload);
+  const visibleActivities = allActivities;
   const visibleActivityIds = new Set(visibleActivities.map((activity) => activity.id));
   const durable = await readDurablePracticeSummary(ownerId, [...visibleActivityIds], date);
 
@@ -154,6 +192,7 @@ export async function readLiveState(
 
   return {
     serverNow: Date.now(),
+    workbench,
     timers: activityTimers,
     sessionTimers,
     outcomes: outcomeMap,
@@ -269,6 +308,32 @@ export async function applyTimerAction(
 
   // Finished timers are locked permanently and never resume.
   if (existing?.completed) return toTimerState(existing);
+
+  if (action === "start" && kind === "activity" && options.sessionId) {
+    const parent = await loadTimer(db, ownerId, options.sessionId, "session");
+    if (parent?.completed) {
+      throw new Error("This session is already finished.");
+    }
+    if (parent?.startedAt && !parent.runningSince) {
+      const sessionRows = await db
+        .select()
+        .from(liveSessions)
+        .where(and(eq(liveSessions.ownerId, ownerId), eq(liveSessions.id, options.sessionId)));
+      const session = sessionRows[0]?.payload as SessionPayload | undefined;
+      await applyTimerAction(ownerId, options.sessionId, "session", "start", nowMs, {
+        activityIds: session?.activityIds ?? [],
+      });
+    }
+  }
+
+  if (action === "finish" && kind === "session" && options.activityIds?.length) {
+    for (const activityId of options.activityIds) {
+      const child = await loadTimer(db, ownerId, activityId, "activity");
+      if (child?.startedAt && !child.completed) {
+        await applyTimerAction(ownerId, activityId, "activity", "finish", nowMs);
+      }
+    }
+  }
 
   // A duplicated start from another surface keeps the original segment intact.
   if (action === "start" && existing?.runningSince) {
@@ -555,12 +620,22 @@ export async function upsertExtraActivity(
   nowMs: number,
 ) {
   const db = getDb();
+  const workbench = await ensureOpenWorkbench(ownerId, activity.date, nowMs);
+  const payload = { ...activity, workbenchId: workbench.id };
   await db
     .insert(extraActivities)
-    .values({ ownerId, id: activity.id, date: activity.date, payload: activity, revision: 1, updatedAt: nowMs })
+    .values({
+      ownerId,
+      id: activity.id,
+      date: activity.date,
+      workbenchId: workbench.id,
+      payload,
+      revision: 1,
+      updatedAt: nowMs,
+    })
     .onConflictDoUpdate({
       target: [extraActivities.ownerId, extraActivities.id],
-      set: { date: activity.date, payload: activity, updatedAt: nowMs },
+      set: { date: activity.date, workbenchId: workbench.id, payload, updatedAt: nowMs },
     });
 }
 
@@ -590,13 +665,79 @@ export async function upsertLiveSession(
   nowMs: number,
 ) {
   const db = getDb();
+  const workbench = await ensureOpenWorkbench(ownerId, session.date, nowMs);
+  const payload = { ...session, workbenchId: workbench.id };
   await db
     .insert(liveSessions)
-    .values({ ownerId, id: session.id, date: session.date, payload: session, revision: 1, updatedAt: nowMs })
+    .values({
+      ownerId,
+      id: session.id,
+      date: session.date,
+      workbenchId: workbench.id,
+      payload,
+      revision: 1,
+      updatedAt: nowMs,
+    })
     .onConflictDoUpdate({
       target: [liveSessions.ownerId, liveSessions.id],
-      set: { date: session.date, payload: session, updatedAt: nowMs },
+      set: { date: session.date, workbenchId: workbench.id, payload, updatedAt: nowMs },
     });
+}
+
+export async function startFreshWorkbench(
+  ownerId: string,
+  date: string,
+  nowMs: number,
+  requestedId?: string,
+) {
+  const db = getDb();
+  const current = await ensureOpenWorkbench(ownerId, date, nowMs);
+  const [activityRows, sessionRows] = await Promise.all([
+    db.select().from(extraActivities).where(and(
+      eq(extraActivities.ownerId, ownerId),
+      eq(extraActivities.workbenchId, current.id),
+    )),
+    db.select().from(liveSessions).where(and(
+      eq(liveSessions.ownerId, ownerId),
+      eq(liveSessions.workbenchId, current.id),
+    )),
+  ]);
+
+  for (const row of activityRows) {
+    const timer = await loadTimer(db, ownerId, row.id, "activity");
+    if (timer?.startedAt && !timer.completed) {
+      await applyTimerAction(ownerId, row.id, "activity", "finish", nowMs);
+    }
+  }
+  for (const row of sessionRows) {
+    const timer = await loadTimer(db, ownerId, row.id, "session");
+    const payload = row.payload as SessionPayload;
+    if (timer?.startedAt && !timer.completed) {
+      await applyTimerAction(ownerId, row.id, "session", "finish", nowMs, {
+        activityIds: payload.activityIds,
+      });
+    }
+  }
+  await setPracticeFocus(ownerId, null, null, nowMs);
+  await db
+    .update(practiceWorkbenches)
+    .set({ status: "archived", closedAt: nowMs, updatedAt: nowMs })
+    .where(and(
+      eq(practiceWorkbenches.ownerId, ownerId),
+      eq(practiceWorkbenches.id, current.id),
+    ));
+
+  const id = requestedId || `workbench-${date}-${crypto.randomUUID()}`;
+  await db.insert(practiceWorkbenches).values({
+    ownerId,
+    id,
+    status: "open",
+    openedPacificDate: date,
+    openedAt: nowMs,
+    closedAt: null,
+    updatedAt: nowMs,
+  });
+  return { id, status: "open" as const, openedPacificDate: date, openedAt: nowMs, closedAt: null };
 }
 
 export async function removeLiveSession(ownerId: string, id: string, activityIds: string[]) {

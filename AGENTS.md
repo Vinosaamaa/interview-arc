@@ -51,6 +51,10 @@ arbitrarily long task transcript from memory at publication time.
 - Starting an activity focuses it and pauses any other running activity.
   Pausing or finishing a session pauses its running child activity. Starting a
   child activity resumes its parent session when necessary.
+- Today belongs to one durable owner-scoped workbench rather than the wall
+  clock. `Start fresh day` closes any started timers, archives that workbench,
+  opens a new one, and leaves every unpublished activity available to the
+  coordinator's undated publication queue.
 - Activity lifecycle is `planned`, `running`, or `completed`.
 - Publication state is `draft`, `ready`, or `published`. Finished activities
   become `ready` automatically, including failed attempts. The website shows

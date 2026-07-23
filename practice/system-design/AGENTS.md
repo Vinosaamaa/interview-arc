@@ -28,6 +28,9 @@ procedure below.
 - After resolving `questionId`, call `get_problem_solution_profile`. Use an
   existing design privately as the baseline on revisits; do not reveal it
   before a fresh attempt unless the user asks.
+- If no current or provisional profile exists, complete the reference preflight
+  and call `save_provisional_solution_profile` before the mock. Reuse that
+  prepared design on delayed or same-batch revisits.
 - Append every meaningful two-sided mock exchange to D1 in small idempotent
   batches with `append_practice_transcript`. Flush every few short turns and on
   long answer, activity switch, pause, finish, or coordinator request.
@@ -61,6 +64,8 @@ procedure below.
 - Use `reuse_current` when the reference design remains complete. Use
   `create_or_revise` only when the mock produces a material requirements,
   architecture, flow, scaling, reliability, or tradeoff improvement.
+- Include `solutionProfileDecision`; fresh web research requires a concrete
+  incompleteness, staleness, dispute, missing support, or explicit request.
 - Schedule failed/full-walkthrough review in 4 days, approach-review completion
   in 7 days, and successful reimplementation in 21 then 60 days.
 

@@ -6,6 +6,7 @@ import {
   setActivityNote,
   setOutcome,
   setPublicationStatus,
+  startFreshWorkbench,
   upsertExtraActivity,
   upsertLiveSession,
   type OutcomeValue,
@@ -35,7 +36,8 @@ type Mutation =
   | { type: "extra-upsert"; activity: { id: string; date: string } & Record<string, unknown> }
   | { type: "extra-remove"; id: string }
   | { type: "session-upsert"; session: { id: string; date: string } & Record<string, unknown> }
-  | { type: "session-remove"; id: string; activityIds: string[] };
+  | { type: "session-remove"; id: string; activityIds: string[] }
+  | { type: "workbench-start-fresh"; workbenchId: string };
 
 const TIMER_ACTIONS: TimerAction[] = ["start", "pause", "finish"];
 const TIMER_KINDS: TimerKind[] = ["activity", "session"];
@@ -173,6 +175,13 @@ export async function POST(request: Request) {
       case "session-remove": {
         if (!mutation.id) return Response.json({ error: "Missing session id." }, { status: 400 });
         await removeLiveSession(ownerId, mutation.id, mutation.activityIds ?? []);
+        break;
+      }
+      case "workbench-start-fresh": {
+        if (!mutation.workbenchId) {
+          return Response.json({ error: "Missing new workbench id." }, { status: 400 });
+        }
+        await startFreshWorkbench(ownerId, date, now, mutation.workbenchId);
         break;
       }
       default:

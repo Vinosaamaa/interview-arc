@@ -66,6 +66,21 @@ type ReaderMemory = {
   anchorOffset?: number;
   scrollTop?: number;
 };
+type WorkspaceUiMemory = {
+  libraryTypeFilters?: ActivityType[];
+  libraryAttentionFilters?: LibraryAttentionFilter[];
+  librarySearch?: string;
+  libraryStarFilter?: boolean;
+  bankTypeFilters?: ActivityType[];
+  bankAttentionFilters?: BankAttentionFilter[];
+  bankLevelFilters?: Array<"easy" | "medium" | "hard">;
+  bankSortKey?: "frequency" | "recent" | "acceptance";
+  bankSortDir?: "asc" | "desc";
+  bankSearch?: string;
+  bankTagFilters?: string[];
+  bankStarFilter?: "all" | "starred";
+  bankTopicsExpanded?: boolean;
+};
 type ComposerState = {
   open: boolean;
   mode: ComposerMode;
@@ -119,6 +134,15 @@ const EMPTY_COMPOSER: ComposerState = {
   sessionBehavioral: 1,
 };
 const OUTCOME_ORDER: (Outcome | undefined)[] = [undefined, "solved", "solved_after_reviewing_approach", "failed"];
+
+function readSessionJson<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try {
+    return JSON.parse(window.sessionStorage.getItem(key) ?? "") as T;
+  } catch {
+    return fallback;
+  }
+}
 
 function publicationLabel(status: PublicationStatus) {
   if (status === "ready") return "Ready for journal";
@@ -333,11 +357,13 @@ function inferredQuestionTags(type: ActivityType, question: QuestionBankItem) {
   return inferred.length ? [...new Set(inferred)] : [type === "leetcode" ? "General coding" : type === "system_design" ? "Distributed systems" : "Behavioral signal"];
 }
 
-function Icon({ name }: { name: "close" | "star" | "book" | "plus" | "minus" | "filter" | "sort" | "note" | "edit" | "trash" | "chevron" | "flag" | "play" | "pause" | "clips" | "volume" }) {
+function Icon({ name }: { name: "close" | "star" | "book" | "sidebar" | "outline" | "plus" | "minus" | "filter" | "sort" | "note" | "edit" | "trash" | "chevron" | "flag" | "play" | "pause" | "clips" | "volume" }) {
   const paths: Record<typeof name, ReactNode> = {
     close: <><path d="M5 5l14 14M19 5 5 19" /></>,
     star: <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" />,
     book: <><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z" /><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z" /></>,
+    sidebar: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16M6 8h.01M6 12h.01" /></>,
+    outline: <><path d="M5 6h2M10 6h9M5 12h2M10 12h9M5 18h2M10 18h9" /></>,
     plus: <><path d="M12 5v14M5 12h14" /></>,
     minus: <path d="M5 12h14" />,
     filter: <path d="M4 6h16l-6.2 7v5l-3.6 2v-7L4 6Z" />,
@@ -954,7 +980,7 @@ function ReaderOutline({ children }: { children: ReactNode }) {
   }, []);
   return <details className="reader-outline" ref={outlineRef} onClick={(event) => {
     if (event.target instanceof Element && event.target.closest("a") && outlineRef.current) outlineRef.current.open = false;
-  }}><summary>Contents</summary><nav>{children}</nav></details>;
+  }}><summary aria-label="Open contents" title="Contents"><Icon name="outline" /></summary><nav>{children}</nav></details>;
 }
 
 function SolutionReaderGroup({ group, idPrefix, coding, open, onToggle }: { group: ReturnType<typeof groupReaderSections>[number]; idPrefix: string; coding: boolean; open: boolean; onToggle: (open: boolean) => void }) {
@@ -998,28 +1024,39 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     () => content.journals.find((candidate) => candidate.date === today) ?? emptyJournal(today),
     [content.journals, today],
   );
-  const [view, setView] = useState<View>("today");
+  const [view, setView] = useState<View>(() => {
+    if (typeof window === "undefined") return "today";
+    const stored = window.sessionStorage.getItem("interview-arc-active-view");
+    return stored === "journey" || stored === "library" || stored === "banks" ? stored : "today";
+  });
+  const [viewDirection, setViewDirection] = useState<"forward" | "backward">("forward");
   const { draft, setDraft, now, setNow, hydrated, enqueue } = useLiveState(journal.date);
   const yesterdayDate = shiftDate(journal.date, -1);
   const yesterdayDraft = useReadOnlyLiveState(yesterdayDate);
   const [composer, setComposer] = useState<ComposerState>(EMPTY_COMPOSER);
   const [selectedEntry, setSelectedEntry] = useState<LogEntry | null>(null);
   const [selectedProblem, setSelectedProblem] = useState<{ type: ActivityType; question: QuestionBankItem } | null>(null);
-  const [masterPaneOpen, setMasterPaneOpen] = useState(false);
+  const [masterPaneOpen, setMasterPaneOpen] = useState(() =>
+    typeof window !== "undefined" && window.sessionStorage.getItem("interview-arc-master-pane") === "open"
+  );
+  const [workspaceUiMemory] = useState(() =>
+    readSessionJson<WorkspaceUiMemory>("interview-arc-workspace-ui-v1", {})
+  );
   const [readerClosing, setReaderClosing] = useState(false);
-  const [libraryTypeFilters, setLibraryTypeFilters] = useState<ActivityType[]>([]);
-  const [libraryAttentionFilters, setLibraryAttentionFilters] = useState<LibraryAttentionFilter[]>([]);
-  const [librarySearch, setLibrarySearch] = useState("");
-  const [libraryStarFilter, setLibraryStarFilter] = useState(false);
-  const [bankTypeFilters, setBankTypeFilters] = useState<ActivityType[]>([]);
-  const [bankAttentionFilters, setBankAttentionFilters] = useState<BankAttentionFilter[]>([]);
-  const [bankLevelFilters, setBankLevelFilters] = useState<Array<"easy" | "medium" | "hard">>([]);
-  const [bankSortKey, setBankSortKey] = useState<"frequency" | "recent" | "acceptance">("frequency");
-  const [bankSortDir, setBankSortDir] = useState<"asc" | "desc">("asc");
-  const [bankSearch, setBankSearch] = useState("");
-  const [bankTagFilters, setBankTagFilters] = useState<string[]>([]);
-  const [bankStarFilter, setBankStarFilter] = useState<"all" | "starred">("all");
-  const [bankTopicsExpanded, setBankTopicsExpanded] = useState(false);
+  const [freshDayConfirmOpen, setFreshDayConfirmOpen] = useState(false);
+  const [libraryTypeFilters, setLibraryTypeFilters] = useState<ActivityType[]>(workspaceUiMemory.libraryTypeFilters ?? []);
+  const [libraryAttentionFilters, setLibraryAttentionFilters] = useState<LibraryAttentionFilter[]>(workspaceUiMemory.libraryAttentionFilters ?? []);
+  const [librarySearch, setLibrarySearch] = useState(workspaceUiMemory.librarySearch ?? "");
+  const [libraryStarFilter, setLibraryStarFilter] = useState(workspaceUiMemory.libraryStarFilter ?? false);
+  const [bankTypeFilters, setBankTypeFilters] = useState<ActivityType[]>(workspaceUiMemory.bankTypeFilters ?? []);
+  const [bankAttentionFilters, setBankAttentionFilters] = useState<BankAttentionFilter[]>(workspaceUiMemory.bankAttentionFilters ?? []);
+  const [bankLevelFilters, setBankLevelFilters] = useState<Array<"easy" | "medium" | "hard">>(workspaceUiMemory.bankLevelFilters ?? []);
+  const [bankSortKey, setBankSortKey] = useState<"frequency" | "recent" | "acceptance">(workspaceUiMemory.bankSortKey ?? "frequency");
+  const [bankSortDir, setBankSortDir] = useState<"asc" | "desc">(workspaceUiMemory.bankSortDir ?? "asc");
+  const [bankSearch, setBankSearch] = useState(workspaceUiMemory.bankSearch ?? "");
+  const [bankTagFilters, setBankTagFilters] = useState<string[]>(workspaceUiMemory.bankTagFilters ?? []);
+  const [bankStarFilter, setBankStarFilter] = useState<"all" | "starred">(workspaceUiMemory.bankStarFilter ?? "all");
+  const [bankTopicsExpanded, setBankTopicsExpanded] = useState(workspaceUiMemory.bankTopicsExpanded ?? false);
   const [composerAttentionFilters, setComposerAttentionFilters] = useState<ComposerAttentionFilter[]>([]);
   const [composerLevelFilters, setComposerLevelFilters] = useState<Array<"easy" | "medium" | "hard">>([]);
   const [composerStarFilter, setComposerStarFilter] = useState(false);
@@ -1058,7 +1095,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [readerMemory, setReaderMemory] = useState<Record<string, ReaderMemory>>(() => {
     if (typeof window === "undefined") return {};
     try {
-      return JSON.parse(window.localStorage.getItem("interview-arc-reader-memory-v1") ?? "{}") as Record<string, ReaderMemory>;
+      return JSON.parse(window.sessionStorage.getItem("interview-arc-reader-memory-v1") ?? "{}") as Record<string, ReaderMemory>;
     } catch {
       return {};
     }
@@ -1095,6 +1132,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const query = window.matchMedia("(max-width: 1976px)");
     const synchronizePane = (event?: MediaQueryListEvent) => {
       const narrow = event?.matches ?? query.matches;
+      if (!event && window.sessionStorage.getItem("interview-arc-master-pane")) return;
       setMasterPaneOpen(!narrow);
     };
     const frame = window.requestAnimationFrame(() => synchronizePane());
@@ -1110,8 +1148,49 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem("interview-arc-reader-memory-v1", JSON.stringify(readerMemory));
+    window.sessionStorage.setItem("interview-arc-reader-memory-v1", JSON.stringify(readerMemory));
   }, [readerMemory]);
+
+  useEffect(() => {
+    window.sessionStorage.setItem("interview-arc-active-view", view);
+  }, [view]);
+
+  useEffect(() => {
+    window.sessionStorage.setItem("interview-arc-master-pane", masterPaneOpen ? "open" : "closed");
+  }, [masterPaneOpen]);
+
+  useEffect(() => {
+    const memory: WorkspaceUiMemory = {
+      libraryTypeFilters,
+      libraryAttentionFilters,
+      librarySearch,
+      libraryStarFilter,
+      bankTypeFilters,
+      bankAttentionFilters,
+      bankLevelFilters,
+      bankSortKey,
+      bankSortDir,
+      bankSearch,
+      bankTagFilters,
+      bankStarFilter,
+      bankTopicsExpanded,
+    };
+    window.sessionStorage.setItem("interview-arc-workspace-ui-v1", JSON.stringify(memory));
+  }, [
+    bankAttentionFilters,
+    bankLevelFilters,
+    bankSearch,
+    bankSortDir,
+    bankSortKey,
+    bankStarFilter,
+    bankTagFilters,
+    bankTopicsExpanded,
+    bankTypeFilters,
+    libraryAttentionFilters,
+    librarySearch,
+    libraryStarFilter,
+    libraryTypeFilters,
+  ]);
 
   useEffect(() => {
     const showArrivalAfterBackNavigation = (event: PageTransitionEvent) => {
@@ -1237,18 +1316,16 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   const allTodayActivities = useMemo(() => {
-    const byId = new Map(draft.extraActivities.map((activity) => [activity.id, activity]));
-    // Published journal data is the narrative source of truth. A matching D1
-    // row remains available through draft timers/outcomes, but it must not
-    // render as a second activity.
-    journal.activities.forEach((activity) => byId.set(activity.id, activity));
-    return [...byId.values()];
-  }, [journal.activities, draft.extraActivities]);
+    return draft.extraActivities.filter((activity) =>
+      draft.publicationStatuses[activity.id] !== "published" && !activity.artifactPath
+    );
+  }, [draft.extraActivities, draft.publicationStatuses]);
   const allSessions: PracticeSession[] = useMemo(() => {
-    const byId = new Map(draft.sessions.map((session) => [session.id, session]));
-    journal.sessions.forEach((session) => byId.set(session.id, session));
-    return [...byId.values()];
-  }, [journal.sessions, draft.sessions]);
+    const visibleActivityIds = new Set(allTodayActivities.map((activity) => activity.id));
+    return draft.sessions.filter((session) =>
+      session.activityIds.some((activityId) => visibleActivityIds.has(activityId))
+    );
+  }, [allTodayActivities, draft.sessions]);
   const sessionByActivityId = useMemo(() => {
     const membership = new Map<string, PracticeSession>();
     allSessions.forEach((session) => session.activityIds.forEach((activityId) => membership.set(activityId, session)));
@@ -1256,17 +1333,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }, [allSessions]);
   const assignedExtraIds = new Set(allSessions.flatMap((session) => session.activityIds));
   const looseActivities = allTodayActivities.filter((activity) => !assignedExtraIds.has(activity.id));
-
-  // Pacific midnight is the journal boundary even when a session continues.
-  // Reloading swaps the Today shell while D1 carries the focused unfinished
-  // session and its activities into the new calendar day.
-  useEffect(() => {
-    const checkPracticeDate = () => {
-      if (practiceDateAt() !== journal.date) window.location.reload();
-    };
-    const interval = window.setInterval(checkPracticeDate, 30_000);
-    return () => window.clearInterval(interval);
-  }, [journal.date]);
 
   useEffect(() => {
     const finished = allSessions.filter((session) => session.activityIds.length > 0
@@ -1494,6 +1560,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (!existing?.startedAt || existing.completed) return;
     setNow(timestamp);
     const session = allSessions.find((candidate) => candidate.id === sessionId);
+    if (session?.activityIds.some((activityId) => !draft.timers[activityId]?.completed)
+      && !window.confirm("Finish this session and close every activity that has already been started? Never-started activities will remain not attempted.")) {
+      return;
+    }
     enqueue({ type: "timer", subjectId: sessionId, kind: "session", action: "finish", activityIds: session?.activityIds ?? [] });
     setDraft((current) => {
       const prior = current.sessionTimers[sessionId];
@@ -1501,8 +1571,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       const timers = { ...current.timers };
       session?.activityIds.forEach((activityId) => {
         const activityTimer = timers[activityId];
-        if (activityTimer?.runningSince) {
-          timers[activityId] = { ...activityTimer, elapsedSeconds: elapsed(activityTimer, timestamp), runningSince: null };
+        if (activityTimer?.startedAt && !activityTimer.completed) {
+          timers[activityId] = {
+            ...activityTimer,
+            elapsedSeconds: elapsed(activityTimer, timestamp),
+            runningSince: null,
+            completed: true,
+            completedAt: timestamp,
+          };
         }
       });
       return {
@@ -1718,7 +1794,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     }
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 1976px)").matches) setMasterPaneOpen(false);
     setReaderClosing(false);
-    setSelectedProblem(null);
     setSelectedEntry(entry);
     transitionToView("library");
   }
@@ -1775,8 +1850,26 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     }
     closeMasterAfterSelection();
     setReaderClosing(false);
-    setSelectedEntry(null);
     setSelectedProblem({ type, question });
+  }
+
+  function bankQuestionForEntry(entry: LogEntry) {
+    return bankFor(entry.type).find((question) =>
+      question.id === entry.questionId ||
+      normalizedIdentity(question.title) === normalizedIdentity(entry.title)
+    );
+  }
+
+  function openEntrySolution(entry: LogEntry) {
+    const question = bankQuestionForEntry(entry);
+    if (!question) return;
+    openProblemProfile(entry.type, question);
+    transitionToView("banks");
+  }
+
+  function addEntryToToday(entry: LogEntry) {
+    const question = bankQuestionForEntry(entry);
+    if (question) addBankQuestionToToday(question, entry.type);
   }
 
   function addBankQuestionToToday(question: QuestionBankItem, type: ActivityType) {
@@ -2316,7 +2409,43 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     [logEntries],
   );
 
+  useEffect(() => {
+    if (selectedEntry) {
+      window.sessionStorage.setItem("interview-arc-selected-past", selectedEntry.id);
+      return;
+    }
+    const storedId = window.sessionStorage.getItem("interview-arc-selected-past");
+    const stored = storedId ? libraryEntries.find((entry) => entry.id === storedId) : undefined;
+    if (!stored) return;
+    const frame = window.requestAnimationFrame(() => setSelectedEntry(stored));
+    return () => window.cancelAnimationFrame(frame);
+  }, [libraryEntries, selectedEntry]);
+
+  useEffect(() => {
+    if (selectedProblem) {
+      window.sessionStorage.setItem(
+        "interview-arc-selected-bank",
+        JSON.stringify({ type: selectedProblem.type, questionId: selectedProblem.question.id }),
+      );
+      return;
+    }
+    try {
+      const stored = JSON.parse(window.sessionStorage.getItem("interview-arc-selected-bank") ?? "null") as
+        | { type: ActivityType; questionId: string }
+        | null;
+      if (!stored || !["leetcode", "system_design", "behavioral"].includes(stored.type)) return;
+      const question = bankFor(stored.type).find((candidate) => candidate.id === stored.questionId);
+      if (!question) return;
+      const frame = window.requestAnimationFrame(() => setSelectedProblem({ type: stored.type, question }));
+      return () => window.cancelAnimationFrame(frame);
+    } catch {
+      window.sessionStorage.removeItem("interview-arc-selected-bank");
+    }
+  }, [content.questionBanks, draft.personalQuestions, selectedProblem]);
+
   function transitionToView(nextView: View) {
+    const order: View[] = ["today", "journey", "library", "banks"];
+    setViewDirection(order.indexOf(nextView) >= order.indexOf(view) ? "forward" : "backward");
     setView(nextView);
   }
 
@@ -2326,9 +2455,30 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       readerCloseTimerRef.current = null;
     }
     setReaderClosing(false);
-    setSelectedEntry(null);
-    setSelectedProblem(null);
     transitionToView(nextView);
+  }
+
+  function startFreshPracticeDay() {
+    const timestamp = Date.now();
+    const openedPacificDate = practiceDateAt(timestamp);
+    const workbenchId = `workbench-${openedPacificDate}-${crypto.randomUUID()}`;
+    enqueue({ type: "workbench-start-fresh", workbenchId });
+    setDraft((current) => ({
+      ...current,
+      workbench: {
+        id: workbenchId,
+        status: "open",
+        openedPacificDate,
+        openedAt: timestamp,
+        closedAt: null,
+      },
+      extraActivities: [],
+      sessions: [],
+      focusedActivityId: null,
+      focusedSessionId: null,
+      focusedAt: timestamp,
+    }));
+    setFreshDayConfirmOpen(false);
   }
 
   const groupedLog = useMemo(() => {
@@ -2625,7 +2775,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             : <div className="orchestrator-empty"><strong>No activity running.</strong><span>Start any activity stopwatch when you are ready. Voice stays unlinked until then.</span></div>}
         </section>
 
-        <div className="today-actions"><div><h2>Today&apos;s sessions</h2><p>Each session countdown follows its activity recipe; activity stopwatches stay compact and independent.</p></div><div><button className="secondary-action" onClick={openNewActivity}>Add one activity</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
+        <div className="today-actions"><div><h2>Current workbench</h2><p>It stays open across Pacific midnight until you publish it or explicitly start fresh.</p></div><div><button className="secondary-action" onClick={() => allTodayActivities.length || allSessions.length ? setFreshDayConfirmOpen(true) : startFreshPracticeDay()}>Start fresh day</button><button className="secondary-action" onClick={openNewActivity}>Add one activity</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
         <section className="session-stack">{allSessions.length ? allSessions.map(renderSession) : <div className="quiet-empty session-empty"><strong>No session planned yet.</strong><span>Add another session to choose up to six coding questions and one question from each available interview bank.</span></div>}</section>
 
         <section className="loose-section">
@@ -2832,7 +2982,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             </div>
             <div className="log-layout">
               <div className="dated-log">
-                {groupedLog.length ? groupedLog.map(([date, entries]) => <section className="log-day" id={`log-date-${date}`} key={date}><header><time>{readableDate(date)}</time><span>{entries.length} record{entries.length === 1 ? "" : "s"} · Pacific day</span></header><div className="log-day-entries">{entries.map((entry) => <article className={`log-entry ${entry.type} ${selectedEntry?.id === entry.id ? "selected" : ""}`} key={entry.id}><button className="log-entry-open" onClick={() => openJournalEntry(entry)} aria-label={`Read ${entry.title}`}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><div className="log-entry-copy"><small>{typeLabel(entry.type)} · {entry.status}{entry.sessionId ? " · session activity" : " · standalone"}</small><strong>{entry.title}</strong>{meaningfulSubtitle(entry.subtitle) && <span>{meaningfulSubtitle(entry.subtitle)}</span>}<div className="entry-badges">{entry.review?.status === "due" && <i className="review-badge due">Due now</i>}{entry.review?.status === "scheduled" && <i className="review-badge">Review {entry.review.dueDate}</i>}{Boolean(entry.personalNote?.trim() || entry.pinnedNotes?.length) && <i className="note-badge">Pinned note</i>}{entry.outcome === "solved" && <i className="independent-badge">Solved</i>}{entry.outcome === "solved_after_reviewing_approach" && <i className="help-badge">Solved with help</i>}{entry.outcome === "failed" && <i className="failure-badge">Failed attempt</i>}</div>{entry.startedAt && <span className="entry-time-range">{formatPracticeTimestamp(entry.startedAt, true)} → {entry.endedAt ? formatPracticeTimestamp(entry.endedAt, true) : "Paused"}</span>}</div><div className="log-entry-meta"><strong>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "—"}</strong><span>{entry.type === "leetcode" ? outcomeLabel(entry.outcome) : entry.artifact ? "Published record" : entry.status}</span></div></button><div className="log-entry-actions"><StaticResultFlag outcome={entry.outcome} label={resultLabel(entry.outcome, entry.type)} /><button className={`star-control ${isStarred(entry.type, entry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(entry.type, entry.questionId)} disabled={!entry.questionId} aria-label={`${isStarred(entry.type, entry.questionId) ? "Unstar" : "Star"} ${entry.title}`} title="Star this problem"><Icon name="star" /></button></div></article>)}</div></section>) : <div className="quiet-empty library-empty"><strong>No completed work in this filter yet.</strong><span>Try another filter, or finish an activity to add it to the field journal.</span></div>}
+                {groupedLog.length ? groupedLog.map(([date, entries]) => <section className="log-day" id={`log-date-${date}`} key={date}><header><time>{readableDate(date)}</time><span>{entries.length} record{entries.length === 1 ? "" : "s"} · Pacific day</span></header><div className="log-day-entries">{entries.map((entry) => <article className={`log-entry ${entry.type} ${selectedEntry?.id === entry.id ? "selected" : ""}`} key={entry.id}><button className="log-entry-open" onClick={() => openJournalEntry(entry)} aria-label={`Read ${entry.title}`}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><div className="log-entry-copy"><small>{typeLabel(entry.type)} · {entry.status}{entry.sessionId ? " · session activity" : " · standalone"}</small><strong>{entry.title}</strong>{meaningfulSubtitle(entry.subtitle) && <span>{meaningfulSubtitle(entry.subtitle)}</span>}<div className="entry-badges">{entry.review?.status === "due" && <i className="review-badge due">Due now</i>}{entry.review?.status === "scheduled" && <i className="review-badge">Review {entry.review.dueDate}</i>}{Boolean(entry.personalNote?.trim() || entry.pinnedNotes?.length) && <i className="note-badge">Pinned note</i>}{entry.outcome === "solved" && <i className="independent-badge">Solved</i>}{entry.outcome === "solved_after_reviewing_approach" && <i className="help-badge">Solved with help</i>}{entry.outcome === "failed" && <i className="failure-badge">Failed attempt</i>}</div>{entry.startedAt && <span className="entry-time-range">{formatPracticeTimestamp(entry.startedAt, true)} → {entry.endedAt ? formatPracticeTimestamp(entry.endedAt, true) : "Paused"}</span>}</div><div className="log-entry-meta"><strong>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "—"}</strong><span>{entry.type === "leetcode" ? outcomeLabel(entry.outcome) : entry.artifact ? "Published record" : entry.status}</span></div></button><div className="log-entry-actions"><StaticResultFlag outcome={entry.outcome} label={resultLabel(entry.outcome, entry.type)} /><button className={`star-control ${isStarred(entry.type, entry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(entry.type, entry.questionId)} disabled={!entry.questionId} aria-label={`${isStarred(entry.type, entry.questionId) ? "Unstar" : "Star"} ${entry.title}`} title="Star this problem"><Icon name="star" /></button><button className="icon-action" onClick={() => openEntrySolution(entry)} disabled={!bankQuestionForEntry(entry)} aria-label={`Open reusable solution for ${entry.title}`} title="Open reusable solution"><Icon name="book" /></button><button className="icon-action add-practice-control" onClick={() => addEntryToToday(entry)} disabled={!bankQuestionForEntry(entry) || Boolean(bankQuestionForEntry(entry) && isQuestionBlocked(bankQuestionForEntry(entry)!, todayBlockedQuestions()))} aria-label={`Add ${entry.title} to Today`} title="Add to Today"><Icon name="plus" /></button></div></article>)}</div></section>) : <div className="quiet-empty library-empty"><strong>No completed work in this filter yet.</strong><span>Try another filter, or finish an activity to add it to the field journal.</span></div>}
               </div>
               <aside className="log-calendar"><span className="eyebrow">JUMP TO A DAY</span><h2>{new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${journal.date}T12:00:00Z`))}</h2><div className="calendar-week"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div><div className="calendar-mini">{calendarDays.map((day) => day.hasEntries ? <button key={day.key} onClick={() => scrollToLogDate(day.key)} title={`Jump to ${day.key}`}>{day.day}<i /></button> : <span key={day.key}>{day.day}</span>)}</div><div className="calendar-dates">{groupedLog.map(([date]) => <button key={date} onClick={() => scrollToLogDate(date)}>{readableDate(date, true)} <span>↘</span></button>)}</div></aside>
             </div>
@@ -3042,7 +3192,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         <div className="problem-bank-list" tabIndex={0} aria-label="Problem bank results">
           {visibleEntries.map(({ type, question, finished, latestAttempt }) => { const blockedToday = isQuestionBlocked(question, todayBlocked); const active = selectedProblem?.type === type && selectedProblem.question.id === question.id; return <article className={`problem-bank-entry ${type} ${active ? "selected" : ""}`} role="button" tabIndex={0} aria-label={`View solution for ${question.title}`} onClick={(event) => { if (event.target instanceof Element && event.target.closest("button, a, input, summary")) return; openProblemProfile(type, question); }} onKeyDown={(event) => { if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) { event.preventDefault(); openProblemProfile(type, question); } }} key={`${type}-${question.id}`}>
             <span className={`type-mark ${type}`}>{typeMark(type)}</span>
-            <div className="problem-bank-copy"><small>{typeLabel(type)}{question.difficulty ? ` · ${question.difficulty}` : ""}{question.complexity ? ` · ${displayComplexity(question.complexity)}` : ""} · {finished ? "finished" : "to practice"}</small><button className="problem-title-button" onClick={() => openProblemProfile(type, question)}>{question.title}</button>{question.prompt && question.prompt !== question.title && <p>{question.prompt}</p>}{question.url && <a href={question.url} target="_blank" rel="noreferrer">{question.solutionReference ? "Open question & solution references ↗" : "Open problem ↗"}</a>}</div>
+            <div className="problem-bank-copy"><small>{typeLabel(type)}{question.difficulty ? ` · ${question.difficulty}` : ""}{question.complexity ? ` · ${displayComplexity(question.complexity)}` : ""} · {finished ? "finished" : "to practice"}</small><strong className="problem-title">{question.title}</strong>{question.prompt && question.prompt !== question.title && <p>{question.prompt}</p>}{question.url && <a className="nested-card-link" href={question.url} target="_blank" rel="noreferrer">{question.solutionReference ? "Open question & solution references ↗" : "Open problem ↗"}</a>}</div>
             <div className="bank-entry-meta"><span>{question.targetMinutes} min estimate</span>{question.problemNumber && <small>#{question.problemNumber}{typeof question.acceptanceRate === "number" ? ` · ${question.acceptanceRate.toFixed(1)}% acceptance` : ""}</small>}{question.companySignals?.[0] && <small>{question.companySignals[0].company} frequency {question.companySignals[0].frequencyScore}/{question.companySignals[0].frequencyScale} · {question.companySignals[0].window}</small>}{question.answerFormat && <small>{question.answerFormat} answer · {question.frequency ?? "medium"} frequency</small>}{question.solutionReference && <small>Reference solution{question.referenceAccess === "may_require_sign_in" ? " may require sign-in" : " available"}</small>}<small className={`content-tags ${type}`}>{tagsForEntry(type, question).slice(0, 4).map((tag) => `#${tag}`).join("  ")}</small></div>
             <div className="bank-entry-actions"><StaticResultFlag outcome={latestAttempt?.outcome} /><button className={`icon-action ${isStarred(type, question.id) ? "active starred" : ""}`} onClick={() => toggleProblemStar(type, question.id)} aria-label={`${isStarred(type, question.id) ? "Unstar" : "Star"} ${question.title}`} title={isStarred(type, question.id) ? "Unstar" : "Star"}><Icon name="star" /></button><button className="icon-action" onClick={() => openProblemProfile(type, question)} aria-label={`View solution for ${question.title}`} title="View solution"><Icon name="book" /></button><button className="icon-action practice" onClick={() => addBankQuestionToToday(question, type)} disabled={blockedToday} aria-label={blockedToday ? `${question.title} is already on Today` : `Practice ${question.title} today`} title={blockedToday ? "Already on Today" : "Practice today"}><Icon name="plus" /></button></div>
           </article>; })}
@@ -3541,8 +3691,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   function closeReaderPanel() {
     if (readerCloseTimerRef.current !== null) window.clearTimeout(readerCloseTimerRef.current);
     const finishClose = () => {
-      setSelectedEntry(null);
-      setSelectedProblem(null);
+      if (view === "library") {
+        window.sessionStorage.removeItem("interview-arc-selected-past");
+        setSelectedEntry(null);
+      }
+      if (view === "banks") {
+        window.sessionStorage.removeItem("interview-arc-selected-bank");
+        setSelectedProblem(null);
+      }
       setReaderClosing(false);
       readerCloseTimerRef.current = null;
     };
@@ -3559,11 +3715,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return (
       <article className="workspace-reader journal-case-reader" aria-labelledby="journal-reader-title" aria-label="Case file contents">
         <div className="reader-chrome">
-          <div className="reader-chrome-leading"><ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</ReaderOutline><button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={() => setMasterPaneOpen((current) => !current)} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="book" /></button></div>
+          <div className="reader-chrome-leading"><button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={() => setMasterPaneOpen((current) => !current)} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button><ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</ReaderOutline></div>
           <div className="reader-chrome-actions"><button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close case file" title="Close"><Icon name="close" /></button></div>
         </div>
         <div className="case-document workspace-reader-scroll" ref={readerDocumentRef} onScroll={rememberReaderPosition} onMouseUp={(event) => captureHighlightSelection(event.clientX, event.clientY)} onKeyUp={() => captureHighlightSelection()}>
-          <header id="case-summary"><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time></div><div className="case-title-row"><h2 id="journal-reader-title">{selectedEntry.title}</h2><div className="case-title-actions"><button className={`star-control ${isStarred(selectedEntry.type, selectedEntry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedEntry.type, selectedEntry.questionId)} disabled={!selectedEntry.questionId} aria-label={`${isStarred(selectedEntry.type, selectedEntry.questionId) ? "Unstar" : "Star"} ${selectedEntry.title}`} title="Star this problem"><Icon name="star" /></button><button className="icon-action note-add" onClick={() => openNoteComposer()} disabled={!selectedEntryActivityId} aria-label="Add a note" title="Add a note"><Icon name="note" /><i><Icon name="plus" /></i></button></div></div>{meaningfulSubtitle(selectedEntry.subtitle) && <p>{meaningfulSubtitle(selectedEntry.subtitle)}</p>}{selectedEntry.questionId && <button className="solution-link-button" onClick={() => { const question = bankFor(selectedEntry.type).find((candidate) => candidate.id === selectedEntry.questionId); if (question) { setSelectedEntry(null); setSelectedProblem({ type: selectedEntry.type, question }); transitionToView("banks"); } }}>Open reusable solution →</button>}</header>
+          <header id="case-summary"><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time></div><div className="case-title-row"><h2 id="journal-reader-title">{selectedEntry.title}</h2><div className="case-title-actions"><button className={`star-control ${isStarred(selectedEntry.type, selectedEntry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedEntry.type, selectedEntry.questionId)} disabled={!selectedEntry.questionId} aria-label={`${isStarred(selectedEntry.type, selectedEntry.questionId) ? "Unstar" : "Star"} ${selectedEntry.title}`} title="Star this problem"><Icon name="star" /></button><button className="icon-action note-add" onClick={() => openNoteComposer()} disabled={!selectedEntryActivityId} aria-label="Add a note" title="Add a note"><Icon name="note" /><i><Icon name="plus" /></i></button></div></div>{meaningfulSubtitle(selectedEntry.subtitle) && <p>{meaningfulSubtitle(selectedEntry.subtitle)}</p>}{selectedEntry.questionId && <button className="solution-link-button" onClick={() => { const question = bankFor(selectedEntry.type).find((candidate) => candidate.id === selectedEntry.questionId); if (question) { setSelectedProblem({ type: selectedEntry.type, question }); transitionToView("banks"); } }}>Open reusable solution →</button>}</header>
           {Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <aside className="pinned-notes" id="case-notes" aria-label="Pinned practice notes"><span>NOTES</span>{selectedEntry.personalNote?.trim() && <article><div className="note-actions"><button onClick={() => openNoteComposer("personal")} aria-label="Edit personal note" title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote("personal")} aria-label="Delete personal note" title="Delete"><Icon name="trash" /></button></div><MarkdownBody source={selectedEntry.personalNote} /></article>}{selectedEntry.pinnedNotes?.map((note) => <article key={note.id}><header><small>{note.kind}</small><div className="note-actions"><button onClick={() => openNoteComposer(note)} aria-label={`Edit ${note.kind} note`} title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote(note.id)} aria-label={`Delete ${note.kind} note`} title="Delete"><Icon name="trash" /></button></div></header><MarkdownBody source={note.body} /></article>)}</aside>}
           {noteComposerOpen && <form className="case-note-composer" onSubmit={(event) => { event.preventDefault(); void saveCaseNote(); }}><label htmlFor="case-note">{editingNoteId ? "Edit note" : "Add a note"}</label><textarea id="case-note" autoFocus value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} placeholder="A concise reminder, mistake, or pattern to keep visible…" /><div><button type="button" onClick={() => { setNoteComposerOpen(false); setEditingNoteId(""); setNoteDraft(""); }}>Cancel</button><button type="submit" disabled={noteBusy || !noteDraft.trim()}>{noteBusy ? "Saving…" : "Save note"}</button></div></form>}
           <div className="letter-facts" id="case-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.startedAt && <div><span>Started</span><strong>{formatPracticeTimestamp(selectedEntry.startedAt)}</strong></div>}{selectedEntry.endedAt && <div><span>Finished</span><strong>{formatPracticeTimestamp(selectedEntry.endedAt)}</strong></div>}{selectedEntry.sessionId && <div><span>Session</span><strong>{selectedEntry.sessionId}</strong></div>}{selectedEntry.outcome && <div><span>Result</span><strong>{resultLabel(selectedEntry.outcome, selectedEntry.type)}</strong></div>}{selectedEntry.review && <div className="review-fact"><span>{selectedEntry.review.status === "due" ? "Review due" : "Next review"}</span><strong>{selectedEntry.review.dueDate}</strong><small>{selectedEntry.review.reason.replaceAll("_", " ")} · {selectedEntry.review.intervalDays} day interval</small></div>}</div>
@@ -3586,13 +3742,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (!selectedProblem) return null;
     return (
       <article className="workspace-reader knowledge-reader" aria-labelledby="solution-profile-title">
-        <div className="reader-chrome"><div className="reader-chrome-leading"><ReaderOutline><a href="#solution-profile-summary">Overview</a>{selectedSolutionGroups.map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#solution-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#solution-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}<a href="#solution-attempts">Past attempts</a></ReaderOutline><button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={() => setMasterPaneOpen((current) => !current)} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="book" /></button></div><div className="reader-chrome-actions"><button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close solution profile" title="Close"><Icon name="close" /></button></div></div>
+        <div className="reader-chrome"><div className="reader-chrome-leading"><button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={() => setMasterPaneOpen((current) => !current)} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button><ReaderOutline><a href="#solution-profile-summary">Overview</a>{selectedSolutionGroups.map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#solution-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#solution-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}<a href="#solution-attempts">Past attempts</a></ReaderOutline></div><div className="reader-chrome-actions"><button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close solution profile" title="Close"><Icon name="close" /></button></div></div>
         <div className="case-document solution-profile-document workspace-reader-scroll" ref={readerDocumentRef} onScroll={rememberReaderPosition} onMouseUp={(event) => captureHighlightSelection(event.clientX, event.clientY)} onKeyUp={() => captureHighlightSelection()}>
           <header id="solution-profile-summary"><div><span className={`type-chip ${selectedProblem.type}`}>{typeLabel(selectedProblem.type)}</span><span className="profile-revision">{selectedProblemProfile ? `Solution revision ${selectedProblemProfile.currentRevision}` : "No solution yet"}</span><button className={`star-control ${isStarred(selectedProblem.type, selectedProblem.question.id) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedProblem.type, selectedProblem.question.id)} aria-label={`${isStarred(selectedProblem.type, selectedProblem.question.id) ? "Unstar" : "Star"} ${selectedProblem.question.title}`}><Icon name="star" /></button></div><h2 id="solution-profile-title">{selectedProblem.question.title}</h2><p>{selectedProblemProfile?.payload.summary ?? selectedProblem.question.prompt ?? "Finish and finalize an attempt to build this reusable Solution Profile."}</p></header>
           <div className="profile-tags">{[...new Set([...selectedProblem.question.topics, ...(selectedProblem.question.tags ?? []), ...(selectedProblemProfile?.tags ?? [])])].map((tag) => <span key={tag}>{tag}</span>)}</div>
           {selectedProblemProfile?.payload.behavioralAnswer && <section className="canonical-answer-card"><span className="eyebrow">YOUR PREFERRED ANSWER</span><h3>{selectedProblemProfile.payload.behavioralAnswer.preferred.label}</h3><MarkdownBody source={selectedProblemProfile.payload.behavioralAnswer.preferred.answer} />{selectedProblemProfile.payload.behavioralAnswer.preferred.evidence.length > 0 && <div className="answer-evidence"><strong>Verified evidence</strong><ul>{selectedProblemProfile.payload.behavioralAnswer.preferred.evidence.map((item) => <li key={item}>{item}</li>)}</ul></div>}{selectedProblemProfile.payload.behavioralAnswer.preferred.evidenceGaps.length > 0 && <div className="answer-gaps"><strong>Evidence still needed</strong><ul>{selectedProblemProfile.payload.behavioralAnswer.preferred.evidenceGaps.map((item) => <li key={item}>{item}</li>)}</ul></div>}{selectedProblemProfile.payload.behavioralAnswer.alternatives.length > 0 && <details className="answer-alternatives"><summary>{selectedProblemProfile.payload.behavioralAnswer.alternatives.length} alternative story {selectedProblemProfile.payload.behavioralAnswer.alternatives.length === 1 ? "variant" : "variants"}</summary>{selectedProblemProfile.payload.behavioralAnswer.alternatives.map((variant) => <article key={variant.label}><h4>{variant.label}</h4>{variant.whenToUse && <small>Best when: {variant.whenToUse}</small>}<MarkdownBody source={variant.answer} /></article>)}</details>}</section>}
           {selectedProblemProfile ? <div className="letter-sections solution-sections layered-reader">{selectedSolutionGroups.map((group) => { const groupId = `solution-group-${group.key}`; return <SolutionReaderGroup group={group} idPrefix="solution" coding={selectedProblem.type === "leetcode"} open={readerGroupOpen(groupId, group.key !== "conversation")} onToggle={(open) => rememberReaderGroup(groupId, open)} key={group.key} />; })}</div> : <div className="unpublished-letter"><span className="eyebrow">KNOWLEDGE PROFILE</span><h3>This problem has no finalized solution yet.</h3><p>The matching specialist creates it when a completed attempt is finalized. Past keeps the transcript; this reader keeps the reusable answer.</p></div>}
-          <section className="attempt-history" id="solution-attempts"><span className="eyebrow">PAST ATTEMPTS</span>{selectedProblemAttempts.length ? selectedProblemAttempts.map((entry) => <button key={entry.id} onClick={() => { setSelectedProblem(null); setSelectedEntry(entry); transitionToView("library"); }}><span>{readableDate(entry.date, true)}</span><strong>{resultLabel(entry.outcome, entry.type)}</strong><small>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "No timer"} · Read case →</small></button>) : <p>No completed attempt is linked yet.</p>}</section>
+          <section className="attempt-history" id="solution-attempts"><span className="eyebrow">PAST ATTEMPTS</span>{selectedProblemAttempts.length ? selectedProblemAttempts.map((entry) => <button key={entry.id} onClick={() => { setSelectedEntry(entry); transitionToView("library"); }}><span>{readableDate(entry.date, true)}</span><strong>{resultLabel(entry.outcome, entry.type)}</strong><small>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "No timer"} · Read case →</small></button>) : <p>No completed attempt is linked yet.</p>}</section>
           {selectedProblemRevisions.length > 1 && <section className="revision-history"><span className="eyebrow">SOLUTION HISTORY</span><p>{selectedProblemRevisions.length} immutable revisions are linked to past attempts. The profile above is the current revision.</p></section>}
           {selectedProblemProfile?.payload.references.length ? <section className="profile-references"><span className="eyebrow">REFERENCES CONSULTED</span>{selectedProblemProfile.payload.references.map((reference) => <a key={`${reference.url}-${reference.accessedAt}`} href={reference.url} target="_blank" rel="noreferrer">{reference.title} ↗<small>{reference.accessedAt}</small></a>)}</section> : null}
           <footer>Interview Arc · {selectedProblem.type}:{selectedProblem.question.id}</footer>
@@ -3631,7 +3787,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             <button className="secondary-action" onClick={exportDraft}>Export today</button>
           </div>
         </header>
-        <div className="page-content page-enter-stage" id="practice-content" key={view}>{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
+        <div className={`page-content page-enter-stage page-enter-${viewDirection}`} id="practice-content" key={view}>{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
       </section>
 
       {composer.open && <div className="modal-backdrop" role="presentation" onMouseDown={() => setComposer(EMPTY_COMPOSER)}>
@@ -3668,6 +3824,15 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             <label className="minutes-field"><span>Planning estimate in minutes</span><input type="number" min="1" max="360" value={composer.minutes} onChange={(event) => setComposer((current) => ({ ...current, minutes: event.target.value }))} /></label>
             <button className="primary-action full-width" type="submit" disabled={!canSaveActivity}>{composer.editingId ? "Save changes" : "Add to today"}</button>
           </form>}
+        </section>
+      </div>}
+
+      {freshDayConfirmOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setFreshDayConfirmOpen(false)}>
+        <section className="confirmation-dialog" role="alertdialog" aria-modal="true" aria-labelledby="fresh-day-title" aria-describedby="fresh-day-description" onMouseDown={(event) => event.stopPropagation()}>
+          <span className="eyebrow">NEW PRACTICE WORKBENCH</span>
+          <h2 id="fresh-day-title">Start a fresh day?</h2>
+          <p id="fresh-day-description">Started timers will close at the current time. Their elapsed time and any result flags will be preserved. Never-started activities will be archived as not attempted, and all pending publishable work will remain available to the coordinator.</p>
+          <div className="confirmation-actions"><button className="secondary-action" onClick={() => setFreshDayConfirmOpen(false)}>Keep working</button><button className="primary-action" onClick={startFreshPracticeDay}>Start fresh day</button></div>
         </section>
       </div>}
 

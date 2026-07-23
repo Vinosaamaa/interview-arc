@@ -36,13 +36,34 @@ Only practice conversation after the activity boundary is in scope. Website
 bugs, scheduling, Git discussion, unrelated questions, and task administration
 must not enter a practice transcript.
 
+## Workbench Boundary
+
+Today is the owner's current open **workbench**, not a Pacific calendar query.
+It may cross midnight and remains visible until the user starts a fresh day or
+its publishable rows are marked published.
+
+- `Start fresh day` archives the current workbench and opens a new durable
+  `workbench_id`.
+- Started timers close at the confirmation time; elapsed time and explicit
+  outcomes are preserved. Never-started activities remain not attempted and do
+  not enter the publication queue.
+- Archived ready work stays discoverable through the undated publication
+  queue. Starting fresh never marks an activity published and never loses
+  pending work.
+- Today hides published rows immediately. A session disappears when all of its
+  publishable activities are published.
+
 ## Solution Profile Preflight
 
 After resolving the stable `questionId`, every specialist calls
 `get_problem_solution_profile` before preparing the activity.
 
-- When no profile exists, prepare from the canonical prompt and the specialty's
-  permitted references, then create revision 1 during finalization.
+- When neither a current nor provisional profile exists, prepare from the
+  canonical prompt and permitted references, then call
+  `save_provisional_solution_profile`. This reusable preflight survives delayed
+  or batch publication without creating a numbered revision.
+- When only a provisional profile exists, use it as the private baseline. The
+  first complete finalization promotes the finalized answer to revision 1.
 - When a profile exists, use its current revision privately as the baseline for
   coaching and evaluation. Do not reveal it before a fresh attempt unless the
   user asks for the answer.
@@ -53,6 +74,10 @@ After resolving the stable `questionId`, every specialist calls
   canonical solution did not materially change. Use `create_or_revise` with a
   complete profile when the discussion adds verified facts, a better approach,
   a stronger explanation, or a useful alternative.
+- Save `solutionProfileDecision` with the reason, changed section names,
+  whether fresh research occurred, and the sources checked. The D1 write path
+  automatically reuses the current revision when the submitted profile is
+  substantively identical.
 
 Every completed attempt links to the exact revision reused or created. Never
 create a new revision for punctuation or formatting alone.
@@ -137,7 +162,11 @@ for their matching activities. Never claim an inaccessible reference was read.
 `Publish all pending practice` is owned by `Interview Arc — Coordinator`.
 
 1. Read `get_publication_queue` without forcing a date.
-2. Group ready activities by specialty and Pacific completion date.
+2. Group ready activities by specialty and Pacific completion date. Within
+   each specialty, group by stable `questionId` and process attempts in
+   chronological completion order. The first attempt may create revision 1;
+   each later attempt reloads the newly current profile and reuses it unless
+   that attempt materially improves it.
 3. Discover registered specialist tasks. Message each relevant specialist
    sequentially to flush and finalize its pending activity IDs; wait for the
    response before consuming its bundle.

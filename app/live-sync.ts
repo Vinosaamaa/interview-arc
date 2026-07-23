@@ -16,6 +16,7 @@ import {
   type SolutionProfile,
   type SolutionRevision,
   type TimerDraft,
+  type Workbench,
 } from "./live-types";
 
 // Shape returned by GET /api/state and POST /api/mutations. `runningSince` is in
@@ -31,6 +32,7 @@ type ServerTimer = {
 };
 type ServerLiveState = {
   serverNow: number;
+  workbench: Workbench | null;
   timers: Record<string, ServerTimer>;
   sessionTimers: Record<string, ServerTimer>;
   outcomes: Record<string, Outcome>;
@@ -89,7 +91,8 @@ export type Mutation =
   | { type: "extra-upsert"; activity: ExtraActivity }
   | { type: "extra-remove"; id: string }
   | { type: "session-upsert"; session: LocalSession }
-  | { type: "session-remove"; id: string; activityIds: string[] };
+  | { type: "session-remove"; id: string; activityIds: string[] }
+  | { type: "workbench-start-fresh"; workbenchId: string };
 
 const RETRY_INTERVAL_MS = 15000;
 
@@ -116,6 +119,7 @@ function serverToDraft(state: ServerLiveState, offset: number, date = ""): Local
   const sessionTimers: Record<string, TimerDraft> = {};
   for (const [id, timer] of Object.entries(state.sessionTimers)) sessionTimers[id] = timerToDraft(timer, offset);
   return {
+    workbench: state.workbench ?? null,
     timers,
     sessionTimers,
     outcomes: state.outcomes ?? {},
@@ -153,6 +157,7 @@ function mergeDrafts(server: LocalDraft, local: LocalDraft) {
     if (!serverSessionIds.has(session.id)) localOnly.push({ type: "session-upsert", session });
   }
   const merged: LocalDraft = {
+    workbench: server.workbench ?? local.workbench,
     // Once the server is reachable, mutable practice state is authoritative in
     // D1. The persisted mutation queue—not an old display cache—owns unsynced
     // timer, outcome, publication, and note changes.
@@ -192,6 +197,7 @@ function readDraft(date: string): LocalDraft {
     if (!saved) return EMPTY_DRAFT;
     const parsed = JSON.parse(saved) as Partial<LocalDraft>;
     return {
+      workbench: parsed.workbench ?? null,
       timers: parsed.timers ?? {},
       sessionTimers: parsed.sessionTimers ?? {},
       outcomes: parsed.outcomes ?? {},

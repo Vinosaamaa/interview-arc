@@ -16,6 +16,13 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
 - On Today, use the masthead tally for yesterday's completed activities, recorded time, and sessions. Read owner-scoped D1 state for yesterday so unpublished work is not omitted; fall back to the versioned journal offline.
 - Let locally added activities be edited and removed.
 - Store lifecycle separately from outcome.
+- Treat Today as one durable owner-scoped workbench rather than a calendar-day
+  query. Pacific midnight does not clear it. `Start fresh day` confirms and
+  closes started timers, archives never-started rows as not attempted, clears
+  Voice focus, and opens a new workbench without marking anything published.
+- Hide published activities from Today immediately; remove a session when all
+  of its publishable activities are published. Archived ready work remains in
+  the coordinator's undated queue.
 - Give coding, system-design, and behavioral activities the same cycling result-flag layout: Solved, Solved with help, and Failed. Preserve `solved_after_reviewing_approach` as the canonical stored value. The hover/focus legend must explain the colors and must not be clipped inside its activity card.
 - Open the original LeetCode page for prompt reading and submission. Never imply that code was executed or accepted locally.
 - Show system-design and behavioral transcript/review artifacts when tracked files exist.
@@ -125,6 +132,14 @@ The website must not imply that browser draft state has already been published t
   eligible `Practice today` selection to standalone practice on Today. Its
   result flag reflects the most recent finished attempt; Past keeps the flag of
   each specific attempt.
+- Past and Problem Banks use the same four compact controls: result flag,
+  canonical star, reusable solution, and Add to Today. The whole card opens its
+  reader; nested source links and filter pills retain distinct hover/focus
+  affordances and stop card navigation.
+- Preserve each tab's selected reader, filters, scroll position, master-list
+  visibility, and section state in `sessionStorage`. Explicit close clears only
+  that tab's selected reader. Use restrained directional page motion and honor
+  `prefers-reduced-motion`.
 - A behavioral Problem Bank profile leads with the user's preferred polished
   personal answer, verified evidence, evidence gaps, and expandable alternative
   story variants. Its transcript remains exclusively on the dated Past attempt.

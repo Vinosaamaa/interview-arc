@@ -6,6 +6,7 @@ bearer_token_env_var = "INTERVIEW_ARC_MCP_TOKEN"
 enabled_tools = [
   "append_practice_transcript",
   "add_practice_note",
+  "save_provisional_solution_profile",
   "save_specialist_finalization",
   "get_problem_solution_profile",
   "get_activity_practice_record",

@@ -81,6 +81,26 @@ export const practiceFocus = sqliteTable("practice_focus", {
   updatedAt,
 });
 
+// A workbench is the durable boundary behind the user-facing "practice day".
+// It is intentionally independent from Pacific calendar dates: a late-night
+// session can continue across midnight until the user explicitly starts fresh.
+export const practiceWorkbenches = sqliteTable(
+  "practice_workbenches",
+  {
+    ownerId,
+    id: text("id").notNull(),
+    status: text("status", { enum: ["open", "archived"] }).notNull().default("open"),
+    openedPacificDate: text("opened_pacific_date").notNull(),
+    openedAt: integer("opened_at").notNull(),
+    closedAt: integer("closed_at"),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.id] }),
+    index("practice_workbenches_owner_status_idx").on(table.ownerId, table.status),
+  ],
+);
+
 // Immutable clock segments preserve exact active intervals across Pacific
 // midnight. They support day-sliced statistics without guessing from totals.
 export const timerIntervals = sqliteTable(
@@ -320,6 +340,25 @@ export const problemSolutionProfiles = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.specialty, table.questionId] })],
 );
 
+// Reference preflight may happen before an attempt is publishable. Keeping that
+// prepared answer separately lets every later attempt reuse the research while
+// reserving numbered Solution Profile revisions for finalized practice.
+export const provisionalSolutionProfiles = sqliteTable(
+  "provisional_solution_profiles",
+  {
+    ownerId,
+    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
+    questionId: text("question_id").notNull(),
+    title: text("title").notNull(),
+    tags: text("tags", { mode: "json" }).notNull(),
+    payload: text("payload", { mode: "json" }).notNull(),
+    preparedByActivityId: text("prepared_by_activity_id"),
+    decision: text("decision", { mode: "json" }),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.specialty, table.questionId] })],
+);
+
 export const problemSolutionRevisions = sqliteTable(
   "problem_solution_revisions",
   {
@@ -388,6 +427,7 @@ export const extraActivities = sqliteTable(
     ownerId,
     id: text("id").notNull(),
     date: text("date").notNull(),
+    workbenchId: text("workbench_id"),
     payload: text("payload", { mode: "json" }).notNull(),
     revision: integer("revision").notNull().default(0),
     updatedAt,
@@ -402,6 +442,7 @@ export const liveSessions = sqliteTable(
     ownerId,
     id: text("id").notNull(),
     date: text("date").notNull(),
+    workbenchId: text("workbench_id"),
     payload: text("payload", { mode: "json" }).notNull(),
     revision: integer("revision").notNull().default(0),
     updatedAt,
@@ -452,6 +493,7 @@ export const contentBank = sqliteTable(
 
 export type TimerRow = typeof timers.$inferSelect;
 export type PracticeFocusRow = typeof practiceFocus.$inferSelect;
+export type PracticeWorkbenchRow = typeof practiceWorkbenches.$inferSelect;
 export type TimerIntervalRow = typeof timerIntervals.$inferSelect;
 export type OutcomeRow = typeof outcomes.$inferSelect;
 export type PublicationStatusRow = typeof publicationStatuses.$inferSelect;
@@ -465,6 +507,7 @@ export type ActivityAudioClipRow = typeof activityAudioClips.$inferSelect;
 export type ActivityDeliveryAnalysisRow = typeof activityDeliveryAnalyses.$inferSelect;
 export type ProblemPreferenceRow = typeof problemPreferences.$inferSelect;
 export type ProblemSolutionProfileRow = typeof problemSolutionProfiles.$inferSelect;
+export type ProvisionalSolutionProfileRow = typeof provisionalSolutionProfiles.$inferSelect;
 export type ProblemSolutionRevisionRow = typeof problemSolutionRevisions.$inferSelect;
 export type ActivitySolutionLinkRow = typeof activitySolutionLinks.$inferSelect;
 export type OwnerBankQuestionRow = typeof ownerBankQuestions.$inferSelect;

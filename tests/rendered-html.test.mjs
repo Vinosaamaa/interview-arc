@@ -134,10 +134,11 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(css, /\.annotation-popover \{ position: fixed;/);
   assert.match(client, /left\.type === "system_design" \? -1 : 1/);
   assert.match(client, /placeholder="Search"/);
-  assert.match(client, /const \[bankTypeFilters, setBankTypeFilters\] = useState<ActivityType\[]>\(\[\]\)/);
-  assert.match(client, /const \[bankAttentionFilters, setBankAttentionFilters\] = useState<BankAttentionFilter\[]>\(\[\]\)/);
-  assert.match(client, /const \[bankLevelFilters, setBankLevelFilters\] = useState<Array<"easy" \| "medium" \| "hard">>\(\[\]\)/);
-  assert.match(client, /const \[bankTagFilters, setBankTagFilters\] = useState<string\[]>\(\[\]\)/);
+  assert.match(client, /const \[bankTypeFilters, setBankTypeFilters\] = useState<ActivityType\[]>\(workspaceUiMemory\.bankTypeFilters \?\? \[\]\)/);
+  assert.match(client, /const \[bankAttentionFilters, setBankAttentionFilters\] = useState<BankAttentionFilter\[]>\(workspaceUiMemory\.bankAttentionFilters \?\? \[\]\)/);
+  assert.match(client, /const \[bankLevelFilters, setBankLevelFilters\] = useState<Array<"easy" \| "medium" \| "hard">>\(workspaceUiMemory\.bankLevelFilters \?\? \[\]\)/);
+  assert.match(client, /const \[bankTagFilters, setBankTagFilters\] = useState<string\[]>\(workspaceUiMemory\.bankTagFilters \?\? \[\]\)/);
+  assert.match(client, /interview-arc-workspace-ui-v1/);
   assert.match(client, /bankTypeFilters\.includes\(filter\)/);
   assert.match(client, /bankAttentionFilters\.includes\(filter\)/);
   assert.match(client, /bankLevelFilters\.includes\(filter\)/);

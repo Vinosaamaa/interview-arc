@@ -140,9 +140,17 @@ export type TimerDraft = {
   startedAt?: number | null;
   completedAt?: number | null;
 };
-export type ExtraActivity = JournalActivity & { timerGroupId: string };
-export type LocalSession = PracticeSession & { source: "extra"; date: string };
+export type Workbench = {
+  id: string;
+  status: "open" | "archived";
+  openedPacificDate: string;
+  openedAt: number;
+  closedAt: number | null;
+};
+export type ExtraActivity = JournalActivity & { timerGroupId: string; workbenchId?: string };
+export type LocalSession = PracticeSession & { source: "extra"; date: string; workbenchId?: string };
 export type LocalDraft = {
+  workbench: Workbench | null;
   timers: Record<string, TimerDraft>;
   sessionTimers: Record<string, TimerDraft>;
   outcomes: Record<string, Outcome>;
@@ -180,6 +188,7 @@ export function sessionAllocationSeconds(coding: number, systemDesign: number, b
 
 export const SESSION_SECONDS = sessionAllocationSeconds(6, 1, 1);
 export const EMPTY_DRAFT: LocalDraft = {
+  workbench: null,
   timers: {},
   sessionTimers: {},
   outcomes: {},
