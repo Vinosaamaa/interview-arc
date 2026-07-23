@@ -51,8 +51,8 @@ test("the Cloudflare build contains the Interview Arc dashboard", async () => {
   assert.match(bundle, /Has notes/);
   assert.match(bundle, /Pinned practice notes/);
   assert.match(bundle, /Case file contents/);
-  assert.match(bundle, /Practice journal/);
-  assert.match(bundle, /A chronological record of finished attempts/);
+  assert.match(bundle, /Read the journey/);
+  assert.match(bundle, /like a field journal/);
   assert.match(bundle, /Open reusable solution/);
   assert.match(bundle, /D1 DRAFT · NOT YET IN THE JOURNAL/);
   assert.match(bundle, /CONVERSATION TRANSCRIPT/);
@@ -81,11 +81,13 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(css, /\.mock-controls \{ grid-template-columns: minmax\(160px, 1fr\) auto auto auto; \}/);
   assert.match(css, /\.past-control-deck \{[^}]*grid-template-columns: minmax\(0, 1fr\) 250px;/);
   assert.match(css, /\.case-title-row \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto;/);
-  assert.match(css, /\.journal-workspace \{[^}]*grid-template-columns:/);
+  assert.match(css, /\.past-master-detail \{[^}]*grid-template-columns:/);
+  assert.match(css, /\.library-page\.has-open-entry \.past-master-detail \{ grid-template-columns:/);
   assert.match(css, /\.banks-page\.has-open-solution \.bank-master-detail \{ grid-template-columns:/);
   assert.match(css, /@keyframes reader-pane-in/);
   assert.match(client, /className="bank-master-detail"/);
-  assert.match(client, /className="journal-date-pane log-calendar"/);
+  assert.match(client, /className="past-master-detail"/);
+  assert.match(client, /className="past-entry-pane"/);
   assert.match(client, /left\.type === "system_design" \? -1 : 1/);
   assert.match(client, /placeholder="Search"/);
   assert.match(client, /const \[bankTypeFilters, setBankTypeFilters\] = useState<ActivityType\[]>\(\[\]\)/);
