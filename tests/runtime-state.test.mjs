@@ -130,6 +130,7 @@ test("workbench lifecycle requires explicit results and preserves archived attem
   const liveState = await readFile(new URL("../db/live-state.ts", import.meta.url), "utf8");
   const liveSync = await readFile(new URL("../app/live-sync.ts", import.meta.url), "utf8");
   const snapshot = await readFile(new URL("../db/practice-snapshot.ts", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/interview-arc-v2.css", import.meta.url), "utf8");
 
   assert.match(liveState, /Choose Solved, Solved with help, or Failed before finishing this activity/);
   assert.match(liveState, /Choose a result for .*before starting a fresh day/);
@@ -141,6 +142,8 @@ test("workbench lifecycle requires explicit results and preserves archived attem
   assert.match(snapshot, /live\.historyActivities as JournalActivity\[\]/);
   assert.match(snapshot, /live\.historySessions as PracticeSession\[\]/);
   assert.match(client, /requiredResultIds/);
+  assert.doesNotMatch(client, /required-result-choices/);
+  assert.match(css, /\.result-flag-wrap\.result-required \.result-flag/);
   assert.match(client, /draft\.historyActivities/);
   assert.match(client, /This session contains started or completed work and cannot be removed/);
   assert.match(client, /kind: "finish-session"/);

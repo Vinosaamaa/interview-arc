@@ -1490,22 +1490,6 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .result-flag:disabled { opacity: .38; cursor: not-allowed; }
 .result-flag-wrap.result-required { z-index: 18; }
 .result-flag-wrap.result-required .result-flag { border-color: #bd5b52; box-shadow: 0 0 0 3px rgba(189,91,82,.14); }
-.required-result-choices {
-  width: 190px;
-  padding: 9px;
-  border: 1px solid #d8b2aa;
-  border-radius: 10px;
-  background: #fffdfa;
-  box-shadow: 0 16px 38px rgba(61,35,29,.18);
-  display: grid;
-  gap: 5px;
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-}
-.required-result-choices strong { padding: 2px 5px 5px; color: #71453d; font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; }
-.required-result-choices button { min-height: 34px; padding: 0 9px; border: 1px solid #ddc7c1; border-radius: 7px; background: white; color: #3e4d48; text-align: left; cursor: pointer; }
-.required-result-choices button:hover { border-color: #a75a50; background: #fff3ef; }
 
 /* Stable history lists ----------------------------------------------------- */
 .log-entry,
