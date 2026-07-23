@@ -128,6 +128,7 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   const knowledge = await readFile(new URL("../drizzle/0005_colorful_nuke.sql", import.meta.url), "utf8");
   const answerAudio = await readFile(new URL("../drizzle/0006_shiny_legion.sql", import.meta.url), "utf8");
   const deliveryCoach = await readFile(new URL("../drizzle/0007_flat_may_parker.sql", import.meta.url), "utf8");
+  const workbenches = await readFile(new URL("../drizzle/0011_workbenches_and_provisional_profiles.sql", import.meta.url), "utf8");
   for (const table of ["timers", "outcomes", "extra_activities", "live_sessions"]) {
     assert.match(live, new RegExp("CREATE TABLE `" + table + "`"));
   }
@@ -151,6 +152,10 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   }
   assert.match(answerAudio, /ALTER TABLE `activity_audio_clips` ADD `transcript_turn_id` text/);
   assert.match(deliveryCoach, /CREATE TABLE `activity_delivery_analyses`/);
+  assert.match(workbenches, /CREATE TABLE `practice_workbenches`/);
+  assert.match(workbenches, /CREATE TABLE `provisional_solution_profiles`/);
+  assert.match(workbenches, /ALTER TABLE `extra_activities` ADD `workbench_id` text/);
+  assert.match(workbenches, /ALTER TABLE `live_sessions` ADD `workbench_id` text/);
 });
 
 test("content highlights persist editable notes", async () => {
@@ -189,7 +194,7 @@ test("durable publishing keeps transcripts, review, notes, and four-day walkthro
   assert.match(contract, /complete standalone `modelAnswer`/i);
   assert.match(contract, /failed attempt or full walkthrough: first review in \*\*4 days\*\*/i);
   assert.match(contract, /Pinned Notes[\s\S]*What Went Well[\s\S]*What To Improve[\s\S]*References/);
-  for (const tool of ["append_practice_transcript", "add_practice_note", "save_specialist_finalization", "get_activity_practice_record", "get_problem_solution_profile", "schedule_practice_review", "register_specialist_task", "register_activity_audio_clip", "save_delivery_analysis"]) {
+  for (const tool of ["append_practice_transcript", "add_practice_note", "save_provisional_solution_profile", "save_specialist_finalization", "get_activity_practice_record", "get_problem_solution_profile", "schedule_practice_review", "register_specialist_task", "register_activity_audio_clip", "save_delivery_analysis"]) {
     assert.match(bridge, new RegExp(`"${tool}"`));
     assert.match(codexConfig, new RegExp(`"${tool}"`));
   }
@@ -206,6 +211,43 @@ test("durable publishing keeps transcripts, review, notes, and four-day walkthro
   assert.match(durableStore, /Behavioral Solution Profiles require .*preferred personal answer/);
   assert.match(durableStore, /contentBank/);
   assert.match(durableStore, /canonicalQuestion\?\.solutionProfile/);
+});
+
+test("workbenches separate Today from the undated publication queue", async () => {
+  const liveState = await readFile(new URL("../db/live-state.ts", import.meta.url), "utf8");
+  const liveSync = await readFile(new URL("../app/live-sync.ts", import.meta.url), "utf8");
+  const mutationRoute = await readFile(new URL("../app/api/mutations/route.ts", import.meta.url), "utf8");
+  const client = await readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8");
+  const contract = await readFile(new URL("../docs/contracts/durable-practice-publishing.md", import.meta.url), "utf8");
+
+  assert.match(liveState, /export async function ensureOpenWorkbench/);
+  assert.match(liveState, /export async function startFreshWorkbench/);
+  assert.match(liveState, /extraRows[\s\S]*row\.workbenchId === workbench\.id/);
+  assert.match(liveState, /includeAll/);
+  assert.match(liveSync, /"workbench-start-fresh"/);
+  assert.match(mutationRoute, /case "workbench-start-fresh"/);
+  assert.match(client, /Start fresh day/);
+  assert.match(client, /interview-arc-workspace-ui-v1/);
+  assert.match(client, /interview-arc-selected-past/);
+  assert.match(client, /interview-arc-selected-bank/);
+  assert.match(contract, /Workbench Boundary/);
+  assert.match(contract, /undated publication\s+queue/i);
+});
+
+test("solution preflight is provisional and identical batch profiles reuse the current revision", async () => {
+  const durableStore = await readFile(new URL("../db/durable-practice.ts", import.meta.url), "utf8");
+  const bridge = await readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8");
+  const contract = await readFile(new URL("../docs/contracts/durable-practice-publishing.md", import.meta.url), "utf8");
+
+  assert.match(durableStore, /export async function saveProvisionalSolutionProfile/);
+  assert.match(durableStore, /profileFingerprint/);
+  assert.match(durableStore, /profileFingerprint\(priorProfile\.payload[\s\S]*=== profileFingerprint\(profile\)/);
+  assert.match(durableStore, /solutionProfileDecision/);
+  assert.match(durableStore, /provisionalProfile/);
+  assert.match(bridge, /"save_provisional_solution_profile"/);
+  assert.match(bridge, /researchPerformed/);
+  assert.match(contract, /Solution Profile Preflight/);
+  assert.match(contract, /chronological completion order/i);
 });
 
 test("private R2 audio stays owner-authorized and seekable", async () => {

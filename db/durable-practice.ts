@@ -12,6 +12,7 @@ import {
   problemPreferences,
   problemSolutionProfiles,
   problemSolutionRevisions,
+  provisionalSolutionProfiles,
   reviewSchedules,
   specialistTasks,
 } from "./schema";
@@ -56,6 +57,12 @@ export type SpecialistFinalization = {
   edgeCases?: string[];
   references: Array<{ title: string; url: string; accessedAt: string }>;
   solutionProfileAction?: "create_or_revise" | "reuse_current";
+  solutionProfileDecision?: {
+    reason: string;
+    changedSections: string[];
+    researchPerformed: boolean;
+    sourcesChecked: string[];
+  };
   solutionProfile?: {
     schemaVersion: 1;
     summary: string;
@@ -97,6 +104,80 @@ function validateSolutionProfile(specialty: Specialty, payload: SpecialistFinali
   if (specialty === "behavioral" && !payload.behavioralAnswer?.preferred.answer.trim()) {
     throw new Error("Behavioral Solution Profiles require the user's polished, evidence-grounded preferred personal answer.");
   }
+}
+
+function normalizedSolutionProfile(
+  payload: NonNullable<SpecialistFinalization["solutionProfile"]>,
+  fallbackReferences: SpecialistFinalization["references"],
+) {
+  return {
+    ...payload,
+    tags: normalizedTags(payload.tags),
+    references: payload.references.length ? payload.references : fallbackReferences,
+  };
+}
+
+function profileFingerprint(payload: NonNullable<SpecialistFinalization["solutionProfile"]>) {
+  return JSON.stringify({
+    summary: payload.summary.trim(),
+    sections: payload.sections.map((section) => ({ title: section.title.trim(), body: section.body.trim() })),
+    tags: normalizedTags(payload.tags).sort(),
+    references: payload.references.map((reference) => ({ title: reference.title.trim(), url: reference.url.trim() }))
+      .sort((left, right) => left.url.localeCompare(right.url)),
+    behavioralAnswer: payload.behavioralAnswer,
+  });
+}
+
+export async function saveProvisionalSolutionProfile(
+  ownerId: string,
+  specialty: Specialty,
+  questionId: string,
+  title: string,
+  payload: NonNullable<SpecialistFinalization["solutionProfile"]>,
+  input: {
+    activityId?: string;
+    decision?: SpecialistFinalization["solutionProfileDecision"];
+    references?: SpecialistFinalization["references"];
+  },
+  nowMs: number,
+) {
+  if (!payload.summary.trim() || payload.sections.length === 0) {
+    throw new Error("A provisional profile needs a summary and reusable reference sections.");
+  }
+  if (specialty === "behavioral" && payload.sections.some((section) => TRANSCRIPT_SECTION.test(section.title))) {
+    throw new Error("Behavioral provisional profiles cannot contain a transcript.");
+  }
+  const db = getDb();
+  const profile = normalizedSolutionProfile(payload, input.references ?? []);
+  const [current, existing] = await Promise.all([
+    db.select({ questionId: problemSolutionProfiles.questionId }).from(problemSolutionProfiles).where(and(
+      eq(problemSolutionProfiles.ownerId, ownerId),
+      eq(problemSolutionProfiles.specialty, specialty),
+      eq(problemSolutionProfiles.questionId, questionId),
+    )),
+    db.select().from(provisionalSolutionProfiles).where(and(
+      eq(provisionalSolutionProfiles.ownerId, ownerId),
+      eq(provisionalSolutionProfiles.specialty, specialty),
+      eq(provisionalSolutionProfiles.questionId, questionId),
+    )),
+  ]);
+  if (current[0]) throw new Error("A finalized Solution Profile already exists; load and reuse or revise it.");
+  if (existing[0]) {
+    const existingPayload = existing[0].payload as NonNullable<SpecialistFinalization["solutionProfile"]>;
+    if (profileFingerprint(existingPayload) === profileFingerprint(profile)) return;
+    throw new Error("A provisional Solution Profile already exists; load it instead of replacing it.");
+  }
+  await db.insert(provisionalSolutionProfiles).values({
+    ownerId,
+    specialty,
+    questionId,
+    title,
+    tags: profile.tags,
+    payload: profile,
+    preparedByActivityId: input.activityId ?? null,
+    decision: input.decision ?? null,
+    updatedAt: nowMs,
+  });
 }
 
 function addDays(date: string, days: number) {
@@ -272,7 +353,46 @@ export async function saveSpecialistFinalization(
         eq(problemSolutionProfiles.questionId, questionId),
       ));
       currentProfile = rows[0];
-      if (!currentProfile) throw new Error("Cannot reuse a Solution Profile that does not exist.");
+      if (!currentProfile) {
+        const category = specialty === "system_design" ? "systemDesign" : specialty;
+        const canonicalRows = await db.select({ payload: contentBank.payload }).from(contentBank).where(and(
+          eq(contentBank.category, category),
+          eq(contentBank.id, questionId),
+        ));
+        const canonicalQuestion = canonicalRows[0]?.payload as {
+          solutionProfile?: NonNullable<SpecialistFinalization["solutionProfile"]>;
+        } | undefined;
+        if (!canonicalQuestion?.solutionProfile) {
+          throw new Error("Cannot reuse a Solution Profile that does not exist.");
+        }
+        validateSolutionProfile(specialty, canonicalQuestion.solutionProfile);
+        const profile = normalizedSolutionProfile(canonicalQuestion.solutionProfile, payload.references);
+        await db.insert(problemSolutionProfiles).values({
+          ownerId,
+          specialty,
+          questionId,
+          title: payload.title,
+          currentRevision: 1,
+          tags: profile.tags,
+          payload: profile,
+          updatedAt: nowMs,
+        });
+        await db.insert(problemSolutionRevisions).values({
+          ownerId,
+          specialty,
+          questionId,
+          revision: 1,
+          activityId,
+          payload: profile,
+          createdAt: nowMs,
+        });
+        const seeded = await db.select().from(problemSolutionProfiles).where(and(
+          eq(problemSolutionProfiles.ownerId, ownerId),
+          eq(problemSolutionProfiles.specialty, specialty),
+          eq(problemSolutionProfiles.questionId, questionId),
+        ));
+        currentProfile = seeded[0];
+      }
     } else {
       validateSolutionProfile(specialty, payload.solutionProfile);
     }
@@ -308,36 +428,42 @@ export async function saveSpecialistFinalization(
   }
   if (payload.complete && questionId && profileAction === "create_or_revise" && payload.solutionProfile) {
     const prior = await db
-      .select({ currentRevision: problemSolutionProfiles.currentRevision })
+      .select()
       .from(problemSolutionProfiles)
       .where(and(
         eq(problemSolutionProfiles.ownerId, ownerId),
         eq(problemSolutionProfiles.specialty, specialty),
         eq(problemSolutionProfiles.questionId, questionId),
       ));
-    const revision = (prior[0]?.currentRevision ?? 0) + 1;
-    const profile = {
-      ...payload.solutionProfile,
-      tags: normalizedTags(payload.solutionProfile.tags),
-      references: payload.solutionProfile.references.length ? payload.solutionProfile.references : payload.references,
-    };
-    await db
-      .insert(problemSolutionProfiles)
-      .values({ ownerId, specialty, questionId, title: payload.title, currentRevision: revision, tags: profile.tags, payload: profile, updatedAt: nowMs })
-      .onConflictDoUpdate({
-        target: [problemSolutionProfiles.ownerId, problemSolutionProfiles.specialty, problemSolutionProfiles.questionId],
-        set: { title: payload.title, currentRevision: revision, tags: profile.tags, payload: profile, updatedAt: nowMs },
+    const profile = normalizedSolutionProfile(payload.solutionProfile, payload.references);
+    const priorProfile = prior[0];
+    if (priorProfile && profileFingerprint(priorProfile.payload as NonNullable<SpecialistFinalization["solutionProfile"]>) === profileFingerprint(profile)) {
+      linkedRevision = priorProfile.currentRevision;
+    } else {
+      const revision = (priorProfile?.currentRevision ?? 0) + 1;
+      await db
+        .insert(problemSolutionProfiles)
+        .values({ ownerId, specialty, questionId, title: payload.title, currentRevision: revision, tags: profile.tags, payload: profile, updatedAt: nowMs })
+        .onConflictDoUpdate({
+          target: [problemSolutionProfiles.ownerId, problemSolutionProfiles.specialty, problemSolutionProfiles.questionId],
+          set: { title: payload.title, currentRevision: revision, tags: profile.tags, payload: profile, updatedAt: nowMs },
+        });
+      await db.insert(problemSolutionRevisions).values({
+        ownerId,
+        specialty,
+        questionId,
+        revision,
+        activityId,
+        payload: profile,
+        createdAt: nowMs,
       });
-    await db.insert(problemSolutionRevisions).values({
-      ownerId,
-      specialty,
-      questionId,
-      revision,
-      activityId,
-      payload: profile,
-      createdAt: nowMs,
-    });
-    linkedRevision = revision;
+      linkedRevision = revision;
+    }
+    await db.delete(provisionalSolutionProfiles).where(and(
+      eq(provisionalSolutionProfiles.ownerId, ownerId),
+      eq(provisionalSolutionProfiles.specialty, specialty),
+      eq(provisionalSolutionProfiles.questionId, questionId),
+    ));
   }
   if (payload.complete && questionId && linkedRevision !== null) {
     await db
@@ -655,11 +781,16 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
 export async function readProblemSolutionProfile(ownerId: string, specialty: Specialty, questionId: string) {
   const db = getDb();
   const category = specialty === "system_design" ? "systemDesign" : specialty;
-  const [profiles, revisions, canonicalQuestions] = await Promise.all([
+  const [profiles, provisionalProfiles, revisions, canonicalQuestions] = await Promise.all([
     db.select().from(problemSolutionProfiles).where(and(
       eq(problemSolutionProfiles.ownerId, ownerId),
       eq(problemSolutionProfiles.specialty, specialty),
       eq(problemSolutionProfiles.questionId, questionId),
+    )),
+    db.select().from(provisionalSolutionProfiles).where(and(
+      eq(provisionalSolutionProfiles.ownerId, ownerId),
+      eq(provisionalSolutionProfiles.specialty, specialty),
+      eq(provisionalSolutionProfiles.questionId, questionId),
     )),
     db.select({
       revision: problemSolutionRevisions.revision,
@@ -691,7 +822,11 @@ export async function readProblemSolutionProfile(ownerId: string, specialty: Spe
         updatedAt: 0,
       }
     : null;
-  return { profile: profiles[0] ?? canonicalProfile, revisions };
+  return {
+    profile: profiles[0] ?? canonicalProfile,
+    provisionalProfile: provisionalProfiles[0] ?? null,
+    revisions,
+  };
 }
 
 export async function readDurablePracticeSummary(ownerId: string, _activityIds: string[], today: string) {

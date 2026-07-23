@@ -21,6 +21,9 @@ later in this guide.
 - After resolving `questionId`, call `get_problem_solution_profile`. On a
   revisit, use the current best approach privately as the evaluation baseline
   without revealing it before the user's fresh attempt.
+- If neither a current nor provisional profile exists, do the canonical prompt
+  preflight once and call `save_provisional_solution_profile`. Later attempts
+  reuse that prepared profile even when prior practice has not been published.
 - Append only relevant coding exchanges with `append_practice_transcript` every
   few turns and on activity switch/pause/finish. Do not copy unrelated task or
   website discussion.
@@ -64,6 +67,9 @@ later in this guide.
   solution remains correct and complete. Use `create_or_revise` only for a
   meaningful algorithm, correctness, implementation, complexity, edge-case,
   or explanation improvement.
+- Include `solutionProfileDecision`. Never research again merely because a
+  later attempt is in the same batch; research only for a concrete gap,
+  disputed claim, plausible staleness, or explicit user request.
 - Schedule failed/full-walkthrough review in 4 days, approach-review completion
   in 7 days, and successful reimplementation in 21 then 60 days.
 

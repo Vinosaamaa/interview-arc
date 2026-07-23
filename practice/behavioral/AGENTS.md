@@ -20,6 +20,9 @@ Read `../../docs/contracts/solution-profiles.md` before finalizing.
 - After resolving `questionId`, call `get_problem_solution_profile`. On a
   revisit, load the existing preferred personal answer, alternatives, verified
   evidence, gaps, and follow-ups privately before asking the question.
+- If no current or provisional profile exists, save the reference/evidence
+  preflight with `save_provisional_solution_profile`. The final preferred
+  personal answer is still created only from the user's verified mock evidence.
 - Append every meaningful two-sided mock exchange to D1 in small idempotent
   batches with `append_practice_transcript`. Flush every few short turns and on
   long answer, activity switch, pause, finish, or coordinator request.
@@ -59,6 +62,8 @@ Read `../../docs/contracts/solution-profiles.md` before finalizing.
   improvement. Use `create_or_revise` when it strengthens the preferred answer,
   verifies new evidence, records a meaningful gap, adds an alternative, or
   promotes a better story. Do not create revisions for wording polish alone.
+- Include `solutionProfileDecision`; do not revisit web sources without a
+  concrete evidence gap, dispute, plausible staleness, or explicit request.
 - Schedule failed/full-walkthrough review in 4 days, approach-review completion
   in 7 days, and successful reimplementation in 21 then 60 days.
 
