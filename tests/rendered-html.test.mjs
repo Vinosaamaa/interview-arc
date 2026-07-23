@@ -148,6 +148,11 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.doesNotMatch(client, /kind: "activity-result"/);
   assert.doesNotMatch(client, /Choose a result first/);
   assert.match(css, /@keyframes page-enter/);
+  assert.match(css, /left: calc\(var\(--sidebar-size\) \+ \(100vw - var\(--sidebar-size\)\) \/ 2\)/);
+  assert.match(css, /@media \(min-width: 1977px\)/);
+  assert.match(css, /--reader-pane-width: 1200px/);
+  assert.match(css, /--master-pane-width: 525px/);
+  assert.doesNotMatch(css, /@keyframes page-enter-(?:forward|backward) \{[^}]*translate3d/);
   assert.match(css, /@keyframes reader-workspace-exit/);
   assert.match(client, /answer-player-unified/);
   assert.match(client, /problem-bank-entry.*role="button" tabIndex=\{0\} aria-label=/);
