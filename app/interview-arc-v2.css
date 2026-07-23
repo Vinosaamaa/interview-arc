@@ -1170,10 +1170,6 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .banks-page.has-open-solution .bank-master-detail.reader-closing {
   pointer-events: none;
 }
-.library-page.has-open-entry .past-entry-pane,
-.banks-page.has-open-solution .bank-solution-pane {
-  animation: reader-pane-enter .28s cubic-bezier(.2,.8,.2,1) both;
-}
 .library-page.has-open-entry .reader-closing .past-entry-pane,
 .banks-page.has-open-solution .reader-closing .bank-solution-pane {
   animation: reader-pane-exit .22s cubic-bezier(.4,0,.2,1) both;
