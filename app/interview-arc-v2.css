@@ -310,6 +310,20 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   align-self: center;
   place-content: center start;
 }
+.activity-timer.locked {
+  border-color: #d2d9d6;
+  background: #edf0ee;
+  color: #7b8581;
+  box-shadow: none;
+}
+.activity-timer.locked .activity-start-time { color: #929b97; }
+.activity-timer.locked button:disabled {
+  border-color: #d2d8d5;
+  background: #e4e8e6;
+  color: #9ca5a1;
+  opacity: 1;
+  cursor: not-allowed;
+}
 .activity-time-actions {
   grid-column: 2;
   grid-row: 1 / -1;

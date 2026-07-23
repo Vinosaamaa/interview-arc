@@ -417,28 +417,30 @@ function ActivityTimer({
   now,
   onToggle,
   onComplete,
+  locked = false,
 }: {
   activity: JournalActivity;
   timer?: TimerDraft;
   now: number;
   onToggle: (id: string) => void;
   onComplete: (id: string) => void;
+  locked?: boolean;
 }) {
   const used = elapsed(timer, now);
   const running = Boolean(timer?.runningSince);
   const complete = Boolean(timer?.completed);
   const started = Boolean(timer?.startedAt);
   return (
-    <div className={`activity-timer ${started ? "started" : "unstarted"} ${running ? "running" : ""} ${complete ? "complete" : ""}`}>
+    <div className={`activity-timer ${started ? "started" : "unstarted"} ${running ? "running" : ""} ${complete ? "complete" : ""} ${locked ? "locked" : ""}`}>
       <div className="activity-time-copy">
         <span>{complete ? "Final time" : running ? "Running" : timer?.startedAt ? "Paused" : "Stopwatch"}</span>
         <strong>{formatClock(used)}</strong>
       </div>
       <div className="activity-time-actions">
-        <button className="start-timer icon-control" onClick={() => onToggle(activity.id)} disabled={complete} aria-label={running ? `Pause ${activity.title}` : `Start ${activity.title}`} title={running ? "Pause stopwatch" : complete ? "Finished activities cannot be resumed" : "Start stopwatch"}>
+        <button className="start-timer icon-control" onClick={() => onToggle(activity.id)} disabled={complete || locked} aria-label={running ? `Pause ${activity.title}` : `Start ${activity.title}`} title={locked ? "This session is finished" : running ? "Pause stopwatch" : complete ? "Finished activities cannot be resumed" : "Start stopwatch"}>
           <span aria-hidden="true">{running ? "Ⅱ" : "▶"}</span>
         </button>
-        <button className="finish-timer icon-control" onClick={() => onComplete(activity.id)} disabled={complete || !started} aria-label={`Finish ${activity.title}`} title={complete ? "Activity finished" : !started ? "Start the stopwatch before finishing" : "Finish and lock stopwatch"}>
+        <button className="finish-timer icon-control" onClick={() => onComplete(activity.id)} disabled={complete || !started || locked} aria-label={`Finish ${activity.title}`} title={locked ? "This session is finished" : complete ? "Activity finished" : !started ? "Start the stopwatch before finishing" : "Finish and lock stopwatch"}>
           <span aria-hidden="true">{complete ? "✓" : "■"}</span>
         </button>
       </div>
@@ -585,6 +587,7 @@ function PipNowPanel({
   session,
   sessionTimer,
   outcome,
+  activityLocked = false,
   now,
   onToggleActivity,
   onCompleteActivity,
@@ -597,6 +600,7 @@ function PipNowPanel({
   session?: PracticeSession | null;
   sessionTimer?: TimerDraft;
   outcome?: Outcome;
+  activityLocked?: boolean;
   now: number;
   onToggleActivity: (id: string) => void;
   onCompleteActivity: (id: string) => void;
@@ -657,10 +661,10 @@ function PipNowPanel({
           <div className="pip-clock-row">
             <strong className="pip-elapsed">{formatClock(activityUsed)}</strong>
             <div className="pip-clock-actions">
-              <button type="button" className="pip-btn primary" onClick={() => onToggleActivity(activity.id)} disabled={activityComplete} aria-label={activityRunning ? `Pause ${activity.title}` : `Start ${activity.title}`}>
+              <button type="button" className="pip-btn primary" onClick={() => onToggleActivity(activity.id)} disabled={activityComplete || activityLocked} aria-label={activityRunning ? `Pause ${activity.title}` : `Start ${activity.title}`}>
                 <span aria-hidden="true">{activityRunning ? "Ⅱ" : "▶"}</span>
               </button>
-              <button type="button" className="pip-btn" onClick={() => onCompleteActivity(activity.id)} disabled={activityComplete || !activityStarted} aria-label={`Finish ${activity.title}`} title={!activityStarted ? "Start the stopwatch before finishing" : "Finish activity"}>
+              <button type="button" className="pip-btn" onClick={() => onCompleteActivity(activity.id)} disabled={activityComplete || !activityStarted || activityLocked} aria-label={`Finish ${activity.title}`} title={activityLocked ? "This session is finished" : !activityStarted ? "Start the stopwatch before finishing" : "Finish activity"}>
                 <span aria-hidden="true">{activityComplete ? "✓" : "■"}</span>
               </button>
               <ResultFlag activityType={activity.type} outcome={outcome} onChange={(next) => onOutcome(activity.id, next)} />
@@ -1435,7 +1439,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     setNow(timestamp);
     const priorTimer = draft.timers[activityId];
     if (priorTimer?.completed) return;
-    const session = sessionByActivityId.get(activityId);
+    const parentSession = sessionByActivityId.get(activityId);
+    if (parentSession && draft.sessionTimers[parentSession.id]?.completed) return;
+    const session = parentSession;
     const action = priorTimer?.runningSince ? "pause" : "start";
     const sessionTimer = session ? draft.sessionTimers[session.id] : undefined;
     enqueue(
@@ -1603,6 +1609,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const timestamp = Date.now();
     const existing = draft.timers[activityId];
     if (!existing?.startedAt || existing.completed) return;
+    const parentSession = sessionByActivityId.get(activityId);
+    if (parentSession && draft.sessionTimers[parentSession.id]?.completed) return;
     setNow(timestamp);
     enqueue({
       type: "timer",
@@ -2687,6 +2695,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const complete = activities.filter(isActivityComplete).length;
     const codingSeconds = coding.reduce((sum, activity) => sum + elapsed(draft.timers[activity.id], now), 0);
     const localSession = draft.sessions.find((item) => item.id === session.id);
+    const sessionLocked = Boolean(draft.sessionTimers[session.id]?.completed);
     return (
       <article className="session-sheet" key={session.id}>
         <header className="session-sheet-header">
@@ -2709,7 +2718,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                 <div className="problem-ledger-row" key={activity.id}>
                   <span className={`row-count ${isActivityComplete(activity) ? "complete" : ""}`}>{isActivityComplete(activity) ? "✓" : problemIndex + 1}</span>
                   <div className="problem-title"><strong>{activity.title}</strong><span>{activity.notes ?? "Coding problem"}</span>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open on LeetCode ↗</a>}</div>
-                  <ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} />
+                  <ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} locked={sessionLocked} />
                   <ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} />
                   <PublicationControl status={publicationStatusFor(activity)} />
                   <button className={`star-control ${isStarred(activity.type, activity.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(activity.type, activity.questionId)} disabled={!activity.questionId} aria-label={`${isStarred(activity.type, activity.questionId) ? "Unstar" : "Star"} ${activity.title}`} title={activity.questionId ? "Keep this problem in your starred review set" : "A stable bank question is required to star this activity"}>★</button>
@@ -2730,7 +2739,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                 <h3>{item.title}</h3>
                 <p>{item.prompt}</p>
                 <div className="mock-controls">
-                  <ActivityTimer activity={item} timer={draft.timers[item.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} />
+                  <ActivityTimer activity={item} timer={draft.timers[item.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} locked={sessionLocked} />
                   <ResultFlag activityType={item.type} outcome={draft.outcomes[item.id] ?? item.outcome} onChange={(outcome) => setOutcome(item.id, outcome)} />
                   <PublicationControl status={publicationStatusFor(item)} />
                   <button className={`star-control ${isStarred(item.type, item.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(item.type, item.questionId)} disabled={!item.questionId} aria-label={`${isStarred(item.type, item.questionId) ? "Unstar" : "Star"} ${item.title}`}>★</button>
@@ -3883,6 +3892,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         session={pipSession}
         sessionTimer={pipSession ? draft.sessionTimers[pipSession.id] : undefined}
         outcome={pipActivity ? draft.outcomes[pipActivity.id] ?? pipActivity.outcome : undefined}
+        activityLocked={Boolean(pipSession && draft.sessionTimers[pipSession.id]?.completed)}
         now={now}
         onToggleActivity={toggleTimer}
         onCompleteActivity={completeTimer}

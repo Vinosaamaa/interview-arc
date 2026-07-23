@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { mutationFailureDisposition } from "./mutation-queue";
 import {
   EMPTY_DRAFT,
   type ExtraActivity,
@@ -257,6 +258,7 @@ export function useLiveState(date: string): LiveStateController {
     if (queueRef.current.length === 0) return;
     flushingRef.current = true;
     try {
+      let latestState: ServerLiveState | null = null;
       while (queueRef.current.length > 0) {
         const mutation = queueRef.current[0];
         let response: Response;
@@ -269,16 +271,38 @@ export function useLiveState(date: string): LiveStateController {
         } catch {
           break; // Offline: keep the queue and retry later.
         }
-        if (!response.ok) break; // Transient server error: retry later.
+        if (!response.ok) {
+          if (mutationFailureDisposition(response.status) === "retry") {
+            break; // Authentication, throttling, and server failures may recover.
+          }
+
+          // A validation/state conflict will never succeed when replayed. Drop
+          // only that mutation, then reconcile from D1 before continuing so an
+          // optimistic timer cannot survive as a browser-only ghost state.
+          queueRef.current = queueRef.current.slice(1);
+          persistQueue();
+          try {
+            const stateResponse = await fetch(`/api/state?date=${encodeURIComponent(date)}`);
+            if (stateResponse.ok) {
+              latestState = (await stateResponse.json()) as ServerLiveState;
+              offsetRef.current = latestState.serverNow - Date.now();
+            }
+          } catch {
+            // The invalid mutation is already removed. A later successful
+            // mutation or the next page load will reconcile authoritative D1.
+          }
+          continue;
+        }
         const state = (await response.json()) as ServerLiveState;
+        latestState = state;
         offsetRef.current = state.serverNow - Date.now();
         queueRef.current = queueRef.current.slice(1);
         persistQueue();
-        if (queueRef.current.length === 0) {
-          // Queue drained: adopt the server's authoritative view (it also reflects
-          // server-side effects like pausing other stopwatches on start).
-          setDraft(() => serverToDraft(state, offsetRef.current, date));
-        }
+      }
+      if (queueRef.current.length === 0 && latestState) {
+        // Queue drained: adopt the server's authoritative view (it also reflects
+        // server-side effects like pausing other stopwatches on start).
+        setDraft(() => serverToDraft(latestState, offsetRef.current, date));
       }
     } finally {
       flushingRef.current = false;
