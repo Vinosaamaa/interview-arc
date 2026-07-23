@@ -2731,6 +2731,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }, [content.questionBanks, crossReaderReturn, draft.personalQuestions, selectedProblem]);
 
   function transitionToView(nextView: View) {
+    if (nextView === view) return;
     const order: View[] = ["today", "journey", "library", "banks"];
     setViewDirection(order.indexOf(nextView) >= order.indexOf(view) ? "forward" : "backward");
     setViewTransitionId((current) => current + 1);

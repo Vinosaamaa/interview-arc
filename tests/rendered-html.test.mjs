@@ -153,6 +153,7 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(css, /--reader-pane-width: 1200px/);
   assert.match(css, /--master-pane-width: 525px/);
   assert.doesNotMatch(css, /@keyframes page-enter-(?:forward|backward) \{[^}]*translate3d/);
+  assert.match(client, /function transitionToView\(nextView: View\) \{\s*if \(nextView === view\) return;/);
   assert.match(css, /@keyframes reader-workspace-exit/);
   assert.match(client, /answer-player-unified/);
   assert.match(client, /problem-bank-entry.*role="button" tabIndex=\{0\} aria-label=/);
