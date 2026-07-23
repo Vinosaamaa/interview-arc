@@ -22,6 +22,7 @@ export const contentHighlights = sqliteTable(
     prefix: text("prefix").notNull().default(""),
     suffix: text("suffix").notNull().default(""),
     color: text("color", { enum: ["yellow", "green", "pink"] }).notNull().default("yellow"),
+    note: text("note").notNull().default(""),
     createdAt: integer("created_at").notNull(),
     updatedAt,
   },

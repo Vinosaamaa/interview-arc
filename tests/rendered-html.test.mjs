@@ -68,6 +68,23 @@ test("the Cloudflare build contains the Interview Arc dashboard", async () => {
   assert.doesNotMatch(bundle, /codex-preview|react-loading-skeleton/);
 });
 
+test("local development bypasses Access without weakening the production config", async () => {
+  const [viteConfig, worker, localConfig, productionConfig] = await Promise.all([
+    readFile(new URL("../vite.config.ts", import.meta.url), "utf8"),
+    readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
+    readFile(new URL("../wrangler.dev.jsonc", import.meta.url), "utf8"),
+    readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(viteConfig, /command === "serve" \? "wrangler\.dev\.jsonc" : "wrangler\.jsonc"/);
+  assert.match(worker, /LOCAL_DEV_AUTH_BYPASS === "true" && isLocalRequest/);
+  assert.match(localConfig, /"LOCAL_DEV_AUTH_BYPASS": "true"/);
+  assert.doesNotMatch(localConfig, /POLICY_AUD|TEAM_DOMAIN/);
+  assert.match(productionConfig, /"POLICY_AUD"/);
+  assert.match(productionConfig, /"TEAM_DOMAIN"/);
+  assert.doesNotMatch(productionConfig, /LOCAL_DEV_AUTH_BYPASS/);
+});
+
 test("the refined analytics and composer layouts keep their intended grouping", async () => {
   const css = await Promise.all([
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
@@ -88,6 +105,14 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /className="bank-master-detail"/);
   assert.match(client, /className="past-master-detail"/);
   assert.match(client, /className="past-entry-pane"/);
+  assert.match(client, /className={`annotation-popover selection-annotation/);
+  assert.match(client, /Highlight selected text and add a note/);
+  assert.match(client, /Remove highlight note/);
+  assert.match(client, /Remove highlight/);
+  assert.match(client, /defaultOpen={group.key !== "conversation"}/);
+  assert.match(css, /\.workspace-reader-scroll \.markdown-body \{ font-size: 1\.0625rem; line-height: 1\.7; \}/);
+  assert.match(css, /@media \(min-width: 1760px\)/);
+  assert.match(css, /\.annotation-popover \{ position: fixed;/);
   assert.match(client, /left\.type === "system_design" \? -1 : 1/);
   assert.match(client, /placeholder="Search"/);
   assert.match(client, /const \[bankTypeFilters, setBankTypeFilters\] = useState<ActivityType\[]>\(\[\]\)/);
