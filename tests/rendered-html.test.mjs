@@ -154,6 +154,7 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(css, /--master-pane-width: 525px/);
   assert.doesNotMatch(css, /@keyframes page-enter-(?:forward|backward) \{[^}]*translate3d/);
   assert.match(client, /function transitionToView\(nextView: View\) \{\s*if \(nextView === view\) return;/);
+  assert.doesNotMatch(css, /\.library-page\.has-open-entry \.past-entry-pane,\s*\.banks-page\.has-open-solution \.bank-solution-pane \{\s*animation: reader-pane-enter/);
   assert.match(css, /@keyframes reader-workspace-exit/);
   assert.match(client, /answer-player-unified/);
   assert.match(client, /problem-bank-entry.*role="button" tabIndex=\{0\} aria-label=/);
