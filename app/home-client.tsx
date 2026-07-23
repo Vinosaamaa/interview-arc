@@ -573,12 +573,6 @@ function ResultFlag({
       <button className={`result-flag ${outcome ?? "unset"}`} onClick={() => onChange(next)} disabled={disabled} aria-label={`Result: ${resultLabel(outcome, activityType)}. Select the next result.`} title={disabled ? "Start the activity stopwatch before choosing a result" : "Change result"}>
         <Icon name="flag" />
       </button>
-      {required && !disabled && <div className="required-result-choices" role="group" aria-label="Choose a result before continuing">
-        <strong>Choose a result</strong>
-        <button type="button" onClick={() => onChange("solved")}>Solved</button>
-        <button type="button" onClick={() => onChange("solved_after_reviewing_approach")}>Solved with help</button>
-        <button type="button" onClick={() => onChange("failed")}>Failed</button>
-      </div>}
       <div className="result-legend" role="tooltip">
         <strong>Result flag</strong>
         <span><i className="unset" /> Not set</span>
