@@ -1,4 +1,5 @@
 const API_BASE = "https://limitless-mcp.vinosama.workers.dev";
+const INTERVIEW_ARC_ORIGIN = "https://limitless.vinosama.workers.dev";
 const OUTCOMES = [null, "solved", "solved_after_reviewing_approach", "failed"];
 
 const elements = Object.fromEntries([...document.querySelectorAll("[id]")].map((element) => [element.id, element]));
@@ -7,6 +8,10 @@ let problemUrl = "";
 let state = null;
 let activity = null;
 let renderInterval = null;
+let refreshInterval = null;
+let refreshSequence = 0;
+let renderedActivityId = "";
+let notesDirty = false;
 
 function practiceDate() {
   return new Intl.DateTimeFormat("en-CA", {
@@ -29,10 +34,24 @@ function elapsed(timer) {
   return timer.accumulatedSeconds + (timer.runningSince ? Math.max(0, Math.floor((Date.now() - timer.runningSince) / 1000)) : 0);
 }
 
-async function activeLeetCodeUrl() {
+async function activeTabContext() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const match = tab?.url?.match(/^https:\/\/(?:www\.)?leetcode\.com\/problems\/([a-z0-9-]+)/i);
-  return match ? `https://leetcode.com/problems/${match[1].toLowerCase()}/` : "";
+  if (match) {
+    return {
+      kind: "leetcode",
+      problemUrl: `https://leetcode.com/problems/${match[1].toLowerCase()}/`,
+    };
+  }
+  try {
+    const url = new URL(tab?.url ?? "");
+    if (url.origin === INTERVIEW_ARC_ORIGIN) {
+      return { kind: "dashboard", problemUrl: "" };
+    }
+  } catch {
+    // Chrome internal and extension pages do not have a usable activity URL.
+  }
+  return { kind: "other", problemUrl: "" };
 }
 
 async function api(path, init = {}) {
@@ -76,15 +95,22 @@ function renderClock() {
 }
 
 function render() {
+  const activityChanged = renderedActivityId !== (activity?.id ?? "");
   elements["connect-view"].hidden = true;
   elements["practice-view"].hidden = false;
   elements.disconnect.hidden = false;
   elements["sync-light"].classList.add("live");
-  elements["problem-link"].href = problemUrl;
+  const activityUrl = activity?.url?.match(/^https:\/\/(?:www\.)?leetcode\.com\/problems\/[a-z0-9-]+\/?/i)?.[0] ?? "";
+  const openUrl = activityUrl || problemUrl;
+  elements["problem-link"].href = openUrl || "#";
+  elements["problem-link"].hidden = !openUrl;
   elements["problem-title"].textContent = activity?.title ?? problemUrl.match(/\/problems\/([^/]+)/)?.[1]?.replaceAll("-", " ") ?? "Open a LeetCode problem";
   elements["not-planned"].hidden = Boolean(activity);
   elements["activity-workspace"].hidden = !activity;
-  if (!activity) return;
+  if (!activity) {
+    renderedActivityId = "";
+    return;
+  }
 
   const [flag, result] = outcomeCopy(activity.outcome);
   elements["outcome-button"].className = `status-button outcome ${activity.outcome ?? "unset"}`;
@@ -95,17 +121,28 @@ function render() {
   elements["publication-button"].querySelector("span").textContent = publication === "published" ? "✓" : publication === "ready" ? "↑" : "◇";
   elements["publication-button"].querySelector("strong").textContent = publication === "published" ? "In journal" : publication === "ready" ? "Ready for journal" : "Finish to journal";
   elements["publication-button"].disabled = true;
-  elements.notes.value = activity.personalNote ?? "";
+  if (activityChanged || !notesDirty) {
+    elements.notes.value = activity.personalNote ?? "";
+  }
+  renderedActivityId = activity.id;
   renderClock();
 }
 
 async function refresh() {
-  problemUrl = await activeLeetCodeUrl();
-  if (!problemUrl) {
-    elements["problem-title"].textContent = "Open a LeetCode problem";
+  const sequence = ++refreshSequence;
+  const context = await activeTabContext();
+  if (context.kind === "other") {
+    problemUrl = "";
+    activity = null;
+    render();
     return;
   }
-  state = await api(`/companion/state?date=${practiceDate()}&url=${encodeURIComponent(problemUrl)}`);
+  const query = new URLSearchParams({ date: practiceDate() });
+  if (context.problemUrl) query.set("url", context.problemUrl);
+  const nextState = await api(`/companion/state?${query.toString()}`);
+  if (sequence !== refreshSequence) return;
+  problemUrl = context.problemUrl;
+  state = nextState;
   activity = state.currentActivity;
   render();
 }
@@ -126,6 +163,13 @@ elements["connect-button"].addEventListener("click", async () => {
   try { await refresh(); } catch { showConnect(); }
 });
 elements["add-button"].addEventListener("click", () => mutate({ type: "add-leetcode", url: problemUrl }));
+elements["problem-link"].addEventListener("click", (event) => {
+  event.preventDefault();
+  const url = elements["problem-link"].href;
+  if (/^https:\/\/(?:www\.)?leetcode\.com\/problems\/[a-z0-9-]+\/?/i.test(url)) {
+    chrome.tabs.create({ url });
+  }
+});
 elements["toggle-timer"].addEventListener("click", () => mutate({ type: "timer", activityId: activity.id, action: activity.timer?.runningSince ? "pause" : "start" }));
 elements["finish-timer"].addEventListener("click", () => mutate({ type: "timer", activityId: activity.id, action: "finish" }));
 elements["outcome-button"].addEventListener("click", () => {
@@ -135,7 +179,12 @@ elements["outcome-button"].addEventListener("click", () => {
 elements["save-note"].addEventListener("click", async () => {
   elements["note-state"].textContent = "Saving…";
   await mutate({ type: "activity-note", activityId: activity.id, note: elements.notes.value });
+  notesDirty = false;
   elements["note-state"].textContent = "Saved to Interview Arc";
+});
+elements.notes.addEventListener("input", () => {
+  notesDirty = true;
+  elements["note-state"].textContent = "Unsaved";
 });
 elements["open-dashboard"].addEventListener("click", () => chrome.tabs.create({ url: "https://limitless.vinosama.workers.dev/" }));
 elements.disconnect.addEventListener("click", async () => {
@@ -155,6 +204,16 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo) => changeInfo.url && toke
     try { await refresh(); } catch { showConnect(); }
   }
   renderInterval = window.setInterval(renderClock, 1000);
+  refreshInterval = window.setInterval(() => {
+    if (token && !document.hidden) refresh().catch(() => {});
+  }, 1000);
 })();
 
-window.addEventListener("unload", () => window.clearInterval(renderInterval));
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && token) refresh().catch(() => {});
+});
+
+window.addEventListener("unload", () => {
+  window.clearInterval(renderInterval);
+  window.clearInterval(refreshInterval);
+});

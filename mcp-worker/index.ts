@@ -222,9 +222,18 @@ async function companionState(ownerId: string, request: Request) {
   const date = url.searchParams.get("date") ?? dateInPracticeTimeZone();
   const problemUrl = normalizeLeetCodeUrl(url.searchParams.get("url") ?? "");
   const snapshot = await buildPracticeSnapshot(ownerId, date);
+  const activeCodingActivity = snapshot.activeActivity?.type === "leetcode"
+    ? snapshot.activeActivity
+    : null;
+  const focusedCodingActivity = (
+    snapshot.focusedActivity?.type === "leetcode"
+    && !snapshot.focusedActivity.timer?.completed
+  )
+    ? snapshot.focusedActivity
+    : null;
   const currentActivity = problemUrl
     ? snapshot.activities.find((activity) => normalizeLeetCodeUrl(activity.url ?? "") === problemUrl) ?? null
-    : null;
+    : activeCodingActivity ?? focusedCodingActivity;
   return json(request, { ...snapshot, currentActivity });
 }
 

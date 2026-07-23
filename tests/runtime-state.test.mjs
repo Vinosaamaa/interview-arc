@@ -327,13 +327,22 @@ test("consecutive Voice captures form one logical answer without merging their d
   assert.deepEqual(groups[1].turns.map((turn) => turn.turnId), ["voice-1", "voice-2"]);
 });
 
-test("the Chrome companion is scoped to public LeetCode pages and the bridge host", async () => {
+test("the Chrome companion follows live Interview Arc focus and public LeetCode pages", async () => {
   const manifest = JSON.parse(await readFile(new URL("../extension/manifest.json", import.meta.url), "utf8"));
+  const serviceWorker = await readFile(new URL("../extension/service-worker.js", import.meta.url), "utf8");
+  const sidePanel = await readFile(new URL("../extension/sidepanel.js", import.meta.url), "utf8");
+  const mcpWorker = await readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8");
   assert.equal(manifest.manifest_version, 3);
   assert.ok(manifest.permissions.includes("sidePanel"));
   assert.deepEqual(manifest.host_permissions, [
     "https://leetcode.com/problems/*",
+    "https://limitless.vinosama.workers.dev/*",
     "https://limitless-mcp.vinosama.workers.dev/*",
   ]);
   assert.equal(manifest.content_scripts, undefined);
+  assert.match(serviceWorker, /url\.origin === INTERVIEW_ARC_ORIGIN/);
+  assert.match(sidePanel, /window\.setInterval\(\(\) => \{/);
+  assert.match(sidePanel, /if \(context\.problemUrl\) query\.set\("url", context\.problemUrl\)/);
+  assert.match(sidePanel, /chrome\.tabs\.create\(\{ url \}\)/);
+  assert.match(mcpWorker, /activeCodingActivity \?\? focusedCodingActivity/);
 });
