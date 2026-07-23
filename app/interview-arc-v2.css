@@ -260,12 +260,15 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .topic-pill { border-color: #c5d5d0; background: #f5f8f7; border-radius: 7px; }
 .topic-pill:hover, .topic-pill.active { border-color: var(--primary); color: var(--primary-deep); background: #eaf6f3; }
 .problem-bank-list {
-  max-height: none;
+  height: clamp(480px, calc(100vh - 350px), 720px);
+  max-height: 720px;
   border-color: #bdcec9;
   border-radius: 13px;
   background: rgba(251,252,250,.94);
   box-shadow: var(--shadow-sm);
-  overflow-y: visible;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 .problem-bank-entry { min-height: 124px; border-bottom-color: #dfe8e5; }
 .problem-bank-entry:hover { background: #f3f8f6; }
@@ -1150,7 +1153,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   grid-template-columns: 0 minmax(0, 1200px);
   gap: 0;
   overflow: visible;
-  animation: reader-workspace-enter .28s cubic-bezier(.2,.8,.2,1) both;
+  animation: none;
   transition:
     width .3s cubic-bezier(.2,.8,.2,1),
     grid-template-columns .3s cubic-bezier(.2,.8,.2,1),
@@ -1158,7 +1161,6 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 }
 .library-page.has-open-entry .past-master-detail.reader-closing,
 .banks-page.has-open-solution .bank-master-detail.reader-closing {
-  animation: reader-workspace-exit .22s cubic-bezier(.4,0,.2,1) both;
   pointer-events: none;
 }
 .library-page.has-open-entry .past-entry-pane,
@@ -1203,12 +1205,19 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 
 .library-page:not(.has-open-entry) .past-master-detail,
 .banks-page:not(.has-open-solution) .bank-master-detail {
-  transition: opacity .14s ease;
+  transition: opacity .16s ease;
+  animation: list-view-return .18s cubic-bezier(.2,.8,.2,1) both;
 }
 .library-page.list-restoring .past-master-detail,
 .banks-page.list-restoring .bank-master-detail {
   opacity: 0;
   pointer-events: none;
+  animation: none;
+}
+
+@keyframes list-view-return {
+  from { opacity: .01; }
+  to { opacity: 1; }
 }
 
 @media (max-width: 1976px) {
@@ -1438,15 +1447,22 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   grid-template-columns: repeat(2, 38px);
 }
 
-.page-enter-forward { animation: page-enter-forward .22s cubic-bezier(.2,.8,.2,1) both; }
-.page-enter-backward { animation: page-enter-backward .22s cubic-bezier(.2,.8,.2,1) both; }
+.page-enter-forward { animation: page-enter-forward .24s cubic-bezier(.2,.8,.2,1) both; }
+.page-enter-backward { animation: page-enter-backward .24s cubic-bezier(.2,.8,.2,1) both; }
 @keyframes page-enter-forward {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from { opacity: .35; transform: translate3d(10px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 @keyframes page-enter-backward {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from { opacity: .35; transform: translate3d(-10px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@media (max-width: 760px) {
+  .problem-bank-list {
+    height: min(62vh, 640px);
+    min-height: 420px;
+  }
 }
 
 @media (max-width: 760px) {

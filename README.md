@@ -133,12 +133,16 @@ Prerequisite: Node.js `>=22.13.0`.
 
 ```bash
 pnpm install
-pnpm db:migrate:local
-pnpm content:import:local
 pnpm dev
 pnpm build
 pnpm test
 ```
+
+`pnpm dev` first runs the idempotent `dev:prepare` step, which applies the
+migrations and imports Git-backed journals, artifacts, solutions, and question
+banks into an isolated local D1 database. Local development never reads or
+writes the production D1 database. Run `pnpm dev:prepare` directly when you
+only need to refresh that local database without starting the site.
 
 Production runs as the `limitless` Cloudflare Worker described by
 `wrangler.jsonc`, with shared published content and owner-scoped live state in
