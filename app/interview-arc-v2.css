@@ -760,7 +760,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .journal-entry .static-result-flag { width: 28px; height: 28px; }
 .journal-entry > .star-control { width: 32px; min-width: 32px; height: 32px; min-height: 32px; margin: 0 4px 0 0; align-self: center; }
 
-.journal-reader-pane,
+.past-entry-pane,
 .bank-solution-pane {
   height: 100%;
   border: 1px solid #bdcec9;
@@ -804,6 +804,40 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .workspace-reader-scroll .markdown-body li { max-width: 76ch; }
 .workspace-reader-scroll .code-stage { max-width: 100%; overflow-x: auto; }
 
+.past-master-detail { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; transition: grid-template-columns .28s ease; }
+.past-master-pane,
+.past-entry-pane { min-width: 0; }
+.past-entry-pane { display: none; }
+.library-page.has-open-entry > .view-masthead { display: none; }
+.library-page.has-open-entry .past-master-detail { grid-template-columns: minmax(340px, .72fr) minmax(560px, 1.28fr); }
+.library-page.has-open-entry .past-entry-pane { display: block; position: sticky; top: 88px; height: calc(100vh - 112px); animation: reader-pane-in .28s ease both; }
+.library-page.has-open-entry .past-control-deck { grid-template-columns: minmax(0, 1fr); gap: 9px; margin-bottom: 10px; }
+.library-page.has-open-entry .past-search-bar { min-width: 0; }
+.library-page.has-open-entry .log-layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
+.library-page.has-open-entry .log-layout > .log-calendar { display: none; }
+.library-page.has-open-entry .dated-log { gap: 12px; }
+.library-page.has-open-entry .log-day > header { min-height: 48px; padding-inline: 14px; }
+.library-page.has-open-entry .log-day > header time { font-size: 1rem; }
+.library-page.has-open-entry .log-day > header span { font-size: .68rem; }
+.library-page.has-open-entry .log-entry { min-height: 0; grid-template-columns: minmax(0, 1fr) auto; border-left: 3px solid transparent; }
+.library-page.has-open-entry .log-entry.selected { border-left-color: var(--primary); background: #eaf4f1; }
+.library-page.has-open-entry .log-entry-open { min-height: 102px; padding: 13px 7px 13px 11px; grid-template-columns: 28px minmax(0, 1fr); gap: 9px; }
+.library-page.has-open-entry .type-mark { width: 28px; height: 28px; border-radius: 8px; }
+.library-page.has-open-entry .log-entry-copy { min-width: 0; gap: 3px; }
+.library-page.has-open-entry .log-entry-copy small { font-size: .67rem; }
+.library-page.has-open-entry .log-entry-copy strong { font-size: .87rem; line-height: 1.25; overflow-wrap: anywhere; }
+.library-page.has-open-entry .log-entry-copy > span:not(.entry-time-range) { display: none; }
+.library-page.has-open-entry .entry-badges { margin-top: 3px; gap: 4px; }
+.library-page.has-open-entry .entry-badges i { padding: 2px 6px; font-size: .55rem; }
+.library-page.has-open-entry .entry-time-range { font-size: .58rem; white-space: normal; }
+.library-page.has-open-entry .log-entry-meta { grid-column: 2; grid-template-columns: auto 1fr; min-width: 0; gap: 6px; }
+.library-page.has-open-entry .log-entry-meta strong,
+.library-page.has-open-entry .log-entry-meta span { font-size: .62rem; }
+.library-page.has-open-entry .log-entry-actions { margin: 0 6px; gap: 5px; }
+.library-page.has-open-entry .log-entry-actions .static-result-flag,
+.library-page.has-open-entry .log-entry-actions .star-control { width: 30px; min-width: 30px; height: 30px; min-height: 30px; }
+.past-entry-pane .workspace-reader { height: 100%; }
+
 .bank-master-detail { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; transition: grid-template-columns .28s ease; }
 .bank-master-pane { min-width: 0; }
 .bank-solution-pane { display: none; }
@@ -834,6 +868,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 
 @media (max-width: 1280px) {
   .journal-workspace { grid-template-columns: 170px minmax(280px, 320px) minmax(430px, 1fr); }
+  .library-page.has-open-entry .past-master-detail { grid-template-columns: minmax(300px, .64fr) minmax(480px, 1.36fr); }
   .banks-page.has-open-solution .bank-master-detail { grid-template-columns: minmax(300px, .64fr) minmax(480px, 1.36fr); }
   .workspace-reader-scroll.case-document { padding-inline: 28px; }
 }
@@ -842,6 +877,9 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .journal-heading { align-items: start; flex-direction: column; gap: 6px; }
   .journal-workspace { height: calc(100vh - 220px); grid-template-columns: minmax(280px, 320px) minmax(0, 1fr); }
   .journal-date-pane { display: none; }
+  .library-page.has-open-entry .past-master-detail { grid-template-columns: minmax(270px, .55fr) minmax(420px, 1.45fr); }
+  .library-page.has-open-entry .log-entry-open { grid-template-columns: 26px minmax(0, 1fr); }
+  .library-page.has-open-entry .log-entry-actions { display: grid; }
   .banks-page.has-open-solution .bank-master-detail { grid-template-columns: minmax(270px, .55fr) minmax(420px, 1.45fr); }
   .banks-page.has-open-solution .problem-bank-entry { grid-template-columns: auto minmax(0, 1fr); }
   .banks-page.has-open-solution .bank-entry-actions { grid-column: 2; grid-row: auto; display: flex; justify-content: start; }
@@ -853,9 +891,9 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .journal-heading p { font-size: .8rem; }
   .journal-workspace { height: auto; min-height: 0; display: block; }
   .journal-feed-pane { height: calc(100vh - 250px); min-height: 480px; }
-  .journal-reader-pane,
+  .library-page.has-open-entry .past-entry-pane,
   .banks-page.has-open-solution .bank-solution-pane { display: block; height: auto; position: fixed; inset: 66px 0 72px; z-index: 57; border: 0; border-radius: 0; background: #fffefb; }
-  .journal-workspace:not(.has-reader) .journal-reader-pane { display: none; }
+  .library-page.has-open-entry .past-master-detail { grid-template-columns: 1fr; }
   .workspace-reader-scroll.case-document { padding: 27px 20px 40px; }
   .workspace-reader-scroll .case-title-row h2,
   .workspace-reader-scroll #solution-profile-title { font-size: clamp(2rem, 10vw, 3.1rem); }
