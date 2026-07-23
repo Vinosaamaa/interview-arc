@@ -1419,6 +1419,11 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   isolation: isolate;
   transition: opacity .85s cubic-bezier(.65, 0, .35, 1), visibility .85s;
 }
+.arrival-ritual.preparing { background: #0b1519; }
+.arrival-ritual.preparing .arrival-image { opacity: 0; }
+.arrival-ritual.preparing .arrival-content,
+.arrival-ritual.preparing footer { visibility: hidden; }
+.arrival-ritual.ready .arrival-image { opacity: 1; transition: opacity .38s ease; }
 .arrival-ritual.leaving { opacity: 0; visibility: hidden; }
 .arrival-image {
   position: absolute;
