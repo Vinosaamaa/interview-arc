@@ -82,7 +82,6 @@ type CrossReaderReturn =
     listScrollTop: number;
   };
 type LifecycleDialog =
-  | { kind: "activity-result"; activityId: string }
   | { kind: "session-results"; sessionId: string; missingCount: number }
   | { kind: "workbench-results"; missingCount: number }
   | { kind: "finish-session"; sessionId: string }
@@ -1081,6 +1080,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     readSessionJson<WorkspaceUiMemory>("interview-arc-workspace-ui-v1", {})
   );
   const [readerClosing, setReaderClosing] = useState(false);
+  const [listRestoring, setListRestoring] = useState<"library" | "banks" | null>(null);
   const [crossReaderReturn, setCrossReaderReturn] = useState<CrossReaderReturn>(null);
   const [lifecycleDialog, setLifecycleDialog] = useState<LifecycleDialog>(null);
   const [uiToast, setUiToast] = useState<UiToast>(null);
@@ -1151,6 +1151,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const toastTimerRef = useRef<number | null>(null);
   const pastListRef = useRef<HTMLDivElement>(null);
   const bankListRef = useRef<HTMLDivElement>(null);
+  const pendingListRestoreRef = useRef<{
+    surface: "library" | "banks";
+    pageScrollTop: number;
+    listScrollTop: number;
+  } | null>(null);
   const listPositionMemoryRef = useRef({
     library: { pageScrollTop: 0, listScrollTop: 0 },
     banks: { pageScrollTop: 0, listScrollTop: 0 },
@@ -1199,6 +1204,17 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (readerCloseTimerRef.current !== null) window.clearTimeout(readerCloseTimerRef.current);
     if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
   }, []);
+
+  useEffect(() => {
+    const pending = pendingListRestoreRef.current;
+    if (!listRestoring || !pending || pending.surface !== listRestoring) return;
+    window.scrollTo({ top: pending.pageScrollTop, behavior: "instant" });
+    const list = pending.surface === "library" ? pastListRef.current : bankListRef.current;
+    if (list) list.scrollTop = pending.listScrollTop;
+    pendingListRestoreRef.current = null;
+    const frame = window.requestAnimationFrame(() => setListRestoring(null));
+    return () => window.cancelAnimationFrame(frame);
+  }, [listRestoring]);
 
   useEffect(() => {
     window.sessionStorage.setItem("interview-arc-reader-memory-v1", JSON.stringify(readerMemory));
@@ -1682,7 +1698,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (parentSession && draft.sessionTimers[parentSession.id]?.completed) return;
     if (!draft.outcomes[activityId]) {
       setRequiredResultIds((current) => [...new Set([...current, activityId])]);
-      setLifecycleDialog({ kind: "activity-result", activityId });
       return;
     }
     setNow(timestamp);
@@ -3177,7 +3192,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const hasPastFilters = libraryTypeFilters.length > 0 || activePastFilterCount > 0;
     const visibleRecordCount = groupedLog.reduce((sum, [, entries]) => sum + entries.length, 0);
     return (
-      <section className={`view-page library-page ${selectedEntry ? "has-open-entry" : ""}`}>
+      <section className={`view-page library-page ${selectedEntry ? "has-open-entry" : ""} ${listRestoring === "library" ? "list-restoring" : ""}`}>
         <header className="view-masthead"><span className="eyebrow">PAST · COMPLETED WORK</span><h1>Read the journey<br /><em>like a field journal.</em></h1><p>Past contains finished activity timers and published case files—never planned work or result flags by themselves.</p></header>
         <div className={`past-master-detail ${masterPaneOpen && !readerFocusMode ? "master-pane-open" : ""} ${readerClosing ? "reader-closing" : ""}`}>
           <div
@@ -3215,7 +3230,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                   listScrollTop: pastListRef.current?.scrollTop ?? 0,
                 };
               }}>
-                {groupedLog.length ? groupedLog.map(([date, entries]) => <section className="log-day" id={`log-date-${date}`} key={date}><header><time>{readableDate(date)}</time><span>{entries.length} record{entries.length === 1 ? "" : "s"} · Pacific day</span></header><div className="log-day-entries">{entries.map((entry) => { const reusableQuestion = bankQuestionForEntry(entry); const reusableSolution = Boolean(reusableQuestion && hasReusableSolution(entry.type, reusableQuestion)); return <article className={`log-entry ${entry.type} ${selectedEntry?.id === entry.id ? "selected" : ""}`} key={entry.id}><button className="log-entry-open" onClick={() => openJournalEntry(entry)} aria-label={`Read ${entry.title}`}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><div className="log-entry-copy"><small>{typeLabel(entry.type)} · {entry.status}{entry.sessionId ? " · session activity" : " · standalone"}</small><strong>{entry.title}</strong>{meaningfulSubtitle(entry.subtitle) && <span>{meaningfulSubtitle(entry.subtitle)}</span>}<div className="entry-badges">{entry.review?.status === "due" && <i className="review-badge due">Due now</i>}{entry.review?.status === "scheduled" && <i className="review-badge">Review {entry.review.dueDate}</i>}{Boolean(entry.personalNote?.trim() || entry.pinnedNotes?.length) && <i className="note-badge">Pinned note</i>}{entry.outcome === "solved" && <i className="independent-badge">Solved</i>}{entry.outcome === "solved_after_reviewing_approach" && <i className="help-badge">Solved with help</i>}{entry.outcome === "failed" && <i className="failure-badge">Failed attempt</i>}</div>{entry.startedAt && <span className="entry-time-range">{formatPracticeTimestamp(entry.startedAt, true)} → {entry.endedAt ? formatPracticeTimestamp(entry.endedAt, true) : "Paused"}</span>}</div><div className="log-entry-meta"><strong>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "—"}</strong><span>{entry.type === "leetcode" ? outcomeLabel(entry.outcome) : entry.artifact ? "Published record" : entry.status}</span></div></button><div className="log-entry-actions"><StaticResultFlag outcome={entry.outcome} label={resultLabel(entry.outcome, entry.type)} /><button className={`star-control ${isStarred(entry.type, entry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(entry.type, entry.questionId)} disabled={!entry.questionId} aria-label={`${isStarred(entry.type, entry.questionId) ? "Unstar" : "Star"} ${entry.title}`} title="Star this problem"><Icon name="star" /></button><button className={`icon-action solution-control ${reusableSolution ? "solution-available" : ""}`} onClick={() => openEntrySolution(entry)} disabled={!reusableSolution} aria-label={reusableSolution ? `Open reusable solution for ${entry.title}` : `No reusable solution for ${entry.title}`} title={reusableSolution ? "Open reusable solution" : "No reusable solution yet"}><Icon name="book" /></button><button className="icon-action add-practice-control" onClick={() => addEntryToToday(entry)} disabled={!reusableQuestion || Boolean(reusableQuestion && isQuestionBlocked(reusableQuestion, todayBlockedQuestions()))} aria-label={`Add ${entry.title} to Today`} title="Add to Today"><Icon name="plus" /></button></div></article>; })}</div></section>) : <div className="quiet-empty library-empty"><strong>No completed work in this filter yet.</strong><span>Try another filter, or finish an activity to add it to the field journal.</span></div>}
+                {groupedLog.length ? groupedLog.map(([date, entries]) => <section className="log-day" id={`log-date-${date}`} key={date}><header><time>{readableDate(date)}</time><span>{entries.length} record{entries.length === 1 ? "" : "s"} · Pacific day</span></header><div className="log-day-entries">{entries.map((entry) => { const reusableQuestion = bankQuestionForEntry(entry); const reusableSolution = Boolean(reusableQuestion && hasReusableSolution(entry.type, reusableQuestion)); return <article className={`log-entry ${entry.type} ${selectedEntry?.id === entry.id ? "selected" : ""}`} key={entry.id}><button className="log-entry-open" onClick={() => openJournalEntry(entry)} aria-label={`Read ${entry.title}`}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><div className="log-entry-copy"><small>{typeLabel(entry.type)} · {entry.status}{entry.sessionId ? " · session activity" : " · standalone"}</small><strong>{entry.title}</strong>{meaningfulSubtitle(entry.subtitle) && <span>{meaningfulSubtitle(entry.subtitle)}</span>}<div className="entry-badges">{entry.review?.status === "due" && <i className="review-badge due">Due now</i>}{entry.review?.status === "scheduled" && <i className="review-badge">Review {entry.review.dueDate}</i>}{Boolean(entry.personalNote?.trim() || entry.pinnedNotes?.length) && <i className="note-badge">Pinned note</i>}{entry.outcome === "solved" && <i className="independent-badge">Solved</i>}{entry.outcome === "solved_after_reviewing_approach" && <i className="help-badge">Solved with help</i>}{entry.outcome === "failed" && <i className="failure-badge">Failed attempt</i>}</div>{entry.startedAt && <span className="entry-time-range">{formatPracticeTimestamp(entry.startedAt, true)} → {entry.endedAt ? formatPracticeTimestamp(entry.endedAt, true) : "Paused"}</span>}</div><div className="log-entry-meta"><strong>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "—"}</strong><span>{entry.artifact ? "Published record" : entry.status}</span></div></button><div className="log-entry-actions"><StaticResultFlag outcome={entry.outcome} label={resultLabel(entry.outcome, entry.type)} /><button className={`star-control ${isStarred(entry.type, entry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(entry.type, entry.questionId)} disabled={!entry.questionId} aria-label={`${isStarred(entry.type, entry.questionId) ? "Unstar" : "Star"} ${entry.title}`} title="Star this problem"><Icon name="star" /></button><button className={`icon-action solution-control ${reusableSolution ? "solution-available" : ""}`} onClick={() => openEntrySolution(entry)} disabled={!reusableSolution} aria-label={reusableSolution ? `Open reusable solution for ${entry.title}` : `No reusable solution for ${entry.title}`} title={reusableSolution ? "Open reusable solution" : "No reusable solution yet"}><Icon name="book" /></button><button className="icon-action add-practice-control" onClick={() => addEntryToToday(entry)} disabled={!reusableQuestion || Boolean(reusableQuestion && isQuestionBlocked(reusableQuestion, todayBlockedQuestions()))} aria-label={`Add ${entry.title} to Today`} title="Add to Today"><Icon name="plus" /></button></div></article>; })}</div></section>) : <div className="quiet-empty library-empty"><strong>No completed work in this filter yet.</strong><span>Try another filter, or finish an activity to add it to the field journal.</span></div>}
               </div>
               <aside className="log-calendar"><span className="eyebrow">JUMP TO A DAY</span><h2>{new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${journal.date}T12:00:00Z`))}</h2><div className="calendar-week"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div><div className="calendar-mini">{calendarDays.map((day) => day.hasEntries ? <button key={day.key} onClick={() => scrollToLogDate(day.key)} title={`Jump to ${day.key}`}>{day.day}<i /></button> : <span key={day.key}>{day.day}</span>)}</div><div className="calendar-dates">{groupedLog.map(([date]) => <button key={date} onClick={() => scrollToLogDate(date)}>{readableDate(date, true)} <span>↘</span></button>)}</div></aside>
             </div>
@@ -3350,7 +3365,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     };
     const activeSort = sortOptions.find((option) => option.key === bankSortKey) ?? sortOptions[0];
     return (
-      <section className={`view-page banks-page ${selectedProblem ? "has-open-solution" : ""}`}>
+      <section className={`view-page banks-page ${selectedProblem ? "has-open-solution" : ""} ${listRestoring === "banks" ? "list-restoring" : ""}`}>
         <header className="view-masthead banks-masthead"><span className="eyebrow">PROBLEM BANKS · ALL PRACTICE SOURCES</span><h1>Choose the next thing<br /><em>worth practicing.</em></h1><div className="banks-masthead-meta"><p>Browse every coding, system-design, and behavioral prompt in one place. “Practice today” adds the question to standalone practice and takes you directly to Today.</p><div className="bank-progress-meter" style={{ background: `conic-gradient(var(--signal-dark) ${finishedPercent}%, #e4e9e1 ${finishedPercent}% 100%)` }} aria-label={`${finishedCount} of ${bankEntries.length} problems finished`}><span><strong>{finishedCount}</strong><small>of {bankEntries.length}</small></span></div></div></header>
         <div className="bank-totals" aria-label="Question bank totals">
           <article className="leetcode"><strong>{bankFor("leetcode").length}</strong><span>Coding problems</span></article>
@@ -3948,18 +3963,21 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         return;
       }
       if (view === "library") {
-        window.sessionStorage.removeItem("interview-arc-selected-past");
-        setSelectedEntry(null);
         const position = listPositionMemoryRef.current.library;
-        restoreListPosition("library", position.pageScrollTop, position.listScrollTop);
+        window.sessionStorage.removeItem("interview-arc-selected-past");
+        pendingListRestoreRef.current = { surface: "library", ...position };
+        setListRestoring("library");
+        setSelectedEntry(null);
+        setReaderClosing(false);
       }
       if (view === "banks") {
-        window.sessionStorage.removeItem("interview-arc-selected-bank");
-        setSelectedProblem(null);
         const position = listPositionMemoryRef.current.banks;
-        restoreListPosition("banks", position.pageScrollTop, position.listScrollTop);
+        window.sessionStorage.removeItem("interview-arc-selected-bank");
+        pendingListRestoreRef.current = { surface: "banks", ...position };
+        setListRestoring("banks");
+        setSelectedProblem(null);
+        setReaderClosing(false);
       }
-      setReaderClosing(false);
       readerCloseTimerRef.current = null;
     };
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -4023,16 +4041,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const session = "sessionId" in lifecycleDialog
       ? allSessions.find((candidate) => candidate.id === lifecycleDialog.sessionId)
       : undefined;
-    const activity = lifecycleDialog.kind === "activity-result"
-      ? allTodayActivities.find((candidate) => candidate.id === lifecycleDialog.activityId)
-      : undefined;
-    const content = lifecycleDialog.kind === "activity-result"
-      ? {
-        eyebrow: "RESULT REQUIRED",
-        title: "Choose a result first",
-        description: `${activity?.title ?? "This activity"} cannot be finished until you mark it Solved, Solved with help, or Failed.`,
-      }
-      : lifecycleDialog.kind === "session-results"
+    const content = lifecycleDialog.kind === "session-results"
         ? {
           eyebrow: "RESULTS REQUIRED",
           title: "Finish the missing results",
