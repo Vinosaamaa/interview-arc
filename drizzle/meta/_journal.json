@@ -71,6 +71,13 @@
       "when": 1784768308914,
       "tag": "0009_left_spyke",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1784784000000,
+      "tag": "0010_highlight_notes",
+      "breakpoints": true
     }
   ]
 }

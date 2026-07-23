@@ -114,7 +114,11 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /highlightRangesRef = useRef\(new Map<string, Range\[\]>\(\)\)/);
   assert.match(client, /interview-arc-note-yellow/);
   assert.match(client, /Remove highlight/);
-  assert.match(client, /defaultOpen={group.key !== "conversation"}/);
+  assert.match(client, /readerGroupOpen\(groupId, group\.key !== "conversation"\)/);
+  assert.match(client, /interview-arc-reader-memory-v1/);
+  assert.match(client, /workspace-drawer-toggle/);
+  assert.match(client, /answer-player-unified/);
+  assert.match(client, /problem-bank-entry.*role="button" tabIndex=\{0\} aria-label=/);
   assert.match(client, /function ReaderOutline/);
   assert.match(client, /setEveryReaderGroup\(false\)/);
   assert.match(client, /setEveryReaderGroup\(true\)/);
