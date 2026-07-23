@@ -72,6 +72,8 @@ export type LiveState = {
   personalQuestions: unknown[];
   extraActivities: unknown[];
   sessions: unknown[];
+  historyActivities: unknown[];
+  historySessions: unknown[];
   focusedActivityId: string | null;
   focusedSessionId: string | null;
   focusedAt: number | null;
@@ -177,22 +179,24 @@ export async function readLiveState(
     : extraRows.filter((row) => row.workbenchId === workbench.id);
   const allActivities = workbenchExtraRows.map((row: ExtraActivityRow) => row.payload as ActivityPayload);
   const visibleActivities = allActivities;
-  const visibleActivityIds = new Set(visibleActivities.map((activity) => activity.id));
-  const durable = await readDurablePracticeSummary(ownerId, [...visibleActivityIds], date);
+  const historySessions = sessionRows.map((row: LiveSessionRow) => row.payload as SessionPayload);
+  const historyActivities = extraRows.map((row: ExtraActivityRow) => row.payload as ActivityPayload);
+  const historyActivityIds = new Set(historyActivities.map((activity) => activity.id));
+  const durable = await readDurablePracticeSummary(ownerId, [...historyActivityIds], date);
 
   const outcomeMap: Record<string, OutcomeValue> = {};
   for (const row of outcomeRows) outcomeMap[row.activityId] = row.outcome as OutcomeValue;
 
   const publicationMap: Record<string, PublicationStatusValue> = {};
   for (const row of publicationRows) {
-    if (options.includeAll || row.date === date || visibleActivityIds.has(row.activityId)) {
+    if (options.includeAll || row.date === date || historyActivityIds.has(row.activityId)) {
       publicationMap[row.activityId] = row.status as PublicationStatusValue;
     }
   }
 
   const noteMap: Record<string, string> = {};
   for (const row of noteRows) {
-    if (options.includeAll || row.date === date || visibleActivityIds.has(row.activityId)) noteMap[row.activityId] = row.note;
+    if (options.includeAll || row.date === date || historyActivityIds.has(row.activityId)) noteMap[row.activityId] = row.note;
   }
 
   const focus = focusRows[0];
@@ -242,6 +246,8 @@ export async function readLiveState(
     personalQuestions: durable.personalQuestions,
     extraActivities: visibleActivities,
     sessions: visibleSessions,
+    historyActivities,
+    historySessions,
     focusedActivityId: focus?.activityId ?? null,
     focusedSessionId: focus?.sessionId ?? null,
     focusedAt: focus?.focusedAt ?? null,
@@ -316,6 +322,16 @@ export async function applyTimerAction(
   // Finished timers are locked permanently and never resume.
   if (existing?.completed) return toTimerState(existing);
 
+  if (action === "finish" && kind === "activity") {
+    const result = await db
+      .select()
+      .from(outcomes)
+      .where(and(eq(outcomes.ownerId, ownerId), eq(outcomes.activityId, subjectId)));
+    if (!result[0]) {
+      throw new TimerStateConflictError("Choose Solved, Solved with help, or Failed before finishing this activity.");
+    }
+  }
+
   if (action === "start" && kind === "activity" && options.sessionId) {
     const parent = await loadTimer(db, ownerId, options.sessionId, "session");
     if (parent?.completed) {
@@ -333,8 +349,27 @@ export async function applyTimerAction(
     }
   }
 
-  if (action === "finish" && kind === "session" && options.activityIds?.length) {
-    for (const activityId of options.activityIds) {
+  if (action === "finish" && kind === "session") {
+    const sessionRows = await db
+      .select()
+      .from(liveSessions)
+      .where(and(eq(liveSessions.ownerId, ownerId), eq(liveSessions.id, subjectId)));
+    const storedSession = sessionRows[0]?.payload as SessionPayload | undefined;
+    const activityIds = storedSession?.activityIds ?? [];
+    const missingResults: string[] = [];
+    for (const activityId of activityIds) {
+      const child = await loadTimer(db, ownerId, activityId, "activity");
+      if (!child?.startedAt) continue;
+      const result = await db
+        .select()
+        .from(outcomes)
+        .where(and(eq(outcomes.ownerId, ownerId), eq(outcomes.activityId, activityId)));
+      if (!result[0]) missingResults.push(activityId);
+    }
+    if (missingResults.length) {
+      throw new TimerStateConflictError(`Choose a result for ${missingResults.length === 1 ? "the started activity" : "every started activity"} before finishing this session.`);
+    }
+    for (const activityId of activityIds) {
       const child = await loadTimer(db, ownerId, activityId, "activity");
       if (child?.startedAt && !child.completed) {
         await applyTimerAction(ownerId, activityId, "activity", "finish", nowMs);
@@ -557,6 +592,17 @@ export async function setOutcome(
   nowMs: number,
 ) {
   const db = getDb();
+  const timer = await loadTimer(db, ownerId, activityId, "activity");
+  if (!timer?.startedAt) {
+    throw new TimerStateConflictError("Start the activity stopwatch before choosing a result.");
+  }
+  const publication = await db
+    .select()
+    .from(publicationStatuses)
+    .where(and(eq(publicationStatuses.ownerId, ownerId), eq(publicationStatuses.activityId, activityId)));
+  if (publication[0]?.status === "published") {
+    throw new TimerStateConflictError("Published results are read-only.");
+  }
   if (!outcome) {
     await db.delete(outcomes).where(and(eq(outcomes.ownerId, ownerId), eq(outcomes.activityId, activityId)));
     return;
@@ -579,6 +625,17 @@ export async function setPublicationStatus(
   artifactPath?: string | null,
 ) {
   const db = getDb();
+  if (status === "published") {
+    const [timer, result] = await Promise.all([
+      loadTimer(db, ownerId, activityId, "activity"),
+      db.select().from(outcomes).where(and(eq(outcomes.ownerId, ownerId), eq(outcomes.activityId, activityId))),
+    ]);
+    if (!timer?.startedAt || !timer.completed || !result[0]?.outcome) {
+      throw new TimerStateConflictError(
+        "Publication requires a finished activity with an explicit result.",
+      );
+    }
+  }
   await db
     .insert(publicationStatuses)
     .values({
@@ -648,6 +705,47 @@ export async function upsertExtraActivity(
 
 export async function removeExtraActivity(ownerId: string, id: string) {
   const db = getDb();
+  const [
+    timer,
+    result,
+    publication,
+    transcript,
+    finalization,
+    audio,
+    notes,
+    delivery,
+    reviews,
+    intervals,
+  ] = await Promise.all([
+    loadTimer(db, ownerId, id, "activity"),
+    db.select().from(outcomes).where(and(eq(outcomes.ownerId, ownerId), eq(outcomes.activityId, id))),
+    db.select().from(publicationStatuses).where(and(eq(publicationStatuses.ownerId, ownerId), eq(publicationStatuses.activityId, id))),
+    db.select().from(practiceTranscriptTurns).where(and(eq(practiceTranscriptTurns.ownerId, ownerId), eq(practiceTranscriptTurns.activityId, id))),
+    db.select().from(activityFinalizations).where(and(eq(activityFinalizations.ownerId, ownerId), eq(activityFinalizations.activityId, id))),
+    db.select().from(activityAudioClips).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.activityId, id))),
+    db.select().from(practiceNotes).where(and(eq(practiceNotes.ownerId, ownerId), eq(practiceNotes.activityId, id))),
+    db.select().from(activityDeliveryAnalyses).where(and(eq(activityDeliveryAnalyses.ownerId, ownerId), eq(activityDeliveryAnalyses.activityId, id))),
+    db.select().from(reviewSchedules).where(and(eq(reviewSchedules.ownerId, ownerId), eq(reviewSchedules.activityId, id))),
+    db.select().from(timerIntervals).where(and(
+      eq(timerIntervals.ownerId, ownerId),
+      eq(timerIntervals.subjectId, id),
+      eq(timerIntervals.kind, "activity"),
+    )),
+  ]);
+  if (
+    timer?.startedAt ||
+    result.length ||
+    publication.length ||
+    transcript.length ||
+    finalization.length ||
+    audio.length ||
+    notes.length ||
+    delivery.length ||
+    reviews.length ||
+    intervals.length
+  ) {
+    throw new TimerStateConflictError("Only an untouched activity can be removed. Started work stays in your history.");
+  }
   await db.delete(extraActivities).where(and(eq(extraActivities.ownerId, ownerId), eq(extraActivities.id, id)));
   await db.delete(outcomes).where(and(eq(outcomes.ownerId, ownerId), eq(outcomes.activityId, id)));
   await db.delete(publicationStatuses).where(and(eq(publicationStatuses.ownerId, ownerId), eq(publicationStatuses.activityId, id)));
@@ -710,6 +808,21 @@ export async function startFreshWorkbench(
     )),
   ]);
 
+  const missingResults: string[] = [];
+  for (const row of activityRows) {
+    const timer = await loadTimer(db, ownerId, row.id, "activity");
+    if (timer?.startedAt) {
+      const result = await db
+        .select()
+        .from(outcomes)
+        .where(and(eq(outcomes.ownerId, ownerId), eq(outcomes.activityId, row.id)));
+      if (!result[0]) missingResults.push(row.id);
+    }
+  }
+  if (missingResults.length) {
+    throw new TimerStateConflictError(`Choose a result for ${missingResults.length === 1 ? "the started activity" : "every started activity"} before starting a fresh day.`);
+  }
+
   for (const row of activityRows) {
     const timer = await loadTimer(db, ownerId, row.id, "activity");
     if (timer?.startedAt && !timer.completed) {
@@ -747,8 +860,46 @@ export async function startFreshWorkbench(
   return { id, status: "open" as const, openedPacificDate: date, openedAt: nowMs, closedAt: null };
 }
 
-export async function removeLiveSession(ownerId: string, id: string, activityIds: string[]) {
+export async function rolloverPublishedWorkbench(ownerId: string, date: string, nowMs: number) {
   const db = getDb();
+  const current = await ensureOpenWorkbench(ownerId, date, nowMs);
+  const activityRows = await db.select().from(extraActivities).where(and(
+    eq(extraActivities.ownerId, ownerId),
+    eq(extraActivities.workbenchId, current.id),
+  ));
+  const startedIds: string[] = [];
+  for (const row of activityRows) {
+    const timer = await loadTimer(db, ownerId, row.id, "activity");
+    if (!timer?.startedAt) continue;
+    if (!timer.completed) return false;
+    const result = await db.select().from(outcomes).where(and(eq(outcomes.ownerId, ownerId), eq(outcomes.activityId, row.id)));
+    const publication = await db.select().from(publicationStatuses).where(and(eq(publicationStatuses.ownerId, ownerId), eq(publicationStatuses.activityId, row.id)));
+    if (!result[0] || publication[0]?.status !== "published") return false;
+    startedIds.push(row.id);
+  }
+  if (!startedIds.length) return false;
+  await startFreshWorkbench(ownerId, date, nowMs);
+  return true;
+}
+
+export async function removeLiveSession(ownerId: string, id: string) {
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(liveSessions)
+    .where(and(eq(liveSessions.ownerId, ownerId), eq(liveSessions.id, id)));
+  const session = rows[0]?.payload as SessionPayload | undefined;
+  if (!session) return;
+  const sessionTimer = await loadTimer(db, ownerId, id, "session");
+  if (sessionTimer?.startedAt) {
+    throw new TimerStateConflictError("Only an untouched session can be removed. Started work stays in your history.");
+  }
+  for (const activityId of session.activityIds) {
+    const child = await loadTimer(db, ownerId, activityId, "activity");
+    if (child?.startedAt) {
+      throw new TimerStateConflictError("Only an untouched session can be removed. Started work stays in your history.");
+    }
+  }
   await db.delete(liveSessions).where(and(eq(liveSessions.ownerId, ownerId), eq(liveSessions.id, id)));
   await db.delete(timers).where(and(eq(timers.ownerId, ownerId), eq(timers.subjectId, id), eq(timers.kind, "session")));
   await db.delete(timerIntervals).where(and(eq(timerIntervals.ownerId, ownerId), eq(timerIntervals.subjectId, id), eq(timerIntervals.kind, "session")));
@@ -756,7 +907,7 @@ export async function removeLiveSession(ownerId: string, id: string, activityIds
     .update(practiceFocus)
     .set({ sessionId: null, updatedAt: Date.now() })
     .where(and(eq(practiceFocus.ownerId, ownerId), eq(practiceFocus.sessionId, id)));
-  for (const activityId of activityIds) {
+  for (const activityId of session.activityIds) {
     await removeExtraActivity(ownerId, activityId);
   }
 }

@@ -168,6 +168,8 @@ export type LocalDraft = {
   personalQuestions: PersonalQuestion[];
   extraActivities: ExtraActivity[];
   sessions: LocalSession[];
+  historyActivities: ExtraActivity[];
+  historySessions: LocalSession[];
   focusedActivityId: string | null;
   focusedSessionId: string | null;
   focusedAt: number | null;
@@ -206,6 +208,8 @@ export const EMPTY_DRAFT: LocalDraft = {
   personalQuestions: [],
   extraActivities: [],
   sessions: [],
+  historyActivities: [],
+  historySessions: [],
   focusedActivityId: null,
   focusedSessionId: null,
   focusedAt: null,

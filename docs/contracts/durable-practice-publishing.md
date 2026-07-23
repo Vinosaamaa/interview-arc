@@ -44,14 +44,24 @@ its publishable rows are marked published.
 
 - `Start fresh day` archives the current workbench and opens a new durable
   `workbench_id`.
-- Started timers close at the confirmation time; elapsed time and explicit
-  outcomes are preserved. Never-started activities remain not attempted and do
-  not enter the publication queue.
+- Starting an activity stopwatch creates an attempt. A started activity must
+  receive an explicit **Solved**, **Solved with help**, or **Failed** result
+  before its activity timer, parent session, workbench, or publication cycle
+  can finish. Interview Arc never assigns a result automatically.
+- Started timers with explicit results close at the confirmation time; elapsed
+  time and outcomes are preserved. Never-started activities remain not
+  attempted, return to the selection pool, and do not enter the publication
+  queue.
 - Archived ready work stays discoverable through the undated publication
-  queue. Starting fresh never marks an activity published and never loses
-  pending work.
-- Today hides published rows immediately. A session disappears when all of its
-  publishable activities are published.
+  queue and in Past. Starting fresh never marks an activity published and never
+  loses pending work.
+- A completed publication cycle archives the current workbench and opens a new
+  empty one once every started activity in that workbench is published.
+  Never-started questions return to the pool.
+- A finished session permanently locks all child timer controls. Unpublished
+  result flags remain correctable; published result flags are read-only.
+- Session and activity removal is allowed only before any timer, result,
+  transcript, recording, finalization, or publication evidence exists.
 
 ## Solution Profile Preflight
 

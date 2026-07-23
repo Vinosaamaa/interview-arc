@@ -1411,14 +1411,111 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .page-enter-forward { animation: page-enter-forward .22s cubic-bezier(.2,.8,.2,1) both; }
 .page-enter-backward { animation: page-enter-backward .22s cubic-bezier(.2,.8,.2,1) both; }
 @keyframes page-enter-forward {
-  from { opacity: 0; transform: translateX(10px); }
-  to { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 @keyframes page-enter-backward {
-  from { opacity: 0; transform: translateX(-10px); }
-  to { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @media (max-width: 760px) {
   .confirmation-actions { display: grid; grid-template-columns: 1fr; }
+}
+
+/* Durable workbench validation --------------------------------------------- */
+.result-flag:disabled { opacity: .38; cursor: not-allowed; }
+.result-flag-wrap.result-required { z-index: 18; }
+.result-flag-wrap.result-required .result-flag { border-color: #bd5b52; box-shadow: 0 0 0 3px rgba(189,91,82,.14); }
+.required-result-choices {
+  width: 190px;
+  padding: 9px;
+  border: 1px solid #d8b2aa;
+  border-radius: 10px;
+  background: #fffdfa;
+  box-shadow: 0 16px 38px rgba(61,35,29,.18);
+  display: grid;
+  gap: 5px;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+}
+.required-result-choices strong { padding: 2px 5px 5px; color: #71453d; font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; }
+.required-result-choices button { min-height: 34px; padding: 0 9px; border: 1px solid #ddc7c1; border-radius: 7px; background: white; color: #3e4d48; text-align: left; cursor: pointer; }
+.required-result-choices button:hover { border-color: #a75a50; background: #fff3ef; }
+
+/* Stable history lists ----------------------------------------------------- */
+.journal-entry.log-entry,
+.problem-bank-entry { min-height: 150px; }
+.journal-entry .log-entry-open,
+.library-page.has-open-entry .log-entry-open,
+.banks-page.has-open-solution .problem-bank-entry { min-height: 150px; }
+.log-entry-actions,
+.bank-entry-actions { display: grid; grid-template-columns: repeat(2, 38px); gap: 6px; }
+.journal-feed,
+.library-page.has-open-entry .dated-log { gap: 0; }
+.journal-day.log-day + .journal-day { margin-top: 8px; }
+.library-page.has-open-entry .log-day + .log-day { margin-top: 8px; }
+.static-result-flag,
+.star-control,
+.log-entry-actions .icon-action,
+.bank-entry-actions .icon-action { border-radius: 8px; }
+
+/* Reader history and centered workspace ----------------------------------- */
+.reader-history-action { font-family: var(--font-geist-mono); font-size: .9rem; }
+.reader-history-action:disabled { opacity: .3; cursor: not-allowed; }
+.library-page.has-open-entry .past-master-detail,
+.banks-page.has-open-solution .bank-master-detail {
+  top: 88px;
+  height: calc(100vh - 104px);
+}
+
+/* Long-form highlight notes ------------------------------------------------ */
+.highlight-note-card.tone-0 { background: #fff2f1; border-color: #efd3cf; }
+.highlight-note-card.expanded > p { display: block; overflow: visible; }
+.highlight-note-expand {
+  width: fit-content;
+  min-height: 28px;
+  margin-top: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #176b5e;
+  font-size: .7rem;
+  font-weight: 760;
+  cursor: pointer;
+}
+.long-note-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  padding: 32px;
+  background: rgba(13,38,34,.48);
+  display: grid;
+  place-items: center;
+}
+.long-note-inspector {
+  width: min(780px, calc(100vw - 48px));
+  max-height: min(760px, calc(100vh - 64px));
+  padding: 24px 28px 30px;
+  border: 1px solid #c8d8d3;
+  border-radius: 16px;
+  background: #fffefb;
+  box-shadow: 0 28px 90px rgba(9,33,29,.3);
+  overflow-y: auto;
+}
+.long-note-inspector > header { margin-bottom: 20px; display: flex; align-items: start; justify-content: space-between; gap: 18px; }
+.long-note-inspector > header div { display: grid; gap: 3px; }
+.long-note-inspector > header span { color: #173d38; font-family: var(--font-newsreader); font-size: 1.5rem; font-weight: 650; }
+.long-note-inspector > header time { color: #71827d; font-family: var(--font-geist-mono); font-size: .7rem; }
+.long-note-inspector > p { margin: 0; color: #304a44; font-size: 1rem; line-height: 1.75; white-space: pre-wrap; }
+
+@media (max-width: 760px) {
+  .journal-entry.log-entry,
+  .problem-bank-entry,
+  .journal-entry .log-entry-open,
+  .library-page.has-open-entry .log-entry-open,
+  .banks-page.has-open-solution .problem-bank-entry { min-height: auto; }
+  .long-note-backdrop { padding: 0; }
+  .long-note-inspector { width: 100%; height: 100%; max-height: none; border: 0; border-radius: 0; }
 }

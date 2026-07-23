@@ -51,6 +51,8 @@ type ServerLiveState = {
   personalQuestions: PersonalQuestion[];
   extraActivities: ExtraActivity[];
   sessions: LocalSession[];
+  historyActivities: ExtraActivity[];
+  historySessions: LocalSession[];
   focusedActivityId: string | null;
   focusedSessionId: string | null;
   focusedAt: number | null;
@@ -138,6 +140,8 @@ function serverToDraft(state: ServerLiveState, offset: number, date = ""): Local
     personalQuestions: state.personalQuestions ?? [],
     extraActivities: state.extraActivities ?? [],
     sessions: (state.sessions ?? []).map((session) => ({ ...session, date: session.date ?? date })),
+    historyActivities: state.historyActivities ?? state.extraActivities ?? [],
+    historySessions: (state.historySessions ?? state.sessions ?? []).map((session) => ({ ...session, date: session.date ?? date })),
     focusedActivityId: state.focusedActivityId ?? null,
     focusedSessionId: state.focusedSessionId ?? null,
     focusedAt: state.focusedAt,
@@ -185,6 +189,8 @@ function mergeDrafts(server: LocalDraft, local: LocalDraft) {
       ...local.sessions.filter((session) => !serverSessionIds.has(session.id)),
       ...server.sessions,
     ],
+    historyActivities: server.historyActivities,
+    historySessions: server.historySessions,
     focusedActivityId: server.focusedActivityId ?? local.focusedActivityId,
     focusedSessionId: server.focusedSessionId ?? local.focusedSessionId,
     focusedAt: server.focusedAt ?? local.focusedAt,
@@ -216,6 +222,8 @@ function readDraft(date: string): LocalDraft {
       personalQuestions: parsed.personalQuestions ?? [],
       extraActivities: parsed.extraActivities ?? [],
       sessions: (parsed.sessions ?? []).map((session) => ({ ...session, date: session.date ?? date })),
+      historyActivities: parsed.historyActivities ?? parsed.extraActivities ?? [],
+      historySessions: (parsed.historySessions ?? parsed.sessions ?? []).map((session) => ({ ...session, date: session.date ?? date })),
       focusedActivityId: parsed.focusedActivityId ?? null,
       focusedSessionId: parsed.focusedSessionId ?? null,
       focusedAt: parsed.focusedAt ?? null,
