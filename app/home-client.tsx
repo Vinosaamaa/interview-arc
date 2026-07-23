@@ -1156,6 +1156,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const pastListRef = useRef<HTMLDivElement>(null);
   const bankListRef = useRef<HTMLDivElement>(null);
   const pendingListRestoreRef = useRef<(ListPosition & { surface: ListSurface }) | null>(null);
+  const pendingSelectedRevealRef = useRef<ListSurface | null>(null);
   const listPositionMemoryRef = useRef<Record<ListSurface, ListPosition>>({
     library: { pageScrollTop: 0, listScrollTop: 0 },
     banks: { pageScrollTop: 0, listScrollTop: 0 },
@@ -1226,8 +1227,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       }
     }
     pendingListRestoreRef.current = null;
-    const frame = window.requestAnimationFrame(() => setListRestoring(null));
-    return () => window.cancelAnimationFrame(frame);
+    setListRestoring(null);
   }, [listRestoring]);
 
   useLayoutEffect(() => {
@@ -1237,7 +1237,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       : view === "banks" && selectedProblem
         ? "banks"
         : null;
-    if (!surface) return;
+    if (!surface || pendingSelectedRevealRef.current !== surface) return;
+    pendingSelectedRevealRef.current = null;
     const list = surface === "library" ? pastListRef.current : bankListRef.current;
     const itemId = surface === "library"
       ? `library:${selectedEntry!.id}`
@@ -1977,7 +1978,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       window.clearTimeout(readerCloseTimerRef.current);
       readerCloseTimerRef.current = null;
     }
+    const openingReader = view !== "library" || !selectedEntry;
     if (view === "library" && !selectedEntry) captureListPosition("library");
+    if (openingReader) pendingSelectedRevealRef.current = "library";
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 1976px)").matches) setMasterPaneOpen(false);
     setReaderFocusMode(false);
     setReaderClosing(false);
@@ -1991,10 +1994,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function toggleMasterPane() {
     if (readerFocusMode) {
+      if (view === "library" || view === "banks") pendingSelectedRevealRef.current = view;
       setReaderFocusMode(false);
       setMasterPaneOpen(true);
       return;
     }
+    if (!masterPaneOpen && (view === "library" || view === "banks")) pendingSelectedRevealRef.current = view;
     setMasterPaneOpen((current) => !current);
   }
 
@@ -2050,7 +2055,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       window.clearTimeout(readerCloseTimerRef.current);
       readerCloseTimerRef.current = null;
     }
+    const openingReader = view !== "banks" || !selectedProblem;
     if (view === "banks" && !selectedProblem) captureListPosition("banks");
+    if (openingReader) pendingSelectedRevealRef.current = "banks";
     closeMasterAfterSelection();
     setReaderFocusMode(false);
     setReaderClosing(false);
@@ -4056,7 +4063,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       return;
     }
     setReaderClosing(true);
-    readerCloseTimerRef.current = window.setTimeout(finishClose, 230);
+    readerCloseTimerRef.current = window.setTimeout(finishClose, 190);
   }
 
   function renderCaseReader() {
