@@ -241,6 +241,7 @@ async function companionState(ownerId: string, request: Request) {
 async function companionMutation(ownerId: string, request: Request) {
   const body = (await request.json()) as {
     date?: string;
+    url?: string;
     mutation?:
       | { type: "timer"; activityId: string; action: TimerAction }
       | { type: "outcome"; activityId: string; outcome: OutcomeValue | null }
@@ -249,6 +250,7 @@ async function companionMutation(ownerId: string, request: Request) {
       | { type: "add-leetcode"; url: string };
   };
   const date = body.date ?? dateInPracticeTimeZone();
+  const problemUrl = normalizeLeetCodeUrl(body.url ?? "");
   const mutation = body.mutation;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !mutation) {
     return json(request, { error: "A valid date and mutation are required." }, { status: 400 });
@@ -351,7 +353,10 @@ async function companionMutation(ownerId: string, request: Request) {
       ...(known?.topics.length ? { notes: known.topics.join(", ") } : {}),
     }, now);
   }
-  return companionState(ownerId, new Request(new URL(`/companion/state?date=${date}`, request.url), {
+  const responseUrl = new URL("/companion/state", request.url);
+  responseUrl.searchParams.set("date", date);
+  if (problemUrl) responseUrl.searchParams.set("url", problemUrl);
+  return companionState(ownerId, new Request(responseUrl, {
     headers: request.headers,
   }));
 }

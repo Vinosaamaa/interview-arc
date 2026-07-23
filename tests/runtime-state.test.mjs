@@ -142,7 +142,10 @@ test("workbench lifecycle requires explicit results and preserves archived attem
   assert.match(snapshot, /live\.historySessions as PracticeSession\[\]/);
   assert.match(client, /requiredResultIds/);
   assert.match(client, /draft\.historyActivities/);
-  assert.match(client, /Only an untouched session can be removed/);
+  assert.match(client, /This session contains started or completed work and cannot be removed/);
+  assert.match(client, /kind: "finish-session"/);
+  assert.match(client, /className="confirmation-dialog lifecycle-dialog"/);
+  assert.doesNotMatch(client, /window\.confirm/);
 });
 
 test("daily checkpoint guard recognizes only journal-owned changes", () => {
@@ -365,5 +368,15 @@ test("the Chrome companion follows live Interview Arc focus and public LeetCode 
   assert.match(sidePanel, /window\.setInterval\(\(\) => \{/);
   assert.match(sidePanel, /if \(context\.problemUrl\) query\.set\("url", context\.problemUrl\)/);
   assert.match(sidePanel, /chrome\.tabs\.create\(\{ url \}\)/);
+  assert.match(sidePanel, /if \(refreshPromise\) \{\s*refreshQueued = true;\s*return refreshPromise;/);
+  assert.match(sidePanel, /const nextState = await api\("\/companion\/mutations"/);
+  assert.match(sidePanel, /applyCompanionState\(nextState, context\)/);
+  const mutationImplementation = sidePanel.slice(
+    sidePanel.indexOf("function mutate("),
+    sidePanel.indexOf('elements["connect-button"]'),
+  );
+  assert.doesNotMatch(mutationImplementation, /await refresh\(\)/);
+  assert.match(sidePanel, /optimisticTimer\(action\)/);
+  assert.match(mcpWorker, /responseUrl\.searchParams\.set\("url", problemUrl\)/);
   assert.match(mcpWorker, /activeCodingActivity \?\? focusedCodingActivity/);
 });
