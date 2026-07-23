@@ -86,7 +86,8 @@ test("result flags stay separate from timer completion and publication readiness
   const mutationRoute = await readFile(new URL("../app/api/mutations/route.ts", import.meta.url), "utf8");
   const setOutcomeBody = liveState.slice(liveState.indexOf("export async function setOutcome"), liveState.indexOf("export async function setPublicationStatus"));
   assert.doesNotMatch(setOutcomeBody, /applyTimerAction|setPracticeFocus/);
-  assert.doesNotMatch(snapshot, /Boolean\(outcome\)/);
+  assert.match(snapshot, /publicationStatus === "ready" && Boolean\(activity\.outcome\)/);
+  assert.match(snapshot, /publicationStatus !== "ready" \|\| !outcome/);
   assert.match(mutationRoute, /Start the .* before finishing it/);
 });
 
@@ -122,6 +123,26 @@ test("a finished parent session locks every child activity timer", async () => {
   assert.match(liveState, /TimerStateConflictError/);
   assert.match(mutationRoute, /error instanceof TimerStateConflictError/);
   assert.match(mutationRoute, /retryable: false/);
+});
+
+test("workbench lifecycle requires explicit results and preserves archived attempts", async () => {
+  const client = await readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8");
+  const liveState = await readFile(new URL("../db/live-state.ts", import.meta.url), "utf8");
+  const liveSync = await readFile(new URL("../app/live-sync.ts", import.meta.url), "utf8");
+  const snapshot = await readFile(new URL("../db/practice-snapshot.ts", import.meta.url), "utf8");
+
+  assert.match(liveState, /Choose Solved, Solved with help, or Failed before finishing this activity/);
+  assert.match(liveState, /Choose a result for .*before starting a fresh day/);
+  assert.match(liveState, /Published results are read-only/);
+  assert.match(liveState, /Only an untouched activity can be removed/);
+  assert.match(liveState, /const historyActivities = extraRows/);
+  assert.match(liveState, /export async function rolloverPublishedWorkbench/);
+  assert.match(liveSync, /historyActivities: state\.historyActivities/);
+  assert.match(snapshot, /live\.historyActivities as JournalActivity\[\]/);
+  assert.match(snapshot, /live\.historySessions as PracticeSession\[\]/);
+  assert.match(client, /requiredResultIds/);
+  assert.match(client, /draft\.historyActivities/);
+  assert.match(client, /Only an untouched session can be removed/);
 });
 
 test("daily checkpoint guard recognizes only journal-owned changes", () => {

@@ -21,6 +21,14 @@ Before editing website code, read `../docs/agents/website.md` and the shared con
 - Treat only a finished, previously started activity stopwatch as publication-ready automatically. A selected result is metadata and never completes or queues work by itself.
   Keep `ready` as the agent-queue enum and set `published` only after an artifact
   exists; do not require a second manual queue action.
+- Require an explicit result before an activity, its parent session, a fresh
+  workbench rollover, or publication can complete. Never infer Failed. A
+  finished parent session permanently locks child timers, while unpublished
+  result flags remain correctable.
+- Preserve completed current and archived workbench activities in Past and
+  Journey. Starting fresh clears Today only; it never deletes recorded work.
+- Permit removal only for wholly untouched sessions and activities. Derive
+  session membership from D1 rather than trusting client-supplied child IDs.
 - Keep Problem Banks question-type filters independent from review, result,
   notes, difficulty, tag, and starred filters.
 - Present result flags consistently as **Solved**, **Solved with help**, and

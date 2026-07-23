@@ -9,6 +9,7 @@ import {
   setActivityNote,
   setOutcome,
   setPublicationStatus,
+  rolloverPublishedWorkbench,
   upsertExtraActivity,
   type OutcomeValue,
   type PublicationStatusValue,
@@ -776,9 +777,10 @@ function createServer(ownerId: string) {
         await setPublicationStatus(ownerId, activity.activityId, date, "published", now, activity.artifactPath);
         await markFinalizationPublished(ownerId, activity.activityId, now);
       }
+      const workbenchRolledOver = await rolloverPublishedWorkbench(ownerId, dateInPracticeTimeZone(now), now);
       return {
         content: [{ type: "text", text: `Marked ${activities.length} activit${activities.length === 1 ? "y" : "ies"} published.` }],
-        structuredContent: { date, published: activities },
+        structuredContent: { date, published: activities, workbenchRolledOver },
       };
     },
   );

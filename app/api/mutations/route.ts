@@ -37,7 +37,7 @@ type Mutation =
   | { type: "extra-upsert"; activity: { id: string; date: string } & Record<string, unknown> }
   | { type: "extra-remove"; id: string }
   | { type: "session-upsert"; session: { id: string; date: string } & Record<string, unknown> }
-  | { type: "session-remove"; id: string; activityIds: string[] }
+  | { type: "session-remove"; id: string; activityIds?: string[] }
   | { type: "workbench-start-fresh"; workbenchId: string };
 
 const TIMER_ACTIONS: TimerAction[] = ["start", "pause", "finish"];
@@ -100,6 +100,15 @@ export async function POST(request: Request) {
             : before.sessionTimers[mutation.subjectId];
           if (!timer?.startedAt) {
             return Response.json({ error: `Start the ${mutation.kind === "activity" ? "activity stopwatch" : "session countdown"} before finishing it.` }, { status: 409 });
+          }
+          if (mutation.kind === "activity" && !before.outcomes[mutation.subjectId]) {
+            return Response.json({ error: "Choose Solved, Solved with help, or Failed before finishing this activity.", retryable: false }, { status: 409 });
+          }
+          if (mutation.kind === "session") {
+            const session = before.sessions.find((candidate) => (
+              typeof candidate === "object" && candidate !== null && "id" in candidate && candidate.id === mutation.subjectId
+            )) as { activityIds?: string[] } | undefined;
+            mutation.activityIds = session?.activityIds ?? [];
           }
         }
         await applyTimerAction(ownerId, mutation.subjectId, mutation.kind, mutation.action, now, {
@@ -175,7 +184,7 @@ export async function POST(request: Request) {
       }
       case "session-remove": {
         if (!mutation.id) return Response.json({ error: "Missing session id." }, { status: 400 });
-        await removeLiveSession(ownerId, mutation.id, mutation.activityIds ?? []);
+        await removeLiveSession(ownerId, mutation.id);
         break;
       }
       case "workbench-start-fresh": {

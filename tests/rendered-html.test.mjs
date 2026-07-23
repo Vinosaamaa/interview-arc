@@ -104,8 +104,10 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(css, /@keyframes master-detail-in/);
   assert.match(css, /@media \(max-width: 1976px\)/);
   assert.match(css, /width: min\(525px, calc\(100vw - var\(--sidebar-size\) - 32px\)\)/);
-  assert.match(client, /bank-master-detail \$\{masterPaneOpen \? "master-pane-open" : ""\}/);
-  assert.match(client, /past-master-detail \$\{masterPaneOpen \? "master-pane-open" : ""\}/);
+  assert.match(client, /bank-master-detail \$\{masterPaneOpen && !readerFocusMode \? "master-pane-open" : ""\}/);
+  assert.match(client, /past-master-detail \$\{masterPaneOpen && !readerFocusMode \? "master-pane-open" : ""\}/);
+  assert.match(client, /openProblemProfile\(entry\.type, question, true, true\)/);
+  assert.match(client, /openJournalEntry\(entry, true, true\)/);
   assert.match(client, /className="past-entry-pane"/);
   assert.match(client, /className={`annotation-popover selection-annotation/);
   assert.match(client, /Underline selected text and add a note/);
@@ -131,6 +133,12 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /setEveryReaderGroup\(true\)/);
   assert.match(css, /\.workspace-reader-scroll \.markdown-body \{ font-size: 1\.0625rem; line-height: 1\.7; \}/);
   assert.match(css, /max-width: 970px/);
+  assert.match(css, /\.journal-entry\.log-entry,\s*\.problem-bank-entry \{ min-height: 150px; \}/);
+  assert.match(css, /\.highlight-note-card\.tone-0 \{ background: #fff2f1/);
+  assert.match(css, /\.long-note-inspector/);
+  assert.match(client, /Open full note/);
+  assert.match(client, /moveReaderNavigation\(-1\)/);
+  assert.match(client, /moveReaderNavigation\(1\)/);
   assert.match(css, /\.annotation-popover \{ position: fixed;/);
   assert.match(client, /left\.type === "system_design" \? -1 : 1/);
   assert.match(client, /placeholder="Search"/);

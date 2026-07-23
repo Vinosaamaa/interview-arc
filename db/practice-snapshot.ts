@@ -33,14 +33,16 @@ export async function buildPracticeSnapshot(
   const journal = content.journals.find((candidate) => candidate.date === date) ?? emptyJournal(date);
   const publishedSessions = options.includeAll ? content.journals.flatMap((candidate) => candidate.sessions) : journal.sessions;
   const publishedActivities = options.includeAll ? content.journals.flatMap((candidate) => candidate.activities) : journal.activities;
-  const sessions = dedupeSnapshotRows([...publishedSessions, ...(live.sessions as PracticeSession[])]);
+  const liveSessionRows = options.includeAll ? live.historySessions : live.sessions;
+  const liveActivityRows = options.includeAll ? live.historyActivities : live.extraActivities;
+  const sessions = dedupeSnapshotRows([...publishedSessions, ...(liveSessionRows as PracticeSession[])]);
   const sessionForActivity = new Map<string, string>();
   sessions.forEach((session) => session.activityIds.forEach((activityId) => sessionForActivity.set(activityId, session.id)));
   // A just-published website activity exists in both owner-private live state
   // and the imported journal. Keep one row and prefer the journal copy so its
   // completed status, Pacific publication date, and artifact metadata win.
   const activities = dedupeSnapshotRows([
-    ...(live.extraActivities as JournalActivity[]),
+    ...(liveActivityRows as JournalActivity[]),
     ...publishedActivities,
   ]).map((activity) => {
     const artifact = content.artifacts.find((candidate) => candidate.activityId === activity.id);
@@ -82,7 +84,9 @@ export async function buildPracticeSnapshot(
     sessions,
     sessionTimers: live.sessionTimers,
     activities,
-    readyActivities: activities.filter((activity) => activity.publicationStatus === "ready"),
+    readyActivities: activities.filter((activity) =>
+      activity.publicationStatus === "ready" && Boolean(activity.outcome)
+    ),
     focusedActivityId: live.focusedActivityId,
     focusedSessionId: live.focusedSessionId,
     focusedAt: live.focusedAt,
@@ -99,13 +103,13 @@ export async function buildPublicationQueue(ownerId: string, requestedDate?: str
   ]);
   const sessions = [
     ...content.journals.flatMap((journal) => journal.sessions),
-    ...(live.sessions as PracticeSession[]),
+    ...(live.historySessions as PracticeSession[]),
   ];
   const sessionForActivity = new Map<string, string>();
   sessions.forEach((session) => session.activityIds.forEach((activityId) => sessionForActivity.set(activityId, session.id)));
   const byId = new Map<string, JournalActivity>();
   content.journals.flatMap((journal) => journal.activities).forEach((activity) => byId.set(activity.id, activity));
-  (live.extraActivities as JournalActivity[]).forEach((activity) => byId.set(activity.id, activity));
+  (live.historyActivities as JournalActivity[]).forEach((activity) => byId.set(activity.id, activity));
   const artifacts = new Map(content.artifacts.filter((artifact) => artifact.activityId).map((artifact) => [artifact.activityId, artifact]));
 
   const activities = [...byId.values()].flatMap((activity) => {
@@ -118,7 +122,7 @@ export async function buildPublicationQueue(ownerId: string, requestedDate?: str
       storedPublication: live.publicationStatuses[activity.id],
       completed,
     });
-    if (publicationStatus !== "ready") return [];
+    if (publicationStatus !== "ready" || !outcome) return [];
     const practiceDate = timer?.completedAt ? practiceDateAt(timer.completedAt) : activity.date;
     if (requestedDate && practiceDate !== requestedDate) return [];
     const sessionId = activity.sessionId ?? sessionForActivity.get(activity.id);

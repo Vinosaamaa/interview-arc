@@ -66,6 +66,9 @@ type ReaderMemory = {
   anchorOffset?: number;
   scrollTop?: number;
 };
+type ReaderNavigationTarget =
+  | { kind: "attempt"; id: string }
+  | { kind: "solution"; type: ActivityType; questionId: string };
 type WorkspaceUiMemory = {
   libraryTypeFilters?: ActivityType[];
   libraryAttentionFilters?: LibraryAttentionFilter[];
@@ -531,18 +534,28 @@ function ResultFlag({
   outcome,
   activityType,
   onChange,
+  disabled = false,
+  required = false,
 }: {
   outcome?: Outcome;
   activityType: ActivityType;
   onChange: (outcome?: Outcome) => void;
+  disabled?: boolean;
+  required?: boolean;
 }) {
   const currentIndex = OUTCOME_ORDER.indexOf(outcome);
   const next = OUTCOME_ORDER[(currentIndex + 1) % OUTCOME_ORDER.length];
   return (
-    <div className="result-flag-wrap">
-      <button className={`result-flag ${outcome ?? "unset"}`} onClick={() => onChange(next)} aria-label={`Result: ${resultLabel(outcome, activityType)}. Select the next result.`} title="Change result">
+    <div className={`result-flag-wrap ${required ? "result-required" : ""}`}>
+      <button className={`result-flag ${outcome ?? "unset"}`} onClick={() => onChange(next)} disabled={disabled} aria-label={`Result: ${resultLabel(outcome, activityType)}. Select the next result.`} title={disabled ? "Start the activity stopwatch before choosing a result" : "Change result"}>
         <Icon name="flag" />
       </button>
+      {required && !disabled && <div className="required-result-choices" role="group" aria-label="Choose a result before continuing">
+        <strong>Choose a result</strong>
+        <button type="button" onClick={() => onChange("solved")}>Solved</button>
+        <button type="button" onClick={() => onChange("solved_after_reviewing_approach")}>Solved with help</button>
+        <button type="button" onClick={() => onChange("failed")}>Failed</button>
+      </div>}
       <div className="result-legend" role="tooltip">
         <strong>Result flag</strong>
         <span><i className="unset" /> Not set</span>
@@ -667,7 +680,7 @@ function PipNowPanel({
               <button type="button" className="pip-btn" onClick={() => onCompleteActivity(activity.id)} disabled={activityComplete || !activityStarted || activityLocked} aria-label={`Finish ${activity.title}`} title={activityLocked ? "This session is finished" : !activityStarted ? "Start the stopwatch before finishing" : "Finish activity"}>
                 <span aria-hidden="true">{activityComplete ? "✓" : "■"}</span>
               </button>
-              <ResultFlag activityType={activity.type} outcome={outcome} onChange={(next) => onOutcome(activity.id, next)} />
+              <ResultFlag activityType={activity.type} outcome={outcome} onChange={(next) => onOutcome(activity.id, next)} disabled={!activityStarted} />
             </div>
           </div>
           {activity.url ? <a className="pip-open" href={activity.url} target="_blank" rel="noreferrer">Open problem ↗</a> : null}
@@ -679,11 +692,11 @@ function PipNowPanel({
   );
 }
 
-function StandaloneActivityCard({ children, title, onRemove }: { children: ReactNode; title: string; onRemove: () => void }) {
+function StandaloneActivityCard({ children, title, onRemove, removeDisabled = false }: { children: ReactNode; title: string; onRemove: () => void; removeDisabled?: boolean }) {
   return (
     <article className="standalone-activity-card">
       {children}
-      <button className="icon-action danger" onClick={onRemove} aria-label={`Remove ${title}`} title="Remove activity"><Icon name="close" /></button>
+      <button className="icon-action danger" onClick={onRemove} disabled={removeDisabled} aria-label={`Remove ${title}`} title={removeDisabled ? "Started activities stay in your history" : "Remove untouched activity"}><Icon name="close" /></button>
     </article>
   );
 }
@@ -1043,11 +1056,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [masterPaneOpen, setMasterPaneOpen] = useState(() =>
     typeof window !== "undefined" && window.sessionStorage.getItem("interview-arc-master-pane") === "open"
   );
+  const [readerFocusMode, setReaderFocusMode] = useState(false);
   const [workspaceUiMemory] = useState(() =>
     readSessionJson<WorkspaceUiMemory>("interview-arc-workspace-ui-v1", {})
   );
   const [readerClosing, setReaderClosing] = useState(false);
+  const [readerNavigation, setReaderNavigation] = useState<{ items: ReaderNavigationTarget[]; index: number }>({ items: [], index: -1 });
   const [freshDayConfirmOpen, setFreshDayConfirmOpen] = useState(false);
+  const [requiredResultIds, setRequiredResultIds] = useState<string[]>([]);
   const [libraryTypeFilters, setLibraryTypeFilters] = useState<ActivityType[]>(workspaceUiMemory.libraryTypeFilters ?? []);
   const [libraryAttentionFilters, setLibraryAttentionFilters] = useState<LibraryAttentionFilter[]>(workspaceUiMemory.libraryAttentionFilters ?? []);
   const [librarySearch, setLibrarySearch] = useState(workspaceUiMemory.librarySearch ?? "");
@@ -1089,6 +1105,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [highlightNoteDraft, setHighlightNoteDraft] = useState("");
   const [highlightNoteEditing, setHighlightNoteEditing] = useState(false);
   const [editingHighlightNoteId, setEditingHighlightNoteId] = useState("");
+  const [expandedHighlightNoteIds, setExpandedHighlightNoteIds] = useState<string[]>([]);
+  const [inspectedHighlightNoteId, setInspectedHighlightNoteId] = useState("");
   const [highlightPaletteOpen, setHighlightPaletteOpen] = useState(false);
   const [highlightColorDraft, setHighlightColorDraft] = useState<HighlightColor>(() => {
     if (typeof window === "undefined") return "yellow";
@@ -1259,7 +1277,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (!selectedEntry && !selectedProblem) return;
     const closeReader = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      if (masterPaneOpen && window.matchMedia("(max-width: 1976px)").matches) {
+      if (masterPaneOpen && !readerFocusMode && window.matchMedia("(max-width: 1976px)").matches) {
         setMasterPaneOpen(false);
         return;
       }
@@ -1267,10 +1285,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     };
     window.addEventListener("keydown", closeReader);
     return () => window.removeEventListener("keydown", closeReader);
-  }, [masterPaneOpen, selectedEntry, selectedProblem]);
+  }, [masterPaneOpen, readerFocusMode, selectedEntry, selectedProblem]);
 
   useEffect(() => {
-    if (!masterPaneOpen) return;
+    if (!masterPaneOpen || readerFocusMode) return;
     const closeMasterPane = (event: PointerEvent) => {
       if (!window.matchMedia("(max-width: 1976px)").matches) return;
       const target = event.target;
@@ -1280,7 +1298,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     };
     document.addEventListener("pointerdown", closeMasterPane);
     return () => document.removeEventListener("pointerdown", closeMasterPane);
-  }, [masterPaneOpen]);
+  }, [masterPaneOpen, readerFocusMode]);
 
   function enterArc() {
     if (!soundMuted) startAmbient();
@@ -1341,7 +1359,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   useEffect(() => {
     const finished = allSessions.filter((session) => session.activityIds.length > 0
       && !draft.sessionTimers[session.id]?.completed
-      && session.activityIds.every((activityId) => draft.timers[activityId]?.completed));
+      && session.activityIds.every((activityId) => draft.timers[activityId]?.completed)
+      && session.activityIds.every((activityId) => Boolean(draft.outcomes[activityId])));
     if (!finished.length) return;
     const timestamp = Date.now();
     finished.forEach((session) => enqueue({
@@ -1368,7 +1387,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         }),
       ),
     }));
-  }, [allSessions, draft.sessionTimers, draft.timers, enqueue, setDraft]);
+  }, [allSessions, draft.outcomes, draft.sessionTimers, draft.timers, enqueue, setDraft]);
 
   const activeActivity =
     allTodayActivities.find((activity) => Boolean(draft.timers[activity.id]?.runningSince) && !draft.timers[activity.id]?.completed) ??
@@ -1566,6 +1585,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (!existing?.startedAt || existing.completed) return;
     setNow(timestamp);
     const session = allSessions.find((candidate) => candidate.id === sessionId);
+    const missingResults = session?.activityIds.filter((activityId) => (
+      Boolean(draft.timers[activityId]?.startedAt) && !draft.outcomes[activityId]
+    )) ?? [];
+    if (missingResults.length) {
+      setRequiredResultIds(missingResults);
+      window.alert("Choose a result for every started activity before finishing this session.");
+      return;
+    }
     if (session?.activityIds.some((activityId) => !draft.timers[activityId]?.completed)
       && !window.confirm("Finish this session and close every activity that has already been started? Never-started activities will remain not attempted.")) {
       return;
@@ -1611,6 +1638,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (!existing?.startedAt || existing.completed) return;
     const parentSession = sessionByActivityId.get(activityId);
     if (parentSession && draft.sessionTimers[parentSession.id]?.completed) return;
+    if (!draft.outcomes[activityId]) {
+      setRequiredResultIds((current) => [...new Set([...current, activityId])]);
+      window.alert("Choose Solved, Solved with help, or Failed before finishing this activity.");
+      return;
+    }
     setNow(timestamp);
     enqueue({
       type: "timer",
@@ -1643,6 +1675,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function setOutcome(activityId: string, outcome?: Outcome) {
+    const timer = draft.timers[activityId];
+    if (!timer?.startedAt || draft.publicationStatuses[activityId] === "published") return;
     enqueue({ type: "outcome", activityId, outcome: outcome ?? null, sessionId: sessionByActivityId.get(activityId)?.id });
     setDraft((current) => {
       const outcomes = { ...current.outcomes };
@@ -1653,6 +1687,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         outcomes,
       };
     });
+    if (outcome) setRequiredResultIds((current) => current.filter((id) => id !== activityId));
   }
 
   async function createConnectionToken() {
@@ -1795,19 +1830,39 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     });
   }
 
-  function openJournalEntry(entry: LibraryEntry) {
+  function rememberReaderNavigation(target: ReaderNavigationTarget) {
+    setReaderNavigation((current) => {
+      const active = current.items[current.index];
+      if (active && JSON.stringify(active) === JSON.stringify(target)) return current;
+      const items = [...current.items.slice(0, current.index + 1), target].slice(-40);
+      return { items, index: items.length - 1 };
+    });
+  }
+
+  function openJournalEntry(entry: LibraryEntry, remember = true, focusMode = false) {
     if (readerCloseTimerRef.current !== null) {
       window.clearTimeout(readerCloseTimerRef.current);
       readerCloseTimerRef.current = null;
     }
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 1976px)").matches) setMasterPaneOpen(false);
+    setReaderFocusMode(focusMode);
     setReaderClosing(false);
     setSelectedEntry(entry);
+    if (remember) rememberReaderNavigation({ kind: "attempt", id: entry.id });
     transitionToView("library");
   }
 
   function closeMasterAfterSelection() {
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 1976px)").matches) setMasterPaneOpen(false);
+  }
+
+  function toggleMasterPane() {
+    if (readerFocusMode) {
+      setReaderFocusMode(false);
+      setMasterPaneOpen(true);
+      return;
+    }
+    setMasterPaneOpen((current) => !current);
   }
 
   function todayBlockedQuestions(excludedActivityIds: string[] = []) {
@@ -1830,9 +1885,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       .filter((review) => review.specialty === type && review.questionId
         && (review.status === "due" || (review.status === "scheduled" && review.dueDate <= journal.date)))
       .map((review) => review.questionId as string));
-    const available = bank.filter((question) => question.active
-      && !isQuestionBlocked(question, blocked)
-      && (!((question.priority ?? 0) > 0 && profileFor(type, question.id)) || dueQuestionIds.has(question.id)));
+    const available = bank.filter((question) => {
+      const completedBefore = Boolean(latestFinishedAttempt(libraryEntries, type, question));
+      return question.active
+        && !isQuestionBlocked(question, blocked)
+        && (!completedBefore || dueQuestionIds.has(question.id));
+    });
     if (type !== "behavioral") return available;
     const curriculum = bank.filter(isResumeCurriculumQuestion);
     if (!curriculum.length) return [];
@@ -1851,14 +1909,39 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     }));
   }
 
-  function openProblemProfile(type: ActivityType, question: QuestionBankItem) {
+  function openProblemProfile(
+    type: ActivityType,
+    question: QuestionBankItem,
+    remember = true,
+    focusMode = false,
+  ) {
     if (readerCloseTimerRef.current !== null) {
       window.clearTimeout(readerCloseTimerRef.current);
       readerCloseTimerRef.current = null;
     }
     closeMasterAfterSelection();
+    setReaderFocusMode(focusMode);
     setReaderClosing(false);
     setSelectedProblem({ type, question });
+    if (remember) rememberReaderNavigation({ kind: "solution", type, questionId: question.id });
+  }
+
+  function moveReaderNavigation(direction: -1 | 1) {
+    const nextIndex = readerNavigation.index + direction;
+    const target = readerNavigation.items[nextIndex];
+    if (!target) return;
+    setReaderNavigation((current) => ({ ...current, index: nextIndex }));
+    setReaderFocusMode(true);
+    if (target.kind === "attempt") {
+      const entry = libraryEntries.find((candidate) => candidate.id === target.id);
+      if (entry) openJournalEntry(entry, false, true);
+      return;
+    }
+    const question = bankFor(target.type).find((candidate) => candidate.id === target.questionId);
+    if (question) {
+      openProblemProfile(target.type, question, false, true);
+      transitionToView("banks");
+    }
   }
 
   function bankQuestionForEntry(entry: LogEntry) {
@@ -1871,7 +1954,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   function openEntrySolution(entry: LogEntry) {
     const question = bankQuestionForEntry(entry);
     if (!question) return;
-    openProblemProfile(entry.type, question);
+    openProblemProfile(entry.type, question, true, true);
     transitionToView("banks");
   }
 
@@ -2149,6 +2232,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function removeActivity(activityId: string) {
+    if (draft.timers[activityId]?.startedAt || draft.outcomes[activityId] || draft.publicationStatuses[activityId]) {
+      window.alert("Only an untouched activity can be removed. Started work stays in Past.");
+      return;
+    }
     enqueue({ type: "extra-remove", id: activityId });
     setDraft((current) => {
       const timers = { ...current.timers };
@@ -2172,6 +2259,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function removeSession(session: LocalSession) {
+    if (!isSessionEditable(session)) {
+      window.alert("Only an untouched session can be removed. Started work stays in Past.");
+      return;
+    }
     if (!window.confirm(`Remove ${session.label} and its local activities?`)) return;
     const ids = new Set(session.activityIds);
     enqueue({ type: "session-remove", id: session.id, activityIds: session.activityIds });
@@ -2303,7 +2394,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const artifactByActivity = new Map(content.artifacts.filter((artifact) => artifact.activityId).map((artifact) => [artifact.activityId, artifact]));
     const knownSessionByActivity = new Map<string, string>();
     content.journals.flatMap((daily) => daily.sessions).forEach((session) => session.activityIds.forEach((id) => knownSessionByActivity.set(id, session.id)));
-    [...draft.sessions, ...(yesterdayDraft?.sessions ?? [])].forEach((session) => session.activityIds.forEach((id) => knownSessionByActivity.set(id, session.id)));
+    [...draft.historySessions, ...draft.sessions, ...(yesterdayDraft?.historySessions ?? [])].forEach((session) => session.activityIds.forEach((id) => knownSessionByActivity.set(id, session.id)));
     for (const daily of content.journals) {
       for (const activity of daily.activities) {
         const liveDraft = daily.date === journal.date ? draft : daily.date === yesterdayDate ? yesterdayDraft : null;
@@ -2340,7 +2431,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         });
       }
     }
-    for (const activity of draft.extraActivities) {
+    const durableActivities = [
+      ...draft.historyActivities,
+      ...draft.extraActivities.filter((activity) => !draft.historyActivities.some((candidate) => candidate.id === activity.id)),
+    ];
+    for (const activity of durableActivities) {
       if (entries.some((entry) => entry.id === activity.id)) continue;
       const timer = draft.timers[activity.id];
       const outcome = draft.outcomes[activity.id];
@@ -2370,7 +2465,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         deliveryAnalyses: draft.deliveryAnalyses[activity.id] ?? [],
       });
     }
-    for (const activity of yesterdayDraft?.extraActivities ?? []) {
+    for (const activity of yesterdayDraft?.historyActivities ?? []) {
       if (entries.some((entry) => entry.id === activity.id)) continue;
       const timer = yesterdayDraft?.timers[activity.id];
       const outcome = yesterdayDraft?.outcomes[activity.id];
@@ -2467,6 +2562,15 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function startFreshPracticeDay() {
+    const missingResults = allTodayActivities.filter((activity) => (
+      Boolean(draft.timers[activity.id]?.startedAt) && !draft.outcomes[activity.id]
+    )).map((activity) => activity.id);
+    if (missingResults.length) {
+      setRequiredResultIds(missingResults);
+      setFreshDayConfirmOpen(false);
+      window.alert("Choose a result for every started activity before starting a fresh day.");
+      return;
+    }
     const timestamp = Date.now();
     const openedPacificDate = practiceDateAt(timestamp);
     const workbenchId = `workbench-${openedPacificDate}-${crypto.randomUUID()}`;
@@ -2482,6 +2586,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       },
       extraActivities: [],
       sessions: [],
+      historyActivities: [
+        ...current.historyActivities.filter((activity) => !current.extraActivities.some((candidate) => candidate.id === activity.id)),
+        ...current.extraActivities,
+      ],
+      historySessions: [
+        ...current.historySessions.filter((session) => !current.sessions.some((candidate) => candidate.id === session.id)),
+        ...current.sessions,
+      ],
       focusedActivityId: null,
       focusedSessionId: null,
       focusedAt: timestamp,
@@ -2660,7 +2772,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const sessionRollups = useMemo(() => {
     const catalog = new Map<string, PracticeSession>();
     content.journals.flatMap((daily) => daily.sessions).forEach((session) => catalog.set(session.id, session));
-    [...draft.sessions, ...(yesterdayDraft?.sessions ?? [])].forEach((session) => catalog.set(session.id, session));
+    [...draft.historySessions, ...(yesterdayDraft?.historySessions ?? [])].forEach((session) => catalog.set(session.id, session));
     return [...catalog.values()].map((session) => {
       const records = completedEntries.filter((entry) => entry.sessionId === session.id);
       return {
@@ -2671,7 +2783,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         dates: [...new Set(records.map((entry) => entry.date))].sort(),
       };
     }).filter((rollup) => rollup.completed > 0).sort((left, right) => (right.dates.at(-1) ?? "").localeCompare(left.dates.at(-1) ?? "")).slice(0, 8);
-  }, [completedEntries, content.journals, draft.sessions, yesterdayDraft?.sessions]);
+  }, [completedEntries, content.journals, draft.historySessions, yesterdayDraft?.historySessions]);
   const calendarDays = useMemo(() => {
     const anchor = new Date(`${journal.date}T12:00:00Z`);
     return Array.from({ length: 35 }, (_, index) => {
@@ -2703,7 +2815,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           <div className="session-heading-copy"><p>Practice session</p><h2>{session.label}</h2><span>{activities.length} activities · {formatDuration(session.allocatedSeconds)} window</span></div>
           <SessionCountdown session={session} timer={draft.sessionTimers[session.id]} now={now} onToggle={toggleSessionTimer} onComplete={completeSessionTimer} />
           <div className="session-progress"><strong>{complete}/{activities.length}</strong><span>finished</span></div>
-          {localSession && <div className="session-header-actions"><button className="edit-session" onClick={() => openEditSession(localSession)} disabled={!isSessionEditable(localSession)} title={isSessionEditable(localSession) ? "Change this session recipe" : "A session recipe locks after timing or completion begins"}>Edit recipe</button><button className="icon-action danger" onClick={() => removeSession(localSession)} aria-label={`Remove ${localSession.label}`} title="Remove session"><Icon name="close" /></button></div>}
+          {localSession && <div className="session-header-actions"><button className="edit-session" onClick={() => openEditSession(localSession)} disabled={!isSessionEditable(localSession)} title={isSessionEditable(localSession) ? "Change this session recipe" : "A session recipe locks after timing or completion begins"}>Edit recipe</button><button className="icon-action danger" onClick={() => removeSession(localSession)} disabled={!isSessionEditable(localSession)} aria-label={`Remove ${localSession.label}`} title={isSessionEditable(localSession) ? "Remove untouched session" : "Started sessions stay in your history"}><Icon name="close" /></button></div>}
         </header>
 
         {coding.length > 0 && <section className="coding-ledger">
@@ -2719,10 +2831,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                   <span className={`row-count ${isActivityComplete(activity) ? "complete" : ""}`}>{isActivityComplete(activity) ? "✓" : problemIndex + 1}</span>
                   <div className="problem-title"><strong>{activity.title}</strong><span>{activity.notes ?? "Coding problem"}</span>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open on LeetCode ↗</a>}</div>
                   <ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} locked={sessionLocked} />
-                  <ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} />
+                  <ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} disabled={!draft.timers[activity.id]?.startedAt || draft.publicationStatuses[activity.id] === "published"} required={requiredResultIds.includes(activity.id)} />
                   <PublicationControl status={publicationStatusFor(activity)} />
                   <button className={`star-control ${isStarred(activity.type, activity.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(activity.type, activity.questionId)} disabled={!activity.questionId} aria-label={`${isStarred(activity.type, activity.questionId) ? "Unstar" : "Star"} ${activity.title}`} title={activity.questionId ? "Keep this problem in your starred review set" : "A stable bank question is required to star this activity"}>★</button>
-                  {isExtra && <button className="icon-action danger row-remove" onClick={() => removeActivity(activity.id)} aria-label={`Remove ${activity.title}`} title="Remove activity"><Icon name="close" /></button>}
+                  {isExtra && <button className="icon-action danger row-remove" onClick={() => removeActivity(activity.id)} disabled={Boolean(draft.timers[activity.id]?.startedAt)} aria-label={`Remove ${activity.title}`} title={draft.timers[activity.id]?.startedAt ? "Started activities stay in your history" : "Remove untouched activity"}><Icon name="close" /></button>}
                 </div>
               );
             })}
@@ -2735,12 +2847,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             const isExtra = item.source === "extra";
             return (
               <section className={`mock-sheet ${item.type}`} key={item.id}>
-                <div className="mock-topline"><span className={`type-chip ${item.type}`}>{typeLabel(item.type)}</span>{isExtra && <button className="icon-action danger" onClick={() => removeActivity(item.id)} aria-label={`Remove ${item.title}`} title="Remove activity"><Icon name="close" /></button>}</div>
+                <div className="mock-topline"><span className={`type-chip ${item.type}`}>{typeLabel(item.type)}</span>{isExtra && <button className="icon-action danger" onClick={() => removeActivity(item.id)} disabled={Boolean(draft.timers[item.id]?.startedAt)} aria-label={`Remove ${item.title}`} title={draft.timers[item.id]?.startedAt ? "Started activities stay in your history" : "Remove untouched activity"}><Icon name="close" /></button>}</div>
                 <h3>{item.title}</h3>
                 <p>{item.prompt}</p>
                 <div className="mock-controls">
                   <ActivityTimer activity={item} timer={draft.timers[item.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} locked={sessionLocked} />
-                  <ResultFlag activityType={item.type} outcome={draft.outcomes[item.id] ?? item.outcome} onChange={(outcome) => setOutcome(item.id, outcome)} />
+                  <ResultFlag activityType={item.type} outcome={draft.outcomes[item.id] ?? item.outcome} onChange={(outcome) => setOutcome(item.id, outcome)} disabled={!draft.timers[item.id]?.startedAt || draft.publicationStatuses[item.id] === "published"} required={requiredResultIds.includes(item.id)} />
                   <PublicationControl status={publicationStatusFor(item)} />
                   <button className={`star-control ${isStarred(item.type, item.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(item.type, item.questionId)} disabled={!item.questionId} aria-label={`${isStarred(item.type, item.questionId) ? "Unstar" : "Star"} ${item.title}`}>★</button>
                 </div>
@@ -2789,7 +2901,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
         <section className="loose-section">
           <div className="section-title"><div><span className="eyebrow">STANDALONE PRACTICE</span><h2>Outside a full session</h2><p>Each card keeps only the controls you need: stopwatch, result, journal state, star, and remove.</p></div></div>
-          {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add one activity” above to search a bank or paste a public LeetCode problem URL.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <StandaloneActivityCard key={activity.id} title={activity.title} onRemove={() => removeActivity(activity.id)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><small>{typeLabel(activity.type)} · local draft</small><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} /><ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} /><PublicationControl status={publicationStatusFor(activity)} /><button className={`star-control ${isStarred(activity.type, activity.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(activity.type, activity.questionId)} disabled={!activity.questionId} aria-label={`${isStarred(activity.type, activity.questionId) ? "Unstar" : "Star"} ${activity.title}`}>★</button></StandaloneActivityCard>)}</div>}
+          {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add one activity” above to search a bank or paste a public LeetCode problem URL.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <StandaloneActivityCard key={activity.id} title={activity.title} onRemove={() => removeActivity(activity.id)} removeDisabled={Boolean(draft.timers[activity.id]?.startedAt)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><small>{typeLabel(activity.type)} · local draft</small><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} /><ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} disabled={!draft.timers[activity.id]?.startedAt || draft.publicationStatuses[activity.id] === "published"} required={requiredResultIds.includes(activity.id)} /><PublicationControl status={publicationStatusFor(activity)} /><button className={`star-control ${isStarred(activity.type, activity.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(activity.type, activity.questionId)} disabled={!activity.questionId} aria-label={`${isStarred(activity.type, activity.questionId) ? "Unstar" : "Star"} ${activity.title}`}>★</button></StandaloneActivityCard>)}</div>}
         </section>
       </>
     );
@@ -2960,7 +3072,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return (
       <section className={`view-page library-page ${selectedEntry ? "has-open-entry" : ""}`}>
         <header className="view-masthead"><span className="eyebrow">PAST · COMPLETED WORK</span><h1>Read the journey<br /><em>like a field journal.</em></h1><p>Past contains finished activity timers and published case files—never planned work or result flags by themselves.</p></header>
-        <div className={`past-master-detail ${masterPaneOpen ? "master-pane-open" : ""} ${readerClosing ? "reader-closing" : ""}`}>
+        <div className={`past-master-detail ${masterPaneOpen && !readerFocusMode ? "master-pane-open" : ""} ${readerClosing ? "reader-closing" : ""}`}>
           <div
             className="past-master-pane"
             onClickCapture={(event) => {
@@ -3133,7 +3245,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           <article className="system_design"><strong>{bankFor("system_design").length}</strong><span>System designs</span></article>
           <article className="behavioral"><strong>{bankFor("behavioral").length}</strong><span>Behavioral prompts</span></article>
         </div>
-        <div className={`bank-master-detail ${masterPaneOpen ? "master-pane-open" : ""} ${readerClosing ? "reader-closing" : ""}`}>
+        <div className={`bank-master-detail ${masterPaneOpen && !readerFocusMode ? "master-pane-open" : ""} ${readerClosing ? "reader-closing" : ""}`}>
         <div
           className="bank-master-pane"
           onClickCapture={(event) => {
@@ -3652,9 +3764,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         <textarea id="saved-highlight-note" ref={highlightNoteEditorRef} autoFocus value={highlightNoteDraft} onChange={(event) => setHighlightNoteDraft(event.target.value)} placeholder="Add a note…" />
         <div className="annotation-form-actions"><button type="button" onClick={() => { setHighlightNoteDraft(""); setHighlightNoteEditing(false); setEditingHighlightNoteId(""); }}>Cancel</button><button type="submit" disabled={highlightBusy || !highlightNoteDraft.trim()}>{highlightBusy ? "Saving…" : "Save note"}</button></div>
       </form> : <>
-        {selectedHighlight.notes.length > 0 && <div className="highlight-note-list">{selectedHighlight.notes.map((note, index) => <article className={`highlight-note-card tone-${index % 3}`} key={note.id}><header><time>{formatPracticeTimestamp(new Date(note.updatedAt).toISOString(), true)}</time><div><button type="button" onClick={() => { setEditingHighlightNoteId(note.id); setHighlightNoteDraft(note.body); setHighlightNoteEditing(true); }} aria-label="Edit note" title="Edit note"><Icon name="edit" /></button><button type="button" onClick={() => void removeHighlightNote(note)} aria-label="Delete note" title="Delete note"><Icon name="close" /></button></div></header><FormattedHighlightNote body={note.body} /></article>)}</div>}
+        {selectedHighlight.notes.length > 0 && <div className="highlight-note-list">{selectedHighlight.notes.map((note, index) => {
+          const expanded = expandedHighlightNoteIds.includes(note.id);
+          const veryLong = note.body.length > 700;
+          return <article className={`highlight-note-card tone-${index % 3} ${expanded ? "expanded" : ""}`} key={note.id}><header><time>{formatPracticeTimestamp(new Date(note.updatedAt).toISOString(), true)}</time><div><button type="button" onClick={() => { setEditingHighlightNoteId(note.id); setHighlightNoteDraft(note.body); setHighlightNoteEditing(true); }} aria-label="Edit note" title="Edit note"><Icon name="edit" /></button><button type="button" onClick={() => void removeHighlightNote(note)} aria-label="Delete note" title="Delete note"><Icon name="close" /></button></div></header><FormattedHighlightNote body={note.body} />{note.body.length > 150 && <button className="highlight-note-expand" type="button" onClick={() => veryLong ? setInspectedHighlightNoteId(note.id) : setExpandedHighlightNoteIds((current) => current.includes(note.id) ? current.filter((id) => id !== note.id) : [...current, note.id])}>{veryLong ? "Open full note" : expanded ? "Show less" : "Read more"}</button>}</article>;
+        })}</div>}
         <div className="annotation-actions"><button type="button" onClick={() => { setEditingHighlightNoteId(""); setHighlightNoteDraft(""); setHighlightNoteEditing(true); }} aria-label="Add another note" title="Add note"><Icon name="note" /><i><Icon name="plus" /></i></button><button className="danger" type="button" onClick={() => void removeHighlight(selectedHighlight.id)} disabled={highlightBusy} aria-label="Remove highlight" title="Remove highlight"><Icon name="trash" /></button></div>
       </>}
+      {inspectedHighlightNoteId && selectedHighlight.notes.find((note) => note.id === inspectedHighlightNoteId) && portal(<div className="long-note-backdrop" role="presentation" onMouseDown={() => setInspectedHighlightNoteId("")}><article className="long-note-inspector" role="dialog" aria-modal="true" aria-label="Full highlight note" onMouseDown={(event) => event.stopPropagation()}><header><div><span>Highlight note</span><time>{formatPracticeTimestamp(new Date(selectedHighlight.notes.find((note) => note.id === inspectedHighlightNoteId)!.updatedAt).toISOString(), true)}</time></div><button type="button" className="icon-action" onClick={() => setInspectedHighlightNoteId("")} aria-label="Close full note"><Icon name="close" /></button></header><FormattedHighlightNote body={selectedHighlight.notes.find((note) => note.id === inspectedHighlightNoteId)!.body} /></article></div>)}
     </section>);
   }
 
@@ -3724,11 +3841,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return (
       <article className="workspace-reader journal-case-reader" aria-labelledby="journal-reader-title" aria-label="Case file contents">
         <div className="reader-chrome">
-          <div className="reader-chrome-leading"><button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={() => setMasterPaneOpen((current) => !current)} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button><ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</ReaderOutline></div>
+          <div className="reader-chrome-leading"><button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen && !readerFocusMode ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen && !readerFocusMode} aria-label={masterPaneOpen && !readerFocusMode ? "Hide problem list" : "Show problem list"} title={masterPaneOpen && !readerFocusMode ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button><button className="icon-action reader-history-action" onClick={() => moveReaderNavigation(-1)} disabled={readerNavigation.index <= 0} aria-label="Go back in reader history" title="Back">←</button><button className="icon-action reader-history-action" onClick={() => moveReaderNavigation(1)} disabled={readerNavigation.index >= readerNavigation.items.length - 1} aria-label="Go forward in reader history" title="Forward">→</button><ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</ReaderOutline></div>
           <div className="reader-chrome-actions"><button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close case file" title="Close"><Icon name="close" /></button></div>
         </div>
         <div className="case-document workspace-reader-scroll" ref={readerDocumentRef} onScroll={rememberReaderPosition} onMouseUp={(event) => captureHighlightSelection(event.clientX, event.clientY)} onKeyUp={() => captureHighlightSelection()}>
-          <header id="case-summary"><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time></div><div className="case-title-row"><h2 id="journal-reader-title">{selectedEntry.title}</h2><div className="case-title-actions"><button className={`star-control ${isStarred(selectedEntry.type, selectedEntry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedEntry.type, selectedEntry.questionId)} disabled={!selectedEntry.questionId} aria-label={`${isStarred(selectedEntry.type, selectedEntry.questionId) ? "Unstar" : "Star"} ${selectedEntry.title}`} title="Star this problem"><Icon name="star" /></button><button className="icon-action note-add" onClick={() => openNoteComposer()} disabled={!selectedEntryActivityId} aria-label="Add a note" title="Add a note"><Icon name="note" /><i><Icon name="plus" /></i></button></div></div>{meaningfulSubtitle(selectedEntry.subtitle) && <p>{meaningfulSubtitle(selectedEntry.subtitle)}</p>}{selectedEntry.questionId && <button className="solution-link-button" onClick={() => { const question = bankFor(selectedEntry.type).find((candidate) => candidate.id === selectedEntry.questionId); if (question) { setSelectedProblem({ type: selectedEntry.type, question }); transitionToView("banks"); } }}>Open reusable solution →</button>}</header>
+          <header id="case-summary"><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time></div><div className="case-title-row"><h2 id="journal-reader-title">{selectedEntry.title}</h2><div className="case-title-actions"><button className={`star-control ${isStarred(selectedEntry.type, selectedEntry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedEntry.type, selectedEntry.questionId)} disabled={!selectedEntry.questionId} aria-label={`${isStarred(selectedEntry.type, selectedEntry.questionId) ? "Unstar" : "Star"} ${selectedEntry.title}`} title="Star this problem"><Icon name="star" /></button><button className="icon-action note-add" onClick={() => openNoteComposer()} disabled={!selectedEntryActivityId} aria-label="Add a note" title="Add a note"><Icon name="note" /><i><Icon name="plus" /></i></button></div></div>{meaningfulSubtitle(selectedEntry.subtitle) && <p>{meaningfulSubtitle(selectedEntry.subtitle)}</p>}{selectedEntry.questionId && <button className="solution-link-button" onClick={() => openEntrySolution(selectedEntry)}>Open reusable solution →</button>}</header>
           {Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <aside className="pinned-notes" id="case-notes" aria-label="Pinned practice notes"><span>NOTES</span>{selectedEntry.personalNote?.trim() && <article><div className="note-actions"><button onClick={() => openNoteComposer("personal")} aria-label="Edit personal note" title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote("personal")} aria-label="Delete personal note" title="Delete"><Icon name="trash" /></button></div><MarkdownBody source={selectedEntry.personalNote} /></article>}{selectedEntry.pinnedNotes?.map((note) => <article key={note.id}><header><small>{note.kind}</small><div className="note-actions"><button onClick={() => openNoteComposer(note)} aria-label={`Edit ${note.kind} note`} title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote(note.id)} aria-label={`Delete ${note.kind} note`} title="Delete"><Icon name="trash" /></button></div></header><MarkdownBody source={note.body} /></article>)}</aside>}
           {noteComposerOpen && <form className="case-note-composer" onSubmit={(event) => { event.preventDefault(); void saveCaseNote(); }}><label htmlFor="case-note">{editingNoteId ? "Edit note" : "Add a note"}</label><textarea id="case-note" autoFocus value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} placeholder="A concise reminder, mistake, or pattern to keep visible…" /><div><button type="button" onClick={() => { setNoteComposerOpen(false); setEditingNoteId(""); setNoteDraft(""); }}>Cancel</button><button type="submit" disabled={noteBusy || !noteDraft.trim()}>{noteBusy ? "Saving…" : "Save note"}</button></div></form>}
           <div className="letter-facts" id="case-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.startedAt && <div><span>Started</span><strong>{formatPracticeTimestamp(selectedEntry.startedAt)}</strong></div>}{selectedEntry.endedAt && <div><span>Finished</span><strong>{formatPracticeTimestamp(selectedEntry.endedAt)}</strong></div>}{selectedEntry.sessionId && <div><span>Session</span><strong>{selectedEntry.sessionId}</strong></div>}{selectedEntry.outcome && <div><span>Result</span><strong>{resultLabel(selectedEntry.outcome, selectedEntry.type)}</strong></div>}{selectedEntry.review && <div className="review-fact"><span>{selectedEntry.review.status === "due" ? "Review due" : "Next review"}</span><strong>{selectedEntry.review.dueDate}</strong><small>{selectedEntry.review.reason.replaceAll("_", " ")} · {selectedEntry.review.intervalDays} day interval</small></div>}</div>
@@ -3751,13 +3868,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (!selectedProblem) return null;
     return (
       <article className="workspace-reader knowledge-reader" aria-labelledby="solution-profile-title">
-        <div className="reader-chrome"><div className="reader-chrome-leading"><button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={() => setMasterPaneOpen((current) => !current)} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button><ReaderOutline><a href="#solution-profile-summary">Overview</a>{selectedSolutionGroups.map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#solution-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#solution-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}<a href="#solution-attempts">Past attempts</a></ReaderOutline></div><div className="reader-chrome-actions"><button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close solution profile" title="Close"><Icon name="close" /></button></div></div>
+        <div className="reader-chrome"><div className="reader-chrome-leading"><button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen && !readerFocusMode ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen && !readerFocusMode} aria-label={masterPaneOpen && !readerFocusMode ? "Hide problem list" : "Show problem list"} title={masterPaneOpen && !readerFocusMode ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button><button className="icon-action reader-history-action" onClick={() => moveReaderNavigation(-1)} disabled={readerNavigation.index <= 0} aria-label="Go back in reader history" title="Back">←</button><button className="icon-action reader-history-action" onClick={() => moveReaderNavigation(1)} disabled={readerNavigation.index >= readerNavigation.items.length - 1} aria-label="Go forward in reader history" title="Forward">→</button><ReaderOutline><a href="#solution-profile-summary">Overview</a>{selectedSolutionGroups.map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#solution-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#solution-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}<a href="#solution-attempts">Past attempts</a></ReaderOutline></div><div className="reader-chrome-actions"><button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close solution profile" title="Close"><Icon name="close" /></button></div></div>
         <div className="case-document solution-profile-document workspace-reader-scroll" ref={readerDocumentRef} onScroll={rememberReaderPosition} onMouseUp={(event) => captureHighlightSelection(event.clientX, event.clientY)} onKeyUp={() => captureHighlightSelection()}>
           <header id="solution-profile-summary"><div><span className={`type-chip ${selectedProblem.type}`}>{typeLabel(selectedProblem.type)}</span><span className="profile-revision">{selectedProblemProfile ? `Solution revision ${selectedProblemProfile.currentRevision}` : "No solution yet"}</span><button className={`star-control ${isStarred(selectedProblem.type, selectedProblem.question.id) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedProblem.type, selectedProblem.question.id)} aria-label={`${isStarred(selectedProblem.type, selectedProblem.question.id) ? "Unstar" : "Star"} ${selectedProblem.question.title}`}><Icon name="star" /></button></div><h2 id="solution-profile-title">{selectedProblem.question.title}</h2><p>{selectedProblemProfile?.payload.summary ?? selectedProblem.question.prompt ?? "Finish and finalize an attempt to build this reusable Solution Profile."}</p></header>
           <div className="profile-tags">{[...new Set([...selectedProblem.question.topics, ...(selectedProblem.question.tags ?? []), ...(selectedProblemProfile?.tags ?? [])])].map((tag) => <span key={tag}>{tag}</span>)}</div>
           {selectedProblemProfile?.payload.behavioralAnswer && <section className="canonical-answer-card"><span className="eyebrow">YOUR PREFERRED ANSWER</span><h3>{selectedProblemProfile.payload.behavioralAnswer.preferred.label}</h3><MarkdownBody source={selectedProblemProfile.payload.behavioralAnswer.preferred.answer} />{selectedProblemProfile.payload.behavioralAnswer.preferred.evidence.length > 0 && <div className="answer-evidence"><strong>Verified evidence</strong><ul>{selectedProblemProfile.payload.behavioralAnswer.preferred.evidence.map((item) => <li key={item}>{item}</li>)}</ul></div>}{selectedProblemProfile.payload.behavioralAnswer.preferred.evidenceGaps.length > 0 && <div className="answer-gaps"><strong>Evidence still needed</strong><ul>{selectedProblemProfile.payload.behavioralAnswer.preferred.evidenceGaps.map((item) => <li key={item}>{item}</li>)}</ul></div>}{selectedProblemProfile.payload.behavioralAnswer.alternatives.length > 0 && <details className="answer-alternatives"><summary>{selectedProblemProfile.payload.behavioralAnswer.alternatives.length} alternative story {selectedProblemProfile.payload.behavioralAnswer.alternatives.length === 1 ? "variant" : "variants"}</summary>{selectedProblemProfile.payload.behavioralAnswer.alternatives.map((variant) => <article key={variant.label}><h4>{variant.label}</h4>{variant.whenToUse && <small>Best when: {variant.whenToUse}</small>}<MarkdownBody source={variant.answer} /></article>)}</details>}</section>}
           {selectedProblemProfile ? <div className="letter-sections solution-sections layered-reader">{selectedSolutionGroups.map((group) => { const groupId = `solution-group-${group.key}`; return <SolutionReaderGroup group={group} idPrefix="solution" coding={selectedProblem.type === "leetcode"} open={readerGroupOpen(groupId, group.key !== "conversation")} onToggle={(open) => rememberReaderGroup(groupId, open)} key={group.key} />; })}</div> : <div className="unpublished-letter"><span className="eyebrow">KNOWLEDGE PROFILE</span><h3>This problem has no finalized solution yet.</h3><p>The matching specialist creates it when a completed attempt is finalized. Past keeps the transcript; this reader keeps the reusable answer.</p></div>}
-          <section className="attempt-history" id="solution-attempts"><span className="eyebrow">PAST ATTEMPTS</span>{selectedProblemAttempts.length ? selectedProblemAttempts.map((entry) => <button key={entry.id} onClick={() => { setSelectedEntry(entry); transitionToView("library"); }}><span>{readableDate(entry.date, true)}</span><strong>{resultLabel(entry.outcome, entry.type)}</strong><small>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "No timer"} · Read case →</small></button>) : <p>No completed attempt is linked yet.</p>}</section>
+          <section className="attempt-history" id="solution-attempts"><span className="eyebrow">PAST ATTEMPTS</span>{selectedProblemAttempts.length ? selectedProblemAttempts.map((entry) => <button key={entry.id} onClick={() => openJournalEntry(entry, true, true)}><span>{readableDate(entry.date, true)}</span><strong>{resultLabel(entry.outcome, entry.type)}</strong><small>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "No timer"} · Read case →</small></button>) : <p>No completed attempt is linked yet.</p>}</section>
           {selectedProblemRevisions.length > 1 && <section className="revision-history"><span className="eyebrow">SOLUTION HISTORY</span><p>{selectedProblemRevisions.length} immutable revisions are linked to past attempts. The profile above is the current revision.</p></section>}
           {selectedProblemProfile?.payload.references.length ? <section className="profile-references"><span className="eyebrow">REFERENCES CONSULTED</span>{selectedProblemProfile.payload.references.map((reference) => <a key={`${reference.url}-${reference.accessedAt}`} href={reference.url} target="_blank" rel="noreferrer">{reference.title} ↗<small>{reference.accessedAt}</small></a>)}</section> : null}
           <footer>Interview Arc · {selectedProblem.type}:{selectedProblem.question.id}</footer>
@@ -3840,7 +3957,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         <section className="confirmation-dialog" role="alertdialog" aria-modal="true" aria-labelledby="fresh-day-title" aria-describedby="fresh-day-description" onMouseDown={(event) => event.stopPropagation()}>
           <span className="eyebrow">NEW PRACTICE WORKBENCH</span>
           <h2 id="fresh-day-title">Start a fresh day?</h2>
-          <p id="fresh-day-description">Started timers will close at the current time. Their elapsed time and any result flags will be preserved. Never-started activities will be archived as not attempted, and all pending publishable work will remain available to the coordinator.</p>
+          <p id="fresh-day-description">Started activities will close at the current time and remain in Past for later batch publication. Every started activity must already have a result. Never-started questions return to the selection pool.</p>
           <div className="confirmation-actions"><button className="secondary-action" onClick={() => setFreshDayConfirmOpen(false)}>Keep working</button><button className="primary-action" onClick={startFreshPracticeDay}>Start fresh day</button></div>
         </section>
       </div>}
