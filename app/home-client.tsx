@@ -326,12 +326,13 @@ function inferredQuestionTags(type: ActivityType, question: QuestionBankItem) {
   return inferred.length ? [...new Set(inferred)] : [type === "leetcode" ? "General coding" : type === "system_design" ? "Distributed systems" : "Behavioral signal"];
 }
 
-function Icon({ name }: { name: "close" | "star" | "book" | "plus" | "filter" | "sort" | "note" | "edit" | "trash" | "chevron" | "flag" }) {
+function Icon({ name }: { name: "close" | "star" | "book" | "plus" | "minus" | "filter" | "sort" | "note" | "edit" | "trash" | "chevron" | "flag" }) {
   const paths: Record<typeof name, ReactNode> = {
     close: <><path d="M5 5l14 14M19 5 5 19" /></>,
     star: <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" />,
     book: <><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z" /><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z" /></>,
     plus: <><path d="M12 5v14M5 12h14" /></>,
+    minus: <path d="M5 12h14" />,
     filter: <path d="M4 6h16l-6.2 7v5l-3.6 2v-7L4 6Z" />,
     sort: <><path d="M8 5v14M5 8l3-3 3 3M16 19V5m-3 11 3 3 3-3" /></>,
     note: <><path d="M5 3h11l3 3v15H5V3Z" /><path d="M15 3v4h4M8 11h8M8 15h8" /></>,
@@ -850,12 +851,34 @@ function LanguageCodeTabs({ sections, idPrefix }: { sections: ReaderSection[]; i
   return <section className="language-code-tabs" id={`${idPrefix}-${slugify(sections[0].title)}-0`}><header><h3>Reference implementation</h3><div role="tablist" aria-label="Implementation language">{sections.map((section, index) => <button type="button" role="tab" aria-selected={activeIndex === index} className={activeIndex === index ? "active" : ""} onClick={() => setActiveIndex(index)} key={section.title}>{section.title.split(/—|-/).at(-1)?.trim() ?? `Option ${index + 1}`}</button>)}</div></header><CodeBlock language={match[1]} code={match[2]} /></section>;
 }
 
+function ReaderOutline({ children }: { children: ReactNode }) {
+  const outlineRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const closeOutside = (event: PointerEvent) => {
+      const outline = outlineRef.current;
+      if (outline?.open && event.target instanceof Node && !outline.contains(event.target)) outline.open = false;
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && outlineRef.current?.open) outlineRef.current.open = false;
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, []);
+  return <details className="reader-outline" ref={outlineRef} onClick={(event) => {
+    if (event.target instanceof Element && event.target.closest("a") && outlineRef.current) outlineRef.current.open = false;
+  }}><summary>Contents</summary><nav>{children}</nav></details>;
+}
+
 function SolutionReaderGroup({ group, idPrefix, coding }: { group: ReturnType<typeof groupReaderSections>[number]; idPrefix: string; coding: boolean }) {
   const implementationSections = coding ? group.sections.filter((section) => /reference implementation\s*[—-]/i.test(section.title)) : [];
   const regularSections = implementationSections.length > 1
     ? group.sections.filter((section) => !implementationSections.includes(section))
     : group.sections;
-  return <section className={`reader-group solution-reader-group ${group.key}-group`} id={`${idPrefix}-group-${group.key}`}><h2>{group.title}</h2>{regularSections.map((section, index) => <ReaderSectionBody section={section} id={`${idPrefix}-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />)}{implementationSections.length > 1 && <LanguageCodeTabs sections={implementationSections} idPrefix={idPrefix} />}</section>;
+  return <details className={`reader-group solution-reader-group ${group.key}-group`} id={`${idPrefix}-group-${group.key}`} defaultOpen><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div>{regularSections.map((section, index) => <ReaderSectionBody section={section} id={`${idPrefix}-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />)}{implementationSections.length > 1 && <LanguageCodeTabs sections={implementationSections} idPrefix={idPrefix} />}</div></details>;
 }
 
 function HighlightShelf({ highlights, onRemove }: { highlights: ContentHighlight[]; onRemove: (id: string) => void }) {
@@ -887,6 +910,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [composer, setComposer] = useState<ComposerState>(EMPTY_COMPOSER);
   const [selectedEntry, setSelectedEntry] = useState<LogEntry | null>(null);
   const [selectedProblem, setSelectedProblem] = useState<{ type: ActivityType; question: QuestionBankItem } | null>(null);
+  const [masterPaneOpen, setMasterPaneOpen] = useState(false);
   const [libraryTypeFilters, setLibraryTypeFilters] = useState<ActivityType[]>([]);
   const [libraryAttentionFilters, setLibraryAttentionFilters] = useState<LibraryAttentionFilter[]>([]);
   const [librarySearch, setLibrarySearch] = useState("");
@@ -928,7 +952,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [highlightNoteDraft, setHighlightNoteDraft] = useState("");
   const [highlightNoteEditing, setHighlightNoteEditing] = useState(false);
   const [highlightPaletteOpen, setHighlightPaletteOpen] = useState(false);
-  const [highlightColorDraft, setHighlightColorDraft] = useState<HighlightColor>("yellow");
+  const [highlightColorDraft, setHighlightColorDraft] = useState<HighlightColor>(() => {
+    if (typeof window === "undefined") return "yellow";
+    const stored = window.localStorage.getItem("interview-arc-highlight-color");
+    return stored === "green" || stored === "pink" ? stored : "yellow";
+  });
   const [highlightBusy, setHighlightBusy] = useState(false);
   const readerDocumentRef = useRef<HTMLDivElement>(null);
   const highlightRangesRef = useRef(new Map<string, Range[]>());
@@ -1018,12 +1046,28 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (!selectedEntry && !selectedProblem) return;
     const closeReader = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      if (masterPaneOpen) {
+        setMasterPaneOpen(false);
+        return;
+      }
       setSelectedEntry(null);
       setSelectedProblem(null);
     };
     window.addEventListener("keydown", closeReader);
     return () => window.removeEventListener("keydown", closeReader);
-  }, [selectedEntry, selectedProblem]);
+  }, [masterPaneOpen, selectedEntry, selectedProblem]);
+
+  useEffect(() => {
+    if (!masterPaneOpen) return;
+    const closeMasterPane = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest(".past-master-pane, .bank-master-pane, .master-pane-toggle")) return;
+      setMasterPaneOpen(false);
+    };
+    document.addEventListener("pointerdown", closeMasterPane);
+    return () => document.removeEventListener("pointerdown", closeMasterPane);
+  }, [masterPaneOpen]);
 
   function enterArc() {
     if (!soundMuted) startAmbient();
@@ -1539,6 +1583,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function openJournalEntry(entry: LibraryEntry) {
+    setMasterPaneOpen(false);
     setSelectedProblem(null);
     setSelectedEntry(entry);
     setView("library");
@@ -2592,8 +2637,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return (
       <section className={`view-page library-page ${selectedEntry ? "has-open-entry" : ""}`}>
         <header className="view-masthead"><span className="eyebrow">PAST · COMPLETED WORK</span><h1>Read the journey<br /><em>like a field journal.</em></h1><p>Past contains finished activity timers and published case files—never planned work or result flags by themselves.</p></header>
-        <div className="past-master-detail">
-          <div className="past-master-pane">
+        <div className={`past-master-detail ${masterPaneOpen ? "master-pane-open" : ""}`}>
+          <div
+            className="past-master-pane"
+            onClickCapture={(event) => {
+              const target = event.target;
+              if (target instanceof Element && target.closest(".log-entry-open")) setMasterPaneOpen(false);
+            }}
+          >
             <div className="past-control-deck">
               <div className="library-toolbar bank-toolbar compact-toolbar past-toolbar">
                 <div className="bank-filter-rail primary-bank-controls past-filter-rail">
@@ -2759,8 +2810,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           <article className="system_design"><strong>{bankFor("system_design").length}</strong><span>System designs</span></article>
           <article className="behavioral"><strong>{bankFor("behavioral").length}</strong><span>Behavioral prompts</span></article>
         </div>
-        <div className="bank-master-detail">
-        <div className="bank-master-pane">
+        <div className={`bank-master-detail ${masterPaneOpen ? "master-pane-open" : ""}`}>
+        <div
+          className="bank-master-pane"
+          onClickCapture={(event) => {
+            const target = event.target;
+            if (target instanceof Element && target.closest(".problem-title-button, [title='View solution']")) setMasterPaneOpen(false);
+          }}
+        >
         <div className="bank-control-deck">
           <div className="bank-search-row"><label className="bank-search-bar">
             <span className="bank-search-icon" aria-hidden="true">
@@ -2952,6 +3009,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const highlightScopeId = highlightScope?.scopeId;
 
   useEffect(() => {
+    window.localStorage.setItem("interview-arc-highlight-color", highlightColorDraft);
+  }, [highlightColorDraft]);
+
+  useEffect(() => {
     queueMicrotask(() => setPendingHighlight(null));
     queueMicrotask(() => setSelectedHighlightId(""));
     queueMicrotask(() => setAnnotationPosition(null));
@@ -3050,7 +3111,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     setHighlightNoteDraft("");
     setHighlightNoteEditing(false);
     setHighlightPaletteOpen(false);
-    setHighlightColorDraft("yellow");
   }
 
   function highlightAtPoint(x: number, y: number) {
@@ -3072,7 +3132,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           setSelectedHighlightId(match[0]);
           setAnnotationPosition(annotationPositionFor(rect));
           setHighlightNoteDraft(highlight?.note ?? "");
-          setHighlightColorDraft(highlight?.color ?? "yellow");
           setHighlightNoteEditing(false);
           setHighlightPaletteOpen(false);
           return;
@@ -3098,7 +3157,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     setHighlightNoteDraft("");
     setHighlightNoteEditing(false);
     setHighlightPaletteOpen(false);
-    setHighlightColorDraft("yellow");
     setPendingHighlight({ quote, prefix: allText.slice(Math.max(0, index - 120), index), suffix: allText.slice(index + quote.length, index + quote.length + 120), position: annotationPositionFor(anchorRect) });
   }
 
@@ -3140,12 +3198,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const style = { left: position.x, top: position.y };
     const portal = (content: ReactNode) => typeof document === "undefined" ? null : createPortal(content, document.body);
     if (pendingHighlight && !highlightNoteEditing) return portal(<div className={`annotation-popover selection-annotation ${position.placement}`} style={style} role="toolbar" aria-label="Selected text actions" onMouseDown={(event) => event.preventDefault()}>
-      {highlightPaletteOpen ? <div className="annotation-colors" role="group" aria-label="Highlight color">
-        {(["yellow", "green", "pink"] as HighlightColor[]).map((color) => <button className={color} type="button" onClick={() => void saveHighlight("", color)} disabled={highlightBusy} aria-label={`Save ${color} highlight`} title={`${color[0].toUpperCase()}${color.slice(1)}`} key={color}><span /></button>)}
-      </div> : <>
-        <button type="button" onClick={() => setHighlightPaletteOpen(true)} disabled={highlightBusy} aria-label="Choose a highlight color" title="Highlight"><Icon name="edit" /></button>
-        <button type="button" onClick={() => { setHighlightNoteDraft(""); setHighlightColorDraft("yellow"); setHighlightNoteEditing(true); }} disabled={highlightBusy} aria-label="Underline selected text and add a note" title="Add note"><Icon name="note" /></button>
-      </>}
+      <button className={`annotation-current-color ${highlightColorDraft}`} type="button" onClick={() => setHighlightPaletteOpen((current) => !current)} disabled={highlightBusy} aria-label={`Current highlight color: ${highlightColorDraft}. Choose another color`} aria-expanded={highlightPaletteOpen} title="Choose color"><span /></button>
+      <button type="button" onClick={() => void saveHighlight()} disabled={highlightBusy} aria-label="Highlight selected text" title="Highlight"><Icon name="edit" /></button>
+      <button type="button" onClick={() => { setHighlightNoteDraft(""); setHighlightNoteEditing(true); }} disabled={highlightBusy} aria-label="Underline selected text and add a note" title="Add note"><Icon name="note" /></button>
+      {highlightPaletteOpen && <div className="annotation-color-menu annotation-colors" role="group" aria-label="Highlight color">
+        {(["yellow", "green", "pink"] as HighlightColor[]).map((color) => <button className={`${color} ${highlightColorDraft === color ? "selected" : ""}`} type="button" onClick={() => { setHighlightColorDraft(color); setHighlightPaletteOpen(false); }} aria-pressed={highlightColorDraft === color} aria-label={`Use ${color} for future highlights`} title={`${color[0].toUpperCase()}${color.slice(1)}`} key={color}><span /></button>)}
+      </div>}
     </div>);
     if (pendingHighlight) return portal(<form className={`annotation-popover annotation-note-editor ${position.placement}`} style={style} onSubmit={(event) => { event.preventDefault(); void saveHighlight(highlightNoteDraft); }} onMouseDown={(event) => event.stopPropagation()}>
       <label htmlFor="new-highlight-note">Add a note to this highlight</label>
@@ -3154,8 +3212,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       <div><button type="button" onClick={() => setHighlightNoteEditing(false)}>Cancel</button><button type="submit" disabled={highlightBusy || !highlightNoteDraft.trim()}>{highlightBusy ? "Saving…" : "Save note"}</button></div>
     </form>);
     if (!selectedHighlight) return null;
-    return portal(<section className={`annotation-popover saved-annotation compact ${position.placement}`} style={style} aria-label="Highlight actions" onMouseDown={(event) => event.stopPropagation()}>
-      {highlightNoteEditing ? <form onSubmit={(event) => { event.preventDefault(); void updateHighlightNote(selectedHighlight.id, highlightNoteDraft); }}><label htmlFor="saved-highlight-note">Note</label><textarea id="saved-highlight-note" autoFocus value={highlightNoteDraft} onChange={(event) => setHighlightNoteDraft(event.target.value)} placeholder="Add a note…" /><div><button type="button" onClick={() => { setHighlightNoteDraft(selectedHighlight.note); setHighlightNoteEditing(false); }}>Cancel</button><button type="submit" disabled={highlightBusy}>{highlightBusy ? "Saving…" : selectedHighlight.note && !highlightNoteDraft.trim() ? "Remove note" : "Save note"}</button></div></form> : <>{selectedHighlight.note && <p>{selectedHighlight.note}</p>}<div className="annotation-actions"><button type="button" onClick={() => setHighlightNoteEditing(true)} aria-label={selectedHighlight.note ? "Edit highlight note" : "Add a note to highlight"} title={selectedHighlight.note ? "Edit note" : "Add note"}><Icon name="note" /></button><button className="danger" type="button" onClick={() => void removeHighlight(selectedHighlight.id)} disabled={highlightBusy} aria-label="Remove highlight" title="Remove highlight"><Icon name="trash" /></button></div></>}
+    return portal(<section className={`annotation-popover saved-annotation compact ${selectedHighlight.note ? "has-note" : "no-note"} ${position.placement}`} style={style} aria-label="Highlight actions" onMouseDown={(event) => event.stopPropagation()}>
+      {highlightNoteEditing ? <form onSubmit={(event) => { event.preventDefault(); void updateHighlightNote(selectedHighlight.id, highlightNoteDraft); }}><label htmlFor="saved-highlight-note">Note</label><textarea id="saved-highlight-note" autoFocus value={highlightNoteDraft} onChange={(event) => setHighlightNoteDraft(event.target.value)} placeholder="Add a note…" /><div><button type="button" onClick={() => { setHighlightNoteDraft(selectedHighlight.note); setHighlightNoteEditing(false); }}>Cancel</button><button type="submit" disabled={highlightBusy}>{highlightBusy ? "Saving…" : selectedHighlight.note && !highlightNoteDraft.trim() ? "Remove note" : "Save note"}</button></div></form> : <>{selectedHighlight.note && <div className="saved-highlight-note"><span>Note</span><p>{selectedHighlight.note}</p></div>}<div className="annotation-actions"><button type="button" onClick={() => setHighlightNoteEditing(true)} aria-label={selectedHighlight.note ? "Edit highlight note" : "Add a note to highlight"} title={selectedHighlight.note ? "Edit note" : "Add note"}><Icon name="note" /></button><button className="danger" type="button" onClick={() => void removeHighlight(selectedHighlight.id)} disabled={highlightBusy} aria-label="Remove highlight" title="Remove highlight"><Icon name="trash" /></button></div></>}
     </section>);
   }
 
@@ -3183,13 +3241,19 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return () => controller.abort();
   }, [selectedEntryActivityId]);
 
+  function setEveryReaderGroup(open: boolean) {
+    readerDocumentRef.current?.querySelectorAll<HTMLDetailsElement>("details.reader-group").forEach((group) => {
+      group.open = open;
+    });
+  }
+
   function renderCaseReader() {
     if (!selectedEntry) return null;
     return (
       <article className="workspace-reader journal-case-reader" aria-labelledby="journal-reader-title" aria-label="Case file contents">
         <div className="reader-chrome">
-          <details className="reader-outline"><summary>Contents</summary><nav><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</nav></details>
-          <button className="reader-close icon-action" onClick={() => setSelectedEntry(null)} aria-label="Close case file" title="Close"><Icon name="close" /></button>
+          <div className="reader-chrome-leading"><button className="master-pane-toggle icon-action" onClick={() => setMasterPaneOpen((current) => !current)} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide practice records" : "Show practice records"} title={masterPaneOpen ? "Hide records" : "Show records"}><Icon name="book" /></button><ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</ReaderOutline></div>
+          <div className="reader-chrome-actions"><button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={() => { setMasterPaneOpen(false); setSelectedEntry(null); }} aria-label="Close case file" title="Close"><Icon name="close" /></button></div>
         </div>
         <div className="case-document workspace-reader-scroll" ref={readerDocumentRef} onMouseUp={(event) => captureHighlightSelection(event.clientX, event.clientY)} onKeyUp={() => captureHighlightSelection()}>
           <header id="case-summary"><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time></div><div className="case-title-row"><h2 id="journal-reader-title">{selectedEntry.title}</h2><div className="case-title-actions"><button className={`star-control ${isStarred(selectedEntry.type, selectedEntry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedEntry.type, selectedEntry.questionId)} disabled={!selectedEntry.questionId} aria-label={`${isStarred(selectedEntry.type, selectedEntry.questionId) ? "Unstar" : "Star"} ${selectedEntry.title}`} title="Star this problem"><Icon name="star" /></button><button className="icon-action note-add" onClick={() => openNoteComposer()} disabled={!selectedEntryActivityId} aria-label="Add a note" title="Add a note"><Icon name="note" /><i><Icon name="plus" /></i></button></div></div>{meaningfulSubtitle(selectedEntry.subtitle) && <p>{meaningfulSubtitle(selectedEntry.subtitle)}</p>}{selectedEntry.questionId && <button className="solution-link-button" onClick={() => { const question = bankFor(selectedEntry.type).find((candidate) => candidate.id === selectedEntry.questionId); if (question) { setSelectedEntry(null); setSelectedProblem({ type: selectedEntry.type, question }); setView("banks"); } }}>Open reusable solution →</button>}</header>
@@ -3199,7 +3263,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           {practiceRecordLoading && <div className="transcript-loading"><span />Loading conversation and recordings…</div>}
           <div className="letter-sections layered-reader">
             {selectedEntry.artifact
-              ? selectedCaseGroups.filter((group) => group.key === "record").map((group) => <section className="reader-group record-group" id={`case-group-${group.key}`} key={group.key}><h2>{group.title}</h2>{group.sections.map((section, index) => <ReaderSectionBody section={section} id={`case-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />)}</section>)
+              ? selectedCaseGroups.filter((group) => group.key === "record").map((group) => <details className="reader-group record-group" id={`case-group-${group.key}`} defaultOpen key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div>{group.sections.map((section, index) => <ReaderSectionBody section={section} id={`case-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />)}</div></details>)
               : <div className="unpublished-letter" id="case-draft"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to finalize the transcript, review, solution, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
             {selectedEntryTurns.length > 0 && <details className="reader-group conversation-group" id="case-transcript"><summary><span>Conversation</span><small>{selectedEntryTurns.length} exchange{selectedEntryTurns.length === 1 ? "" : "s"} · recordings inline</small></summary><div id="case-transcript-thread"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} /></div></details>}
             {selectedEntry.artifact && selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <details className={`reader-group ${group.key}-group`} id={`case-group-${group.key}`} defaultOpen={group.key !== "conversation"} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div>{group.sections.map((section, index) => <ReaderSectionBody section={section} id={`case-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />)}</div></details>)}
@@ -3215,7 +3279,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (!selectedProblem) return null;
     return (
       <article className="workspace-reader knowledge-reader" aria-labelledby="solution-profile-title">
-        <div className="reader-chrome"><details className="reader-outline"><summary>Contents</summary><nav><a href="#solution-profile-summary">Overview</a>{selectedSolutionGroups.map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#solution-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#solution-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}<a href="#solution-attempts">Past attempts</a></nav></details><button className="reader-close icon-action" onClick={() => setSelectedProblem(null)} aria-label="Close solution profile" title="Close"><Icon name="close" /></button></div>
+        <div className="reader-chrome"><div className="reader-chrome-leading"><button className="master-pane-toggle icon-action" onClick={() => setMasterPaneOpen((current) => !current)} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem bank" : "Show problem bank"} title={masterPaneOpen ? "Hide problems" : "Show problems"}><Icon name="book" /></button><ReaderOutline><a href="#solution-profile-summary">Overview</a>{selectedSolutionGroups.map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#solution-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#solution-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}<a href="#solution-attempts">Past attempts</a></ReaderOutline></div><div className="reader-chrome-actions"><button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={() => { setMasterPaneOpen(false); setSelectedProblem(null); }} aria-label="Close solution profile" title="Close"><Icon name="close" /></button></div></div>
         <div className="case-document solution-profile-document workspace-reader-scroll" ref={readerDocumentRef} onMouseUp={(event) => captureHighlightSelection(event.clientX, event.clientY)} onKeyUp={() => captureHighlightSelection()}>
           <header id="solution-profile-summary"><div><span className={`type-chip ${selectedProblem.type}`}>{typeLabel(selectedProblem.type)}</span><span className="profile-revision">{selectedProblemProfile ? `Solution revision ${selectedProblemProfile.currentRevision}` : "No solution yet"}</span><button className={`star-control ${isStarred(selectedProblem.type, selectedProblem.question.id) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedProblem.type, selectedProblem.question.id)} aria-label={`${isStarred(selectedProblem.type, selectedProblem.question.id) ? "Unstar" : "Star"} ${selectedProblem.question.title}`}><Icon name="star" /></button></div><h2 id="solution-profile-title">{selectedProblem.question.title}</h2><p>{selectedProblemProfile?.payload.summary ?? selectedProblem.question.prompt ?? "Finish and finalize an attempt to build this reusable Solution Profile."}</p></header>
           <div className="profile-tags">{[...new Set([...selectedProblem.question.topics, ...(selectedProblem.question.tags ?? []), ...(selectedProblemProfile?.tags ?? [])])].map((tag) => <span key={tag}>{tag}</span>)}</div>

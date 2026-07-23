@@ -154,21 +154,36 @@ export function ArrivalRitual({
 }) {
   const [quoteIndex, setQuoteIndex] = useState(() => DAILY_LINES.indexOf(quoteFor(date)));
   const [wallpaperIndex, setWallpaperIndex] = useState(() => WALLPAPER_POOL.indexOf(wallpaperFor(date)));
+  const [arrivalReady, setArrivalReady] = useState(false);
 
   useEffect(() => {
     const nextQuote = visitIndex("interview-arc-last-arrival-quote", DAILY_LINES.length);
     const nextWallpaper = visitIndex("interview-arc-last-arrival-wallpaper", WALLPAPER_POOL.length);
-    const frame = window.requestAnimationFrame(() => {
+    const image = new Image();
+    let cancelled = false;
+    let revealed = false;
+    let frame = 0;
+    const reveal = () => {
+      if (cancelled || revealed) return;
+      revealed = true;
       setQuoteIndex(nextQuote);
       setWallpaperIndex(nextWallpaper);
-    });
-    return () => window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => setArrivalReady(true));
+    };
+    image.addEventListener("load", reveal, { once: true });
+    image.addEventListener("error", reveal, { once: true });
+    image.src = WALLPAPER_POOL[nextWallpaper].path;
+    if (image.complete) reveal();
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+    };
   }, [date]);
 
   if (state === "entered") return null;
   const wallpaper = WALLPAPER_POOL[wallpaperIndex];
   return (
-    <section className={`arrival-ritual ${state}`} aria-label="Daily arrival">
+    <section className={`arrival-ritual ${state} ${arrivalReady ? "ready" : "preparing"}`} aria-label="Daily arrival" aria-busy={!arrivalReady}>
       <div className="arrival-image" style={{ "--arrival-wallpaper": `url(${wallpaper.path})` } as CSSProperties} aria-hidden="true" />
       <div className="arrival-shade" aria-hidden="true" />
       <div className="arrival-content">
