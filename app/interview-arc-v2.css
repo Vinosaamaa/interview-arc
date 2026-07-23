@@ -1152,7 +1152,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   transform: translateX(-50%);
   overflow: visible;
   z-index: 26;
-  animation: none;
+  animation: reader-workspace-enter .2s cubic-bezier(.2,.8,.2,1) both;
   transition:
     width .3s cubic-bezier(.2,.8,.2,1),
     grid-template-columns .3s cubic-bezier(.2,.8,.2,1),

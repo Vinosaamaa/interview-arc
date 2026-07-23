@@ -145,6 +145,8 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /data-list-item-id=\{`library:\$\{entry\.id\}`\}/);
   assert.match(client, /data-list-item-id=\{`banks:\$\{type\}:\$\{question\.id\}`\}/);
   assert.match(client, /anchorOffset: anchor\.getBoundingClientRect\(\)\.top - referenceTop/);
+  assert.match(client, /centerAnchor: true/);
+  assert.match(client, /pending\.centerAnchor/);
   assert.match(client, /list\.scrollTo\(\{ top: Math\.max\(0, target\), behavior: "instant" \}\)/);
   assert.match(client, /key=\{`\$\{view\}-\$\{viewTransitionId\}`\}/);
   assert.doesNotMatch(client, /kind: "activity-result"/);
@@ -158,7 +160,10 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /function transitionToView\(nextView: View\) \{\s*if \(nextView === view\) return;/);
   assert.doesNotMatch(css, /reader-pane-(?:enter|exit)/);
   assert.match(css, /@keyframes reader-workspace-exit/);
+  assert.match(css, /@keyframes reader-workspace-enter/);
+  assert.match(css, /animation: reader-workspace-enter \.2s/);
   assert.match(css, /\.past-master-detail\.reader-closing,[\s\S]*animation: reader-workspace-exit/);
+  assert.doesNotMatch(client, /Loading conversation and recordings/);
   assert.doesNotMatch(css, /list-view-return/);
   assert.match(client, /answer-player-unified/);
   assert.match(client, /problem-bank-entry.*role="button" tabIndex=\{0\} aria-label=/);
