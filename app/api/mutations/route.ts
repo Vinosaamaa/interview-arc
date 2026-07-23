@@ -7,6 +7,7 @@ import {
   setOutcome,
   setPublicationStatus,
   startFreshWorkbench,
+  TimerStateConflictError,
   upsertExtraActivity,
   upsertLiveSession,
   type OutcomeValue,
@@ -191,6 +192,9 @@ export async function POST(request: Request) {
     const state = await readLiveState(ownerId, date);
     return Response.json(state);
   } catch (error) {
+    if (error instanceof TimerStateConflictError) {
+      return Response.json({ error: error.message, retryable: false }, { status: 409 });
+    }
     return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 });
   }
 }

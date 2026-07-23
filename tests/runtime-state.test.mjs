@@ -11,6 +11,7 @@ import { dedupeSnapshotRows } from "../db/snapshot-rows.ts";
 import { derivePublicationStatus } from "../db/publication-state.ts";
 import { foldElapsed, nextTimerState } from "../db/timer-state.ts";
 import { reviewIntervalDays } from "../db/review-cadence.ts";
+import { mutationFailureDisposition } from "../app/mutation-queue.ts";
 import { isJournalPath, journalBranch, parsePorcelain } from "../scripts/journal-branch.mjs";
 
 test("today follows the practice timezone instead of the Worker UTC date", () => {
@@ -94,6 +95,33 @@ test("the clean-start release cannot replay stale mock browser queues", async ()
   assert.match(liveSync, /interview-arc-draft-v3-/);
   assert.match(liveSync, /interview-arc-queue-v2-/);
   assert.match(liveSync, /startsWith\("interview-arc-queue-"\)/);
+});
+
+test("non-retryable timer conflicts cannot poison the durable mutation queue", async () => {
+  assert.equal(mutationFailureDisposition(409), "discard");
+  assert.equal(mutationFailureDisposition(400), "discard");
+  assert.equal(mutationFailureDisposition(422), "discard");
+  assert.equal(mutationFailureDisposition(401), "retry");
+  assert.equal(mutationFailureDisposition(429), "retry");
+  assert.equal(mutationFailureDisposition(500), "retry");
+
+  const liveSync = await readFile(new URL("../app/live-sync.ts", import.meta.url), "utf8");
+  assert.match(liveSync, /mutationFailureDisposition\(response\.status\)/);
+  assert.match(liveSync, /queueRef\.current = queueRef\.current\.slice\(1\)/);
+  assert.ok(liveSync.includes("fetch(`/api/state?date="));
+});
+
+test("a finished parent session locks every child activity timer", async () => {
+  const client = await readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8");
+  const liveState = await readFile(new URL("../db/live-state.ts", import.meta.url), "utf8");
+  const mutationRoute = await readFile(new URL("../app/api/mutations/route.ts", import.meta.url), "utf8");
+
+  assert.match(client, /locked=\{sessionLocked\}/);
+  assert.match(client, /if \(parentSession && draft\.sessionTimers\[parentSession\.id\]\?\.completed\) return/);
+  assert.match(client, /activity-timer .*locked/);
+  assert.match(liveState, /TimerStateConflictError/);
+  assert.match(mutationRoute, /error instanceof TimerStateConflictError/);
+  assert.match(mutationRoute, /retryable: false/);
 });
 
 test("daily checkpoint guard recognizes only journal-owned changes", () => {

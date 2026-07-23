@@ -26,6 +26,13 @@ export type TimerKind = "activity" | "session";
 export type TimerAction = "start" | "pause" | "finish";
 export type OutcomeValue = "solved" | "solved_after_reviewing_approach" | "failed";
 export type PublicationStatusValue = "draft" | "ready" | "published";
+
+export class TimerStateConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TimerStateConflictError";
+  }
+}
 export type WorkbenchState = {
   id: string;
   status: "open" | "archived";
@@ -312,7 +319,7 @@ export async function applyTimerAction(
   if (action === "start" && kind === "activity" && options.sessionId) {
     const parent = await loadTimer(db, ownerId, options.sessionId, "session");
     if (parent?.completed) {
-      throw new Error("This session is already finished.");
+      throw new TimerStateConflictError("This session is already finished.");
     }
     if (parent?.startedAt && !parent.runningSince) {
       const sessionRows = await db
