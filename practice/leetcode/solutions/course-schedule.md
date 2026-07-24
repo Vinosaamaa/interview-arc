@@ -9,19 +9,26 @@ status: published
 
 ## Problem Summary
 
-There are `numCourses` courses numbered `0` through `numCourses - 1`. A pair `[course, prerequisite]` creates the directed edge `prerequisite -> course`. Return whether every course can be completed. This is a directed-cycle question.
+There are `numCourses` courses numbered `0` through `numCourses - 1`. Each pair `[course, prerequisite]` creates the directed edge `prerequisite -> course`. Return whether every course can be completed. Equivalently, determine whether this directed graph is acyclic.
 
 ## Pattern Recognition and Constraints
 
-The words **prerequisite**, **dependency**, and **can everything be completed** point to directed-graph cycle detection. Use an `O(V + E)` traversal. Kahn's topological sort is preferred because its processed-node count gives the answer directly.
+The words **prerequisite**, **dependency**, and **can everything be completed** point to directed-graph cycle detection. Both Kahn’s topological sort and DFS three-state coloring run in `O(V + E)`. Kahn’s algorithm is the preferred interview answer because the number of processed vertices gives the boolean result directly and avoids recursion-depth concerns.
 
-## Best Approach: Kahn's BFS Topological Sort
+## Best Approach: Kahn’s BFS Topological Sort
 
-Build an adjacency list and indegree array. Queue every zero-indegree course. Process ready courses, delete their outgoing edges, and enqueue neighbors that become ready. Return `true` exactly when the processed count equals `numCourses`.
+1. Build an adjacency list from each prerequisite to the courses it unlocks.
+2. Count every course’s indegree, which is its number of unmet prerequisites.
+3. Queue all zero-indegree courses.
+4. Repeatedly process a ready course and decrement its neighbors’ indegrees.
+5. Queue each neighbor when its indegree reaches zero.
+6. Return `true` exactly when the processed count equals `numCourses`.
 
-## Correctness Reasoning
+## Correctness Proof
 
-Every queued course has no remaining prerequisite, so processing it is valid. If all vertices are processed, that order is a topological order. If vertices remain, the finite remaining subgraph has no zero-indegree vertex and therefore contains a cycle.
+Every course entering the queue has no unmet prerequisite, so appending it to the order is valid. Processing it removes exactly the dependency edges it satisfies. Therefore, if all vertices are processed, their processing order is a valid topological order.
+
+If some vertices remain, every vertex in the remaining finite subgraph has positive indegree. Following incoming edges must eventually revisit a vertex, which proves that the remaining subgraph contains a directed cycle. Those courses cannot all be completed. Therefore, the algorithm returns `true` exactly when all courses are completable.
 
 ## Reference Implementation — Java
 
@@ -31,14 +38,23 @@ import java.util.*;
 class Solution {
     public boolean canFinish(int numCourses, int[][] prerequisites) {
         List<List<Integer>> graph = new ArrayList<>();
-        for (int i = 0; i < numCourses; i++) graph.add(new ArrayList<>());
+        for (int course = 0; course < numCourses; course++) {
+            graph.add(new ArrayList<>());
+        }
+
         int[] indegree = new int[numCourses];
         for (int[] pair : prerequisites) {
-            graph.get(pair[1]).add(pair[0]);
-            indegree[pair[0]]++;
+            int course = pair[0];
+            int prerequisite = pair[1];
+            graph.get(prerequisite).add(course);
+            indegree[course]++;
         }
+
         Deque<Integer> ready = new ArrayDeque<>();
-        for (int i = 0; i < numCourses; i++) if (indegree[i] == 0) ready.offer(i);
+        for (int course = 0; course < numCourses; course++) {
+            if (indegree[course] == 0) ready.offer(course);
+        }
+
         int completed = 0;
         while (!ready.isEmpty()) {
             int prerequisite = ready.poll();
@@ -62,11 +78,17 @@ class Solution:
     def canFinish(self, numCourses: int, prerequisites: List[List[int]]) -> bool:
         graph = [[] for _ in range(numCourses)]
         indegree = [0] * numCourses
+
         for course, prerequisite in prerequisites:
             graph[prerequisite].append(course)
             indegree[course] += 1
-        ready = deque(i for i in range(numCourses) if indegree[i] == 0)
+
+        ready = deque(
+            course for course in range(numCourses)
+            if indegree[course] == 0
+        )
         completed = 0
+
         while ready:
             prerequisite = ready.popleft()
             completed += 1
@@ -74,41 +96,231 @@ class Solution:
                 indegree[course] -= 1
                 if indegree[course] == 0:
                     ready.append(course)
+
         return completed == numCourses
 ```
 
 ## Complexity
 
-- Time: `O(V + E)`.
-- Space: `O(V + E)`.
+- Time: `O(V + E)`, where `V = numCourses` and `E = prerequisites.length`.
+- Space: `O(V + E)` for the graph, indegree array, and queue.
 
 ## Alternative: DFS Three-State Coloring
 
-Use `0 = unvisited`, `1 = visiting`, and `2 = finished`. Reaching a visiting node is a back edge and proves a cycle.
+Track each course as `0 = unvisited`, `1 = visiting`, or `2 = finished`. Reaching a visiting course proves a back edge and therefore a directed cycle. This has the same asymptotic cost as Kahn’s algorithm, but recursive implementations may require care on very deep graphs.
+
+## Alternative Implementation: DFS Three-State Coloring — Java
 
 ```java
-private boolean hasCycle(int node, List<List<Integer>> graph, int[] state) {
-    state[node] = 1;
-    for (int next : graph.get(node)) {
-        if (state[next] == 1) return true;
-        if (state[next] == 0 && hasCycle(next, graph, state)) return true;
+import java.util.*;
+
+class Solution {
+    public boolean canFinish(int numCourses, int[][] prerequisites) {
+        List<List<Integer>> graph = new ArrayList<>();
+        for (int course = 0; course < numCourses; course++) {
+            graph.add(new ArrayList<>());
+        }
+        for (int[] pair : prerequisites) {
+            graph.get(pair[1]).add(pair[0]);
+        }
+
+        int[] state = new int[numCourses];
+        for (int course = 0; course < numCourses; course++) {
+            if (state[course] == 0 && hasCycle(course, graph, state)) {
+                return false;
+            }
+        }
+        return true;
     }
-    state[node] = 2;
-    return false;
+
+    private boolean hasCycle(
+        int course,
+        List<List<Integer>> graph,
+        int[] state
+    ) {
+        state[course] = 1;
+        for (int next : graph.get(course)) {
+            if (state[next] == 1) return true;
+            if (state[next] == 0 && hasCycle(next, graph, state)) return true;
+        }
+        state[course] = 2;
+        return false;
+    }
 }
 ```
 
-## Meaningful Alternative: Strongly Connected Components
+## Alternative Implementation: DFS Three-State Coloring — Python
 
-Tarjan's or Kosaraju's algorithm identifies the exact cyclic components in `O(V + E)`. Use it when the caller needs diagnostics about which courses form each cycle, not merely a boolean.
+```python
+from typing import List
+
+class Solution:
+    def canFinish(self, numCourses: int, prerequisites: List[List[int]]) -> bool:
+        graph = [[] for _ in range(numCourses)]
+        for course, prerequisite in prerequisites:
+            graph[prerequisite].append(course)
+
+        state = [0] * numCourses
+
+        def has_cycle(course: int) -> bool:
+            state[course] = 1
+            for next_course in graph[course]:
+                if state[next_course] == 1:
+                    return True
+                if state[next_course] == 0 and has_cycle(next_course):
+                    return True
+            state[course] = 2
+            return False
+
+        return all(
+            state[course] != 0 or not has_cycle(course)
+            for course in range(numCourses)
+        )
+```
+
+## Alternative: Strongly Connected Components
+
+Tarjan’s algorithm identifies the exact cyclic groups rather than only returning a boolean. An SCC with more than one vertex is cyclic; a one-vertex SCC is cyclic only when the course has a self-loop. Prefer this approach when diagnostics must report which courses participate in each cycle.
+
+## Alternative Implementation: Tarjan SCC — Java
+
+```java
+import java.util.*;
+
+class Solution {
+    private int time = 0;
+
+    public boolean canFinish(int numCourses, int[][] prerequisites) {
+        List<List<Integer>> graph = new ArrayList<>();
+        for (int course = 0; course < numCourses; course++) {
+            graph.add(new ArrayList<>());
+        }
+        boolean[] selfLoop = new boolean[numCourses];
+        for (int[] pair : prerequisites) {
+            graph.get(pair[1]).add(pair[0]);
+            if (pair[0] == pair[1]) selfLoop[pair[0]] = true;
+        }
+
+        int[] discovery = new int[numCourses];
+        int[] low = new int[numCourses];
+        Arrays.fill(discovery, -1);
+        boolean[] onStack = new boolean[numCourses];
+        Deque<Integer> stack = new ArrayDeque<>();
+        boolean[] cyclic = { false };
+
+        for (int course = 0; course < numCourses; course++) {
+            if (discovery[course] == -1) {
+                tarjan(course, graph, discovery, low, onStack, stack, selfLoop, cyclic);
+            }
+        }
+        return !cyclic[0];
+    }
+
+    private void tarjan(
+        int node,
+        List<List<Integer>> graph,
+        int[] discovery,
+        int[] low,
+        boolean[] onStack,
+        Deque<Integer> stack,
+        boolean[] selfLoop,
+        boolean[] cyclic
+    ) {
+        discovery[node] = low[node] = time++;
+        stack.push(node);
+        onStack[node] = true;
+
+        for (int next : graph.get(node)) {
+            if (discovery[next] == -1) {
+                tarjan(next, graph, discovery, low, onStack, stack, selfLoop, cyclic);
+                low[node] = Math.min(low[node], low[next]);
+            } else if (onStack[next]) {
+                low[node] = Math.min(low[node], discovery[next]);
+            }
+        }
+
+        if (low[node] == discovery[node]) {
+            int size = 0;
+            int member;
+            do {
+                member = stack.pop();
+                onStack[member] = false;
+                size++;
+            } while (member != node);
+            if (size > 1 || selfLoop[node]) cyclic[0] = true;
+        }
+    }
+}
+```
+
+## Alternative Implementation: Tarjan SCC — Python
+
+```python
+from typing import List
+
+class Solution:
+    def canFinish(self, numCourses: int, prerequisites: List[List[int]]) -> bool:
+        graph = [[] for _ in range(numCourses)]
+        self_loop = [False] * numCourses
+        for course, prerequisite in prerequisites:
+            graph[prerequisite].append(course)
+            if course == prerequisite:
+                self_loop[course] = True
+
+        discovery = [-1] * numCourses
+        low = [0] * numCourses
+        on_stack = [False] * numCourses
+        stack = []
+        time = 0
+        cyclic = False
+
+        def tarjan(node: int) -> None:
+            nonlocal time, cyclic
+            discovery[node] = low[node] = time
+            time += 1
+            stack.append(node)
+            on_stack[node] = True
+
+            for next_course in graph[node]:
+                if discovery[next_course] == -1:
+                    tarjan(next_course)
+                    low[node] = min(low[node], low[next_course])
+                elif on_stack[next_course]:
+                    low[node] = min(low[node], discovery[next_course])
+
+            if low[node] == discovery[node]:
+                size = 0
+                while True:
+                    member = stack.pop()
+                    on_stack[member] = False
+                    size += 1
+                    if member == node:
+                        break
+                if size > 1 or self_loop[node]:
+                    cyclic = True
+
+        for course in range(numCourses):
+            if discovery[course] == -1:
+                tarjan(course)
+
+        return not cyclic
+```
 
 ## Edge Cases
 
 - No prerequisites or one independent course.
 - Disconnected components.
 - Two-node and longer cycles.
-- A self-dependency.
+- A self-dependency such as `[0, 0]`.
 - Several prerequisites converging on one course.
+- Duplicate prerequisite edges; they are counted and removed consistently.
+
+## Common Mistakes
+
+- Reversing the edge and incrementing the wrong course’s indegree.
+- Returning `true` when the queue becomes empty instead of checking the processed count.
+- Running cycle detection from only course `0` and missing disconnected components.
+- Marking a DFS node finished before all of its descendants have finished.
 
 ## Recall Cue
 
@@ -116,5 +328,4 @@ Tarjan's or Kosaraju's algorithm identifies the exact cyclic components in `O(V 
 
 ## Improved Interview Answer
 
-I model `[a, b]` as `b -> a`, then run Kahn's topological sort. I queue zero-indegree courses, process them, and decrement the indegrees of the courses they unlock. Processing every course proves the graph is acyclic; otherwise the remaining vertices contain a cycle. Time and space are both `O(V + E)`.
-
+I model `[a, b]` as the edge `b -> a`, because completing `b` unlocks `a`. Then I run Kahn’s topological sort: queue every zero-indegree course, process it, and decrement the indegrees of the courses it unlocks. If I process all `numCourses` vertices, the processing order is a valid topological order; otherwise the remaining subgraph contains a directed cycle. The algorithm uses `O(V + E)` time and `O(V + E)` space.

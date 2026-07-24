@@ -161,37 +161,67 @@ Assume 100M monthly users, 10M daily users, and 100M active listings. At 20 brow
 
 ## API contract
 
-POST /v1/listings creates an idempotent draft and returns listing_id plus signed media-upload URLs. POST /v1/listings/{id}/publish validates ownership, fields, media, and moderation state. PATCH /v1/listings/{id} uses an expected version for optimistic concurrency. POST /v1/listings/{id}/status changes active/reserved/sold/inactive state. GET /v1/listings/{id} reads authoritative detail. GET /v1/listings/search?q=&lat=&lon=&radius=&category=&min_price=&max_price=&cursor= performs full-text/geospatial discovery with opaque cursor pagination. POST /v1/listings/{id}/contact idempotently creates or reuses a buyer-seller conversation. POST /v1/listings/{id}/reports records abuse. Authenticate every call, authorize owner mutations, validate input, rate-limit abuse, and return stable error codes.
+### Create a draft
+
+```http
+POST /v1/listings
+Idempotency-Key: <client-key>
+```
+
+Returns `listing_id`, `version`, and short-lived signed media-upload URLs.
+
+### Publish, edit, or change lifecycle
+
+```http
+POST  /v1/listings/{listing_id}/publish
+PATCH /v1/listings/{listing_id}
+POST  /v1/listings/{listing_id}/status
+If-Match: <expected-version>
+```
+
+Validate ownership, fields, media readiness, and moderation state. Use optimistic concurrency for edits and stable lifecycle transitions for `active`, `reserved`, `sold`, and `inactive`.
+
+### Read and discover
+
+```http
+GET /v1/listings/{listing_id}
+GET /v1/listings/search?q=&lat=&lon=&radius=&category=&min_price=&max_price=&cursor=
+```
+
+The detail endpoint reads authoritative state. Search performs full-text/geospatial discovery, returns an opaque search-after cursor, and never exposes precise seller coordinates.
+
+### Contact and report
+
+```http
+POST /v1/listings/{listing_id}/contact
+POST /v1/listings/{listing_id}/reports
+```
+
+Contact idempotently creates or reuses a buyer-listing conversation. Authenticate every call, authorize owner mutations, validate input, and rate-limit abuse.
 
 ## Data model and access patterns
 
-Core records: Listing(listing_id, seller_id, title, description, price_minor, currency, category_id, condition, coarse_geohash, precise_location_encrypted, status, moderation_status, version, timestamps); ListingMedia(media_id, listing_id, object_key, sort_order, processing_status); Category; Favorite; ConversationLink; Report; and TransactionalOutbox. Use a sharded relational database as canonical storage for ownership, lifecycle, uniqueness, and transactional outbox writes. Store media in object storage. Maintain denormalized full-text/geospatial documents in a search cluster. Use distributed caches for hot details and short-lived discovery results.
+```text
+Listing(
+  listing_id, seller_id, title, description, price_minor, currency,
+  category_id, condition, coarse_geohash, precise_location_encrypted,
+  status, moderation_status, version, created_at, updated_at
+)
+ListingMedia(media_id, listing_id, object_key, sort_order, processing_status)
+Favorite(user_id, listing_id, created_at)
+ConversationLink(buyer_id, listing_id, conversation_id)
+Report(report_id, reporter_id, listing_id, reason, status)
+TransactionalOutbox(event_id, aggregate_id, version, event_type, payload)
+```
+
+Use a sharded relational database as canonical storage for ownership, lifecycle, uniqueness, and transactional outbox writes. Store media in object storage. Maintain denormalized full-text/geospatial documents in a search cluster. Use distributed caches for hot details and short-lived discovery results.
 
 ## High-level architecture
 
-```mermaid
-flowchart LR
- C[Web and mobile clients] --> G[API gateway and auth]
- G --> L[Listing service]
- G --> D[Discovery service]
- G --> M[Media service]
- G --> MSG[Existing messaging]
- L --> DB[(Sharded relational DB)]
- L --> O[Transactional outbox]
- M --> OBJ[(Object storage)]
- OBJ --> CDN[CDN]
- O --> BUS[Event stream]
- BUS --> IDX[Indexing workers]
- BUS --> MOD[Moderation pipeline]
- BUS --> REC[Recommendation pipeline]
- IDX --> SEARCH[(Search cluster)]
- MOD --> DB
- REC --> RSTORE[(Recommendation store)]
- D --> SEARCH
- D --> CACHE[(Distributed cache)]
- D --> RSTORE
- L --> CACHE
-```
+![Facebook Marketplace high-level architecture](/diagrams/facebook-marketplace-architecture.svg)
+
+[Open the editable Draw.io source](https://github.com/Vinosaamaa/interview-arc/blob/main/practice/system-design/diagrams/facebook-marketplace-architecture.drawio)
+
 The listing service owns canonical metadata and lifecycle. Media uploads directly to object storage using signed URLs. The event stream decouples indexing, moderation, recommendations, analytics, cache invalidation, and notifications. Discovery queries search and optional recommendations, then hydrates cards from cache or source-of-truth reads.
 
 ## Critical read and write flows
@@ -416,4 +446,3 @@ _Duration: 46.85 seconds · Pace: 132 WPM_
 
 - [System Design Interview Practice: Design Craigslist](https://medium.com/@bugfreeai/system-design-interview-practice-design-craigslist-c95ba0238f74) — accessed 2026-07-22T10:19:04.118Z
 - [System design cheatsheet: Online Marketplace](https://www.reddit.com/r/leetcode/comments/104wf74/system_design_cheatsheet_online_marketplace/) — accessed 2026-07-22T10:19:04.118Z
-

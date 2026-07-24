@@ -756,6 +756,29 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .markdown-body th, .markdown-body td { padding: 9px 11px; border: 1px solid #c8d0c5; text-align: left; vertical-align: top; }
 .markdown-body th { background: #eef1eb; }
 .markdown-body hr { margin: 1.6em 0; border: 0; border-top: 1px solid #c9d0c6; }
+.markdown-body > img { display: block; max-width: 100%; height: auto; margin: 1.2em auto; }
+.architecture-diagram { margin: 1.25em 0; border: 1px solid #b9cbc4; border-radius: 12px; background: #f8fbf9; overflow: hidden; box-shadow: 0 10px 28px rgba(17, 58, 51, .08); }
+.architecture-diagram > figcaption { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 48px; padding: 8px 10px 8px 16px; border-bottom: 1px solid #cbd8d3; background: #edf5f1; color: var(--ink); font-weight: 760; }
+.architecture-diagram > figcaption > div { display: flex; align-items: center; gap: 5px; flex: 0 0 auto; }
+.architecture-diagram button { display: inline-grid; width: 32px; height: 32px; place-items: center; padding: 0; border: 1px solid #b5c8c0; border-radius: 7px; background: #fff; color: var(--ink); cursor: pointer; }
+.architecture-diagram button:hover:not(:disabled) { border-color: #568c7c; background: #e1efe9; }
+.architecture-diagram button:disabled { opacity: .35; cursor: default; }
+.architecture-diagram .diagram-zoom-value { width: 50px; font-family: var(--font-geist-mono); font-size: .72rem; }
+.architecture-diagram-viewport { max-height: min(72vh, 780px); padding: 12px; overflow: auto; background: #fff; overscroll-behavior: contain; }
+.architecture-diagram-viewport img { display: block; max-width: none; height: auto; margin: 0 auto; transition: width 160ms ease; }
+.architecture-diagram > small { display: block; padding: 7px 14px 9px; color: #65766f; font-size: .72rem; }
+.architecture-diagram:fullscreen { display: flex; flex-direction: column; width: 100vw; height: 100vh; margin: 0; border: 0; border-radius: 0; background: #fff; }
+.architecture-diagram:fullscreen .architecture-diagram-viewport { max-height: none; flex: 1; }
+.code-stage { margin: 1.15em 0; border: 1px solid #263429; border-radius: 10px; background: #172019; overflow: hidden; }
+.code-stage > figcaption { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #344638; color: #cbd8ce; font-family: var(--font-geist-mono); font-size: .74rem; text-transform: uppercase; letter-spacing: .08em; }
+.code-stage > figcaption button { padding: 4px 8px; border: 1px solid #53685a; border-radius: 5px; background: transparent; color: #eef5f0; cursor: pointer; }
+.code-stage > pre { max-height: 720px; margin: 0; border-radius: 0; overflow: auto; }
+.language-code-tabs { margin: 1.2em 0; }
+.language-code-tabs > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 8px; }
+.language-code-tabs > header h3 { margin: 0; }
+.language-code-tabs [role="tablist"] { display: flex; gap: 5px; padding: 3px; border-radius: 8px; background: #e7eee9; }
+.language-code-tabs [role="tab"] { padding: 6px 12px; border: 0; border-radius: 6px; background: transparent; color: #53625a; font-weight: 720; cursor: pointer; }
+.language-code-tabs [role="tab"].active { background: #fff; color: var(--ink); box-shadow: 0 1px 5px rgba(20, 55, 46, .13); }
 .unpublished-letter { margin: 34px 0; padding: 25px; border: 1px solid #ccd3c8; background: rgba(247,249,243,.86); }
 .unpublished-letter .eyebrow { display: block; margin-bottom: 12px; }
 .unpublished-letter p { margin: 0; color: var(--muted); font-size: .92rem; line-height: 1.65; }

@@ -117,11 +117,12 @@ export async function readContent(root) {
   const systemDesignBank = await readJson(root, "practice/system-design/bank/questions.json");
   const behavioralBank = await readJson(root, "practice/behavioral/bank/questions.json");
   const questionBanks = {
-    leetcode: leetcodeBank.questions.map((question) => ({
+    leetcode: await Promise.all(leetcodeBank.questions.map((question) => hydrateBankSolution(root, {
       id: question.id,
       problemNumber: question.problemNumber,
       title: question.title,
       url: question.url,
+      source: question.source,
       difficulty: question.difficulty,
       acceptanceRate: question.acceptanceRate,
       topics: question.topics ?? [],
@@ -129,7 +130,8 @@ export async function readContent(root) {
       companySignals: question.companySignals ?? [],
       targetMinutes: question.targetMinutes ?? 30,
       active: question.active ?? true,
-    })),
+      solutionPath: question.solutionPath,
+    }))),
     systemDesign: await Promise.all(systemDesignBank.questions.map((question) => hydrateBankSolution(root, question))),
     behavioral: await Promise.all(behavioralBank.questions.map((question) => hydrateBankSolution(root, question))),
   };
