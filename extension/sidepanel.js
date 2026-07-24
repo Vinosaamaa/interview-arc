@@ -102,6 +102,15 @@ function outcomeCopy(outcome) {
   return ["⚐", "Not set"];
 }
 
+function currentActivityStarred() {
+  if (!activity?.questionId) return false;
+  return Boolean(state?.problemPreferences?.some(
+    (preference) => preference.specialty === activity.type
+      && preference.questionId === activity.questionId
+      && preference.starred,
+  ));
+}
+
 function renderClock() {
   if (!activity) return;
   const timer = activity.timer;
@@ -148,6 +157,15 @@ function render() {
   elements["publication-button"].querySelector("span").textContent = publication === "published" ? "✓" : publication === "ready" ? "↑" : "◇";
   elements["publication-button"].querySelector("strong").textContent = publication === "published" ? "In journal" : publication === "ready" ? "Ready for journal" : "Finish to journal";
   elements["publication-button"].disabled = true;
+  const starred = currentActivityStarred();
+  elements["favorite-button"].classList.toggle("starred", starred);
+  elements["favorite-button"].textContent = starred ? "★" : "☆";
+  elements["favorite-button"].disabled = !activity.questionId;
+  elements["favorite-button"].setAttribute("aria-pressed", String(starred));
+  elements["favorite-button"].setAttribute("aria-label", `${starred ? "Unstar" : "Star"} ${activity.title}`);
+  elements["favorite-button"].title = activity.questionId
+    ? starred ? "Remove from starred problems" : "Keep this problem in your starred review set"
+    : "A stable bank question is required to star this activity";
   if (activityChanged || !notesDirty) {
     elements.notes.value = activity.personalNote ?? "";
   }
@@ -305,6 +323,27 @@ elements["outcome-button"].addEventListener("click", () => {
     { type: "outcome", activityId, outcome: nextOutcome },
     () => {
       activity = { ...activity, outcome: nextOutcome };
+      render();
+    },
+  ).catch(() => {});
+});
+elements["favorite-button"].addEventListener("click", () => {
+  if (!activity?.questionId) return;
+  const specialty = activity.type;
+  const questionId = activity.questionId;
+  const starred = !currentActivityStarred();
+  mutate(
+    { type: "problem-star", specialty, questionId, starred },
+    () => {
+      state = {
+        ...state,
+        problemPreferences: [
+          ...(state?.problemPreferences ?? []).filter(
+            (preference) => !(preference.specialty === specialty && preference.questionId === questionId),
+          ),
+          { specialty, questionId, starred, updatedAt: Date.now() },
+        ],
+      };
       render();
     },
   ).catch(() => {});

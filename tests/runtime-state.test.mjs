@@ -375,6 +375,7 @@ test("the Chrome companion follows live Interview Arc focus and public LeetCode 
   const manifest = JSON.parse(await readFile(new URL("../extension/manifest.json", import.meta.url), "utf8"));
   const serviceWorker = await readFile(new URL("../extension/service-worker.js", import.meta.url), "utf8");
   const sidePanel = await readFile(new URL("../extension/sidepanel.js", import.meta.url), "utf8");
+  const sidePanelHtml = await readFile(new URL("../extension/sidepanel.html", import.meta.url), "utf8");
   const mcpWorker = await readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8");
   assert.equal(manifest.manifest_version, 3);
   assert.ok(manifest.permissions.includes("sidePanel"));
@@ -397,6 +398,11 @@ test("the Chrome companion follows live Interview Arc focus and public LeetCode 
   );
   assert.doesNotMatch(mutationImplementation, /await refresh\(\)/);
   assert.match(sidePanel, /optimisticTimer\(action\)/);
+  assert.match(sidePanelHtml, /id="favorite-button"/);
+  assert.match(sidePanel, /type: "problem-star", specialty, questionId, starred/);
+  assert.match(sidePanel, /currentActivityStarred\(\)/);
+  assert.match(mcpWorker, /mutation\.type === "problem-star"/);
+  assert.match(mcpWorker, /setProblemStar\(ownerId, mutation\.specialty, mutation\.questionId, mutation\.starred, now\)/);
   assert.match(mcpWorker, /responseUrl\.searchParams\.set\("url", problemUrl\)/);
   assert.match(mcpWorker, /activeCodingActivity \?\? focusedCodingActivity/);
 });

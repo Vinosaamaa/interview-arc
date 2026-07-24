@@ -50,6 +50,9 @@ button.primary { border-color: var(--signal); background: var(--signal); color: 
 .clock-actions { display: flex; gap: 7px; }
 .round { width: 40px; height: 40px; border-radius: 50%; font: 800 .78rem ui-monospace, monospace; }
 .round:disabled { opacity: .42; cursor: default; }
+.round.favorite { color: #c4cbc2; font-size: 1.22rem; transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease; }
+.round.favorite:hover:not(:disabled) { border-color: rgba(229,184,77,.62); color: #f0c75f; transform: translateY(-1px); }
+.round.favorite.starred { border-color: rgba(229,184,77,.72); background: rgba(229,184,77,.13); color: #f0c75f; }
 .status-rail { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .status-button { min-height: 64px; padding: 9px 10px; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 9px; text-align: left; }
 .status-button > span { font-size: 1.2rem; }

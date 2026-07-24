@@ -609,6 +609,7 @@ function PipNowPanel({
   session,
   sessionTimer,
   outcome,
+  starred = false,
   activityLocked = false,
   now,
   onToggleActivity,
@@ -616,12 +617,14 @@ function PipNowPanel({
   onToggleSession,
   onCompleteSession,
   onOutcome,
+  onToggleStar,
 }: {
   activity?: JournalActivity | ExtraActivity | null;
   activityTimer?: TimerDraft;
   session?: PracticeSession | null;
   sessionTimer?: TimerDraft;
   outcome?: Outcome;
+  starred?: boolean;
   activityLocked?: boolean;
   now: number;
   onToggleActivity: (id: string) => void;
@@ -629,6 +632,7 @@ function PipNowPanel({
   onToggleSession: (id: string) => void;
   onCompleteSession: (id: string) => void;
   onOutcome: (id: string, outcome?: Outcome) => void;
+  onToggleStar: (type: ActivityType, questionId?: string) => void;
 }) {
   const sessionAllocated = session?.allocatedSeconds ?? SESSION_SECONDS;
   const sessionLeft = session ? remaining(sessionTimer, now, sessionAllocated) : 0;
@@ -691,6 +695,17 @@ function PipNowPanel({
                 <span aria-hidden="true">{activityComplete ? "✓" : "■"}</span>
               </button>
               <ResultFlag activityType={activity.type} outcome={outcome} onChange={(next) => onOutcome(activity.id, next)} disabled={!activityStarted || activityComplete || activityLocked} />
+              <button
+                type="button"
+                className={`pip-btn pip-star ${starred ? "starred" : ""}`}
+                onClick={() => onToggleStar(activity.type, activity.questionId)}
+                disabled={!activity.questionId}
+                aria-label={`${starred ? "Unstar" : "Star"} ${activity.title}`}
+                aria-pressed={starred}
+                title={activity.questionId ? starred ? "Remove from starred problems" : "Keep this problem in your starred review set" : "A stable bank question is required to star this activity"}
+              >
+                <Icon name="star" />
+              </button>
             </div>
           </div>
           {activity.url ? <a className="pip-open" href={activity.url} target="_blank" rel="noreferrer">Open problem ↗</a> : null}
@@ -4299,6 +4314,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         session={pipSession}
         sessionTimer={pipSession ? draft.sessionTimers[pipSession.id] : undefined}
         outcome={pipActivity ? draft.outcomes[pipActivity.id] ?? pipActivity.outcome : undefined}
+        starred={pipActivity ? isStarred(pipActivity.type, pipActivity.questionId) : false}
         activityLocked={Boolean(pipSession && draft.sessionTimers[pipSession.id]?.completed)}
         now={now}
         onToggleActivity={toggleTimer}
@@ -4306,6 +4322,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         onToggleSession={toggleSessionTimer}
         onCompleteSession={completeSessionTimer}
         onOutcome={setOutcome}
+        onToggleStar={toggleProblemStar}
       />,
       pipWindow.document.body,
     )}

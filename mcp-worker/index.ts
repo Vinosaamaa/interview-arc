@@ -32,6 +32,7 @@ import {
   saveProvisionalSolutionProfile,
   saveSpecialistFinalization,
   scheduleReview,
+  setProblemStar,
   updateActivityAudioClipStatus,
   upsertOwnerBankQuestion,
 } from "../db/durable-practice";
@@ -253,6 +254,7 @@ async function companionMutation(ownerId: string, request: Request) {
       | { type: "outcome"; activityId: string; outcome: OutcomeValue | null }
       | { type: "publication-status"; activityId: string; status: PublicationStatusValue }
       | { type: "activity-note"; activityId: string; note: string }
+      | { type: "problem-star"; specialty: "leetcode" | "system_design" | "behavioral"; questionId: string; starred: boolean }
       | { type: "add-leetcode"; url: string };
   };
   const date = body.date ?? dateInPracticeTimeZone();
@@ -334,6 +336,11 @@ async function companionMutation(ownerId: string, request: Request) {
   } else if (mutation.type === "activity-note") {
     if (mutation.note.length > 20_000) return json(request, { error: "Note is too long." }, { status: 400 });
     await setActivityNote(ownerId, mutation.activityId, date, mutation.note, now);
+  } else if (mutation.type === "problem-star") {
+    if (!mutation.questionId || !["leetcode", "system_design", "behavioral"].includes(mutation.specialty) || typeof mutation.starred !== "boolean") {
+      return json(request, { error: "Invalid problem-star mutation." }, { status: 400 });
+    }
+    await setProblemStar(ownerId, mutation.specialty, mutation.questionId, mutation.starred, now);
   } else if (mutation.type === "add-leetcode") {
     const normalizedUrl = normalizeLeetCodeUrl(mutation.url);
     if (!normalizedUrl) return json(request, { error: "A public LeetCode problem URL is required." }, { status: 400 });

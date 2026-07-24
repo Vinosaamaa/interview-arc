@@ -1190,6 +1190,24 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   opacity: .45;
   cursor: default;
 }
+.pip-star {
+  color: #d5ddd2;
+  transition: transform .16s ease, border-color .16s ease, background .16s ease, color .16s ease;
+}
+.pip-star:hover:not(:disabled) {
+  border-color: rgba(229, 184, 77, .62);
+  color: #f4ce6e;
+  transform: translateY(-1px);
+}
+.pip-star.starred {
+  border-color: #e0b24d;
+  background: rgba(224, 178, 77, .18);
+  color: #ffe09a;
+}
+.pip-star svg {
+  width: 18px;
+  height: 18px;
+}
 .pip-track {
   grid-column: 1 / -1;
   height: 3px;
