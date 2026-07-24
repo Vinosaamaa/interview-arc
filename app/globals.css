@@ -1237,6 +1237,22 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   border-color: rgba(232, 238, 230, .22);
   background: rgba(255, 255, 255, .06);
   color: #d5ddd2;
+  transition: transform .16s ease, border-color .16s ease, background .16s ease, color .16s ease;
+}
+.pip-clock .result-flag.solved {
+  border-color: #a9ca4d;
+  background: rgba(169, 202, 77, .22);
+  color: #dcf594;
+}
+.pip-clock .result-flag.solved_after_reviewing_approach {
+  border-color: #e0b24d;
+  background: rgba(224, 178, 77, .22);
+  color: #ffe09a;
+}
+.pip-clock .result-flag.failed {
+  border-color: #d86e5d;
+  background: rgba(216, 110, 93, .22);
+  color: #ffb5a9;
 }
 .pip-clock .result-legend {
   right: 0;
