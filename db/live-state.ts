@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import {
   activityNotes,
@@ -12,6 +12,7 @@ import {
   practiceWorkbenches,
   practiceNotes,
   practiceTranscriptTurns,
+  problemPreferences,
   publicationStatuses,
   timerIntervals,
   timers,
@@ -113,6 +114,27 @@ export type ActiveVoiceActivity = ActivityPayload & {
   timer: TimerState;
 };
 
+export type VoiceTimerActivity = ActivityPayload & {
+  type: "leetcode" | "system_design" | "behavioral";
+  title: string;
+  questionId?: string;
+  url?: string;
+  allocatedSeconds: number;
+  timer: TimerState | null;
+  starred: boolean;
+};
+
+export type VoiceTimerInstrument = {
+  serverNow: number;
+  session: (SessionPayload & {
+    label: string;
+    allocatedSeconds: number;
+    timer: TimerState;
+  }) | null;
+  activity: VoiceTimerActivity | null;
+  activities: VoiceTimerActivity[];
+};
+
 export async function readActiveVoiceActivity(ownerId: string): Promise<ActiveVoiceActivity | null> {
   const db = getDb();
   const activeTimerRows = await db
@@ -147,6 +169,153 @@ export async function readActiveVoiceActivity(ownerId: string): Promise<ActiveVo
     type: payload.type as ActiveVoiceActivity["type"],
     title: payload.title,
     timer: toTimerState(activeTimer),
+  };
+}
+
+function isVoiceActivityPayload(payload: ActivityPayload | undefined): payload is ActivityPayload & {
+  type: VoiceTimerActivity["type"];
+  title: string;
+  allocatedSeconds: number;
+} {
+  return Boolean(
+    payload
+    && ["leetcode", "system_design", "behavioral"].includes(String(payload.type))
+    && typeof payload.title === "string"
+    && typeof payload.allocatedSeconds === "number",
+  );
+}
+
+export async function readVoiceTimerInstrument(ownerId: string): Promise<VoiceTimerInstrument> {
+  const db = getDb();
+  const [focusRows, workbenchRows] = await Promise.all([
+    db.select().from(practiceFocus).where(eq(practiceFocus.ownerId, ownerId)),
+    db
+      .select()
+      .from(practiceWorkbenches)
+      .where(and(
+        eq(practiceWorkbenches.ownerId, ownerId),
+        eq(practiceWorkbenches.status, "open"),
+      ))
+      .orderBy(desc(practiceWorkbenches.openedAt))
+      .limit(1),
+  ]);
+  const workbench = workbenchRows[0];
+  if (!workbench) {
+    return { serverNow: Date.now(), session: null, activity: null, activities: [] };
+  }
+  const [sessionRows, activityRows] = await Promise.all([
+    db.select().from(liveSessions).where(and(
+      eq(liveSessions.ownerId, ownerId),
+      eq(liveSessions.workbenchId, workbench.id),
+    )),
+    db.select().from(extraActivities).where(and(
+      eq(extraActivities.ownerId, ownerId),
+      eq(extraActivities.workbenchId, workbench.id),
+    )),
+  ]);
+  const subjectIds = [
+    ...sessionRows.map((row) => row.id),
+    ...activityRows.map((row) => row.id),
+  ];
+  const questionIds = activityRows.flatMap((row) => {
+    const questionId = (row.payload as ActivityPayload).questionId;
+    return typeof questionId === "string" ? [questionId] : [];
+  });
+  const [timerRows, preferenceRows] = await Promise.all([
+    subjectIds.length
+      ? db.select().from(timers).where(and(
+          eq(timers.ownerId, ownerId),
+          inArray(timers.subjectId, subjectIds),
+        ))
+      : Promise.resolve([]),
+    questionIds.length
+      ? db.select().from(problemPreferences).where(and(
+          eq(problemPreferences.ownerId, ownerId),
+          inArray(problemPreferences.questionId, questionIds),
+        ))
+      : Promise.resolve([]),
+  ]);
+  const focus = focusRows[0];
+  const activityTimerById = new Map(
+    timerRows
+      .filter((row) => row.kind === "activity")
+      .map((row) => [row.subjectId, toTimerState(row)]),
+  );
+  const sessionTimerById = new Map(
+    timerRows
+      .filter((row) => row.kind === "session")
+      .map((row) => [row.subjectId, toTimerState(row)]),
+  );
+  const starredKeys = new Set(
+    preferenceRows
+      .filter((row) => row.starred)
+      .map((row) => `${row.specialty}:${row.questionId}`),
+  );
+  const activityById = new Map(
+    activityRows.map((row) => [row.id, row.payload as ActivityPayload]),
+  );
+
+  const runningSessionTimer = timerRows
+    .filter((row) => row.kind === "session" && row.startedAt && !row.completed)
+    .sort((left, right) => right.updatedAt - left.updatedAt)[0];
+  const focusedSessionTimer = focus?.sessionId
+    ? sessionTimerById.get(focus.sessionId)
+    : undefined;
+  const sessionId = (
+    focusedSessionTimer?.startedAt && !focusedSessionTimer.completed
+      ? focus?.sessionId
+      : runningSessionTimer?.subjectId
+  ) ?? null;
+  const sessionPayload = sessionId
+    ? sessionRows.find((row) => row.id === sessionId)?.payload as SessionPayload | undefined
+    : undefined;
+  const sessionTimer = sessionId ? sessionTimerById.get(sessionId) : undefined;
+  const session = (
+    sessionPayload
+    && sessionTimer?.startedAt
+    && !sessionTimer.completed
+    && typeof sessionPayload.label === "string"
+    && typeof sessionPayload.allocatedSeconds === "number"
+  )
+    ? {
+        ...sessionPayload,
+        label: sessionPayload.label,
+        allocatedSeconds: sessionPayload.allocatedSeconds,
+        timer: sessionTimer,
+      }
+    : null;
+
+  const activityIds = session?.activityIds ?? (
+    focus?.activityId ? [focus.activityId] : []
+  );
+  const activities = activityIds.flatMap((activityId) => {
+    const payload = activityById.get(activityId);
+    if (!isVoiceActivityPayload(payload)) return [];
+    const timer = activityTimerById.get(activityId) ?? null;
+    if (timer?.completed) return [];
+    const specialty = payload.type;
+    const questionId = typeof payload.questionId === "string" ? payload.questionId : undefined;
+    return [{
+      ...payload,
+      type: specialty,
+      title: payload.title,
+      questionId,
+      url: typeof payload.url === "string" ? payload.url : undefined,
+      allocatedSeconds: payload.allocatedSeconds,
+      timer,
+      starred: Boolean(questionId && starredKeys.has(`${specialty}:${questionId}`)),
+    } satisfies VoiceTimerActivity];
+  });
+  const runningActivity = activities.find((candidate) => candidate.timer?.runningSince) ?? null;
+  const focusedActivity = focus?.activityId
+    ? activities.find((candidate) => candidate.id === focus.activityId) ?? null
+    : null;
+
+  return {
+    serverNow: Date.now(),
+    session,
+    activity: runningActivity ?? focusedActivity,
+    activities,
   };
 }
 
