@@ -752,40 +752,83 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
 
 function DiagramFigure({ src, alt }: { src: string; alt: string }) {
   const [zoom, setZoom] = useState(1);
-  const frameRef = useRef<HTMLElement>(null);
-  const updateZoom = (next: number) => setZoom(Math.min(2.4, Math.max(.65, Number(next.toFixed(2)))));
-  return <span className="architecture-diagram" ref={frameRef} role="group" aria-label={alt || "Architecture diagram"}>
+  const [expanded, setExpanded] = useState(false);
+  const updateZoom = useCallback((amount: number) => {
+    setZoom((current) => Math.min(2.4, Math.max(.65, Number((current + amount).toFixed(2)))));
+  }, []);
+
+  useEffect(() => {
+    if (!expanded) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      setExpanded(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape, true);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape, true);
+    };
+  }, [expanded]);
+
+  const figure = <span className={`architecture-diagram ${expanded ? "expanded" : ""}`} role="group" aria-label={alt || "Architecture diagram"}>
     <span className="diagram-caption"><strong>{alt || "Architecture diagram"}</strong><span className="diagram-controls">
-      <button type="button" onClick={() => updateZoom(zoom - .2)} disabled={zoom <= .65} aria-label="Zoom diagram out" title="Zoom out"><Icon name="minus" /></button>
+      <button type="button" onClick={() => updateZoom(-.2)} disabled={zoom <= .65} aria-label="Zoom diagram out" title="Zoom out"><Icon name="minus" /></button>
       <button type="button" className="diagram-zoom-value" onClick={() => setZoom(1)} aria-label="Reset diagram zoom" title="Reset zoom">{Math.round(zoom * 100)}%</button>
-      <button type="button" onClick={() => updateZoom(zoom + .2)} disabled={zoom >= 2.4} aria-label="Zoom diagram in" title="Zoom in"><Icon name="plus" /></button>
-      <button type="button" onClick={() => void frameRef.current?.requestFullscreen()} aria-label="View diagram full screen" title="Full screen">↗</button>
+      <button type="button" onClick={() => updateZoom(.2)} disabled={zoom >= 2.4} aria-label="Zoom diagram in" title="Zoom in"><Icon name="plus" /></button>
+      <button type="button" onClick={() => setExpanded((current) => !current)} aria-label={expanded ? "Exit full-screen diagram" : "View diagram full screen"} title={expanded ? "Exit full screen" : "Full screen"}>{expanded ? "↙" : "↗"}</button>
     </span></span>
     <span className="architecture-diagram-viewport">
       <img src={src} alt={alt} style={{ width: `${zoom * 100}%` }} />
     </span>
     <small>Zoom, then scroll or use a trackpad to inspect the architecture.</small>
   </span>;
+
+  if (!expanded || typeof document === "undefined") return figure;
+
+  return <>
+    <span className="architecture-diagram-placeholder" aria-hidden="true" />
+    {createPortal(
+      <span className="diagram-viewer-backdrop" role="presentation" onMouseDown={(event) => {
+        if (event.target === event.currentTarget) setExpanded(false);
+      }}>
+        <span className="diagram-viewer-shell" role="dialog" aria-modal="true" aria-label={`${alt || "Architecture diagram"} full-screen viewer`}>
+          {figure}
+        </span>
+      </span>,
+      document.body,
+    )}
+  </>;
 }
+
+function MarkdownCode({ className, children }: { className?: string; children?: ReactNode }) {
+  const language = className?.match(/language-([\w-]+)/)?.[1];
+  if (!language) return <code className={className}>{children}</code>;
+  return <CodeBlock language={language} code={String(children)} />;
+}
+
+function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
+  const imageSrc = typeof src === "string" ? src : "";
+  if (/\/diagrams\/|\.svg(?:$|\?)/i.test(imageSrc)) {
+    return <DiagramFigure src={imageSrc} alt={alt ?? "Architecture diagram"} />;
+  }
+  return <img src={imageSrc} alt={alt ?? ""} />;
+}
+
+const MARKDOWN_COMPONENTS = {
+  pre: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  code: MarkdownCode,
+  img: MarkdownImage,
+};
 
 function MarkdownBody({ source }: { source: string }) {
   return <div className="markdown-body"><Markdown
     remarkPlugins={[remarkGfm]}
-    components={{
-      pre: ({ children }) => <>{children}</>,
-      code: ({ className, children }) => {
-        const language = className?.match(/language-([\w-]+)/)?.[1];
-        if (!language) return <code className={className}>{children}</code>;
-        return <CodeBlock language={language} code={String(children)} />;
-      },
-      img: ({ src, alt }) => {
-        const imageSrc = typeof src === "string" ? src : "";
-        if (/\/diagrams\/|\.svg(?:$|\?)/i.test(imageSrc)) {
-          return <DiagramFigure src={imageSrc} alt={alt ?? "Architecture diagram"} />;
-        }
-        return <img src={imageSrc} alt={alt ?? ""} />;
-      },
-    }}
+    components={MARKDOWN_COMPONENTS}
   >{source}</Markdown></div>;
 }
 

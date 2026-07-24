@@ -182,6 +182,17 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /setEveryReaderGroup\(true\)/);
   assert.match(css, /\.workspace-reader-scroll \.markdown-body \{ font-size: 1\.0625rem; line-height: 1\.7; \}/);
   assert.match(css, /max-width: 970px/);
+  assert.match(css, /\.code-stage > pre,\s*\.code-stage > pre code \{ color: #f2f7f3;/);
+  assert.match(css, /\.code-stage \.syntax-keyword \{ color: #8ee4c2;/);
+  assert.match(css, /\.code-stage \.syntax-string \{ color: #f2cf79;/);
+  assert.match(css, /\.code-stage \.syntax-number \{ color: #f3a6b8;/);
+  assert.match(css, /\.code-stage \.syntax-comment \{ color: #adc1b3;/);
+  assert.match(css, /\.diagram-viewer-backdrop \{ position: fixed;/);
+  assert.match(client, /const MARKDOWN_COMPONENTS = \{/);
+  assert.match(client, /components=\{MARKDOWN_COMPONENTS\}/);
+  assert.match(client, /setZoom\(\(current\) =>/);
+  assert.match(client, /setExpanded\(\(current\) => !current\)/);
+  assert.match(client, /event\.stopImmediatePropagation\(\)/);
   assert.match(css, /\.log-entry,\s*\.problem-bank-entry \{ min-height: 150px; \}/);
   assert.match(css, /\.library-page\.has-open-entry \.dated-log \{[^}]*grid-auto-rows: max-content;[^}]*align-content: start;/);
   assert.match(css, /\.library-page\.has-open-entry \.log-day \{[^}]*height: max-content;/);
