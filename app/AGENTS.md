@@ -1,8 +1,16 @@
 # Website Agent Instructions
 
-Before editing website code, read `../docs/agents/website.md` and the shared contracts under `../docs/contracts/`.
+Before editing website code, read `../docs/agents/website.md` and the shared contracts under `../docs/contracts/`. Read `../docs/contracts/reader-rendering.md` for any Past/Problem Bank reader, Markdown, code-block, diagram, or artifact-template change.
 
 - Treat Interview Arc as a journey log and monitoring dashboard.
+- Keep durable artifact content separate from shared presentation. A reader
+  style or interaction change must apply to existing Markdown artifacts without
+  regenerating them; missing substantive sections require an explicit profile
+  revision or backfill.
+- Keep Markdown component identities stable when they own local interaction
+  state. Code blocks require explicit high-contrast token colors, and final
+  system-design diagrams require Draw.io source, exported SVG, persistent zoom,
+  and a reliable app-owned enlarged viewer.
 - Keep LeetCode solving and submission on LeetCode; do not present a fake executable editor.
 - Timers must distinguish allocated time from actual elapsed time, use each session's stored allocation in every timer path, and survive normal page refreshes when persistence is implemented.
 - Preserve keyboard access, visible focus, semantic controls, responsive layouts, and reduced-motion behavior.

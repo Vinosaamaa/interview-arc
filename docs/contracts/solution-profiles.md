@@ -5,6 +5,10 @@ Every completed attempt in Past links to the exact revision it produced. Past
 owns attempt-specific facts: transcript, feedback, timer, outcome, notes,
 session membership, and audio. Never copy a transcript into a Solution Profile.
 
+Follow `reader-rendering.md` for the boundary between durable profile content
+and the shared runtime reader. Visual/template improvements do not create a new
+profile revision. Missing or materially improved canonical content does.
+
 ## LeetCode
 
 1. Pattern recognition and constraints
