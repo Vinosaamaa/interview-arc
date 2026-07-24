@@ -86,6 +86,7 @@ async function voiceContext(ownerId: string, request: Request) {
   // durable practice graph, and published journal on every idle poll made a
   // newly started stopwatch appear several seconds—or minutes—late. Resolve
   // the one running timer directly, and load richer metadata only when it exists.
+  const date = dateInPracticeTimeZone();
   const activity = await readActiveVoiceActivity(ownerId);
   if (!activity) {
     return json(request, {
