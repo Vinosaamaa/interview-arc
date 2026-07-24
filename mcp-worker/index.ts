@@ -7,10 +7,12 @@ import {
   applyTimerAction,
   activityTimerWasRunningAt,
   readActiveVoiceActivity,
+  readVoiceTimerInstrument,
   setActivityNote,
   setOutcome,
   setPublicationStatus,
   rolloverPublishedWorkbench,
+  TimerStateConflictError,
   upsertExtraActivity,
   type OutcomeValue,
   type PublicationStatusValue,
@@ -88,12 +90,16 @@ async function voiceContext(ownerId: string, request: Request) {
   // newly started stopwatch appear several seconds—or minutes—late. Resolve
   // the one running timer directly, and load richer metadata only when it exists.
   const date = dateInPracticeTimeZone();
-  const activity = await readActiveVoiceActivity(ownerId);
+  const [activity, timerInstrument] = await Promise.all([
+    readActiveVoiceActivity(ownerId),
+    readVoiceTimerInstrument(ownerId),
+  ]);
   if (!activity) {
     return json(request, {
       protocolVersion: VOICE_PROTOCOL_VERSION,
       date,
       focusedActivity: null,
+      timerInstrument,
       specialist: null,
       message: "Start an activity stopwatch in Interview Arc before recording a linked answer.",
     });
@@ -130,6 +136,7 @@ async function voiceContext(ownerId: string, request: Request) {
       startedAt: activity.timer.startedAt,
       runningSince: activity.timer.runningSince,
     },
+    timerInstrument,
     specialist: specialist ? {
       specialty: specialist.specialty,
       threadId: specialist.threadId,
@@ -138,6 +145,118 @@ async function voiceContext(ownerId: string, request: Request) {
     } : null,
     message: specialist ? null : `Connect the ${activity.type} specialist task before sending a recording.`,
   });
+}
+
+async function scheduleCompletedVoiceActivity(
+  ownerId: string,
+  activity: Awaited<ReturnType<typeof readVoiceTimerInstrument>>["activities"][number],
+  outcome: OutcomeValue,
+  date: string,
+  now: number,
+) {
+  if (outcome === "failed" || outcome === "solved_after_reviewing_approach") {
+    await scheduleReview(ownerId, {
+      activityId: activity.id,
+      questionId: activity.questionId,
+      specialty: activity.type,
+      completedDate: date,
+      reason: outcome === "failed" ? "failed" : "approach_review",
+    }, now);
+  } else if (outcome === "solved" && typeof activity.reviewOfActivityId === "string") {
+    await scheduleReview(ownerId, {
+      activityId: activity.id,
+      questionId: activity.questionId,
+      specialty: activity.type,
+      completedDate: date,
+      reason: "successful_recall",
+    }, now);
+  } else {
+    await clearActivityReviewSchedules(ownerId, activity.id);
+  }
+}
+
+async function voiceTimerMutation(ownerId: string, request: Request) {
+  const body = (await request.json()) as {
+    protocolVersion?: number;
+    mutation?:
+      | { type: "timer"; subjectId: string; kind: "activity" | "session"; action: TimerAction }
+      | { type: "finish-activity"; activityId: string; outcome: OutcomeValue; starred: boolean };
+  };
+  if (body.protocolVersion !== VOICE_PROTOCOL_VERSION || !body.mutation) {
+    return json(request, { error: "A supported protocol version and timer mutation are required." }, { status: 400 });
+  }
+  const mutation = body.mutation;
+  const now = Date.now();
+  const date = dateInPracticeTimeZone(new Date(now));
+  try {
+    const instrument = await readVoiceTimerInstrument(ownerId);
+    if (mutation.type === "timer") {
+      if (
+        !mutation.subjectId
+        || !["activity", "session"].includes(mutation.kind)
+        || !["start", "pause", "finish"].includes(mutation.action)
+      ) {
+        return json(request, { error: "Invalid timer mutation." }, { status: 400 });
+      }
+      if (mutation.kind === "session") {
+        if (!instrument.session || instrument.session.id !== mutation.subjectId) {
+          return json(request, { error: "The requested session is not the current open session." }, { status: 404 });
+        }
+        await applyTimerAction(ownerId, mutation.subjectId, "session", mutation.action, now, {
+          activityIds: instrument.session.activityIds,
+        });
+      } else {
+        const activity = instrument.activities.find((candidate) => candidate.id === mutation.subjectId);
+        if (!activity) {
+          return json(request, { error: "The requested activity is not available in the current session." }, { status: 404 });
+        }
+        if (mutation.action === "finish") {
+          return json(request, {
+            error: "Choose a result in the Finish drawer before completing this activity.",
+          }, { status: 409 });
+        }
+        if (mutation.action === "start" && instrument.session) {
+          await applyTimerAction(ownerId, instrument.session.id, "session", "start", now, {
+            activityIds: instrument.session.activityIds,
+          });
+        }
+        await applyTimerAction(ownerId, activity.id, "activity", mutation.action, now, {
+          sessionId: instrument.session?.id,
+        });
+      }
+    } else if (mutation.type === "finish-activity") {
+      if (
+        !mutation.activityId
+        || !["solved", "solved_after_reviewing_approach", "failed"].includes(mutation.outcome)
+        || typeof mutation.starred !== "boolean"
+      ) {
+        return json(request, { error: "A result and star choice are required to finish this activity." }, { status: 400 });
+      }
+      const activity = instrument.activities.find((candidate) => candidate.id === mutation.activityId);
+      if (!activity || !activity.timer?.startedAt) {
+        return json(request, { error: "Start the activity stopwatch before finishing it." }, { status: 409 });
+      }
+      await setOutcome(ownerId, activity.id, mutation.outcome, now);
+      if (activity.questionId) {
+        await setProblemStar(ownerId, activity.type, activity.questionId, mutation.starred, now);
+      }
+      await applyTimerAction(ownerId, activity.id, "activity", "finish", now, {
+        sessionId: instrument.session?.id,
+      });
+      await scheduleCompletedVoiceActivity(ownerId, activity, mutation.outcome, date, now);
+    } else {
+      return json(request, { error: "Unsupported timer mutation." }, { status: 400 });
+    }
+    return json(request, {
+      protocolVersion: VOICE_PROTOCOL_VERSION,
+      timerInstrument: await readVoiceTimerInstrument(ownerId),
+    });
+  } catch (error) {
+    if (error instanceof TimerStateConflictError) {
+      return json(request, { error: error.message }, { status: 409 });
+    }
+    throw error;
+  }
 }
 
 async function saveVoiceCapture(ownerId: string, request: Request) {
@@ -795,7 +914,7 @@ function createServer(ownerId: string) {
         await setPublicationStatus(ownerId, activity.activityId, date, "published", now, activity.artifactPath);
         await markFinalizationPublished(ownerId, activity.activityId, now);
       }
-      const workbenchRolledOver = await rolloverPublishedWorkbench(ownerId, dateInPracticeTimeZone(now), now);
+      const workbenchRolledOver = await rolloverPublishedWorkbench(ownerId, dateInPracticeTimeZone(new Date(now)), now);
       return {
         content: [{ type: "text", text: `Marked ${activities.length} activit${activities.length === 1 ? "y" : "ies"} published.` }],
         structuredContent: { date, published: activities, workbenchRolledOver },
@@ -831,6 +950,9 @@ export default {
     }
     if (url.pathname === "/voice/context" && request.method === "GET") {
       return voiceContext(ownerId, request);
+    }
+    if (url.pathname === "/voice/timers" && request.method === "POST") {
+      return voiceTimerMutation(ownerId, request);
     }
     if (url.pathname === "/voice/captures" && request.method === "POST") {
       return saveVoiceCapture(ownerId, request);

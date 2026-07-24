@@ -329,7 +329,7 @@ test("Interview Arc Voice persists exact turns, idempotent clips, and per-answer
   const bridge = await readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8");
   const durableStore = await readFile(new URL("../db/durable-practice.ts", import.meta.url), "utf8");
   const client = await readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8");
-  for (const route of ["/voice/context", "/voice/captures", "/voice/delivery"]) {
+  for (const route of ["/voice/context", "/voice/timers", "/voice/captures", "/voice/delivery"]) {
     assert.match(bridge, new RegExp(route.replace("/", "\\/")));
   }
   assert.match(bridge, /startedAt: activity\.timer\.startedAt/);
@@ -355,6 +355,19 @@ test("Voice context reads the active stopwatch directly instead of rebuilding al
   assert.match(voiceContextBody, /readActiveVoiceActivity\(ownerId\)/);
   assert.doesNotMatch(voiceContextBody, /buildPracticeSnapshot/);
   assert.doesNotMatch(voiceContextBody, /includeAll/);
+});
+
+test("Voice timer instrument preserves paused focus and finishes only through an explicit result drawer", async () => {
+  const bridge = await readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8");
+  const liveState = await readFile(new URL("../db/live-state.ts", import.meta.url), "utf8");
+
+  assert.match(liveState, /export async function readVoiceTimerInstrument/);
+  assert.match(liveState, /runningActivity \?\? focusedActivity/);
+  assert.match(bridge, /mutation\.type === "finish-activity"/);
+  assert.match(bridge, /Choose a result in the Finish drawer/);
+  assert.match(bridge, /await setOutcome\(ownerId, activity\.id, mutation\.outcome, now\)/);
+  assert.match(bridge, /await setProblemStar\(ownerId, activity\.type, activity\.questionId, mutation\.starred, now\)/);
+  assert.match(bridge, /await applyTimerAction\(ownerId, activity\.id, "activity", "finish"/);
 });
 
 test("consecutive Voice captures form one logical answer without merging their durable turns", () => {
