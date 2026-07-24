@@ -80,6 +80,7 @@ test("publishes only the real July 22 practice records while preserving the TikT
 
   const content = await readContent(fileURLToPath(new URL("..", import.meta.url)));
   const hydrated = content.questionBanks.systemDesign.find((candidate) => candidate.id === question.id);
+  const hydratedCourseSchedule = content.questionBanks.leetcode.find((candidate) => candidate.id === "course-schedule");
   assert.equal(content.journals.length, 1);
   assert.equal(content.journals[0].date, "2026-07-22");
   assert.deepEqual(
@@ -99,4 +100,16 @@ test("publishes only the real July 22 practice records while preserving the TikT
   assert.ok(content.artifacts.every((artifact) => artifact.date === "2026-07-22"));
   assert.ok(hydrated.solutionProfile.summary.length > 100);
   assert.ok(hydrated.solutionProfile.sections.some((section) => section.title === "Requirements"));
+  assert.ok(hydratedCourseSchedule.solutionProfile.summary.length > 100);
+  assert.ok(hydratedCourseSchedule.solutionProfile.sections.some((section) => section.title === "Reference Implementation — Java"));
+  assert.ok(hydratedCourseSchedule.solutionProfile.sections.some((section) => section.title === "Reference Implementation — Python"));
+  assert.ok(hydratedCourseSchedule.solutionProfile.sections.some((section) => section.title === "Alternative Implementation: DFS Three-State Coloring — Java"));
+  assert.ok(hydratedCourseSchedule.solutionProfile.sections.some((section) => section.title === "Alternative Implementation: Tarjan SCC — Python"));
+
+  const marketplaceArtifact = content.artifacts.find((artifact) =>
+    artifact.path === "practice/system-design/sessions/2026-07-22-build-a-marketplace-feature-for-facebook.md"
+  );
+  const architecture = marketplaceArtifact.sections.find((section) => section.title === "High-level architecture");
+  assert.match(architecture.body, /facebook-marketplace-architecture\.svg/);
+  assert.doesNotMatch(architecture.body, /```mermaid/);
 });

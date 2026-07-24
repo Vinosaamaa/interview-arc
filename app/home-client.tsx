@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Children, type FormEvent, isValidElement, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -750,15 +750,41 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
   return <figure className="code-stage"><figcaption><span>{language || "code"}</span><button type="button" onClick={() => void navigator.clipboard.writeText(code)}>Copy</button></figcaption><pre><code>{highlightedCode(code.replace(/\n$/, ""))}</code></pre></figure>;
 }
 
+function DiagramFigure({ src, alt }: { src: string; alt: string }) {
+  const [zoom, setZoom] = useState(1);
+  const frameRef = useRef<HTMLElement>(null);
+  const updateZoom = (next: number) => setZoom(Math.min(2.4, Math.max(.65, Number(next.toFixed(2)))));
+  return <figure className="architecture-diagram" ref={frameRef}>
+    <figcaption><span>{alt || "Architecture diagram"}</span><div>
+      <button type="button" onClick={() => updateZoom(zoom - .2)} disabled={zoom <= .65} aria-label="Zoom diagram out" title="Zoom out"><Icon name="minus" /></button>
+      <button type="button" className="diagram-zoom-value" onClick={() => setZoom(1)} aria-label="Reset diagram zoom" title="Reset zoom">{Math.round(zoom * 100)}%</button>
+      <button type="button" onClick={() => updateZoom(zoom + .2)} disabled={zoom >= 2.4} aria-label="Zoom diagram in" title="Zoom in"><Icon name="plus" /></button>
+      <button type="button" onClick={() => void frameRef.current?.requestFullscreen()} aria-label="View diagram full screen" title="Full screen">↗</button>
+    </div></figcaption>
+    <div className="architecture-diagram-viewport">
+      <img src={src} alt={alt} style={{ width: `${zoom * 100}%` }} />
+    </div>
+    <small>Zoom, then scroll or use a trackpad to inspect the architecture.</small>
+  </figure>;
+}
+
 function MarkdownBody({ source }: { source: string }) {
   return <div className="markdown-body"><Markdown
     remarkPlugins={[remarkGfm]}
     components={{
+      p: ({ children }) => Children.toArray(children).some((child) => isValidElement(child) && child.type === DiagramFigure) ? <>{children}</> : <p>{children}</p>,
       pre: ({ children }) => <>{children}</>,
       code: ({ className, children }) => {
         const language = className?.match(/language-([\w-]+)/)?.[1];
         if (!language) return <code className={className}>{children}</code>;
         return <CodeBlock language={language} code={String(children)} />;
+      },
+      img: ({ src, alt }) => {
+        const imageSrc = typeof src === "string" ? src : "";
+        if (/\/diagrams\/|\.svg(?:$|\?)/i.test(imageSrc)) {
+          return <DiagramFigure src={imageSrc} alt={alt ?? "Architecture diagram"} />;
+        }
+        return <img src={imageSrc} alt={alt ?? ""} />;
       },
     }}
   >{source}</Markdown></div>;
@@ -995,12 +1021,18 @@ function ReaderSectionBody({ section, id }: { section: ReaderSection; id: string
   return <section className="reader-subsection" id={id}><h3>{section.title}</h3><MarkdownBody source={section.body} /></section>;
 }
 
-function LanguageCodeTabs({ sections, idPrefix }: { sections: ReaderSection[]; idPrefix: string }) {
+function codeSectionFamily(section: ReaderSection) {
+  if (!/```[\w-]+\n[\s\S]*?```/.test(section.body)) return null;
+  const match = section.title.match(/^(.*?)[\s]*[—-][\s]*(Java|Python)$/i);
+  return match ? match[1].trim() : null;
+}
+
+function LanguageCodeTabs({ sections, idPrefix, title }: { sections: ReaderSection[]; idPrefix: string; title: string }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const active = sections[activeIndex] ?? sections[0];
   const match = active?.body.match(/```([\w-]+)\n([\s\S]*?)```/);
   if (!active || !match) return null;
-  return <section className="language-code-tabs" id={`${idPrefix}-${slugify(sections[0].title)}-0`}><header><h3>Reference implementation</h3><div role="tablist" aria-label="Implementation language">{sections.map((section, index) => <button type="button" role="tab" aria-selected={activeIndex === index} className={activeIndex === index ? "active" : ""} onClick={() => setActiveIndex(index)} key={section.title}>{section.title.split(/—|-/).at(-1)?.trim() ?? `Option ${index + 1}`}</button>)}</div></header><CodeBlock language={match[1]} code={match[2]} /></section>;
+  return <section className="language-code-tabs" id={`${idPrefix}-${slugify(title)}-0`}><header><h3>{title}</h3><div role="tablist" aria-label={`${title} language`}>{sections.map((section, index) => <button type="button" role="tab" aria-selected={activeIndex === index} className={activeIndex === index ? "active" : ""} onClick={() => setActiveIndex(index)} key={section.title}>{section.title.match(/[—-]\s*(Java|Python)$/i)?.[1] ?? `Option ${index + 1}`}</button>)}</div></header><CodeBlock language={match[1]} code={match[2]} /></section>;
 }
 
 function ReaderOutline({ children }: { children: ReactNode }) {
@@ -1025,12 +1057,27 @@ function ReaderOutline({ children }: { children: ReactNode }) {
   }}><summary aria-label="Open contents" title="Contents"><Icon name="outline" /></summary><nav>{children}</nav></details>;
 }
 
+function ReaderGroupSections({ sections, idPrefix, coding }: { sections: ReaderSection[]; idPrefix: string; coding: boolean }) {
+  const families = new Map<string, ReaderSection[]>();
+  if (coding) sections.forEach((section) => {
+    const family = codeSectionFamily(section);
+    if (family) families.set(family, [...(families.get(family) ?? []), section]);
+  });
+  const renderedFamilies = new Set<string>();
+  return <>{sections.map((section, index) => {
+    const family = codeSectionFamily(section);
+    const siblings = family ? families.get(family) ?? [] : [];
+    if (family && siblings.length > 1) {
+      if (renderedFamilies.has(family)) return null;
+      renderedFamilies.add(family);
+      return <LanguageCodeTabs sections={siblings} idPrefix={idPrefix} title={family} key={family} />;
+    }
+    return <ReaderSectionBody section={section} id={`${idPrefix}-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />;
+  })}</>;
+}
+
 function SolutionReaderGroup({ group, idPrefix, coding, open, onToggle }: { group: ReturnType<typeof groupReaderSections>[number]; idPrefix: string; coding: boolean; open: boolean; onToggle: (open: boolean) => void }) {
-  const implementationSections = coding ? group.sections.filter((section) => /reference implementation\s*[—-]/i.test(section.title)) : [];
-  const regularSections = implementationSections.length > 1
-    ? group.sections.filter((section) => !implementationSections.includes(section))
-    : group.sections;
-  return <details className={`reader-group solution-reader-group ${group.key}-group`} id={`${idPrefix}-group-${group.key}`} open={open} onToggle={(event) => onToggle(event.currentTarget.open)}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div>{regularSections.map((section, index) => <ReaderSectionBody section={section} id={`${idPrefix}-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />)}{implementationSections.length > 1 && <LanguageCodeTabs sections={implementationSections} idPrefix={idPrefix} />}</div></details>;
+  return <details className={`reader-group solution-reader-group ${group.key}-group`} id={`${idPrefix}-group-${group.key}`} open={open} onToggle={(event) => onToggle(event.currentTarget.open)}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div><ReaderGroupSections sections={group.sections} idPrefix={idPrefix} coding={coding} /></div></details>;
 }
 
 function HighlightShelf({ highlights, onRemove }: { highlights: ContentHighlight[]; onRemove: (id: string) => void }) {
@@ -4106,10 +4153,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           <div className="letter-facts" id="case-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.startedAt && <div><span>Started</span><strong>{formatPracticeTimestamp(selectedEntry.startedAt)}</strong></div>}{selectedEntry.endedAt && <div><span>Finished</span><strong>{formatPracticeTimestamp(selectedEntry.endedAt)}</strong></div>}{selectedEntry.sessionId && <div><span>Session</span><strong>{selectedEntry.sessionId}</strong></div>}{selectedEntry.outcome && <div><span>Result</span><strong>{resultLabel(selectedEntry.outcome, selectedEntry.type)}</strong></div>}{selectedEntry.review && <div className="review-fact"><span>{selectedEntry.review.status === "due" ? "Review due" : "Next review"}</span><strong>{selectedEntry.review.dueDate}</strong><small>{selectedEntry.review.reason.replaceAll("_", " ")} · {selectedEntry.review.intervalDays} day interval</small></div>}</div>
           <div className="letter-sections layered-reader">
             {selectedEntry.artifact
-              ? selectedCaseGroups.filter((group) => group.key === "record").map((group) => { const groupId = `case-group-${group.key}`; return <details className="reader-group record-group" id={groupId} open={readerGroupOpen(groupId, true)} onToggle={(event) => rememberReaderGroup(groupId, event.currentTarget.open)} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div>{group.sections.map((section, index) => <ReaderSectionBody section={section} id={`case-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />)}</div></details>; })
+              ? selectedCaseGroups.filter((group) => group.key === "record").map((group) => { const groupId = `case-group-${group.key}`; return <details className="reader-group record-group" id={groupId} open={readerGroupOpen(groupId, true)} onToggle={(event) => rememberReaderGroup(groupId, event.currentTarget.open)} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></div></details>; })
               : <div className="unpublished-letter" id="case-draft"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to finalize the transcript, review, solution, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
             {selectedEntryTurns.length > 0 && <details className="reader-group conversation-group" id="case-transcript" open={readerGroupOpen("case-transcript", false)} onToggle={(event) => rememberReaderGroup("case-transcript", event.currentTarget.open)}><summary><span>Conversation</span><small>{selectedEntryTurns.length} exchange{selectedEntryTurns.length === 1 ? "" : "s"} · recordings inline</small></summary><div id="case-transcript-thread"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} /></div></details>}
-            {selectedEntry.artifact && selectedCaseGroups.filter((group) => group.key !== "record").map((group) => { const groupId = `case-group-${group.key}`; return <details className={`reader-group ${group.key}-group`} id={groupId} open={readerGroupOpen(groupId, group.key !== "conversation")} onToggle={(event) => rememberReaderGroup(groupId, event.currentTarget.open)} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div>{group.sections.map((section, index) => <ReaderSectionBody section={section} id={`case-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />)}</div></details>; })}
+            {selectedEntry.artifact && selectedCaseGroups.filter((group) => group.key !== "record").map((group) => { const groupId = `case-group-${group.key}`; return <details className={`reader-group ${group.key}-group`} id={groupId} open={readerGroupOpen(groupId, group.key !== "conversation")} onToggle={(event) => rememberReaderGroup(groupId, event.currentTarget.open)} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></div></details>; })}
           </div>
           <footer>Interview Arc · {selectedEntry.id}</footer>
         </div>
@@ -4282,8 +4329,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             {noteComposerOpen && <form className="case-note-composer" onSubmit={(event) => { event.preventDefault(); void saveCaseNote(); }}><label htmlFor="case-note">{editingNoteId ? "Edit note" : "Add a note"}</label><textarea id="case-note" autoFocus value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} placeholder="A concise reminder, mistake, or pattern to keep visible…" /><div><button type="button" onClick={() => { setNoteComposerOpen(false); setEditingNoteId(""); setNoteDraft(""); }}>Cancel</button><button type="submit" disabled={noteBusy || !noteDraft.trim()}>{noteBusy ? "Saving…" : "Save note"}</button></div></form>}
             <div className="letter-facts" id="case-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.startedAt && <div><span>Started</span><strong>{formatPracticeTimestamp(selectedEntry.startedAt)}</strong></div>}{selectedEntry.endedAt && <div><span>Finished</span><strong>{formatPracticeTimestamp(selectedEntry.endedAt)}</strong></div>}{selectedEntry.sessionId && <div><span>Session</span><strong>{selectedEntry.sessionId}</strong></div>}{selectedEntry.outcome && <div><span>Result</span><strong>{resultLabel(selectedEntry.outcome, selectedEntry.type)}</strong></div>}{selectedEntry.review && <div className="review-fact"><span>{selectedEntry.review.status === "due" ? "Review due" : "Next review"}</span><strong>{selectedEntry.review.dueDate}</strong><small>{selectedEntry.review.reason.replaceAll("_", " ")} · {selectedEntry.review.intervalDays} day interval</small></div>}</div>
             {selectedEntry.artifact ? <div className="letter-sections layered-reader">{selectedCaseGroups.map((group) => group.key === "record"
-              ? <section className="reader-group record-group" id={`case-group-${group.key}`} key={group.key}><h2>{group.title}</h2>{group.sections.map((section, index) => <ReaderSectionBody section={section} id={`case-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />)}</section>
-              : <details className={`reader-group ${group.key}-group`} id={`case-group-${group.key}`} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div>{group.sections.map((section, index) => <ReaderSectionBody section={section} id={`case-${slugify(section.title)}-${index}`} key={`${section.title}-${index}`} />)}</div></details>)}</div> : <div className="unpublished-letter" id="case-draft"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to finalize the transcript, review, solution, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
+              ? <section className="reader-group record-group" id={`case-group-${group.key}`} key={group.key}><h2>{group.title}</h2><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></section>
+              : <details className={`reader-group ${group.key}-group`} id={`case-group-${group.key}`} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></div></details>)}</div> : <div className="unpublished-letter" id="case-draft"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to finalize the transcript, review, solution, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
             {selectedEntryTurns.length > 0 && <details className="reader-group conversation-group" id="case-transcript"><summary><span>Conversation</span><small>{selectedEntryTurns.length} exchange{selectedEntryTurns.length === 1 ? "" : "s"} · recordings inline</small></summary><div id="case-transcript-thread"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} /></div></details>}
             <footer>Interview Arc · {selectedEntry.id}</footer>
           </div>

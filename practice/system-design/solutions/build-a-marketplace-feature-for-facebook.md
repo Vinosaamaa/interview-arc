@@ -90,6 +90,8 @@ Use a sharded relational database for canonical lifecycle state and outbox write
 
 ![Facebook Marketplace high-level architecture](/diagrams/facebook-marketplace-architecture.svg)
 
+[Open the editable Draw.io source](https://github.com/Vinosaamaa/interview-arc/blob/main/practice/system-design/diagrams/facebook-marketplace-architecture.drawio)
+
 The listing service owns canonical state. Signed uploads go directly to object storage. A transactional outbox feeds an event stream whose idempotent consumers update search, moderation, recommendations, caches, analytics, and notifications.
 
 ## Critical Read and Write Flows
@@ -115,4 +117,3 @@ A relational source plus search index adds operational complexity but cleanly se
 ## Interview-Ready Closing Summary
 
 Keep listing lifecycle in a sharded relational database, media in object storage behind a CDN, and discovery in a full-text/geospatial index. A transactional outbox feeds indexing, moderation, recommendations, invalidation, and analytics. The key tradeoff is strong lifecycle consistency versus seconds of eventual consistency for discovery.
-
