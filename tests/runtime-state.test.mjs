@@ -351,6 +351,7 @@ test("Voice context reads the active stopwatch directly instead of rebuilding al
   );
 
   assert.match(liveState, /export async function readActiveVoiceActivity/);
+  assert.match(voiceContextBody, /const date = dateInPracticeTimeZone\(\)/);
   assert.match(voiceContextBody, /readActiveVoiceActivity\(ownerId\)/);
   assert.doesNotMatch(voiceContextBody, /buildPracticeSnapshot/);
   assert.doesNotMatch(voiceContextBody, /includeAll/);
