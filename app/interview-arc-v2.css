@@ -293,6 +293,12 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .atmosphere-toggle:not(.active) { border-color: #c8d4d0; background: rgba(251,252,250,.9); color: #8a9692; }
 .pip-toggle.active { border-color: #dda9a4; background: #fff0ee; color: #9f4039; }
 .pip-toggle.active:hover { border-color: #c77c74; background: #ffe5e2; color: #86352f; }
+.pip-toggle {
+  width: 124px;
+  min-width: 124px;
+  justify-content: center;
+  white-space: nowrap;
+}
 .petal-field.quiet { opacity: .78; }
 .petal-field.paused { opacity: 0; visibility: hidden; }
 .petal-field.paused .ambient-petal { animation-play-state: paused !important; }
@@ -1170,6 +1176,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 }
 .library-page.has-open-entry .past-master-pane,
 .banks-page.has-open-solution .bank-master-pane {
+  display: none;
   width: var(--master-pane-width);
   height: 100%;
   transform: translateX(-34px);
@@ -1180,11 +1187,13 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 }
 .library-page.has-open-entry .master-pane-open .past-master-pane,
 .banks-page.has-open-solution .master-pane-open .bank-master-pane {
+  display: grid;
   transform: translateX(0);
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
   transition-delay: 0s;
+  animation: master-pane-inline-in .24s cubic-bezier(.2,.8,.2,1) both;
 }
 .library-page.has-open-entry .past-entry-pane,
 .banks-page.has-open-solution .bank-solution-pane {
@@ -1263,6 +1272,37 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 @keyframes master-pane-overlay-in {
   from { opacity: 0; transform: translateX(-28px); }
   to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes master-pane-inline-in {
+  from { opacity: 0; transform: translateX(-28px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.library-page.has-open-entry .past-master-detail.nested-reader-focus,
+.library-page.has-open-entry .past-master-detail.master-pane-open.nested-reader-focus,
+.banks-page.has-open-solution .bank-master-detail.nested-reader-focus,
+.banks-page.has-open-solution .bank-master-detail.master-pane-open.nested-reader-focus {
+  width: min(var(--reader-pane-width), calc(100vw - var(--sidebar-size) - 32px));
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+.library-page.has-open-entry .nested-reader-focus .past-master-pane,
+.banks-page.has-open-solution .nested-reader-focus .bank-master-pane {
+  display: none !important;
+  visibility: hidden;
+  pointer-events: none;
+}
+.library-page.has-open-entry .nested-reader-focus .past-entry-pane,
+.banks-page.has-open-solution .nested-reader-focus .bank-solution-pane {
+  grid-column: 1;
+}
+.workspace-reader.nested-reader {
+  animation: nested-reader-enter .22s cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes nested-reader-enter {
+  from { opacity: 0; transform: translateY(8px) scale(.997); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @media (min-width: 761px) and (max-width: 900px) {
