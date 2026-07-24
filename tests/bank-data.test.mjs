@@ -63,7 +63,7 @@ test("stores all Bugfree.ai behavioral questions with canonical answer reference
   );
 });
 
-test("publishes only the real July 22 practice records while preserving the TikTok solution in the bank", async () => {
+test("starts with no published practice records while preserving the TikTok solution in the bank", async () => {
   const bank = await readJson("practice/system-design/bank/questions.json");
   const question = bank.questions.find((candidate) => candidate.id === "design-tiktok-style-for-you-feed");
   assert.equal(question.solutionPath, "practice/system-design/solutions/design-tiktok-for-you-feed.md");
@@ -81,35 +81,13 @@ test("publishes only the real July 22 practice records while preserving the TikT
   const content = await readContent(fileURLToPath(new URL("..", import.meta.url)));
   const hydrated = content.questionBanks.systemDesign.find((candidate) => candidate.id === question.id);
   const hydratedCourseSchedule = content.questionBanks.leetcode.find((candidate) => candidate.id === "course-schedule");
-  assert.equal(content.journals.length, 1);
-  assert.equal(content.journals[0].date, "2026-07-22");
-  assert.deepEqual(
-    content.journals[0].activities.map((activity) => activity.id).sort(),
-    [
-      "2026-07-21-session-1-0-0-build-a-marketplace-feature-for-facebook",
-      "2026-07-21-session-1-0-0-course-schedule",
-    ].sort(),
+  const hydratedMarketplace = content.questionBanks.systemDesign.find(
+    (candidate) => candidate.id === "build-a-marketplace-feature-for-facebook",
   );
-  assert.deepEqual(
-    content.artifacts.map((artifact) => artifact.path).sort(),
-    [
-      "practice/leetcode/attempts/2026-07-22-course-schedule.md",
-      "practice/system-design/sessions/2026-07-22-build-a-marketplace-feature-for-facebook.md",
-    ].sort(),
-  );
-  assert.ok(content.artifacts.every((artifact) => artifact.date === "2026-07-22"));
+  assert.equal(content.journals.length, 0);
+  assert.equal(content.artifacts.length, 0);
   assert.ok(hydrated.solutionProfile.summary.length > 100);
   assert.ok(hydrated.solutionProfile.sections.some((section) => section.title === "Requirements"));
-  assert.ok(hydratedCourseSchedule.solutionProfile.summary.length > 100);
-  assert.ok(hydratedCourseSchedule.solutionProfile.sections.some((section) => section.title === "Reference Implementation — Java"));
-  assert.ok(hydratedCourseSchedule.solutionProfile.sections.some((section) => section.title === "Reference Implementation — Python"));
-  assert.ok(hydratedCourseSchedule.solutionProfile.sections.some((section) => section.title === "Alternative Implementation: DFS Three-State Coloring — Java"));
-  assert.ok(hydratedCourseSchedule.solutionProfile.sections.some((section) => section.title === "Alternative Implementation: Tarjan SCC — Python"));
-
-  const marketplaceArtifact = content.artifacts.find((artifact) =>
-    artifact.path === "practice/system-design/sessions/2026-07-22-build-a-marketplace-feature-for-facebook.md"
-  );
-  const architecture = marketplaceArtifact.sections.find((section) => section.title === "High-level architecture");
-  assert.match(architecture.body, /facebook-marketplace-architecture\.svg/);
-  assert.doesNotMatch(architecture.body, /```mermaid/);
+  assert.equal(hydratedCourseSchedule.solutionProfile, undefined);
+  assert.equal(hydratedMarketplace.solutionProfile, undefined);
 });
