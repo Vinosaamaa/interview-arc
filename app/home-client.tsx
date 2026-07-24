@@ -1,6 +1,6 @@
 "use client";
 
-import { Children, type FormEvent, isValidElement, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -754,25 +754,24 @@ function DiagramFigure({ src, alt }: { src: string; alt: string }) {
   const [zoom, setZoom] = useState(1);
   const frameRef = useRef<HTMLElement>(null);
   const updateZoom = (next: number) => setZoom(Math.min(2.4, Math.max(.65, Number(next.toFixed(2)))));
-  return <figure className="architecture-diagram" ref={frameRef}>
-    <figcaption><span>{alt || "Architecture diagram"}</span><div>
+  return <span className="architecture-diagram" ref={frameRef} role="group" aria-label={alt || "Architecture diagram"}>
+    <span className="diagram-caption"><strong>{alt || "Architecture diagram"}</strong><span className="diagram-controls">
       <button type="button" onClick={() => updateZoom(zoom - .2)} disabled={zoom <= .65} aria-label="Zoom diagram out" title="Zoom out"><Icon name="minus" /></button>
       <button type="button" className="diagram-zoom-value" onClick={() => setZoom(1)} aria-label="Reset diagram zoom" title="Reset zoom">{Math.round(zoom * 100)}%</button>
       <button type="button" onClick={() => updateZoom(zoom + .2)} disabled={zoom >= 2.4} aria-label="Zoom diagram in" title="Zoom in"><Icon name="plus" /></button>
       <button type="button" onClick={() => void frameRef.current?.requestFullscreen()} aria-label="View diagram full screen" title="Full screen">↗</button>
-    </div></figcaption>
-    <div className="architecture-diagram-viewport">
+    </span></span>
+    <span className="architecture-diagram-viewport">
       <img src={src} alt={alt} style={{ width: `${zoom * 100}%` }} />
-    </div>
+    </span>
     <small>Zoom, then scroll or use a trackpad to inspect the architecture.</small>
-  </figure>;
+  </span>;
 }
 
 function MarkdownBody({ source }: { source: string }) {
   return <div className="markdown-body"><Markdown
     remarkPlugins={[remarkGfm]}
     components={{
-      p: ({ children }) => Children.toArray(children).some((child) => isValidElement(child) && child.type === DiagramFigure) ? <>{children}</> : <p>{children}</p>,
       pre: ({ children }) => <>{children}</>,
       code: ({ className, children }) => {
         const language = className?.match(/language-([\w-]+)/)?.[1];
