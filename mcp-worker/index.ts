@@ -6,6 +6,7 @@ import { resolveIntegrationOwner } from "../db/integrations";
 import {
   applyTimerAction,
   activityTimerWasRunningAt,
+  readActiveVoiceActivity,
   setActivityNote,
   setOutcome,
   setPublicationStatus,
@@ -81,13 +82,11 @@ function voiceSpecialty(value: "leetcode" | "system_design" | "behavioral") {
 }
 
 async function voiceContext(ownerId: string, request: Request) {
-  const date = new URL(request.url).searchParams.get("date") ?? dateInPracticeTimeZone();
-  const [snapshot, content, specialists] = await Promise.all([
-    buildPracticeSnapshot(ownerId, date, { includeAll: true }),
-    loadContentIndex(),
-    readSpecialistTasks(ownerId),
-  ]);
-  const activity = snapshot.activeActivity;
+  // Voice polls this route every second. Reading the entire owner history,
+  // durable practice graph, and published journal on every idle poll made a
+  // newly started stopwatch appear several seconds—or minutes—late. Resolve
+  // the one running timer directly, and load richer metadata only when it exists.
+  const activity = await readActiveVoiceActivity(ownerId);
   if (!activity) {
     return json(request, {
       protocolVersion: VOICE_PROTOCOL_VERSION,
@@ -97,6 +96,10 @@ async function voiceContext(ownerId: string, request: Request) {
       message: "Start an activity stopwatch in Interview Arc before recording a linked answer.",
     });
   }
+  const [content, specialists] = await Promise.all([
+    loadContentIndex(),
+    readSpecialistTasks(ownerId),
+  ]);
   const bank = activity.type === "system_design"
     ? content.questionBanks.systemDesign
     : activity.type === "behavioral"
@@ -122,8 +125,8 @@ async function voiceContext(ownerId: string, request: Request) {
       projects: [],
       vocabularyPackIds: activity.vocabularyPackIds ?? question?.vocabularyPackIds ?? [],
       speechTerms: activity.speechTerms ?? question?.speechTerms ?? [],
-      startedAt: activity.timer?.startedAt ?? null,
-      runningSince: activity.timer?.runningSince ?? null,
+      startedAt: activity.timer.startedAt,
+      runningSince: activity.timer.runningSince,
     },
     specialist: specialist ? {
       specialty: specialist.specialty,

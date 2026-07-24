@@ -332,14 +332,28 @@ test("Interview Arc Voice persists exact turns, idempotent clips, and per-answer
   for (const route of ["/voice/context", "/voice/captures", "/voice/delivery"]) {
     assert.match(bridge, new RegExp(route.replace("/", "\\/")));
   }
-  assert.match(bridge, /startedAt: activity\.timer\?\.startedAt \?\? null/);
-  assert.match(bridge, /runningSince: activity\.timer\?\.runningSince \?\? null/);
+  assert.match(bridge, /startedAt: activity\.timer\.startedAt/);
+  assert.match(bridge, /runningSince: activity\.timer\.runningSince/);
   assert.match(bridge, /requestedClipId \|\| crypto\.randomUUID\(\)/);
   assert.match(durableStore, /appendVoiceTranscriptTurn/);
   assert.match(durableStore, /Delivery analysis must reference a private clip linked to the same user transcript turn/);
   assert.ok(client.indexOf("<DeliveryReview") < client.indexOf('"Your answer"'));
   assert.match(client, /GroupedAnswerPlayback/);
   assert.match(client, /onEnded=\{continueToNextSegment\}/);
+});
+
+test("Voice context reads the active stopwatch directly instead of rebuilding all practice history", async () => {
+  const bridge = await readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8");
+  const liveState = await readFile(new URL("../db/live-state.ts", import.meta.url), "utf8");
+  const voiceContextBody = bridge.slice(
+    bridge.indexOf("async function voiceContext"),
+    bridge.indexOf("async function saveVoiceCapture"),
+  );
+
+  assert.match(liveState, /export async function readActiveVoiceActivity/);
+  assert.match(voiceContextBody, /readActiveVoiceActivity\(ownerId\)/);
+  assert.doesNotMatch(voiceContextBody, /buildPracticeSnapshot/);
+  assert.doesNotMatch(voiceContextBody, /includeAll/);
 });
 
 test("consecutive Voice captures form one logical answer without merging their durable turns", () => {

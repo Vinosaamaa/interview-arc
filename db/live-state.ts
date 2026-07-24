@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import {
   activityNotes,
@@ -101,6 +101,54 @@ function toTimerState(row: {
 
 type ActivityPayload = { id: string; date: string; sessionId?: string } & Record<string, unknown>;
 type SessionPayload = { id: string; date?: string; activityIds: string[] } & Record<string, unknown>;
+
+export type ActiveVoiceActivity = ActivityPayload & {
+  type: "leetcode" | "system_design" | "behavioral";
+  title: string;
+  questionId?: string;
+  url?: string;
+  prompt?: string;
+  vocabularyPackIds?: string[];
+  speechTerms?: string[];
+  timer: TimerState;
+};
+
+export async function readActiveVoiceActivity(ownerId: string): Promise<ActiveVoiceActivity | null> {
+  const db = getDb();
+  const activeTimerRows = await db
+    .select()
+    .from(timers)
+    .where(and(
+      eq(timers.ownerId, ownerId),
+      eq(timers.kind, "activity"),
+      isNotNull(timers.runningSince),
+      eq(timers.completed, false),
+    ))
+    .orderBy(desc(timers.updatedAt))
+    .limit(1);
+  const activeTimer = activeTimerRows[0];
+  if (!activeTimer) return null;
+
+  const activityRows = await db
+    .select()
+    .from(extraActivities)
+    .where(and(
+      eq(extraActivities.ownerId, ownerId),
+      eq(extraActivities.id, activeTimer.subjectId),
+    ));
+  const payload = activityRows[0]?.payload as ActivityPayload | undefined;
+  if (!payload
+      || !["leetcode", "system_design", "behavioral"].includes(String(payload.type))
+      || typeof payload.title !== "string") {
+    return null;
+  }
+  return {
+    ...payload,
+    type: payload.type as ActiveVoiceActivity["type"],
+    title: payload.title,
+    timer: toTimerState(activeTimer),
+  };
+}
 
 function toWorkbenchState(row: typeof practiceWorkbenches.$inferSelect): WorkbenchState {
   return {
