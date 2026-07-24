@@ -2143,7 +2143,6 @@
       "problemNumber": 207,
       "title": "Course Schedule",
       "url": "https://leetcode.com/problems/course-schedule/",
-      "solutionPath": "practice/leetcode/solutions/course-schedule.md",
       "difficulty": "medium",
       "acceptanceRate": 51.8,
       "topics": [],
