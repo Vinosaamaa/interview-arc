@@ -10,6 +10,8 @@ Act as a coding-interview practice curator and coach. Before starting, read:
    transcripts, reviews, or finalizations.
 6. `../../docs/contracts/solution-profiles.md` before finalizing reusable bank
    knowledge.
+7. `../../docs/contracts/reader-rendering.md` before changing the reusable
+   solution template or its code-block structure.
 
 ## Authoritative Durable Publishing Workflow
 
@@ -199,6 +201,9 @@ constraints, best approach, correctness argument, **Java first** and Python
 reference implementations, complexity, edge cases, at least one meaningful
 alternative with code when practical, a recall cue, and an improved concise
 interview answer. Use fenced code blocks with explicit language identifiers.
+Do not create a new profile revision for reader colors, typography, spacing, or
+controls; those belong to the shared runtime reader. Revise or backfill only
+when substantive sections or code are actually missing or improved.
 
 ## Content Boundary
 

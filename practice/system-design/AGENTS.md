@@ -16,6 +16,8 @@ Before starting:
    reference preflight and Solution Profile template.
 9. Read `../../docs/contracts/solution-profiles.md` for the shared Past-versus-
    Problem-Bank boundary.
+10. Read `../../docs/contracts/reader-rendering.md` before changing the reusable
+    solution template, code contracts, or architecture-diagram presentation.
 
 ## Authoritative Durable Publishing Workflow
 
@@ -509,6 +511,11 @@ endpoint its own fenced `http` contract, format the data model as readable
 records rather than one paragraph, and include a real architecture diagram
 (versioned draw.io source plus exported SVG) instead of publishing raw Mermaid
 or ASCII arrows as the final visual.
+Do not create a new Solution Profile revision for reader styling, zoom,
+fullscreen, typography, or layout changes; those belong to the shared runtime
+reader and update older artifacts automatically. Create or backfill a revision
+only when the diagram or substantive design content itself is missing or
+materially improved.
 
 Do not invent things the user said. Clearly distinguish the user's original answer, the coach's feedback, and generated model material.
 

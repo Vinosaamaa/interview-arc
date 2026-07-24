@@ -31,6 +31,18 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
   separate from attention filters: Due now, Needs review, Solved, Solved with
   help, Failed, and Has notes.
 - Render tracked artifact Markdown as formatted headings, lists, links, tables, quotes, and code blocks rather than raw source text.
+- Follow `../contracts/reader-rendering.md`. The reader is one shared runtime
+  template over versioned Markdown/JSON, not a generated static page per
+  artifact. CSS and interaction improvements must update prior artifacts
+  automatically; content absent from an old profile requires an explicit
+  revision or backfill.
+- Keep fenced-code presentation readable on its dark surface by setting an
+  explicit plain-text color plus distinct accessible keyword, string, number,
+  and comment colors.
+- Render final system-design SVGs through the shared interactive diagram
+  component. Zoom must survive dashboard rerenders, and the enlarged viewer
+  must not depend solely on native browser fullscreen or close the underlying
+  reader when Escape is pressed.
 - For legacy ignored audio, display the filename and `Local only`. For private
   R2 clips with D1 status `available`, render the authenticated audio player;
   never expose an R2 object key or public bucket URL. When a clip references a

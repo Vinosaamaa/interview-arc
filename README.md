@@ -160,6 +160,14 @@ Timers, result flags, website-created sessions, and extra activities are
 canonical in D1, with browser storage acting only as an offline cache and retry
 queue.
 
+Published content is not compiled into one static page per artifact. Past
+attempts and Problem Bank Solution Profiles are rendered at runtime by one
+shared reader, so typography, code-block presentation, diagram controls, and
+layout improvements update old artifacts automatically. Missing factual
+sections still require a deliberate Solution Profile revision or backfill.
+Follow [`docs/contracts/reader-rendering.md`](docs/contracts/reader-rendering.md)
+for the exact boundary and template-evolution rules.
+
 ## Git Workflow
 
 - Code, schemas, and agent-guide changes use a feature branch and pull request.

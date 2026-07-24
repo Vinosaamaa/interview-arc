@@ -40,6 +40,12 @@ registry, transcript, finalization, review, and publication protocol. Maintain
 long system-design and behavioral drafts incrementally; never reconstruct an
 arbitrarily long task transcript from memory at publication time.
 
+Read `docs/contracts/reader-rendering.md` before changing artifact templates,
+Solution Profile section requirements, code-block rendering, architecture
+diagrams, or the Past/Problem Bank reader. Treat published Markdown/JSON as
+durable content and the React/CSS reader as the shared presentation layer.
+Visual reader changes must update old artifacts without rewriting them.
+
 ## Shared Product Rules
 
 - Default daily plan: one session containing 6 LeetCode problems, 1 system-design mock, and 1 behavioral mock. Website-created sessions may change those counts before work begins; allocate 40 minutes per coding problem and 60 minutes per mock.
