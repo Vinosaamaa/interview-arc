@@ -122,6 +122,8 @@ async function voiceContext(ownerId: string, request: Request) {
       projects: [],
       vocabularyPackIds: activity.vocabularyPackIds ?? question?.vocabularyPackIds ?? [],
       speechTerms: activity.speechTerms ?? question?.speechTerms ?? [],
+      startedAt: activity.timer?.startedAt ?? null,
+      runningSince: activity.timer?.runningSince ?? null,
     },
     specialist: specialist ? {
       specialty: specialist.specialty,

@@ -332,6 +332,8 @@ test("Interview Arc Voice persists exact turns, idempotent clips, and per-answer
   for (const route of ["/voice/context", "/voice/captures", "/voice/delivery"]) {
     assert.match(bridge, new RegExp(route.replace("/", "\\/")));
   }
+  assert.match(bridge, /startedAt: activity\.timer\?\.startedAt \?\? null/);
+  assert.match(bridge, /runningSince: activity\.timer\?\.runningSince \?\? null/);
   assert.match(bridge, /requestedClipId \|\| crypto\.randomUUID\(\)/);
   assert.match(durableStore, /appendVoiceTranscriptTurn/);
   assert.match(durableStore, /Delivery analysis must reference a private clip linked to the same user transcript turn/);
