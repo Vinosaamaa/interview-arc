@@ -74,17 +74,9 @@ type ListPosition = {
   anchorOffset?: number;
   centerAnchor?: boolean;
 };
-type CrossReaderReturn =
-  | {
-    sourceView: "library";
-    sourceMasterPaneOpen: boolean;
-    destinationProblem: { type: ActivityType; question: QuestionBankItem } | null;
-  } & ListPosition
-  | {
-    sourceView: "banks";
-    sourceMasterPaneOpen: boolean;
-    destinationEntry: LogEntry | null;
-  } & ListPosition;
+type ListMode = "main" | "pane";
+type MasterPaneState = Record<ListSurface, boolean>;
+type ListPositionState = Record<ListSurface, Record<ListMode, ListPosition>>;
 type LifecycleDialog =
   | { kind: "session-results"; sessionId: string; missingCount: number }
   | { kind: "workbench-results"; missingCount: number }
@@ -1058,11 +1050,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     () => content.journals.find((candidate) => candidate.date === today) ?? emptyJournal(today),
     [content.journals, today],
   );
-  const [view, setView] = useState<View>(() => {
-    if (typeof window === "undefined") return "today";
-    const stored = window.sessionStorage.getItem("interview-arc-active-view");
-    return stored === "journey" || stored === "library" || stored === "banks" ? stored : "today";
-  });
+  // Keep the server and first client render identical. The arrival screen masks
+  // the one-time restoration, so the remembered workspace is ready before the
+  // user enters without forcing React to discard a mismatched server tree.
+  const [view, setView] = useState<View>("today");
+  const [viewMemoryReady, setViewMemoryReady] = useState(false);
   const [viewDirection, setViewDirection] = useState<"forward" | "backward">("forward");
   const [viewTransitionId, setViewTransitionId] = useState(0);
   const { draft, setDraft, now, setNow, hydrated, enqueue } = useLiveState(journal.date);
@@ -1071,16 +1063,26 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [composer, setComposer] = useState<ComposerState>(EMPTY_COMPOSER);
   const [selectedEntry, setSelectedEntry] = useState<LogEntry | null>(null);
   const [selectedProblem, setSelectedProblem] = useState<{ type: ActivityType; question: QuestionBankItem } | null>(null);
-  const [masterPaneOpen, setMasterPaneOpen] = useState(() =>
-    typeof window !== "undefined" && window.sessionStorage.getItem("interview-arc-master-pane") === "open"
-  );
-  const [readerFocusMode, setReaderFocusMode] = useState(false);
+  const [libraryNestedProblem, setLibraryNestedProblem] = useState<{ type: ActivityType; question: QuestionBankItem } | null>(null);
+  const [bankNestedEntry, setBankNestedEntry] = useState<LogEntry | null>(null);
+  const [masterPaneState, setMasterPaneState] = useState<MasterPaneState>(() => ({
+    library: typeof window !== "undefined" && window.sessionStorage.getItem("interview-arc-master-pane-library") === "open",
+    banks: typeof window !== "undefined" && window.sessionStorage.getItem("interview-arc-master-pane-banks") === "open",
+  }));
+  const activeListSurface: ListSurface | null = view === "library" || view === "banks" ? view : null;
+  const masterPaneOpen = activeListSurface ? masterPaneState[activeListSurface] : false;
+  const setMasterPaneOpen = useCallback((next: boolean | ((current: boolean) => boolean), surface = activeListSurface) => {
+    if (!surface) return;
+    setMasterPaneState((current) => ({
+      ...current,
+      [surface]: typeof next === "function" ? next(current[surface]) : next,
+    }));
+  }, [activeListSurface]);
   const [workspaceUiMemory] = useState(() =>
     readSessionJson<WorkspaceUiMemory>("interview-arc-workspace-ui-v1", {})
   );
   const [readerClosing, setReaderClosing] = useState(false);
   const [listRestoring, setListRestoring] = useState<ListSurface | null>(null);
-  const [crossReaderReturn, setCrossReaderReturn] = useState<CrossReaderReturn>(null);
   const [lifecycleDialog, setLifecycleDialog] = useState<LifecycleDialog>(null);
   const [uiToast, setUiToast] = useState<UiToast>(null);
   const [freshDayConfirmOpen, setFreshDayConfirmOpen] = useState(false);
@@ -1147,15 +1149,24 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const readerScrollFrameRef = useRef(0);
   const readerCloseTimerRef = useRef<number | null>(null);
   const toastTimerRef = useRef<number | null>(null);
+  const pipWindowRef = useRef<Window | null>(null);
   const pastListRef = useRef<HTMLDivElement>(null);
   const bankListRef = useRef<HTMLDivElement>(null);
   const pendingListRestoreRef = useRef<(ListPosition & { surface: ListSurface }) | null>(null);
   const pendingSelectedRevealRef = useRef<ListSurface | null>(null);
-  const listPositionMemoryRef = useRef<Record<ListSurface, ListPosition>>({
-    library: { pageScrollTop: 0, listScrollTop: 0 },
-    banks: { pageScrollTop: 0, listScrollTop: 0 },
-  });
-  const masterPaneMemoryRef = useRef({ library: masterPaneOpen, banks: masterPaneOpen });
+  const listPositionMemoryRef = useRef<ListPositionState>(readSessionJson<ListPositionState>(
+    "interview-arc-list-position-v2",
+    {
+      library: {
+        main: { pageScrollTop: 0, listScrollTop: 0 },
+        pane: { pageScrollTop: 0, listScrollTop: 0 },
+      },
+      banks: {
+        main: { pageScrollTop: 0, listScrollTop: 0 },
+        pane: { pageScrollTop: 0, listScrollTop: 0 },
+      },
+    },
+  ));
   const highlightRangesRef = useRef(new Map<string, Range[]>());
   const {
     playing: ambientPlaying,
@@ -1184,8 +1195,18 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const query = window.matchMedia("(max-width: 1976px)");
     const synchronizePane = (event?: MediaQueryListEvent) => {
       const narrow = event?.matches ?? query.matches;
-      if (!event && window.sessionStorage.getItem("interview-arc-master-pane")) return;
-      setMasterPaneOpen(!narrow);
+      if (narrow) {
+        setMasterPaneState({ library: false, banks: false });
+        return;
+      }
+      setMasterPaneState((current) => ({
+        library: window.sessionStorage.getItem("interview-arc-master-pane-library")
+          ? current.library
+          : !narrow,
+        banks: window.sessionStorage.getItem("interview-arc-master-pane-banks")
+          ? current.banks
+          : !narrow,
+      }));
     };
     const frame = window.requestAnimationFrame(() => synchronizePane());
     query.addEventListener("change", synchronizePane);
@@ -1230,7 +1251,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }, [listRestoring]);
 
   useLayoutEffect(() => {
-    if (readerClosing || readerFocusMode) return;
+    if (readerClosing) return;
     const surface: ListSurface | null = view === "library" && selectedEntry
       ? "library"
       : view === "banks" && selectedProblem
@@ -1254,22 +1275,29 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       list.scrollTo({ top: Math.max(0, target), behavior: "instant" });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [masterPaneOpen, readerClosing, readerFocusMode, selectedEntry, selectedProblem, view]);
+  }, [masterPaneOpen, readerClosing, selectedEntry, selectedProblem, view]);
 
   useEffect(() => {
     window.sessionStorage.setItem("interview-arc-reader-memory-v1", JSON.stringify(readerMemory));
   }, [readerMemory]);
 
   useEffect(() => {
-    window.sessionStorage.setItem("interview-arc-active-view", view);
-  }, [view]);
+    const frame = window.requestAnimationFrame(() => {
+      const stored = window.sessionStorage.getItem("interview-arc-active-view");
+      if (stored === "journey" || stored === "library" || stored === "banks") setView(stored);
+      setViewMemoryReady(true);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
-    window.sessionStorage.setItem("interview-arc-master-pane", masterPaneOpen ? "open" : "closed");
-    if ((view === "library" || view === "banks") && !readerFocusMode) {
-      masterPaneMemoryRef.current[view] = masterPaneOpen;
-    }
-  }, [masterPaneOpen, readerFocusMode, view]);
+    if (viewMemoryReady) window.sessionStorage.setItem("interview-arc-active-view", view);
+  }, [view, viewMemoryReady]);
+
+  useEffect(() => {
+    window.sessionStorage.setItem("interview-arc-master-pane-library", masterPaneState.library ? "open" : "closed");
+    window.sessionStorage.setItem("interview-arc-master-pane-banks", masterPaneState.banks ? "open" : "closed");
+  }, [masterPaneState]);
 
   useEffect(() => {
     const memory: WorkspaceUiMemory = {
@@ -1347,9 +1375,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }, []);
 
   // Close the pop-out if the dashboard unmounts so it never outlives its opener.
-  useEffect(() => {
-    return () => pipWindow?.close();
-  }, [pipWindow]);
+  useEffect(() => () => pipWindowRef.current?.close(), []);
 
   useEffect(() => {
     if (!composer.open && !integrationOpen) return;
@@ -1367,7 +1393,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (!selectedEntry && !selectedProblem) return;
     const closeReader = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      if (masterPaneOpen && !readerFocusMode && window.matchMedia("(max-width: 1976px)").matches) {
+      if (masterPaneOpen && window.matchMedia("(max-width: 1976px)").matches) {
         setMasterPaneOpen(false);
         return;
       }
@@ -1375,10 +1401,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     };
     window.addEventListener("keydown", closeReader);
     return () => window.removeEventListener("keydown", closeReader);
-  }, [masterPaneOpen, readerFocusMode, selectedEntry, selectedProblem]);
+  }, [masterPaneOpen, selectedEntry, selectedProblem, setMasterPaneOpen]);
 
   useEffect(() => {
-    if (!masterPaneOpen || readerFocusMode) return;
+    if (!masterPaneOpen) return;
     const closeMasterPane = (event: PointerEvent) => {
       if (!window.matchMedia("(max-width: 1976px)").matches) return;
       const target = event.target;
@@ -1388,7 +1414,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     };
     document.addEventListener("pointerdown", closeMasterPane);
     return () => document.removeEventListener("pointerdown", closeMasterPane);
-  }, [masterPaneOpen, readerFocusMode]);
+  }, [masterPaneOpen, setMasterPaneOpen]);
 
   function enterArc() {
     if (!soundMuted) startAmbient();
@@ -1738,6 +1764,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (parentSession && draft.sessionTimers[parentSession.id]?.completed) return;
     if (!draft.outcomes[activityId]) {
       setRequiredResultIds((current) => [...new Set([...current, activityId])]);
+      showUiToast("Choose a result before completing this activity.");
       return;
     }
     setNow(timestamp);
@@ -1855,7 +1882,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         const response = await fetch("/api/practice-notes", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ activityId: selectedEntryActivityId, date: selectedEntry?.date, body: noteDraft.trim(), kind: "remember" }),
+          body: JSON.stringify({ activityId: selectedEntryActivityId, date: readerSelectedEntry?.date, body: noteDraft.trim(), kind: "remember" }),
         });
         if (!response.ok) throw new Error("Unable to add note");
         const note = await response.json() as PracticeNote;
@@ -1927,7 +1954,18 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     });
   }
 
-  function captureListPosition(surface: ListSurface, remember = true): ListPosition {
+  function listModeFor(surface: ListSurface): ListMode {
+    return surface === "library"
+      ? selectedEntry ? "pane" : "main"
+      : selectedProblem ? "pane" : "main";
+  }
+
+  function rememberListPosition(surface: ListSurface, mode: ListMode, position: ListPosition) {
+    listPositionMemoryRef.current[surface][mode] = position;
+    window.sessionStorage.setItem("interview-arc-list-position-v2", JSON.stringify(listPositionMemoryRef.current));
+  }
+
+  function captureListPosition(surface: ListSurface, mode = listModeFor(surface), remember = true): ListPosition {
     const list = surface === "library" ? pastListRef.current : bankListRef.current;
     const overflowY = list ? window.getComputedStyle(list).overflowY : "";
     const internallyScrollable = Boolean(
@@ -1948,28 +1986,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         anchorOffset: anchor.getBoundingClientRect().top - referenceTop,
       } : {}),
     };
-    if (remember) listPositionMemoryRef.current[surface] = position;
+    if (remember) rememberListPosition(surface, mode, position);
     return position;
-  }
-
-  function restoreListPosition(surface: ListSurface, position: ListPosition) {
-    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
-      window.scrollTo({ top: position.pageScrollTop, behavior: "instant" });
-      const list = surface === "library" ? pastListRef.current : bankListRef.current;
-      if (!list) return;
-      list.scrollTop = position.listScrollTop;
-      const anchor = position.anchorId
-        ? [...list.querySelectorAll<HTMLElement>("[data-list-item-id]")].find((item) => item.dataset.listItemId === position.anchorId)
-        : null;
-      if (!anchor || typeof position.anchorOffset !== "number") return;
-      const overflowY = window.getComputedStyle(list).overflowY;
-      const internallyScrollable = (overflowY === "auto" || overflowY === "scroll")
-        && list.scrollHeight > list.clientHeight + 2;
-      const referenceTop = internallyScrollable ? list.getBoundingClientRect().top : 0;
-      const delta = anchor.getBoundingClientRect().top - referenceTop - position.anchorOffset;
-      if (internallyScrollable) list.scrollTop += delta;
-      else window.scrollBy({ top: delta, behavior: "instant" });
-    }));
   }
 
   function openJournalEntry(entry: LibraryEntry) {
@@ -1978,17 +1996,17 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       readerCloseTimerRef.current = null;
     }
     const openingReader = view !== "library" || !selectedEntry;
-    if (view === "library" && !selectedEntry) captureListPosition("library");
+    if (view === "library" && !selectedEntry) captureListPosition("library", "main");
     if (view === "library" && selectedEntry) {
-      listPositionMemoryRef.current.library = {
-        ...listPositionMemoryRef.current.library,
+      captureListPosition("library", "pane");
+      rememberListPosition("library", "main", {
+        ...listPositionMemoryRef.current.library.main,
         anchorId: `library:${entry.id}`,
         centerAnchor: true,
-      };
+      });
     }
     if (openingReader) pendingSelectedRevealRef.current = "library";
-    if (typeof window !== "undefined" && window.matchMedia("(max-width: 1976px)").matches) setMasterPaneOpen(false);
-    setReaderFocusMode(false);
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 1976px)").matches) setMasterPaneOpen(false, "library");
     setReaderClosing(false);
     setSelectedEntry(entry);
     transitionToView("library");
@@ -1999,12 +2017,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function toggleMasterPane() {
-    if (readerFocusMode) {
-      if (view === "library" || view === "banks") pendingSelectedRevealRef.current = view;
-      setReaderFocusMode(false);
-      setMasterPaneOpen(true);
-      return;
-    }
     if (!masterPaneOpen && (view === "library" || view === "banks")) pendingSelectedRevealRef.current = view;
     setMasterPaneOpen((current) => !current);
   }
@@ -2062,34 +2074,29 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       readerCloseTimerRef.current = null;
     }
     const openingReader = view !== "banks" || !selectedProblem;
-    if (view === "banks" && !selectedProblem) captureListPosition("banks");
+    if (view === "banks" && !selectedProblem) captureListPosition("banks", "main");
     if (view === "banks" && selectedProblem) {
-      listPositionMemoryRef.current.banks = {
-        ...listPositionMemoryRef.current.banks,
+      captureListPosition("banks", "pane");
+      rememberListPosition("banks", "main", {
+        ...listPositionMemoryRef.current.banks.main,
         anchorId: `banks:${type}:${question.id}`,
         centerAnchor: true,
-      };
+      });
     }
     if (openingReader) pendingSelectedRevealRef.current = "banks";
     closeMasterAfterSelection();
-    setReaderFocusMode(false);
     setReaderClosing(false);
     setSelectedProblem({ type, question });
   }
 
   function openAttemptFromSolution(entry: LibraryEntry) {
-    const position = captureListPosition("banks", false);
-    setCrossReaderReturn({
-      sourceView: "banks",
-      sourceMasterPaneOpen: masterPaneOpen,
-      destinationEntry: selectedEntry,
-      ...position,
-    });
-    setReaderFocusMode(true);
-    setMasterPaneOpen(false);
     setReaderClosing(false);
+    if (view === "banks") {
+      setBankNestedEntry(entry);
+      return;
+    }
+    setLibraryNestedProblem(null);
     setSelectedEntry(entry);
-    transitionToView("library");
   }
 
   function bankQuestionForEntry(entry: LogEntry) {
@@ -2102,43 +2109,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   function openEntrySolution(entry: LogEntry) {
     const question = bankQuestionForEntry(entry);
     if (!question || !hasReusableSolution(entry.type, question)) return;
-    const position = captureListPosition("library", false);
-    setCrossReaderReturn({
-      sourceView: "library",
-      sourceMasterPaneOpen: masterPaneOpen,
-      destinationProblem: selectedProblem,
-      ...position,
-    });
-    setReaderFocusMode(true);
-    setMasterPaneOpen(false);
-    setReaderClosing(false);
-    setSelectedProblem({ type: entry.type, question });
-    transitionToView("banks");
-  }
-
-  function returnFromCrossReader() {
-    if (!crossReaderReturn) return;
-    const target = crossReaderReturn;
-    setCrossReaderReturn(null);
-    setReaderFocusMode(false);
-    setMasterPaneOpen(target.sourceMasterPaneOpen);
-    if (target.sourceView === "library") {
-      setSelectedProblem(target.destinationProblem);
-      transitionToView("library");
-      restoreListPosition("library", target);
-      return;
+    if (view === "library" && !selectedEntry) {
+      captureListPosition("library", "main");
+      setSelectedEntry(entry);
     }
-    setSelectedEntry(target.destinationEntry);
-    transitionToView("banks");
-    restoreListPosition("banks", target);
-  }
-
-  function dismissCrossReader() {
-    if (!crossReaderReturn) return;
-    if (crossReaderReturn.sourceView === "library") setSelectedProblem(crossReaderReturn.destinationProblem);
-    else setSelectedEntry(crossReaderReturn.destinationEntry);
-    setCrossReaderReturn(null);
-    setReaderFocusMode(false);
+    setReaderClosing(false);
+    setLibraryNestedProblem({ type: entry.type, question });
+    transitionToView("library");
   }
 
   function addEntryToToday(entry: LogEntry) {
@@ -2574,8 +2551,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   async function openNowWindow() {
     const dpip = (window as Window & { documentPictureInPicture?: DocumentPiP }).documentPictureInPicture;
     if (!dpip) return;
-    if (pipWindow) {
-      pipWindow.focus();
+    if (pipWindow && !pipWindow.closed) {
+      pipWindow.close();
+      pipWindowRef.current = null;
+      setPipWindow(null);
       return;
     }
     try {
@@ -2584,7 +2563,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         win.document.head.appendChild(node.cloneNode(true));
       }
       win.document.body.classList.add("pip-body");
-      win.addEventListener("pagehide", () => setPipWindow(null), { once: true });
+      win.addEventListener("pagehide", () => {
+        pipWindowRef.current = null;
+        setPipWindow(null);
+      }, { once: true });
+      pipWindowRef.current = win;
       setPipWindow(win);
     } catch {
       // The request needs a user gesture and can be cancelled; ignore failures.
@@ -2715,7 +2698,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   );
 
   useEffect(() => {
-    if (crossReaderReturn) return;
     if (selectedEntry) {
       window.sessionStorage.setItem("interview-arc-selected-past", selectedEntry.id);
       return;
@@ -2725,10 +2707,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (!stored) return;
     const frame = window.requestAnimationFrame(() => setSelectedEntry(stored));
     return () => window.cancelAnimationFrame(frame);
-  }, [crossReaderReturn, libraryEntries, selectedEntry]);
+  }, [libraryEntries, selectedEntry]);
 
   useEffect(() => {
-    if (crossReaderReturn) return;
     if (selectedProblem) {
       window.sessionStorage.setItem(
         "interview-arc-selected-bank",
@@ -2748,7 +2729,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     } catch {
       window.sessionStorage.removeItem("interview-arc-selected-bank");
     }
-  }, [content.questionBanks, crossReaderReturn, draft.personalQuestions, selectedProblem]);
+  }, [content.questionBanks, draft.personalQuestions, selectedProblem]);
 
   function transitionToView(nextView: View) {
     if (nextView === view) return;
@@ -2759,14 +2740,21 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function navigateToPrimaryView(nextView: View) {
+    if (nextView === view) return;
     if (readerCloseTimerRef.current !== null) {
       window.clearTimeout(readerCloseTimerRef.current);
       readerCloseTimerRef.current = null;
     }
-    if (crossReaderReturn) {
-      const destinationMasterPaneOpen = masterPaneMemoryRef.current[nextView === "library" || nextView === "banks" ? nextView : view === "library" || view === "banks" ? view : "library"];
-      dismissCrossReader();
-      if (nextView === "library" || nextView === "banks") setMasterPaneOpen(destinationMasterPaneOpen);
+    if (view === "library" || view === "banks") {
+      captureListPosition(view, listModeFor(view));
+    }
+    if (nextView === "library" || nextView === "banks") {
+      const nextMode: ListMode = nextView === "library"
+        ? selectedEntry ? "pane" : "main"
+        : selectedProblem ? "pane" : "main";
+      const position = listPositionMemoryRef.current[nextView][nextMode];
+      pendingListRestoreRef.current = { surface: nextView, ...position };
+      setListRestoring(nextView);
     }
     setReaderClosing(false);
     transitionToView(nextView);
@@ -3283,7 +3271,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return (
       <section className={`view-page library-page ${selectedEntry ? "has-open-entry" : ""} ${listRestoring === "library" ? "list-restoring" : ""}`}>
         <header className="view-masthead"><span className="eyebrow">PAST · COMPLETED WORK</span><h1>Read the journey<br /><em>like a field journal.</em></h1><p>Past contains finished activity timers and published case files—never planned work or result flags by themselves.</p></header>
-        <div className={`past-master-detail ${masterPaneOpen && !readerFocusMode ? "master-pane-open" : ""} ${readerClosing ? "reader-closing" : ""}`}>
+        <div className={`past-master-detail ${masterPaneOpen ? "master-pane-open" : ""} ${readerClosing ? "reader-closing" : ""}`}>
           <div
             className="past-master-pane"
             onClickCapture={(event) => {
@@ -3314,18 +3302,18 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             </div>
             <div className="log-layout">
               <div className="dated-log" ref={pastListRef} onScroll={() => {
-                if (selectedEntry) return;
-                listPositionMemoryRef.current.library = {
+                const position = {
                   pageScrollTop: window.scrollY,
                   listScrollTop: pastListRef.current?.scrollTop ?? 0,
                 };
+                listPositionMemoryRef.current.library[selectedEntry ? "pane" : "main"] = position;
               }}>
                 {groupedLog.length ? groupedLog.map(([date, entries]) => <section className="log-day" id={`log-date-${date}`} key={date}><header><time>{readableDate(date)}</time><span>{entries.length} record{entries.length === 1 ? "" : "s"} · Pacific day</span></header><div className="log-day-entries">{entries.map((entry) => { const reusableQuestion = bankQuestionForEntry(entry); const reusableSolution = Boolean(reusableQuestion && hasReusableSolution(entry.type, reusableQuestion)); return <article className={`log-entry ${entry.type} ${selectedEntry?.id === entry.id ? "selected" : ""}`} data-list-item-id={`library:${entry.id}`} key={entry.id}><button className="log-entry-open" onClick={() => openJournalEntry(entry)} aria-label={`Read ${entry.title}`}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><div className="log-entry-copy"><small>{typeLabel(entry.type)} · {entry.status}{entry.sessionId ? " · session activity" : " · standalone"}</small><strong>{entry.title}</strong>{meaningfulSubtitle(entry.subtitle) && <span>{meaningfulSubtitle(entry.subtitle)}</span>}<div className="entry-badges">{entry.review?.status === "due" && <i className="review-badge due">Due now</i>}{entry.review?.status === "scheduled" && <i className="review-badge">Review {entry.review.dueDate}</i>}{Boolean(entry.personalNote?.trim() || entry.pinnedNotes?.length) && <i className="note-badge">Pinned note</i>}{entry.outcome === "solved" && <i className="independent-badge">Solved</i>}{entry.outcome === "solved_after_reviewing_approach" && <i className="help-badge">Solved with help</i>}{entry.outcome === "failed" && <i className="failure-badge">Failed attempt</i>}</div>{entry.startedAt && <span className="entry-time-range">{formatPracticeTimestamp(entry.startedAt, true)} → {entry.endedAt ? formatPracticeTimestamp(entry.endedAt, true) : "Paused"}</span>}</div><div className="log-entry-meta"><strong>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "—"}</strong><span>{entry.artifact ? "Published record" : entry.status}</span></div></button><div className="log-entry-actions"><StaticResultFlag outcome={entry.outcome} label={resultLabel(entry.outcome, entry.type)} /><button className={`star-control ${isStarred(entry.type, entry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(entry.type, entry.questionId)} disabled={!entry.questionId} aria-label={`${isStarred(entry.type, entry.questionId) ? "Unstar" : "Star"} ${entry.title}`} title="Star this problem"><Icon name="star" /></button><button className={`icon-action solution-control ${reusableSolution ? "solution-available" : ""}`} onClick={() => openEntrySolution(entry)} disabled={!reusableSolution} aria-label={reusableSolution ? `Open reusable solution for ${entry.title}` : `No reusable solution for ${entry.title}`} title={reusableSolution ? "Open reusable solution" : "No reusable solution yet"}><Icon name="book" /></button><button className="icon-action add-practice-control" onClick={() => addEntryToToday(entry)} disabled={!reusableQuestion || Boolean(reusableQuestion && isQuestionBlocked(reusableQuestion, todayBlockedQuestions()))} aria-label={`Add ${entry.title} to Today`} title="Add to Today"><Icon name="plus" /></button></div></article>; })}</div></section>) : <div className="quiet-empty library-empty"><strong>No completed work in this filter yet.</strong><span>Try another filter, or finish an activity to add it to the field journal.</span></div>}
               </div>
               <aside className="log-calendar"><span className="eyebrow">JUMP TO A DAY</span><h2>{new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${journal.date}T12:00:00Z`))}</h2><div className="calendar-week"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div><div className="calendar-mini">{calendarDays.map((day) => day.hasEntries ? <button key={day.key} onClick={() => scrollToLogDate(day.key)} title={`Jump to ${day.key}`}>{day.day}<i /></button> : <span key={day.key}>{day.day}</span>)}</div><div className="calendar-dates">{groupedLog.map(([date]) => <button key={date} onClick={() => scrollToLogDate(date)}>{readableDate(date, true)} <span>↘</span></button>)}</div></aside>
             </div>
           </div>
-          {selectedEntry && <aside className="past-entry-pane" aria-label="Selected practice record">{renderCaseReader()}</aside>}
+          {selectedEntry && <aside className="past-entry-pane" aria-label="Selected practice record">{libraryNestedProblem ? renderSolutionReader() : renderCaseReader()}</aside>}
         </div>
       </section>
     );
@@ -3462,7 +3450,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           <article className="system_design"><strong>{bankFor("system_design").length}</strong><span>System designs</span></article>
           <article className="behavioral"><strong>{bankFor("behavioral").length}</strong><span>Behavioral prompts</span></article>
         </div>
-        <div className={`bank-master-detail ${masterPaneOpen && !readerFocusMode ? "master-pane-open" : ""} ${readerClosing ? "reader-closing" : ""}`}>
+        <div className={`bank-master-detail ${masterPaneOpen ? "master-pane-open" : ""} ${readerClosing ? "reader-closing" : ""}`}>
         <div
           className="bank-master-pane"
           onClickCapture={(event) => {
@@ -3528,11 +3516,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           </div>
         </div>
         <div className="problem-bank-list" ref={bankListRef} onScroll={() => {
-          if (selectedProblem) return;
-          listPositionMemoryRef.current.banks = {
+          const position = {
             pageScrollTop: window.scrollY,
             listScrollTop: bankListRef.current?.scrollTop ?? 0,
           };
+          listPositionMemoryRef.current.banks[selectedProblem ? "pane" : "main"] = position;
         }} tabIndex={0} aria-label="Problem bank results">
           {visibleEntries.map(({ type, question, finished, latestAttempt }) => { const blockedToday = isQuestionBlocked(question, todayBlocked); const active = selectedProblem?.type === type && selectedProblem.question.id === question.id; const reusableSolution = hasReusableSolution(type, question); return <article className={`problem-bank-entry ${type} ${active ? "selected" : ""}`} data-list-item-id={`banks:${type}:${question.id}`} role="button" tabIndex={0} aria-label={`View solution for ${question.title}`} onClick={(event) => { if (event.target instanceof Element && event.target.closest("button, a, input, summary")) return; openProblemProfile(type, question); }} onKeyDown={(event) => { if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) { event.preventDefault(); openProblemProfile(type, question); } }} key={`${type}-${question.id}`}>
             <span className={`type-mark ${type}`}>{typeMark(type)}</span>
@@ -3543,7 +3531,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           {!visibleEntries.length && <div className="quiet-empty bank-empty"><strong>No questions match these filters.</strong><span>Change type, progress, level, or search text.</span></div>}
         </div>
         </div>
-        <aside className="bank-solution-pane" aria-label="Selected problem solution">{selectedProblem ? renderSolutionReader() : null}</aside>
+        <aside className="bank-solution-pane" aria-label="Selected problem solution">{selectedProblem ? bankNestedEntry ? renderCaseReader() : renderSolutionReader() : null}</aside>
         </div>
       </section>
     );
@@ -3618,8 +3606,18 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     composer.sessionCoding <= sessionAvailability.coding &&
     composer.sessionSystemDesign <= sessionAvailability.systemDesign &&
     composer.sessionBehavioral <= sessionAvailability.behavioral;
-  const ownerProblemProfile = selectedProblem ? profileFor(selectedProblem.type, selectedProblem.question.id) : undefined;
-  const canonicalProblemProfile = selectedProblem?.question.solutionProfile;
+  const readerSelectedEntry = view === "library"
+    ? libraryNestedProblem ? null : selectedEntry
+    : view === "banks"
+      ? bankNestedEntry
+      : null;
+  const readerSelectedProblem = view === "banks"
+    ? bankNestedEntry ? null : selectedProblem
+    : view === "library"
+      ? libraryNestedProblem
+      : null;
+  const ownerProblemProfile = readerSelectedProblem ? profileFor(readerSelectedProblem.type, readerSelectedProblem.question.id) : undefined;
+  const canonicalProblemProfile = readerSelectedProblem?.question.solutionProfile;
   const selectedProblemProfile = ownerProblemProfile && canonicalProblemProfile ? {
     ...ownerProblemProfile,
     tags: [...new Set([...canonicalProblemProfile.tags, ...ownerProblemProfile.tags])],
@@ -3636,38 +3634,38 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       ]).values()],
     },
   } : ownerProblemProfile ?? (canonicalProblemProfile ? {
-    specialty: selectedProblem.type,
-    questionId: selectedProblem.question.id,
-    title: selectedProblem.question.title,
+    specialty: readerSelectedProblem!.type,
+    questionId: readerSelectedProblem!.question.id,
+    title: readerSelectedProblem!.question.title,
     currentRevision: 1,
     tags: canonicalProblemProfile.tags,
     payload: canonicalProblemProfile,
     updatedAt: 0,
   } : undefined);
-  const selectedProblemAttempts = selectedProblem
-    ? libraryEntries.filter((entry) => entry.type === selectedProblem.type && entry.questionId === selectedProblem.question.id)
+  const selectedProblemAttempts = readerSelectedProblem
+    ? libraryEntries.filter((entry) => entry.type === readerSelectedProblem.type && entry.questionId === readerSelectedProblem.question.id)
     : [];
-  const selectedProblemRevisions = selectedProblem
-    ? draft.solutionRevisions.filter((revision) => revision.specialty === selectedProblem.type && revision.questionId === selectedProblem.question.id)
+  const selectedProblemRevisions = readerSelectedProblem
+    ? draft.solutionRevisions.filter((revision) => revision.specialty === readerSelectedProblem.type && revision.questionId === readerSelectedProblem.question.id)
     : [];
-  const selectedEntryActivityId = selectedEntry?.artifact?.activityId || (selectedEntry && !selectedEntry.id.includes("/") ? selectedEntry.id : "");
-  const selectedEntryTurns = selectedEntry?.transcriptTurns ?? [];
-  const selectedEntryClips = selectedEntry?.audioClips ?? [];
-  const selectedEntryDeliveryAnalyses = selectedEntry?.deliveryAnalyses ?? [];
-  const selectedCaseSections = dedupeReaderSections(selectedEntry?.artifact?.sections.filter((section) => !(selectedEntryTurns.length && isTranscriptSection(section.title))) ?? []);
+  const selectedEntryActivityId = readerSelectedEntry?.artifact?.activityId || (readerSelectedEntry && !readerSelectedEntry.id.includes("/") ? readerSelectedEntry.id : "");
+  const selectedEntryTurns = readerSelectedEntry?.transcriptTurns ?? [];
+  const selectedEntryClips = readerSelectedEntry?.audioClips ?? [];
+  const selectedEntryDeliveryAnalyses = readerSelectedEntry?.deliveryAnalyses ?? [];
+  const selectedCaseSections = dedupeReaderSections(readerSelectedEntry?.artifact?.sections.filter((section) => !(selectedEntryTurns.length && isTranscriptSection(section.title))) ?? []);
   const selectedCaseGroups = groupReaderSections(selectedCaseSections);
   const selectedSolutionGroups = groupReaderSections(selectedProblemProfile?.payload.sections ?? []);
-  const highlightScope = view === "library" && selectedEntry
-    ? { scopeType: "activity" as const, scopeId: selectedEntryActivityId || selectedEntry.id }
-    : view === "banks" && selectedProblem
-      ? { scopeType: "solution" as const, scopeId: `${selectedProblem.type}:${selectedProblem.question.id}` }
+  const highlightScope = readerSelectedEntry
+    ? { scopeType: "activity" as const, scopeId: selectedEntryActivityId || readerSelectedEntry.id }
+    : readerSelectedProblem
+      ? { scopeType: "solution" as const, scopeId: `${readerSelectedProblem.type}:${readerSelectedProblem.question.id}` }
       : null;
   const highlightScopeType = highlightScope?.scopeType;
   const highlightScopeId = highlightScope?.scopeId;
-  const readerMemoryKey = selectedEntry
-    ? `activity:${selectedEntryActivityId || selectedEntry.id}`
-    : selectedProblem
-      ? `solution:${selectedProblem.type}:${selectedProblem.question.id}`
+  const readerMemoryKey = readerSelectedEntry
+    ? `activity:${selectedEntryActivityId || readerSelectedEntry.id}`
+    : readerSelectedProblem
+      ? `solution:${readerSelectedProblem.type}:${readerSelectedProblem.question.id}`
       : "";
   const activeReaderMemory = readerMemoryKey ? readerMemory[readerMemoryKey] : undefined;
 
@@ -4004,9 +4002,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       .then(async (response) => response.ok ? response.json() as Promise<{ turns: TranscriptTurn[]; notes: PracticeNote[]; audioClips: AudioClip[]; deliveryAnalyses: DeliveryAnalysis[] }> : null)
       .then((record) => {
         if (!record) return;
-        setSelectedEntry((current) => current && (current.artifact?.activityId || current.id) === selectedEntryActivityId
+        const enrich = (current: LogEntry | null) => current && (current.artifact?.activityId || current.id) === selectedEntryActivityId
           ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips, deliveryAnalyses: record.deliveryAnalyses }
-          : current);
+          : current;
+        if (view === "banks") setBankNestedEntry(enrich);
+        else setSelectedEntry(enrich);
       })
       .catch((error: unknown) => {
         if (!(error instanceof DOMException && error.name === "AbortError")) {
@@ -4014,7 +4014,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         }
       });
     return () => controller.abort();
-  }, [selectedEntryActivityId]);
+  }, [selectedEntryActivityId, view]);
 
   function setEveryReaderGroup(open: boolean) {
     if (!readerMemoryKey) return;
@@ -4034,21 +4034,20 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   function closeReaderPanel() {
     if (readerCloseTimerRef.current !== null) window.clearTimeout(readerCloseTimerRef.current);
     const finishClose = () => {
-      if (crossReaderReturn) {
-        if (view === "banks" && crossReaderReturn.sourceView === "library") {
-          setSelectedProblem(crossReaderReturn.destinationProblem);
-        } else if (view === "library" && crossReaderReturn.sourceView === "banks") {
-          setSelectedEntry(crossReaderReturn.destinationEntry);
-        }
-        setCrossReaderReturn(null);
-        setReaderFocusMode(false);
-        setMasterPaneOpen(masterPaneMemoryRef.current[view === "library" ? "library" : "banks"]);
+      if (view === "library" && libraryNestedProblem) {
+        setLibraryNestedProblem(null);
+        setReaderClosing(false);
+        readerCloseTimerRef.current = null;
+        return;
+      }
+      if (view === "banks" && bankNestedEntry) {
+        setBankNestedEntry(null);
         setReaderClosing(false);
         readerCloseTimerRef.current = null;
         return;
       }
       if (view === "library") {
-        const position = listPositionMemoryRef.current.library;
+        const position = listPositionMemoryRef.current.library.main;
         window.sessionStorage.removeItem("interview-arc-selected-past");
         pendingListRestoreRef.current = { surface: "library", ...position };
         setListRestoring("library");
@@ -4056,7 +4055,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         setReaderClosing(false);
       }
       if (view === "banks") {
-        const position = listPositionMemoryRef.current.banks;
+        const position = listPositionMemoryRef.current.banks.main;
         window.sessionStorage.removeItem("interview-arc-selected-bank");
         pendingListRestoreRef.current = { surface: "banks", ...position };
         setListRestoring("banks");
@@ -4074,11 +4073,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function renderCaseReader() {
+    const selectedEntry = readerSelectedEntry;
     if (!selectedEntry) return null;
     return (
       <article className="workspace-reader journal-case-reader" aria-labelledby="journal-reader-title" aria-label="Case file contents">
         <div className="reader-chrome">
-          <div className="reader-chrome-leading"><button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen && !readerFocusMode ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen && !readerFocusMode} aria-label={masterPaneOpen && !readerFocusMode ? "Hide problem list" : "Show problem list"} title={masterPaneOpen && !readerFocusMode ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button>{crossReaderReturn?.sourceView === "banks" && <button className="icon-action reader-return-action" onClick={returnFromCrossReader} aria-label="Return to solution" title="Back to solution">←</button>}<ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</ReaderOutline></div>
+          <div className="reader-chrome-leading"><button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button><ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</ReaderOutline></div>
           <div className="reader-chrome-actions"><button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close case file" title="Close"><Icon name="close" /></button></div>
         </div>
         <div className="case-document workspace-reader-scroll" ref={readerDocumentRef} onScroll={rememberReaderPosition} onMouseUp={(event) => captureHighlightSelection(event.clientX, event.clientY)} onKeyUp={() => captureHighlightSelection()}>
@@ -4101,10 +4101,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function renderSolutionReader() {
+    const selectedProblem = readerSelectedProblem;
     if (!selectedProblem) return null;
     return (
       <article className="workspace-reader knowledge-reader" aria-labelledby="solution-profile-title">
-        <div className="reader-chrome"><div className="reader-chrome-leading"><button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen && !readerFocusMode ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen && !readerFocusMode} aria-label={masterPaneOpen && !readerFocusMode ? "Hide problem list" : "Show problem list"} title={masterPaneOpen && !readerFocusMode ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button>{crossReaderReturn?.sourceView === "library" && <button className="icon-action reader-return-action" onClick={returnFromCrossReader} aria-label="Return to practice record" title="Back to practice record">←</button>}<ReaderOutline><a href="#solution-profile-summary">Overview</a>{selectedSolutionGroups.map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#solution-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#solution-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}<a href="#solution-attempts">Past attempts</a></ReaderOutline></div><div className="reader-chrome-actions"><button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close solution profile" title="Close"><Icon name="close" /></button></div></div>
+        <div className="reader-chrome"><div className="reader-chrome-leading"><button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button><ReaderOutline><a href="#solution-profile-summary">Overview</a>{selectedSolutionGroups.map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#solution-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#solution-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}<a href="#solution-attempts">Past attempts</a></ReaderOutline></div><div className="reader-chrome-actions"><button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close solution profile" title="Close"><Icon name="close" /></button></div></div>
         <div className="case-document solution-profile-document workspace-reader-scroll" ref={readerDocumentRef} onScroll={rememberReaderPosition} onMouseUp={(event) => captureHighlightSelection(event.clientX, event.clientY)} onKeyUp={() => captureHighlightSelection()}>
           <header id="solution-profile-summary"><div><span className={`type-chip ${selectedProblem.type}`}>{typeLabel(selectedProblem.type)}</span><span className="profile-revision">{selectedProblemProfile ? `Solution revision ${selectedProblemProfile.currentRevision}` : "No solution yet"}</span><button className={`star-control ${isStarred(selectedProblem.type, selectedProblem.question.id) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedProblem.type, selectedProblem.question.id)} aria-label={`${isStarred(selectedProblem.type, selectedProblem.question.id) ? "Unstar" : "Star"} ${selectedProblem.question.title}`}><Icon name="star" /></button></div><h2 id="solution-profile-title">{selectedProblem.question.title}</h2><p>{selectedProblemProfile?.payload.summary ?? selectedProblem.question.prompt ?? "Finish and finalize an attempt to build this reusable Solution Profile."}</p></header>
           <div className="profile-tags">{[...new Set([...selectedProblem.question.topics, ...(selectedProblem.question.tags ?? []), ...(selectedProblemProfile?.tags ?? [])])].map((tag) => <span key={tag}>{tag}</span>)}</div>
@@ -4191,8 +4192,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
               <label><span>Volume</span><input type="range" min="0" max="1" step="0.05" value={musicVolume} onChange={(event) => setMusicVolume(Number(event.target.value))} aria-label="Music volume" /></label>
               <MusicPlaylist playlist={ambientPlaylist} currentIndex={ambientTrackIndex} onSelect={chooseAmbientTrack} />
             </div>
-            <button className={`atmosphere-toggle ${petalsEnabled ? "active" : ""}`} onClick={togglePetals} aria-pressed={petalsEnabled} title={petalsEnabled ? "Pause cherry blossoms" : "Resume cherry blossoms"}><span aria-hidden="true">✦</span>{petalsEnabled ? "Petals" : "Still"}</button>
-            {view === "today" && pipSupported && <button className="secondary-action" onClick={openNowWindow}>{pipWindow ? "Now window open" : "Pop out timer"}</button>}
+            <button className={`atmosphere-toggle ${petalsEnabled ? "active" : ""}`} onClick={togglePetals} aria-pressed={petalsEnabled} title={petalsEnabled ? "Pause cherry blossoms" : "Resume cherry blossoms"}><span aria-hidden="true">✦</span>Petals</button>
+            {view === "today" && pipSupported && <button className={`secondary-action pip-toggle ${pipWindow && !pipWindow.closed ? "active" : ""}`} onClick={openNowWindow} aria-pressed={Boolean(pipWindow && !pipWindow.closed)}>{pipWindow && !pipWindow.closed ? "Close timer" : "Pop out timer"}</button>}
             <button className="secondary-action" onClick={() => setIntegrationOpen(true)}>Connect</button>
             <button className="secondary-action" onClick={exportDraft}>Export today</button>
           </div>
