@@ -204,6 +204,9 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(css, /\.petal-field\.paused \{ opacity: 0; visibility: hidden;/);
   assert.match(css, /\.pip-toggle\.active \{/);
   assert.match(css, /\.pip-toggle \{[^}]*width: 124px;[^}]*min-width: 124px;/);
+  assert.match(css, /\.pip-clock \.result-flag\.solved \{[^}]*background: rgba\(169, 202, 77, \.22\);/);
+  assert.match(css, /\.pip-clock \.result-flag\.solved_after_reviewing_approach \{[^}]*background: rgba\(224, 178, 77, \.22\);/);
+  assert.match(css, /\.pip-clock \.result-flag\.failed \{[^}]*background: rgba\(216, 110, 93, \.22\);/);
   assert.match(css, /\.library-page\.has-open-entry \.past-master-pane,[\s\S]*display: none;/);
   assert.match(css, /\.master-pane-open \.past-master-pane,[\s\S]*display: grid;/);
   assert.match(css, /\.past-master-detail\.nested-reader-focus/);
