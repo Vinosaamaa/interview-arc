@@ -121,6 +121,9 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /setBankNestedEntry\(entry\)/);
   assert.match(client, /libraryNestedProblem \? renderSolutionReader\(\) : renderCaseReader\(\)/);
   assert.match(client, /bankNestedEntry \? renderCaseReader\(\) : renderSolutionReader\(\)/);
+  assert.match(client, /const nestedReaderFocus = \(view === "library" && Boolean\(libraryNestedProblem\)\)/);
+  assert.match(client, /nestedReaderFocus \? "nested-reader-focus" : ""/);
+  assert.match(client, /\{!nestedReaderFocus && <button type="button" className=\{`master-pane-toggle/);
   assert.doesNotMatch(client, /function returnFromCrossReader\(\)/);
   assert.doesNotMatch(client, /Go forward in reader history/);
   assert.match(client, /interview-arc-list-position-v2/);
@@ -194,9 +197,17 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /Choose a result before completing this activity\./);
   assert.match(client, /pip-toggle \$\{pipWindow && !pipWindow\.closed \? "active" : ""\}/);
   assert.match(client, /"Close timer" : "Pop out timer"/);
+  assert.match(client, /const sessionOvertime = session \? overtime\(sessionTimer, now, sessionAllocated\) : 0/);
+  assert.match(client, /sessionOvertime \? `\+\$\{formatClock\(sessionOvertime\)\}` : formatClock\(sessionLeft\)/);
+  assert.match(client, /disabled=\{activityComplete \|\| !activityStarted \|\| !outcome \|\| activityLocked\}/);
   assert.match(client, /<span aria-hidden="true">✦<\/span>Petals/);
   assert.match(css, /\.petal-field\.paused \{ opacity: 0; visibility: hidden;/);
   assert.match(css, /\.pip-toggle\.active \{/);
+  assert.match(css, /\.pip-toggle \{[^}]*width: 124px;[^}]*min-width: 124px;/);
+  assert.match(css, /\.library-page\.has-open-entry \.past-master-pane,[\s\S]*display: none;/);
+  assert.match(css, /\.master-pane-open \.past-master-pane,[\s\S]*display: grid;/);
+  assert.match(css, /\.past-master-detail\.nested-reader-focus/);
+  assert.match(css, /\.workspace-reader\.nested-reader/);
   assert.match(css, /display: none;\s*visibility: hidden;\s*position: absolute;/);
   assert.match(css, /@keyframes master-pane-overlay-in/);
   assert.match(css, /\.annotation-popover \{ position: fixed;/);

@@ -632,8 +632,9 @@ function PipNowPanel({
 }) {
   const sessionAllocated = session?.allocatedSeconds ?? SESSION_SECONDS;
   const sessionLeft = session ? remaining(sessionTimer, now, sessionAllocated) : 0;
-  const sessionRunning = Boolean(session && sessionTimer?.runningSince && sessionLeft > 0);
-  const sessionComplete = Boolean(session && (sessionTimer?.completed || sessionLeft === 0));
+  const sessionOvertime = session ? overtime(sessionTimer, now, sessionAllocated) : 0;
+  const sessionRunning = Boolean(session && sessionTimer?.runningSince);
+  const sessionComplete = Boolean(session && sessionTimer?.completed);
   const sessionStarted = Boolean(sessionTimer?.startedAt);
   const sessionProgress = session ? Math.min(100, (elapsed(sessionTimer, now) / sessionAllocated) * 100) : 0;
   const activityUsed = activity ? elapsed(activityTimer, now) : 0;
@@ -655,9 +656,9 @@ function PipNowPanel({
       {session ? (
         <section className={`pip-clock session ${sessionRunning ? "running" : ""} ${sessionComplete ? "complete" : ""}`}>
           <div className="pip-clock-copy">
-            <span>Session left</span>
-            <strong>{formatClock(sessionLeft)}</strong>
-            <small>{sessionComplete ? "Finished" : sessionRunning ? session.label : `${session.label} · paused`}</small>
+            <span>{sessionOvertime ? "Session overtime" : "Session left"}</span>
+            <strong>{sessionOvertime ? `+${formatClock(sessionOvertime)}` : formatClock(sessionLeft)}</strong>
+            <small>{sessionComplete ? "Finished" : sessionOvertime ? `${session.label} · ${sessionRunning ? "still running" : "paused"}` : sessionRunning ? session.label : `${session.label} · paused`}</small>
           </div>
           <div className="pip-clock-actions">
             <button type="button" className="pip-btn primary" onClick={() => onToggleSession(session.id)} disabled={sessionComplete} aria-label={sessionRunning ? `Pause ${session.label}` : `Start ${session.label}`}>
@@ -686,10 +687,10 @@ function PipNowPanel({
               <button type="button" className="pip-btn primary" onClick={() => onToggleActivity(activity.id)} disabled={activityComplete || activityLocked} aria-label={activityRunning ? `Pause ${activity.title}` : `Start ${activity.title}`}>
                 <span aria-hidden="true">{activityRunning ? "Ⅱ" : "▶"}</span>
               </button>
-              <button type="button" className="pip-btn" onClick={() => onCompleteActivity(activity.id)} disabled={activityComplete || !activityStarted || activityLocked} aria-label={`Finish ${activity.title}`} title={activityLocked ? "This session is finished" : !activityStarted ? "Start the stopwatch before finishing" : "Finish activity"}>
+              <button type="button" className="pip-btn" onClick={() => onCompleteActivity(activity.id)} disabled={activityComplete || !activityStarted || !outcome || activityLocked} aria-label={`Finish ${activity.title}`} title={activityLocked ? "This session is finished" : !activityStarted ? "Start the stopwatch before finishing" : !outcome ? "Choose a result before finishing" : "Finish activity"}>
                 <span aria-hidden="true">{activityComplete ? "✓" : "■"}</span>
               </button>
-              <ResultFlag activityType={activity.type} outcome={outcome} onChange={(next) => onOutcome(activity.id, next)} disabled={!activityStarted} />
+              <ResultFlag activityType={activity.type} outcome={outcome} onChange={(next) => onOutcome(activity.id, next)} disabled={!activityStarted || activityComplete || activityLocked} />
             </div>
           </div>
           {activity.url ? <a className="pip-open" href={activity.url} target="_blank" rel="noreferrer">Open problem ↗</a> : null}
@@ -1065,6 +1066,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [selectedProblem, setSelectedProblem] = useState<{ type: ActivityType; question: QuestionBankItem } | null>(null);
   const [libraryNestedProblem, setLibraryNestedProblem] = useState<{ type: ActivityType; question: QuestionBankItem } | null>(null);
   const [bankNestedEntry, setBankNestedEntry] = useState<LogEntry | null>(null);
+  const nestedReaderFocus = (view === "library" && Boolean(libraryNestedProblem))
+    || (view === "banks" && Boolean(bankNestedEntry));
   const [masterPaneState, setMasterPaneState] = useState<MasterPaneState>(() => ({
     library: typeof window !== "undefined" && window.sessionStorage.getItem("interview-arc-master-pane-library") === "open",
     banks: typeof window !== "undefined" && window.sessionStorage.getItem("interview-arc-master-pane-banks") === "open",
@@ -1393,7 +1396,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (!selectedEntry && !selectedProblem) return;
     const closeReader = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      if (masterPaneOpen && window.matchMedia("(max-width: 1976px)").matches) {
+      if (!nestedReaderFocus && masterPaneOpen && window.matchMedia("(max-width: 1976px)").matches) {
         setMasterPaneOpen(false);
         return;
       }
@@ -1401,7 +1404,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     };
     window.addEventListener("keydown", closeReader);
     return () => window.removeEventListener("keydown", closeReader);
-  }, [masterPaneOpen, selectedEntry, selectedProblem, setMasterPaneOpen]);
+  }, [bankNestedEntry, libraryNestedProblem, masterPaneOpen, nestedReaderFocus, selectedEntry, selectedProblem, setMasterPaneOpen]);
 
   useEffect(() => {
     if (!masterPaneOpen) return;
@@ -3271,7 +3274,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return (
       <section className={`view-page library-page ${selectedEntry ? "has-open-entry" : ""} ${listRestoring === "library" ? "list-restoring" : ""}`}>
         <header className="view-masthead"><span className="eyebrow">PAST · COMPLETED WORK</span><h1>Read the journey<br /><em>like a field journal.</em></h1><p>Past contains finished activity timers and published case files—never planned work or result flags by themselves.</p></header>
-        <div className={`past-master-detail ${masterPaneOpen ? "master-pane-open" : ""} ${readerClosing ? "reader-closing" : ""}`}>
+        <div className={`past-master-detail ${masterPaneOpen ? "master-pane-open" : ""} ${nestedReaderFocus ? "nested-reader-focus" : ""} ${readerClosing ? "reader-closing" : ""}`}>
           <div
             className="past-master-pane"
             onClickCapture={(event) => {
@@ -3450,7 +3453,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           <article className="system_design"><strong>{bankFor("system_design").length}</strong><span>System designs</span></article>
           <article className="behavioral"><strong>{bankFor("behavioral").length}</strong><span>Behavioral prompts</span></article>
         </div>
-        <div className={`bank-master-detail ${masterPaneOpen ? "master-pane-open" : ""} ${readerClosing ? "reader-closing" : ""}`}>
+        <div className={`bank-master-detail ${masterPaneOpen ? "master-pane-open" : ""} ${nestedReaderFocus ? "nested-reader-focus" : ""} ${readerClosing ? "reader-closing" : ""}`}>
         <div
           className="bank-master-pane"
           onClickCapture={(event) => {
@@ -4076,9 +4079,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const selectedEntry = readerSelectedEntry;
     if (!selectedEntry) return null;
     return (
-      <article className="workspace-reader journal-case-reader" aria-labelledby="journal-reader-title" aria-label="Case file contents">
+      <article className={`workspace-reader journal-case-reader ${nestedReaderFocus ? "nested-reader" : ""}`} aria-labelledby="journal-reader-title" aria-label="Case file contents">
         <div className="reader-chrome">
-          <div className="reader-chrome-leading"><button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button><ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</ReaderOutline></div>
+          <div className="reader-chrome-leading">{!nestedReaderFocus && <button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button>}<ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</ReaderOutline></div>
           <div className="reader-chrome-actions"><button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close case file" title="Close"><Icon name="close" /></button></div>
         </div>
         <div className="case-document workspace-reader-scroll" ref={readerDocumentRef} onScroll={rememberReaderPosition} onMouseUp={(event) => captureHighlightSelection(event.clientX, event.clientY)} onKeyUp={() => captureHighlightSelection()}>
@@ -4104,8 +4107,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const selectedProblem = readerSelectedProblem;
     if (!selectedProblem) return null;
     return (
-      <article className="workspace-reader knowledge-reader" aria-labelledby="solution-profile-title">
-        <div className="reader-chrome"><div className="reader-chrome-leading"><button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button><ReaderOutline><a href="#solution-profile-summary">Overview</a>{selectedSolutionGroups.map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#solution-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#solution-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}<a href="#solution-attempts">Past attempts</a></ReaderOutline></div><div className="reader-chrome-actions"><button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close solution profile" title="Close"><Icon name="close" /></button></div></div>
+      <article className={`workspace-reader knowledge-reader ${nestedReaderFocus ? "nested-reader" : ""}`} aria-labelledby="solution-profile-title">
+        <div className="reader-chrome"><div className="reader-chrome-leading">{!nestedReaderFocus && <button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button>}<ReaderOutline><a href="#solution-profile-summary">Overview</a>{selectedSolutionGroups.map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#solution-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#solution-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}<a href="#solution-attempts">Past attempts</a></ReaderOutline></div><div className="reader-chrome-actions"><button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close solution profile" title="Close"><Icon name="close" /></button></div></div>
         <div className="case-document solution-profile-document workspace-reader-scroll" ref={readerDocumentRef} onScroll={rememberReaderPosition} onMouseUp={(event) => captureHighlightSelection(event.clientX, event.clientY)} onKeyUp={() => captureHighlightSelection()}>
           <header id="solution-profile-summary"><div><span className={`type-chip ${selectedProblem.type}`}>{typeLabel(selectedProblem.type)}</span><span className="profile-revision">{selectedProblemProfile ? `Solution revision ${selectedProblemProfile.currentRevision}` : "No solution yet"}</span><button className={`star-control ${isStarred(selectedProblem.type, selectedProblem.question.id) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedProblem.type, selectedProblem.question.id)} aria-label={`${isStarred(selectedProblem.type, selectedProblem.question.id) ? "Unstar" : "Star"} ${selectedProblem.question.title}`}><Icon name="star" /></button></div><h2 id="solution-profile-title">{selectedProblem.question.title}</h2><p>{selectedProblemProfile?.payload.summary ?? selectedProblem.question.prompt ?? "Finish and finalize an attempt to build this reusable Solution Profile."}</p></header>
           <div className="profile-tags">{[...new Set([...selectedProblem.question.topics, ...(selectedProblem.question.tags ?? []), ...(selectedProblemProfile?.tags ?? [])])].map((tag) => <span key={tag}>{tag}</span>)}</div>
