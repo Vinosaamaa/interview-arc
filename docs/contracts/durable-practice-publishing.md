@@ -274,8 +274,10 @@ Interview Arc Voice uses protocol version `1` and the same personal integration
 token as MCP and the Chrome companion.
 
 1. `GET /voice/context` returns the **single activity whose stopwatch is
-   currently running**, deterministic speech
-   metadata, and registered specialist task. It never returns credentials.
+   currently running**, its `startedAt` and `runningSince` timer timestamps,
+   deterministic speech metadata, and registered specialist task. The
+   timestamps permit safe late binding only when the activity was already
+   running when recording began. It never returns credentials.
 2. The client records one continuous local M4A and transcribes it with Groq
    `whisper-large-v3`. Temporary derivatives or chunks are not durable clips.
 3. `POST /voice/captures` writes the verbatim user transcript first with a
