@@ -80,6 +80,15 @@ export type LiveState = {
   focusedAt: number | null;
 };
 
+export type TimerSyncState = {
+  serverNow: number;
+  timers: Record<string, TimerState>;
+  sessionTimers: Record<string, TimerState>;
+  focusedActivityId: string | null;
+  focusedSessionId: string | null;
+  focusedAt: number | null;
+};
+
 type Db = ReturnType<typeof getDb>;
 
 function toTimerState(row: {
@@ -465,6 +474,30 @@ export async function readLiveState(
     sessions: visibleSessions,
     historyActivities,
     historySessions,
+    focusedActivityId: focus?.activityId ?? null,
+    focusedSessionId: focus?.sessionId ?? null,
+    focusedAt: focus?.focusedAt ?? null,
+  };
+}
+
+export async function readTimerSyncState(ownerId: string): Promise<TimerSyncState> {
+  const db = getDb();
+  const [timerRows, focusRows] = await Promise.all([
+    db.select().from(timers).where(eq(timers.ownerId, ownerId)),
+    db.select().from(practiceFocus).where(eq(practiceFocus.ownerId, ownerId)),
+  ]);
+
+  const activityTimers: Record<string, TimerState> = {};
+  const sessionTimers: Record<string, TimerState> = {};
+  for (const row of timerRows) {
+    (row.kind === "session" ? sessionTimers : activityTimers)[row.subjectId] = toTimerState(row);
+  }
+  const focus = focusRows[0];
+
+  return {
+    serverNow: Date.now(),
+    timers: activityTimers,
+    sessionTimers,
     focusedActivityId: focus?.activityId ?? null,
     focusedSessionId: focus?.sessionId ?? null,
     focusedAt: focus?.focusedAt ?? null,

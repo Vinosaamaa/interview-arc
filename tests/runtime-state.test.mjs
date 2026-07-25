@@ -12,6 +12,7 @@ import { derivePublicationStatus } from "../db/publication-state.ts";
 import { foldElapsed, nextTimerState } from "../db/timer-state.ts";
 import { reviewIntervalDays } from "../db/review-cadence.ts";
 import { mutationFailureDisposition } from "../app/mutation-queue.ts";
+import { applyTimerSync, timerSyncChanged } from "../app/timer-reconciliation.ts";
 import { isJournalPath, journalBranch, parsePorcelain } from "../scripts/journal-branch.mjs";
 
 test("today follows the practice timezone instead of the Worker UTC date", () => {
@@ -110,6 +111,71 @@ test("non-retryable timer conflicts cannot poison the durable mutation queue", a
   assert.match(liveSync, /mutationFailureDisposition\(response\.status\)/);
   assert.match(liveSync, /queueRef\.current = queueRef\.current\.slice\(1\)/);
   assert.ok(liveSync.includes("fetch(`/api/state?date="));
+});
+
+test("external timer reconciliation is revision-aware and preserves unrelated practice state", async () => {
+  const current = {
+    timers: {
+      activity: {
+        elapsedSeconds: 12,
+        runningSince: null,
+        completed: false,
+        revision: 2,
+      },
+    },
+    sessionTimers: {},
+    focusedActivityId: "activity",
+    focusedSessionId: "session",
+    focusedAt: 100,
+    notes: { activity: "keep me" },
+  };
+  const unchanged = {
+    serverNow: 1_000,
+    timers: {
+      activity: {
+        accumulatedSeconds: 12,
+        startedAt: 50,
+        runningSince: null,
+        completed: false,
+        completedAt: null,
+        revision: 2,
+      },
+    },
+    sessionTimers: {},
+    focusedActivityId: "activity",
+    focusedSessionId: "session",
+    focusedAt: 100,
+  };
+  assert.equal(timerSyncChanged(current, unchanged), false);
+  assert.equal(applyTimerSync(current, unchanged, 0), current);
+
+  const externalPause = {
+    ...unchanged,
+    serverNow: 2_000,
+    timers: {
+      activity: {
+        ...unchanged.timers.activity,
+        accumulatedSeconds: 18,
+        revision: 3,
+      },
+    },
+    focusedAt: 200,
+  };
+  const reconciled = applyTimerSync(current, externalPause, 0);
+  assert.notEqual(reconciled, current);
+  assert.equal(reconciled.timers.activity.elapsedSeconds, 18);
+  assert.equal(reconciled.timers.activity.revision, 3);
+  assert.deepEqual(reconciled.notes, current.notes);
+
+  const liveSync = await readFile(new URL("../app/live-sync.ts", import.meta.url), "utf8");
+  const route = await readFile(new URL("../app/api/timer-state/route.ts", import.meta.url), "utf8");
+  const client = await readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8");
+  assert.match(liveSync, /queueRef\.current\.length > 0/);
+  assert.match(liveSync, /lastTimerSyncServerNowRef/);
+  assert.match(liveSync, /setInterval\(\(\) => void reconcileTimers\(\), 1000\)/);
+  assert.match(route, /readTimerSyncState/);
+  assert.match(route, /private, no-store/);
+  assert.match(client, /pipWindow\.setInterval/);
 });
 
 test("a finished parent session locks every child activity timer", async () => {
