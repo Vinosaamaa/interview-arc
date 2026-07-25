@@ -25,7 +25,7 @@ test("the Cloudflare build contains the Interview Arc dashboard", async () => {
   assert.match(bundle, /Edit session recipe/);
   assert.match(bundle, /Shape the session you need/);
   assert.match(bundle, /SESSION COUNTDOWN/);
-  assert.match(bundle, /Add one activity/);
+  assert.match(bundle, /Add activities/);
   assert.match(bundle, /Problem banks/);
   assert.match(bundle, /YESTERDAY/);
   assert.match(bundle, /365-DAY PRACTICE MAP/);
@@ -240,6 +240,12 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /compact-filter-popover bank-attention-menu/);
   assert.match(client, /composerVisibleCount/);
   assert.match(client, /activity-picker-toolbar/);
+  assert.match(client, /selectedActivities: StagedActivity\[\]/);
+  assert.match(client, /Review selections/);
+  assert.match(client, /Create a custom activity/);
+  assert.match(client, /Add to selections/);
+  assert.match(client, /current\.selectedActivities\.some/);
+  assert.doesNotMatch(client, /selectedId: question\.id,\s*query: question\.title/);
   assert.match(client, /\['todo', 'To do'\]/);
   assert.doesNotMatch(client, /activity-picker-progress/);
   assert.match(client, /Already on Today/);

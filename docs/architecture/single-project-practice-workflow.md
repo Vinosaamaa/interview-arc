@@ -46,7 +46,20 @@ activity pauses the previously running activity, and starting a child resumes
 its parent when needed. Starting a standalone activity pauses any running
 session so standalone time is never counted in a session rollup.
 
-The user may create multiple sessions in one day. A session starts with six coding problems, one system-design question, and one behavioral question selected from their respective banks, but the user may configure those counts before starting. Standalone extra activities remain supported and expose one compact cross control for removal.
+The user may create multiple sessions in one day. A session starts with six
+coding problems, one system-design question, and one behavioral question
+selected from their respective banks, but the user may configure those counts
+before starting.
+
+The standalone activity picker stages any number of bank questions across
+specialties, searches, filters, and scroll positions before one add operation.
+Selecting a card never rewrites the search field. A review drawer is the
+canonical place to inspect or remove selections that are no longer visible.
+Custom activities use an explicit form with required specialty and title plus
+optional public URL, description/prompt, and planned minutes; they join the
+same staged selection and become owner-private bank questions only when the
+validated batch is added to Today. Standalone activities expose one compact
+cross control for removal.
 
 ## LeetCode Records
 

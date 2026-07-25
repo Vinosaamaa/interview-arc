@@ -54,6 +54,17 @@ type JourneyMetric = "activities" | "time";
 type LibraryAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "failed" | "notes";
 type BankAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "failed" | "todo" | "notes";
 type ComposerAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "failed" | "todo";
+type StagedActivity = {
+  key: string;
+  type: ActivityType;
+  questionId?: string;
+  title: string;
+  url?: string;
+  prompt?: string;
+  minutes: number;
+  topics: string[];
+  source: "bank" | "custom";
+};
 type DocumentPiP = { requestWindow: (options?: { width?: number; height?: number }) => Promise<Window> };
 type HighlightColor = "yellow" | "green" | "pink";
 type HighlightNote = { id: string; highlightId: string; body: string; createdAt: number; updatedAt: number };
@@ -105,7 +116,15 @@ type ComposerState = {
   type: ActivityType;
   query: string;
   selectedId: string;
+  selectedActivities: StagedActivity[];
   minutes: string;
+  customOpen: boolean;
+  customEditingKey: string;
+  customTitle: string;
+  customUrl: string;
+  customPrompt: string;
+  customMinutes: string;
+  reviewOpen: boolean;
   editingId: string;
   editingSessionId: string;
   sessionCoding: number;
@@ -144,7 +163,15 @@ const EMPTY_COMPOSER: ComposerState = {
   type: "leetcode",
   query: "",
   selectedId: "",
+  selectedActivities: [],
   minutes: "30",
+  customOpen: false,
+  customEditingKey: "",
+  customTitle: "",
+  customUrl: "",
+  customPrompt: "",
+  customMinutes: "30",
+  reviewOpen: false,
   editingId: "",
   editingSessionId: "",
   sessionCoding: 6,
@@ -2204,9 +2231,94 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   function selectBankQuestion(question: QuestionBankItem) {
     setComposer((current) => ({
       ...current,
-      selectedId: question.id,
-      query: question.title,
-      minutes: String(question.targetMinutes),
+      selectedActivities: current.selectedActivities.some((item) => item.type === current.type && item.questionId === question.id)
+        ? current.selectedActivities.filter((item) => !(item.type === current.type && item.questionId === question.id))
+        : [...current.selectedActivities, {
+            key: `bank:${current.type}:${question.id}`,
+            type: current.type,
+            questionId: question.id,
+            title: question.title,
+            ...(question.url ? { url: question.url } : {}),
+            ...(question.prompt ? { prompt: question.prompt } : {}),
+            minutes: question.targetMinutes,
+            topics: question.topics,
+            source: "bank" as const,
+          }],
+    }));
+  }
+
+  function openCustomActivity(prefillUrl = "") {
+    const bank = bankFor(composer.type);
+    const derived = prefillUrl ? deriveQuestionFromUrl(prefillUrl, composer.type, bank) : null;
+    setComposer((current) => ({
+      ...current,
+      customOpen: true,
+      customEditingKey: "",
+      customTitle: derived?.title ?? "",
+      customUrl: derived?.url ?? prefillUrl,
+      customPrompt: derived?.prompt ?? "",
+      customMinutes: String(derived?.targetMinutes ?? (current.type === "leetcode" ? 30 : 60)),
+    }));
+  }
+
+  function editStagedActivity(item: StagedActivity) {
+    if (item.source !== "custom") return;
+    setComposer((current) => ({
+      ...current,
+      customOpen: true,
+      customEditingKey: item.key,
+      type: item.type,
+      customTitle: item.title,
+      customUrl: item.url ?? "",
+      customPrompt: item.prompt ?? "",
+      customMinutes: String(item.minutes),
+      reviewOpen: false,
+    }));
+  }
+
+  function stageCustomActivity() {
+    const title = composer.customTitle.trim();
+    if (!title) return;
+    const rawUrl = composer.customUrl.trim();
+    const derived = rawUrl ? deriveQuestionFromUrl(rawUrl, composer.type, bankFor(composer.type)) : null;
+    if (rawUrl && !derived) return;
+    const minutes = Math.max(1, Number(composer.customMinutes) || (composer.type === "leetcode" ? 30 : 60));
+    const existingKey = composer.customEditingKey;
+    const key = existingKey || `custom:${composer.type}:${slugify(title)}:${Date.now().toString(36)}`;
+    const item: StagedActivity = {
+      key,
+      type: composer.type,
+      ...(derived?.questionId ? { questionId: derived.questionId } : {}),
+      title: derived?.title ?? title,
+      ...(derived?.url ? { url: derived.url } : {}),
+      ...(composer.customPrompt.trim() || derived?.prompt ? { prompt: composer.customPrompt.trim() || derived?.prompt } : {}),
+      minutes,
+      topics: [],
+      source: derived?.questionId ? "bank" : "custom",
+    };
+    setComposer((current) => ({
+      ...current,
+      selectedActivities: [
+        ...current.selectedActivities.filter((candidate) =>
+          candidate.key !== existingKey
+          && !(item.questionId && candidate.type === item.type && candidate.questionId === item.questionId)
+          && !(!item.questionId && candidate.type === item.type && normalizedIdentity(candidate.title) === normalizedIdentity(item.title))
+        ),
+        item,
+      ],
+      customOpen: false,
+      customEditingKey: "",
+      customTitle: "",
+      customUrl: "",
+      customPrompt: "",
+      customMinutes: current.type === "leetcode" ? "30" : "60",
+    }));
+  }
+
+  function removeStagedActivity(key: string) {
+    setComposer((current) => ({
+      ...current,
+      selectedActivities: current.selectedActivities.filter((item) => item.key !== key),
     }));
   }
 
@@ -2307,6 +2419,72 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function saveActivity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!composer.editingId) {
+      if (!composer.selectedActivities.length) return;
+      const blocked = todayBlockedQuestions();
+      const duplicate = composer.selectedActivities.find((item) => {
+        const identity: QuestionBankItem = {
+          id: item.questionId ?? `personal-${item.type}-${slugify(item.title)}`,
+          title: item.title,
+          ...(item.url ? { url: item.url } : {}),
+          topics: item.topics,
+          targetMinutes: item.minutes,
+          active: true,
+        };
+        if (isQuestionBlocked(identity, blocked)) return true;
+        blockKeysForQuestion(identity).forEach((key) => blocked.add(key));
+        return false;
+      });
+      if (duplicate) {
+        showUiToast(`${duplicate.title} is already on Today or selected more than once.`);
+        return;
+      }
+      const stamp = Date.now().toString(36);
+      const activities = composer.selectedActivities.map((item, index): ExtraActivity => {
+        const id = `${journal.date}-extra-${slugify(item.title)}-${stamp}-${index}`;
+        const questionId = item.questionId ?? `personal-${item.type}-${slugify(item.title)}`;
+        return {
+          schemaVersion: 2,
+          id,
+          questionId,
+          date: journal.date,
+          source: "extra",
+          type: item.type,
+          ...(item.type === "leetcode" ? { recordKind: "attempt" as const } : {}),
+          title: item.title,
+          ...(item.url ? { url: item.url } : {}),
+          ...(item.prompt ? { prompt: item.prompt } : item.type !== "leetcode" ? { prompt: item.title } : {}),
+          allocatedSeconds: item.minutes * 60,
+          timerGroupId: id,
+          timingSource: "website",
+          status: "planned",
+          ...(item.topics.length ? { notes: item.topics.join(", ") } : {}),
+        };
+      });
+      setDraft((current) => ({
+        ...current,
+        extraActivities: [...current.extraActivities, ...activities],
+      }));
+      enqueue(
+        ...composer.selectedActivities
+          .filter((item) => item.source === "custom" && !item.questionId)
+          .map((item) => ({
+            type: "personal-question-upsert" as const,
+            specialty: item.type,
+            question: {
+              questionId: `personal-${item.type}-${slugify(item.title)}`,
+              title: item.title,
+              ...(item.url ? { url: item.url } : {}),
+              ...(item.prompt ? { prompt: item.prompt } : item.type !== "leetcode" ? { prompt: item.title } : {}),
+              targetMinutes: item.minutes,
+            },
+          })),
+        ...activities.map((activity) => ({ type: "extra-upsert" as const, activity })),
+      );
+      setComposer(EMPTY_COMPOSER);
+      showUiToast(`${activities.length} ${activities.length === 1 ? "activity" : "activities"} added to Today.`);
+      return;
+    }
     const bank = bankFor(composer.type);
     const selected = bank.find((question) => question.id === composer.selectedId);
     const derived = !selected ? deriveQuestionFromUrl(composer.query, composer.type, bank) : null;
@@ -3251,12 +3429,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             : <div className="orchestrator-empty"><strong>No activity running.</strong><span>Start any activity stopwatch when you are ready. Voice stays unlinked until then.</span></div>}
         </section>
 
-        <div className="today-actions"><div><h2>Current workbench</h2><p>It stays open across Pacific midnight until you publish it or explicitly start fresh.</p></div><div><button className="secondary-action" onClick={() => allTodayActivities.length || allSessions.length ? setFreshDayConfirmOpen(true) : startFreshPracticeDay()}>Start fresh day</button><button className="secondary-action" onClick={openNewActivity}>Add one activity</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
+        <div className="today-actions"><div><h2>Current workbench</h2><p>It stays open across Pacific midnight until you publish it or explicitly start fresh.</p></div><div><button className="secondary-action" onClick={() => allTodayActivities.length || allSessions.length ? setFreshDayConfirmOpen(true) : startFreshPracticeDay()}>Start fresh day</button><button className="secondary-action" onClick={openNewActivity}>Add activities</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
         <section className="session-stack">{allSessions.length ? allSessions.map(renderSession) : <div className="quiet-empty session-empty"><strong>No session planned yet.</strong><span>Add another session to choose up to six coding questions and one question from each available interview bank.</span></div>}</section>
 
         <section className="loose-section">
           <div className="section-title"><div><span className="eyebrow">STANDALONE PRACTICE</span><h2>Outside a full session</h2><p>Each card keeps only the controls you need: stopwatch, result, journal state, star, and remove.</p></div></div>
-          {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add one activity” above to search a bank or paste a public LeetCode problem URL.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <StandaloneActivityCard key={activity.id} title={activity.title} onRemove={() => removeActivity(activity.id)} removeDisabled={Boolean(draft.timers[activity.id]?.startedAt)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><small>{typeLabel(activity.type)} · local draft</small><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} /><ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} disabled={!draft.timers[activity.id]?.startedAt || draft.publicationStatuses[activity.id] === "published"} required={requiredResultIds.includes(activity.id)} /><PublicationControl status={publicationStatusFor(activity)} /><button className={`star-control ${isStarred(activity.type, activity.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(activity.type, activity.questionId)} disabled={!activity.questionId} aria-label={`${isStarred(activity.type, activity.questionId) ? "Unstar" : "Star"} ${activity.title}`}>★</button></StandaloneActivityCard>)}</div>}
+          {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add activities” above to select across the banks or create a custom prompt.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <StandaloneActivityCard key={activity.id} title={activity.title} onRemove={() => removeActivity(activity.id)} removeDisabled={Boolean(draft.timers[activity.id]?.startedAt)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><small>{typeLabel(activity.type)} · local draft</small><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} /><ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} disabled={!draft.timers[activity.id]?.startedAt || draft.publicationStatuses[activity.id] === "published"} required={requiredResultIds.includes(activity.id)} /><PublicationControl status={publicationStatusFor(activity)} /><button className={`star-control ${isStarred(activity.type, activity.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(activity.type, activity.questionId)} disabled={!activity.questionId} aria-label={`${isStarred(activity.type, activity.questionId) ? "Unstar" : "Star"} ${activity.title}`}>★</button></StandaloneActivityCard>)}</div>}
         </section>
       </>
     );
@@ -3722,7 +3900,15 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const visibleQuestionEntries = filteredQuestionEntries.slice(0, composerVisibleCount);
   const derivedUrl = deriveQuestionFromUrl(composer.query, composer.type, activeBank);
   const derivedBlocked = Boolean(derivedUrl && isQuestionBlocked({ id: derivedUrl.questionId ?? `personal-${composer.type}-${slugify(derivedUrl.title)}`, title: derivedUrl.title, url: derivedUrl.url, topics: [], targetMinutes: derivedUrl.targetMinutes, active: true }, composerBlocked));
-  const canSaveActivity = !derivedBlocked && (composer.type === "leetcode" ? Boolean(composer.selectedId || derivedUrl) : Boolean(composer.selectedId || derivedUrl || composer.query.trim()));
+  const canSaveActivity = composer.editingId
+    ? !derivedBlocked && (composer.type === "leetcode" ? Boolean(composer.selectedId || derivedUrl) : Boolean(composer.selectedId || derivedUrl || composer.query.trim()))
+    : composer.selectedActivities.length > 0;
+  const selectedActivityMinutes = composer.selectedActivities.reduce((total, activity) => total + activity.minutes, 0);
+  const stagedByType = (["leetcode", "system_design", "behavioral"] as const).map((type) => ({
+    type,
+    items: composer.selectedActivities.filter((item) => item.type === type),
+  })).filter((group) => group.items.length > 0);
+  const customUrlInvalid = Boolean(composer.customUrl.trim() && !deriveQuestionFromUrl(composer.customUrl, composer.type, activeBank));
   const activeComposerFilterCount = composerAttentionFilters.length + composerLevelFilters.length;
   const hasComposerFilters = activeComposerFilterCount > 0 || composerStarFilter;
   const composerAttentionCount = (filter: ComposerAttentionFilter) => composerQuestionEntries.filter((entry) => {
@@ -4358,13 +4544,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       </section>
 
       {composer.open && <div className="modal-backdrop" role="presentation" onMouseDown={() => setComposer(EMPTY_COMPOSER)}>
-        <section className="composer" role="dialog" aria-modal="true" aria-labelledby="composer-title" onMouseDown={(event) => event.stopPropagation()}>
+        <section className={`composer ${composer.mode === "activity" && !composer.editingId ? "activity-composer-dialog" : ""}`} role="dialog" aria-modal="true" aria-labelledby="composer-title" onMouseDown={(event) => event.stopPropagation()}>
           <button className="modal-close" onClick={() => setComposer(EMPTY_COMPOSER)} aria-label="Close">×</button>
           <span className="eyebrow">BUILD TODAY&apos;S WORK</span>
-          <h2 id="composer-title">{composer.editingSessionId ? "Edit session recipe" : composer.editingId ? "Edit this activity" : composer.mode === "session" ? "Build another session" : "Add one activity"}</h2>
+          <h2 id="composer-title">{composer.editingSessionId ? "Edit session recipe" : composer.editingId ? "Edit this activity" : composer.mode === "session" ? "Build another session" : "Add activities"}</h2>
           {!composer.editingId && !composer.editingSessionId && <div className="composer-mode">
             <button className={composer.mode === "session" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, mode: "session" }))}>Full session</button>
-            <button className={composer.mode === "activity" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, mode: "activity" }))}>Single activity</button>
+            <button className={composer.mode === "activity" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, mode: "activity" }))}>Activities</button>
           </div>}
           {composer.mode === "session" && !composer.editingId ? <div className="session-composer">
             <p>Shape the session you need. The default is six coding problems, one system-design mock, and one behavioral mock. When available, Interview Arc places up to two due reviews first and fills the remaining slots with new bank questions.</p>
@@ -4380,16 +4566,27 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             </div>
             <small>{sessionAvailability.coding} coding, {sessionAvailability.systemDesign} system-design, and {sessionAvailability.behavioral} behavioral questions are available after today&apos;s other picks. A recipe locks once its timer, activity work, or completion begins.</small>
             <button className="primary-action full-width" onClick={saveFullSession} disabled={!canSaveSession}>{composer.editingSessionId ? "Save session recipe" : `Add session ${allSessions.length + 1}`}</button>
-          </div> : <form onSubmit={saveActivity}>
-            <div className="type-selector" role="group" aria-label="Practice type">{(["leetcode", "system_design", "behavioral"] as const).map((type) => <button type="button" key={type} className={`${type} ${composer.type === type ? "active" : ""}`} onClick={() => { setComposerVisibleCount(20); setComposer((current) => ({ ...current, type, query: "", selectedId: "", minutes: type === "leetcode" ? "30" : "60" })); }}>{typeLabel(type)}</button>)}</div>
+          </div> : <form className="multi-activity-composer" onSubmit={saveActivity}>
+            <div className="type-selector" role="group" aria-label="Practice type">{(["leetcode", "system_design", "behavioral"] as const).map((type) => <button type="button" key={type} className={`${type} ${composer.type === type ? "active" : ""}`} onClick={() => { setComposerVisibleCount(20); setComposer((current) => ({ ...current, type, query: "", selectedId: "", minutes: type === "leetcode" ? "30" : "60", customOpen: false, customEditingKey: "", customTitle: "", customUrl: "", customPrompt: "", customMinutes: type === "leetcode" ? "30" : "60" })); }}>{typeLabel(type)}{composer.selectedActivities.some((item) => item.type === type) && <small>{composer.selectedActivities.filter((item) => item.type === type).length}</small>}</button>)}</div>
             <div className="activity-picker-toolbar">
-              <div className="activity-picker-heading"><span>{composer.type === "leetcode" ? "Search the bank or paste a LeetCode URL" : `Search the ${typeLabel(composer.type).toLowerCase()} bank, paste a URL, or type a new title`}</span>{hasComposerFilters && <button type="button" className="filter-clear" onClick={clearComposerFilters}>Clear</button>}<div className="bank-icon-tools activity-picker-tools"><button type="button" className={`collection-toggle icon-tool ${composerStarFilter ? "active" : ""}`} onClick={() => { setComposerVisibleCount(20); setComposerStarFilter((current) => !current); }} aria-pressed={composerStarFilter} aria-label={composerStarFilter ? "Show all questions" : "Show starred questions"} title={composerStarFilter ? "Showing starred questions" : "Show starred questions"}><Icon name="star" /></button><details className={`control-menu icon-menu ${activeComposerFilterCount > 0 ? "active" : ""}`}><summary aria-label={`Activity filters${activeComposerFilterCount ? `, ${activeComposerFilterCount} active` : ""}`} title={`${activeComposerFilterCount || "No"} active filters`}><Icon name="filter" />{activeComposerFilterCount > 0 && <i>{activeComposerFilterCount}</i>}</summary><div className="control-popover compact-filter-popover activity-filter-menu"><div className="compact-filter-group review" role="group" aria-label="Review filters">{([['due', 'Due now'], ['needs_review', 'Needs review']] as const).map(([filter, label]) => <button type="button" key={filter} className={composerAttentionFilters.includes(filter) ? "active" : ""} aria-pressed={composerAttentionFilters.includes(filter)} onClick={() => toggleComposerAttentionFilter(filter)}><span>{label}</span><small>{composerAttentionCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div><div className="compact-filter-group result" role="group" aria-label="Result filters">{([['solved', 'Solved'], ['helped', 'Solved with help'], ['failed', 'Failed'], ['todo', 'To do']] as const).map(([filter, label]) => <button type="button" key={filter} className={composerAttentionFilters.includes(filter) ? "active" : ""} aria-pressed={composerAttentionFilters.includes(filter)} onClick={() => toggleComposerAttentionFilter(filter)}><span>{label}</span><small>{composerAttentionCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div><div className="compact-filter-group difficulty" role="group" aria-label="Difficulty filters">{(["easy", "medium", "hard"] as const).map((filter) => <button type="button" key={filter} className={composerLevelFilters.includes(filter) ? "active" : ""} aria-pressed={composerLevelFilters.includes(filter)} onClick={() => toggleComposerLevelFilter(filter)}><span>{filter[0].toUpperCase() + filter.slice(1)}</span><small>{composerLevelCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div></div></details></div></div>
-              <label className="bank-search-bar activity-picker-search"><span className="bank-search-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="16" height="16" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.8"/><path d="M12.8 12.8 17 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg></span><input autoFocus type="search" value={composer.query} onChange={(event) => { setComposerVisibleCount(20); setComposer((current) => ({ ...current, query: event.target.value, selectedId: "" })); }} placeholder={composer.type === "leetcode" ? "Search titles and topics, or paste a LeetCode URL" : "Search titles and topics, paste a URL, or enter a title"} aria-label="Search activity questions" />{composer.query ? <button type="button" className="bank-search-clear" onClick={() => { setComposerVisibleCount(20); setComposer((current) => ({ ...current, query: "", selectedId: "" })); }} aria-label="Clear search">×</button> : <span className="bank-search-clear-spacer" aria-hidden="true" />}<span className="bank-result-count" aria-live="polite">{filteredQuestionEntries.length}</span></label>
+              <div className="activity-picker-heading"><span>Search this specialty, then keep selecting across searches and tabs.</span>{hasComposerFilters && <button type="button" className="filter-clear" onClick={clearComposerFilters}>Clear</button>}<div className="bank-icon-tools activity-picker-tools"><button type="button" className={`collection-toggle icon-tool ${composerStarFilter ? "active" : ""}`} onClick={() => { setComposerVisibleCount(20); setComposerStarFilter((current) => !current); }} aria-pressed={composerStarFilter} aria-label={composerStarFilter ? "Show all questions" : "Show starred questions"} title={composerStarFilter ? "Showing starred questions" : "Show starred questions"}><Icon name="star" /></button><details className={`control-menu icon-menu ${activeComposerFilterCount > 0 ? "active" : ""}`}><summary aria-label={`Activity filters${activeComposerFilterCount ? `, ${activeComposerFilterCount} active` : ""}`} title={`${activeComposerFilterCount || "No"} active filters`}><Icon name="filter" />{activeComposerFilterCount > 0 && <i>{activeComposerFilterCount}</i>}</summary><div className="control-popover compact-filter-popover activity-filter-menu"><div className="compact-filter-group review" role="group" aria-label="Review filters">{([['due', 'Due now'], ['needs_review', 'Needs review']] as const).map(([filter, label]) => <button type="button" key={filter} className={composerAttentionFilters.includes(filter) ? "active" : ""} aria-pressed={composerAttentionFilters.includes(filter)} onClick={() => toggleComposerAttentionFilter(filter)}><span>{label}</span><small>{composerAttentionCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div><div className="compact-filter-group result" role="group" aria-label="Result filters">{([['solved', 'Solved'], ['helped', 'Solved with help'], ['failed', 'Failed'], ['todo', 'To do']] as const).map(([filter, label]) => <button type="button" key={filter} className={composerAttentionFilters.includes(filter) ? "active" : ""} aria-pressed={composerAttentionFilters.includes(filter)} onClick={() => toggleComposerAttentionFilter(filter)}><span>{label}</span><small>{composerAttentionCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div><div className="compact-filter-group difficulty" role="group" aria-label="Difficulty filters">{(["easy", "medium", "hard"] as const).map((filter) => <button type="button" key={filter} className={composerLevelFilters.includes(filter) ? "active" : ""} aria-pressed={composerLevelFilters.includes(filter)} onClick={() => toggleComposerLevelFilter(filter)}><span>{filter[0].toUpperCase() + filter.slice(1)}</span><small>{composerLevelCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div></div></details></div></div>
+              <label className="bank-search-bar activity-picker-search"><span className="bank-search-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="16" height="16" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.8"/><path d="M12.8 12.8 17 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg></span><input autoFocus type="search" value={composer.query} onChange={(event) => { setComposerVisibleCount(20); setComposer((current) => ({ ...current, query: event.target.value })); }} placeholder={composer.type === "leetcode" ? "Search titles and topics, or paste a LeetCode URL" : "Search titles and topics, or paste a public URL"} aria-label="Search activity questions" />{composer.query ? <button type="button" className="bank-search-clear" onClick={() => { setComposerVisibleCount(20); setComposer((current) => ({ ...current, query: "" })); }} aria-label="Clear search">×</button> : <span className="bank-search-clear-spacer" aria-hidden="true" />}<span className="bank-result-count" aria-live="polite">{filteredQuestionEntries.length}</span></label>
             </div>
-            {derivedUrl && !composer.selectedId && <div className={`derived-question ${derivedBlocked ? "blocked" : ""}`}><span>{derivedUrl.questionId ? "Question matched in the bank" : "New personal bank question"}</span><strong>{derivedUrl.title}</strong><small>{derivedUrl.url}</small>{derivedBlocked && <em>Already on Today</em>}</div>}
-            {!derivedUrl && <div className="bank-results" onScroll={(event) => { const list = event.currentTarget; if (list.scrollTop + list.clientHeight >= list.scrollHeight - 72 && composerVisibleCount < filteredQuestionEntries.length) setComposerVisibleCount((current) => Math.min(filteredQuestionEntries.length, current + 20)); }}>{visibleQuestionEntries.length ? visibleQuestionEntries.map(({ question, latestAttempt, blockedToday }) => <button type="button" className={`${composer.selectedId === question.id ? "selected" : ""} ${blockedToday ? "blocked" : ""}`} key={question.id} onClick={() => selectBankQuestion(question)} disabled={blockedToday} aria-label={blockedToday ? `${question.title} is already on Today` : `Select ${question.title}`}><span className={`type-mark ${composer.type}`}>{typeMark(composer.type)}</span><div><strong>{question.title}</strong><small>{question.difficulty ? `${question.difficulty} · ` : ""}{question.topics.join(" · ")}{blockedToday ? `${question.topics.length || question.difficulty ? " · " : ""}Already on Today` : ""}</small></div><StaticResultFlag outcome={latestAttempt?.outcome} /></button>) : <p className="no-results">{composer.type === "leetcode" ? "No bank match. Paste a public LeetCode problem URL to create a personal bank question automatically." : "No bank match. Paste a public URL or enter a custom title to create a personal bank question."}</p>}{visibleQuestionEntries.length < filteredQuestionEntries.length && <span className="picker-load-status">Scroll for more · {filteredQuestionEntries.length - visibleQuestionEntries.length} remaining</span>}</div>}
-            <label className="minutes-field"><span>Planning estimate in minutes</span><input type="number" min="1" max="360" value={composer.minutes} onChange={(event) => setComposer((current) => ({ ...current, minutes: event.target.value }))} /></label>
-            <button className="primary-action full-width" type="submit" disabled={!canSaveActivity}>{composer.editingId ? "Save changes" : "Add to today"}</button>
+            {derivedUrl && <div className={`derived-question ${derivedBlocked ? "blocked" : ""}`}><span>{derivedUrl.questionId ? "Question matched in the bank" : "Public URL ready to stage"}</span><strong>{derivedUrl.title}</strong><small>{derivedUrl.url}</small>{derivedBlocked ? <em>Already on Today</em> : <button type="button" onClick={() => { const known = activeBank.find((question) => question.id === derivedUrl.questionId); if (known) selectBankQuestion(known); else openCustomActivity(derivedUrl.url); }}>{derivedUrl.questionId && composer.selectedActivities.some((item) => item.type === composer.type && item.questionId === derivedUrl.questionId) ? "Remove selection" : derivedUrl.questionId ? "Select activity" : "Review custom activity"}</button>}</div>}
+            {!derivedUrl && <div className="bank-results" onScroll={(event) => { const list = event.currentTarget; if (list.scrollTop + list.clientHeight >= list.scrollHeight - 72 && composerVisibleCount < filteredQuestionEntries.length) setComposerVisibleCount((current) => Math.min(filteredQuestionEntries.length, current + 20)); }}>{visibleQuestionEntries.length ? visibleQuestionEntries.map(({ question, latestAttempt, blockedToday }) => { const selected = composer.selectedActivities.some((item) => item.type === composer.type && item.questionId === question.id); return <button type="button" className={`${selected ? "selected" : ""} ${blockedToday ? "blocked" : ""}`} key={question.id} onClick={() => selectBankQuestion(question)} disabled={blockedToday} aria-pressed={selected} aria-label={blockedToday ? `${question.title} is already on Today` : `${selected ? "Remove" : "Select"} ${question.title}`}><span className={`type-mark ${composer.type}`}>{typeMark(composer.type)}</span><div><strong>{question.title}</strong><small>{question.difficulty ? `${question.difficulty} · ` : ""}{question.topics.join(" · ")}{blockedToday ? `${question.topics.length || question.difficulty ? " · " : ""}Already on Today` : ""}</small></div><StaticResultFlag outcome={latestAttempt?.outcome} /></button>; }) : <p className="no-results">No bank match. Create a custom activity for a private, offline, or not-yet-indexed prompt.</p>}{visibleQuestionEntries.length < filteredQuestionEntries.length && <span className="picker-load-status">Scroll for more · {filteredQuestionEntries.length - visibleQuestionEntries.length} remaining</span>}</div>}
+            <button className="custom-activity-trigger" type="button" onClick={() => composer.customOpen ? setComposer((current) => ({ ...current, customOpen: false, customEditingKey: "" })) : openCustomActivity()}>＋ Custom activity</button>
+            {composer.customOpen && <section className="custom-activity-card" aria-label="Custom activity">
+              <div><strong>{composer.customEditingKey ? "Edit custom activity" : "Create a custom activity"}</strong><small>Title is required. A public URL and prompt are optional.</small></div>
+              <label><span>Specialty</span><select value={composer.type} onChange={(event) => { const type = event.target.value as ActivityType; setComposer((current) => ({ ...current, type, customMinutes: type === "leetcode" ? "30" : "60" })); }}><option value="leetcode">Coding</option><option value="system_design">System design</option><option value="behavioral">Behavioral</option></select></label>
+              <label><span>Title</span><input value={composer.customTitle} onChange={(event) => setComposer((current) => ({ ...current, customTitle: event.target.value }))} placeholder="Required" /></label>
+              <label><span>Public URL</span><input type="url" value={composer.customUrl} onChange={(event) => { const value = event.target.value; const derived = deriveQuestionFromUrl(value, composer.type, bankFor(composer.type)); setComposer((current) => ({ ...current, customUrl: value, ...(!current.customTitle && derived?.title ? { customTitle: derived.title } : {}) })); }} placeholder="Optional" />{customUrlInvalid && <em>Use a complete public http or https URL.</em>}</label>
+              <label className="custom-prompt"><span>Description or prompt</span><textarea value={composer.customPrompt} onChange={(event) => setComposer((current) => ({ ...current, customPrompt: event.target.value }))} placeholder="Optional context for the specialist" /></label>
+              <label><span>Planned minutes</span><input type="number" min="1" max="360" value={composer.customMinutes} onChange={(event) => setComposer((current) => ({ ...current, customMinutes: event.target.value }))} /></label>
+              {composer.type === "leetcode" && !composer.customUrl.trim() && !composer.customPrompt.trim() && <p>A title-only coding activity is allowed, but the specialist may need you to provide the full prompt later.</p>}
+              <div className="custom-activity-actions"><button type="button" onClick={() => setComposer((current) => ({ ...current, customOpen: false, customEditingKey: "" }))}>Cancel</button><button type="button" className="primary-action" disabled={!composer.customTitle.trim() || customUrlInvalid} onClick={stageCustomActivity}>{composer.customEditingKey ? "Save selection" : "Add to selections"}</button></div>
+            </section>}
+            {composer.reviewOpen && <section className="selection-review" aria-label="Review selected activities"><header><div><strong>Review selections</strong><small>Remove anything without searching for it again.</small></div><button type="button" onClick={() => setComposer((current) => ({ ...current, selectedActivities: [] }))} disabled={!composer.selectedActivities.length}>Clear all</button></header>{stagedByType.length ? stagedByType.map((group) => <div className="selection-review-group" key={group.type}><h3>{typeLabel(group.type)}</h3>{group.items.map((item) => <article key={item.key}><div><strong>{item.title}</strong><small>{item.minutes} min{item.source === "custom" ? " · Custom" : ""}</small></div>{item.source === "custom" && <button type="button" onClick={() => editStagedActivity(item)} aria-label={`Edit ${item.title}`}>Edit</button>}<button type="button" onClick={() => removeStagedActivity(item.key)} aria-label={`Remove ${item.title}`}>×</button></article>)}</div>) : <p className="no-results">No activities selected yet.</p>}</section>}
+            <footer className="activity-selection-footer"><div><strong>{composer.selectedActivities.length} selected</strong><small>{selectedActivityMinutes} total minutes</small></div><button type="button" onClick={() => setComposer((current) => ({ ...current, reviewOpen: !current.reviewOpen }))} disabled={!composer.selectedActivities.length}>{composer.reviewOpen ? "Hide review" : "Review selections"}</button><button className="primary-action" type="submit" disabled={!canSaveActivity}>{composer.editingId ? "Save changes" : composer.selectedActivities.length ? `Add ${composer.selectedActivities.length} to Today` : "Add to Today"}</button></footer>
           </form>}
         </section>
       </div>}
