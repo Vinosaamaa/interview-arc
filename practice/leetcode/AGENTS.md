@@ -61,6 +61,16 @@ later in this guide.
   canonical prompt or user-supplied statement; never infer missing constraints
   from only a title or inaccessible URL. Keep finalization incomplete and ask
   for the statement when the exact problem cannot be established.
+- When the resolved question is an owner-private entry created from a public
+  LeetCode URL, perform the question-metadata preflight at its first complete
+  finalization. Add `questionMetadata` containing every field actually
+  verified from permitted sources: public problem number, difficulty,
+  acceptance rate, official topics, and authorized company metadata. Include
+  `capturedAt` plus each consulted source and access time. If the public page is
+  inaccessible, omit unavailable fields; never guess or block an otherwise
+  evidence-complete finalization solely because optional metadata could not be
+  reached. Recheck later only for a missing/stale/disputed field or explicit
+  request.
 - Pass the stable `questionId` and a complete reusable `solutionProfile`. Put
   the canonical best approach, reference implementation, complexity, edge
   cases, and up to two meaningful alternatives in the profile. Keep the
@@ -207,11 +217,19 @@ when substantive sections or code are actually missing or improved.
 
 ## Content Boundary
 
-- Do not crawl LeetCode, authenticated pages, private endpoints, cookies, editorials, or solutions.
+- Do not bulk-crawl LeetCode or inspect authenticated pages, private endpoints,
+  cookies, account state, submissions, editorials, or solutions. A
+  finalization may open the exact user-supplied public problem URL once to read
+  its visible official metadata; that narrow metadata preflight is not
+  permission to copy the problem statement or solution content.
 - Accept manual metadata and user-provided CSV, JSON, PDF, or saved MHTML snapshots. A user-saved company page is an authorized input artifact, not permission to automate the live account.
 - For a saved MHTML company list, run `scripts/import_leetcode_company_mhtml.py` from the repository root. Import every complete visible table row, preserve the public problem number, title, URL, difficulty, acceptance rate, and structured company-frequency signal, then report source, imported, updated, and total counts.
 - Deduplicate in this order: canonical LeetCode URL slug, public displayed problem number, then normalized title. Merge company signals rather than creating another copy of a known problem.
 - Ignore account-specific solved/check icons during bank import. Website progress comes from Interview Arc activities and published artifacts, not from the company-list snapshot.
+- Add company tags or frequency signals during finalization only from an
+  existing user-provided import or another source the user explicitly
+  authorized. Never derive company frequency from a title, model memory, or
+  unverified search result.
 - Never invent a LeetCode URL; use a validated URL from the bank or the URL the user supplied.
 - Link to the original problem for prompt reading and submission.
 - Do not copy protected statements or official solutions into this repository.

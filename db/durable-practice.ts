@@ -16,6 +16,14 @@ import {
   reviewSchedules,
   specialistTasks,
 } from "./schema";
+import {
+  mergePersonalLeetCodeQuestionMetadata,
+  validateLeetCodeQuestionMetadata,
+  type CompanySignal,
+  type LeetCodeQuestionMetadata,
+  type QuestionMetadataReference,
+  type StoredQuestionMetadata,
+} from "./question-metadata";
 import { reviewIntervalDays, type ReviewReason } from "./review-cadence";
 
 export type Specialty = "leetcode" | "system_design" | "behavioral";
@@ -56,6 +64,7 @@ export type SpecialistFinalization = {
   alternatives?: Array<{ title: string; summary: string; time?: string; space?: string }>;
   edgeCases?: string[];
   references: Array<{ title: string; url: string; accessedAt: string }>;
+  questionMetadata?: LeetCodeQuestionMetadata;
   solutionProfileAction?: "create_or_revise" | "reuse_current";
   solutionProfileDecision?: {
     reason: string;
@@ -343,6 +352,12 @@ export async function saveSpecialistFinalization(
 ) {
   const db = getDb();
   const profileAction = payload.solutionProfileAction ?? "create_or_revise";
+  if (payload.questionMetadata) {
+    if (specialty !== "leetcode") {
+      throw new Error("Question metadata enrichment is currently supported only for LeetCode finalizations.");
+    }
+    validateLeetCodeQuestionMetadata(payload.questionMetadata);
+  }
   let currentProfile: typeof problemSolutionProfiles.$inferSelect | undefined;
   if (payload.complete) {
     if (!questionId) throw new Error("A complete finalization needs the stable questionId.");
@@ -473,6 +488,52 @@ export async function saveSpecialistFinalization(
         target: [activitySolutionLinks.ownerId, activitySolutionLinks.activityId],
         set: { specialty, questionId, solutionRevision: linkedRevision, updatedAt: nowMs },
       });
+  }
+  if (payload.complete && specialty === "leetcode" && questionId) {
+    const personalRows = await db.select().from(ownerBankQuestions).where(and(
+      eq(ownerBankQuestions.ownerId, ownerId),
+      eq(ownerBankQuestions.specialty, specialty),
+      eq(ownerBankQuestions.questionId, questionId),
+    ));
+    const personalQuestion = personalRows[0];
+    if (personalQuestion) {
+      const profileTags = profileAction === "reuse_current"
+        ? ((currentProfile?.tags ?? []) as string[])
+        : normalizedTags(payload.solutionProfile?.tags ?? []);
+      const tags = normalizedTags([
+        ...((personalQuestion.tags ?? []) as string[]),
+        ...profileTags,
+      ]);
+      const existingMetadata: StoredQuestionMetadata = {
+        problemNumber: personalQuestion.problemNumber,
+        difficulty: personalQuestion.difficulty,
+        acceptanceRate: personalQuestion.acceptanceRate,
+        topics: (personalQuestion.topics ?? []) as string[],
+        companyTags: (personalQuestion.companyTags ?? []) as string[],
+        companySignals: (personalQuestion.companySignals ?? []) as CompanySignal[],
+        metadataReferences: (personalQuestion.metadataReferences ?? []) as QuestionMetadataReference[],
+        metadataCapturedAt: personalQuestion.metadataCapturedAt,
+      };
+      const metadata = payload.questionMetadata
+        ? mergePersonalLeetCodeQuestionMetadata(existingMetadata, payload.questionMetadata)
+        : existingMetadata;
+      await db.update(ownerBankQuestions).set({
+        tags,
+        problemNumber: metadata.problemNumber,
+        difficulty: metadata.difficulty,
+        acceptanceRate: metadata.acceptanceRate,
+        topics: metadata.topics,
+        companyTags: metadata.companyTags,
+        companySignals: metadata.companySignals,
+        metadataReferences: metadata.metadataReferences,
+        metadataCapturedAt: metadata.metadataCapturedAt,
+        updatedAt: nowMs,
+      }).where(and(
+        eq(ownerBankQuestions.ownerId, ownerId),
+        eq(ownerBankQuestions.specialty, specialty),
+        eq(ownerBankQuestions.questionId, questionId),
+      ));
+    }
   }
 }
 
@@ -736,6 +797,12 @@ export async function upsertOwnerBankQuestion(
   nowMs: number,
 ) {
   const db = getDb();
+  const existingRows = await db.select().from(ownerBankQuestions).where(and(
+    eq(ownerBankQuestions.ownerId, ownerId),
+    eq(ownerBankQuestions.specialty, specialty),
+    eq(ownerBankQuestions.questionId, question.questionId),
+  ));
+  const existing = existingRows[0];
   const values = {
     ownerId,
     specialty,
@@ -744,7 +811,18 @@ export async function upsertOwnerBankQuestion(
     prompt: question.prompt ?? null,
     url: question.url ?? null,
     source: question.source ?? "personal",
-    tags: normalizedTags(question.tags ?? []),
+    tags: normalizedTags([
+      ...((existing?.tags ?? []) as string[]),
+      ...(question.tags ?? []),
+    ]),
+    problemNumber: existing?.problemNumber ?? null,
+    difficulty: existing?.difficulty ?? null,
+    acceptanceRate: existing?.acceptanceRate ?? null,
+    topics: (existing?.topics ?? []) as string[],
+    companyTags: (existing?.companyTags ?? []) as string[],
+    companySignals: (existing?.companySignals ?? []) as CompanySignal[],
+    metadataReferences: (existing?.metadataReferences ?? []) as QuestionMetadataReference[],
+    metadataCapturedAt: existing?.metadataCapturedAt ?? null,
     priority: question.priority ?? 0,
     targetMinutes: question.targetMinutes ?? (specialty === "leetcode" ? 40 : 60),
     active: question.active ?? true,

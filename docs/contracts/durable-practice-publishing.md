@@ -142,6 +142,30 @@ Every complete bundle contains:
   an attempt transcript. Past retains the activity transcript, feedback,
   timing, notes, result, and recording links.
 
+For an owner-private LeetCode question created from a public problem URL, the
+LeetCode specialist also performs a metadata preflight during the first
+complete finalization. It supplies `questionMetadata` with every currently
+verified field that is available: public problem number, difficulty, acceptance
+rate, official topic labels, and any permitted company metadata. The bundle
+must include a capture time and every source actually consulted.
+
+- This is a single-question finalization step, not a bulk crawler. Never inspect
+  cookies, account state, submissions, editorials, solutions, or private
+  endpoints.
+- Prefer the exact public LeetCode URL supplied by the user for official
+  metadata. If access is blocked, omit the unavailable fields instead of
+  guessing them.
+- Company tags and frequency signals require an existing user-provided import
+  or another source the user explicitly authorized. Do not infer company
+  frequency from general reputation or search snippets.
+- The D1 write merges verified values into the owner-scoped question. Omitted
+  fields and prior provenance are preserved. The finalized Solution Profile's
+  normalized tags are also merged into the personal question for search and
+  filtering.
+- Canonical Git-backed bank questions are never mutated by this path. On later
+  attempts, metadata research is needed only for a concrete missing or
+  plausibly stale field, a disputed value, or an explicit refresh request.
+
 Follow `solution-profiles.md` for the specialty-specific structure and tags.
 
 System-design and behavioral bundles use `transcript_scope: full_activity` and

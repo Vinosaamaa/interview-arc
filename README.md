@@ -86,6 +86,13 @@ See `docs/architecture/single-project-practice-workflow.md` for the full ownersh
 
 Question metadata is added manually or imported from a user-provided CSV, JSON, or saved MHTML snapshot. A saved snapshot is user-supplied input: parse only its visible company-table metadata and public problem URLs. Do not crawl the live authenticated account, inspect cookies or private endpoints, or import problem statements, editorials, or solution content.
 
+A personal question created from one public LeetCode URL may also be enriched
+when its specialist finalizes the first attempt. That single-question preflight
+stores only metadata the specialist actually verified—such as public number,
+difficulty, acceptance rate, and official topics—with source provenance in the
+owner's D1 data. Company signals still require a user-provided or explicitly
+authorized source.
+
 The bank may store titles, public URLs, difficulty, topics, user-supplied company tags, and planning metadata. Attempts should link to LeetCode for the original prompt and submission. Generated explanations must be labeled as original coaching material, not as official LeetCode answers.
 
 ## Session Artifacts

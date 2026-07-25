@@ -76,6 +76,12 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
   registry, private audio metadata, and per-answer delivery-analysis records.
   These rows are working state—not the
   published journal. Follow `../contracts/durable-practice-publishing.md`.
+- Owner-private LeetCode questions may acquire verified public metadata during
+  specialist finalization. Keep problem number, difficulty, acceptance rate,
+  topics, authorized company signals, capture time, and source provenance on
+  the owner-scoped D1 question. Merge omitted fields safely and never let a
+  later title or URL edit erase enriched metadata. Canonical Git-backed bank
+  questions remain unchanged.
 - The Today view uses the current date in `America/Los_Angeles`. If no imported
   manifest exists for that date, render an empty current-day journal and let
   D1 hold the live work instead of falling back to the latest historical day.

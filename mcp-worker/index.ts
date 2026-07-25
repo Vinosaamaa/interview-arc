@@ -580,6 +580,28 @@ function createServer(ownerId: string) {
             url: z.string().url(),
             accessedAt: z.string().min(1),
           })),
+          questionMetadata: z.object({
+            problemNumber: z.number().int().positive().optional(),
+            difficulty: z.enum(["easy", "medium", "hard"]).optional(),
+            acceptanceRate: z.number().min(0).max(100).optional(),
+            topics: z.array(z.string().min(1)).max(64).optional(),
+            companyTags: z.array(z.string().min(1)).max(64).optional(),
+            companySignals: z.array(z.object({
+              company: z.string().min(1),
+              window: z.string().min(1),
+              frequencyScore: z.number().min(0),
+              frequencyScale: z.number().positive(),
+              capturedAt: z.string().datetime(),
+            }).refine((signal) => signal.frequencyScore <= signal.frequencyScale, {
+              message: "frequencyScore cannot exceed frequencyScale",
+            })).max(64).optional(),
+            capturedAt: z.string().datetime(),
+            sources: z.array(z.object({
+              title: z.string().min(1),
+              url: z.string().url(),
+              accessedAt: z.string().datetime(),
+            })).min(1).max(32),
+          }).optional(),
           solutionProfileAction: z.enum(["create_or_revise", "reuse_current"]).optional(),
           solutionProfileDecision: z.object({
             reason: z.string().min(1),
