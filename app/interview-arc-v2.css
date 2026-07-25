@@ -660,13 +660,40 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   box-shadow: 0 -12px 28px rgba(21,54,50,.08);
   backdrop-filter: blur(12px);
   display: grid;
-  grid-template-columns: minmax(110px, 1fr) auto auto;
+  grid-template-columns: minmax(110px, 1fr) auto auto auto;
   align-items: center;
   gap: 9px;
 }
-.activity-selection-footer > div { display: grid; gap: 2px; }
-.activity-selection-footer strong { font-size: .82rem; }
-.activity-selection-footer small { color: var(--muted); font-size: .7rem; }
+.activity-selection-footer .selection-summary { display: grid; gap: 2px; }
+.activity-selection-footer .selection-summary strong { font-size: .82rem; }
+.activity-selection-footer .selection-summary small { color: var(--muted); font-size: .7rem; }
+.activity-destination {
+  min-height: 42px;
+  padding: 4px;
+  border: 1px solid #bdc9c2;
+  border-radius: 10px;
+  background: #edf3ef;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.activity-destination > span { padding: 0 6px 0 5px; color: #718078; font-size: .66rem; font-weight: 760; letter-spacing: .04em; text-transform: uppercase; }
+.activity-destination > button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #53655f;
+  font-size: .71rem;
+  font-weight: 760;
+  cursor: pointer;
+}
+.activity-destination > button.active {
+  background: #fff;
+  color: #164f46;
+  box-shadow: 0 1px 5px rgba(21,54,50,.12), inset 0 0 0 1px #abc1b9;
+}
 .activity-selection-footer > button { min-height: 42px; padding: 0 14px; border: 1px solid #abb8af; border-radius: 9px; background: white; color: #284b45; font-size: .76rem; font-weight: 760; cursor: pointer; }
 .activity-selection-footer > button:disabled { opacity: .45; cursor: not-allowed; }
 
@@ -901,7 +928,10 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
     padding: 12px 20px;
     grid-template-columns: 1fr auto;
   }
-  .activity-selection-footer > div { grid-row: 1 / 3; }
+  .activity-selection-footer .selection-summary { grid-column: 1; grid-row: 1; }
+  .activity-selection-footer .activity-destination { grid-column: 1 / -1; grid-row: 2; }
+  .activity-selection-footer > button:not(.primary-action) { grid-column: 1; grid-row: 3; }
+  .activity-selection-footer > .primary-action { grid-column: 2; grid-row: 3; }
   .icon-action, .star-control, .result-flag, .modal-close, .letter-close, .countdown-controls button, .icon-control { min-width: 44px; width: 44px; min-height: 44px; height: 44px; }
   .bank-entry-actions, .note-actions, .row-edit-actions, .countdown-controls, .activity-time-actions { gap: 8px; }
 }

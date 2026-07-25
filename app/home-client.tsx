@@ -5,6 +5,11 @@ import { createPortal } from "react-dom";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { groupTranscriptTurns } from "./transcript-groups";
+import {
+  buildSelectedActivityBatch,
+  type ActivityBatchDestination,
+  type SelectedActivity,
+} from "./activity-batch";
 import type {
   ContentArtifact,
   ContentIndex,
@@ -54,17 +59,7 @@ type JourneyMetric = "activities" | "time";
 type LibraryAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "failed" | "notes";
 type BankAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "failed" | "todo" | "notes";
 type ComposerAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "failed" | "todo";
-type StagedActivity = {
-  key: string;
-  type: ActivityType;
-  questionId?: string;
-  title: string;
-  url?: string;
-  prompt?: string;
-  minutes: number;
-  topics: string[];
-  source: "bank" | "custom";
-};
+type StagedActivity = SelectedActivity;
 type DocumentPiP = { requestWindow: (options?: { width?: number; height?: number }) => Promise<Window> };
 type HighlightColor = "yellow" | "green" | "pink";
 type HighlightNote = { id: string; highlightId: string; body: string; createdAt: number; updatedAt: number };
@@ -125,6 +120,7 @@ type ComposerState = {
   customPrompt: string;
   customMinutes: string;
   reviewOpen: boolean;
+  batchDestination: ActivityBatchDestination;
   editingId: string;
   editingSessionId: string;
   sessionCoding: number;
@@ -172,6 +168,7 @@ const EMPTY_COMPOSER: ComposerState = {
   customPrompt: "",
   customMinutes: "30",
   reviewOpen: false,
+  batchDestination: "standalone",
   editingId: "",
   editingSessionId: "",
   sessionCoding: 6,
@@ -2439,31 +2436,17 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         showUiToast(`${duplicate.title} is already on Today or selected more than once.`);
         return;
       }
-      const stamp = Date.now().toString(36);
-      const activities = composer.selectedActivities.map((item, index): ExtraActivity => {
-        const id = `${journal.date}-extra-${slugify(item.title)}-${stamp}-${index}`;
-        const questionId = item.questionId ?? `personal-${item.type}-${slugify(item.title)}`;
-        return {
-          schemaVersion: 2,
-          id,
-          questionId,
-          date: journal.date,
-          source: "extra",
-          type: item.type,
-          ...(item.type === "leetcode" ? { recordKind: "attempt" as const } : {}),
-          title: item.title,
-          ...(item.url ? { url: item.url } : {}),
-          ...(item.prompt ? { prompt: item.prompt } : item.type !== "leetcode" ? { prompt: item.title } : {}),
-          allocatedSeconds: item.minutes * 60,
-          timerGroupId: id,
-          timingSource: "website",
-          status: "planned",
-          ...(item.topics.length ? { notes: item.topics.join(", ") } : {}),
-        };
+      const { activities, session } = buildSelectedActivityBatch({
+        date: journal.date,
+        stamp: Date.now().toString(36),
+        sessionNumber: allSessions.length + 1,
+        destination: composer.batchDestination,
+        items: composer.selectedActivities,
       });
       setDraft((current) => ({
         ...current,
         extraActivities: [...current.extraActivities, ...activities],
+        sessions: session ? [...current.sessions, session] : current.sessions,
       }));
       enqueue(
         ...composer.selectedActivities
@@ -2479,10 +2462,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
               targetMinutes: item.minutes,
             },
           })),
+        ...(session ? [{ type: "session-upsert" as const, session }] : []),
         ...activities.map((activity) => ({ type: "extra-upsert" as const, activity })),
       );
       setComposer(EMPTY_COMPOSER);
-      showUiToast(`${activities.length} ${activities.length === 1 ? "activity" : "activities"} added to Today.`);
+      showUiToast(session
+        ? `${activities.length} ${activities.length === 1 ? "activity" : "activities"} added as ${session.label}.`
+        : `${activities.length} ${activities.length === 1 ? "activity" : "activities"} added to Today.`);
       return;
     }
     const bank = bankFor(composer.type);
@@ -4586,7 +4572,16 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
               <div className="custom-activity-actions"><button type="button" onClick={() => setComposer((current) => ({ ...current, customOpen: false, customEditingKey: "" }))}>Cancel</button><button type="button" className="primary-action" disabled={!composer.customTitle.trim() || customUrlInvalid} onClick={stageCustomActivity}>{composer.customEditingKey ? "Save selection" : "Add to selections"}</button></div>
             </section>}
             {composer.reviewOpen && <section className="selection-review" aria-label="Review selected activities"><header><div><strong>Review selections</strong><small>Remove anything without searching for it again.</small></div><button type="button" onClick={() => setComposer((current) => ({ ...current, selectedActivities: [] }))} disabled={!composer.selectedActivities.length}>Clear all</button></header>{stagedByType.length ? stagedByType.map((group) => <div className="selection-review-group" key={group.type}><h3>{typeLabel(group.type)}</h3>{group.items.map((item) => <article key={item.key}><div><strong>{item.title}</strong><small>{item.minutes} min{item.source === "custom" ? " · Custom" : ""}</small></div>{item.source === "custom" && <button type="button" onClick={() => editStagedActivity(item)} aria-label={`Edit ${item.title}`}>Edit</button>}<button type="button" onClick={() => removeStagedActivity(item.key)} aria-label={`Remove ${item.title}`}>×</button></article>)}</div>) : <p className="no-results">No activities selected yet.</p>}</section>}
-            <footer className="activity-selection-footer"><div><strong>{composer.selectedActivities.length} selected</strong><small>{selectedActivityMinutes} total minutes</small></div><button type="button" onClick={() => setComposer((current) => ({ ...current, reviewOpen: !current.reviewOpen }))} disabled={!composer.selectedActivities.length}>{composer.reviewOpen ? "Hide review" : "Review selections"}</button><button className="primary-action" type="submit" disabled={!canSaveActivity}>{composer.editingId ? "Save changes" : composer.selectedActivities.length ? `Add ${composer.selectedActivities.length} to Today` : "Add to Today"}</button></footer>
+            <footer className="activity-selection-footer">
+              <div className="selection-summary"><strong>{composer.selectedActivities.length} selected</strong><small>{composer.batchDestination === "session" ? `${selectedActivityMinutes} min session countdown` : `${selectedActivityMinutes} total minutes`}</small></div>
+              {!composer.editingId && <div className="activity-destination" role="radiogroup" aria-label="Add selected activities as">
+                <span>Add as</span>
+                <button type="button" role="radio" aria-checked={composer.batchDestination === "standalone"} className={composer.batchDestination === "standalone" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, batchDestination: "standalone" }))}>Standalone</button>
+                <button type="button" role="radio" aria-checked={composer.batchDestination === "session"} className={composer.batchDestination === "session" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, batchDestination: "session" }))}>One session</button>
+              </div>}
+              <button type="button" onClick={() => setComposer((current) => ({ ...current, reviewOpen: !current.reviewOpen }))} disabled={!composer.selectedActivities.length}>{composer.reviewOpen ? "Hide review" : "Review selections"}</button>
+              <button className="primary-action" type="submit" disabled={!canSaveActivity}>{composer.editingId ? "Save changes" : composer.selectedActivities.length ? composer.batchDestination === "session" ? `Add ${composer.selectedActivities.length} as one session` : `Add ${composer.selectedActivities.length} to Today` : "Add to Today"}</button>
+            </footer>
           </form>}
         </section>
       </div>}
