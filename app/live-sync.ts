@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mutationFailureDisposition } from "./mutation-queue";
+import { applyTimerSync, type TimerSyncState } from "./timer-reconciliation";
 import {
   EMPTY_DRAFT,
   type ExtraActivity,
@@ -113,6 +114,7 @@ function timerToDraft(timer: ServerTimer, offset: number): TimerDraft {
     completed: timer.completed,
     startedAt: timer.startedAt,
     completedAt: timer.completedAt,
+    revision: timer.revision,
   };
 }
 
@@ -241,6 +243,7 @@ export type LiveStateController = {
   hydrated: boolean;
   synced: boolean;
   enqueue: (...mutations: Mutation[]) => void;
+  reconcileTimers: () => Promise<void>;
 };
 
 export function useLiveState(date: string): LiveStateController {
@@ -252,6 +255,8 @@ export function useLiveState(date: string): LiveStateController {
   const offsetRef = useRef(0);
   const queueRef = useRef<Mutation[]>([]);
   const flushingRef = useRef(false);
+  const reconcilingRef = useRef(false);
+  const lastTimerSyncServerNowRef = useRef(0);
 
   const persistQueue = useCallback(() => {
     try {
@@ -326,6 +331,29 @@ export function useLiveState(date: string): LiveStateController {
     },
     [flush, persistQueue],
   );
+
+  const reconcileTimers = useCallback(async () => {
+    if (reconcilingRef.current || flushingRef.current || queueRef.current.length > 0) return;
+    reconcilingRef.current = true;
+    try {
+      const response = await fetch("/api/timer-state", { cache: "no-store" });
+      if (!response.ok) return;
+      const state = (await response.json()) as TimerSyncState;
+
+      // A local action may have been queued while the read was in flight. Let
+      // its mutation response reconcile instead of replacing optimistic UI.
+      if (flushingRef.current || queueRef.current.length > 0) return;
+      if (state.serverNow < lastTimerSyncServerNowRef.current) return;
+      lastTimerSyncServerNowRef.current = state.serverNow;
+      offsetRef.current = state.serverNow - Date.now();
+      setDraft((current) => applyTimerSync(current, state, offsetRef.current));
+      setSynced(true);
+    } catch {
+      // Transient polling failures must not disturb the current display.
+    } finally {
+      reconcilingRef.current = false;
+    }
+  }, []);
 
   // Hydrate from localStorage immediately, then reconcile with the server.
   // The local paint must not run after the server merge: a fast /api/state
@@ -407,6 +435,16 @@ export function useLiveState(date: string): LiveStateController {
     };
   }, [flush]);
 
+  // Voice and the Chrome companion mutate the same D1 clocks. Reconcile only
+  // the lightweight timer/focus projection once per second; the full practice
+  // record remains on its existing load/mutation path.
+  useEffect(() => {
+    if (!hydrated) return;
+    void reconcileTimers();
+    const interval = window.setInterval(() => void reconcileTimers(), 1000);
+    return () => window.clearInterval(interval);
+  }, [hydrated, reconcileTimers]);
+
   // Drive the display. The dashboard owns auto-finish because each session can
   // have a different allocation.
   useEffect(() => {
@@ -423,5 +461,5 @@ export function useLiveState(date: string): LiveStateController {
     setDraft(updater);
   }, []);
 
-  return { draft, setDraft: setDraftPublic, now, setNow, hydrated, synced, enqueue };
+  return { draft, setDraft: setDraftPublic, now, setNow, hydrated, synced, enqueue, reconcileTimers };
 }

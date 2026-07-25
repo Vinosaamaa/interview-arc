@@ -139,6 +139,7 @@ export type TimerDraft = {
   completed: boolean;
   startedAt?: number | null;
   completedAt?: number | null;
+  revision?: number;
 };
 export type Workbench = {
   id: string;
