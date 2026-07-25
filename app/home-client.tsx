@@ -1659,8 +1659,34 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       return result;
     }, { leetcode: [], system_design: [], behavioral: [] });
     return Object.fromEntries((Object.keys(canonical) as ActivityType[]).map((type) => {
+      const personalById = new Map(personal[type].map((question) => [question.id, question]));
       const canonicalIds = new Set(canonical[type].map((question) => question.id));
-      return [type, [...personal[type].filter((question) => !canonicalIds.has(question.id)), ...canonical[type]]];
+      const mergedCanonical = canonical[type].map((question) => {
+        const ownerQuestion = personalById.get(question.id);
+        if (!ownerQuestion) return question;
+        const unique = (values: string[]) => [...new Set(values.filter(Boolean))];
+        const signals = new Map(
+          [...(question.companySignals ?? []), ...(ownerQuestion.companySignals ?? [])]
+            .map((signal) => [`${signal.company}\u0000${signal.window}\u0000${signal.capturedAt}`, signal]),
+        );
+        return {
+          ...question,
+          problemNumber: ownerQuestion.problemNumber ?? question.problemNumber,
+          difficulty: ownerQuestion.difficulty ?? question.difficulty,
+          acceptanceRate: ownerQuestion.acceptanceRate ?? question.acceptanceRate,
+          topics: unique([...question.topics, ...ownerQuestion.topics]),
+          tags: unique([...(question.tags ?? []), ...(ownerQuestion.tags ?? [])]),
+          companyTags: unique([...(question.companyTags ?? []), ...(ownerQuestion.companyTags ?? [])]),
+          companySignals: [...signals.values()],
+          priority: ownerQuestion.priority,
+          targetMinutes: ownerQuestion.targetMinutes,
+          active: ownerQuestion.active,
+        };
+      });
+      return [type, [
+        ...personal[type].filter((question) => !canonicalIds.has(question.id)),
+        ...mergedCanonical,
+      ]];
     })) as Record<ActivityType, QuestionBankItem[]>;
   }, [content.questionBanks, draft.personalQuestions]);
 

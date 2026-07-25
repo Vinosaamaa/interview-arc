@@ -18,11 +18,10 @@ import {
 } from "./schema";
 import {
   mergePersonalLeetCodeQuestionMetadata,
+  questionMetadataUpdateFields,
+  readStoredQuestionMetadata,
   validateLeetCodeQuestionMetadata,
-  type CompanySignal,
   type LeetCodeQuestionMetadata,
-  type QuestionMetadataReference,
-  type StoredQuestionMetadata,
 } from "./question-metadata";
 import { reviewIntervalDays, type ReviewReason } from "./review-cadence";
 
@@ -101,6 +100,41 @@ const TRANSCRIPT_SECTION = /transcript|conversation|raw exchange|verbatim/i;
 function normalizedTags(tags: string[]) {
   return [...new Set(tags.map((tag) => tag.trim().toLowerCase().replace(/[^a-z0-9+#.]+/g, "-")).filter(Boolean))]
     .slice(0, 32);
+}
+
+async function enrichPersonalLeetCodeQuestion(
+  ownerId: string,
+  questionId: string,
+  tags: string[],
+  metadata: LeetCodeQuestionMetadata | undefined,
+  nowMs: number,
+) {
+  const db = getDb();
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const rows = await db.select().from(ownerBankQuestions).where(and(
+      eq(ownerBankQuestions.ownerId, ownerId),
+      eq(ownerBankQuestions.specialty, "leetcode"),
+      eq(ownerBankQuestions.questionId, questionId),
+    ));
+    const question = rows[0];
+    if (!question) return;
+    const existingMetadata = readStoredQuestionMetadata(question);
+    const mergedMetadata = metadata
+      ? mergePersonalLeetCodeQuestionMetadata(existingMetadata, metadata)
+      : existingMetadata;
+    const updated = await db.update(ownerBankQuestions).set({
+      tags: normalizedTags([...((question.tags ?? []) as string[]), ...tags]),
+      ...questionMetadataUpdateFields(mergedMetadata),
+      updatedAt: nowMs,
+    }).where(and(
+      eq(ownerBankQuestions.ownerId, ownerId),
+      eq(ownerBankQuestions.specialty, "leetcode"),
+      eq(ownerBankQuestions.questionId, questionId),
+      eq(ownerBankQuestions.updatedAt, question.updatedAt),
+    )).returning({ questionId: ownerBankQuestions.questionId });
+    if (updated.length > 0) return;
+  }
+  throw new Error("The personal LeetCode question changed during finalization; retry the finalization.");
 }
 
 function validateSolutionProfile(specialty: Specialty, payload: SpecialistFinalization["solutionProfile"]) {
@@ -412,6 +446,15 @@ export async function saveSpecialistFinalization(
       validateSolutionProfile(specialty, payload.solutionProfile);
     }
   }
+  if (payload.complete && specialty === "leetcode" && questionId) {
+    const profileTags = profileAction === "reuse_current"
+      ? ((currentProfile?.tags ?? []) as string[])
+      : normalizedTags(payload.solutionProfile?.tags ?? []);
+    // Enrichment is independently useful and idempotent. Complete it before
+    // the activity can become ready so a failed metadata write is safely
+    // retried instead of leaving a ready finalization without its bank update.
+    await enrichPersonalLeetCodeQuestion(ownerId, questionId, profileTags, payload.questionMetadata, nowMs);
+  }
   const status = payload.complete ? "ready" : "draft";
   await db
     .insert(activityFinalizations)
@@ -488,52 +531,6 @@ export async function saveSpecialistFinalization(
         target: [activitySolutionLinks.ownerId, activitySolutionLinks.activityId],
         set: { specialty, questionId, solutionRevision: linkedRevision, updatedAt: nowMs },
       });
-  }
-  if (payload.complete && specialty === "leetcode" && questionId) {
-    const personalRows = await db.select().from(ownerBankQuestions).where(and(
-      eq(ownerBankQuestions.ownerId, ownerId),
-      eq(ownerBankQuestions.specialty, specialty),
-      eq(ownerBankQuestions.questionId, questionId),
-    ));
-    const personalQuestion = personalRows[0];
-    if (personalQuestion) {
-      const profileTags = profileAction === "reuse_current"
-        ? ((currentProfile?.tags ?? []) as string[])
-        : normalizedTags(payload.solutionProfile?.tags ?? []);
-      const tags = normalizedTags([
-        ...((personalQuestion.tags ?? []) as string[]),
-        ...profileTags,
-      ]);
-      const existingMetadata: StoredQuestionMetadata = {
-        problemNumber: personalQuestion.problemNumber,
-        difficulty: personalQuestion.difficulty,
-        acceptanceRate: personalQuestion.acceptanceRate,
-        topics: (personalQuestion.topics ?? []) as string[],
-        companyTags: (personalQuestion.companyTags ?? []) as string[],
-        companySignals: (personalQuestion.companySignals ?? []) as CompanySignal[],
-        metadataReferences: (personalQuestion.metadataReferences ?? []) as QuestionMetadataReference[],
-        metadataCapturedAt: personalQuestion.metadataCapturedAt,
-      };
-      const metadata = payload.questionMetadata
-        ? mergePersonalLeetCodeQuestionMetadata(existingMetadata, payload.questionMetadata)
-        : existingMetadata;
-      await db.update(ownerBankQuestions).set({
-        tags,
-        problemNumber: metadata.problemNumber,
-        difficulty: metadata.difficulty,
-        acceptanceRate: metadata.acceptanceRate,
-        topics: metadata.topics,
-        companyTags: metadata.companyTags,
-        companySignals: metadata.companySignals,
-        metadataReferences: metadata.metadataReferences,
-        metadataCapturedAt: metadata.metadataCapturedAt,
-        updatedAt: nowMs,
-      }).where(and(
-        eq(ownerBankQuestions.ownerId, ownerId),
-        eq(ownerBankQuestions.specialty, specialty),
-        eq(ownerBankQuestions.questionId, questionId),
-      ));
-    }
   }
 }
 
@@ -797,12 +794,7 @@ export async function upsertOwnerBankQuestion(
   nowMs: number,
 ) {
   const db = getDb();
-  const existingRows = await db.select().from(ownerBankQuestions).where(and(
-    eq(ownerBankQuestions.ownerId, ownerId),
-    eq(ownerBankQuestions.specialty, specialty),
-    eq(ownerBankQuestions.questionId, question.questionId),
-  ));
-  const existing = existingRows[0];
+  const tags = normalizedTags(question.tags ?? []);
   const values = {
     ownerId,
     specialty,
@@ -811,18 +803,15 @@ export async function upsertOwnerBankQuestion(
     prompt: question.prompt ?? null,
     url: question.url ?? null,
     source: question.source ?? "personal",
-    tags: normalizedTags([
-      ...((existing?.tags ?? []) as string[]),
-      ...(question.tags ?? []),
-    ]),
-    problemNumber: existing?.problemNumber ?? null,
-    difficulty: existing?.difficulty ?? null,
-    acceptanceRate: existing?.acceptanceRate ?? null,
-    topics: (existing?.topics ?? []) as string[],
-    companyTags: (existing?.companyTags ?? []) as string[],
-    companySignals: (existing?.companySignals ?? []) as CompanySignal[],
-    metadataReferences: (existing?.metadataReferences ?? []) as QuestionMetadataReference[],
-    metadataCapturedAt: existing?.metadataCapturedAt ?? null,
+    tags,
+    problemNumber: null,
+    difficulty: null,
+    acceptanceRate: null,
+    topics: [],
+    companyTags: [],
+    companySignals: [],
+    metadataReferences: [],
+    metadataCapturedAt: null,
     priority: question.priority ?? 0,
     targetMinutes: question.targetMinutes ?? (specialty === "leetcode" ? 40 : 60),
     active: question.active ?? true,
@@ -830,7 +819,30 @@ export async function upsertOwnerBankQuestion(
   };
   await db.insert(ownerBankQuestions).values(values).onConflictDoUpdate({
     target: [ownerBankQuestions.ownerId, ownerBankQuestions.specialty, ownerBankQuestions.questionId],
-    set: values,
+    set: {
+      title: values.title,
+      prompt: values.prompt,
+      url: values.url,
+      source: values.source,
+      ...(tags.length ? {
+        tags: sql`(
+          SELECT COALESCE(json_group_array(value), '[]')
+          FROM (
+            SELECT DISTINCT value
+            FROM (
+              SELECT value FROM json_each(${ownerBankQuestions.tags})
+              UNION ALL
+              SELECT value FROM json_each(${JSON.stringify(tags)})
+            )
+            WHERE value <> ''
+          )
+        )`,
+      } : {}),
+      priority: values.priority,
+      targetMinutes: values.targetMinutes,
+      active: values.active,
+      updatedAt: values.updatedAt,
+    },
   });
 }
 

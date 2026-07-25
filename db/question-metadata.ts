@@ -1,27 +1,35 @@
-export type QuestionMetadataReference = {
-  title: string;
-  url: string;
-  accessedAt: string;
-};
+import { z } from "zod";
 
-export type CompanySignal = {
-  company: string;
-  window: string;
-  frequencyScore: number;
-  frequencyScale: number;
-  capturedAt: string;
-};
+export const questionMetadataReferenceSchema = z.object({
+  title: z.string().min(1),
+  url: z.string().url(),
+  accessedAt: z.string().datetime(),
+});
 
-export type LeetCodeQuestionMetadata = {
-  problemNumber?: number;
-  difficulty?: "easy" | "medium" | "hard";
-  acceptanceRate?: number;
-  topics?: string[];
-  companyTags?: string[];
-  companySignals?: CompanySignal[];
-  capturedAt: string;
-  sources: QuestionMetadataReference[];
-};
+export const companySignalSchema = z.object({
+  company: z.string().min(1),
+  window: z.string().min(1),
+  frequencyScore: z.number().min(0),
+  frequencyScale: z.number().positive(),
+  capturedAt: z.string().datetime(),
+}).refine((signal) => signal.frequencyScore <= signal.frequencyScale, {
+  message: "frequencyScore cannot exceed frequencyScale",
+});
+
+export const leetCodeQuestionMetadataSchema = z.object({
+  problemNumber: z.number().int().positive().optional(),
+  difficulty: z.enum(["easy", "medium", "hard"]).optional(),
+  acceptanceRate: z.number().min(0).max(100).optional(),
+  topics: z.array(z.string().min(1)).max(64).optional(),
+  companyTags: z.array(z.string().min(1)).max(64).optional(),
+  companySignals: z.array(companySignalSchema).max(64).optional(),
+  capturedAt: z.string().datetime(),
+  sources: z.array(questionMetadataReferenceSchema).min(1).max(32),
+});
+
+export type QuestionMetadataReference = z.infer<typeof questionMetadataReferenceSchema>;
+export type CompanySignal = z.infer<typeof companySignalSchema>;
+export type LeetCodeQuestionMetadata = z.infer<typeof leetCodeQuestionMetadataSchema>;
 
 export type StoredQuestionMetadata = {
   problemNumber: number | null;
@@ -33,6 +41,41 @@ export type StoredQuestionMetadata = {
   metadataReferences: QuestionMetadataReference[];
   metadataCapturedAt: number | null;
 };
+
+export function readStoredQuestionMetadata(row: {
+  problemNumber: number | null;
+  difficulty: "easy" | "medium" | "hard" | null;
+  acceptanceRate: number | null;
+  topics: unknown;
+  companyTags: unknown;
+  companySignals: unknown;
+  metadataReferences: unknown;
+  metadataCapturedAt: number | null;
+}): StoredQuestionMetadata {
+  return {
+    problemNumber: row.problemNumber,
+    difficulty: row.difficulty,
+    acceptanceRate: row.acceptanceRate,
+    topics: Array.isArray(row.topics) ? row.topics as string[] : [],
+    companyTags: Array.isArray(row.companyTags) ? row.companyTags as string[] : [],
+    companySignals: Array.isArray(row.companySignals) ? row.companySignals as CompanySignal[] : [],
+    metadataReferences: Array.isArray(row.metadataReferences) ? row.metadataReferences as QuestionMetadataReference[] : [],
+    metadataCapturedAt: row.metadataCapturedAt,
+  };
+}
+
+export function questionMetadataUpdateFields(metadata: StoredQuestionMetadata) {
+  return {
+    problemNumber: metadata.problemNumber,
+    difficulty: metadata.difficulty,
+    acceptanceRate: metadata.acceptanceRate,
+    topics: metadata.topics,
+    companyTags: metadata.companyTags,
+    companySignals: metadata.companySignals,
+    metadataReferences: metadata.metadataReferences,
+    metadataCapturedAt: metadata.metadataCapturedAt,
+  };
+}
 
 function trimmedUnique(values: string[], limit = 64) {
   const seen = new Set<string>();
@@ -80,30 +123,9 @@ function mergeCompanySignals(existing: CompanySignal[], incoming: CompanySignal[
 }
 
 export function validateLeetCodeQuestionMetadata(metadata: LeetCodeQuestionMetadata) {
-  if (metadata.problemNumber !== undefined && (!Number.isInteger(metadata.problemNumber) || metadata.problemNumber <= 0)) {
-    throw new Error("LeetCode problemNumber must be a positive integer.");
-  }
-  if (metadata.acceptanceRate !== undefined && (!Number.isFinite(metadata.acceptanceRate) || metadata.acceptanceRate < 0 || metadata.acceptanceRate > 100)) {
-    throw new Error("LeetCode acceptanceRate must be between 0 and 100.");
-  }
-  if (!Number.isFinite(Date.parse(metadata.capturedAt))) {
-    throw new Error("LeetCode metadata capturedAt must be a valid date-time.");
-  }
-  if (metadata.sources.length === 0) {
-    throw new Error("LeetCode metadata must cite at least one source actually consulted.");
-  }
-  for (const source of metadata.sources) {
-    if (!source.title.trim() || !source.url.trim() || !Number.isFinite(Date.parse(source.accessedAt))) {
-      throw new Error("Every LeetCode metadata source needs a title, URL, and valid access time.");
-    }
-  }
-  for (const signal of metadata.companySignals ?? []) {
-    if (!signal.company.trim() || !signal.window.trim() || signal.frequencyScore < 0 || signal.frequencyScale < 1 || signal.frequencyScore > signal.frequencyScale) {
-      throw new Error("Company signals need a company, window, and a score within their positive scale.");
-    }
-    if (!Number.isFinite(Date.parse(signal.capturedAt))) {
-      throw new Error("Company signal capturedAt must be a valid date-time.");
-    }
+  const result = leetCodeQuestionMetadataSchema.safeParse(metadata);
+  if (!result.success) {
+    throw new Error(`Invalid LeetCode question metadata: ${result.error.issues.map((issue) => issue.message).join("; ")}`);
   }
 }
 
@@ -112,14 +134,17 @@ export function mergePersonalLeetCodeQuestionMetadata(
   incoming: LeetCodeQuestionMetadata,
 ): StoredQuestionMetadata {
   validateLeetCodeQuestionMetadata(incoming);
+  const incomingCapturedAt = Date.parse(incoming.capturedAt);
+  const acceptsIncomingScalars = existing.metadataCapturedAt === null
+    || incomingCapturedAt >= existing.metadataCapturedAt;
   return {
-    problemNumber: incoming.problemNumber ?? existing.problemNumber,
-    difficulty: incoming.difficulty ?? existing.difficulty,
-    acceptanceRate: incoming.acceptanceRate ?? existing.acceptanceRate,
+    problemNumber: acceptsIncomingScalars ? incoming.problemNumber ?? existing.problemNumber : existing.problemNumber,
+    difficulty: acceptsIncomingScalars ? incoming.difficulty ?? existing.difficulty : existing.difficulty,
+    acceptanceRate: acceptsIncomingScalars ? incoming.acceptanceRate ?? existing.acceptanceRate : existing.acceptanceRate,
     topics: trimmedUnique([...(existing.topics ?? []), ...(incoming.topics ?? [])]),
     companyTags: trimmedUnique([...(existing.companyTags ?? []), ...(incoming.companyTags ?? [])]),
     companySignals: mergeCompanySignals(existing.companySignals ?? [], incoming.companySignals ?? []),
     metadataReferences: mergeReferences(existing.metadataReferences ?? [], incoming.sources),
-    metadataCapturedAt: Date.parse(incoming.capturedAt),
+    metadataCapturedAt: Math.max(existing.metadataCapturedAt ?? 0, incomingCapturedAt),
   };
 }
