@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 // Live practice state owned by the deployed website. Durable narrative content
 // (daily journals, attempt write-ups, transcripts) stays in Git; these tables
@@ -399,6 +399,14 @@ export const ownerBankQuestions = sqliteTable(
     url: text("url"),
     source: text("source").notNull().default("personal"),
     tags: text("tags", { mode: "json" }).notNull(),
+    problemNumber: integer("problem_number"),
+    difficulty: text("difficulty", { enum: ["easy", "medium", "hard"] }),
+    acceptanceRate: real("acceptance_rate"),
+    topics: text("topics", { mode: "json" }).notNull().default(sql`'[]'`),
+    companyTags: text("company_tags", { mode: "json" }).notNull().default(sql`'[]'`),
+    companySignals: text("company_signals", { mode: "json" }).notNull().default(sql`'[]'`),
+    metadataReferences: text("metadata_references", { mode: "json" }).notNull().default(sql`'[]'`),
+    metadataCapturedAt: integer("metadata_captured_at"),
     priority: integer("priority").notNull().default(0),
     targetMinutes: integer("target_minutes").notNull().default(60),
     active: integer("active", { mode: "boolean" }).notNull().default(true),

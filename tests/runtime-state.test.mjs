@@ -11,6 +11,10 @@ import { dedupeSnapshotRows } from "../db/snapshot-rows.ts";
 import { derivePublicationStatus } from "../db/publication-state.ts";
 import { foldElapsed, nextTimerState } from "../db/timer-state.ts";
 import { reviewIntervalDays } from "../db/review-cadence.ts";
+import {
+  mergePersonalLeetCodeQuestionMetadata,
+  validateLeetCodeQuestionMetadata,
+} from "../db/question-metadata.ts";
 import { mutationFailureDisposition } from "../app/mutation-queue.ts";
 import { applyTimerSync, timerSyncChanged } from "../app/timer-reconciliation.ts";
 import { isJournalPath, journalBranch, parsePorcelain } from "../scripts/journal-branch.mjs";
@@ -70,6 +74,75 @@ test("review cadence starts at four days and advances successful recall", () => 
   assert.equal(reviewIntervalDays("approach_review"), 7);
   assert.equal(reviewIntervalDays("successful_recall"), 21);
   assert.equal(reviewIntervalDays("successful_recall", 21), 60);
+});
+
+test("personal LeetCode metadata enrichment preserves prior values and merges provenance", () => {
+  const existing = {
+    problemNumber: 207,
+    difficulty: "medium",
+    acceptanceRate: 49.8,
+    topics: ["Graph"],
+    companyTags: ["TikTok"],
+    companySignals: [{
+      company: "TikTok",
+      window: "30 days",
+      frequencyScore: 2,
+      frequencyScale: 5,
+      capturedAt: "2026-07-01T12:00:00.000Z",
+    }],
+    metadataReferences: [{
+      title: "Saved company list",
+      url: "https://example.test/company-list",
+      accessedAt: "2026-07-01T12:00:00.000Z",
+    }],
+    metadataCapturedAt: Date.parse("2026-07-01T12:00:00.000Z"),
+  };
+  const merged = mergePersonalLeetCodeQuestionMetadata(existing, {
+    acceptanceRate: 50.2,
+    topics: ["Topological Sort", "graph"],
+    capturedAt: "2026-07-25T12:00:00.000Z",
+    sources: [{
+      title: "Course Schedule",
+      url: "https://leetcode.com/problems/course-schedule/",
+      accessedAt: "2026-07-25T12:00:00.000Z",
+    }],
+  });
+
+  assert.equal(merged.problemNumber, 207);
+  assert.equal(merged.difficulty, "medium");
+  assert.equal(merged.acceptanceRate, 50.2);
+  assert.deepEqual(merged.topics, ["Graph", "Topological Sort"]);
+  assert.deepEqual(merged.companyTags, ["TikTok"]);
+  assert.equal(merged.companySignals.length, 1);
+  assert.equal(merged.metadataReferences.length, 2);
+  assert.equal(merged.metadataCapturedAt, Date.parse("2026-07-25T12:00:00.000Z"));
+  assert.throws(() => validateLeetCodeQuestionMetadata({
+    acceptanceRate: 101,
+    capturedAt: "2026-07-25T12:00:00.000Z",
+    sources: [{
+      title: "Course Schedule",
+      url: "https://leetcode.com/problems/course-schedule/",
+      accessedAt: "2026-07-25T12:00:00.000Z",
+    }],
+  }), /Invalid LeetCode question metadata/);
+
+  const stale = mergePersonalLeetCodeQuestionMetadata(merged, {
+    problemNumber: 999,
+    difficulty: "hard",
+    acceptanceRate: 1,
+    topics: ["Breadth-First Search"],
+    capturedAt: "2026-07-20T12:00:00.000Z",
+    sources: [{
+      title: "Delayed metadata",
+      url: "https://example.test/delayed",
+      accessedAt: "2026-07-20T12:00:00.000Z",
+    }],
+  });
+  assert.equal(stale.problemNumber, 207);
+  assert.equal(stale.difficulty, "medium");
+  assert.equal(stale.acceptanceRate, 50.2);
+  assert.ok(stale.topics.includes("Breadth-First Search"));
+  assert.equal(stale.metadataCapturedAt, Date.parse("2026-07-25T12:00:00.000Z"));
 });
 
 test("finished activities enter the journal queue without a second toggle", () => {
@@ -250,6 +323,7 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   const answerAudio = await readFile(new URL("../drizzle/0006_shiny_legion.sql", import.meta.url), "utf8");
   const deliveryCoach = await readFile(new URL("../drizzle/0007_flat_may_parker.sql", import.meta.url), "utf8");
   const workbenches = await readFile(new URL("../drizzle/0011_workbenches_and_provisional_profiles.sql", import.meta.url), "utf8");
+  const personalMetadata = await readFile(new URL("../drizzle/0012_personal_leetcode_metadata.sql", import.meta.url), "utf8");
   for (const table of ["timers", "outcomes", "extra_activities", "live_sessions"]) {
     assert.match(live, new RegExp("CREATE TABLE `" + table + "`"));
   }
@@ -277,6 +351,9 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   assert.match(workbenches, /CREATE TABLE `provisional_solution_profiles`/);
   assert.match(workbenches, /ALTER TABLE `extra_activities` ADD `workbench_id` text/);
   assert.match(workbenches, /ALTER TABLE `live_sessions` ADD `workbench_id` text/);
+  assert.match(personalMetadata, /ALTER TABLE `owner_bank_questions` ADD `problem_number` integer/);
+  assert.match(personalMetadata, /ADD `acceptance_rate` real/);
+  assert.match(personalMetadata, /ADD `metadata_references` text DEFAULT '\[\]' NOT NULL/);
 });
 
 test("content highlights persist editable notes", async () => {
@@ -325,6 +402,8 @@ test("durable publishing keeps transcripts, review, notes, and four-day walkthro
   assert.match(bridge, /modelAnswer: z\.string\(\)\.min\(1\)/);
   assert.match(bridge, /solutionProfile: z\.object/);
   assert.match(bridge, /solutionProfileAction: z\.enum\(\["create_or_revise", "reuse_current"\]\)/);
+  assert.match(bridge, /questionMetadata: leetCodeQuestionMetadataSchema\.optional\(\)/);
+  assert.match(bridge, /input\.specialty !== "leetcode" && input\.finalization\.questionMetadata/);
   assert.match(bridge, /behavioralAnswer: z\.object/);
   assert.match(bridge, /"upsert_personal_bank_question"/);
   const durableStore = await readFile(new URL("../db/durable-practice.ts", import.meta.url), "utf8");
@@ -332,6 +411,21 @@ test("durable publishing keeps transcripts, review, notes, and four-day walkthro
   assert.match(durableStore, /Behavioral Solution Profiles require .*preferred personal answer/);
   assert.match(durableStore, /contentBank/);
   assert.match(durableStore, /canonicalQuestion\?\.solutionProfile/);
+  assert.match(durableStore, /mergePersonalLeetCodeQuestionMetadata/);
+  assert.match(durableStore, /changed during finalization; retry the finalization/);
+  assert.ok(
+    durableStore.indexOf("await enrichPersonalLeetCodeQuestion") < durableStore.indexOf(".insert(activityFinalizations)"),
+    "personal-question enrichment must finish before the finalization becomes ready",
+  );
+  assert.match(durableStore, /SELECT value FROM json_each\(\$\{ownerBankQuestions\.tags\}\)/);
+  const metadataSchema = await readFile(new URL("../db/question-metadata.ts", import.meta.url), "utf8");
+  assert.match(metadataSchema, /acceptanceRate: z\.number\(\)\.min\(0\)\.max\(100\)/);
+  assert.match(metadataSchema, /incomingCapturedAt >= existing\.metadataCapturedAt/);
+  assert.match(contract, /owner-private LeetCode question created from a public problem URL/i);
+  assert.match(contract, /Canonical Git-backed bank questions are never mutated/i);
+  const client = await readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8");
+  assert.match(client, /const mergedCanonical = canonical\[type\]\.map/);
+  assert.match(client, /ownerQuestion\.acceptanceRate \?\? question\.acceptanceRate/);
 });
 
 test("workbenches separate Today from the undated publication queue", async () => {

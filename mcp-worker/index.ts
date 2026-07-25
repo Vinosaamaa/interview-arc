@@ -19,6 +19,7 @@ import {
   type TimerAction,
 } from "../db/live-state";
 import { buildPracticeSnapshot, buildPublicationQueue, dateInPracticeTimeZone } from "../db/practice-snapshot";
+import { leetCodeQuestionMetadataSchema } from "../db/question-metadata";
 import {
   addPracticeNote,
   appendTranscriptTurns,
@@ -551,7 +552,7 @@ function createServer(ownerId: string) {
     "save_specialist_finalization",
     {
       description: "Save a specialist finalization bundle in D1. This does not publish Git artifacts, open a PR, or deploy.",
-      inputSchema: {
+      inputSchema: z.object({
         activityId: z.string().min(1),
         specialty: z.enum(["leetcode", "system_design", "behavioral"]),
         questionId: z.string().min(1).optional(),
@@ -580,6 +581,7 @@ function createServer(ownerId: string) {
             url: z.string().url(),
             accessedAt: z.string().min(1),
           })),
+          questionMetadata: leetCodeQuestionMetadataSchema.optional(),
           solutionProfileAction: z.enum(["create_or_revise", "reuse_current"]).optional(),
           solutionProfileDecision: z.object({
             reason: z.string().min(1),
@@ -610,7 +612,15 @@ function createServer(ownerId: string) {
             }).optional(),
           }).optional(),
         }),
-      },
+      }).superRefine((input, context) => {
+        if (input.specialty !== "leetcode" && input.finalization.questionMetadata) {
+          context.addIssue({
+            code: "custom",
+            path: ["finalization", "questionMetadata"],
+            message: "questionMetadata is supported only for LeetCode finalizations.",
+          });
+        }
+      }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async ({ activityId, specialty, questionId, finalization }) => {

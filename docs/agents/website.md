@@ -76,6 +76,8 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
   registry, private audio metadata, and per-answer delivery-analysis records.
   These rows are working state—not the
   published journal. Follow `../contracts/durable-practice-publishing.md`.
+- Follow the owner-private LeetCode metadata enrichment and preservation rules
+  in `../contracts/durable-practice-publishing.md`.
 - The Today view uses the current date in `America/Los_Angeles`. If no imported
   manifest exists for that date, render an empty current-day journal and let
   D1 hold the live work instead of falling back to the latest historical day.

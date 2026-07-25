@@ -16,6 +16,13 @@ import {
   reviewSchedules,
   specialistTasks,
 } from "./schema";
+import {
+  mergePersonalLeetCodeQuestionMetadata,
+  questionMetadataUpdateFields,
+  readStoredQuestionMetadata,
+  validateLeetCodeQuestionMetadata,
+  type LeetCodeQuestionMetadata,
+} from "./question-metadata";
 import { reviewIntervalDays, type ReviewReason } from "./review-cadence";
 
 export type Specialty = "leetcode" | "system_design" | "behavioral";
@@ -56,6 +63,7 @@ export type SpecialistFinalization = {
   alternatives?: Array<{ title: string; summary: string; time?: string; space?: string }>;
   edgeCases?: string[];
   references: Array<{ title: string; url: string; accessedAt: string }>;
+  questionMetadata?: LeetCodeQuestionMetadata;
   solutionProfileAction?: "create_or_revise" | "reuse_current";
   solutionProfileDecision?: {
     reason: string;
@@ -92,6 +100,41 @@ const TRANSCRIPT_SECTION = /transcript|conversation|raw exchange|verbatim/i;
 function normalizedTags(tags: string[]) {
   return [...new Set(tags.map((tag) => tag.trim().toLowerCase().replace(/[^a-z0-9+#.]+/g, "-")).filter(Boolean))]
     .slice(0, 32);
+}
+
+async function enrichPersonalLeetCodeQuestion(
+  ownerId: string,
+  questionId: string,
+  tags: string[],
+  metadata: LeetCodeQuestionMetadata | undefined,
+  nowMs: number,
+) {
+  const db = getDb();
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const rows = await db.select().from(ownerBankQuestions).where(and(
+      eq(ownerBankQuestions.ownerId, ownerId),
+      eq(ownerBankQuestions.specialty, "leetcode"),
+      eq(ownerBankQuestions.questionId, questionId),
+    ));
+    const question = rows[0];
+    if (!question) return;
+    const existingMetadata = readStoredQuestionMetadata(question);
+    const mergedMetadata = metadata
+      ? mergePersonalLeetCodeQuestionMetadata(existingMetadata, metadata)
+      : existingMetadata;
+    const updated = await db.update(ownerBankQuestions).set({
+      tags: normalizedTags([...((question.tags ?? []) as string[]), ...tags]),
+      ...questionMetadataUpdateFields(mergedMetadata),
+      updatedAt: nowMs,
+    }).where(and(
+      eq(ownerBankQuestions.ownerId, ownerId),
+      eq(ownerBankQuestions.specialty, "leetcode"),
+      eq(ownerBankQuestions.questionId, questionId),
+      eq(ownerBankQuestions.updatedAt, question.updatedAt),
+    )).returning({ questionId: ownerBankQuestions.questionId });
+    if (updated.length > 0) return;
+  }
+  throw new Error("The personal LeetCode question changed during finalization; retry the finalization.");
 }
 
 function validateSolutionProfile(specialty: Specialty, payload: SpecialistFinalization["solutionProfile"]) {
@@ -343,6 +386,12 @@ export async function saveSpecialistFinalization(
 ) {
   const db = getDb();
   const profileAction = payload.solutionProfileAction ?? "create_or_revise";
+  if (payload.questionMetadata) {
+    if (specialty !== "leetcode") {
+      throw new Error("Question metadata enrichment is currently supported only for LeetCode finalizations.");
+    }
+    validateLeetCodeQuestionMetadata(payload.questionMetadata);
+  }
   let currentProfile: typeof problemSolutionProfiles.$inferSelect | undefined;
   if (payload.complete) {
     if (!questionId) throw new Error("A complete finalization needs the stable questionId.");
@@ -396,6 +445,15 @@ export async function saveSpecialistFinalization(
     } else {
       validateSolutionProfile(specialty, payload.solutionProfile);
     }
+  }
+  if (payload.complete && specialty === "leetcode" && questionId) {
+    const profileTags = profileAction === "reuse_current"
+      ? ((currentProfile?.tags ?? []) as string[])
+      : normalizedTags(payload.solutionProfile?.tags ?? []);
+    // Enrichment is independently useful and idempotent. Complete it before
+    // the activity can become ready so a failed metadata write is safely
+    // retried instead of leaving a ready finalization without its bank update.
+    await enrichPersonalLeetCodeQuestion(ownerId, questionId, profileTags, payload.questionMetadata, nowMs);
   }
   const status = payload.complete ? "ready" : "draft";
   await db
@@ -736,6 +794,7 @@ export async function upsertOwnerBankQuestion(
   nowMs: number,
 ) {
   const db = getDb();
+  const tags = normalizedTags(question.tags ?? []);
   const values = {
     ownerId,
     specialty,
@@ -744,7 +803,15 @@ export async function upsertOwnerBankQuestion(
     prompt: question.prompt ?? null,
     url: question.url ?? null,
     source: question.source ?? "personal",
-    tags: normalizedTags(question.tags ?? []),
+    tags,
+    problemNumber: null,
+    difficulty: null,
+    acceptanceRate: null,
+    topics: [],
+    companyTags: [],
+    companySignals: [],
+    metadataReferences: [],
+    metadataCapturedAt: null,
     priority: question.priority ?? 0,
     targetMinutes: question.targetMinutes ?? (specialty === "leetcode" ? 40 : 60),
     active: question.active ?? true,
@@ -752,7 +819,30 @@ export async function upsertOwnerBankQuestion(
   };
   await db.insert(ownerBankQuestions).values(values).onConflictDoUpdate({
     target: [ownerBankQuestions.ownerId, ownerBankQuestions.specialty, ownerBankQuestions.questionId],
-    set: values,
+    set: {
+      title: values.title,
+      prompt: values.prompt,
+      url: values.url,
+      source: values.source,
+      ...(tags.length ? {
+        tags: sql`(
+          SELECT COALESCE(json_group_array(value), '[]')
+          FROM (
+            SELECT DISTINCT value
+            FROM (
+              SELECT value FROM json_each(${ownerBankQuestions.tags})
+              UNION ALL
+              SELECT value FROM json_each(${JSON.stringify(tags)})
+            )
+            WHERE value <> ''
+          )
+        )`,
+      } : {}),
+      priority: values.priority,
+      targetMinutes: values.targetMinutes,
+      active: values.active,
+      updatedAt: values.updatedAt,
+    },
   });
 }
 

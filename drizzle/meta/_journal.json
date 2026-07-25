@@ -85,6 +85,13 @@
       "when": 1784870400000,
       "tag": "0011_workbenches_and_provisional_profiles",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1784956800000,
+      "tag": "0012_personal_leetcode_metadata",
+      "breakpoints": true
     }
   ]
 }

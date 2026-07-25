@@ -129,6 +129,20 @@ export type PersonalQuestion = {
   url: string | null;
   source: string;
   tags: string[];
+  problemNumber: number | null;
+  difficulty: "easy" | "medium" | "hard" | null;
+  acceptanceRate: number | null;
+  topics: string[];
+  companyTags: string[];
+  companySignals: Array<{
+    company: string;
+    window: string;
+    frequencyScore: number;
+    frequencyScale: number;
+    capturedAt: string;
+  }>;
+  metadataReferences: Array<{ title: string; url: string; accessedAt: string }>;
+  metadataCapturedAt: number | null;
   priority: number;
   targetMinutes: number;
   active: boolean;

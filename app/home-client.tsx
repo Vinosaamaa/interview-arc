@@ -1632,27 +1632,65 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const pipSession =
     focusedSession ?? allSessions.find((session) => draft.sessionTimers[session.id]?.runningSince) ?? allSessions[0] ?? null;
 
-  function bankFor(type: ActivityType) {
-    const canonical = type === "leetcode"
-      ? content.questionBanks.leetcode
-      : type === "system_design"
-        ? content.questionBanks.systemDesign
-        : content.questionBanks.behavioral;
-    const personal = draft.personalQuestions.filter((question) => question.specialty === type).map((question): QuestionBankItem => ({
-      id: question.questionId,
-      title: question.title,
-      prompt: question.prompt ?? undefined,
-      url: question.url ?? undefined,
-      source: question.source,
-      topics: question.tags,
-      tags: question.tags,
-      priority: question.priority,
-      targetMinutes: question.targetMinutes,
-      active: question.active,
-    }));
-    const canonicalIds = new Set(canonical.map((question) => question.id));
-    return [...personal.filter((question) => !canonicalIds.has(question.id)), ...canonical];
-  }
+  const questionBanks = useMemo(() => {
+    const canonical: Record<ActivityType, QuestionBankItem[]> = {
+      leetcode: content.questionBanks.leetcode,
+      system_design: content.questionBanks.systemDesign,
+      behavioral: content.questionBanks.behavioral,
+    };
+    const personal = draft.personalQuestions.reduce<Record<ActivityType, QuestionBankItem[]>>((result, question) => {
+      result[question.specialty].push({
+        id: question.questionId,
+        title: question.title,
+        prompt: question.prompt ?? undefined,
+        url: question.url ?? undefined,
+        source: question.source,
+        problemNumber: question.problemNumber ?? undefined,
+        difficulty: question.difficulty ?? undefined,
+        acceptanceRate: question.acceptanceRate ?? undefined,
+        topics: question.topics ?? [],
+        tags: question.tags,
+        companyTags: question.companyTags ?? [],
+        companySignals: question.companySignals ?? [],
+        priority: question.priority,
+        targetMinutes: question.targetMinutes,
+        active: question.active,
+      });
+      return result;
+    }, { leetcode: [], system_design: [], behavioral: [] });
+    return Object.fromEntries((Object.keys(canonical) as ActivityType[]).map((type) => {
+      const personalById = new Map(personal[type].map((question) => [question.id, question]));
+      const canonicalIds = new Set(canonical[type].map((question) => question.id));
+      const mergedCanonical = canonical[type].map((question) => {
+        const ownerQuestion = personalById.get(question.id);
+        if (!ownerQuestion) return question;
+        const unique = (values: string[]) => [...new Set(values.filter(Boolean))];
+        const signals = new Map(
+          [...(question.companySignals ?? []), ...(ownerQuestion.companySignals ?? [])]
+            .map((signal) => [`${signal.company}\u0000${signal.window}\u0000${signal.capturedAt}`, signal]),
+        );
+        return {
+          ...question,
+          problemNumber: ownerQuestion.problemNumber ?? question.problemNumber,
+          difficulty: ownerQuestion.difficulty ?? question.difficulty,
+          acceptanceRate: ownerQuestion.acceptanceRate ?? question.acceptanceRate,
+          topics: unique([...question.topics, ...ownerQuestion.topics]),
+          tags: unique([...(question.tags ?? []), ...(ownerQuestion.tags ?? [])]),
+          companyTags: unique([...(question.companyTags ?? []), ...(ownerQuestion.companyTags ?? [])]),
+          companySignals: [...signals.values()],
+          priority: ownerQuestion.priority,
+          targetMinutes: ownerQuestion.targetMinutes,
+          active: ownerQuestion.active,
+        };
+      });
+      return [type, [
+        ...personal[type].filter((question) => !canonicalIds.has(question.id)),
+        ...mergedCanonical,
+      ]];
+    })) as Record<ActivityType, QuestionBankItem[]>;
+  }, [content.questionBanks, draft.personalQuestions]);
+
+  const bankFor = useCallback((type: ActivityType) => questionBanks[type], [questionBanks]);
 
   function isStarred(type: ActivityType, questionId?: string) {
     return Boolean(questionId && draft.problemPreferences.some((preference) => preference.specialty === type && preference.questionId === questionId && preference.starred));
@@ -2847,7 +2885,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     } catch {
       window.sessionStorage.removeItem("interview-arc-selected-bank");
     }
-  }, [content.questionBanks, draft.personalQuestions, selectedProblem]);
+  }, [bankFor, selectedProblem]);
 
   function transitionToView(nextView: View) {
     if (nextView === view) return;
