@@ -2,6 +2,12 @@
 
 Read `README.md` before starting work. Interview Arc is a personal interview-preparation journal, not a LeetCode clone or a general-purpose chatbot.
 
+Before creating, implementing, closing, or reopening GitHub work, read and
+follow [`docs/agents/issue-lifecycle.md`](docs/agents/issue-lifecycle.md).
+Every non-emergency product change starts with an issue in the repository that
+owns the behavior. Repository routing, PR linkage, release verification,
+resolution records, and postmortem requirements are defined there.
+
 ## Task Routing
 
 Use the closest specialist guide and keep work in its owning area:
