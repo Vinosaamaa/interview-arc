@@ -1632,32 +1632,39 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const pipSession =
     focusedSession ?? allSessions.find((session) => draft.sessionTimers[session.id]?.runningSince) ?? allSessions[0] ?? null;
 
-  function bankFor(type: ActivityType) {
-    const canonical = type === "leetcode"
-      ? content.questionBanks.leetcode
-      : type === "system_design"
-        ? content.questionBanks.systemDesign
-        : content.questionBanks.behavioral;
-    const personal = draft.personalQuestions.filter((question) => question.specialty === type).map((question): QuestionBankItem => ({
-      id: question.questionId,
-      title: question.title,
-      prompt: question.prompt ?? undefined,
-      url: question.url ?? undefined,
-      source: question.source,
-      problemNumber: question.problemNumber ?? undefined,
-      difficulty: question.difficulty ?? undefined,
-      acceptanceRate: question.acceptanceRate ?? undefined,
-      topics: question.topics ?? [],
-      tags: question.tags,
-      companyTags: question.companyTags ?? [],
-      companySignals: question.companySignals ?? [],
-      priority: question.priority,
-      targetMinutes: question.targetMinutes,
-      active: question.active,
-    }));
-    const canonicalIds = new Set(canonical.map((question) => question.id));
-    return [...personal.filter((question) => !canonicalIds.has(question.id)), ...canonical];
-  }
+  const questionBanks = useMemo(() => {
+    const canonical: Record<ActivityType, QuestionBankItem[]> = {
+      leetcode: content.questionBanks.leetcode,
+      system_design: content.questionBanks.systemDesign,
+      behavioral: content.questionBanks.behavioral,
+    };
+    const personal = draft.personalQuestions.reduce<Record<ActivityType, QuestionBankItem[]>>((result, question) => {
+      result[question.specialty].push({
+        id: question.questionId,
+        title: question.title,
+        prompt: question.prompt ?? undefined,
+        url: question.url ?? undefined,
+        source: question.source,
+        problemNumber: question.problemNumber ?? undefined,
+        difficulty: question.difficulty ?? undefined,
+        acceptanceRate: question.acceptanceRate ?? undefined,
+        topics: question.topics ?? [],
+        tags: question.tags,
+        companyTags: question.companyTags ?? [],
+        companySignals: question.companySignals ?? [],
+        priority: question.priority,
+        targetMinutes: question.targetMinutes,
+        active: question.active,
+      });
+      return result;
+    }, { leetcode: [], system_design: [], behavioral: [] });
+    return Object.fromEntries((Object.keys(canonical) as ActivityType[]).map((type) => {
+      const canonicalIds = new Set(canonical[type].map((question) => question.id));
+      return [type, [...personal[type].filter((question) => !canonicalIds.has(question.id)), ...canonical[type]]];
+    })) as Record<ActivityType, QuestionBankItem[]>;
+  }, [content.questionBanks, draft.personalQuestions]);
+
+  const bankFor = useCallback((type: ActivityType) => questionBanks[type], [questionBanks]);
 
   function isStarred(type: ActivityType, questionId?: string) {
     return Boolean(questionId && draft.problemPreferences.some((preference) => preference.specialty === type && preference.questionId === questionId && preference.starred));
@@ -2852,7 +2859,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     } catch {
       window.sessionStorage.removeItem("interview-arc-selected-bank");
     }
-  }, [content.questionBanks, draft.personalQuestions, selectedProblem]);
+  }, [bankFor, selectedProblem]);
 
   function transitionToView(nextView: View) {
     if (nextView === view) return;
