@@ -311,8 +311,13 @@ test("activity composer keeps specialty controls independent and contains every 
   assert.match(client, /ref=\{composerListRef\}/);
   assert.match(client, /COMPOSER_SORT_OPTIONS/);
   assert.match(client, /activity-card-meta/);
+  assert.match(client, /function composerQuestionMetadata/);
+  assert.match(client, /acceptanceRate\.toFixed\(1\).*% acceptance/);
+  assert.match(client, /frequencyScore.*frequencyScale.*frequency/);
   assert.match(css, /\.activity-card-meta > span \{[^}]*text-overflow: ellipsis;/);
   assert.match(css, /\.activity-card-meta > em \{[^}]*white-space: nowrap;/);
+  assert.match(css, /\.activity-composer-dialog \.bank-results \{[^}]*max-height: min\(280px, 34vh\);/);
+  assert.match(css, /\.custom-activity-actions \.primary-action \{[^}]*color: white;/);
   assert.match(css, /\.activity-selection-footer \{[^}]*bottom: 0;/);
   assert.match(css, /grid-template-columns: minmax\(110px, 1fr\) auto 160px 160px;/);
 });

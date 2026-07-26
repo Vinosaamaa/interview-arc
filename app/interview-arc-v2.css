@@ -564,7 +564,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   font-family: var(--font-geist-mono);
   font-size: .62rem;
 }
-.bank-results { max-height: min(360px, 42vh); }
+.activity-composer-dialog .bank-results { max-height: min(280px, 34vh); }
 .bank-results button { grid-template-columns: auto minmax(0, 1fr) auto; }
 .bank-results button > div { min-width: 0; }
 .activity-card-meta {
@@ -642,6 +642,17 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .custom-activity-card > p { margin: 0; padding: 10px 12px; border-left: 3px solid #bd9440; background: #fff9e9; color: #695d43; font-size: .76rem; line-height: 1.45; }
 .custom-activity-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .custom-activity-actions button { min-height: 39px; padding: 0 14px; border: 1px solid #aeb9af; border-radius: 8px; background: white; font-weight: 740; cursor: pointer; }
+.custom-activity-actions .primary-action {
+  border-color: var(--primary-deep);
+  background: var(--primary-deep);
+  color: white;
+}
+.custom-activity-actions .primary-action:hover { background: #0b514d; }
+.custom-activity-actions .primary-action:disabled {
+  border-color: #aeb9af;
+  background: #eef1ed;
+  color: #718078;
+}
 .selection-review {
   padding: 15px;
   border: 1px solid #c4cec5;
