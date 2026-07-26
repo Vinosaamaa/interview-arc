@@ -36,6 +36,30 @@ fail, including a later regression. Create a new linked issue only when
 evidence establishes a separate problem, materially expanded scope, or an
 independently deliverable result.
 
+## Mandatory reproduction gate
+
+For every reported bug, complete a diagnosis pass before changing product
+code:
+
+1. Reproduce the exact reported flow in the affected released product when it
+   is safe to do so. Match the relevant screen size, zoom or text scale, theme,
+   selected tab, saved state, and input data.
+2. Classify the report as **Confirmed**, **Intermittent**, **Not reproduced**,
+   or **Expected behavior**. Never describe a hypothesis as reproduced fact.
+3. Capture the evidence that supports the classification: screenshots,
+   recordings, logs, database state, accessibility state, source inspection,
+   or a minimal test case.
+4. Identify confirmed root cause when possible. Otherwise record the leading
+   hypothesis, the missing evidence, and the next diagnostic step.
+5. Explain whether the behavior is fixable, the proposed implementation
+   approach, affected states, risks, and likely regression coverage.
+6. When the user asks for diagnosis before implementation, stop after reporting
+   these findings and wait for approval before changing product code.
+
+After implementation, repeat the original reproduction steps against the
+changed build and the released product. A nearby happy-path test is not a
+substitute for rerunning the exact reported flow.
+
 ## Issue-first rule
 
 Every non-emergency product change begins with an issue. Urgent containment may
