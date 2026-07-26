@@ -205,6 +205,27 @@ A complete review may cover:
 
 Clearly distinguish user work from generated coaching material.
 
+## Voice intent and exact code boundaries
+
+For an `interview-arc-voice:v2` envelope, classify the same model turn with
+`resolve_voice_capture` before treating it as durable practice evidence:
+
+- `activity_related` only when it belongs to the focused LeetCode activity;
+- `unrelated` for website, tooling, or other administrative speech;
+- `uncertain` when the turn itself is insufficient to decide.
+
+Never append an enveloped user turn separately. For `unrelated`, return exactly
+`*Not attached to this practice activity · Transcript not saved · Recording not uploaded*`
+and do not persist that receipt. For unrelated typed administration, return
+exactly `*Not attached to this practice activity · Not saved to the practice transcript or publication*`.
+
+An exact code block becomes a Code Attempt only when the user explicitly says
+it is an attempt/submission/final code or confirms the specialist's boundary
+question. Then call `save_leetcode_code_attempt` with the exact code,
+language, originating turn, observed evidence, and a declaration that does not
+invent platform correctness. Ordinary snippets, pseudocode, generated
+reference implementations, and Scratch Notes are not Code Attempts.
+
 Every created or revised reusable coding Solution Profile must be independently
 reviewable in the Problem Bank. Include, in order: problem summary, pattern and
 constraints, best approach, correctness argument, **Java first** and Python

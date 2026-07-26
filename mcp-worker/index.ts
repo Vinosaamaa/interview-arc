@@ -24,20 +24,33 @@ import {
   addPracticeNote,
   appendTranscriptTurns,
   appendVoiceTranscriptTurn,
+  beginDeleteVoiceCapture,
   clearActivityReviewSchedules,
+  commitRelatedVoiceCapture,
+  completeDeleteVoiceCapture,
+  failDeleteVoiceCapture,
   markFinalizationPublished,
+  prepareLegacyVoiceCaptureDeletion,
+  readActivityAudioClip,
   readActivityPracticeRecord,
+  readLikelyLegacyVoiceOrphans,
   readProblemSolutionProfile,
   readSpecialistTasks,
+  readVoiceCaptureIntent,
+  readVoiceCaptureIntents,
+  registerVoiceCaptureIntent,
   registerActivityAudioClip,
   registerSpecialistTask,
+  resolveVoiceCaptureIntent,
   saveActivityDeliveryAnalysis,
+  saveLeetCodeCodeAttempt,
   saveProvisionalSolutionProfile,
   saveSpecialistFinalization,
   scheduleReview,
   setProblemStar,
   updateActivityAudioClipStatus,
   upsertOwnerBankQuestion,
+  unresolvedVoiceCaptureCount,
 } from "../db/durable-practice";
 
 interface Env {
@@ -51,6 +64,7 @@ function safeAudioFilename(value: string) {
 
 async function uploadPracticeAudio(ownerId: string, request: Request, env: Env) {
   const form = await request.formData();
+  const captureId = String(form.get("captureId") ?? "").trim();
   const requestedClipId = String(form.get("clipId") ?? "").trim();
   const activityId = String(form.get("activityId") ?? "").trim();
   const transcriptTurnId = String(form.get("transcriptTurnId") ?? "").trim() || undefined;
@@ -58,9 +72,17 @@ async function uploadPracticeAudio(ownerId: string, request: Request, env: Env) 
   const durationValue = Number(form.get("durationSeconds") ?? "");
   const durationSeconds = Number.isFinite(durationValue) && durationValue >= 0 ? Math.round(durationValue) : undefined;
   const file = form.get("file");
+  const intent = captureId ? await readVoiceCaptureIntent(ownerId, captureId) : null;
   if ((requestedClipId && !/^[a-zA-Z0-9._-]{1,120}$/.test(requestedClipId))
       || !activityId || !(file instanceof File) || !file.type.startsWith("audio/") || file.size === 0 || file.size > 100 * 1024 * 1024) {
     return json(request, { error: "An activityId and non-empty audio file no larger than 100 MB are required." }, { status: 400 });
+  }
+  if (captureId && (!intent
+      || intent.status !== "accepted"
+      || intent.activityId !== activityId
+      || intent.turnId !== transcriptTurnId
+      || intent.clipId !== requestedClipId)) {
+    return json(request, { error: "Audio upload requires the matching accepted voice-capture intent." }, { status: 409 });
   }
   const clipId = requestedClipId || crypto.randomUUID();
   const filename = safeAudioFilename(file.name);
@@ -79,7 +101,7 @@ async function uploadPracticeAudio(ownerId: string, request: Request, env: Env) 
   return json(request, { clipId, activityId, transcriptTurnId: transcriptTurnId ?? null, filename, mimeType: file.type, label, durationSeconds: durationSeconds ?? null, status: "available" }, { status: 201 });
 }
 
-const VOICE_PROTOCOL_VERSION = 1;
+const VOICE_PROTOCOL_VERSION = 2;
 
 function voiceSpecialty(value: "leetcode" | "system_design" | "behavioral") {
   return value === "leetcode" ? "coding" : value === "system_design" ? "system-design" : "behavioral";
@@ -237,6 +259,12 @@ async function voiceTimerMutation(ownerId: string, request: Request) {
       if (!activity || !activity.timer?.startedAt) {
         return json(request, { error: "Start the activity stopwatch before finishing it." }, { status: 409 });
       }
+      const unresolvedCaptures = await unresolvedVoiceCaptureCount(ownerId, activity.id);
+      if (unresolvedCaptures > 0) {
+        return json(request, {
+          error: `Resolve ${unresolvedCaptures} pending voice capture${unresolvedCaptures === 1 ? "" : "s"} before finishing this activity.`,
+        }, { status: 409 });
+      }
       await setOutcome(ownerId, activity.id, mutation.outcome, now);
       if (activity.questionId) {
         await setProblemStar(ownerId, activity.type, activity.questionId, mutation.starred, now);
@@ -266,6 +294,8 @@ async function saveVoiceCapture(ownerId: string, request: Request) {
     activityId?: string;
     specialty?: "leetcode" | "system_design" | "behavioral";
     turnId?: string;
+    captureId?: string;
+    checksum?: string;
     transcript?: string;
     occurredAt?: number;
   };
@@ -274,20 +304,132 @@ async function saveVoiceCapture(ownerId: string, request: Request) {
   }
   const activityId = body.activityId?.trim() ?? "";
   const turnId = body.turnId?.trim() ?? "";
+  const captureId = body.captureId?.trim() ?? "";
+  const checksum = body.checksum?.trim() ?? "";
   const transcript = body.transcript?.trim() ?? "";
   const specialty = body.specialty;
   const occurredAt = Number.isFinite(body.occurredAt) ? Number(body.occurredAt) : Date.now();
   if (!activityId || !specialty || !turnId || !transcript || transcript.length > 200_000) {
     return json(request, { error: "A focused activity, specialty, stable turnId, and transcript are required." }, { status: 400 });
   }
+  if (!captureId || !checksum) {
+    const snapshot = await buildPracticeSnapshot(ownerId, dateInPracticeTimeZone(), { includeAll: true });
+    const activity = snapshot.activities.find((candidate) => candidate.id === activityId);
+    const beganWhileRunning = await activityTimerWasRunningAt(ownerId, activityId, occurredAt);
+    if (!activity || activity.type !== specialty || !beganWhileRunning) {
+      return json(request, { error: "The legacy recording did not begin while this activity stopwatch was running." }, { status: 409 });
+    }
+    const turn = await appendVoiceTranscriptTurn(ownerId, {
+      activityId,
+      specialty,
+      turnId,
+      body: transcript,
+      occurredAt,
+    }, Date.now());
+    return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, turn, legacyAccepted: true }, { status: 201 });
+  }
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(transcript));
+  const actualChecksum = [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
+  if (actualChecksum !== checksum) {
+    return json(request, { error: "Transcript checksum does not match the registered capture." }, { status: 409 });
+  }
+  const turn = await commitRelatedVoiceCapture(ownerId, {
+    captureId,
+    activityId,
+    specialty,
+    turnId,
+    transcript,
+    checksum,
+    occurredAt,
+  }, Date.now());
+  return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, turn }, { status: 201 });
+}
+
+async function registerVoiceIntent(ownerId: string, request: Request) {
+  const body = (await request.json()) as {
+    protocolVersion?: number;
+    captureId?: string;
+    activityId?: string;
+    turnId?: string;
+    clipId?: string;
+    specialty?: "leetcode" | "system_design" | "behavioral";
+    checksum?: string;
+    occurredAt?: number;
+  };
+  if (body.protocolVersion !== VOICE_PROTOCOL_VERSION) {
+    return json(request, { error: "Unsupported Interview Arc Voice protocol version." }, { status: 409 });
+  }
+  const input = {
+    captureId: body.captureId?.trim() ?? "",
+    activityId: body.activityId?.trim() ?? "",
+    turnId: body.turnId?.trim() ?? "",
+    clipId: body.clipId?.trim() ?? "",
+    specialty: body.specialty,
+    checksum: body.checksum?.trim().toLowerCase() ?? "",
+    occurredAt: Number.isFinite(body.occurredAt) ? Number(body.occurredAt) : Date.now(),
+  };
+  if (!input.captureId || !input.activityId || !input.turnId || !input.clipId || !input.specialty
+      || !/^[a-f0-9]{64}$/.test(input.checksum)) {
+    return json(request, { error: "Complete capture identity, specialty, and SHA-256 checksum are required." }, { status: 400 });
+  }
   const snapshot = await buildPracticeSnapshot(ownerId, dateInPracticeTimeZone(), { includeAll: true });
-  const activity = snapshot.activities.find((candidate) => candidate.id === activityId);
-  const beganWhileRunning = await activityTimerWasRunningAt(ownerId, activityId, occurredAt);
-  if (!activity || activity.type !== specialty || !beganWhileRunning) {
+  const activity = snapshot.activities.find((candidate) => candidate.id === input.activityId);
+  const beganWhileRunning = await activityTimerWasRunningAt(ownerId, input.activityId, input.occurredAt);
+  if (!activity || activity.type !== input.specialty || !beganWhileRunning) {
     return json(request, { error: "The recording did not begin while this Interview Arc activity stopwatch was running." }, { status: 409 });
   }
-  const turn = await appendVoiceTranscriptTurn(ownerId, { activityId, specialty, turnId, body: transcript, occurredAt }, Date.now());
-  return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, turn }, { status: 201 });
+  const intent = await registerVoiceCaptureIntent(ownerId, input as Parameters<typeof registerVoiceCaptureIntent>[1], Date.now());
+  return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, intent }, { status: 201 });
+}
+
+async function listVoiceIntents(ownerId: string, request: Request) {
+  const ids = new URL(request.url).searchParams.getAll("captureId").map((value) => value.trim()).filter(Boolean);
+  const [intents, legacyOrphans] = await Promise.all([
+    readVoiceCaptureIntents(ownerId, ids.length ? ids : undefined),
+    ids.length ? Promise.resolve([]) : readLikelyLegacyVoiceOrphans(ownerId),
+  ]);
+  return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, intents, legacyOrphans });
+}
+
+async function decideVoiceIntent(ownerId: string, request: Request, captureId: string) {
+  const body = (await request.json()) as {
+    protocolVersion?: number;
+    decision?: "activity_related" | "unrelated" | "uncertain";
+    reason?: string;
+  };
+  if (body.protocolVersion !== VOICE_PROTOCOL_VERSION || !body.decision) {
+    return json(request, { error: "A supported protocol version and decision are required." }, { status: 400 });
+  }
+  const intent = await resolveVoiceCaptureIntent(
+    ownerId,
+    captureId,
+    body.decision,
+    "voice-user",
+    body.reason ?? "Resolved from the local pending-capture card.",
+    Date.now(),
+  );
+  return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, intent });
+}
+
+async function deleteVoiceCaptureGraph(ownerId: string, request: Request, env: Env, captureId: string) {
+  const intent = await beginDeleteVoiceCapture(ownerId, captureId, Date.now());
+  try {
+    const clip = await readActivityAudioClip(ownerId, intent.clipId);
+    if (clip?.objectKey && !clip.objectKey.startsWith("local-only/")) {
+      await env.AUDIO.delete(clip.objectKey);
+    }
+    await completeDeleteVoiceCapture(ownerId, captureId, Date.now());
+    return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, captureId, status: "deleted" });
+  } catch (error) {
+    await failDeleteVoiceCapture(ownerId, captureId, error instanceof Error ? error.message : String(error), Date.now());
+    throw error;
+  }
+}
+
+async function deleteLegacyVoiceCaptureGraph(ownerId: string, request: Request, env: Env, clipId: string) {
+  const intent = await prepareLegacyVoiceCaptureDeletion(ownerId, clipId, Date.now());
+  if (!intent) throw new Error("Legacy Voice capture not found.");
+  return deleteVoiceCaptureGraph(ownerId, request, env, intent.captureId);
 }
 
 async function saveVoiceDelivery(ownerId: string, request: Request) {
@@ -315,7 +457,7 @@ function corsHeaders(request: Request) {
   return {
     ...(allowedOrigin ? { "access-control-allow-origin": allowedOrigin } : {}),
     "access-control-allow-headers": "authorization, content-type",
-    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
     "access-control-max-age": "86400",
     vary: "Origin",
   };
@@ -395,6 +537,14 @@ async function companionMutation(ownerId: string, request: Request) {
       : undefined;
     if (mutation.action === "finish" && !activity?.timer?.startedAt) {
       return json(request, { error: "Start the activity stopwatch before finishing it." }, { status: 409 });
+    }
+    if (mutation.action === "finish") {
+      const unresolvedCaptures = await unresolvedVoiceCaptureCount(ownerId, mutation.activityId);
+      if (unresolvedCaptures > 0) {
+        return json(request, {
+          error: `Resolve ${unresolvedCaptures} pending voice capture${unresolvedCaptures === 1 ? "" : "s"} before finishing this activity.`,
+        }, { status: 409 });
+      }
     }
     if (mutation.action === "start" && session && !snapshot.sessionTimers[session.id]?.completed) {
       await applyTimerAction(ownerId, session.id, "session", "start", now, { activityIds: session.activityIds });
@@ -520,6 +670,73 @@ function createServer(ownerId: string) {
       return {
         content: [{ type: "text", text: `Saved ${turns.length} transcript turn${turns.length === 1 ? "" : "s"} for ${activityId}.` }],
         structuredContent: { activityId, saved: turns.length },
+      };
+    },
+  );
+
+  server.registerTool(
+    "resolve_voice_capture",
+    {
+      description: "Classify one protocol-v2 Voice turn from its stable envelope. Use activity_related only when the same model turn belongs to the focused practice activity; use unrelated for admin/off-topic speech and uncertain when evidence is insufficient.",
+      inputSchema: {
+        captureId: z.string().min(1),
+        activityId: z.string().min(1),
+        turnId: z.string().min(1),
+        decision: z.enum(["activity_related", "unrelated", "uncertain"]),
+        reason: z.string().min(1).max(2_000),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ captureId, activityId, turnId, decision, reason }) => {
+      const existing = await readVoiceCaptureIntent(ownerId, captureId);
+      if (!existing || existing.activityId !== activityId || existing.turnId !== turnId) {
+        throw new Error("The capture envelope does not match the registered owner-scoped intent.");
+      }
+      const intent = await resolveVoiceCaptureIntent(
+        ownerId,
+        captureId,
+        decision,
+        "specialist",
+        reason,
+        Date.now(),
+      );
+      const receipt = decision === "unrelated"
+        ? "*Not attached to this practice activity · Transcript not saved · Recording not uploaded*"
+        : null;
+      return {
+        content: [{ type: "text", text: receipt ?? `Voice capture classified as ${decision}.` }],
+        structuredContent: { captureId, activityId, turnId, decision, status: intent?.status, receipt },
+      };
+    },
+  );
+
+  server.registerTool(
+    "save_leetcode_code_attempt",
+    {
+      description: "Save an exact owner-provided LeetCode attempt after an explicit attempt boundary. Ordinary snippets and generated reference solutions must not use this tool.",
+      inputSchema: {
+        id: z.string().min(1),
+        activityId: z.string().min(1),
+        originatingTurnId: z.string().min(1),
+        sequence: z.number().int().positive(),
+        language: z.string().min(1).max(40),
+        code: z.string().min(1).max(300_000),
+        occurredAt: z.number().int().positive(),
+        review: z.unknown().optional(),
+        observedCorrectness: z.enum(["not_verified", "appears_correct", "issues_found", "incomplete"]),
+        concreteFindings: z.array(z.string()).max(100),
+        edgeCases: z.array(z.string()).max(100),
+        complexity: z.object({ time: z.string().optional(), space: z.string().optional() }).optional(),
+        finalDeclaration: z.string().min(1).max(2_000),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      await saveLeetCodeCodeAttempt(ownerId, input, Date.now());
+      const lineCount = input.code.split(/\r?\n/).length;
+      return {
+        content: [{ type: "text", text: `Saved Code Attempt ${input.sequence} · ${input.language} · ${lineCount} lines.` }],
+        structuredContent: { id: input.id, activityId: input.activityId, sequence: input.sequence, language: input.language, lineCount },
       };
     },
   );
@@ -964,8 +1181,26 @@ export default {
     if (url.pathname === "/voice/timers" && request.method === "POST") {
       return voiceTimerMutation(ownerId, request);
     }
+    if (url.pathname === "/voice/intents" && request.method === "POST") {
+      return registerVoiceIntent(ownerId, request);
+    }
+    if (url.pathname === "/voice/intents" && request.method === "GET") {
+      return listVoiceIntents(ownerId, request);
+    }
+    const voiceIntentDecision = url.pathname.match(/^\/voice\/intents\/([^/]+)\/decision$/);
+    if (voiceIntentDecision && request.method === "POST") {
+      return decideVoiceIntent(ownerId, request, decodeURIComponent(voiceIntentDecision[1]));
+    }
     if (url.pathname === "/voice/captures" && request.method === "POST") {
       return saveVoiceCapture(ownerId, request);
+    }
+    const voiceCaptureDelete = url.pathname.match(/^\/voice\/captures\/([^/]+)$/);
+    if (voiceCaptureDelete && request.method === "DELETE") {
+      return deleteVoiceCaptureGraph(ownerId, request, env, decodeURIComponent(voiceCaptureDelete[1]));
+    }
+    const legacyVoiceCaptureDelete = url.pathname.match(/^\/voice\/legacy-orphans\/([^/]+)$/);
+    if (legacyVoiceCaptureDelete && request.method === "DELETE") {
+      return deleteLegacyVoiceCaptureGraph(ownerId, request, env, decodeURIComponent(legacyVoiceCaptureDelete[1]));
     }
     if (url.pathname === "/voice/delivery" && request.method === "POST") {
       return saveVoiceDelivery(ownerId, request);

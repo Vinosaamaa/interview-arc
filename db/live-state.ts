@@ -6,6 +6,7 @@ import {
   activityDeliveryAnalyses,
   activityFinalizations,
   extraActivities,
+  leetcodeCodeAttempts,
   liveSessions,
   outcomes,
   practiceFocus,
@@ -19,9 +20,10 @@ import {
   reviewSchedules,
   type ExtraActivityRow,
   type LiveSessionRow,
+  voiceCaptureIntents,
 } from "./schema";
 import { foldElapsed, nextTimerState } from "./timer-state";
-import { readDurablePracticeSummary } from "./durable-practice";
+import { readDurablePracticeSummary, unresolvedVoiceCaptureCount } from "./durable-practice";
 
 export type TimerKind = "activity" | "session";
 export type TimerAction = "start" | "pause" | "finish";
@@ -573,6 +575,12 @@ export async function applyTimerAction(
   if (existing?.completed) return toTimerState(existing);
 
   if (action === "finish" && kind === "activity") {
+    const unresolvedCaptures = await unresolvedVoiceCaptureCount(ownerId, subjectId);
+    if (unresolvedCaptures > 0) {
+      throw new TimerStateConflictError(
+        `Resolve ${unresolvedCaptures} pending voice capture${unresolvedCaptures === 1 ? "" : "s"} before finishing this activity.`,
+      );
+    }
     const result = await db
       .select()
       .from(outcomes)
@@ -610,6 +618,12 @@ export async function applyTimerAction(
     for (const activityId of activityIds) {
       const child = await loadTimer(db, ownerId, activityId, "activity");
       if (!child?.startedAt) continue;
+      const unresolvedCaptures = await unresolvedVoiceCaptureCount(ownerId, activityId);
+      if (unresolvedCaptures > 0) {
+        throw new TimerStateConflictError(
+          `Resolve ${unresolvedCaptures} pending voice capture${unresolvedCaptures === 1 ? "" : "s"} before finishing this session.`,
+        );
+      }
       const result = await db
         .select()
         .from(outcomes)
@@ -966,6 +980,8 @@ export async function removeExtraActivity(ownerId: string, id: string) {
     delivery,
     reviews,
     intervals,
+    codeAttempts,
+    captureIntents,
   ] = await Promise.all([
     loadTimer(db, ownerId, id, "activity"),
     db.select().from(outcomes).where(and(eq(outcomes.ownerId, ownerId), eq(outcomes.activityId, id))),
@@ -981,6 +997,8 @@ export async function removeExtraActivity(ownerId: string, id: string) {
       eq(timerIntervals.subjectId, id),
       eq(timerIntervals.kind, "activity"),
     )),
+    db.select().from(leetcodeCodeAttempts).where(and(eq(leetcodeCodeAttempts.ownerId, ownerId), eq(leetcodeCodeAttempts.activityId, id))),
+    db.select().from(voiceCaptureIntents).where(and(eq(voiceCaptureIntents.ownerId, ownerId), eq(voiceCaptureIntents.activityId, id))),
   ]);
   if (
     timer?.startedAt ||
@@ -992,7 +1010,9 @@ export async function removeExtraActivity(ownerId: string, id: string) {
     notes.length ||
     delivery.length ||
     reviews.length ||
-    intervals.length
+    intervals.length ||
+    codeAttempts.length ||
+    captureIntents.length
   ) {
     throw new TimerStateConflictError("Only an untouched activity can be removed. Started work stays in your history.");
   }
@@ -1006,6 +1026,8 @@ export async function removeExtraActivity(ownerId: string, id: string) {
   await db.delete(activityAudioClips).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.activityId, id)));
   await db.delete(activityDeliveryAnalyses).where(and(eq(activityDeliveryAnalyses.ownerId, ownerId), eq(activityDeliveryAnalyses.activityId, id)));
   await db.delete(reviewSchedules).where(and(eq(reviewSchedules.ownerId, ownerId), eq(reviewSchedules.activityId, id)));
+  await db.delete(leetcodeCodeAttempts).where(and(eq(leetcodeCodeAttempts.ownerId, ownerId), eq(leetcodeCodeAttempts.activityId, id)));
+  await db.delete(voiceCaptureIntents).where(and(eq(voiceCaptureIntents.ownerId, ownerId), eq(voiceCaptureIntents.activityId, id)));
   await db.delete(timers).where(and(eq(timers.ownerId, ownerId), eq(timers.subjectId, id), eq(timers.kind, "activity")));
   await db.delete(timerIntervals).where(and(eq(timerIntervals.ownerId, ownerId), eq(timerIntervals.subjectId, id), eq(timerIntervals.kind, "activity")));
   await db

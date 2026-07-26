@@ -206,6 +206,61 @@ export const practiceTranscriptTurns = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.activityId, table.turnId] })],
 );
 
+// Voice protocol v2 registers only stable identity and checksum until the
+// specialist decides whether the Codex turn belongs to the focused activity.
+// Transcript text and audio remain local while this row is unresolved.
+export const voiceCaptureIntents = sqliteTable(
+  "voice_capture_intents",
+  {
+    ownerId,
+    captureId: text("capture_id").notNull(),
+    activityId: text("activity_id").notNull(),
+    turnId: text("turn_id").notNull(),
+    clipId: text("clip_id").notNull(),
+    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
+    status: text("status", {
+      enum: ["pending", "activity_related", "accepted", "unrelated", "uncertain", "deleting", "deleted"],
+    }).notNull().default("pending"),
+    checksum: text("checksum").notNull(),
+    occurredAt: integer("occurred_at").notNull(),
+    decidedAt: integer("decided_at"),
+    decisionSource: text("decision_source"),
+    decisionReason: text("decision_reason"),
+    lastError: text("last_error"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.captureId] })],
+);
+
+// Exact user code is versioned independently from the generated reference
+// solution. A specialist creates this only across an explicit attempt boundary.
+export const leetcodeCodeAttempts = sqliteTable(
+  "leetcode_code_attempts",
+  {
+    ownerId,
+    id: text("id").notNull(),
+    activityId: text("activity_id").notNull(),
+    originatingTurnId: text("originating_turn_id").notNull(),
+    sequence: integer("sequence").notNull(),
+    language: text("language").notNull(),
+    code: text("code").notNull(),
+    lineCount: integer("line_count").notNull(),
+    occurredAt: integer("occurred_at").notNull(),
+    review: text("review", { mode: "json" }),
+    observedCorrectness: text("observed_correctness", {
+      enum: ["not_verified", "appears_correct", "issues_found", "incomplete"],
+    }).notNull().default("not_verified"),
+    concreteFindings: text("concrete_findings", { mode: "json" }).notNull(),
+    edgeCases: text("edge_cases", { mode: "json" }).notNull(),
+    complexity: text("complexity", { mode: "json" }),
+    finalDeclaration: text("final_declaration").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.id] })],
+);
+
 // A specialist writes one ready bundle after flushing its draft. The
 // coordinator consumes this JSON payload to render versioned Markdown; writing
 // this row is finalization, not publication.
@@ -508,6 +563,8 @@ export type PublicationStatusRow = typeof publicationStatuses.$inferSelect;
 export type ActivityNoteRow = typeof activityNotes.$inferSelect;
 export type PracticeNoteRow = typeof practiceNotes.$inferSelect;
 export type PracticeTranscriptTurnRow = typeof practiceTranscriptTurns.$inferSelect;
+export type VoiceCaptureIntentRow = typeof voiceCaptureIntents.$inferSelect;
+export type LeetCodeCodeAttemptRow = typeof leetcodeCodeAttempts.$inferSelect;
 export type ActivityFinalizationRow = typeof activityFinalizations.$inferSelect;
 export type ReviewScheduleRow = typeof reviewSchedules.$inferSelect;
 export type SpecialistTaskRow = typeof specialistTasks.$inferSelect;

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import {
   activityDeliveryAnalyses,
@@ -6,6 +6,7 @@ import {
   activityFinalizations,
   activitySolutionLinks,
   contentBank,
+  leetcodeCodeAttempts,
   ownerBankQuestions,
   practiceNotes,
   practiceTranscriptTurns,
@@ -15,6 +16,7 @@ import {
   provisionalSolutionProfiles,
   reviewSchedules,
   specialistTasks,
+  voiceCaptureIntents,
 } from "./schema";
 import {
   mergePersonalLeetCodeQuestionMetadata,
@@ -29,6 +31,7 @@ export type Specialty = "leetcode" | "system_design" | "behavioral";
 export type NoteKind = "remember" | "insight" | "mistake" | "pattern" | "question";
 export type TranscriptSpeaker = "user" | "specialist";
 export type TranscriptSource = "codex" | "dictation" | "audio_transcript";
+export type VoiceCaptureDecision = "activity_related" | "unrelated" | "uncertain";
 export type { ReviewReason } from "./review-cadence";
 
 export type DeliveryAnalysisPayload = {
@@ -317,6 +320,315 @@ export async function appendVoiceTranscriptTurn(
   return { ...input, speaker: "user" as const, source: "audio_transcript" as const, sequence };
 }
 
+export async function registerVoiceCaptureIntent(
+  ownerId: string,
+  input: {
+    captureId: string;
+    activityId: string;
+    turnId: string;
+    clipId: string;
+    specialty: Specialty;
+    checksum: string;
+    occurredAt: number;
+  },
+  nowMs: number,
+) {
+  const db = getDb();
+  const existing = await readVoiceCaptureIntent(ownerId, input.captureId);
+  if (existing) {
+    if (existing.activityId !== input.activityId
+        || existing.turnId !== input.turnId
+        || existing.clipId !== input.clipId
+        || existing.specialty !== input.specialty
+        || existing.checksum !== input.checksum
+        || existing.occurredAt !== input.occurredAt) {
+      throw new Error("A captureId cannot be rebound to different voice content or activity.");
+    }
+    return existing;
+  }
+  await db.insert(voiceCaptureIntents).values({
+    ownerId,
+    ...input,
+    status: "pending",
+    createdAt: nowMs,
+    updatedAt: nowMs,
+  }).onConflictDoNothing();
+  return readVoiceCaptureIntent(ownerId, input.captureId);
+}
+
+export async function readVoiceCaptureIntent(ownerId: string, captureId: string) {
+  const db = getDb();
+  const rows = await db.select().from(voiceCaptureIntents).where(and(
+    eq(voiceCaptureIntents.ownerId, ownerId),
+    eq(voiceCaptureIntents.captureId, captureId),
+  ));
+  return rows[0] ?? null;
+}
+
+export async function readVoiceCaptureIntents(ownerId: string, captureIds?: string[]) {
+  const db = getDb();
+  if (captureIds && captureIds.length === 0) return [];
+  return db.select().from(voiceCaptureIntents).where(
+    captureIds
+      ? and(eq(voiceCaptureIntents.ownerId, ownerId), inArray(voiceCaptureIntents.captureId, captureIds))
+      : eq(voiceCaptureIntents.ownerId, ownerId),
+  );
+}
+
+export async function readLikelyLegacyVoiceOrphans(ownerId: string) {
+  const db = getDb();
+  const [clips, turns, intents] = await Promise.all([
+    db.select().from(activityAudioClips).where(and(
+      eq(activityAudioClips.ownerId, ownerId),
+      isNotNull(activityAudioClips.transcriptTurnId),
+    )),
+    db.select().from(practiceTranscriptTurns).where(eq(practiceTranscriptTurns.ownerId, ownerId)),
+    db.select().from(voiceCaptureIntents).where(eq(voiceCaptureIntents.ownerId, ownerId)),
+  ]);
+  const intentClipIds = new Set(intents.map((intent) => intent.clipId));
+  const orderedByActivity = new Map<string, typeof turns>();
+  turns.forEach((turn) => {
+    orderedByActivity.set(turn.activityId, [...(orderedByActivity.get(turn.activityId) ?? []), turn]);
+  });
+  orderedByActivity.forEach((activityTurns) => activityTurns.sort((a, b) => a.sequence - b.sequence));
+  return clips.flatMap((clip) => {
+    if (!clip.transcriptTurnId || intentClipIds.has(clip.id)) return [];
+    const activityTurns = orderedByActivity.get(clip.activityId) ?? [];
+    const turn = activityTurns.find((candidate) => candidate.turnId === clip.transcriptTurnId);
+    if (!turn || turn.source !== "audio_transcript") return [];
+    const following = activityTurns.filter((candidate) => candidate.sequence > turn.sequence);
+    const beforeNextUser = following.slice(0, following.findIndex((candidate) => candidate.speaker === "user") < 0
+      ? following.length
+      : following.findIndex((candidate) => candidate.speaker === "user"));
+    if (beforeNextUser.some((candidate) => candidate.speaker === "specialist")) return [];
+    return [{
+      clipId: clip.id,
+      activityId: clip.activityId,
+      turnId: turn.turnId,
+      occurredAt: turn.occurredAt,
+      excerpt: turn.body.slice(0, 240),
+      durationSeconds: clip.durationSeconds,
+      status: clip.status,
+    }];
+  });
+}
+
+export async function prepareLegacyVoiceCaptureDeletion(
+  ownerId: string,
+  clipId: string,
+  nowMs: number,
+) {
+  const db = getDb();
+  const existingIntent = (await db.select().from(voiceCaptureIntents).where(and(
+    eq(voiceCaptureIntents.ownerId, ownerId),
+    eq(voiceCaptureIntents.clipId, clipId),
+  )))[0];
+  if (existingIntent) return existingIntent;
+  const clip = await readActivityAudioClip(ownerId, clipId);
+  if (!clip?.transcriptTurnId) throw new Error("Legacy Voice capture not found.");
+  const turn = (await db.select().from(practiceTranscriptTurns).where(and(
+    eq(practiceTranscriptTurns.ownerId, ownerId),
+    eq(practiceTranscriptTurns.activityId, clip.activityId),
+    eq(practiceTranscriptTurns.turnId, clip.transcriptTurnId),
+  )))[0];
+  if (!turn || turn.source !== "audio_transcript") throw new Error("Legacy Voice transcript not found.");
+  const captureId = `legacy-${clip.id}`;
+  await db.insert(voiceCaptureIntents).values({
+    ownerId,
+    captureId,
+    activityId: clip.activityId,
+    turnId: turn.turnId,
+    clipId: clip.id,
+    specialty: turn.specialty,
+    status: "deleting",
+    checksum: "legacy-accepted",
+    occurredAt: turn.occurredAt,
+    decidedAt: nowMs,
+    decisionSource: "voice-user",
+    decisionReason: "User deleted a legacy Voice capture from the review list.",
+    createdAt: nowMs,
+    updatedAt: nowMs,
+  });
+  return readVoiceCaptureIntent(ownerId, captureId);
+}
+
+export async function resolveVoiceCaptureIntent(
+  ownerId: string,
+  captureId: string,
+  decision: VoiceCaptureDecision,
+  source: string,
+  reason: string,
+  nowMs: number,
+) {
+  const db = getDb();
+  const existing = await readVoiceCaptureIntent(ownerId, captureId);
+  if (!existing) {
+    throw new Error("The voice capture is unavailable or already resolved.");
+  }
+  if (existing.status === decision
+      || (existing.status === "accepted" && decision === "activity_related")
+      || (existing.status === "deleted" && decision === "unrelated")) {
+    return existing;
+  }
+  if (!["pending", "uncertain"].includes(existing.status)) {
+    throw new Error("The voice capture is unavailable or already resolved.");
+  }
+  await db.update(voiceCaptureIntents).set({
+    status: decision,
+    decisionSource: source.slice(0, 80),
+    decisionReason: reason.slice(0, 2_000),
+    decidedAt: nowMs,
+    updatedAt: nowMs,
+  }).where(and(
+    eq(voiceCaptureIntents.ownerId, ownerId),
+    eq(voiceCaptureIntents.captureId, captureId),
+  ));
+  return readVoiceCaptureIntent(ownerId, captureId);
+}
+
+export async function commitRelatedVoiceCapture(
+  ownerId: string,
+  input: {
+    captureId: string;
+    activityId: string;
+    specialty: Specialty;
+    turnId: string;
+    transcript: string;
+    checksum: string;
+    occurredAt: number;
+  },
+  nowMs: number,
+) {
+  const db = getDb();
+  const intent = await readVoiceCaptureIntent(ownerId, input.captureId);
+  if (!intent
+      || intent.status !== "activity_related"
+      || intent.activityId !== input.activityId
+      || intent.specialty !== input.specialty
+      || intent.turnId !== input.turnId
+      || intent.checksum !== input.checksum) {
+    throw new Error("Only an acknowledged activity-related capture can be committed.");
+  }
+  const turn = await appendVoiceTranscriptTurn(ownerId, {
+    activityId: input.activityId,
+    specialty: input.specialty,
+    turnId: input.turnId,
+    body: input.transcript,
+    occurredAt: input.occurredAt,
+  }, nowMs);
+  await db.update(voiceCaptureIntents).set({
+    status: "accepted",
+    updatedAt: nowMs,
+    lastError: null,
+  }).where(and(
+    eq(voiceCaptureIntents.ownerId, ownerId),
+    eq(voiceCaptureIntents.captureId, input.captureId),
+  ));
+  return turn;
+}
+
+export async function beginDeleteVoiceCapture(ownerId: string, captureId: string, nowMs: number) {
+  const db = getDb();
+  const intent = await readVoiceCaptureIntent(ownerId, captureId);
+  if (!intent) throw new Error("Voice capture not found.");
+  await db.update(voiceCaptureIntents).set({
+    status: "deleting",
+    updatedAt: nowMs,
+    lastError: null,
+  }).where(and(eq(voiceCaptureIntents.ownerId, ownerId), eq(voiceCaptureIntents.captureId, captureId)));
+  return intent;
+}
+
+export async function completeDeleteVoiceCapture(ownerId: string, captureId: string, nowMs: number) {
+  const db = getDb();
+  const intent = await readVoiceCaptureIntent(ownerId, captureId);
+  if (!intent) return;
+  await db.delete(activityDeliveryAnalyses).where(and(
+    eq(activityDeliveryAnalyses.ownerId, ownerId),
+    eq(activityDeliveryAnalyses.transcriptTurnId, intent.turnId),
+  ));
+  await db.delete(activityAudioClips).where(and(
+    eq(activityAudioClips.ownerId, ownerId),
+    eq(activityAudioClips.id, intent.clipId),
+  ));
+  await db.delete(practiceTranscriptTurns).where(and(
+    eq(practiceTranscriptTurns.ownerId, ownerId),
+    eq(practiceTranscriptTurns.activityId, intent.activityId),
+    eq(practiceTranscriptTurns.turnId, intent.turnId),
+  ));
+  await db.update(voiceCaptureIntents).set({
+    status: "deleted",
+    updatedAt: nowMs,
+    lastError: null,
+  }).where(and(eq(voiceCaptureIntents.ownerId, ownerId), eq(voiceCaptureIntents.captureId, captureId)));
+}
+
+export async function failDeleteVoiceCapture(ownerId: string, captureId: string, message: string, nowMs: number) {
+  const db = getDb();
+  await db.update(voiceCaptureIntents).set({
+    status: "deleting",
+    lastError: message.slice(0, 2_000),
+    updatedAt: nowMs,
+  }).where(and(eq(voiceCaptureIntents.ownerId, ownerId), eq(voiceCaptureIntents.captureId, captureId)));
+}
+
+export async function unresolvedVoiceCaptureCount(ownerId: string, activityId: string) {
+  const db = getDb();
+  const rows = await db.select({ count: sql<number>`count(*)` }).from(voiceCaptureIntents).where(and(
+    eq(voiceCaptureIntents.ownerId, ownerId),
+    eq(voiceCaptureIntents.activityId, activityId),
+    inArray(voiceCaptureIntents.status, ["pending", "activity_related", "uncertain", "deleting"]),
+  ));
+  return Number(rows[0]?.count ?? 0);
+}
+
+export async function saveLeetCodeCodeAttempt(
+  ownerId: string,
+  input: {
+    id: string;
+    activityId: string;
+    originatingTurnId: string;
+    sequence: number;
+    language: string;
+    code: string;
+    occurredAt: number;
+    review?: unknown;
+    observedCorrectness: "not_verified" | "appears_correct" | "issues_found" | "incomplete";
+    concreteFindings: string[];
+    edgeCases: string[];
+    complexity?: { time?: string; space?: string };
+    finalDeclaration: string;
+  },
+  nowMs: number,
+) {
+  const db = getDb();
+  const values = {
+    ownerId,
+    ...input,
+    language: input.language.trim().slice(0, 40),
+    code: input.code,
+    lineCount: input.code.split(/\r?\n/).length,
+    review: input.review ?? null,
+    concreteFindings: input.concreteFindings,
+    edgeCases: input.edgeCases,
+    complexity: input.complexity ?? null,
+    createdAt: nowMs,
+    updatedAt: nowMs,
+  };
+  await db.insert(leetcodeCodeAttempts).values(values).onConflictDoUpdate({
+    target: [leetcodeCodeAttempts.ownerId, leetcodeCodeAttempts.id],
+    set: {
+      review: values.review,
+      observedCorrectness: values.observedCorrectness,
+      concreteFindings: values.concreteFindings,
+      edgeCases: values.edgeCases,
+      complexity: values.complexity,
+      finalDeclaration: values.finalDeclaration,
+      updatedAt: nowMs,
+    },
+  });
+}
+
 export async function addPracticeNote(
   ownerId: string,
   note: {
@@ -385,6 +697,14 @@ export async function saveSpecialistFinalization(
   nowMs: number,
 ) {
   const db = getDb();
+  if (payload.complete) {
+    const unresolvedCaptures = await unresolvedVoiceCaptureCount(ownerId, activityId);
+    if (unresolvedCaptures > 0) {
+      throw new Error(
+        `${unresolvedCaptures} voice capture${unresolvedCaptures === 1 ? " is" : "s are"} still awaiting an attach/delete decision.`,
+      );
+    }
+  }
   const profileAction = payload.solutionProfileAction ?? "create_or_revise";
   if (payload.questionMetadata) {
     if (specialty !== "leetcode") {
@@ -853,7 +1173,7 @@ export async function readSpecialistTasks(ownerId: string) {
 
 export async function readActivityPracticeRecord(ownerId: string, activityId: string) {
   const db = getDb();
-  const [turns, notes, finalizations, reviews, clips, deliveryAnalyses] = await Promise.all([
+  const [turns, notes, finalizations, reviews, clips, deliveryAnalyses, codeAttempts] = await Promise.all([
     db
       .select()
       .from(practiceTranscriptTurns)
@@ -864,8 +1184,12 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
     db.select().from(reviewSchedules).where(and(eq(reviewSchedules.ownerId, ownerId), eq(reviewSchedules.activityId, activityId))),
     db.select().from(activityAudioClips).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.activityId, activityId))),
     db.select().from(activityDeliveryAnalyses).where(and(eq(activityDeliveryAnalyses.ownerId, ownerId), eq(activityDeliveryAnalyses.activityId, activityId))),
+    db.select().from(leetcodeCodeAttempts).where(and(
+      eq(leetcodeCodeAttempts.ownerId, ownerId),
+      eq(leetcodeCodeAttempts.activityId, activityId),
+    )).orderBy(asc(leetcodeCodeAttempts.sequence), asc(leetcodeCodeAttempts.occurredAt)),
   ]);
-  return { turns, notes, finalization: finalizations[0] ?? null, reviews, audioClips: clips, deliveryAnalyses };
+  return { turns, notes, finalization: finalizations[0] ?? null, reviews, audioClips: clips, deliveryAnalyses, codeAttempts };
 }
 
 export async function readProblemSolutionProfile(ownerId: string, specialty: Specialty, questionId: string) {

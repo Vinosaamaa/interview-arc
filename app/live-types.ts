@@ -43,6 +43,22 @@ export type TranscriptTurn = {
   occurredAt: number;
   updatedAt: number;
 };
+export type LeetCodeCodeAttempt = {
+  id: string;
+  activityId: string;
+  originatingTurnId: string;
+  sequence: number;
+  language: string;
+  code: string;
+  lineCount: number;
+  occurredAt: number;
+  review: unknown;
+  observedCorrectness: "not_verified" | "appears_correct" | "issues_found" | "incomplete";
+  concreteFindings: string[];
+  edgeCases: string[];
+  complexity: { time?: string; space?: string } | null;
+  finalDeclaration: string;
+};
 export type AudioClip = {
   id: string;
   activityId: string;
