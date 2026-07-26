@@ -1,3 +1,5 @@
+importScripts("companion-network.js");
+
 const LEETCODE_ORIGIN = "https://leetcode.com";
 const LEETCODE_WWW_ORIGIN = "https://www.leetcode.com";
 const INTERVIEW_ARC_ORIGIN = "https://limitless.vinosama.workers.dev";
@@ -84,6 +86,26 @@ chrome.tabs.onUpdated.addListener((tabId, _changeInfo, tab) => updatePanel(tabId
 chrome.tabs.onActivated.addListener(async ({ tabId }) => {
   const tab = await chrome.tabs.get(tabId);
   await updatePanel(tabId, tab.url);
+});
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type !== InterviewArcCompanionNetwork.REQUEST_TYPE) return false;
+  if (sender.id !== chrome.runtime.id) {
+    sendResponse({
+      kind: "transport-error",
+      code: "invalid-sender",
+      message: "The Companion rejected an unknown request source.",
+    });
+    return false;
+  }
+  InterviewArcCompanionNetwork.performRequest(message)
+    .then(sendResponse)
+    .catch(() => sendResponse({
+      kind: "transport-error",
+      code: "worker",
+      message: "The Companion network worker stopped unexpectedly.",
+    }));
+  return true;
 });
 
 initializeTabs().catch(() => {});
