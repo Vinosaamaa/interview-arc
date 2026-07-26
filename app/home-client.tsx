@@ -347,6 +347,29 @@ function frequencyRank(question: QuestionBankItem) {
   return -1;
 }
 
+function composerQuestionMetadata(question: QuestionBankItem) {
+  const metadata: string[] = [];
+  if (question.difficulty) {
+    metadata.push(question.difficulty[0].toUpperCase() + question.difficulty.slice(1));
+  }
+  if (typeof question.acceptanceRate === "number") {
+    metadata.push(`${question.acceptanceRate.toFixed(1)}% acceptance`);
+  }
+  const strongestCompanySignal = question.companySignals?.reduce((strongest, signal) => {
+    if (!strongest) return signal;
+    const strength = signal.frequencyScore / Math.max(1, signal.frequencyScale);
+    const strongestStrength = strongest.frequencyScore / Math.max(1, strongest.frequencyScale);
+    return strength > strongestStrength ? signal : strongest;
+  }, question.companySignals[0]);
+  if (strongestCompanySignal) {
+    metadata.push(`${strongestCompanySignal.frequencyScore}/${strongestCompanySignal.frequencyScale} frequency`);
+  } else if (question.frequency) {
+    metadata.push(`${question.frequency[0].toUpperCase() + question.frequency.slice(1)} frequency`);
+  }
+  metadata.push(...question.topics);
+  return metadata.join(" · ");
+}
+
 function pickQuestionsByFrequency(pool: QuestionBankItem[], count: number, blocked: Set<string>, salt = "") {
   if (count <= 0) return [] as QuestionBankItem[];
   const candidates = pool
@@ -4781,7 +4804,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             </div>
             <div className="composer-specialty-surface" key={composer.type}>
               {derivedUrl && <div className={`derived-question ${derivedBlocked ? "blocked" : ""}`}><span>{derivedUrl.questionId ? "Question matched in the bank" : "Public URL ready to stage"}</span><strong>{derivedUrl.title}</strong><small>{derivedUrl.url}</small>{derivedBlocked ? <em>Already on Today</em> : <button type="button" onClick={() => { const known = activeBank.find((question) => question.id === derivedUrl.questionId); if (known) selectBankQuestion(known); else openCustomActivity(derivedUrl.url); }}>{derivedUrl.questionId && composer.selectedActivities.some((item) => item.type === composer.type && item.questionId === derivedUrl.questionId) ? "Remove selection" : derivedUrl.questionId ? "Select activity" : "Review custom activity"}</button>}</div>}
-              {!derivedUrl && <div className="bank-results" ref={composerListRef} onScroll={(event) => handleComposerListScroll(event.currentTarget)}>{visibleQuestionEntries.length ? visibleQuestionEntries.map(({ question, latestAttempt, blockedToday }) => { const selected = composer.selectedActivities.some((item) => item.type === composer.type && item.questionId === question.id); return <button type="button" className={`${selected ? "selected" : ""} ${blockedToday ? "blocked" : ""}`} key={question.id} onClick={() => selectBankQuestion(question)} disabled={blockedToday} aria-pressed={selected} aria-label={blockedToday ? `${question.title} is already on Today` : `${selected ? "Remove" : "Select"} ${question.title}`}><span className={`type-mark ${composer.type}`}>{typeMark(composer.type)}</span><div><strong>{question.title}</strong><small className="activity-card-meta"><span>{question.difficulty ? `${question.difficulty} · ` : ""}{question.topics.join(" · ")}</span>{blockedToday && <em>Already on Today</em>}</small></div><StaticResultFlag outcome={latestAttempt?.outcome} /></button>; }) : <p className="no-results">No bank match. Create a custom activity for a private, offline, or not-yet-indexed prompt.</p>}{visibleQuestionEntries.length < filteredQuestionEntries.length && <span className="picker-load-status">Scroll for more · {filteredQuestionEntries.length - visibleQuestionEntries.length} remaining</span>}</div>}
+              {!derivedUrl && <div className="bank-results" ref={composerListRef} onScroll={(event) => handleComposerListScroll(event.currentTarget)}>{visibleQuestionEntries.length ? visibleQuestionEntries.map(({ question, latestAttempt, blockedToday }) => { const selected = composer.selectedActivities.some((item) => item.type === composer.type && item.questionId === question.id); return <button type="button" className={`${selected ? "selected" : ""} ${blockedToday ? "blocked" : ""}`} key={question.id} onClick={() => selectBankQuestion(question)} disabled={blockedToday} aria-pressed={selected} aria-label={blockedToday ? `${question.title} is already on Today` : `${selected ? "Remove" : "Select"} ${question.title}`}><span className={`type-mark ${composer.type}`}>{typeMark(composer.type)}</span><div><strong>{question.title}</strong><small className="activity-card-meta"><span>{composerQuestionMetadata(question)}</span>{blockedToday && <em>Already on Today</em>}</small></div><StaticResultFlag outcome={latestAttempt?.outcome} /></button>; }) : <p className="no-results">No bank match. Create a custom activity for a private, offline, or not-yet-indexed prompt.</p>}{visibleQuestionEntries.length < filteredQuestionEntries.length && <span className="picker-load-status">Scroll for more · {filteredQuestionEntries.length - visibleQuestionEntries.length} remaining</span>}</div>}
             </div>
             <button className="custom-activity-trigger" type="button" onClick={() => composer.customOpen ? setComposer((current) => ({ ...current, customOpen: false, customEditingKey: "" })) : openCustomActivity()}>＋ Custom activity</button>
             {composer.customOpen && <section className="custom-activity-card" aria-label="Custom activity">
