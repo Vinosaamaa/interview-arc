@@ -29,6 +29,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 h1 { margin: 10px 0 13px; font-size: clamp(2.25rem, 11vw, 3.5rem); line-height: .89; letter-spacing: -.065em; }
 h1 em { font-family: Iowan Old Style, Palatino Linotype, Georgia, serif; font-weight: 500; }
 .connect-view p, .not-planned p { color: var(--muted); font-size: .85rem; line-height: 1.6; }
+.connect-view .connection-error { margin: 12px 0 0; color: var(--coral); }
 .connect-view label { margin: 24px 0 10px; display: grid; gap: 6px; }
 .connect-view label span { color: var(--muted); font-size: .72rem; font-weight: 700; }
 input, textarea { width: 100%; border: 1px solid var(--line); border-radius: 10px; background: var(--ink-2); color: var(--text); }

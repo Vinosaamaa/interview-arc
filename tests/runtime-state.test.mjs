@@ -568,6 +568,17 @@ test("the Chrome companion follows live Interview Arc focus and public LeetCode 
   assert.match(sidePanel, /if \(context\.problemUrl\) query\.set\("url", context\.problemUrl\)/);
   assert.match(sidePanel, /chrome\.tabs\.create\(\{ url \}\)/);
   assert.match(sidePanel, /if \(refreshPromise\) \{\s*refreshQueued = true;\s*return refreshPromise;/);
+  assert.match(sidePanel, /async function validateConnection\(candidate\)/);
+  assert.match(sidePanel, /await chrome\.storage\.local\.set\(\{ interviewArcToken: token \}\)/);
+  assert.match(sidePanel, /showOffline\(error\)/);
+  assert.match(sidePanel, /if \(error instanceof CompanionAPIError && error\.unauthorized\)/);
+  assert.doesNotMatch(
+    sidePanel.slice(
+      sidePanel.indexOf("async function api("),
+      sidePanel.indexOf("function showConnect("),
+    ),
+    /chrome\.storage\.local\.remove/,
+  );
   assert.match(sidePanel, /const nextState = await api\("\/companion\/mutations"/);
   assert.match(sidePanel, /applyCompanionState\(nextState, context\)/);
   const mutationImplementation = sidePanel.slice(
@@ -577,6 +588,8 @@ test("the Chrome companion follows live Interview Arc focus and public LeetCode 
   assert.doesNotMatch(mutationImplementation, /await refresh\(\)/);
   assert.match(sidePanel, /optimisticTimer\(action\)/);
   assert.match(sidePanelHtml, /id="favorite-button"/);
+  assert.match(sidePanelHtml, /id="offline-view"/);
+  assert.match(sidePanelHtml, /id="retry-connection"/);
   assert.match(sidePanel, /type: "problem-star", specialty, questionId, starred/);
   assert.match(sidePanel, /currentActivityStarred\(\)/);
   assert.match(mcpWorker, /mutation\.type === "problem-star"/);

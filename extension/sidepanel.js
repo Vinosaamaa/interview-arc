@@ -18,6 +18,18 @@ let contextRevision = 0;
 let renderedActivityId = "";
 let notesDirty = false;
 
+class CompanionAPIError extends Error {
+  constructor(message, status = 0) {
+    super(message);
+    this.name = "CompanionAPIError";
+    this.status = status;
+  }
+
+  get unauthorized() {
+    return this.status === 401;
+  }
+}
+
 function practiceDate() {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Los_Angeles",
@@ -59,29 +71,51 @@ async function activeTabContext() {
   return { kind: "other", problemUrl: "" };
 }
 
-async function api(path, init = {}) {
+async function api(path, init = {}, credential = token) {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     cache: "no-store",
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json", ...(init.headers ?? {}) },
+    headers: { authorization: `Bearer ${credential}`, "content-type": "application/json", ...(init.headers ?? {}) },
   });
-  if (response.status === 401) {
-    await chrome.storage.local.remove("interviewArcToken");
-    token = "";
-    showConnect();
-    throw new Error("Connection expired");
+  if (!response.ok) {
+    throw new CompanionAPIError(
+      response.status === 401
+        ? "This connection token is no longer accepted."
+        : `Interview Arc is temporarily unavailable (${response.status}).`,
+      response.status,
+    );
   }
-  if (!response.ok) throw new Error(`Interview Arc returned ${response.status}`);
   return response.json();
 }
 
 function showConnect() {
   elements["connect-view"].hidden = false;
+  elements["offline-view"].hidden = true;
   elements["practice-view"].hidden = true;
   elements.disconnect.hidden = true;
   elements["sync-light"].classList.remove("live");
   elements["sync-light"].classList.remove("syncing");
   elements["sync-light"].classList.remove("error");
+}
+
+function showOffline(error) {
+  elements["connect-view"].hidden = true;
+  elements["offline-view"].hidden = false;
+  elements["practice-view"].hidden = true;
+  elements.disconnect.hidden = false;
+  elements["offline-message"].textContent = error?.message
+    ?? "Interview Arc is temporarily unavailable. Your saved connection is still intact.";
+  setSyncStatus("error");
+}
+
+async function handleConnectionFailure(error) {
+  if (error instanceof CompanionAPIError && error.unauthorized) {
+    await chrome.storage.local.remove("interviewArcToken");
+    token = "";
+    showConnect();
+    return;
+  }
+  showOffline(error);
 }
 
 function setSyncStatus(status) {
@@ -125,6 +159,7 @@ function renderClock() {
 function render() {
   const activityChanged = renderedActivityId !== (activity?.id ?? "");
   elements["connect-view"].hidden = true;
+  elements["offline-view"].hidden = true;
   elements["practice-view"].hidden = false;
   elements.disconnect.hidden = false;
   if (!elements["sync-light"].classList.contains("syncing") && !elements["sync-light"].classList.contains("error")) {
@@ -201,6 +236,14 @@ async function performRefresh() {
   applyCompanionState(nextState, context);
 }
 
+async function validateConnection(candidate) {
+  const context = await activeTabContext();
+  const query = new URLSearchParams({ date: practiceDate() });
+  if (context.problemUrl) query.set("url", context.problemUrl);
+  const nextState = await api(`/companion/state?${query.toString()}`, {}, candidate);
+  return { context, nextState };
+}
+
 function refresh() {
   if (!token) return Promise.resolve();
   if (pendingMutations > 0) {
@@ -213,8 +256,8 @@ function refresh() {
   }
   if (!state) setSyncStatus("syncing");
   refreshPromise = performRefresh()
-    .catch((error) => {
-      setSyncStatus("error");
+    .catch(async (error) => {
+      await handleConnectionFailure(error);
       throw error;
     })
     .finally(() => {
@@ -291,9 +334,21 @@ function mutate(mutation, optimisticUpdate) {
 elements["connect-button"].addEventListener("click", async () => {
   const value = elements["token-input"].value.trim();
   if (!value.startsWith("ia_")) return;
-  token = value;
-  await chrome.storage.local.set({ interviewArcToken: token });
-  try { await refresh(); } catch { showConnect(); }
+  elements["connect-error"].hidden = true;
+  elements["connect-button"].disabled = true;
+  try {
+    const { context, nextState } = await validateConnection(value);
+    token = value;
+    await chrome.storage.local.set({ interviewArcToken: token });
+    applyCompanionState(nextState, context);
+  } catch (error) {
+    elements["connect-error"].textContent = error instanceof CompanionAPIError
+      ? error.message
+      : "Interview Arc could not be reached. Your previous token was not replaced.";
+    elements["connect-error"].hidden = false;
+  } finally {
+    elements["connect-button"].disabled = false;
+  }
 });
 elements["add-button"].addEventListener("click", () => mutate({ type: "add-leetcode", url: problemUrl }));
 elements["problem-link"].addEventListener("click", (event) => {
@@ -371,6 +426,7 @@ elements.notes.addEventListener("input", () => {
   elements["note-state"].textContent = "Unsaved";
 });
 elements["open-dashboard"].addEventListener("click", () => chrome.tabs.create({ url: "https://limitless.vinosama.workers.dev/" }));
+elements["retry-connection"].addEventListener("click", () => refresh().catch(() => {}));
 elements.disconnect.addEventListener("click", async () => {
   await chrome.storage.local.remove("interviewArcToken");
   token = "";
@@ -392,7 +448,7 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo) => {
   token = (await chrome.storage.local.get("interviewArcToken")).interviewArcToken ?? "";
   if (!token) showConnect();
   else {
-    try { await refresh(); } catch { showConnect(); }
+    try { await refresh(); } catch {}
   }
   renderInterval = window.setInterval(renderClock, 1000);
   refreshInterval = window.setInterval(() => {
