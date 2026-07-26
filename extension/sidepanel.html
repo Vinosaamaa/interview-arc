@@ -20,7 +20,15 @@
         <p>Create a personal token from <strong>Connect</strong> in Interview Arc, then paste it here once.</p>
         <label><span>Connection token</span><input id="token-input" type="password" autocomplete="off" placeholder="ia_…" /></label>
         <button id="connect-button" class="primary">Connect companion</button>
+        <p id="connect-error" class="connection-error" role="status" hidden></p>
         <a href="https://limitless.vinosama.workers.dev/" target="_blank">Open Interview Arc ↗</a>
+      </section>
+
+      <section id="offline-view" class="connect-view" hidden>
+        <span class="kicker">CONNECTION PAUSED</span>
+        <h1>Keep your token.<br /><em>Retry the bridge.</em></h1>
+        <p id="offline-message">Interview Arc is temporarily unavailable. Your saved connection is still intact.</p>
+        <button id="retry-connection" class="primary">Retry connection</button>
       </section>
 
       <section id="practice-view" hidden>

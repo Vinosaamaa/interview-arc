@@ -10,7 +10,12 @@ The companion keeps Interview Arc beside the real LeetCode editor. It does not s
 4. Pin **Interview Arc Companion** from Chrome's Extensions menu, then click its toolbar icon from Interview Arc or a public LeetCode problem. Chrome opens the companion in the browser side panel.
 5. In the Interview Arc website, choose **Connect**, create a personal token, and paste it into the side panel.
 
-The token is kept in Chrome extension storage. The server stores only its SHA-256 digest. Disconnect the companion or create a replacement token if the credential is ever shared.
+The token is kept in Chrome extension storage. The server stores only its
+SHA-256 digest. A temporary network or server failure keeps the last known-good
+token and offers Retry; the reconnect form appears only when no token exists or
+the server rejects it. A replacement token is validated before it overwrites
+the stored credential. Disconnect the companion or revoke a token if the
+credential is ever shared.
 
 On a LeetCode page, the panel follows that page's canonical problem. On the
 Interview Arc dashboard, it follows the currently running or paused coding
