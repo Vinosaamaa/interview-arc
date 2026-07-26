@@ -257,3 +257,41 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.ok(client.indexOf("CODING LADDER") < client.indexOf("SKILL COVERAGE"));
   assert.ok(client.indexOf("SKILL COVERAGE") < client.indexOf("EFFORT MAP"));
 });
+
+test("arrival keeps the dashboard width stable while the wallpaper exits", async () => {
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(css, /html\s*\{[^}]*scrollbar-gutter:\s*stable;/);
+});
+
+test("the practice composer animates both layout changes and dismissal", async () => {
+  const [client, css] = await Promise.all([
+    readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8"),
+    Promise.all([
+      readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+      readFile(new URL("../app/interview-arc-v2.css", import.meta.url), "utf8"),
+    ]).then((stylesheets) => stylesheets.join("\n")),
+  ]);
+
+  assert.match(client, /function AnimatedComposerStage/);
+  assert.match(client, /const \[composerClosing, setComposerClosing\] = useState\(false\)/);
+  assert.match(client, /const closeComposer = useCallback/);
+  assert.match(client, /composerClosing \? "closing" : ""/);
+  assert.match(client, /<AnimatedComposerStage motionKey=\{composer\.mode\}>/);
+  assert.match(css, /\.composer-stage \{[^}]*transition: height/);
+  assert.match(css, /\.composer \{[^}]*transition: width/);
+  assert.match(css, /@keyframes dialogOut/);
+  assert.match(css, /\.modal-backdrop\.closing/);
+});
+
+test("activity selection motion stays localized to changed composer content", async () => {
+  const [client, css] = await Promise.all([
+    readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(client, /className="composer-specialty-surface"/);
+  assert.match(client, /className="selection-count"/);
+  assert.match(css, /\.composer-specialty-surface \{[^}]*animation: composerContentIn/);
+  assert.match(css, /\.bank-results button\.selected \{[^}]*animation: selectionConfirm/);
+  assert.match(css, /@keyframes selectionConfirm/);
+});

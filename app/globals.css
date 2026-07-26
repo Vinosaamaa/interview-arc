@@ -19,7 +19,7 @@
 }
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; scrollbar-gutter: stable; }
 body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-geist-sans), Arial, sans-serif; font-size: 16px; }
 button, input, select, textarea { font: inherit; }
 button, a, select { -webkit-tap-highlight-color: transparent; }
@@ -577,7 +577,14 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .problem-bank-entry > button:hover { border-color: #7f8a80; transform: translateY(-2px); }
 
 .modal-backdrop, .letter-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(16,23,17,.5); backdrop-filter: blur(7px); display: grid; place-items: center; }
-.composer { width: min(720px, calc(100vw - 30px)); max-height: calc(100vh - 36px); padding: 32px; border-radius: 18px; background: white; box-shadow: 0 34px 90px rgba(11,18,12,.25); overflow-y: auto; position: relative; animation: dialogIn .24s ease-out both; }
+.modal-backdrop { animation: modalBackdropIn .2s ease-out both; }
+.modal-backdrop.closing { animation: modalBackdropOut .18s ease-in both; pointer-events: none; }
+.composer { width: min(720px, calc(100vw - 30px)); max-height: calc(100vh - 36px); padding: 32px; border-radius: 18px; background: white; box-shadow: 0 34px 90px rgba(11,18,12,.25); overflow-y: auto; position: relative; animation: dialogIn .24s ease-out both; transition: width .28s cubic-bezier(.2,.78,.2,1); }
+.composer.closing { animation: dialogOut .18s ease-in both; pointer-events: none; }
+.composer-stage { overflow: clip; transition: height .28s cubic-bezier(.2,.78,.2,1); }
+.composer-stage-inner { display: flow-root; animation: composerContentIn .2s ease-out both; }
+.composer-specialty-surface { display: grid; animation: composerContentIn .18s ease-out both; }
+.selection-count { animation: selectionConfirm .2s ease-out both; }
 .modal-close { position: absolute; top: 15px; right: 15px; width: 38px; height: 38px; border: 1px solid var(--line); border-radius: 50%; background: white; font-size: 1.25rem; cursor: pointer; }
 .composer > h2 { margin: 9px 0 18px; font-family: var(--font-editorial); font-size: 2.55rem; line-height: 1; font-weight: 540; letter-spacing: -.04em; }
 .integration-dialog { width: min(650px, calc(100vw - 30px)); background: linear-gradient(145deg, #fff 0%, #f4f7ef 100%); }
@@ -629,7 +636,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .minutes-field input { width: 118px; min-height: 46px; background: white; text-align: center; }
 .bank-results { max-height: 300px; display: grid; gap: 7px; overflow-y: auto; }
 .bank-results button { min-height: 64px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: white; display: grid; grid-template-columns: auto 1fr auto; gap: 11px; align-items: center; text-align: left; cursor: pointer; }
-.bank-results button.selected { border-color: #829455; background: #f6fae8; }
+.bank-results button.selected { border-color: #829455; background: #f6fae8; animation: selectionConfirm .2s ease-out both; }
 .bank-results button > div { display: grid; gap: 3px; }
 .bank-results strong { font-size: .88rem; }
 .bank-results small { color: var(--muted); font-size: .82rem; text-transform: capitalize; }
@@ -797,6 +804,11 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 
 @keyframes timerPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
 @keyframes dialogIn { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes dialogOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(8px) scale(.99); } }
+@keyframes modalBackdropIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modalBackdropOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes composerContentIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+@keyframes selectionConfirm { from { opacity: .72; transform: scale(.992); } to { opacity: 1; transform: none; } }
 @keyframes letterOpen { from { opacity: 0; transform: translateY(30px) scale(.94) rotate(-1deg); } to { opacity: 1; transform: none; } }
 
 @media (max-width: 1180px) {
