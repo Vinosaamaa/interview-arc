@@ -578,7 +578,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 
 .modal-backdrop, .letter-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(16,23,17,.5); backdrop-filter: blur(7px); display: grid; place-items: center; }
 .modal-backdrop { animation: modalBackdropIn .2s ease-out both; }
-.modal-backdrop.closing { animation: modalBackdropOut .18s ease-in both; pointer-events: none; }
+.modal-backdrop.closing { animation: modalBackdropOut .18s ease-in both; pointer-events: none; will-change: opacity; }
 .composer { width: min(720px, calc(100vw - 30px)); max-height: calc(100vh - 36px); padding: 32px; border-radius: 18px; background: white; box-shadow: 0 34px 90px rgba(11,18,12,.25); overflow-y: auto; position: relative; animation: dialogIn .24s ease-out both; transition: width .28s cubic-bezier(.2,.78,.2,1); }
 .composer.closing { animation: dialogOut .18s ease-in both; pointer-events: none; }
 .composer-stage { overflow: clip; transition: height .28s cubic-bezier(.2,.78,.2,1); }

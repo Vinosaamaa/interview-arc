@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type AnimationEvent, type FormEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -90,6 +90,19 @@ type LifecycleDialog =
   | { kind: "remove-session"; sessionId: string }
   | null;
 type UiToast = { id: number; message: string } | null;
+type ComposerSortKey = "frequency" | "recent" | "acceptance";
+type ComposerSortDirection = "asc" | "desc";
+type ComposerSpecialtyView = {
+  query: string;
+  attentionFilters: ComposerAttentionFilter[];
+  levelFilters: Array<"easy" | "medium" | "hard">;
+  starFilter: boolean;
+  sortKey: ComposerSortKey;
+  sortDir: ComposerSortDirection;
+  visibleCount: number;
+  scrollTop: number;
+};
+type ComposerSpecialtyViews = Record<ActivityType, ComposerSpecialtyView>;
 type WorkspaceUiMemory = {
   libraryTypeFilters?: ActivityType[];
   libraryAttentionFilters?: LibraryAttentionFilter[];
@@ -175,6 +188,29 @@ const EMPTY_COMPOSER: ComposerState = {
   sessionSystemDesign: 1,
   sessionBehavioral: 1,
 };
+const COMPOSER_SORT_OPTIONS = [
+  { key: "frequency" as const, label: "Frequency", icon: "freq" },
+  { key: "recent" as const, label: "Recent", icon: "recent" },
+  { key: "acceptance" as const, label: "Acceptance", icon: "accept" },
+];
+
+function createComposerSpecialtyViews(): ComposerSpecialtyViews {
+  const createView = (): ComposerSpecialtyView => ({
+    query: "",
+    attentionFilters: [],
+    levelFilters: [],
+    starFilter: false,
+    sortKey: "frequency",
+    sortDir: "asc",
+    visibleCount: 20,
+    scrollTop: 0,
+  });
+  return {
+    leetcode: createView(),
+    system_design: createView(),
+    behavioral: createView(),
+  };
+}
 const OUTCOME_ORDER: (Outcome | undefined)[] = [undefined, "solved", "solved_after_reviewing_approach", "failed"];
 
 function readSessionJson<T>(key: string, fallback: T): T {
@@ -1263,9 +1299,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [bankTagFilters, setBankTagFilters] = useState<string[]>(workspaceUiMemory.bankTagFilters ?? []);
   const [bankStarFilter, setBankStarFilter] = useState<"all" | "starred">(workspaceUiMemory.bankStarFilter ?? "all");
   const [bankTopicsExpanded, setBankTopicsExpanded] = useState(workspaceUiMemory.bankTopicsExpanded ?? false);
+  const composerSpecialtyViewsRef = useRef<ComposerSpecialtyViews>(createComposerSpecialtyViews());
   const [composerAttentionFilters, setComposerAttentionFilters] = useState<ComposerAttentionFilter[]>([]);
   const [composerLevelFilters, setComposerLevelFilters] = useState<Array<"easy" | "medium" | "hard">>([]);
   const [composerStarFilter, setComposerStarFilter] = useState(false);
+  const [composerSortKey, setComposerSortKey] = useState<ComposerSortKey>("frequency");
+  const [composerSortDir, setComposerSortDir] = useState<ComposerSortDirection>("asc");
   const [composerVisibleCount, setComposerVisibleCount] = useState(20);
   const [journeyRange, setJourneyRange] = useState<JourneyRange>(90);
   const [journeyMetric, setJourneyMetric] = useState<JourneyMetric>("activities");
@@ -1311,8 +1350,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const highlightNoteEditorRef = useRef<HTMLTextAreaElement>(null);
   const readerScrollFrameRef = useRef(0);
   const readerCloseTimerRef = useRef<number | null>(null);
-  const composerCloseTimerRef = useRef<number | null>(null);
   const toastTimerRef = useRef<number | null>(null);
+  const composerListRef = useRef<HTMLDivElement>(null);
+  const pendingComposerScrollRestoreRef = useRef<number | null>(null);
   const pipWindowRef = useRef<Window | null>(null);
   const pastListRef = useRef<HTMLDivElement>(null);
   const bankListRef = useRef<HTMLDivElement>(null);
@@ -1354,12 +1394,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       return;
     }
     setComposerClosing(true);
-    composerCloseTimerRef.current = window.setTimeout(() => {
-      setComposer(EMPTY_COMPOSER);
-      setComposerClosing(false);
-      composerCloseTimerRef.current = null;
-    }, 180);
   }, [composer.open, composerClosing]);
+
+  const finishComposerClose = useCallback((event: AnimationEvent<HTMLDivElement>) => {
+    if (!composerClosing || event.target !== event.currentTarget || event.animationName !== "modalBackdropOut") return;
+    setComposer(EMPTY_COMPOSER);
+    setComposerClosing(false);
+  }, [composerClosing]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -1396,9 +1437,18 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   useEffect(() => () => {
     if (readerCloseTimerRef.current !== null) window.clearTimeout(readerCloseTimerRef.current);
-    if (composerCloseTimerRef.current !== null) window.clearTimeout(composerCloseTimerRef.current);
     if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
   }, []);
+
+  useLayoutEffect(() => {
+    const pendingScrollTop = pendingComposerScrollRestoreRef.current;
+    if (!composer.open || pendingScrollTop === null) return;
+    pendingComposerScrollRestoreRef.current = null;
+    const frame = window.requestAnimationFrame(() => {
+      if (composerListRef.current) composerListRef.current.scrollTop = pendingScrollTop;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [composer.open, composer.type, composerVisibleCount]);
 
   useLayoutEffect(() => {
     const pending = pendingListRestoreRef.current;
@@ -2134,18 +2184,28 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function openNewActivity() {
-    if (composerCloseTimerRef.current !== null) window.clearTimeout(composerCloseTimerRef.current);
+    composerSpecialtyViewsRef.current = createComposerSpecialtyViews();
+    pendingComposerScrollRestoreRef.current = 0;
     setComposerClosing(false);
     setComposerAttentionFilters([]);
     setComposerLevelFilters([]);
     setComposerStarFilter(false);
+    setComposerSortKey("frequency");
+    setComposerSortDir("asc");
     setComposerVisibleCount(20);
     setComposer({ ...EMPTY_COMPOSER, open: true, mode: "activity" });
   }
 
   function openNewSession() {
-    if (composerCloseTimerRef.current !== null) window.clearTimeout(composerCloseTimerRef.current);
+    composerSpecialtyViewsRef.current = createComposerSpecialtyViews();
+    pendingComposerScrollRestoreRef.current = 0;
     setComposerClosing(false);
+    setComposerAttentionFilters([]);
+    setComposerLevelFilters([]);
+    setComposerStarFilter(false);
+    setComposerSortKey("frequency");
+    setComposerSortDir("asc");
+    setComposerVisibleCount(20);
     setComposer({ ...EMPTY_COMPOSER, open: true, mode: "session" });
   }
 
@@ -2163,7 +2223,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function openEditSession(session: LocalSession) {
     if (!isSessionEditable(session)) return;
-    if (composerCloseTimerRef.current !== null) window.clearTimeout(composerCloseTimerRef.current);
+    composerSpecialtyViewsRef.current = createComposerSpecialtyViews();
+    pendingComposerScrollRestoreRef.current = 0;
     setComposerClosing(false);
     const activities = sessionActivities(session);
     setComposer({
@@ -2175,6 +2236,66 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       sessionSystemDesign: activities.filter((activity) => activity.type === "system_design").length,
       sessionBehavioral: activities.filter((activity) => activity.type === "behavioral").length,
     });
+  }
+
+  function rememberComposerSpecialtyView(
+    type = composer.type,
+    patch: Partial<ComposerSpecialtyView> = {},
+  ) {
+    const current = composerSpecialtyViewsRef.current[type];
+    composerSpecialtyViewsRef.current[type] = {
+      ...current,
+      ...(type === composer.type ? {
+        query: composer.query,
+        attentionFilters: composerAttentionFilters,
+        levelFilters: composerLevelFilters,
+        starFilter: composerStarFilter,
+        sortKey: composerSortKey,
+        sortDir: composerSortDir,
+        visibleCount: composerVisibleCount,
+        scrollTop: composerListRef.current?.scrollTop ?? current.scrollTop,
+      } : {}),
+      ...patch,
+    };
+  }
+
+  function resetActiveComposerResults(patch: Partial<ComposerSpecialtyView> = {}) {
+    if (composerListRef.current) composerListRef.current.scrollTop = 0;
+    pendingComposerScrollRestoreRef.current = 0;
+    setComposerVisibleCount(20);
+    rememberComposerSpecialtyView(composer.type, {
+      visibleCount: 20,
+      scrollTop: 0,
+      ...patch,
+    });
+  }
+
+  function switchComposerType(type: ActivityType, preserveCustomDraft = false) {
+    if (type === composer.type) return;
+    rememberComposerSpecialtyView();
+    const next = composerSpecialtyViewsRef.current[type];
+    pendingComposerScrollRestoreRef.current = next.scrollTop;
+    setComposerAttentionFilters(next.attentionFilters);
+    setComposerLevelFilters(next.levelFilters);
+    setComposerStarFilter(next.starFilter);
+    setComposerSortKey(next.sortKey);
+    setComposerSortDir(next.sortDir);
+    setComposerVisibleCount(next.visibleCount);
+    setComposer((current) => ({
+      ...current,
+      type,
+      query: next.query,
+      selectedId: "",
+      minutes: type === "leetcode" ? "30" : "60",
+      ...(!preserveCustomDraft ? {
+        customOpen: false,
+        customEditingKey: "",
+        customTitle: "",
+        customUrl: "",
+        customPrompt: "",
+      } : {}),
+      customMinutes: type === "leetcode" ? "30" : "60",
+    }));
   }
 
   function listModeFor(surface: ListSurface): ListMode {
@@ -3937,7 +4058,19 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       && (composerLevelFilters.length === 0 || (questionLevel(question) !== null && composerLevelFilters.includes(questionLevel(question)!)))
       && (!composerStarFilter || isStarred(composer.type, question.id));
   });
-  const visibleQuestionEntries = filteredQuestionEntries.slice(0, composerVisibleCount);
+  const orderedQuestionEntries = [...filteredQuestionEntries].sort((left, right) => {
+    let comparison = 0;
+    if (composerSortKey === "frequency") {
+      comparison = frequencyRank(left.question) - frequencyRank(right.question);
+    } else if (composerSortKey === "acceptance") {
+      comparison = (left.question.acceptanceRate ?? -1) - (right.question.acceptanceRate ?? -1);
+    } else {
+      comparison = recencyScore(left.question) - recencyScore(right.question);
+    }
+    if (comparison === 0) comparison = left.question.title.localeCompare(right.question.title);
+    return composerSortDir === "asc" ? comparison : -comparison;
+  });
+  const visibleQuestionEntries = orderedQuestionEntries.slice(0, composerVisibleCount);
   const derivedUrl = deriveQuestionFromUrl(composer.query, composer.type, activeBank);
   const derivedBlocked = Boolean(derivedUrl && isQuestionBlocked({ id: derivedUrl.questionId ?? `personal-${composer.type}-${slugify(derivedUrl.title)}`, title: derivedUrl.title, url: derivedUrl.url, topics: [], targetMinutes: derivedUrl.targetMinutes, active: true }, composerBlocked));
   const canSaveActivity = composer.editingId
@@ -3951,6 +4084,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const customUrlInvalid = Boolean(composer.customUrl.trim() && !deriveQuestionFromUrl(composer.customUrl, composer.type, activeBank));
   const activeComposerFilterCount = composerAttentionFilters.length + composerLevelFilters.length;
   const hasComposerFilters = activeComposerFilterCount > 0 || composerStarFilter;
+  const activeComposerSort = COMPOSER_SORT_OPTIONS.find((option) => option.key === composerSortKey) ?? COMPOSER_SORT_OPTIONS[0];
   const composerAttentionCount = (filter: ComposerAttentionFilter) => composerQuestionEntries.filter((entry) => {
     if (filter === "due") return entry.dueNow;
     if (filter === "needs_review") return entry.needsReview;
@@ -3961,18 +4095,50 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }).length;
   const composerLevelCount = (level: "easy" | "medium" | "hard") => composerQuestionEntries.filter((entry) => questionLevel(entry.question) === level).length;
   const toggleComposerAttentionFilter = (filter: ComposerAttentionFilter) => {
-    setComposerVisibleCount(20);
-    setComposerAttentionFilters((current) => current.includes(filter) ? current.filter((candidate) => candidate !== filter) : [...current, filter]);
+    const next = composerAttentionFilters.includes(filter)
+      ? composerAttentionFilters.filter((candidate) => candidate !== filter)
+      : [...composerAttentionFilters, filter];
+    setComposerAttentionFilters(next);
+    resetActiveComposerResults({ attentionFilters: next });
   };
   const toggleComposerLevelFilter = (filter: "easy" | "medium" | "hard") => {
-    setComposerVisibleCount(20);
-    setComposerLevelFilters((current) => current.includes(filter) ? current.filter((candidate) => candidate !== filter) : [...current, filter]);
+    const next = composerLevelFilters.includes(filter)
+      ? composerLevelFilters.filter((candidate) => candidate !== filter)
+      : [...composerLevelFilters, filter];
+    setComposerLevelFilters(next);
+    resetActiveComposerResults({ levelFilters: next });
   };
   const clearComposerFilters = () => {
     setComposerAttentionFilters([]);
     setComposerLevelFilters([]);
     setComposerStarFilter(false);
-    setComposerVisibleCount(20);
+    resetActiveComposerResults({ attentionFilters: [], levelFilters: [], starFilter: false });
+  };
+  const toggleComposerStarFilter = () => {
+    const next = !composerStarFilter;
+    setComposerStarFilter(next);
+    resetActiveComposerResults({ starFilter: next });
+  };
+  const updateComposerQuery = (query: string) => {
+    setComposer((current) => ({ ...current, query }));
+    resetActiveComposerResults({ query });
+  };
+  const toggleComposerSort = (key: ComposerSortKey) => {
+    const nextDirection = composerSortKey === key
+      ? composerSortDir === "asc" ? "desc" : "asc"
+      : "asc";
+    setComposerSortKey(key);
+    setComposerSortDir(nextDirection);
+    resetActiveComposerResults({ sortKey: key, sortDir: nextDirection });
+  };
+  const handleComposerListScroll = (list: HTMLDivElement) => {
+    rememberComposerSpecialtyView(composer.type, { scrollTop: list.scrollTop });
+    if (list.scrollTop + list.clientHeight < list.scrollHeight - 72 || composerVisibleCount >= orderedQuestionEntries.length) return;
+    setComposerVisibleCount((current) => {
+      const next = Math.min(orderedQuestionEntries.length, current + 20);
+      rememberComposerSpecialtyView(composer.type, { visibleCount: next, scrollTop: list.scrollTop });
+      return next;
+    });
   };
   const sessionAvailability = {
     coding: availableSessionQuestions("leetcode", composer.editingSessionId).length,
@@ -4583,7 +4749,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         <div className={`page-content page-enter-stage page-enter-${viewDirection}`} id="practice-content" key={`${view}-${viewTransitionId}`}>{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
       </section>
 
-      {composer.open && <div className={`modal-backdrop ${composerClosing ? "closing" : ""}`} role="presentation" onMouseDown={closeComposer}>
+      {composer.open && <div className={`modal-backdrop ${composerClosing ? "closing" : ""}`} role="presentation" onMouseDown={closeComposer} onAnimationEnd={finishComposerClose}>
         <section className={`composer ${composer.mode === "activity" && !composer.editingId ? "activity-composer-dialog" : ""} ${composerClosing ? "closing" : ""}`} role="dialog" aria-modal="true" aria-labelledby="composer-title" onMouseDown={(event) => event.stopPropagation()}>
           <button className="modal-close" onClick={closeComposer} aria-label="Close">×</button>
           <span className="eyebrow">BUILD TODAY&apos;S WORK</span>
@@ -4608,19 +4774,19 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             <small>{sessionAvailability.coding} coding, {sessionAvailability.systemDesign} system-design, and {sessionAvailability.behavioral} behavioral questions are available after today&apos;s other picks. A recipe locks once its timer, activity work, or completion begins.</small>
             <button className="primary-action full-width" onClick={saveFullSession} disabled={!canSaveSession}>{composer.editingSessionId ? "Save session recipe" : `Add session ${allSessions.length + 1}`}</button>
           </div> : <form className="multi-activity-composer" onSubmit={saveActivity}>
-            <div className="type-selector" role="group" aria-label="Practice type">{(["leetcode", "system_design", "behavioral"] as const).map((type) => <button type="button" key={type} className={`${type} ${composer.type === type ? "active" : ""}`} onClick={() => { setComposerVisibleCount(20); setComposer((current) => ({ ...current, type, query: "", selectedId: "", minutes: type === "leetcode" ? "30" : "60", customOpen: false, customEditingKey: "", customTitle: "", customUrl: "", customPrompt: "", customMinutes: type === "leetcode" ? "30" : "60" })); }}>{typeLabel(type)}{composer.selectedActivities.some((item) => item.type === type) && <small>{composer.selectedActivities.filter((item) => item.type === type).length}</small>}</button>)}</div>
+            <div className="type-selector" role="group" aria-label="Practice type">{(["leetcode", "system_design", "behavioral"] as const).map((type) => <button type="button" key={type} className={`${type} ${composer.type === type ? "active" : ""}`} onClick={() => switchComposerType(type)}>{typeLabel(type)}{composer.selectedActivities.some((item) => item.type === type) && <small>{composer.selectedActivities.filter((item) => item.type === type).length}</small>}</button>)}</div>
             <div className="activity-picker-toolbar">
-              <div className="activity-picker-heading"><span>Search this specialty, then keep selecting across searches and tabs.</span>{hasComposerFilters && <button type="button" className="filter-clear" onClick={clearComposerFilters}>Clear</button>}<div className="bank-icon-tools activity-picker-tools"><button type="button" className={`collection-toggle icon-tool ${composerStarFilter ? "active" : ""}`} onClick={() => { setComposerVisibleCount(20); setComposerStarFilter((current) => !current); }} aria-pressed={composerStarFilter} aria-label={composerStarFilter ? "Show all questions" : "Show starred questions"} title={composerStarFilter ? "Showing starred questions" : "Show starred questions"}><Icon name="star" /></button><details className={`control-menu icon-menu ${activeComposerFilterCount > 0 ? "active" : ""}`}><summary aria-label={`Activity filters${activeComposerFilterCount ? `, ${activeComposerFilterCount} active` : ""}`} title={`${activeComposerFilterCount || "No"} active filters`}><Icon name="filter" />{activeComposerFilterCount > 0 && <i>{activeComposerFilterCount}</i>}</summary><div className="control-popover compact-filter-popover activity-filter-menu"><div className="compact-filter-group review" role="group" aria-label="Review filters">{([['due', 'Due now'], ['needs_review', 'Needs review']] as const).map(([filter, label]) => <button type="button" key={filter} className={composerAttentionFilters.includes(filter) ? "active" : ""} aria-pressed={composerAttentionFilters.includes(filter)} onClick={() => toggleComposerAttentionFilter(filter)}><span>{label}</span><small>{composerAttentionCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div><div className="compact-filter-group result" role="group" aria-label="Result filters">{([['solved', 'Solved'], ['helped', 'Solved with help'], ['failed', 'Failed'], ['todo', 'To do']] as const).map(([filter, label]) => <button type="button" key={filter} className={composerAttentionFilters.includes(filter) ? "active" : ""} aria-pressed={composerAttentionFilters.includes(filter)} onClick={() => toggleComposerAttentionFilter(filter)}><span>{label}</span><small>{composerAttentionCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div><div className="compact-filter-group difficulty" role="group" aria-label="Difficulty filters">{(["easy", "medium", "hard"] as const).map((filter) => <button type="button" key={filter} className={composerLevelFilters.includes(filter) ? "active" : ""} aria-pressed={composerLevelFilters.includes(filter)} onClick={() => toggleComposerLevelFilter(filter)}><span>{filter[0].toUpperCase() + filter.slice(1)}</span><small>{composerLevelCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div></div></details></div></div>
-              <label className="bank-search-bar activity-picker-search"><span className="bank-search-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="16" height="16" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.8"/><path d="M12.8 12.8 17 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg></span><input autoFocus type="search" value={composer.query} onChange={(event) => { setComposerVisibleCount(20); setComposer((current) => ({ ...current, query: event.target.value })); }} placeholder={composer.type === "leetcode" ? "Search titles and topics, or paste a LeetCode URL" : "Search titles and topics, or paste a public URL"} aria-label="Search activity questions" />{composer.query ? <button type="button" className="bank-search-clear" onClick={() => { setComposerVisibleCount(20); setComposer((current) => ({ ...current, query: "" })); }} aria-label="Clear search">×</button> : <span className="bank-search-clear-spacer" aria-hidden="true" />}<span className="bank-result-count" aria-live="polite">{filteredQuestionEntries.length}</span></label>
+              <div className="activity-picker-heading"><span>Search this specialty, then keep selecting across searches and tabs.</span>{hasComposerFilters && <button type="button" className="filter-clear" onClick={clearComposerFilters}>Clear</button>}<div className="bank-icon-tools activity-picker-tools"><button type="button" className={`collection-toggle icon-tool ${composerStarFilter ? "active" : ""}`} onClick={toggleComposerStarFilter} aria-pressed={composerStarFilter} aria-label={composerStarFilter ? "Show all questions" : "Show starred questions"} title={composerStarFilter ? "Showing starred questions" : "Show starred questions"}><Icon name="star" /></button><details className={`control-menu icon-menu ${activeComposerFilterCount > 0 ? "active" : ""}`}><summary aria-label={`Activity filters${activeComposerFilterCount ? `, ${activeComposerFilterCount} active` : ""}`} title={`${activeComposerFilterCount || "No"} active filters`}><Icon name="filter" />{activeComposerFilterCount > 0 && <i>{activeComposerFilterCount}</i>}</summary><div className="control-popover compact-filter-popover activity-filter-menu"><div className="compact-filter-group review" role="group" aria-label="Review filters">{([['due', 'Due now'], ['needs_review', 'Needs review']] as const).map(([filter, label]) => <button type="button" key={filter} className={composerAttentionFilters.includes(filter) ? "active" : ""} aria-pressed={composerAttentionFilters.includes(filter)} onClick={() => toggleComposerAttentionFilter(filter)}><span>{label}</span><small>{composerAttentionCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div><div className="compact-filter-group result" role="group" aria-label="Result filters">{([['solved', 'Solved'], ['helped', 'Solved with help'], ['failed', 'Failed'], ['todo', 'To do']] as const).map(([filter, label]) => <button type="button" key={filter} className={composerAttentionFilters.includes(filter) ? "active" : ""} aria-pressed={composerAttentionFilters.includes(filter)} onClick={() => toggleComposerAttentionFilter(filter)}><span>{label}</span><small>{composerAttentionCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div><div className="compact-filter-group difficulty" role="group" aria-label="Difficulty filters">{(["easy", "medium", "hard"] as const).map((filter) => <button type="button" key={filter} className={composerLevelFilters.includes(filter) ? "active" : ""} aria-pressed={composerLevelFilters.includes(filter)} onClick={() => toggleComposerLevelFilter(filter)}><span>{filter[0].toUpperCase() + filter.slice(1)}</span><small>{composerLevelCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div></div></details><details className="control-menu sort-menu icon-menu"><summary aria-label={`Sort by ${activeComposerSort.label}, ${composerSortDir === "asc" ? "ascending" : "descending"}`} title={`Sort: ${activeComposerSort.label} · ${composerSortDir === "asc" ? "low to high" : "high to low"}`}><span className={`bank-sort-glyph ${activeComposerSort.icon}`} aria-hidden="true" /><small className="sort-direction-badge" aria-hidden="true">{composerSortDir === "asc" ? "↑" : "↓"}</small></summary><div className="control-popover"><strong>Order by</strong>{COMPOSER_SORT_OPTIONS.map((option) => { const active = composerSortKey === option.key; return <button key={option.key} type="button" className={active ? "active" : ""} onClick={() => toggleComposerSort(option.key)} aria-pressed={active}><span>{option.label}</span><small aria-hidden="true">{active ? composerSortDir === "asc" ? "↑ low to high" : "↓ high to low" : ""}</small></button>; })}</div></details></div></div>
+              <label className="bank-search-bar activity-picker-search"><span className="bank-search-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="16" height="16" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.8"/><path d="M12.8 12.8 17 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg></span><input autoFocus type="search" value={composer.query} onChange={(event) => updateComposerQuery(event.target.value)} placeholder={composer.type === "leetcode" ? "Search titles and topics, or paste a LeetCode URL" : "Search titles and topics, or paste a public URL"} aria-label="Search activity questions" />{composer.query ? <button type="button" className="bank-search-clear" onClick={() => updateComposerQuery("")} aria-label="Clear search">×</button> : <span className="bank-search-clear-spacer" aria-hidden="true" />}<span className="bank-result-count" aria-live="polite">{filteredQuestionEntries.length}</span></label>
             </div>
             <div className="composer-specialty-surface" key={composer.type}>
               {derivedUrl && <div className={`derived-question ${derivedBlocked ? "blocked" : ""}`}><span>{derivedUrl.questionId ? "Question matched in the bank" : "Public URL ready to stage"}</span><strong>{derivedUrl.title}</strong><small>{derivedUrl.url}</small>{derivedBlocked ? <em>Already on Today</em> : <button type="button" onClick={() => { const known = activeBank.find((question) => question.id === derivedUrl.questionId); if (known) selectBankQuestion(known); else openCustomActivity(derivedUrl.url); }}>{derivedUrl.questionId && composer.selectedActivities.some((item) => item.type === composer.type && item.questionId === derivedUrl.questionId) ? "Remove selection" : derivedUrl.questionId ? "Select activity" : "Review custom activity"}</button>}</div>}
-              {!derivedUrl && <div className="bank-results" onScroll={(event) => { const list = event.currentTarget; if (list.scrollTop + list.clientHeight >= list.scrollHeight - 72 && composerVisibleCount < filteredQuestionEntries.length) setComposerVisibleCount((current) => Math.min(filteredQuestionEntries.length, current + 20)); }}>{visibleQuestionEntries.length ? visibleQuestionEntries.map(({ question, latestAttempt, blockedToday }) => { const selected = composer.selectedActivities.some((item) => item.type === composer.type && item.questionId === question.id); return <button type="button" className={`${selected ? "selected" : ""} ${blockedToday ? "blocked" : ""}`} key={question.id} onClick={() => selectBankQuestion(question)} disabled={blockedToday} aria-pressed={selected} aria-label={blockedToday ? `${question.title} is already on Today` : `${selected ? "Remove" : "Select"} ${question.title}`}><span className={`type-mark ${composer.type}`}>{typeMark(composer.type)}</span><div><strong>{question.title}</strong><small>{question.difficulty ? `${question.difficulty} · ` : ""}{question.topics.join(" · ")}{blockedToday ? `${question.topics.length || question.difficulty ? " · " : ""}Already on Today` : ""}</small></div><StaticResultFlag outcome={latestAttempt?.outcome} /></button>; }) : <p className="no-results">No bank match. Create a custom activity for a private, offline, or not-yet-indexed prompt.</p>}{visibleQuestionEntries.length < filteredQuestionEntries.length && <span className="picker-load-status">Scroll for more · {filteredQuestionEntries.length - visibleQuestionEntries.length} remaining</span>}</div>}
+              {!derivedUrl && <div className="bank-results" ref={composerListRef} onScroll={(event) => handleComposerListScroll(event.currentTarget)}>{visibleQuestionEntries.length ? visibleQuestionEntries.map(({ question, latestAttempt, blockedToday }) => { const selected = composer.selectedActivities.some((item) => item.type === composer.type && item.questionId === question.id); return <button type="button" className={`${selected ? "selected" : ""} ${blockedToday ? "blocked" : ""}`} key={question.id} onClick={() => selectBankQuestion(question)} disabled={blockedToday} aria-pressed={selected} aria-label={blockedToday ? `${question.title} is already on Today` : `${selected ? "Remove" : "Select"} ${question.title}`}><span className={`type-mark ${composer.type}`}>{typeMark(composer.type)}</span><div><strong>{question.title}</strong><small className="activity-card-meta"><span>{question.difficulty ? `${question.difficulty} · ` : ""}{question.topics.join(" · ")}</span>{blockedToday && <em>Already on Today</em>}</small></div><StaticResultFlag outcome={latestAttempt?.outcome} /></button>; }) : <p className="no-results">No bank match. Create a custom activity for a private, offline, or not-yet-indexed prompt.</p>}{visibleQuestionEntries.length < filteredQuestionEntries.length && <span className="picker-load-status">Scroll for more · {filteredQuestionEntries.length - visibleQuestionEntries.length} remaining</span>}</div>}
             </div>
             <button className="custom-activity-trigger" type="button" onClick={() => composer.customOpen ? setComposer((current) => ({ ...current, customOpen: false, customEditingKey: "" })) : openCustomActivity()}>＋ Custom activity</button>
             {composer.customOpen && <section className="custom-activity-card" aria-label="Custom activity">
               <div><strong>{composer.customEditingKey ? "Edit custom activity" : "Create a custom activity"}</strong><small>Title is required. A public URL and prompt are optional.</small></div>
-              <label><span>Specialty</span><select value={composer.type} onChange={(event) => { const type = event.target.value as ActivityType; setComposer((current) => ({ ...current, type, customMinutes: type === "leetcode" ? "30" : "60" })); }}><option value="leetcode">Coding</option><option value="system_design">System design</option><option value="behavioral">Behavioral</option></select></label>
+              <label><span>Specialty</span><select value={composer.type} onChange={(event) => switchComposerType(event.target.value as ActivityType, true)}><option value="leetcode">Coding</option><option value="system_design">System design</option><option value="behavioral">Behavioral</option></select></label>
               <label><span>Title</span><input value={composer.customTitle} onChange={(event) => setComposer((current) => ({ ...current, customTitle: event.target.value }))} placeholder="Required" /></label>
               <label><span>Public URL</span><input type="url" value={composer.customUrl} onChange={(event) => { const value = event.target.value; const derived = deriveQuestionFromUrl(value, composer.type, bankFor(composer.type)); setComposer((current) => ({ ...current, customUrl: value, ...(!current.customTitle && derived?.title ? { customTitle: derived.title } : {}) })); }} placeholder="Optional" />{customUrlInvalid && <em>Use a complete public http or https URL.</em>}</label>
               <label className="custom-prompt"><span>Description or prompt</span><textarea value={composer.customPrompt} onChange={(event) => setComposer((current) => ({ ...current, customPrompt: event.target.value }))} placeholder="Optional context for the specialist" /></label>

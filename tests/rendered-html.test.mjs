@@ -275,6 +275,8 @@ test("the practice composer animates both layout changes and dismissal", async (
   assert.match(client, /function AnimatedComposerStage/);
   assert.match(client, /const \[composerClosing, setComposerClosing\] = useState\(false\)/);
   assert.match(client, /const closeComposer = useCallback/);
+  assert.match(client, /onAnimationEnd=\{finishComposerClose\}/);
+  assert.doesNotMatch(client, /composerCloseTimerRef/);
   assert.match(client, /composerClosing \? "closing" : ""/);
   assert.match(client, /<AnimatedComposerStage motionKey=\{composer\.mode\}>/);
   assert.match(css, /\.composer-stage \{[^}]*transition: height/);
@@ -294,4 +296,23 @@ test("activity selection motion stays localized to changed composer content", as
   assert.match(css, /\.composer-specialty-surface \{[^}]*animation: composerContentIn/);
   assert.match(css, /\.bank-results button\.selected \{[^}]*animation: selectionConfirm/);
   assert.match(css, /@keyframes selectionConfirm/);
+});
+
+test("activity composer keeps specialty controls independent and contains every footer and card label", async () => {
+  const [client, css] = await Promise.all([
+    readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/interview-arc-v2.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(client, /type ComposerSpecialtyViews = Record<ActivityType, ComposerSpecialtyView>/);
+  assert.match(client, /composerSpecialtyViewsRef/);
+  assert.match(client, /function switchComposerType/);
+  assert.match(client, /pendingComposerScrollRestoreRef/);
+  assert.match(client, /ref=\{composerListRef\}/);
+  assert.match(client, /COMPOSER_SORT_OPTIONS/);
+  assert.match(client, /activity-card-meta/);
+  assert.match(css, /\.activity-card-meta > span \{[^}]*text-overflow: ellipsis;/);
+  assert.match(css, /\.activity-card-meta > em \{[^}]*white-space: nowrap;/);
+  assert.match(css, /\.activity-selection-footer \{[^}]*bottom: 0;/);
+  assert.match(css, /grid-template-columns: minmax\(110px, 1fr\) auto 160px 160px;/);
 });
