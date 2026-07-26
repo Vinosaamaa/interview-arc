@@ -22,3 +22,7 @@ state request. The panel can add the current public LeetCode URL to Today, run
 and finish its D1-backed stopwatch, cycle the user-owned result, and save
 personal notes. Finishing the stopwatch makes the attempt **Ready for journal**
 automatically; the result remains separate attempt metadata.
+
+The toolbar icon is colored on supported Interview Arc and public LeetCode
+problem pages. It becomes gray on other pages, where the side panel is
+intentionally unavailable.

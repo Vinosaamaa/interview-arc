@@ -554,11 +554,16 @@ test("the Chrome companion follows live Interview Arc focus and public LeetCode 
   assert.ok(manifest.permissions.includes("sidePanel"));
   assert.deepEqual(manifest.host_permissions, [
     "https://leetcode.com/problems/*",
+    "https://www.leetcode.com/problems/*",
     "https://limitless.vinosama.workers.dev/*",
     "https://limitless-mcp.vinosama.workers.dev/*",
   ]);
   assert.equal(manifest.content_scripts, undefined);
   assert.match(serviceWorker, /url\.origin === INTERVIEW_ARC_ORIGIN/);
+  assert.match(serviceWorker, /LEETCODE_WWW_ORIGIN/);
+  assert.match(serviceWorker, /chrome\.action\.setIcon/);
+  assert.match(serviceWorker, /chrome\.runtime\.onStartup/);
+  assert.match(serviceWorker, /chrome\.tabs\.query\(\{\}\)/);
   assert.match(sidePanel, /window\.setInterval\(\(\) => \{/);
   assert.match(sidePanel, /if \(context\.problemUrl\) query\.set\("url", context\.problemUrl\)/);
   assert.match(sidePanel, /chrome\.tabs\.create\(\{ url \}\)/);
