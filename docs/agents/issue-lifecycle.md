@@ -36,10 +36,65 @@ fail, including a later regression. Create a new linked issue only when
 evidence establishes a separate problem, materially expanded scope, or an
 independently deliverable result.
 
-## Mandatory reproduction gate
+## Verification lanes
 
-For every reported bug, complete a diagnosis pass before changing product
-code:
+Choose the lightest lane that is safe for the change. When the user explicitly
+says **Fast fix**, use the Fast lane unless investigation reveals reliability
+risk. When no lane is named, use Standard. Record the chosen lane in the issue
+or pull request.
+
+### Fast
+
+Use Fast for a localized, reversible change such as spacing, color, copy,
+non-critical metadata presentation, or another isolated visual defect.
+
+1. Inspect the report and affected source. Reproduce only when the failure is
+   unclear or reproduction is quick and non-disruptive.
+2. Make the smallest scoped repair.
+3. Run the directly relevant test, parser, lint, or build check and require CI
+   to pass.
+4. Merge and deploy the website or install the packaged Voice application.
+5. Do not require agent-run production visual verification. The user performs
+   final visual acceptance during normal use and may reopen the same issue if
+   it still fails.
+
+Fast does not waive safe release mechanics, CI, rollback information, or the
+issue-first rule. It shortens reproduction, test breadth, manual verification,
+and resolution detail.
+
+For Voice, download the exact artifact produced from merged `main`, quit the
+installed copy, and launch the artifact directly from a temporary staging
+folder before installation. This is the real release application, not a
+SwiftUI preview or development build. If its focused visual smoke test passes,
+install that exact artifact. A Fast visual change does not require a second
+agent-run smoke test after installation.
+
+### Standard
+
+Use Standard for ordinary product bugs and features:
+
+1. Reproduce once in the relevant environment.
+2. Add focused regression coverage.
+3. Run the normal repository checks and CI.
+4. Merge and deploy or install.
+5. Perform one concise production or installed-app smoke test before recording
+   resolution.
+
+### Reliability
+
+Use Reliability for timers, saved or published data, authentication,
+permissions, recording, transcription, insertion, synchronization, crashes,
+privacy, security, or any change that could silently lose or corrupt user
+work. Follow the complete reproduction, boundary inspection, regression,
+release, installed/deployed verification, and postmortem requirements.
+
+If a Fast or Standard investigation exposes Reliability scope, stop using the
+lighter lane and record the escalation.
+
+## Reproduction gate
+
+For Standard and Reliability bugs, complete a diagnosis pass before changing
+product code:
 
 1. Reproduce the exact reported flow in the affected released product when it
    is safe to do so. Match the relevant screen size, zoom or text scale, theme,
@@ -56,9 +111,11 @@ code:
 6. When the user asks for diagnosis before implementation, stop after reporting
    these findings and wait for approval before changing product code.
 
-After implementation, repeat the original reproduction steps against the
-changed build and the released product. A nearby happy-path test is not a
-substitute for rerunning the exact reported flow.
+After Standard or Reliability implementation, repeat the original reproduction
+steps against the changed build and the released product. A nearby happy-path
+test is not a substitute for rerunning the exact reported flow. Fast changes
+use source inspection, focused automated checks, CI, and user acceptance unless
+they are escalated.
 
 ## Issue-first rule
 
@@ -102,19 +159,25 @@ The PR records:
 
 ## Release, verification, and closure
 
-After review:
+After review, follow the selected lane:
 
 1. Merge into `main`.
 2. Deploy the website when runtime content, code, or infrastructure changed.
-3. For Voice, package merged `main` and install that exact application.
-4. Test the deployed website or signed installed app.
-5. Add the issue resolution record.
-6. Close the issue.
+3. For Voice, package merged `main`. In Fast, run that exact app from a
+   temporary staging folder before installing it. In Standard and Reliability,
+   also exercise the installed copy.
+4. In Standard and Reliability, test the deployed website or signed installed
+   app. In Fast, leave final production visual acceptance to the user.
+5. Add a resolution record proportionate to the lane.
+6. Close the issue after the required agent verification. A Fast issue may be
+   closed after CI, deployment or installation, and its staged Voice check; the
+   user may reopen it without needing to explicitly confirm success.
 
-Source inspection, previews, an unmerged build, or CI alone are not release
-evidence. The user does not need to explicitly confirm every fix. After
-thorough agent verification, the agent records and closes it; the user may
-continue using the product normally.
+A preview or development build is never release evidence. CI alone is
+insufficient for Standard or Reliability. For Fast Voice work, the staged exact
+merged-main artifact is release evidence before installation. The user does not
+need to explicitly confirm every fix; if normal use later exposes the same
+failure, reopen the issue and preserve its history.
 
 Use this closing comment:
 
@@ -187,7 +250,7 @@ resolution history.
 
 Normal:
 
-`Report → Triage → Issue → Implementation → PR → Merge → Deploy/install → Agent verification → Resolution record → Close`
+`Report → Triage → Choose lane → Issue → Implementation → PR → Merge → Deploy/install → Lane verification → Resolution record → Close`
 
 Recurrence:
 
