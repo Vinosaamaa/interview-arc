@@ -1,4 +1,3 @@
-const API_BASE = "https://limitless-mcp.vinosama.workers.dev";
 const INTERVIEW_ARC_ORIGIN = "https://limitless.vinosama.workers.dev";
 const OUTCOMES = [null, "solved", "solved_after_reviewing_approach", "failed"];
 
@@ -72,20 +71,32 @@ async function activeTabContext() {
 }
 
 async function api(path, init = {}, credential = token) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    cache: "no-store",
-    headers: { authorization: `Bearer ${credential}`, "content-type": "application/json", ...(init.headers ?? {}) },
-  });
-  if (!response.ok) {
+  let envelope;
+  try {
+    envelope = await chrome.runtime.sendMessage(
+      InterviewArcCompanionNetwork.requestMessage(path, init, credential),
+    );
+  } catch {
+    envelope = {
+      kind: "transport-error",
+      code: "worker",
+      message: "The Companion network worker could not start.",
+    };
+  }
+  if (!envelope || envelope.kind === "transport-error") {
     throw new CompanionAPIError(
-      response.status === 401
-        ? "This connection token is no longer accepted."
-        : `Interview Arc is temporarily unavailable (${response.status}).`,
-      response.status,
+      `${envelope?.message ?? "Chrome could not reach Interview Arc"} Recheck the connection.`,
     );
   }
-  return response.json();
+  if (!envelope.ok) {
+    throw new CompanionAPIError(
+      envelope.status === 401
+        ? "This connection token is no longer accepted."
+        : `Interview Arc is temporarily unavailable (${envelope.status}).`,
+      envelope.status,
+    );
+  }
+  return envelope.body;
 }
 
 function showConnect() {
