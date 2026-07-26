@@ -1174,6 +1174,37 @@ function MetricRing({ label, value, detail, color }: { label: string; value: num
   );
 }
 
+function AnimatedComposerStage({ children, motionKey }: { children: ReactNode; motionKey: ComposerMode }) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<number | null>(null);
+  const [height, setHeight] = useState<number>();
+
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+    const measure = () => {
+      if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
+      frameRef.current = window.requestAnimationFrame(() => {
+        setHeight(content.getBoundingClientRect().height);
+        frameRef.current = null;
+      });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(content);
+    return () => {
+      observer.disconnect();
+      if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
+    };
+  }, [motionKey]);
+
+  return (
+    <div className="composer-stage" style={height === undefined ? undefined : { height }}>
+      <div className="composer-stage-inner" ref={contentRef} key={motionKey}>{children}</div>
+    </div>
+  );
+}
+
 export default function HomeClient({ content, today }: { content: ContentIndex; today: string }) {
   const journal = useMemo(
     () => content.journals.find((candidate) => candidate.date === today) ?? emptyJournal(today),
@@ -1190,6 +1221,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const yesterdayDate = shiftDate(journal.date, -1);
   const yesterdayDraft = useReadOnlyLiveState(yesterdayDate);
   const [composer, setComposer] = useState<ComposerState>(EMPTY_COMPOSER);
+  const [composerClosing, setComposerClosing] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<LogEntry | null>(null);
   const [selectedProblem, setSelectedProblem] = useState<{ type: ActivityType; question: QuestionBankItem } | null>(null);
   const [libraryNestedProblem, setLibraryNestedProblem] = useState<{ type: ActivityType; question: QuestionBankItem } | null>(null);
@@ -1279,6 +1311,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const highlightNoteEditorRef = useRef<HTMLTextAreaElement>(null);
   const readerScrollFrameRef = useRef(0);
   const readerCloseTimerRef = useRef<number | null>(null);
+  const composerCloseTimerRef = useRef<number | null>(null);
   const toastTimerRef = useRef<number | null>(null);
   const pipWindowRef = useRef<Window | null>(null);
   const pastListRef = useRef<HTMLDivElement>(null);
@@ -1313,6 +1346,20 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     playTrack: playAmbientTrack,
     setVolume: setMusicVolume,
   } = useAmbientSound(today);
+
+  const closeComposer = useCallback(() => {
+    if (!composer.open || composerClosing) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setComposer(EMPTY_COMPOSER);
+      return;
+    }
+    setComposerClosing(true);
+    composerCloseTimerRef.current = window.setTimeout(() => {
+      setComposer(EMPTY_COMPOSER);
+      setComposerClosing(false);
+      composerCloseTimerRef.current = null;
+    }, 180);
+  }, [composer.open, composerClosing]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -1349,6 +1396,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   useEffect(() => () => {
     if (readerCloseTimerRef.current !== null) window.clearTimeout(readerCloseTimerRef.current);
+    if (composerCloseTimerRef.current !== null) window.clearTimeout(composerCloseTimerRef.current);
     if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
   }, []);
 
@@ -1512,13 +1560,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (!composer.open && !integrationOpen) return;
     const onEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setComposer(EMPTY_COMPOSER);
+        if (composer.open) closeComposer();
         setIntegrationOpen(false);
       }
     };
     window.addEventListener("keydown", onEscape);
     return () => window.removeEventListener("keydown", onEscape);
-  }, [composer.open, integrationOpen]);
+  }, [closeComposer, composer.open, integrationOpen]);
 
   useEffect(() => {
     if (!selectedEntry && !selectedProblem) return;
@@ -2086,6 +2134,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function openNewActivity() {
+    if (composerCloseTimerRef.current !== null) window.clearTimeout(composerCloseTimerRef.current);
+    setComposerClosing(false);
     setComposerAttentionFilters([]);
     setComposerLevelFilters([]);
     setComposerStarFilter(false);
@@ -2094,6 +2144,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function openNewSession() {
+    if (composerCloseTimerRef.current !== null) window.clearTimeout(composerCloseTimerRef.current);
+    setComposerClosing(false);
     setComposer({ ...EMPTY_COMPOSER, open: true, mode: "session" });
   }
 
@@ -2111,6 +2163,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function openEditSession(session: LocalSession) {
     if (!isSessionEditable(session)) return;
+    if (composerCloseTimerRef.current !== null) window.clearTimeout(composerCloseTimerRef.current);
+    setComposerClosing(false);
     const activities = sessionActivities(session);
     setComposer({
       ...EMPTY_COMPOSER,
@@ -2465,7 +2519,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         ...(session ? [{ type: "session-upsert" as const, session }] : []),
         ...activities.map((activity) => ({ type: "extra-upsert" as const, activity })),
       );
-      setComposer(EMPTY_COMPOSER);
+      closeComposer();
       showUiToast(session
         ? `${activities.length} ${activities.length === 1 ? "activity" : "activities"} added as ${session.label}.`
         : `${activities.length} ${activities.length === 1 ? "activity" : "activities"} added to Today.`);
@@ -2531,7 +2585,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         },
       }] : []),
     );
-    setComposer(EMPTY_COMPOSER);
+    closeComposer();
   }
 
   function saveFullSession() {
@@ -2697,7 +2751,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       { type: "session-upsert", session },
       ...activities.map((activity) => ({ type: "extra-upsert" as const, activity })),
     );
-    setComposer(EMPTY_COMPOSER);
+    closeComposer();
   }
 
   function showUiToast(message: string) {
@@ -4529,15 +4583,16 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         <div className={`page-content page-enter-stage page-enter-${viewDirection}`} id="practice-content" key={`${view}-${viewTransitionId}`}>{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
       </section>
 
-      {composer.open && <div className="modal-backdrop" role="presentation" onMouseDown={() => setComposer(EMPTY_COMPOSER)}>
-        <section className={`composer ${composer.mode === "activity" && !composer.editingId ? "activity-composer-dialog" : ""}`} role="dialog" aria-modal="true" aria-labelledby="composer-title" onMouseDown={(event) => event.stopPropagation()}>
-          <button className="modal-close" onClick={() => setComposer(EMPTY_COMPOSER)} aria-label="Close">×</button>
+      {composer.open && <div className={`modal-backdrop ${composerClosing ? "closing" : ""}`} role="presentation" onMouseDown={closeComposer}>
+        <section className={`composer ${composer.mode === "activity" && !composer.editingId ? "activity-composer-dialog" : ""} ${composerClosing ? "closing" : ""}`} role="dialog" aria-modal="true" aria-labelledby="composer-title" onMouseDown={(event) => event.stopPropagation()}>
+          <button className="modal-close" onClick={closeComposer} aria-label="Close">×</button>
           <span className="eyebrow">BUILD TODAY&apos;S WORK</span>
           <h2 id="composer-title">{composer.editingSessionId ? "Edit session recipe" : composer.editingId ? "Edit this activity" : composer.mode === "session" ? "Build another session" : "Add activities"}</h2>
           {!composer.editingId && !composer.editingSessionId && <div className="composer-mode">
             <button className={composer.mode === "session" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, mode: "session" }))}>Full session</button>
             <button className={composer.mode === "activity" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, mode: "activity" }))}>Activities</button>
           </div>}
+          <AnimatedComposerStage motionKey={composer.mode}>
           {composer.mode === "session" && !composer.editingId ? <div className="session-composer">
             <p>Shape the session you need. The default is six coding problems, one system-design mock, and one behavioral mock. When available, Interview Arc places up to two due reviews first and fills the remaining slots with new bank questions.</p>
             {bankFor("behavioral").filter(isResumeCurriculumQuestion).length === 0 && <div className="resume-setup-warning"><strong>Résumé foundation is not ready yet.</strong><span>Interview Arc will not substitute a random behavioral prompt. Connect the Behavioral specialist once to build the private résumé curriculum.</span></div>}
@@ -4558,8 +4613,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
               <div className="activity-picker-heading"><span>Search this specialty, then keep selecting across searches and tabs.</span>{hasComposerFilters && <button type="button" className="filter-clear" onClick={clearComposerFilters}>Clear</button>}<div className="bank-icon-tools activity-picker-tools"><button type="button" className={`collection-toggle icon-tool ${composerStarFilter ? "active" : ""}`} onClick={() => { setComposerVisibleCount(20); setComposerStarFilter((current) => !current); }} aria-pressed={composerStarFilter} aria-label={composerStarFilter ? "Show all questions" : "Show starred questions"} title={composerStarFilter ? "Showing starred questions" : "Show starred questions"}><Icon name="star" /></button><details className={`control-menu icon-menu ${activeComposerFilterCount > 0 ? "active" : ""}`}><summary aria-label={`Activity filters${activeComposerFilterCount ? `, ${activeComposerFilterCount} active` : ""}`} title={`${activeComposerFilterCount || "No"} active filters`}><Icon name="filter" />{activeComposerFilterCount > 0 && <i>{activeComposerFilterCount}</i>}</summary><div className="control-popover compact-filter-popover activity-filter-menu"><div className="compact-filter-group review" role="group" aria-label="Review filters">{([['due', 'Due now'], ['needs_review', 'Needs review']] as const).map(([filter, label]) => <button type="button" key={filter} className={composerAttentionFilters.includes(filter) ? "active" : ""} aria-pressed={composerAttentionFilters.includes(filter)} onClick={() => toggleComposerAttentionFilter(filter)}><span>{label}</span><small>{composerAttentionCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div><div className="compact-filter-group result" role="group" aria-label="Result filters">{([['solved', 'Solved'], ['helped', 'Solved with help'], ['failed', 'Failed'], ['todo', 'To do']] as const).map(([filter, label]) => <button type="button" key={filter} className={composerAttentionFilters.includes(filter) ? "active" : ""} aria-pressed={composerAttentionFilters.includes(filter)} onClick={() => toggleComposerAttentionFilter(filter)}><span>{label}</span><small>{composerAttentionCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div><div className="compact-filter-group difficulty" role="group" aria-label="Difficulty filters">{(["easy", "medium", "hard"] as const).map((filter) => <button type="button" key={filter} className={composerLevelFilters.includes(filter) ? "active" : ""} aria-pressed={composerLevelFilters.includes(filter)} onClick={() => toggleComposerLevelFilter(filter)}><span>{filter[0].toUpperCase() + filter.slice(1)}</span><small>{composerLevelCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div></div></details></div></div>
               <label className="bank-search-bar activity-picker-search"><span className="bank-search-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="16" height="16" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.8"/><path d="M12.8 12.8 17 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg></span><input autoFocus type="search" value={composer.query} onChange={(event) => { setComposerVisibleCount(20); setComposer((current) => ({ ...current, query: event.target.value })); }} placeholder={composer.type === "leetcode" ? "Search titles and topics, or paste a LeetCode URL" : "Search titles and topics, or paste a public URL"} aria-label="Search activity questions" />{composer.query ? <button type="button" className="bank-search-clear" onClick={() => { setComposerVisibleCount(20); setComposer((current) => ({ ...current, query: "" })); }} aria-label="Clear search">×</button> : <span className="bank-search-clear-spacer" aria-hidden="true" />}<span className="bank-result-count" aria-live="polite">{filteredQuestionEntries.length}</span></label>
             </div>
-            {derivedUrl && <div className={`derived-question ${derivedBlocked ? "blocked" : ""}`}><span>{derivedUrl.questionId ? "Question matched in the bank" : "Public URL ready to stage"}</span><strong>{derivedUrl.title}</strong><small>{derivedUrl.url}</small>{derivedBlocked ? <em>Already on Today</em> : <button type="button" onClick={() => { const known = activeBank.find((question) => question.id === derivedUrl.questionId); if (known) selectBankQuestion(known); else openCustomActivity(derivedUrl.url); }}>{derivedUrl.questionId && composer.selectedActivities.some((item) => item.type === composer.type && item.questionId === derivedUrl.questionId) ? "Remove selection" : derivedUrl.questionId ? "Select activity" : "Review custom activity"}</button>}</div>}
-            {!derivedUrl && <div className="bank-results" onScroll={(event) => { const list = event.currentTarget; if (list.scrollTop + list.clientHeight >= list.scrollHeight - 72 && composerVisibleCount < filteredQuestionEntries.length) setComposerVisibleCount((current) => Math.min(filteredQuestionEntries.length, current + 20)); }}>{visibleQuestionEntries.length ? visibleQuestionEntries.map(({ question, latestAttempt, blockedToday }) => { const selected = composer.selectedActivities.some((item) => item.type === composer.type && item.questionId === question.id); return <button type="button" className={`${selected ? "selected" : ""} ${blockedToday ? "blocked" : ""}`} key={question.id} onClick={() => selectBankQuestion(question)} disabled={blockedToday} aria-pressed={selected} aria-label={blockedToday ? `${question.title} is already on Today` : `${selected ? "Remove" : "Select"} ${question.title}`}><span className={`type-mark ${composer.type}`}>{typeMark(composer.type)}</span><div><strong>{question.title}</strong><small>{question.difficulty ? `${question.difficulty} · ` : ""}{question.topics.join(" · ")}{blockedToday ? `${question.topics.length || question.difficulty ? " · " : ""}Already on Today` : ""}</small></div><StaticResultFlag outcome={latestAttempt?.outcome} /></button>; }) : <p className="no-results">No bank match. Create a custom activity for a private, offline, or not-yet-indexed prompt.</p>}{visibleQuestionEntries.length < filteredQuestionEntries.length && <span className="picker-load-status">Scroll for more · {filteredQuestionEntries.length - visibleQuestionEntries.length} remaining</span>}</div>}
+            <div className="composer-specialty-surface" key={composer.type}>
+              {derivedUrl && <div className={`derived-question ${derivedBlocked ? "blocked" : ""}`}><span>{derivedUrl.questionId ? "Question matched in the bank" : "Public URL ready to stage"}</span><strong>{derivedUrl.title}</strong><small>{derivedUrl.url}</small>{derivedBlocked ? <em>Already on Today</em> : <button type="button" onClick={() => { const known = activeBank.find((question) => question.id === derivedUrl.questionId); if (known) selectBankQuestion(known); else openCustomActivity(derivedUrl.url); }}>{derivedUrl.questionId && composer.selectedActivities.some((item) => item.type === composer.type && item.questionId === derivedUrl.questionId) ? "Remove selection" : derivedUrl.questionId ? "Select activity" : "Review custom activity"}</button>}</div>}
+              {!derivedUrl && <div className="bank-results" onScroll={(event) => { const list = event.currentTarget; if (list.scrollTop + list.clientHeight >= list.scrollHeight - 72 && composerVisibleCount < filteredQuestionEntries.length) setComposerVisibleCount((current) => Math.min(filteredQuestionEntries.length, current + 20)); }}>{visibleQuestionEntries.length ? visibleQuestionEntries.map(({ question, latestAttempt, blockedToday }) => { const selected = composer.selectedActivities.some((item) => item.type === composer.type && item.questionId === question.id); return <button type="button" className={`${selected ? "selected" : ""} ${blockedToday ? "blocked" : ""}`} key={question.id} onClick={() => selectBankQuestion(question)} disabled={blockedToday} aria-pressed={selected} aria-label={blockedToday ? `${question.title} is already on Today` : `${selected ? "Remove" : "Select"} ${question.title}`}><span className={`type-mark ${composer.type}`}>{typeMark(composer.type)}</span><div><strong>{question.title}</strong><small>{question.difficulty ? `${question.difficulty} · ` : ""}{question.topics.join(" · ")}{blockedToday ? `${question.topics.length || question.difficulty ? " · " : ""}Already on Today` : ""}</small></div><StaticResultFlag outcome={latestAttempt?.outcome} /></button>; }) : <p className="no-results">No bank match. Create a custom activity for a private, offline, or not-yet-indexed prompt.</p>}{visibleQuestionEntries.length < filteredQuestionEntries.length && <span className="picker-load-status">Scroll for more · {filteredQuestionEntries.length - visibleQuestionEntries.length} remaining</span>}</div>}
+            </div>
             <button className="custom-activity-trigger" type="button" onClick={() => composer.customOpen ? setComposer((current) => ({ ...current, customOpen: false, customEditingKey: "" })) : openCustomActivity()}>＋ Custom activity</button>
             {composer.customOpen && <section className="custom-activity-card" aria-label="Custom activity">
               <div><strong>{composer.customEditingKey ? "Edit custom activity" : "Create a custom activity"}</strong><small>Title is required. A public URL and prompt are optional.</small></div>
@@ -4573,7 +4630,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             </section>}
             {composer.reviewOpen && <section className="selection-review" aria-label="Review selected activities"><header><div><strong>Review selections</strong><small>Remove anything without searching for it again.</small></div><button type="button" onClick={() => setComposer((current) => ({ ...current, selectedActivities: [] }))} disabled={!composer.selectedActivities.length}>Clear all</button></header>{stagedByType.length ? stagedByType.map((group) => <div className="selection-review-group" key={group.type}><h3>{typeLabel(group.type)}</h3>{group.items.map((item) => <article key={item.key}><div><strong>{item.title}</strong><small>{item.minutes} min{item.source === "custom" ? " · Custom" : ""}</small></div>{item.source === "custom" && <button type="button" onClick={() => editStagedActivity(item)} aria-label={`Edit ${item.title}`}>Edit</button>}<button type="button" onClick={() => removeStagedActivity(item.key)} aria-label={`Remove ${item.title}`}>×</button></article>)}</div>) : <p className="no-results">No activities selected yet.</p>}</section>}
             <footer className="activity-selection-footer">
-              <div className="selection-summary"><strong>{composer.selectedActivities.length} selected</strong><small>{composer.batchDestination === "session" ? `${selectedActivityMinutes} min session countdown` : `${selectedActivityMinutes} total minutes`}</small></div>
+              <div className="selection-summary"><strong className="selection-count" key={composer.selectedActivities.length}>{composer.selectedActivities.length} selected</strong><small>{composer.batchDestination === "session" ? `${selectedActivityMinutes} min session countdown` : `${selectedActivityMinutes} total minutes`}</small></div>
               {!composer.editingId && <div className="activity-destination" role="radiogroup" aria-label="Add selected activities as">
                 <span>Add as</span>
                 <button type="button" role="radio" aria-checked={composer.batchDestination === "standalone"} className={composer.batchDestination === "standalone" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, batchDestination: "standalone" }))}>Standalone</button>
@@ -4583,6 +4640,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
               <button className="primary-action" type="submit" disabled={!canSaveActivity}>{composer.editingId ? "Save changes" : composer.selectedActivities.length ? composer.batchDestination === "session" ? `Add ${composer.selectedActivities.length} as one session` : `Add ${composer.selectedActivities.length} to Today` : "Add to Today"}</button>
             </footer>
           </form>}
+          </AnimatedComposerStage>
         </section>
       </div>}
 
