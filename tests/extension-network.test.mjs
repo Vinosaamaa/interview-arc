@@ -85,5 +85,13 @@ test("the side panel routes Companion requests through the service worker", asyn
   assert.match(sidePanel, /chrome\.runtime\.sendMessage/);
   assert.doesNotMatch(sidePanel, /fetch\(`\\$\\{API_BASE\\}/);
   assert.match(serviceWorker, /InterviewArcCompanionNetwork\.performRequest/);
-  assert.equal(manifest.version, "1.1.5");
+  assert.equal(manifest.version, "1.1.6");
+  assert.equal(manifest.icons["128"], "icons/brand-128.png");
+  assert.equal(manifest.action.default_icon["16"], "icons/brand-16.png");
+  const sidePanelMarkup = await readFile(
+    new URL("../extension/sidepanel.html", import.meta.url),
+    "utf8",
+  );
+  assert.ok(sidePanelMarkup.includes('src="icons/brand.svg"'));
+  assert.ok(!sidePanelMarkup.includes(">IA</span>"));
 });

@@ -16,7 +16,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
 button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visible { outline: 3px solid rgba(201,239,77,.34); outline-offset: 3px; }
 .panel-shell { min-height: 100vh; padding: 15px; display: flex; flex-direction: column; }
 .brand-line { padding: 2px 1px 14px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; }
-.brand-mark { width: 38px; height: 38px; border-radius: 12px 12px 12px 3px; background: var(--signal); color: #172019; display: grid; place-items: center; font-size: .72rem; font-weight: 900; }
+.brand-mark { width: 38px; height: 38px; border-radius: 12px 12px 12px 3px; background: color-mix(in srgb, var(--teal) 14%, var(--paper)); border: 1px solid color-mix(in srgb, var(--teal) 32%, var(--line)); display: grid; place-items: center; overflow: hidden; }
+.brand-mark img { width: 30px; height: 30px; display: block; border-radius: 8px; }
 .brand-line div { display: grid; gap: 1px; }
 .brand-line strong { font-size: .86rem; }
 .brand-line small, .kicker { color: var(--muted); font: 750 .64rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; }
