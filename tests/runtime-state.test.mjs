@@ -544,6 +544,39 @@ test("consecutive Voice captures form one logical answer without merging their d
   assert.deepEqual(groups[1].turns.map((turn) => turn.turnId), ["voice-1", "voice-2"]);
 });
 
+test("Voice protocol v2 gates content behind an explicit per-capture decision", async () => {
+  const schema = await readFile(new URL("../db/schema.ts", import.meta.url), "utf8");
+  const durable = await readFile(new URL("../db/durable-practice.ts", import.meta.url), "utf8");
+  const worker = await readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8");
+  const migration = await readFile(new URL("../drizzle/0013_bizarre_the_hand.sql", import.meta.url), "utf8");
+  const leetcodeGuide = await readFile(new URL("../practice/leetcode/AGENTS.md", import.meta.url), "utf8");
+
+  assert.match(schema, /voice_capture_intents/);
+  assert.match(schema, /leetcode_code_attempts/);
+  assert.match(migration, /CREATE TABLE `voice_capture_intents`/);
+  assert.match(migration, /CREATE TABLE `leetcode_code_attempts`/);
+  assert.doesNotMatch(migration, /CREATE TABLE `practice_workbenches`/);
+  assert.match(durable, /Only an acknowledged activity-related capture can be committed/);
+  assert.match(durable, /A captureId cannot be rebound/);
+  assert.match(durable, /unresolvedVoiceCaptureCount/);
+  assert.match(worker, /\/voice\/intents/);
+  assert.match(worker, /resolve_voice_capture/);
+  assert.match(worker, /save_leetcode_code_attempt/);
+  assert.match(worker, /Transcript not saved · Recording not uploaded/);
+  assert.match(leetcodeGuide, /ambiguous.*uncertain/is);
+  assert.match(leetcodeGuide, /Scratch Notes/);
+});
+
+test("the reader versions exact user code separately from the reference solution", async () => {
+  const client = await readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8");
+  const route = await readFile(new URL("../app/api/practice-record/route.ts", import.meta.url), "utf8");
+  assert.match(route, /codeAttempts/);
+  assert.match(client, /User Code Attempts/);
+  assert.match(client, /Code Attempt \{attempt\.sequence\}/);
+  assert.match(client, /transcriptBodyWithoutCodeAttempts/);
+  assert.match(client, /attemptBodies\.has/);
+});
+
 test("the Chrome companion follows live Interview Arc focus and public LeetCode pages", async () => {
   const manifest = JSON.parse(await readFile(new URL("../extension/manifest.json", import.meta.url), "utf8"));
   const serviceWorker = await readFile(new URL("../extension/service-worker.js", import.meta.url), "utf8");

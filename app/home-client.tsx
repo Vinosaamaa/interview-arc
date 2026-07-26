@@ -38,6 +38,7 @@ import {
   type DeliveryAnalysis,
   type TimerDraft,
   type TranscriptTurn,
+  type LeetCodeCodeAttempt,
 } from "./live-types";
 import { useLiveState, useReadOnlyLiveState } from "./live-sync";
 import { emptyJournal } from "./current-day";
@@ -164,6 +165,7 @@ type LogEntry = {
   transcriptTurns?: TranscriptTurn[];
   audioClips?: AudioClip[];
   deliveryAnalyses?: DeliveryAnalysis[];
+  codeAttempts?: LeetCodeCodeAttempt[];
 };
 
 const EMPTY_COMPOSER: ComposerState = {
@@ -1044,10 +1046,12 @@ function ActivityTranscript({
   turns,
   clips,
   deliveryAnalyses,
+  codeAttempts,
 }: {
   turns: TranscriptTurn[];
   clips: AudioClip[];
   deliveryAnalyses: DeliveryAnalysis[];
+  codeAttempts: LeetCodeCodeAttempt[];
 }) {
   const groups = useMemo(() => groupTranscriptTurns(turns), [turns]);
   return (
@@ -1069,6 +1073,8 @@ function ActivityTranscript({
             </div>;
           }
           const turn = group.turn;
+          const turnCodeAttempts = codeAttempts.filter((attempt) => attempt.originatingTurnId === turn.turnId);
+          const transcriptBody = transcriptBodyWithoutCodeAttempts(turn.body, turnCodeAttempts);
           const answerClips = turn.speaker === "user"
             ? clips.filter((clip) => clip.transcriptTurnId === turn.turnId)
             : [];
@@ -1076,13 +1082,32 @@ function ActivityTranscript({
             {turn.speaker === "user" && answerClips.length > 0 && <GroupedAnswerPlayback clips={answerClips} deliveryAnalyses={deliveryAnalyses} />}
             <article>
               <header><span>{turn.speaker === "specialist" ? "Specialist" : "Your answer"}</span><time>{formatPracticeTimestamp(new Date(turn.occurredAt).toISOString())}</time></header>
-              <MarkdownBody source={turn.body} />
+              {turnCodeAttempts.map((attempt) => <details className="code-attempt-card compact" key={attempt.id}><summary><strong>Code Attempt {attempt.sequence} · {attempt.language} · {attempt.lineCount} lines</strong><span>Expand code</span></summary><CodeAttemptBody attempt={attempt} /></details>)}
+              {transcriptBody.trim() && <MarkdownBody source={transcriptBody} />}
             </article>
           </div>;
         })}
       </div>
     </section>
   );
+}
+
+function transcriptBodyWithoutCodeAttempts(source: string, attempts: LeetCodeCodeAttempt[]) {
+  if (!attempts.length) return source;
+  const attemptBodies = new Set(attempts.map((attempt) => attempt.code.trim().replace(/\r\n/g, "\n")));
+  return source.replace(/```[^\n]*\n([\s\S]*?)```/g, (block, code: string) => (
+    attemptBodies.has(code.trim().replace(/\r\n/g, "\n")) ? "" : block
+  )).replace(/\n{3,}/g, "\n\n");
+}
+
+function CodeAttemptBody({ attempt }: { attempt: LeetCodeCodeAttempt }) {
+  return <div className="code-attempt-body">
+    <pre><code>{attempt.code}</code></pre>
+    <p><strong>{attempt.observedCorrectness.replaceAll("_", " ")}</strong> · {attempt.finalDeclaration}</p>
+    {attempt.complexity && <div className="code-attempt-complexity">{attempt.complexity.time && <span>Time: {attempt.complexity.time}</span>}{attempt.complexity.space && <span>Space: {attempt.complexity.space}</span>}</div>}
+    {attempt.concreteFindings.length > 0 && <ul>{attempt.concreteFindings.map((finding) => <li key={finding}>{finding}</li>)}</ul>}
+    {attempt.edgeCases.length > 0 && <details className="code-attempt-review"><summary>Edge cases reviewed</summary><ul>{attempt.edgeCases.map((edgeCase) => <li key={edgeCase}>{edgeCase}</li>)}</ul></details>}
+  </div>;
 }
 
 function DeliveryReview({ analysis, segmentLabel }: { analysis: DeliveryAnalysis; segmentLabel?: string }) {
@@ -4223,6 +4248,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const selectedEntryTurns = readerSelectedEntry?.transcriptTurns ?? [];
   const selectedEntryClips = readerSelectedEntry?.audioClips ?? [];
   const selectedEntryDeliveryAnalyses = readerSelectedEntry?.deliveryAnalyses ?? [];
+  const selectedEntryCodeAttempts = readerSelectedEntry?.codeAttempts ?? [];
   const selectedCaseSections = dedupeReaderSections(readerSelectedEntry?.artifact?.sections.filter((section) => !(selectedEntryTurns.length && isTranscriptSection(section.title))) ?? []);
   const selectedCaseGroups = groupReaderSections(selectedCaseSections);
   const selectedSolutionGroups = groupReaderSections(selectedProblemProfile?.payload.sections ?? []);
@@ -4570,11 +4596,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (!selectedEntryActivityId) return;
     const controller = new AbortController();
     void fetch(`/api/practice-record?activityId=${encodeURIComponent(selectedEntryActivityId)}`, { signal: controller.signal })
-      .then(async (response) => response.ok ? response.json() as Promise<{ turns: TranscriptTurn[]; notes: PracticeNote[]; audioClips: AudioClip[]; deliveryAnalyses: DeliveryAnalysis[] }> : null)
+      .then(async (response) => response.ok ? response.json() as Promise<{ turns: TranscriptTurn[]; notes: PracticeNote[]; audioClips: AudioClip[]; deliveryAnalyses: DeliveryAnalysis[]; codeAttempts: LeetCodeCodeAttempt[] }> : null)
       .then((record) => {
         if (!record) return;
         const enrich = (current: LogEntry | null) => current && (current.artifact?.activityId || current.id) === selectedEntryActivityId
-          ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips, deliveryAnalyses: record.deliveryAnalyses }
+          ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips, deliveryAnalyses: record.deliveryAnalyses, codeAttempts: record.codeAttempts }
           : current;
         if (view === "banks") setBankNestedEntry(enrich);
         else setSelectedEntry(enrich);
@@ -4661,7 +4687,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             {selectedEntry.artifact
               ? selectedCaseGroups.filter((group) => group.key === "record").map((group) => { const groupId = `case-group-${group.key}`; return <details className="reader-group record-group" id={groupId} open={readerGroupOpen(groupId, true)} onToggle={(event) => rememberReaderGroup(groupId, event.currentTarget.open)} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></div></details>; })
               : <div className="unpublished-letter" id="case-draft"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to finalize the transcript, review, solution, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
-            {selectedEntryTurns.length > 0 && <details className="reader-group conversation-group" id="case-transcript" open={readerGroupOpen("case-transcript", false)} onToggle={(event) => rememberReaderGroup("case-transcript", event.currentTarget.open)}><summary><span>Conversation</span><small>{selectedEntryTurns.length} exchange{selectedEntryTurns.length === 1 ? "" : "s"} · recordings inline</small></summary><div id="case-transcript-thread"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} /></div></details>}
+            {selectedEntryTurns.length > 0 && <details className="reader-group conversation-group" id="case-transcript" open={readerGroupOpen("case-transcript", false)} onToggle={(event) => rememberReaderGroup("case-transcript", event.currentTarget.open)}><summary><span>Conversation</span><small>{selectedEntryTurns.length} exchange{selectedEntryTurns.length === 1 ? "" : "s"} · recordings inline</small></summary><div id="case-transcript-thread"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} codeAttempts={selectedEntryCodeAttempts} /></div></details>}
+            {selectedEntryCodeAttempts.length > 0 && <details className="reader-group code-attempts-group" id="case-code-attempts" open={readerGroupOpen("case-code-attempts", true)} onToggle={(event) => rememberReaderGroup("case-code-attempts", event.currentTarget.open)}><summary><span>User Code Attempts</span><small>{selectedEntryCodeAttempts.length} version{selectedEntryCodeAttempts.length === 1 ? "" : "s"}</small></summary><div>{selectedEntryCodeAttempts.map((attempt) => <article className="code-attempt-card" key={attempt.id}><header><strong>Code Attempt {attempt.sequence} · {attempt.language}</strong><span>{attempt.lineCount} lines</span></header><CodeAttemptBody attempt={attempt} /></article>)}</div></details>}
             {selectedEntry.artifact && selectedCaseGroups.filter((group) => group.key !== "record").map((group) => { const groupId = `case-group-${group.key}`; return <details className={`reader-group ${group.key}-group`} id={groupId} open={readerGroupOpen(groupId, group.key !== "conversation")} onToggle={(event) => rememberReaderGroup(groupId, event.currentTarget.open)} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></div></details>; })}
           </div>
           <footer>Interview Arc · {selectedEntry.id}</footer>
@@ -4861,7 +4888,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             {selectedEntry.artifact ? <div className="letter-sections layered-reader">{selectedCaseGroups.map((group) => group.key === "record"
               ? <section className="reader-group record-group" id={`case-group-${group.key}`} key={group.key}><h2>{group.title}</h2><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></section>
               : <details className={`reader-group ${group.key}-group`} id={`case-group-${group.key}`} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></div></details>)}</div> : <div className="unpublished-letter" id="case-draft"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to finalize the transcript, review, solution, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
-            {selectedEntryTurns.length > 0 && <details className="reader-group conversation-group" id="case-transcript"><summary><span>Conversation</span><small>{selectedEntryTurns.length} exchange{selectedEntryTurns.length === 1 ? "" : "s"} · recordings inline</small></summary><div id="case-transcript-thread"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} /></div></details>}
+            {selectedEntryTurns.length > 0 && <details className="reader-group conversation-group" id="case-transcript"><summary><span>Conversation</span><small>{selectedEntryTurns.length} exchange{selectedEntryTurns.length === 1 ? "" : "s"} · recordings inline</small></summary><div id="case-transcript-thread"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} codeAttempts={selectedEntryCodeAttempts} /></div></details>}
             <footer>Interview Arc · {selectedEntry.id}</footer>
           </div>
         </article>

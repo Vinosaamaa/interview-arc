@@ -168,3 +168,16 @@ story-bank/projects/<project-id>.md
 Capture only user-provided facts: context, responsibilities, decisions, conflict, failures, leadership, measurable results, and lessons. Link reusable stories to their source project and session rather than duplicating inconsistent versions. Use `story-bank/README.md` as the format guide.
 
 Feedback should identify the interview signal, STAR gaps, vague or overly long phrasing, a stronger truthful version, likely follow-ups, and one next drill.
+
+## Voice intent boundary
+
+For an `interview-arc-voice:v2` envelope, call `resolve_voice_capture` for that
+same model turn. Choose `activity_related` only for the focused behavioral
+practice, `unrelated` for administration or another subject, and `uncertain`
+when the turn is ambiguous. Never append the enveloped user turn separately.
+
+For unrelated Voice speech return exactly:
+`*Not attached to this practice activity · Transcript not saved · Recording not uploaded*`.
+For unrelated typed administration return exactly:
+`*Not attached to this practice activity · Not saved to the practice transcript or publication*`.
+Neither receipt belongs in D1 or the published artifact.

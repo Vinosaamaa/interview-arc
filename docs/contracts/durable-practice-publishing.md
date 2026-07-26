@@ -294,7 +294,7 @@ answer association.
 
 ## Interview Arc Voice
 
-Interview Arc Voice uses protocol version `1` and the same personal integration
+Interview Arc Voice uses protocol version `2` and the same personal integration
 token as MCP and the Chrome companion.
 
 1. `GET /voice/context` returns the **single activity whose stopwatch is
@@ -304,17 +304,19 @@ token as MCP and the Chrome companion.
    running when recording began. It never returns credentials.
 2. The client records one continuous local M4A and transcribes it with Groq
    `whisper-large-v3`. Temporary derivatives or chunks are not durable clips.
-3. `POST /voice/captures` writes the verbatim user transcript first with a
-   client-generated, idempotent `turnId` and `source: audio_transcript`.
-4. `POST /audio/upload` uploads the original recording and links it to that
-   same user turn. Upload retries do not duplicate the transcript.
-5. The client inserts the transcript into the visible Codex editor followed by
-   an `Interview Arc Voice` Markdown comment envelope containing `activityId`
-   and `turnId`. The user presses Send. The envelope states that Voice owns the
-   durable D1 turn; the specialist must reuse that exact turn and must not append
-   the user text again. Voice never resumes or submits the specialist task
-   invisibly.
-6. Delivery Coach runs asynchronously. Its owner-scoped result is saved with
+3. Only captures started in the Codex bundle (`com.openai.codex`) can enter the
+   linked flow. Other destinations remain general dictation and never write
+   D1/R2.
+4. `POST /voice/intents` writes stable IDs, activity, specialty, occurrence
+   time, status, and SHA-256 only. Exact transcript and audio remain in Voice's
+   permission-`0600` local pending queue.
+5. The client inserts the transcript plus a v2 envelope containing
+   `captureId`, `activityId`, and `turnId`. The specialist classifies that same
+   turn as activity-related, unrelated, or uncertain.
+6. Only activity-related captures may call `POST /voice/captures` and
+   `POST /audio/upload`. The accepted turn is idempotent; upload retries do not
+   duplicate it. Uncertain captures require a Voice Attach/Delete decision.
+7. Delivery Coach runs asynchronously. Its owner-scoped result is saved with
    `save_delivery_analysis` and references the same activity, turn, and clip.
 
 Focused activity lookup is global rather than limited to the current calendar

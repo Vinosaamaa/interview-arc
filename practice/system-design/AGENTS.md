@@ -528,3 +528,16 @@ Do not invent things the user said. Clearly distinguish the user's original answ
 - Update this `AGENTS.md` only when the user explicitly changes the ongoing system-design role, workflow, or artifact requirements.
 
 Main priority: help the user learn how to think, speak, and structure answers in a real system-design interview.
+
+## Voice intent boundary
+
+For an `interview-arc-voice:v2` envelope, call `resolve_voice_capture` for that
+same model turn. Choose `activity_related` only for the focused design,
+`unrelated` for administration or another subject, and `uncertain` when the
+turn is ambiguous. Never append the enveloped user turn separately.
+
+For unrelated Voice speech return exactly:
+`*Not attached to this practice activity · Transcript not saved · Recording not uploaded*`.
+For unrelated typed administration return exactly:
+`*Not attached to this practice activity · Not saved to the practice transcript or publication*`.
+Neither receipt belongs in D1 or the published artifact.

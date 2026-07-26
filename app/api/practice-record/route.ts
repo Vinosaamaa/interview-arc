@@ -52,6 +52,22 @@ export async function GET(request: Request) {
         createdAt: analysis.createdAt,
         updatedAt: analysis.updatedAt,
       })),
+      codeAttempts: record.codeAttempts.map((attempt) => ({
+        id: attempt.id,
+        activityId: attempt.activityId,
+        originatingTurnId: attempt.originatingTurnId,
+        sequence: attempt.sequence,
+        language: attempt.language,
+        code: attempt.code,
+        lineCount: attempt.lineCount,
+        occurredAt: attempt.occurredAt,
+        review: attempt.review,
+        observedCorrectness: attempt.observedCorrectness,
+        concreteFindings: attempt.concreteFindings,
+        edgeCases: attempt.edgeCases,
+        complexity: attempt.complexity,
+        finalDeclaration: attempt.finalDeclaration,
+      })),
     }, { headers: { "cache-control": "private, no-store" } });
   } catch (error) {
     return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 });
