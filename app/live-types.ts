@@ -1,4 +1,6 @@
 import type { JournalActivity, PracticeSession } from "./content-types";
+import type { FocusBlock } from "./career-work";
+export type { FocusBlock } from "./career-work";
 
 export type ActivityType = JournalActivity["type"];
 export type Outcome = "solved" | "solved_after_reviewing_approach" | "failed";
@@ -198,8 +200,10 @@ export type LocalDraft = {
   activitySolutionLinks: ActivitySolutionLink[];
   personalQuestions: PersonalQuestion[];
   extraActivities: ExtraActivity[];
+  focusBlocks: FocusBlock[];
   sessions: LocalSession[];
   historyActivities: ExtraActivity[];
+  historyFocusBlocks: FocusBlock[];
   historySessions: LocalSession[];
   focusedActivityId: string | null;
   focusedSessionId: string | null;
@@ -238,8 +242,10 @@ export const EMPTY_DRAFT: LocalDraft = {
   activitySolutionLinks: [],
   personalQuestions: [],
   extraActivities: [],
+  focusBlocks: [],
   sessions: [],
   historyActivities: [],
+  historyFocusBlocks: [],
   historySessions: [],
   focusedActivityId: null,
   focusedSessionId: null,

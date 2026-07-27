@@ -13,6 +13,10 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
 - Allow another configurable session; use 6/1/1 as the starting recipe.
 - Let an unstarted website-created session be edited. Lock its recipe once its session timer, activity timing, result, or publication work begins.
 - Allow an extra activity in any category with its own stopwatch and optional planning estimate.
+- Offer Job applications as a separate Career Focus quick action, not as a
+  fourth practice specialty. It shares the one-active-stopwatch rule but has no
+  outcome, specialist, review, solution, Past card, Problem Bank row, or
+  publication lifecycle. Follow `../contracts/career-work.md`.
 - On Today, use the masthead tally for yesterday's completed activities, recorded time, and sessions. Read owner-scoped D1 state for yesterday so unpublished work is not omitted; fall back to the versioned journal offline.
 - Let locally added activities be edited and removed.
 - Store lifecycle separately from outcome.
@@ -162,7 +166,7 @@ The website must not imply that browser draft state has already been published t
   story variants. Its transcript remains exclusively on the dated Past attempt.
 - For imported system-design questions, show the source question link, listed complexity, and whether reference solutions are available.
 - For imported behavioral questions, show the expected answer format, frequency, and whether the Bugfree.ai reference may require sign-in. Link to the canonical answer page without copying third-party answer text into the site.
-- Journey owns cumulative totals and interactive analytics for coding, system design, behavioral, outcomes, elapsed time, consistency, difficulty, and bank-linked topic coverage.
+- Journey owns cumulative totals and interactive analytics for coding, system design, behavioral, outcomes, elapsed time, consistency, difficulty, and bank-linked topic coverage. Its separate Career Work panel joins Interview Arc focus time with the privacy-minimized, read-only Job Journey v1 API without copying job records into Interview Arc D1.
 - A new session places up to two due reviews ahead of new questions when the
   configured category slots permit it. Failed/full-walkthrough work is due in 4
   days; approach-review work in 7; successful recalls advance to 21 then 60.

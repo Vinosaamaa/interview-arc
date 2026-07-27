@@ -582,6 +582,29 @@ export const extraActivities = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.id] })],
 );
 
+// Career work is time evidence, not interview-practice evidence. Keeping focus
+// blocks in their own table prevents them from entering outcomes, reviews,
+// specialist publication, Past, or the Problem Bank.
+export const focusBlocks = sqliteTable(
+  "focus_blocks",
+  {
+    ownerId,
+    id: text("id").notNull(),
+    workbenchId: text("workbench_id").notNull(),
+    date: text("date").notNull(),
+    category: text("category", { enum: ["job_applications"] }).notNull(),
+    title: text("title").notNull(),
+    plannedSeconds: integer("planned_seconds").notNull(),
+    note: text("note"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.id] }),
+    index("focus_blocks_owner_workbench_idx").on(table.ownerId, table.workbenchId),
+  ],
+);
+
 // Locally created practice sessions (the six-hour countdown groupings).
 export const liveSessions = sqliteTable(
   "live_sessions",
@@ -663,6 +686,7 @@ export type ActivitySolutionLinkRow = typeof activitySolutionLinks.$inferSelect;
 export type OwnerBankQuestionRow = typeof ownerBankQuestions.$inferSelect;
 export type IntegrationTokenRow = typeof integrationTokens.$inferSelect;
 export type ExtraActivityRow = typeof extraActivities.$inferSelect;
+export type FocusBlockRow = typeof focusBlocks.$inferSelect;
 export type LiveSessionRow = typeof liveSessions.$inferSelect;
 export type ContentJournalRow = typeof contentJournals.$inferSelect;
 export type ContentArtifactRow = typeof contentArtifacts.$inferSelect;

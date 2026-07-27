@@ -1,7 +1,9 @@
 import {
   applyTimerAction,
+  applyFocusTimerAction,
   readLiveState,
   removeExtraActivity,
+  removeFocusBlock,
   removeLiveSession,
   setActivityNote,
   setOutcome,
@@ -9,6 +11,7 @@ import {
   startFreshWorkbench,
   TimerStateConflictError,
   upsertExtraActivity,
+  upsertFocusBlock,
   upsertLiveSession,
   type OutcomeValue,
   type PublicationStatusValue,
@@ -38,6 +41,8 @@ type Mutation =
   | { type: "personal-question-upsert"; specialty: "leetcode" | "system_design" | "behavioral"; question: { questionId: string; title: string; prompt?: string; url?: string; tags?: string[]; priority?: number; targetMinutes?: number } }
   | { type: "extra-upsert"; activity: { id: string; date: string } & Record<string, unknown> }
   | { type: "extra-remove"; id: string }
+  | { type: "focus-block-upsert"; block: { id: string; date: string; focusCategory: "job_applications"; title: string; plannedSeconds: number; note?: string } }
+  | { type: "focus-block-remove"; id: string }
   | { type: "session-upsert"; session: { id: string; date: string } & Record<string, unknown> }
   | { type: "session-remove"; id: string; activityIds?: string[] }
   | { type: "workbench-start-fresh"; workbenchId: string };
@@ -95,15 +100,18 @@ export async function POST(request: Request) {
         if (!mutation.subjectId || !TIMER_KINDS.includes(mutation.kind) || !TIMER_ACTIONS.includes(mutation.action)) {
           return Response.json({ error: "Invalid timer mutation." }, { status: 400 });
         }
+        const before = await readLiveState(ownerId, date);
+        const isFocusBlock = before.focusBlocks.some((candidate) => (
+          typeof candidate === "object" && candidate !== null && "id" in candidate && candidate.id === mutation.subjectId
+        ));
         if (mutation.action === "finish") {
-          const before = await readLiveState(ownerId, date);
           const timer = mutation.kind === "activity"
             ? before.timers[mutation.subjectId]
             : before.sessionTimers[mutation.subjectId];
           if (!timer?.startedAt) {
             return Response.json({ error: `Start the ${mutation.kind === "activity" ? "activity stopwatch" : "session countdown"} before finishing it.` }, { status: 409 });
           }
-          if (mutation.kind === "activity" && !before.outcomes[mutation.subjectId]) {
+          if (mutation.kind === "activity" && !isFocusBlock && !before.outcomes[mutation.subjectId]) {
             return Response.json({ error: "Choose Solved, Solved with help, or Failed before finishing this activity.", retryable: false }, { status: 409 });
           }
           if (mutation.kind === "session") {
@@ -113,11 +121,18 @@ export async function POST(request: Request) {
             mutation.activityIds = session?.activityIds ?? [];
           }
         }
-        await applyTimerAction(ownerId, mutation.subjectId, mutation.kind, mutation.action, now, {
-          sessionId: mutation.sessionId,
-          activityIds: mutation.activityIds,
-        });
-        if (mutation.kind === "activity" && mutation.action === "finish") {
+        if (isFocusBlock) {
+          if (mutation.kind !== "activity") {
+            return Response.json({ error: "Career focus blocks use activity stopwatches." }, { status: 400 });
+          }
+          await applyFocusTimerAction(ownerId, mutation.subjectId, mutation.action, now);
+        } else {
+          await applyTimerAction(ownerId, mutation.subjectId, mutation.kind, mutation.action, now, {
+            sessionId: mutation.sessionId,
+            activityIds: mutation.activityIds,
+          });
+        }
+        if (!isFocusBlock && mutation.kind === "activity" && mutation.action === "finish") {
           await syncCompletedReview(ownerId, date, mutation.subjectId, now);
         }
         break;
@@ -175,6 +190,28 @@ export async function POST(request: Request) {
       case "extra-remove": {
         if (!mutation.id) return Response.json({ error: "Missing activity id." }, { status: 400 });
         await removeExtraActivity(ownerId, mutation.id);
+        break;
+      }
+      case "focus-block-upsert": {
+        const block = mutation.block;
+        if (
+          !block?.id
+          || !block.date
+          || block.focusCategory !== "job_applications"
+          || !block.title?.trim()
+          || !Number.isInteger(block.plannedSeconds)
+          || block.plannedSeconds < 60
+          || block.plannedSeconds > 12 * 60 * 60
+          || (block.note?.length ?? 0) > 20_000
+        ) {
+          return Response.json({ error: "Invalid career focus block." }, { status: 400 });
+        }
+        await upsertFocusBlock(ownerId, { ...block, title: block.title.trim() }, now);
+        break;
+      }
+      case "focus-block-remove": {
+        if (!mutation.id) return Response.json({ error: "Missing focus block id." }, { status: 400 });
+        await removeFocusBlock(ownerId, mutation.id);
         break;
       }
       case "session-upsert": {

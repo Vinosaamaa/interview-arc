@@ -28,7 +28,9 @@ test("the Cloudflare build contains the Interview Arc dashboard", async () => {
   assert.match(bundle, /Add activities/);
   assert.match(bundle, /Problem banks/);
   assert.match(bundle, /YESTERDAY/);
-  assert.match(bundle, /365-DAY PRACTICE MAP/);
+  assert.match(bundle, /365-DAY JOURNEY MAP/);
+  assert.match(bundle, /CAREER WORK/);
+  assert.match(bundle, /Job application focus/);
   assert.match(bundle, /Time spent versus outcome/);
   assert.match(bundle, /Topics practiced/);
   assert.match(bundle, /PACIFIC PRACTICE RHYTHM/);
@@ -145,7 +147,7 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /master-pane-toggle icon-action/);
   assert.match(client, /navigateToPrimaryView/);
   assert.doesNotMatch(client, /startViewTransition/);
-  assert.match(client, /activeActivity \? "has-focus" : railActivity \? "has-history" : "empty"/);
+  assert.match(client, /railFocusTimer\?\.runningSince \|\| activeActivity \? "has-focus" : railFocusBlock \|\| railActivity \? "has-history" : "empty"/);
   assert.match(client, /readerClosing \? "reader-closing" : ""/);
   assert.match(client, /listRestoring === "library" \? "list-restoring" : ""/);
   assert.match(client, /pendingListRestoreRef\.current = \{ surface: "library", \.\.\.position \}/);

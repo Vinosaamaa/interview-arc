@@ -5,6 +5,7 @@ import { subscribeToLiveUpdates } from "./live-event-policy";
 import {
   EMPTY_DRAFT,
   type ExtraActivity,
+  type FocusBlock,
   type AudioClip,
   type ActivitySolutionLink,
   type FinalizationSummary,
@@ -52,8 +53,10 @@ type ServerLiveState = {
   activitySolutionLinks: ActivitySolutionLink[];
   personalQuestions: PersonalQuestion[];
   extraActivities: ExtraActivity[];
+  focusBlocks: FocusBlock[];
   sessions: LocalSession[];
   historyActivities: ExtraActivity[];
+  historyFocusBlocks: FocusBlock[];
   historySessions: LocalSession[];
   focusedActivityId: string | null;
   focusedSessionId: string | null;
@@ -95,6 +98,8 @@ export type Mutation =
   | { type: "personal-question-upsert"; specialty: import("./live-types").ActivityType; question: { questionId: string; title: string; prompt?: string; url?: string; tags?: string[]; priority?: number; targetMinutes?: number } }
   | { type: "extra-upsert"; activity: ExtraActivity }
   | { type: "extra-remove"; id: string }
+  | { type: "focus-block-upsert"; block: FocusBlock }
+  | { type: "focus-block-remove"; id: string }
   | { type: "session-upsert"; session: LocalSession }
   | { type: "session-remove"; id: string; activityIds: string[] }
   | { type: "workbench-start-fresh"; workbenchId: string };
@@ -142,8 +147,10 @@ function serverToDraft(state: ServerLiveState, offset: number, date = ""): Local
     activitySolutionLinks: state.activitySolutionLinks ?? [],
     personalQuestions: state.personalQuestions ?? [],
     extraActivities: state.extraActivities ?? [],
+    focusBlocks: state.focusBlocks ?? [],
     sessions: (state.sessions ?? []).map((session) => ({ ...session, date: session.date ?? date })),
     historyActivities: state.historyActivities ?? state.extraActivities ?? [],
+    historyFocusBlocks: state.historyFocusBlocks ?? state.focusBlocks ?? [],
     historySessions: (state.historySessions ?? state.sessions ?? []).map((session) => ({ ...session, date: session.date ?? date })),
     focusedActivityId: state.focusedActivityId ?? null,
     focusedSessionId: state.focusedSessionId ?? null,
@@ -155,11 +162,15 @@ function serverToDraft(state: ServerLiveState, offset: number, date = ""): Local
 // reported back so it can be pushed up, so a first sync never drops local work.
 function mergeDrafts(server: LocalDraft, local: LocalDraft) {
   const serverExtraIds = new Set(server.extraActivities.map((activity) => activity.id));
+  const serverFocusBlockIds = new Set(server.focusBlocks.map((block) => block.id));
   const serverSessionIds = new Set(server.sessions.map((session) => session.id));
   const localOnly: Mutation[] = [];
 
   for (const activity of local.extraActivities) {
     if (!serverExtraIds.has(activity.id)) localOnly.push({ type: "extra-upsert", activity });
+  }
+  for (const block of local.focusBlocks) {
+    if (!serverFocusBlockIds.has(block.id)) localOnly.push({ type: "focus-block-upsert", block });
   }
   for (const session of local.sessions) {
     if (!serverSessionIds.has(session.id)) localOnly.push({ type: "session-upsert", session });
@@ -188,11 +199,16 @@ function mergeDrafts(server: LocalDraft, local: LocalDraft) {
       ...local.extraActivities.filter((activity) => !serverExtraIds.has(activity.id)),
       ...server.extraActivities,
     ],
+    focusBlocks: [
+      ...local.focusBlocks.filter((block) => !serverFocusBlockIds.has(block.id)),
+      ...server.focusBlocks,
+    ],
     sessions: [
       ...local.sessions.filter((session) => !serverSessionIds.has(session.id)),
       ...server.sessions,
     ],
     historyActivities: server.historyActivities,
+    historyFocusBlocks: server.historyFocusBlocks,
     historySessions: server.historySessions,
     focusedActivityId: server.focusedActivityId ?? local.focusedActivityId,
     focusedSessionId: server.focusedSessionId ?? local.focusedSessionId,
@@ -224,8 +240,10 @@ function readDraft(date: string): LocalDraft {
       activitySolutionLinks: parsed.activitySolutionLinks ?? [],
       personalQuestions: parsed.personalQuestions ?? [],
       extraActivities: parsed.extraActivities ?? [],
+      focusBlocks: parsed.focusBlocks ?? [],
       sessions: (parsed.sessions ?? []).map((session) => ({ ...session, date: session.date ?? date })),
       historyActivities: parsed.historyActivities ?? parsed.extraActivities ?? [],
+      historyFocusBlocks: parsed.historyFocusBlocks ?? parsed.focusBlocks ?? [],
       historySessions: (parsed.historySessions ?? parsed.sessions ?? []).map((session) => ({ ...session, date: session.date ?? date })),
       focusedActivityId: parsed.focusedActivityId ?? null,
       focusedSessionId: parsed.focusedSessionId ?? null,
