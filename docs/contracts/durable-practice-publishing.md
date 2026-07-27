@@ -92,21 +92,32 @@ After resolving the stable `questionId`, every specialist calls
 Every completed attempt links to the exact revision reused or created. Never
 create a new revision for punctuation or formatting alone.
 
-## Draft Capture
+## Exact-once Draft Capture
 
-Specialists call `append_practice_transcript` with small, ordered, idempotent
-batches. Flush after roughly two or three short exchanges and always on:
+For a related typed exchange, specialists call `save_practice_exchange` once
+per user question and canonical specialist response. The write is atomic,
+ordered, and identity-idempotent. Exact retries reuse the saved pair; the same
+turn ID with changed identity or content is rejected rather than rewritten.
+`append_practice_transcript` remains available only for legacy recovery and
+imports.
 
-- activity switch;
-- pause or finish;
-- a long answer;
-- a coordinator finalization request;
-- task interruption when a flush is still possible.
+For a related protocol-v2 Voice envelope, specialists call
+`resolve_voice_capture_and_save_response`. That operation atomically marks the
+capture `activity_related` and reserves one canonical response linked through
+`replyToTurnId`. Interview Arc holds the response provisionally until Voice
+delivers the matching user transcript, then materializes the ordered pair once.
+Use `resolve_voice_capture` only for `unrelated` or `uncertain` decisions.
 
-This is an append-only draft. Do not rewrite the whole interview after every
-message. `turn_id` must be stable on retries. Preserve the user's and
-specialist's exact activity-related meaning; do not reconstruct unobserved
-conversation.
+Visible receipts confirm every decision and write but are never persisted.
+Untouched `pending` captures are discarded as `discarded_unclassified` when an
+activity finishes and do not block completion. An `uncertain` capture requires
+Attach or Discard. A confirmed related capture missing delivery requires Retry
+or Discard. Local 24-hour expiry must first record
+`expired_unclassified` on the server before deleting the local record.
+
+Publishing reads only materialized D1 turns. It never guesses missing Voice
+decisions, reconstructs specialist answers from task history, or publishes
+provisional responses.
 
 When the user says “please note for this problem/question,” call
 `add_practice_note` for any specialty and preserve the user's wording. Notes are

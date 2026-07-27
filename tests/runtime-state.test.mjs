@@ -18,6 +18,12 @@ import {
 import { mutationFailureDisposition } from "../app/mutation-queue.ts";
 import { applyTimerSync, timerSyncChanged } from "../app/timer-reconciliation.ts";
 import { isJournalPath, journalBranch, parsePorcelain } from "../scripts/journal-branch.mjs";
+import {
+  finishDispositionForVoiceStatus,
+  sameCanonicalExchange,
+  voiceDecisionReceipt,
+  voiceFinishGuardMessage,
+} from "../db/practice-exchange-policy.ts";
 
 test("today follows the practice timezone instead of the Worker UTC date", () => {
   assert.equal(dateInTimeZone(new Date("2026-07-20T05:30:00Z")), "2026-07-19");
@@ -58,6 +64,60 @@ test("timer transitions fold elapsed time and permanently lock finish", () => {
   const finished = nextTimerState(paused, "finish", 8_000);
   assert.deepEqual(finished, { accumulatedSeconds: 3, runningSince: null, completed: true, revision: 3 });
   assert.equal(nextTimerState(finished, "start", 10_000), finished);
+});
+
+test("activity finish discards untouched Voice envelopes but protects confirmed evidence", () => {
+  assert.equal(finishDispositionForVoiceStatus("pending"), "discard_unclassified");
+  assert.equal(finishDispositionForVoiceStatus("activity_related"), "block_for_delivery");
+  assert.equal(finishDispositionForVoiceStatus("uncertain"), "needs_user_decision");
+  assert.equal(finishDispositionForVoiceStatus("accepted"), "nonblocking");
+  assert.equal(finishDispositionForVoiceStatus("discarded_unclassified"), "nonblocking");
+  assert.equal(finishDispositionForVoiceStatus("expired_unclassified"), "nonblocking");
+});
+
+test("voice finish recovery tells the user the exact action required", () => {
+  const empty = {
+    discardedUnclassified: [],
+    awaitingDelivery: [],
+    needsDecision: [],
+    deleting: [],
+    conflicts: [],
+  };
+  assert.equal(voiceFinishGuardMessage(empty), null);
+  assert.match(voiceFinishGuardMessage({ ...empty, awaitingDelivery: ["c1"] }), /Retry delivery or Discard/);
+  assert.match(voiceFinishGuardMessage({ ...empty, needsDecision: ["c1"] }), /Attach or Discard/);
+  assert.match(voiceFinishGuardMessage({ ...empty, deleting: ["c1"] }), /Retry or wait/);
+  assert.match(voiceFinishGuardMessage({ ...empty, conflicts: ["c1"] }), /conflicting durable content/);
+});
+
+test("canonical exchange retries are identity-idempotent and conflicting rewrites are rejected", () => {
+  const canonical = {
+    activityId: "activity-1",
+    userTurnId: "voice-user-1",
+    responseTurnId: "specialist-1",
+    specialty: "leetcode",
+    responseBody: "Use dynamic programming.",
+    responseOccurredAt: 1_234,
+  };
+  assert.equal(sameCanonicalExchange(canonical, { ...canonical }), true);
+  assert.equal(sameCanonicalExchange(canonical, {
+    ...canonical,
+    responseBody: "Use recursion instead.",
+  }), false);
+});
+
+test("Voice decision receipts distinguish syncing, excluded, uncertain, failed, and duplicate states", () => {
+  assert.equal(
+    voiceDecisionReceipt("activity_related", "Course Schedule"),
+    "✓ Attached to Course Schedule · Voice evidence syncing",
+  );
+  assert.equal(
+    voiceDecisionReceipt("unrelated", "Course Schedule"),
+    "Not attached to this practice activity · Transcript not saved · Recording not uploaded",
+  );
+  assert.match(voiceDecisionReceipt("uncertain", "Course Schedule"), /Attach or Discard/);
+  assert.match(voiceDecisionReceipt("failed", "Course Schedule"), /Retry or Discard/);
+  assert.match(voiceDecisionReceipt("duplicate", "Course Schedule"), /Existing specialist response reused/);
 });
 
 test("session allocations follow the configurable 40/60/60-minute recipe", () => {
@@ -548,6 +608,7 @@ test("consecutive Voice captures form one logical answer without merging their d
 test("Voice protocol v2 gates content behind an explicit per-capture decision", async () => {
   const schema = await readFile(new URL("../db/schema.ts", import.meta.url), "utf8");
   const durable = await readFile(new URL("../db/durable-practice.ts", import.meta.url), "utf8");
+  const exchangePolicy = await readFile(new URL("../db/practice-exchange-policy.ts", import.meta.url), "utf8");
   const worker = await readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8");
   const migration = await readFile(new URL("../drizzle/0013_bizarre_the_hand.sql", import.meta.url), "utf8");
   const leetcodeGuide = await readFile(new URL("../practice/leetcode/AGENTS.md", import.meta.url), "utf8");
@@ -559,11 +620,13 @@ test("Voice protocol v2 gates content behind an explicit per-capture decision", 
   assert.doesNotMatch(migration, /CREATE TABLE `practice_workbenches`/);
   assert.match(durable, /Only an acknowledged activity-related capture can be committed/);
   assert.match(durable, /A captureId cannot be rebound/);
-  assert.match(durable, /unresolvedVoiceCaptureCount/);
+  assert.match(durable, /discarded_unclassified/);
   assert.match(worker, /\/voice\/intents/);
   assert.match(worker, /resolve_voice_capture/);
+  assert.match(worker, /resolve_voice_capture_and_save_response/);
+  assert.match(worker, /save_practice_exchange/);
   assert.match(worker, /save_leetcode_code_attempt/);
-  assert.match(worker, /Transcript not saved · Recording not uploaded/);
+  assert.match(exchangePolicy, /Transcript not saved · Recording not uploaded/);
   assert.match(leetcodeGuide, /ambiguous.*uncertain/is);
   assert.match(leetcodeGuide, /Scratch Notes/);
 });

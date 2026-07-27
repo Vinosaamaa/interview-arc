@@ -42,5 +42,7 @@ test("specialist contract requirements are registered and exposed", async () => 
   assert.ok(result.contracts.required.includes("save_leetcode_code_attempt"));
   assert.ok(result.contracts.required.includes("save_provisional_solution_profile"));
   assert.ok(result.contracts.required.includes("resolve_voice_capture"));
+  assert.ok(result.contracts.required.includes("resolve_voice_capture_and_save_response"));
+  assert.ok(result.contracts.required.includes("save_practice_exchange"));
   assert.ok(result.contracts.required.includes("save_delivery_analysis"));
 });
