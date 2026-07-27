@@ -111,6 +111,21 @@ If the MCP bridge or the registration tools are unavailable, merge/deploy the
 feature that introduced them, restart Codex so its environment token is loaded,
 and run `Connect specialist tasks` again.
 
+### MCP catalog reloads
+
+Codex loads each MCP server's tool catalog and project `enabled_tools` allowlist
+when that connection starts. Editing either `.codex/config.toml` file does not
+hot-add tools to an already running long-lived task. After an allowlist or
+server-catalog change:
+
+1. run `pnpm mcp:config:check` from `interview-arc/`;
+2. reconnect or reopen the Coordinator and all three specialist tasks;
+3. use tool discovery in each applicable task before practice resumes.
+
+The repository allowlist is canonical. The optional outer workspace shim can be
+aligned safely with `pnpm mcp:config:sync-outer`; CI validates the repository
+configuration even when the outer workspace is absent.
+
 ## Normal Commands After Setup
 
 - In a specialist: natural practice language such as `Let's work on the focused

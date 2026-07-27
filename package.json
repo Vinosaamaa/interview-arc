@@ -14,6 +14,8 @@
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "test": "pnpm run build && node --experimental-strip-types --test tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "mcp:config:check": "node scripts/validate-mcp-tool-allowlist.mjs",
+    "mcp:config:sync-outer": "node scripts/validate-mcp-tool-allowlist.mjs --sync-outer",
     "journal:checkpoint": "node scripts/journal-branch.mjs checkpoint",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
