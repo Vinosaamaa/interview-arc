@@ -163,9 +163,9 @@ that site.
 Git JSON/Markdown is canonical for journals, solutions, transcripts, and story
 records. `scripts/import-content.mjs` projects those files into D1 so the site
 can read new published content without compiling it into the application.
-Timers, result flags, website-created sessions, and extra activities are
-canonical in D1, with browser storage acting only as an offline cache and retry
-queue.
+Timers, result flags, website-created sessions, extra activities, and
+non-publishable Career Focus blocks are canonical in D1, with browser storage
+acting only as an offline cache and retry queue.
 
 Published content is not compiled into one static page per artifact. Past
 attempts and Problem Bank Solution Profiles are rendered at runtime by one

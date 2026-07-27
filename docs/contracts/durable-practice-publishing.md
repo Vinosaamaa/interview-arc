@@ -67,7 +67,9 @@ Career focus blocks share the workbench and single-active-stopwatch boundary
 but are not practice activities. They require no outcome, specialist,
 finalization, review, or publication. Starting fresh closes and archives
 started focus time; it never places that block in Past or the publication
-queue. Follow `career-work.md`.
+queue. A focus block may be a standalone Today row or a member of an
+Activities-composer session; session membership does not add a practice result
+or publication requirement. Follow `career-work.md`.
 
 ## Solution Profile Preflight
 

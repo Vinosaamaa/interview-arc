@@ -4,6 +4,7 @@ import { z } from "zod";
 import { loadContentIndex } from "../db/content";
 import { resolveIntegrationOwner } from "../db/integrations";
 import {
+  applyFocusTimerAction,
   applyTimerAction,
   activityTimerWasRunningAt,
   readActiveVoiceActivity,
@@ -195,7 +196,7 @@ async function voiceContext(ownerId: string, request: Request) {
 
 async function scheduleCompletedVoiceActivity(
   ownerId: string,
-  activity: Awaited<ReturnType<typeof readVoiceTimerInstrument>>["activities"][number],
+  activity: Extract<Awaited<ReturnType<typeof readVoiceTimerInstrument>>["activities"][number], { activityClass: "practice" }>,
   outcome: OutcomeValue,
   date: string,
   now: number,
@@ -256,7 +257,7 @@ async function voiceTimerMutation(ownerId: string, request: Request, env: Env) {
         if (!activity) {
           return json(request, { error: "The requested activity is not available in the current session." }, { status: 404 });
         }
-        if (mutation.action === "finish") {
+        if (mutation.action === "finish" && activity.requiresOutcome) {
           return json(request, {
             error: "Choose a result in the Finish drawer before completing this activity.",
           }, { status: 409 });
@@ -266,9 +267,13 @@ async function voiceTimerMutation(ownerId: string, request: Request, env: Env) {
             activityIds: instrument.session.activityIds,
           });
         }
-        await applyTimerAction(ownerId, activity.id, "activity", mutation.action, now, {
-          sessionId: instrument.session?.id,
-        });
+        if (activity.activityClass === "focus_block") {
+          await applyFocusTimerAction(ownerId, activity.id, mutation.action, now, instrument.session?.id);
+        } else {
+          await applyTimerAction(ownerId, activity.id, "activity", mutation.action, now, {
+            sessionId: instrument.session?.id,
+          });
+        }
       }
     } else if (mutation.type === "finish-activity") {
       if (
@@ -281,6 +286,9 @@ async function voiceTimerMutation(ownerId: string, request: Request, env: Env) {
       const activity = instrument.activities.find((candidate) => candidate.id === mutation.activityId);
       if (!activity || !activity.timer?.startedAt) {
         return json(request, { error: "Start the activity stopwatch before finishing it." }, { status: 409 });
+      }
+      if (activity.activityClass !== "practice") {
+        return json(request, { error: "Career focus blocks finish directly and do not accept a result." }, { status: 409 });
       }
       const voiceGuard = await prepareVoiceCapturesForFinish(ownerId, activity.id, now);
       const voiceConflict = voiceFinishGuardMessage(voiceGuard);

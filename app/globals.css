@@ -581,7 +581,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .modal-backdrop.closing { animation: modalBackdropOut .18s ease-in both; pointer-events: none; will-change: opacity; }
 .composer { width: min(720px, calc(100vw - 30px)); max-height: calc(100vh - 36px); padding: 32px; border-radius: 18px; background: white; box-shadow: 0 34px 90px rgba(11,18,12,.25); overflow-y: auto; position: relative; animation: dialogIn .24s ease-out both; transition: width .28s cubic-bezier(.2,.78,.2,1); }
 .composer.closing { animation: dialogOut .18s ease-in both; pointer-events: none; }
-.composer-stage { overflow: clip; transition: height .28s cubic-bezier(.2,.78,.2,1); }
+.composer-stage { overflow: clip; padding-bottom: 3px; transition: height .28s cubic-bezier(.2,.78,.2,1); }
 .composer-stage-inner { display: flow-root; animation: composerContentIn .2s ease-out both; }
 .composer-specialty-surface { display: grid; animation: composerContentIn .18s ease-out both; }
 .selection-count { animation: selectionConfirm .2s ease-out both; }
@@ -600,7 +600,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .composer-mode { padding: 5px; border-radius: 10px; background: #eef1ed; display: grid; grid-template-columns: 1fr 1fr; }
 .composer-mode button { min-height: 42px; border: 0; border-radius: 8px; background: transparent; color: #5e685f; font-size: .85rem; font-weight: 730; cursor: pointer; }
 .composer-mode button.active { background: white; color: var(--ink); box-shadow: 0 3px 10px rgba(25,35,27,.07); }
-.session-composer { margin-top: 25px; }
+.session-composer { margin-top: 25px; padding-bottom: 8px; }
 .session-composer > p { margin: 0; color: var(--muted); font-size: .92rem; line-height: 1.6; }
 .session-recipe { margin: 24px 0 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .session-count-card { min-height: 205px; padding: 17px 15px 14px; border: 1px solid var(--line); border-radius: 11px; background: #fcfdfb; display: grid; grid-template-rows: auto 1fr auto auto; justify-items: center; align-items: center; gap: 7px; text-align: center; }

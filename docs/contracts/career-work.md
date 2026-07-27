@@ -34,6 +34,13 @@ A job-application block has:
 
 - It uses the shared `activity` timer kind, so only one practice or focus
   stopwatch can run at once.
+- It is selected from the Today **Activities** composer. It may be added as a
+  standalone focus block or included in the composer’s **One session**
+  destination. The Full session recipe remains practice-only.
+- When included in a session, its ID participates in `activityIds` and its
+  planned time contributes to the session countdown. It still finishes without
+  a result and may let the parent session auto-complete once every child is
+  complete.
 - It never receives a problem ID, result, review schedule, specialist task,
   transcript, reusable solution, publication status, Past card, or Problem
   Bank entry.
@@ -82,4 +89,3 @@ remain usable.
 Until Job Journey #49 is deployed and the Worker secrets are configured, this
 unavailable state is the only truthful production behavior. Contract fixtures
 may be used in tests but never as production application data.
-

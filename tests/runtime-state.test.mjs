@@ -584,8 +584,13 @@ test("Voice timer instrument preserves paused focus and finishes only through an
 
   assert.match(liveState, /export async function readVoiceTimerInstrument/);
   assert.match(liveState, /runningActivity \?\? focusedActivity/);
+  assert.match(liveState, /activityClass: "focus_block"/);
+  assert.match(liveState, /requiresOutcome: false/);
+  assert.match(liveState, /requiresOutcome: !focusBlockIds\.has\(activityId\)/);
   assert.match(bridge, /mutation\.type === "finish-activity"/);
   assert.match(bridge, /Choose a result in the Finish drawer/);
+  assert.match(bridge, /activity\.activityClass === "focus_block"/);
+  assert.match(bridge, /applyFocusTimerAction/);
   assert.match(bridge, /await setOutcome\(ownerId, activity\.id, mutation\.outcome, now\)/);
   assert.match(bridge, /await setProblemStar\(ownerId, activity\.type, activity\.questionId, mutation\.starred, now\)/);
   assert.match(bridge, /await applyTimerAction\(ownerId, activity\.id, "activity", "finish"/);
