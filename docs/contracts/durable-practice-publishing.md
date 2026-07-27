@@ -63,6 +63,12 @@ its publishable rows are marked published.
 - Session and activity removal is allowed only before any timer, result,
   transcript, recording, finalization, or publication evidence exists.
 
+Career focus blocks share the workbench and single-active-stopwatch boundary
+but are not practice activities. They require no outcome, specialist,
+finalization, review, or publication. Starting fresh closes and archives
+started focus time; it never places that block in Past or the publication
+queue. Follow `career-work.md`.
+
 ## Solution Profile Preflight
 
 After resolving the stable `questionId`, every specialist calls

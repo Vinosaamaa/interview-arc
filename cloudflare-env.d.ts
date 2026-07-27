@@ -5,5 +5,7 @@ declare namespace Cloudflare {
     DB: D1Database;
     AUDIO: R2Bucket;
     LIVE_UPDATES: DurableObjectNamespace;
+    JOB_JOURNEY_BASE_URL?: string;
+    JOB_JOURNEY_SITE_TOKEN?: string;
   }
 }

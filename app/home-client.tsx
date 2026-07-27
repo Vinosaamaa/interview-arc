@@ -28,6 +28,7 @@ import {
   sessionAllocationSeconds,
   type ActivityType,
   type ExtraActivity,
+  type FocusBlock,
   type LocalSession,
   type Outcome,
   type PracticeNote,
@@ -40,6 +41,7 @@ import {
   type TranscriptTurn,
   type LeetCodeCodeAttempt,
 } from "./live-types";
+import { careerHeatLevel, type CareerJob, type CareerSummary, type JobStatus } from "./career-work";
 import { useLiveState, useReadOnlyLiveState } from "./live-sync";
 import { emptyJournal } from "./current-day";
 import { ArrivalRitual, PetalField } from "./arrival-ritual";
@@ -57,6 +59,26 @@ type View = "today" | "journey" | "library" | "banks";
 type ComposerMode = "session" | "activity";
 type JourneyRange = 30 | 90 | 365 | "all";
 type JourneyMetric = "activities" | "time";
+type JourneyHeatmapView = "all" | ActivityType | "job_applications";
+type CareerWorkPayload = {
+  focus: {
+    totalSeconds: number;
+    plannedSeconds: number;
+    completedBlocks: number;
+    focusDays: number;
+    currentStreak: number;
+    longestStreak: number;
+    averageCompletedSeconds: number;
+    byDate: Record<string, number>;
+  };
+  jobJourney: {
+    status: "available" | "unavailable";
+    stale: boolean;
+    summary: CareerSummary | null;
+    jobs: { jobs: CareerJob[]; page: { nextCursor: string | null; hasMore: boolean } } | null;
+    message?: string;
+  };
+};
 type LibraryAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "failed" | "notes";
 type BankAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "failed" | "todo" | "notes";
 type ComposerAttentionFilter = "due" | "needs_review" | "solved" | "helped" | "failed" | "todo";
@@ -522,7 +544,7 @@ function ActivityTimer({
   onComplete,
   locked = false,
 }: {
-  activity: JournalActivity;
+  activity: Pick<JournalActivity, "id" | "title">;
   timer?: TimerDraft;
   now: number;
   onToggle: (id: string) => void;
@@ -1356,8 +1378,23 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [composerVisibleCount, setComposerVisibleCount] = useState(20);
   const [journeyRange, setJourneyRange] = useState<JourneyRange>(90);
   const [journeyMetric, setJourneyMetric] = useState<JourneyMetric>("activities");
+  const [journeyHeatmapView, setJourneyHeatmapView] = useState<JourneyHeatmapView>("all");
   const [journeyDate, setJourneyDate] = useState("");
   const [journeyTopic, setJourneyTopic] = useState("");
+  const [careerWork, setCareerWork] = useState<CareerWorkPayload | null>(null);
+  const [careerLoading, setCareerLoading] = useState(false);
+  const [careerLoadingMore, setCareerLoadingMore] = useState(false);
+  const [careerSearch, setCareerSearch] = useState("");
+  const [careerStatuses, setCareerStatuses] = useState<JobStatus[]>([]);
+  const [careerSource, setCareerSource] = useState("");
+  const [careerReferral, setCareerReferral] = useState<"all" | "only" | "exclude">("all");
+  const [careerSelectedJob, setCareerSelectedJob] = useState<CareerJob | null>(null);
+  const careerQueryKeyRef = useRef("");
+  const [focusComposerOpen, setFocusComposerOpen] = useState(false);
+  const [editingFocusBlockId, setEditingFocusBlockId] = useState("");
+  const [focusTitle, setFocusTitle] = useState("Job applications");
+  const [focusMinutes, setFocusMinutes] = useState("60");
+  const [focusNote, setFocusNote] = useState("");
   const [pipWindow, setPipWindow] = useState<Window | null>(null);
   const [pipSupported, setPipSupported] = useState(false);
   const [arrivalState, setArrivalState] = useState<"show" | "leaving" | "entered">("show");
@@ -1748,6 +1785,89 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }, [allSessions]);
   const assignedExtraIds = new Set(allSessions.flatMap((session) => session.activityIds));
   const looseActivities = allTodayActivities.filter((activity) => !assignedExtraIds.has(activity.id));
+  const currentFocusBlocks = draft.focusBlocks;
+
+  const careerQueryParams = useCallback((cursor?: string) => {
+    const params = new URLSearchParams({
+      from: shiftDate(journal.date, -364),
+      to: journal.date,
+      limit: "50",
+    });
+    if (careerSearch.trim()) params.set("q", careerSearch.trim());
+    if (careerStatuses.length) params.set("status", careerStatuses.join(","));
+    if (careerSource) params.set("source", careerSource);
+    if (careerReferral !== "all") params.set("referral", careerReferral);
+    if (cursor) params.set("cursor", cursor);
+    return params;
+  }, [careerReferral, careerSearch, careerSource, careerStatuses, journal.date]);
+
+  const careerQueryKey = careerQueryParams().toString();
+  careerQueryKeyRef.current = careerQueryKey;
+
+  useEffect(() => {
+    if (view !== "journey") return;
+    let cancelled = false;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setCareerLoading(true);
+      const params = careerQueryParams();
+      void fetch(`/api/career-work?${params}`, { cache: "no-store", signal: controller.signal })
+        .then(async (response) => {
+          if (!response.ok) throw new Error("Career Work could not load.");
+          return response.json() as Promise<CareerWorkPayload>;
+        })
+        .then((payload) => {
+          if (!cancelled) setCareerWork(payload);
+        })
+        .catch(() => {
+          if (!cancelled) setCareerWork(null);
+        })
+        .finally(() => {
+          if (!cancelled) setCareerLoading(false);
+        });
+    }, careerSearch ? 250 : 0);
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [careerQueryParams, careerSearch, view, draft.historyFocusBlocks, draft.timers]);
+
+  async function loadMoreCareerJobs() {
+    const cursor = careerWork?.jobJourney.jobs?.page.nextCursor;
+    if (!cursor || careerLoadingMore) return;
+    const expectedQueryKey = careerQueryKeyRef.current;
+    setCareerLoadingMore(true);
+    try {
+      const response = await fetch(`/api/career-work?${careerQueryParams(cursor)}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("More jobs could not load.");
+      const payload = await response.json() as CareerWorkPayload;
+      if (
+        expectedQueryKey !== careerQueryKeyRef.current ||
+        payload.jobJourney.status !== "available" ||
+        !payload.jobJourney.jobs
+      ) return;
+      setCareerWork((current) => {
+        if (current?.jobJourney.status !== "available" || !current.jobJourney.jobs) return payload;
+        const jobs = [...current.jobJourney.jobs.jobs, ...payload.jobJourney.jobs.jobs];
+        return {
+          ...payload,
+          focus: current.focus,
+          jobJourney: {
+            ...payload.jobJourney,
+            jobs: {
+              ...payload.jobJourney.jobs,
+              jobs: [...new Map(jobs.map((job) => [job.id, job])).values()],
+            },
+          },
+        };
+      });
+    } catch {
+      showUiToast("More Job Journey records could not load.");
+    } finally {
+      setCareerLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     const finished = allSessions.filter((session) => session.activityIds.length > 0
@@ -2111,6 +2231,96 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         focusedAt: timestamp,
       };
     });
+  }
+
+  function completeFocusBlock(blockId: string) {
+    const timestamp = Date.now();
+    const existing = draft.timers[blockId];
+    if (!existing?.startedAt || existing.completed) return;
+    setNow(timestamp);
+    enqueue({ type: "timer", subjectId: blockId, kind: "activity", action: "finish" });
+    setDraft((current) => ({
+      ...current,
+      timers: {
+        ...current.timers,
+        [blockId]: {
+          ...current.timers[blockId],
+          elapsedSeconds: elapsed(current.timers[blockId], timestamp),
+          runningSince: null,
+          completed: true,
+          completedAt: timestamp,
+        },
+      },
+      focusedActivityId: blockId,
+      focusedSessionId: null,
+      focusedAt: timestamp,
+    }));
+  }
+
+  function saveFocusBlock(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const title = focusTitle.trim();
+    const plannedSeconds = Math.max(60, Math.min(12 * 60 * 60, Math.round(Number(focusMinutes) * 60)));
+    if (!title || !Number.isFinite(plannedSeconds)) return;
+    const timestamp = Date.now();
+    const existingBlock = draft.focusBlocks.find((block) => block.id === editingFocusBlockId);
+    const block: FocusBlock = {
+      id: existingBlock?.id ?? `${journal.date}-focus-job-applications-${crypto.randomUUID()}`,
+      workbenchId: draft.workbench?.id,
+      activityClass: "focus_block",
+      focusCategory: "job_applications",
+      title,
+      plannedSeconds,
+      ...(focusNote.trim() ? { note: focusNote.trim() } : {}),
+      date: journal.date,
+      createdAt: existingBlock?.createdAt ?? timestamp,
+      updatedAt: timestamp,
+    };
+    setDraft((current) => ({
+      ...current,
+      focusBlocks: existingBlock
+        ? current.focusBlocks.map((candidate) => candidate.id === block.id ? block : candidate)
+        : [...current.focusBlocks, block],
+    }));
+    enqueue({ type: "focus-block-upsert", block });
+    setFocusComposerOpen(false);
+    setEditingFocusBlockId("");
+    setFocusTitle("Job applications");
+    setFocusMinutes("60");
+    setFocusNote("");
+    showUiToast(existingBlock ? "Career focus block updated." : "Job application focus block added to Today.");
+  }
+
+  function closeFocusComposer() {
+    setFocusComposerOpen(false);
+    setEditingFocusBlockId("");
+    setFocusTitle("Job applications");
+    setFocusMinutes("60");
+    setFocusNote("");
+  }
+
+  function editFocusBlock(block: FocusBlock) {
+    if (draft.timers[block.id]?.completed) {
+      showUiToast("Completed career focus blocks are locked.");
+      return;
+    }
+    setEditingFocusBlockId(block.id);
+    setFocusTitle(block.title);
+    setFocusMinutes(String(Math.round(block.plannedSeconds / 60)));
+    setFocusNote(block.note ?? "");
+    setFocusComposerOpen(true);
+  }
+
+  function removeFocusBlockFromToday(blockId: string) {
+    if (draft.timers[blockId]?.startedAt) {
+      showUiToast("Started career time stays in Career Work.");
+      return;
+    }
+    enqueue({ type: "focus-block-remove", id: blockId });
+    setDraft((current) => ({
+      ...current,
+      focusBlocks: current.focusBlocks.filter((block) => block.id !== blockId),
+    }));
   }
 
   function setOutcome(activityId: string, outcome?: Outcome) {
@@ -3326,6 +3536,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         closedAt: null,
       },
       extraActivities: [],
+      focusBlocks: [],
       sessions: [],
       historyActivities: [
         ...current.historyActivities.filter((activity) => !current.extraActivities.some((candidate) => candidate.id === activity.id)),
@@ -3334,6 +3545,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       historySessions: [
         ...current.historySessions.filter((session) => !current.sessions.some((candidate) => candidate.id === session.id)),
         ...current.sessions,
+      ],
+      historyFocusBlocks: [
+        ...current.historyFocusBlocks.filter((block) => !current.focusBlocks.some((candidate) => candidate.id === block.id)),
+        ...current.focusBlocks,
       ],
       focusedActivityId: null,
       focusedSessionId: null,
@@ -3428,6 +3643,19 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       };
     });
   }, [completedEntries, journal.date]);
+  const displayedHeatmapDays = useMemo(() => heatmapDays.map((day) => {
+    if (journeyHeatmapView === "job_applications") {
+      const seconds = careerWork?.focus.byDate[day.date] ?? 0;
+      return { ...day, count: careerHeatLevel(seconds), seconds, failed: 0 };
+    }
+    if (journeyHeatmapView === "all") return day;
+    const count = journeyHeatmapView === "leetcode"
+      ? day.coding
+      : journeyHeatmapView === "system_design"
+        ? day.system
+        : day.behavioral;
+    return { ...day, count };
+  }), [careerWork?.focus.byDate, heatmapDays, journeyHeatmapView]);
 
   const activeDates = useMemo(
     () => [...new Set(completedEntries.map((entry) => entry.date))].sort(),
@@ -3483,7 +3711,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }, [codingQuestionFor, libraryEntries]);
 
   const selectedJourneyEntries = journeyDate
-    ? completedEntries.filter((entry) => entry.date === journeyDate)
+    ? completedEntries.filter((entry) => entry.date === journeyDate && (
+      journeyHeatmapView === "all"
+      || (journeyHeatmapView !== "job_applications" && entry.type === journeyHeatmapView)
+    ))
+    : [];
+  const selectedFocusBlocks = journeyDate
+    ? draft.historyFocusBlocks.filter((block) => block.date === journeyDate)
     : [];
   const selectedTopicEntries = topicStats.find((topic) => topic.topic === journeyTopic)?.entries ?? [];
   const yesterdayEntries = logEntries.filter((entry) => entry.date === yesterdayDate);
@@ -3608,6 +3842,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function renderToday() {
     const totalToday = allTodayActivities.length;
+    const railFocusBlock = currentFocusBlocks.find((block) => draft.timers[block.id]?.runningSince)
+      ?? currentFocusBlocks.find((block) => block.id === draft.focusedActivityId)
+      ?? null;
+    const railFocusTimer = railFocusBlock ? draft.timers[railFocusBlock.id] : undefined;
     const railActivity = activeActivity ?? lastFocusedActivity;
     const focusTimer = railActivity ? draft.timers[railActivity.id] : undefined;
     const focusPublication = railActivity ? publicationStatusFor(railActivity) : "draft";
@@ -3624,9 +3862,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           <div className="today-tally"><span className="yesterday-label">YESTERDAY · {readableDate(yesterdayDate, true)}</span><div><strong>{yesterdayCompleted.length}/{yesterdayEntries.length}</strong><span>activities finished</span></div><div><strong>{formatDuration(yesterdaySeconds)}</strong><span>time recorded</span></div><div><strong>{yesterdaySessions}</strong><span>session{yesterdaySessions === 1 ? "" : "s"} planned</span></div></div>
         </section>
 
-        <section className={`orchestrator-rail ${activeActivity ? "has-focus" : railActivity ? "has-history" : "empty"}`} aria-label="Current practice activity">
-          <div className="orchestrator-signal"><span className={focusTimer?.runningSince ? "live" : ""} /><small>NOW</small></div>
-          {railActivity ? <>
+        <section className={`orchestrator-rail ${railFocusTimer?.runningSince || activeActivity ? "has-focus" : railFocusBlock || railActivity ? "has-history" : "empty"}`} aria-label="Current workbench activity">
+          <div className="orchestrator-signal"><span className={railFocusTimer?.runningSince || focusTimer?.runningSince ? "live" : ""} /><small>NOW</small></div>
+          {railFocusBlock ? <>
+            <div className="orchestrator-focus career"><span className="career-focus-mark">J</span><div><small>{railFocusTimer?.completed ? "Career focus · complete" : railFocusTimer?.runningSince ? "Career focus · running now" : "Career focus · paused"}</small><strong>{railFocusBlock.title}</strong><span>{railFocusBlock.note ?? "Job application focus block"}</span></div></div>
+            <div className="orchestrator-clock"><span>Recorded</span><strong>{formatClock(elapsed(railFocusTimer, now))}</strong><small>{PRACTICE_TIME_ZONE}</small></div>
+            <div className="orchestrator-lifecycle career" aria-label="Career focus lifecycle"><i className="done">Planned</i><b /><i className={railFocusTimer?.startedAt ? "done" : ""}>In progress</i><b /><i className={railFocusTimer?.completed ? "done" : ""}>Complete</i></div>
+            {!railFocusTimer?.runningSince && !railFocusTimer?.completed && <button className="orchestrator-resume" onClick={() => toggleTimer(railFocusBlock.id)}>Resume</button>}
+          </> : railActivity ? <>
             <div className="orchestrator-focus"><span className={`type-mark ${railActivity.type}`}>{typeMark(railActivity.type)}</span><div><small>{focusPhase} · {railSession?.label ?? "Standalone practice"}</small><strong>{activeActivity ? railActivity.title : "No activity running"}</strong><span>{activeActivity ? railActivity.title : `${railActivity.title} was the last focused activity.`}</span></div></div>
             <div className="orchestrator-clock"><span>Recorded</span><strong>{formatClock(elapsed(focusTimer, now))}</strong><small>{PRACTICE_TIME_ZONE}</small></div>
             <div className="orchestrator-lifecycle" aria-label={`Lifecycle: ${focusPhase}`}><i className="done">Planned</i><b /><i className={focusTimer?.startedAt ? "done" : ""}>In progress</i><b /><i className={focusTimer?.completed ? "done" : ""}>Ready</i><b /><i className={focusPublication === "published" ? "done" : ""}>Journal</i></div>
@@ -3637,12 +3880,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             : <div className="orchestrator-empty"><strong>No activity running.</strong><span>Start any activity stopwatch when you are ready. Voice stays unlinked until then.</span></div>}
         </section>
 
-        <div className="today-actions"><div><h2>Current workbench</h2><p>It stays open across Pacific midnight until you publish it or explicitly start fresh.</p></div><div><button className="secondary-action" onClick={() => allTodayActivities.length || allSessions.length ? setFreshDayConfirmOpen(true) : startFreshPracticeDay()}>Start fresh day</button><button className="secondary-action" onClick={openNewActivity}>Add activities</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
+        <div className="today-actions"><div><h2>Current workbench</h2><p>It stays open across Pacific midnight until you publish it or explicitly start fresh.</p></div><div><button className="secondary-action" onClick={() => allTodayActivities.length || allSessions.length || currentFocusBlocks.length ? setFreshDayConfirmOpen(true) : startFreshPracticeDay()}>Start fresh day</button><button className="career-action" onClick={() => setFocusComposerOpen(true)}>＋ Job application block</button><button className="secondary-action" onClick={openNewActivity}>Add activities</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
         <section className="session-stack">{allSessions.length ? allSessions.map(renderSession) : <div className="quiet-empty session-empty"><strong>No session planned yet.</strong><span>Add another session to choose up to six coding questions and one question from each available interview bank.</span></div>}</section>
 
         <section className="loose-section">
           <div className="section-title"><div><span className="eyebrow">STANDALONE PRACTICE</span><h2>Outside a full session</h2><p>Each card keeps only the controls you need: stopwatch, result, journal state, star, and remove.</p></div></div>
           {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add activities” above to select across the banks or create a custom prompt.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <StandaloneActivityCard key={activity.id} title={activity.title} onRemove={() => removeActivity(activity.id)} removeDisabled={Boolean(draft.timers[activity.id]?.startedAt)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><small>{typeLabel(activity.type)} · local draft</small><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} /><ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} disabled={!draft.timers[activity.id]?.startedAt || draft.publicationStatuses[activity.id] === "published"} required={requiredResultIds.includes(activity.id)} /><PublicationControl status={publicationStatusFor(activity)} /><button className={`star-control ${isStarred(activity.type, activity.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(activity.type, activity.questionId)} disabled={!activity.questionId} aria-label={`${isStarred(activity.type, activity.questionId) ? "Unstar" : "Star"} ${activity.title}`}>★</button></StandaloneActivityCard>)}</div>}
+          {currentFocusBlocks.length > 0 && <section className="career-focus-section" aria-labelledby="career-focus-title"><header><div><span className="eyebrow">CAREER WORK</span><h3 id="career-focus-title">Job application focus</h3></div><small>Time only · no result or publication required</small></header><div className="career-focus-list">{currentFocusBlocks.map((block) => <article className={`career-focus-card ${draft.timers[block.id]?.completed ? "completed" : ""}`} key={block.id}><span className="career-focus-mark" aria-hidden="true">J</span><div className="career-focus-copy"><small>Focus block · {Math.round(block.plannedSeconds / 60)} planned min</small><strong>{block.title}</strong>{block.note && <p>{block.note}</p>}</div><ActivityTimer activity={block} timer={draft.timers[block.id]} now={now} onToggle={toggleTimer} onComplete={completeFocusBlock} /><div className="career-focus-actions"><button className="icon-action" onClick={() => editFocusBlock(block)} disabled={Boolean(draft.timers[block.id]?.completed)} aria-label={`Edit ${block.title}`}>✎</button><button className="icon-action" onClick={() => removeFocusBlockFromToday(block.id)} disabled={Boolean(draft.timers[block.id]?.startedAt)} aria-label={`Remove ${block.title}`}>×</button></div></article>)}</div></section>}
         </section>
       </>
     );
@@ -3686,28 +3930,61 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           <article className={momentumDelta >= 0 ? "positive" : "negative"}><span>7-day momentum</span><strong>{momentumDelta > 0 ? "+" : ""}{momentumDelta}%</strong><small>{recentSeven} now · {priorSeven} prior</small></article>
         </div>
 
-        <article className="chart-sheet heatmap-sheet">
-          <div className="chart-heading"><div><span className="eyebrow">365-DAY PRACTICE MAP</span><h2>Consistency at a glance</h2><p>Color measures finished coding and mock-interview work. Failed attempts remain visible in each day&apos;s detail without inflating the shade.</p></div><div className="heatmap-legend"><span>Less</span>{[0, 1, 2, 3, 4].map((level) => <i className={`level-${level}`} key={level} />)}<span>More</span></div></div>
+        <article className={`chart-sheet heatmap-sheet ${journeyHeatmapView === "job_applications" ? "career-map" : ""}`}>
+          <div className="chart-heading"><div><span className="eyebrow">365-DAY JOURNEY MAP</span><h2>{journeyHeatmapView === "job_applications" ? "Career focus at a glance" : "Consistency at a glance"}</h2><p>{journeyHeatmapView === "job_applications" ? "Color measures elapsed job-application focus time, split correctly at Pacific midnight." : "Color measures finished coding and mock-interview work. Failed attempts remain visible without inflating the shade."}</p></div><div className="heatmap-legend"><span>Less</span>{Array.from({ length: journeyHeatmapView === "job_applications" ? 6 : 5 }, (_, level) => <i className={`level-${level}`} key={level} />)}<span>More</span></div></div>
+          <div className="heatmap-view-selector" role="group" aria-label="Journey map category">{([
+            ["all", "All practice"],
+            ["leetcode", "Coding"],
+            ["system_design", "System design"],
+            ["behavioral", "Behavioral"],
+            ["job_applications", "Job applications"],
+          ] as Array<[JourneyHeatmapView, string]>).map(([value, label]) => <button key={value} className={journeyHeatmapView === value ? "active" : ""} onClick={() => setJourneyHeatmapView(value)}>{label}</button>)}</div>
           <div className="heatmap-scroll">
             <div className="heatmap-days"><span>M</span><span>W</span><span>F</span></div>
             <div className="practice-heatmap" role="grid" aria-label="Completed practice during the last 365 days">
-              {heatmapDays.map((day) => {
-                const level = day.count === 0 ? 0 : Math.min(4, day.count);
+              {displayedHeatmapDays.map((day) => {
+                const level = day.count === 0 ? 0 : Math.min(journeyHeatmapView === "job_applications" ? 5 : 4, day.count);
                 return <button
                   key={day.date}
                   className={`heat-day level-${level} ${journeyDate === day.date ? "selected" : ""}`}
                   onClick={() => setJourneyDate(day.date)}
-                  aria-label={`${readableDate(day.date)}: ${day.count} finished activities, ${day.failed} failed attempts`}
-                ><span role="tooltip"><strong>{readableDate(day.date, true)}</strong>{day.count} finished · {day.coding} coding · {day.system} system · {day.behavioral} behavioral{day.failed ? ` · ${day.failed} failed` : ""}<small>{formatDuration(day.seconds)} recorded</small></span></button>;
+                  aria-label={journeyHeatmapView === "job_applications" ? `${readableDate(day.date)}: ${formatDuration(day.seconds)} job application focus` : `${readableDate(day.date)}: ${day.count} finished activities`}
+                ><span role="tooltip"><strong>{readableDate(day.date, true)}</strong>{journeyHeatmapView === "job_applications" ? `${formatDuration(day.seconds)} career focus` : <>{day.count} finished · {day.coding} coding · {day.system} system · {day.behavioral} behavioral{day.failed ? ` · ${day.failed} failed` : ""}</>}<small>{formatDuration(day.seconds)} recorded</small></span></button>;
               })}
             </div>
           </div>
-          <div className="heatmap-foot"><span>{readableDate(heatmapDays[0].date, true)}</span><span>Select a square to inspect the day</span><span>{readableDate(journal.date, true)}</span></div>
+          <div className="heatmap-foot"><span>{readableDate(displayedHeatmapDays[0].date, true)}</span><span>Select a square to inspect the day</span><span>{readableDate(journal.date, true)}</span></div>
           {journeyDate && <div className="journey-day-inspector">
-            <div><span className="eyebrow">SELECTED DAY</span><h3>{readableDate(journeyDate)}</h3><p>{selectedJourneyEntries.length ? `${selectedJourneyEntries.length} completed record${selectedJourneyEntries.length === 1 ? "" : "s"}.` : "No completed work was recorded on this day."}</p></div>
-            <div>{selectedJourneyEntries.map((entry) => <button key={entry.id} onClick={() => openJournalEntry(entry)}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><i><strong>{entry.title}</strong><small>{typeLabel(entry.type)} · {entry.elapsedSeconds ? formatDuration(entry.elapsedSeconds) : "time not recorded"}</small></i><b>Read →</b></button>)}</div>
+            <div><span className="eyebrow">SELECTED DAY</span><h3>{readableDate(journeyDate)}</h3><p>{journeyHeatmapView === "job_applications" ? `${formatDuration(careerWork?.focus.byDate[journeyDate] ?? 0)} of job-application focus.` : selectedJourneyEntries.length ? `${selectedJourneyEntries.length} completed record${selectedJourneyEntries.length === 1 ? "" : "s"}.` : "No completed work was recorded on this day."}</p></div>
+            <div>{journeyHeatmapView === "job_applications" ? selectedFocusBlocks.map((block) => <article className="career-day-record" key={block.id}><span className="career-focus-mark">J</span><i><strong>{block.title}</strong><small>{Math.round(block.plannedSeconds / 60)} planned min{block.note ? ` · ${block.note}` : ""}</small></i></article>) : selectedJourneyEntries.map((entry) => <button key={entry.id} onClick={() => openJournalEntry(entry)}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><i><strong>{entry.title}</strong><small>{typeLabel(entry.type)} · {entry.elapsedSeconds ? formatDuration(entry.elapsedSeconds) : "time not recorded"}</small></i><b>Read →</b></button>)}</div>
           </div>}
         </article>
+
+        <section className="career-work-panel" aria-labelledby="career-work-title">
+          <header><div><span className="eyebrow">CAREER WORK</span><h2 id="career-work-title">Focus here. Applications from Job Journey.</h2><p>Interview Arc owns only your focus time. Job Journey remains authoritative for companies, roles, URLs, referrals, and pipeline status.</p></div><span className={`career-source-status ${careerWork?.jobJourney.status ?? "unavailable"}`}>{careerLoading ? "Refreshing…" : careerWork?.jobJourney.status === "available" ? careerWork.jobJourney.stale ? "Job Journey · cached" : "Job Journey connected" : "Application data unavailable"}</span></header>
+          <div className="career-local-ledger">
+            <article><span>Focused time</span><strong>{formatDuration(careerWork?.focus.totalSeconds ?? 0)}</strong><small>last 365 days</small></article>
+            <article><span>Completed blocks</span><strong>{careerWork?.focus.completedBlocks ?? 0}</strong><small>career focus sessions</small></article>
+            <article><span>Focus days</span><strong>{careerWork?.focus.focusDays ?? 0}</strong><small>{careerWork?.focus.currentStreak ?? 0}-day current streak</small></article>
+            <article><span>Average block</span><strong>{formatDuration(careerWork?.focus.averageCompletedSeconds ?? 0)}</strong><small>completed focus time</small></article>
+          </div>
+          {careerWork?.jobJourney.status === "available" && careerWork.jobJourney.summary && careerWork.jobJourney.jobs ? <>
+            <div className="career-pipeline-ledger">
+              <article><span>Submitted</span><strong>{careerWork.jobJourney.summary.totals.submitted}</strong></article>
+              <article><span>Interviewing</span><strong>{careerWork.jobJourney.summary.totals.interviewing}</strong></article>
+              <article><span>Offers</span><strong>{careerWork.jobJourney.summary.totals.offers}</strong></article>
+              <article><span>Awaiting referral</span><strong>{careerWork.jobJourney.summary.totals.awaitingReferral}</strong></article>
+            </div>
+            <div className="career-job-controls">
+              <label><span className="sr-only">Search jobs</span><input type="search" value={careerSearch} onChange={(event) => setCareerSearch(event.target.value)} placeholder="Search company, role, location, source, or job ID" /></label>
+              <details className="career-status-picker"><summary>{careerStatuses.length ? `${careerStatuses.length} statuses` : "All statuses"}</summary><div>{Object.keys(careerWork.jobJourney.summary.currentStatusCounts).map((status) => <label key={status}><input type="checkbox" checked={careerStatuses.includes(status as JobStatus)} onChange={() => setCareerStatuses((current) => current.includes(status as JobStatus) ? current.filter((value) => value !== status) : [...current, status as JobStatus])} /><span>{status.replaceAll("_", " ")}</span><small>{careerWork.jobJourney.summary?.currentStatusCounts[status as JobStatus] ?? 0}</small></label>)}</div></details>
+              <select value={careerSource} onChange={(event) => setCareerSource(event.target.value)} aria-label="Filter jobs by source"><option value="">All sources</option>{Object.keys(careerWork.jobJourney.summary.bySource).sort().map((source) => <option key={source} value={source}>{source}</option>)}</select>
+              <select value={careerReferral} onChange={(event) => setCareerReferral(event.target.value as "all" | "only" | "exclude")} aria-label="Filter jobs by referral"><option value="all">All referral states</option><option value="only">Referral only</option><option value="exclude">Exclude referral-only</option></select>
+            </div>
+            <div className="career-job-list">{careerWork.jobJourney.jobs.jobs.map((job) => <button key={job.id} onClick={() => setCareerSelectedJob(job)}><span><strong>{job.title}</strong><small>{job.company}{job.location ? ` · ${job.location}` : ""}</small></span><i>{job.status.replaceAll("_", " ")}</i></button>)}</div>
+            {careerWork.jobJourney.jobs.page.hasMore && careerWork.jobJourney.jobs.page.nextCursor && <button type="button" className="career-load-more" onClick={() => void loadMoreCareerJobs()} disabled={careerLoadingMore}>{careerLoadingMore ? "Loading more…" : "Load more applications"}</button>}
+          </> : <div className="career-unavailable"><strong>Your focus record is safe and current.</strong><p>{careerWork?.jobJourney.message ?? "Job Journey’s v1 integration is not connected yet. Application details will appear here after its private API is deployed and configured."}</p></div>}
+        </section>
 
         <section className="metric-rings" aria-label="Coding outcome rates">
           <MetricRing label="Solved" value={codingAttemptCount ? (outcomeCounts.solved / codingAttemptCount) * 100 : 0} detail={`${outcomeCounts.solved} coding attempt${outcomeCounts.solved === 1 ? "" : "s"} solved without help.`} color="#91a72f" />
@@ -4866,6 +5143,31 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           <p id="fresh-day-description">Started activities will close at the current time and remain in Past for later batch publication. Every started activity must already have a result. Never-started questions return to the selection pool.</p>
           <div className="confirmation-actions"><button className="secondary-action" onClick={() => setFreshDayConfirmOpen(false)}>Keep working</button><button className="primary-action" onClick={startFreshPracticeDay}>Start fresh day</button></div>
         </section>
+      </div>}
+
+      {focusComposerOpen && <div className="modal-backdrop" role="presentation" onMouseDown={closeFocusComposer}>
+        <form className="focus-composer" role="dialog" aria-modal="true" aria-labelledby="focus-composer-title" onSubmit={saveFocusBlock} onMouseDown={(event) => event.stopPropagation()}>
+          <button className="modal-close" type="button" onClick={closeFocusComposer} aria-label="Close">×</button>
+          <span className="eyebrow">CAREER FOCUS</span>
+          <h2 id="focus-composer-title">{editingFocusBlockId ? "Edit career focus." : "Block time for job applications."}</h2>
+          <p>This records honest focus time in Journey. It does not create a practice problem, result, review, or publication artifact.</p>
+          <label><span>Title</span><input autoFocus value={focusTitle} onChange={(event) => setFocusTitle(event.target.value)} required /></label>
+          <label><span>Planned minutes</span><input type="number" min="1" max="720" value={focusMinutes} onChange={(event) => setFocusMinutes(event.target.value)} required /></label>
+          <label><span>Optional note</span><textarea value={focusNote} onChange={(event) => setFocusNote(event.target.value)} placeholder="Goal, application batch, or reminder" /></label>
+          <div className="confirmation-actions"><button className="secondary-action" type="button" onClick={closeFocusComposer}>Cancel</button><button className="primary-action" type="submit" disabled={!focusTitle.trim()}>{editingFocusBlockId ? "Save changes" : "Add focus block"}</button></div>
+        </form>
+      </div>}
+
+      {careerSelectedJob && <div className="modal-backdrop career-drawer-backdrop" role="presentation" onMouseDown={() => setCareerSelectedJob(null)}>
+        <aside className="career-job-drawer" role="dialog" aria-modal="true" aria-labelledby="career-job-title" onMouseDown={(event) => event.stopPropagation()}>
+          <button className="modal-close" onClick={() => setCareerSelectedJob(null)} aria-label="Close">×</button>
+          <span className="eyebrow">JOB JOURNEY · READ ONLY</span>
+          <h2 id="career-job-title">{careerSelectedJob.title}</h2>
+          <p className="career-job-company">{careerSelectedJob.company}{careerSelectedJob.location ? ` · ${careerSelectedJob.location}` : ""}</p>
+          <dl><div><dt>Status</dt><dd>{careerSelectedJob.status.replaceAll("_", " ")}</dd></div><div><dt>Source</dt><dd>{careerSelectedJob.source}</dd></div><div><dt>External job ID</dt><dd>{careerSelectedJob.externalJobId ?? "Not recorded"}</dd></div><div><dt>Applied</dt><dd>{careerSelectedJob.appliedAt ? formatPracticeTimestamp(Date.parse(careerSelectedJob.appliedAt)) : "Not submitted"}</dd></div><div><dt>Referred</dt><dd>{careerSelectedJob.referredAt ? formatPracticeTimestamp(Date.parse(careerSelectedJob.referredAt)) : careerSelectedJob.referralOnly ? "Awaiting referral" : "No referral recorded"}</dd></div><div><dt>Last status update</dt><dd>{careerSelectedJob.statusUpdatedAt ? formatPracticeTimestamp(Date.parse(careerSelectedJob.statusUpdatedAt)) : "Not recorded"}</dd></div></dl>
+          {careerSelectedJob.jobUrl && <a className="primary-action" href={careerSelectedJob.jobUrl} target="_blank" rel="noreferrer">Open original job ↗</a>}
+          <small>Application data is owned by Job Journey and cannot be edited here.</small>
+        </aside>
       </div>}
 
       {renderLifecycleDialog()}

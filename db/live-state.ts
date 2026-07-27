@@ -6,6 +6,7 @@ import {
   activityDeliveryAnalyses,
   activityFinalizations,
   extraActivities,
+  focusBlocks,
   leetcodeCodeAttempts,
   liveSessions,
   outcomes,
@@ -19,6 +20,7 @@ import {
   timers,
   reviewSchedules,
   type ExtraActivityRow,
+  type FocusBlockRow,
   type LiveSessionRow,
   voiceCaptureIntents,
 } from "./schema";
@@ -78,8 +80,10 @@ export type LiveState = {
   activitySolutionLinks: unknown[];
   personalQuestions: unknown[];
   extraActivities: unknown[];
+  focusBlocks: unknown[];
   sessions: unknown[];
   historyActivities: unknown[];
+  historyFocusBlocks: unknown[];
   historySessions: unknown[];
   focusedActivityId: string | null;
   focusedSessionId: string | null;
@@ -117,6 +121,21 @@ function toTimerState(row: {
 
 type ActivityPayload = { id: string; date: string; sessionId?: string } & Record<string, unknown>;
 type SessionPayload = { id: string; date?: string; activityIds: string[] } & Record<string, unknown>;
+
+function toFocusBlock(row: FocusBlockRow) {
+  return {
+    id: row.id,
+    workbenchId: row.workbenchId,
+    activityClass: "focus_block" as const,
+    focusCategory: row.category,
+    title: row.title,
+    plannedSeconds: row.plannedSeconds,
+    ...(row.note ? { note: row.note } : {}),
+    date: row.date,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
 
 export type ActiveVoiceActivity = ActivityPayload & {
   type: "leetcode" | "system_design" | "behavioral";
@@ -384,12 +403,13 @@ export async function readLiveState(
 ): Promise<LiveState> {
   const db = getDb();
   const workbench = await ensureOpenWorkbench(ownerId, date);
-  const [timerRows, outcomeRows, publicationRows, noteRows, extraRows, sessionRows, focusRows] = await Promise.all([
+  const [timerRows, outcomeRows, publicationRows, noteRows, extraRows, focusBlockRows, sessionRows, focusRows] = await Promise.all([
     db.select().from(timers).where(eq(timers.ownerId, ownerId)),
     db.select().from(outcomes).where(eq(outcomes.ownerId, ownerId)),
     db.select().from(publicationStatuses).where(eq(publicationStatuses.ownerId, ownerId)),
     db.select().from(activityNotes).where(eq(activityNotes.ownerId, ownerId)),
     db.select().from(extraActivities).where(eq(extraActivities.ownerId, ownerId)),
+    db.select().from(focusBlocks).where(eq(focusBlocks.ownerId, ownerId)),
     db.select().from(liveSessions).where(eq(liveSessions.ownerId, ownerId)),
     db.select().from(practiceFocus).where(eq(practiceFocus.ownerId, ownerId)),
   ]);
@@ -413,6 +433,11 @@ export async function readLiveState(
   const visibleActivities = allActivities;
   const historySessions = sessionRows.map((row: LiveSessionRow) => row.payload as SessionPayload);
   const historyActivities = extraRows.map((row: ExtraActivityRow) => row.payload as ActivityPayload);
+  const visibleFocusBlocks = (options.includeAll
+    ? focusBlockRows
+    : focusBlockRows.filter((row) => row.workbenchId === workbench.id))
+    .map(toFocusBlock);
+  const historyFocusBlocks = focusBlockRows.map(toFocusBlock);
   const historyActivityIds = new Set(historyActivities.map((activity) => activity.id));
   const durable = await readDurablePracticeSummary(ownerId, [...historyActivityIds], date);
 
@@ -477,8 +502,10 @@ export async function readLiveState(
     activitySolutionLinks: durable.activitySolutionLinks,
     personalQuestions: durable.personalQuestions,
     extraActivities: visibleActivities,
+    focusBlocks: visibleFocusBlocks,
     sessions: visibleSessions,
     historyActivities,
+    historyFocusBlocks,
     historySessions,
     focusedActivityId: focus?.activityId ?? null,
     focusedSessionId: focus?.sessionId ?? null,
@@ -570,7 +597,7 @@ export async function applyTimerAction(
   kind: TimerKind,
   action: TimerAction,
   nowMs: number,
-  options: { sessionId?: string | null; activityIds?: string[] } = {},
+  options: { sessionId?: string | null; activityIds?: string[]; requiresOutcome?: boolean } = {},
 ): Promise<TimerState> {
   const db = getDb();
   const existing = await loadTimer(db, ownerId, subjectId, kind);
@@ -578,7 +605,7 @@ export async function applyTimerAction(
   // Finished timers are locked permanently and never resume.
   if (existing?.completed) return toTimerState(existing);
 
-  if (action === "finish" && kind === "activity") {
+  if (action === "finish" && kind === "activity" && options.requiresOutcome !== false) {
     const voiceGuard = await prepareVoiceCapturesForFinish(ownerId, subjectId, nowMs);
     const voiceConflict = voiceFinishGuardMessage(voiceGuard);
     if (voiceConflict) throw new TimerStateConflictError(voiceConflict);
@@ -729,6 +756,21 @@ export async function applyTimerAction(
     }
   }
   return toTimerState(updated!);
+}
+
+export async function applyFocusTimerAction(
+  ownerId: string,
+  subjectId: string,
+  action: TimerAction,
+  nowMs: number,
+) {
+  const db = getDb();
+  const rows = await db.select({ id: focusBlocks.id }).from(focusBlocks).where(and(
+    eq(focusBlocks.ownerId, ownerId),
+    eq(focusBlocks.id, subjectId),
+  ));
+  if (!rows[0]) throw new TimerStateConflictError("This career focus block no longer exists.");
+  return applyTimerAction(ownerId, subjectId, "activity", action, nowMs, { requiresOutcome: false });
 }
 
 // Voice locks its destination when recording begins. This check deliberately
@@ -965,6 +1007,67 @@ export async function upsertExtraActivity(
     });
 }
 
+export async function upsertFocusBlock(
+  ownerId: string,
+  input: {
+    id: string;
+    date: string;
+    focusCategory: "job_applications";
+    title: string;
+    plannedSeconds: number;
+    note?: string;
+  },
+  nowMs: number,
+) {
+  const db = getDb();
+  const existingTimer = await loadTimer(db, ownerId, input.id, "activity");
+  if (existingTimer?.completed) {
+    throw new TimerStateConflictError("Completed career focus blocks are locked.");
+  }
+  const workbench = await ensureOpenWorkbench(ownerId, input.date, nowMs);
+  const existing = await db.select().from(focusBlocks).where(and(
+    eq(focusBlocks.ownerId, ownerId),
+    eq(focusBlocks.id, input.id),
+  ));
+  await db.insert(focusBlocks).values({
+    ownerId,
+    id: input.id,
+    workbenchId: workbench.id,
+    date: input.date,
+    category: input.focusCategory,
+    title: input.title,
+    plannedSeconds: input.plannedSeconds,
+    note: input.note?.trim() || null,
+    createdAt: existing[0]?.createdAt ?? nowMs,
+    updatedAt: nowMs,
+  }).onConflictDoUpdate({
+    target: [focusBlocks.ownerId, focusBlocks.id],
+    set: {
+      workbenchId: workbench.id,
+      date: input.date,
+      category: input.focusCategory,
+      title: input.title,
+      plannedSeconds: input.plannedSeconds,
+      note: input.note?.trim() || null,
+      updatedAt: nowMs,
+    },
+  });
+}
+
+export async function removeFocusBlock(ownerId: string, id: string) {
+  const db = getDb();
+  const timer = await loadTimer(db, ownerId, id, "activity");
+  if (timer?.startedAt) {
+    throw new TimerStateConflictError("Only an untouched career focus block can be removed. Started time stays in Career Work.");
+  }
+  await db.delete(focusBlocks).where(and(eq(focusBlocks.ownerId, ownerId), eq(focusBlocks.id, id)));
+  await db.delete(timers).where(and(
+    eq(timers.ownerId, ownerId),
+    eq(timers.subjectId, id),
+    eq(timers.kind, "activity"),
+  ));
+}
+
 export async function removeExtraActivity(ownerId: string, id: string) {
   const db = getDb();
   const [
@@ -1067,10 +1170,14 @@ export async function startFreshWorkbench(
 ) {
   const db = getDb();
   const current = await ensureOpenWorkbench(ownerId, date, nowMs);
-  const [activityRows, sessionRows] = await Promise.all([
+  const [activityRows, focusRows, sessionRows] = await Promise.all([
     db.select().from(extraActivities).where(and(
       eq(extraActivities.ownerId, ownerId),
       eq(extraActivities.workbenchId, current.id),
+    )),
+    db.select().from(focusBlocks).where(and(
+      eq(focusBlocks.ownerId, ownerId),
+      eq(focusBlocks.workbenchId, current.id),
     )),
     db.select().from(liveSessions).where(and(
       eq(liveSessions.ownerId, ownerId),
@@ -1097,6 +1204,12 @@ export async function startFreshWorkbench(
     const timer = await loadTimer(db, ownerId, row.id, "activity");
     if (timer?.startedAt && !timer.completed) {
       await applyTimerAction(ownerId, row.id, "activity", "finish", nowMs);
+    }
+  }
+  for (const row of focusRows) {
+    const timer = await loadTimer(db, ownerId, row.id, "activity");
+    if (timer?.startedAt && !timer.completed) {
+      await applyTimerAction(ownerId, row.id, "activity", "finish", nowMs, { requiresOutcome: false });
     }
   }
   for (const row of sessionRows) {
