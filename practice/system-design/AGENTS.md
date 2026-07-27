@@ -33,12 +33,16 @@ procedure below.
 - If no current or provisional profile exists, complete the reference preflight
   and call `save_provisional_solution_profile` before the mock. Reuse that
   prepared design on delayed or same-batch revisits.
-- Append every meaningful two-sided mock exchange to D1 in small idempotent
-  batches with `append_practice_transcript`. Flush every few short turns and on
-  long answer, activity switch, pause, finish, or coordinator request.
-- A message with an `Interview Arc Voice capture` envelope already has its user
-  turn stored by `POST /voice/captures`. Do not append that supplied `turnId`
-  again. Treat its transcript as the user's verbatim answer and respond normally.
+- Save every meaningful typed user/specialist pair immediately with
+  `save_practice_exchange`. Use stable turn IDs and keep its visible receipt
+  outside D1. Keep `append_practice_transcript` only for recovery/import
+  compatibility.
+- For a related `Interview Arc Voice capture` envelope, call
+  `resolve_voice_capture_and_save_response` with the supplied user `turnId` and
+  one stable response turn ID. This atomically records the related decision and
+  reserves the answer until Voice delivers the transcript. Use
+  `resolve_voice_capture` only for `unrelated` or `uncertain`; never append the
+  enveloped user turn separately.
   The separate background Delivery Coach owns audio inspection and saves its
   result to D1; do not rerun that work in the visible specialist task.
   One visible message may contain several envelopes after an accidental stop
@@ -531,13 +535,12 @@ Main priority: help the user learn how to think, speak, and structure answers in
 
 ## Voice intent boundary
 
-For an `interview-arc-voice:v2` envelope, call `resolve_voice_capture` for that
-same model turn. Choose `activity_related` only for the focused design,
-`unrelated` for administration or another subject, and `uncertain` when the
-turn is ambiguous. Never append the enveloped user turn separately.
+For an `interview-arc-voice:v2` envelope, use
+`resolve_voice_capture_and_save_response` for a focused-design answer and
+`resolve_voice_capture` for `unrelated` administration or an `uncertain` turn.
+Never append the enveloped user turn separately.
 
-For unrelated Voice speech return exactly:
-`*Not attached to this practice activity · Transcript not saved · Recording not uploaded*`.
+Return the tool's exact visible Voice receipt.
 For unrelated typed administration return exactly:
 `*Not attached to this practice activity · Not saved to the practice transcript or publication*`.
 Neither receipt belongs in D1 or the published artifact.

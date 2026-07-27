@@ -29,8 +29,10 @@ import {
   clearActivityReviewSchedules,
   commitRelatedVoiceCapture,
   completeDeleteVoiceCapture,
+  expireUnclassifiedVoiceCapture,
   failDeleteVoiceCapture,
   markFinalizationPublished,
+  prepareVoiceCapturesForFinish,
   prepareLegacyVoiceCaptureDeletion,
   readActivityAudioClip,
   readActivityPracticeRecord,
@@ -43,17 +45,23 @@ import {
   registerVoiceCaptureIntent,
   registerActivityAudioClip,
   registerSpecialistTask,
+  resolveVoiceCaptureAndSaveResponse,
   resolveVoiceCaptureIntent,
   saveActivityDeliveryAnalysis,
   saveLeetCodeCodeAttempt,
   saveProvisionalSolutionProfile,
   saveSpecialistFinalization,
+  saveTypedPracticeExchange,
   scheduleReview,
   setProblemStar,
   updateActivityAudioClipStatus,
   upsertOwnerBankQuestion,
-  unresolvedVoiceCaptureCount,
+  voiceFinishGuardMessage,
 } from "../db/durable-practice";
+import {
+  typedExchangeReceipt,
+  voiceDecisionReceipt,
+} from "../db/practice-exchange-policy";
 
 interface Env {
   DB: D1Database;
@@ -274,10 +282,11 @@ async function voiceTimerMutation(ownerId: string, request: Request, env: Env) {
       if (!activity || !activity.timer?.startedAt) {
         return json(request, { error: "Start the activity stopwatch before finishing it." }, { status: 409 });
       }
-      const unresolvedCaptures = await unresolvedVoiceCaptureCount(ownerId, activity.id);
-      if (unresolvedCaptures > 0) {
+      const voiceGuard = await prepareVoiceCapturesForFinish(ownerId, activity.id, now);
+      const voiceConflict = voiceFinishGuardMessage(voiceGuard);
+      if (voiceConflict) {
         return json(request, {
-          error: `Resolve ${unresolvedCaptures} pending voice capture${unresolvedCaptures === 1 ? "" : "s"} before finishing this activity.`,
+          error: voiceConflict,
         }, { status: 409 });
       }
       await setOutcome(ownerId, activity.id, mutation.outcome, now);
@@ -509,6 +518,25 @@ async function decideVoiceIntent(ownerId: string, request: Request, captureId: s
   return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, intent });
 }
 
+async function expireVoiceIntent(ownerId: string, request: Request, captureId: string, env: Env) {
+  const body = (await request.json()) as {
+    protocolVersion?: number;
+    activityId?: string;
+    turnId?: string;
+  };
+  if (body.protocolVersion !== VOICE_PROTOCOL_VERSION || !body.activityId || !body.turnId) {
+    return json(request, { error: "A supported protocol version and stable capture identity are required." }, { status: 400 });
+  }
+  const intent = await expireUnclassifiedVoiceCapture(
+    ownerId,
+    captureId,
+    Date.now(),
+    { activityId: body.activityId, turnId: body.turnId },
+  );
+  await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_intent");
+  return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, intent });
+}
+
 async function deleteVoiceCaptureGraph(ownerId: string, request: Request, env: Env, captureId: string) {
   const intent = await beginDeleteVoiceCapture(ownerId, captureId, Date.now());
   try {
@@ -649,10 +677,11 @@ async function companionMutation(ownerId: string, request: Request, env: Env) {
       return json(request, { error: "Start the activity stopwatch before finishing it." }, { status: 409 });
     }
     if (mutation.action === "finish") {
-      const unresolvedCaptures = await unresolvedVoiceCaptureCount(ownerId, mutation.activityId);
-      if (unresolvedCaptures > 0) {
+      const voiceGuard = await prepareVoiceCapturesForFinish(ownerId, mutation.activityId, now);
+      const voiceConflict = voiceFinishGuardMessage(voiceGuard);
+      if (voiceConflict) {
         return json(request, {
-          error: `Resolve ${unresolvedCaptures} pending voice capture${unresolvedCaptures === 1 ? "" : "s"} before finishing this activity.`,
+          error: voiceConflict,
         }, { status: 409 });
       }
     }
@@ -763,6 +792,103 @@ function createServer(ownerId: string, env: Env) {
   const server = new McpServer({ name: "Interview Arc", version: "1.0.0" });
 
   server.registerTool(
+    "save_practice_exchange",
+    {
+      description: "Atomically save one related typed user question and its canonical specialist response to the focused activity. Use stable turn IDs; an exact retry is idempotent and changed content is rejected.",
+      inputSchema: {
+        activityId: z.string().min(1),
+        activityTitle: z.string().min(1).max(500),
+        specialty: z.enum(["leetcode", "system_design", "behavioral"]),
+        userTurn: z.object({
+          turnId: z.string().min(1),
+          body: z.string().min(1).max(100_000),
+          occurredAt: z.number().int().positive(),
+        }),
+        specialistTurn: z.object({
+          turnId: z.string().min(1),
+          body: z.string().min(1).max(100_000),
+          occurredAt: z.number().int().positive(),
+        }),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ activityId, activityTitle, specialty, userTurn, specialistTurn }) => {
+      const saved = await saveTypedPracticeExchange(ownerId, {
+        activityId,
+        specialty,
+        userTurn,
+        specialistTurn,
+      }, Date.now());
+      const receipt = typedExchangeReceipt(activityTitle);
+      return {
+        content: [{ type: "text", text: receipt }],
+        structuredContent: {
+          activityId,
+          userTurnId: saved.userTurn.turnId,
+          responseTurnId: saved.specialistTurn.turnId,
+          duplicate: saved.duplicate,
+          receipt,
+        },
+      };
+    },
+  );
+
+  server.registerTool(
+    "resolve_voice_capture_and_save_response",
+    {
+      description: "Atomically classify one protocol-v2 Voice envelope as activity-related and reserve exactly one canonical specialist response linked by replyToTurnId. The response remains provisional until Voice delivers the user transcript.",
+      inputSchema: {
+        captureId: z.string().min(1),
+        activityId: z.string().min(1),
+        activityTitle: z.string().min(1).max(500),
+        userTurnId: z.string().min(1),
+        responseTurnId: z.string().min(1),
+        specialty: z.enum(["leetcode", "system_design", "behavioral"]),
+        responseBody: z.string().min(1).max(100_000),
+        responseOccurredAt: z.number().int().positive(),
+        reason: z.string().min(1).max(2_000),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async ({
+      captureId,
+      activityId,
+      activityTitle,
+      userTurnId,
+      responseTurnId,
+      specialty,
+      responseBody,
+      responseOccurredAt,
+      reason,
+    }) => {
+      const saved = await resolveVoiceCaptureAndSaveResponse(ownerId, {
+        captureId,
+        activityId,
+        userTurnId,
+        responseTurnId,
+        specialty,
+        responseBody,
+        responseOccurredAt,
+        reason,
+      }, Date.now());
+      await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_intent");
+      const receipt = voiceDecisionReceipt(saved.duplicate ? "duplicate" : "activity_related", activityTitle);
+      return {
+        content: [{ type: "text", text: receipt }],
+        structuredContent: {
+          captureId,
+          activityId,
+          userTurnId,
+          responseTurnId,
+          status: saved.intent?.status ?? "deferred",
+          duplicate: saved.duplicate,
+          receipt,
+        },
+      };
+    },
+  );
+
+  server.registerTool(
     "append_practice_transcript",
     {
       description: "Append activity-scoped user/specialist transcript turns to the durable D1 draft. Exclude unrelated task, website, or administration conversation.",
@@ -792,12 +918,12 @@ function createServer(ownerId: string, env: Env) {
   server.registerTool(
     "resolve_voice_capture",
     {
-      description: "Classify one protocol-v2 Voice turn from its stable envelope. Use activity_related only when the same model turn belongs to the focused practice activity; use unrelated for admin/off-topic speech and uncertain when evidence is insufficient.",
+      description: "Classify one protocol-v2 Voice turn as unrelated or uncertain. Related turns with a specialist answer must use resolve_voice_capture_and_save_response so the decision and response cannot drift.",
       inputSchema: {
         captureId: z.string().min(1),
         activityId: z.string().min(1),
         turnId: z.string().min(1),
-        decision: z.enum(["activity_related", "unrelated", "uncertain"]),
+        decision: z.enum(["unrelated", "uncertain"]),
         reason: z.string().min(1).max(2_000),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
@@ -813,11 +939,9 @@ function createServer(ownerId: string, env: Env) {
         { activityId, turnId },
       );
       await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_intent");
-      const receipt = decision === "unrelated"
-        ? "*Not attached to this practice activity · Transcript not saved · Recording not uploaded*"
-        : null;
+      const receipt = voiceDecisionReceipt(decision, activityId);
       return {
-        content: [{ type: "text", text: receipt ?? `Voice capture classified as ${decision}.` }],
+        content: [{ type: "text", text: receipt }],
         structuredContent: { captureId, activityId, turnId, decision, status: intent?.status, receipt },
       };
     },
@@ -1306,6 +1430,10 @@ export default {
     const voiceIntentDecision = url.pathname.match(/^\/voice\/intents\/([^/]+)\/decision$/);
     if (voiceIntentDecision && request.method === "POST") {
       return decideVoiceIntent(ownerId, request, decodeURIComponent(voiceIntentDecision[1]), env);
+    }
+    const voiceIntentExpiry = url.pathname.match(/^\/voice\/intents\/([^/]+)\/expire$/);
+    if (voiceIntentExpiry && request.method === "POST") {
+      return expireVoiceIntent(ownerId, request, decodeURIComponent(voiceIntentExpiry[1]), env);
     }
     if (url.pathname === "/voice/captures" && request.method === "POST") {
       return saveVoiceCapture(ownerId, request, env);

@@ -23,7 +23,11 @@ import {
   voiceCaptureIntents,
 } from "./schema";
 import { foldElapsed, nextTimerState } from "./timer-state";
-import { readDurablePracticeSummary, unresolvedVoiceCaptureCount } from "./durable-practice";
+import {
+  prepareVoiceCapturesForFinish,
+  readDurablePracticeSummary,
+  voiceFinishGuardMessage,
+} from "./durable-practice";
 
 export type TimerKind = "activity" | "session";
 export type TimerAction = "start" | "pause" | "finish";
@@ -575,12 +579,9 @@ export async function applyTimerAction(
   if (existing?.completed) return toTimerState(existing);
 
   if (action === "finish" && kind === "activity") {
-    const unresolvedCaptures = await unresolvedVoiceCaptureCount(ownerId, subjectId);
-    if (unresolvedCaptures > 0) {
-      throw new TimerStateConflictError(
-        `Resolve ${unresolvedCaptures} pending voice capture${unresolvedCaptures === 1 ? "" : "s"} before finishing this activity.`,
-      );
-    }
+    const voiceGuard = await prepareVoiceCapturesForFinish(ownerId, subjectId, nowMs);
+    const voiceConflict = voiceFinishGuardMessage(voiceGuard);
+    if (voiceConflict) throw new TimerStateConflictError(voiceConflict);
     const result = await db
       .select()
       .from(outcomes)
@@ -618,12 +619,9 @@ export async function applyTimerAction(
     for (const activityId of activityIds) {
       const child = await loadTimer(db, ownerId, activityId, "activity");
       if (!child?.startedAt) continue;
-      const unresolvedCaptures = await unresolvedVoiceCaptureCount(ownerId, activityId);
-      if (unresolvedCaptures > 0) {
-        throw new TimerStateConflictError(
-          `Resolve ${unresolvedCaptures} pending voice capture${unresolvedCaptures === 1 ? "" : "s"} before finishing this session.`,
-        );
-      }
+      const voiceGuard = await prepareVoiceCapturesForFinish(ownerId, activityId, nowMs);
+      const voiceConflict = voiceFinishGuardMessage(voiceGuard);
+      if (voiceConflict) throw new TimerStateConflictError(voiceConflict);
       const result = await db
         .select()
         .from(outcomes)

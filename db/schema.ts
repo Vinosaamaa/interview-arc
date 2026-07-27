@@ -219,7 +219,18 @@ export const voiceCaptureIntents = sqliteTable(
     clipId: text("clip_id").notNull(),
     specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
     status: text("status", {
-      enum: ["pending", "activity_related", "accepted", "unrelated", "uncertain", "deleting", "deleted"],
+      enum: [
+        "pending",
+        "activity_related",
+        "accepted",
+        "unrelated",
+        "uncertain",
+        "deleting",
+        "deleted",
+        "discarded_unclassified",
+        "expired_unclassified",
+        "quarantined_conflict",
+      ],
     }).notNull().default("pending"),
     checksum: text("checksum").notNull(),
     occurredAt: integer("occurred_at").notNull(),
@@ -237,6 +248,42 @@ export const voiceCaptureIntents = sqliteTable(
       table.status,
       table.updatedAt,
       table.captureId,
+    ),
+  ],
+);
+
+// The specialist response to a protocol-v2 Voice turn is reserved together
+// with the activity-related decision. It stays provisional until Voice
+// delivers the acknowledged user transcript, then both turns materialize in
+// sequence exactly once. Retrying the same immutable response is idempotent;
+// conflicting reuse is quarantined instead of overwriting durable evidence.
+export const voiceSpecialistResponses = sqliteTable(
+  "voice_specialist_responses",
+  {
+    ownerId,
+    captureId: text("capture_id").notNull(),
+    activityId: text("activity_id").notNull(),
+    userTurnId: text("user_turn_id").notNull(),
+    responseTurnId: text("response_turn_id").notNull(),
+    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
+    responseBody: text("response_body").notNull(),
+    responseOccurredAt: integer("response_occurred_at").notNull(),
+    status: text("status", {
+      enum: ["provisional", "materialized", "discarded", "quarantined_conflict"],
+    }).notNull().default("provisional"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.captureId] }),
+    index("voice_specialist_responses_owner_response_idx").on(
+      table.ownerId,
+      table.responseTurnId,
+    ),
+    index("voice_specialist_responses_owner_status_idx").on(
+      table.ownerId,
+      table.status,
+      table.updatedAt,
     ),
   ],
 );
@@ -601,6 +648,7 @@ export type ActivityNoteRow = typeof activityNotes.$inferSelect;
 export type PracticeNoteRow = typeof practiceNotes.$inferSelect;
 export type PracticeTranscriptTurnRow = typeof practiceTranscriptTurns.$inferSelect;
 export type VoiceCaptureIntentRow = typeof voiceCaptureIntents.$inferSelect;
+export type VoiceSpecialistResponseRow = typeof voiceSpecialistResponses.$inferSelect;
 export type LeetCodeCodeAttemptRow = typeof leetcodeCodeAttempts.$inferSelect;
 export type ActivityFinalizationRow = typeof activityFinalizations.$inferSelect;
 export type ReviewScheduleRow = typeof reviewSchedules.$inferSelect;

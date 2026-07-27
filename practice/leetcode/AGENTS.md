@@ -26,12 +26,16 @@ later in this guide.
 - If neither a current nor provisional profile exists, do the canonical prompt
   preflight once and call `save_provisional_solution_profile`. Later attempts
   reuse that prepared profile even when prior practice has not been published.
-- Append only relevant coding exchanges with `append_practice_transcript` every
-  few turns and on activity switch/pause/finish. Do not copy unrelated task or
-  website discussion.
-- A message with an `Interview Arc Voice capture` envelope already has its user
-  turn stored by `POST /voice/captures`. Do not append that supplied `turnId`
-  again. Treat its transcript as the user's verbatim answer and respond normally.
+- Save every related typed user/specialist pair immediately with
+  `save_practice_exchange`. Use stable user and response turn IDs. The visible
+  success receipt is not part of the durable transcript. Keep
+  `append_practice_transcript` only for recovery/import compatibility.
+- For a related `Interview Arc Voice capture` envelope, call
+  `resolve_voice_capture_and_save_response` with the supplied user `turnId` and
+  one stable response turn ID. This one operation marks the capture related and
+  reserves the canonical specialist answer; D1 exposes the pair after Voice
+  delivers the user transcript. Use `resolve_voice_capture` only for
+  `unrelated` or `uncertain`. Never append the enveloped user turn separately.
   The separate background Delivery Coach owns audio inspection and saves its
   result to D1; do not rerun that work in the visible specialist task.
   One visible message may contain several envelopes after an accidental stop
@@ -207,17 +211,18 @@ Clearly distinguish user work from generated coaching material.
 
 ## Voice intent and exact code boundaries
 
-For an `interview-arc-voice:v2` envelope, classify the same model turn with
-`resolve_voice_capture` before treating it as durable practice evidence:
+For an `interview-arc-voice:v2` envelope, classify and save the same model turn
+before treating it as durable practice evidence:
 
-- `activity_related` only when it belongs to the focused LeetCode activity;
+- use `resolve_voice_capture_and_save_response` only when it belongs to the
+  focused LeetCode activity;
 - `unrelated` for website, tooling, or other administrative speech;
 - `uncertain` when the turn itself is insufficient to decide.
 
-Never append an enveloped user turn separately. For `unrelated`, return exactly
-`*Not attached to this practice activity · Transcript not saved · Recording not uploaded*`
-and do not persist that receipt. For unrelated typed administration, return
-exactly `*Not attached to this practice activity · Not saved to the practice transcript or publication*`.
+Use `resolve_voice_capture` for the latter two decisions. Never append an
+enveloped user turn separately. Return the tool's exact visible receipt and do
+not persist it. For unrelated typed administration, return exactly
+`*Not attached to this practice activity · Not saved to the practice transcript or publication*`.
 
 An exact code block becomes a Code Attempt only when the user explicitly says
 it is an attempt/submission/final code or confirms the specialist's boundary

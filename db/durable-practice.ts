@@ -18,7 +18,16 @@ import {
   reviewSchedules,
   specialistTasks,
   voiceCaptureIntents,
+  voiceSpecialistResponses,
 } from "./schema";
+import {
+  finishDispositionForVoiceStatus,
+  sameCanonicalExchange,
+  type CanonicalExchangeIdentity,
+  type VoiceFinishGuard,
+  type VoiceIntentStatus,
+  voiceFinishGuardMessage,
+} from "./practice-exchange-policy";
 import {
   mergePersonalLeetCodeQuestionMetadata,
   questionMetadataUpdateFields,
@@ -249,6 +258,22 @@ export async function appendTranscriptTurns(
 ) {
   const db = getDb();
   for (const turn of turns) {
+    const existing = (await db.select().from(practiceTranscriptTurns).where(and(
+      eq(practiceTranscriptTurns.ownerId, ownerId),
+      eq(practiceTranscriptTurns.activityId, activityId),
+      eq(practiceTranscriptTurns.turnId, turn.turnId),
+    )))[0];
+    if (existing) {
+      if (existing.specialty !== specialty
+          || existing.speaker !== turn.speaker
+          || existing.body !== turn.body
+          || existing.source !== (turn.source ?? "codex")
+          || existing.sequence !== turn.sequence
+          || existing.occurredAt !== turn.occurredAt) {
+        throw new Error("A stable transcript turnId cannot be rewritten with different content or identity.");
+      }
+      continue;
+    }
     await db
       .insert(practiceTranscriptTurns)
       .values({
@@ -263,21 +288,115 @@ export async function appendTranscriptTurns(
         occurredAt: turn.occurredAt,
         updatedAt: nowMs,
       })
-      .onConflictDoUpdate({
-        target: [
-          practiceTranscriptTurns.ownerId,
-          practiceTranscriptTurns.activityId,
-          practiceTranscriptTurns.turnId,
-        ],
-        set: {
-          body: turn.body,
-          source: turn.source ?? "codex",
-          sequence: turn.sequence,
-          occurredAt: turn.occurredAt,
-          updatedAt: nowMs,
-        },
-      });
+      .onConflictDoNothing();
+    const stored = (await db.select().from(practiceTranscriptTurns).where(and(
+      eq(practiceTranscriptTurns.ownerId, ownerId),
+      eq(practiceTranscriptTurns.activityId, activityId),
+      eq(practiceTranscriptTurns.turnId, turn.turnId),
+    )))[0];
+    if (!stored
+        || stored.specialty !== specialty
+        || stored.speaker !== turn.speaker
+        || stored.body !== turn.body
+        || stored.source !== (turn.source ?? "codex")
+        || stored.sequence !== turn.sequence
+        || stored.occurredAt !== turn.occurredAt) {
+      throw new Error("A stable transcript turnId conflicts with another durable exchange.");
+    }
   }
+}
+
+export async function saveTypedPracticeExchange(
+  ownerId: string,
+  input: {
+    activityId: string;
+    specialty: Specialty;
+    userTurn: {
+      turnId: string;
+      body: string;
+      occurredAt: number;
+    };
+    specialistTurn: {
+      turnId: string;
+      body: string;
+      occurredAt: number;
+    };
+  },
+  nowMs: number,
+) {
+  if (input.userTurn.turnId === input.specialistTurn.turnId) {
+    throw new Error("The user and specialist turns require different stable turn IDs.");
+  }
+  const db = getDb();
+  const requestedIds = [input.userTurn.turnId, input.specialistTurn.turnId];
+  const existing = await db.select().from(practiceTranscriptTurns).where(and(
+    eq(practiceTranscriptTurns.ownerId, ownerId),
+    eq(practiceTranscriptTurns.activityId, input.activityId),
+    inArray(practiceTranscriptTurns.turnId, requestedIds),
+  ));
+  const latest = await db
+    .select({ sequence: practiceTranscriptTurns.sequence })
+    .from(practiceTranscriptTurns)
+    .where(and(
+      eq(practiceTranscriptTurns.ownerId, ownerId),
+      eq(practiceTranscriptTurns.activityId, input.activityId),
+    ))
+    .orderBy(desc(practiceTranscriptTurns.sequence))
+    .limit(1);
+  const firstSequence = existing.length
+    ? Math.min(...existing.map((turn) => turn.sequence))
+    : (latest[0]?.sequence ?? -1) + 1;
+  const values = [
+    {
+      ownerId,
+      activityId: input.activityId,
+      turnId: input.userTurn.turnId,
+      specialty: input.specialty,
+      speaker: "user" as const,
+      body: input.userTurn.body,
+      source: "codex" as const,
+      sequence: firstSequence,
+      occurredAt: input.userTurn.occurredAt,
+      updatedAt: nowMs,
+    },
+    {
+      ownerId,
+      activityId: input.activityId,
+      turnId: input.specialistTurn.turnId,
+      specialty: input.specialty,
+      speaker: "specialist" as const,
+      body: input.specialistTurn.body,
+      source: "codex" as const,
+      sequence: firstSequence + 1,
+      occurredAt: input.specialistTurn.occurredAt,
+      updatedAt: nowMs,
+    },
+  ];
+  await db.batch([
+    db.insert(practiceTranscriptTurns).values(values[0]).onConflictDoNothing(),
+    db.insert(practiceTranscriptTurns).values(values[1]).onConflictDoNothing(),
+  ]);
+  const stored = await db.select().from(practiceTranscriptTurns).where(and(
+    eq(practiceTranscriptTurns.ownerId, ownerId),
+    eq(practiceTranscriptTurns.activityId, input.activityId),
+    inArray(practiceTranscriptTurns.turnId, requestedIds),
+  ));
+  const matches = values.every((value) => stored.some((turn) =>
+    turn.turnId === value.turnId
+    && turn.specialty === value.specialty
+    && turn.speaker === value.speaker
+    && turn.body === value.body
+    && turn.source === value.source
+    && turn.sequence === value.sequence
+    && turn.occurredAt === value.occurredAt));
+  if (!matches || stored.length !== 2) {
+    throw new Error("A typed practice exchange conflicts with an existing stable turn ID.");
+  }
+  return {
+    duplicate: existing.length === 2,
+    userTurn: stored.find((turn) => turn.turnId === input.userTurn.turnId)!,
+    specialistTurn: stored.find((turn) => turn.turnId === input.specialistTurn.turnId)!,
+  };
 }
 
 // The native voice bridge owns the stable turn id and writes the transcript
@@ -402,6 +521,47 @@ export async function readVoiceCaptureIntents(ownerId: string, captureIds?: stri
       ? and(eq(voiceCaptureIntents.ownerId, ownerId), inArray(voiceCaptureIntents.captureId, captureIds))
       : eq(voiceCaptureIntents.ownerId, ownerId),
   );
+}
+
+export async function expireUnclassifiedVoiceCapture(
+  ownerId: string,
+  captureId: string,
+  nowMs: number,
+  expectedIdentity?: { activityId: string; turnId: string },
+) {
+  const db = getDb();
+  const existing = await readVoiceCaptureIntent(ownerId, captureId);
+  if (!existing) throw new Error("The voice capture is unavailable or already resolved.");
+  if (expectedIdentity
+      && (existing.activityId !== expectedIdentity.activityId || existing.turnId !== expectedIdentity.turnId)) {
+    throw new Error("The capture envelope does not match the registered owner-scoped intent.");
+  }
+  if (existing.status === "expired_unclassified") return existing;
+  if (existing.status !== "pending") {
+    throw new Error("Only an untouched pending capture can expire without a specialist decision.");
+  }
+  await db.batch([
+    db.update(voiceCaptureIntents).set({
+      status: "expired_unclassified",
+      decisionSource: "voice-expiry",
+      decisionReason: "The local unclassified capture reached its retention limit.",
+      decidedAt: nowMs,
+      updatedAt: nowMs,
+    }).where(and(
+      eq(voiceCaptureIntents.ownerId, ownerId),
+      eq(voiceCaptureIntents.captureId, captureId),
+      eq(voiceCaptureIntents.status, "pending"),
+    )),
+    db.update(voiceSpecialistResponses).set({
+      status: "discarded",
+      updatedAt: nowMs,
+    }).where(and(
+      eq(voiceSpecialistResponses.ownerId, ownerId),
+      eq(voiceSpecialistResponses.captureId, captureId),
+      eq(voiceSpecialistResponses.status, "provisional"),
+    )),
+  ]);
+  return readVoiceCaptureIntent(ownerId, captureId);
 }
 
 export async function readVoiceCaptureIntentsPage(
@@ -582,10 +742,28 @@ export async function resolveVoiceCaptureIntent(
 
 async function purgeExpiredDeferredVoiceCaptureDecisions(ownerId: string, nowMs: number) {
   const db = getDb();
-  await db.delete(deferredVoiceCaptureDecisions).where(and(
+  const expired = await db.select({ captureId: deferredVoiceCaptureDecisions.captureId })
+    .from(deferredVoiceCaptureDecisions)
+    .where(and(
+      eq(deferredVoiceCaptureDecisions.ownerId, ownerId),
+      lt(deferredVoiceCaptureDecisions.expiresAt, nowMs),
+    ));
+  const captureIds = expired.map((decision) => decision.captureId);
+  if (!captureIds.length) return;
+  await db.batch([
+    db.update(voiceSpecialistResponses).set({
+      status: "discarded",
+      updatedAt: nowMs,
+    }).where(and(
+      eq(voiceSpecialistResponses.ownerId, ownerId),
+      inArray(voiceSpecialistResponses.captureId, captureIds),
+      eq(voiceSpecialistResponses.status, "provisional"),
+    )),
+    db.delete(deferredVoiceCaptureDecisions).where(and(
     eq(deferredVoiceCaptureDecisions.ownerId, ownerId),
-    lt(deferredVoiceCaptureDecisions.expiresAt, nowMs),
-  ));
+      inArray(deferredVoiceCaptureDecisions.captureId, captureIds),
+    )),
+  ]);
 }
 
 async function applyVoiceCaptureDecision(
@@ -620,6 +798,151 @@ async function applyVoiceCaptureDecision(
   return readVoiceCaptureIntent(ownerId, captureId);
 }
 
+export async function readVoiceSpecialistResponse(ownerId: string, captureId: string) {
+  const db = getDb();
+  const rows = await db.select().from(voiceSpecialistResponses).where(and(
+    eq(voiceSpecialistResponses.ownerId, ownerId),
+    eq(voiceSpecialistResponses.captureId, captureId),
+  ));
+  return rows[0] ?? null;
+}
+
+function canonicalExchangeFromRow(row: {
+  activityId: string;
+  userTurnId: string;
+  responseTurnId: string;
+  specialty: string;
+  responseBody: string;
+  responseOccurredAt: number;
+}): CanonicalExchangeIdentity {
+  return {
+    activityId: row.activityId,
+    userTurnId: row.userTurnId,
+    responseTurnId: row.responseTurnId,
+    specialty: row.specialty,
+    responseBody: row.responseBody,
+    responseOccurredAt: row.responseOccurredAt,
+  };
+}
+
+export async function resolveVoiceCaptureAndSaveResponse(
+  ownerId: string,
+  input: CanonicalExchangeIdentity & {
+    captureId: string;
+    reason: string;
+  },
+  nowMs: number,
+) {
+  const db = getDb();
+  const requested = canonicalExchangeFromRow(input);
+  const existingResponse = await readVoiceSpecialistResponse(ownerId, input.captureId);
+  if (existingResponse) {
+    if (!sameCanonicalExchange(canonicalExchangeFromRow(existingResponse), requested)) {
+      await db.batch([
+        db.update(voiceSpecialistResponses).set({
+          status: "quarantined_conflict",
+          updatedAt: nowMs,
+        }).where(and(
+          eq(voiceSpecialistResponses.ownerId, ownerId),
+          eq(voiceSpecialistResponses.captureId, input.captureId),
+        )),
+        db.update(voiceCaptureIntents).set({
+          status: "quarantined_conflict",
+          lastError: "A canonical specialist response was retried with different content or identity.",
+          updatedAt: nowMs,
+        }).where(and(
+          eq(voiceCaptureIntents.ownerId, ownerId),
+          eq(voiceCaptureIntents.captureId, input.captureId),
+        )),
+      ]);
+      throw new Error("The Voice envelope already has a different canonical specialist response.");
+    }
+    return {
+      intent: await readVoiceCaptureIntent(ownerId, input.captureId),
+      response: existingResponse,
+      duplicate: true,
+    };
+  }
+
+  const intent = await readVoiceCaptureIntent(ownerId, input.captureId);
+  if (intent
+      && (intent.activityId !== input.activityId
+        || intent.turnId !== input.userTurnId
+        || intent.specialty !== input.specialty)) {
+    throw new Error("The Voice response does not match the registered owner-scoped envelope.");
+  }
+  if (intent && !["pending", "uncertain", "activity_related"].includes(intent.status)) {
+    throw new Error("The Voice capture is unavailable or already resolved.");
+  }
+
+  const responseInsert = db.insert(voiceSpecialistResponses).values({
+    ownerId,
+    captureId: input.captureId,
+    activityId: input.activityId,
+    userTurnId: input.userTurnId,
+    responseTurnId: input.responseTurnId,
+    specialty: input.specialty as Specialty,
+    responseBody: input.responseBody,
+    responseOccurredAt: input.responseOccurredAt,
+    status: "provisional",
+    createdAt: nowMs,
+    updatedAt: nowMs,
+  }).onConflictDoNothing();
+
+  if (intent) {
+    await db.batch([
+      responseInsert,
+      db.update(voiceCaptureIntents).set({
+        status: "activity_related",
+        decisionSource: "specialist",
+        decisionReason: input.reason.slice(0, 2_000),
+        decidedAt: nowMs,
+        lastError: null,
+        updatedAt: nowMs,
+      }).where(and(
+        eq(voiceCaptureIntents.ownerId, ownerId),
+        eq(voiceCaptureIntents.captureId, input.captureId),
+      )),
+    ]);
+  } else {
+    const deferred = (await db.select().from(deferredVoiceCaptureDecisions).where(and(
+      eq(deferredVoiceCaptureDecisions.ownerId, ownerId),
+      eq(deferredVoiceCaptureDecisions.captureId, input.captureId),
+    )))[0];
+    if (deferred
+        && (deferred.activityId !== input.activityId
+          || deferred.turnId !== input.userTurnId
+          || deferred.decision !== "activity_related")) {
+      throw new Error("A deferred Voice decision conflicts with this canonical response.");
+    }
+    await db.batch([
+      responseInsert,
+      db.insert(deferredVoiceCaptureDecisions).values({
+        ownerId,
+        captureId: input.captureId,
+        activityId: input.activityId,
+        turnId: input.userTurnId,
+        decision: "activity_related",
+        decisionSource: "specialist",
+        decisionReason: input.reason.slice(0, 2_000),
+        expiresAt: nowMs + 86_400_000,
+        createdAt: nowMs,
+        updatedAt: nowMs,
+      }).onConflictDoNothing(),
+    ]);
+  }
+
+  const storedResponse = await readVoiceSpecialistResponse(ownerId, input.captureId);
+  if (!storedResponse || !sameCanonicalExchange(canonicalExchangeFromRow(storedResponse), requested)) {
+    throw new Error("The canonical Voice response could not be reserved safely.");
+  }
+  return {
+    intent: await readVoiceCaptureIntent(ownerId, input.captureId),
+    response: storedResponse,
+    duplicate: false,
+  };
+}
+
 export async function commitRelatedVoiceCapture(
   ownerId: string,
   input: {
@@ -643,22 +966,109 @@ export async function commitRelatedVoiceCapture(
       || intent.checksum !== input.checksum) {
     throw new Error("Only an acknowledged activity-related capture can be committed.");
   }
-  const turn = await appendVoiceTranscriptTurn(ownerId, {
-    activityId: input.activityId,
-    specialty: input.specialty,
-    turnId: input.turnId,
-    body: input.transcript,
-    occurredAt: input.occurredAt,
-  }, nowMs);
-  await db.update(voiceCaptureIntents).set({
-    status: "accepted",
-    updatedAt: nowMs,
-    lastError: null,
-  }).where(and(
-    eq(voiceCaptureIntents.ownerId, ownerId),
-    eq(voiceCaptureIntents.captureId, input.captureId),
+  const response = await readVoiceSpecialistResponse(ownerId, input.captureId);
+  if (!response) {
+    const turn = await appendVoiceTranscriptTurn(ownerId, {
+      activityId: input.activityId,
+      specialty: input.specialty,
+      turnId: input.turnId,
+      body: input.transcript,
+      occurredAt: input.occurredAt,
+    }, nowMs);
+    await db.update(voiceCaptureIntents).set({
+      status: "accepted",
+      updatedAt: nowMs,
+      lastError: null,
+    }).where(and(
+      eq(voiceCaptureIntents.ownerId, ownerId),
+      eq(voiceCaptureIntents.captureId, input.captureId),
+    ));
+    return turn;
+  }
+  if (response.status === "quarantined_conflict"
+      || response.activityId !== input.activityId
+      || response.userTurnId !== input.turnId
+      || response.specialty !== input.specialty) {
+    throw new Error("The provisional specialist response conflicts with the acknowledged Voice capture.");
+  }
+
+  const requestedIds = [input.turnId, response.responseTurnId];
+  const existingTurns = await db.select().from(practiceTranscriptTurns).where(and(
+    eq(practiceTranscriptTurns.ownerId, ownerId),
+    eq(practiceTranscriptTurns.activityId, input.activityId),
+    inArray(practiceTranscriptTurns.turnId, requestedIds),
   ));
-  return turn;
+  const latest = await db
+    .select({ sequence: practiceTranscriptTurns.sequence })
+    .from(practiceTranscriptTurns)
+    .where(and(
+      eq(practiceTranscriptTurns.ownerId, ownerId),
+      eq(practiceTranscriptTurns.activityId, input.activityId),
+    ))
+    .orderBy(desc(practiceTranscriptTurns.sequence))
+    .limit(1);
+  const userSequence = existingTurns.find((turn) => turn.turnId === input.turnId)?.sequence
+    ?? (latest[0]?.sequence ?? -1) + 1;
+  const responseSequence = existingTurns.find((turn) => turn.turnId === response.responseTurnId)?.sequence
+    ?? userSequence + 1;
+  const userValue = {
+    ownerId,
+    activityId: input.activityId,
+    turnId: input.turnId,
+    specialty: input.specialty,
+    speaker: "user" as const,
+    body: input.transcript,
+    source: "audio_transcript" as const,
+    sequence: userSequence,
+    occurredAt: input.occurredAt,
+    updatedAt: nowMs,
+  };
+  const responseValue = {
+    ownerId,
+    activityId: input.activityId,
+    turnId: response.responseTurnId,
+    specialty: input.specialty,
+    speaker: "specialist" as const,
+    body: response.responseBody,
+    source: "codex" as const,
+    sequence: responseSequence,
+    occurredAt: response.responseOccurredAt,
+    updatedAt: nowMs,
+  };
+  for (const [value, existingTurn] of [
+    [userValue, existingTurns.find((turn) => turn.turnId === input.turnId)],
+    [responseValue, existingTurns.find((turn) => turn.turnId === response.responseTurnId)],
+  ] as const) {
+    if (existingTurn
+        && (existingTurn.specialty !== value.specialty
+          || existingTurn.speaker !== value.speaker
+          || existingTurn.body !== value.body
+          || existingTurn.source !== value.source
+          || existingTurn.sequence !== value.sequence
+          || existingTurn.occurredAt !== value.occurredAt)) {
+      throw new Error("A stable Voice exchange turn conflicts with existing durable transcript content.");
+    }
+  }
+  await db.batch([
+    db.insert(practiceTranscriptTurns).values(userValue).onConflictDoNothing(),
+    db.insert(practiceTranscriptTurns).values(responseValue).onConflictDoNothing(),
+    db.update(voiceSpecialistResponses).set({
+      status: "materialized",
+      updatedAt: nowMs,
+    }).where(and(
+      eq(voiceSpecialistResponses.ownerId, ownerId),
+      eq(voiceSpecialistResponses.captureId, input.captureId),
+    )),
+    db.update(voiceCaptureIntents).set({
+      status: "accepted",
+      updatedAt: nowMs,
+      lastError: null,
+    }).where(and(
+      eq(voiceCaptureIntents.ownerId, ownerId),
+      eq(voiceCaptureIntents.captureId, input.captureId),
+    )),
+  ]);
+  return userValue;
 }
 
 export async function beginDeleteVoiceCapture(ownerId: string, captureId: string, nowMs: number) {
@@ -690,11 +1100,20 @@ export async function completeDeleteVoiceCapture(ownerId: string, captureId: str
     eq(practiceTranscriptTurns.activityId, intent.activityId),
     eq(practiceTranscriptTurns.turnId, intent.turnId),
   ));
-  await db.update(voiceCaptureIntents).set({
-    status: "deleted",
-    updatedAt: nowMs,
-    lastError: null,
-  }).where(and(eq(voiceCaptureIntents.ownerId, ownerId), eq(voiceCaptureIntents.captureId, captureId)));
+  await db.batch([
+    db.update(voiceSpecialistResponses).set({
+      status: "discarded",
+      updatedAt: nowMs,
+    }).where(and(
+      eq(voiceSpecialistResponses.ownerId, ownerId),
+      eq(voiceSpecialistResponses.captureId, captureId),
+    )),
+    db.update(voiceCaptureIntents).set({
+      status: "deleted",
+      updatedAt: nowMs,
+      lastError: null,
+    }).where(and(eq(voiceCaptureIntents.ownerId, ownerId), eq(voiceCaptureIntents.captureId, captureId))),
+  ]);
 }
 
 export async function failDeleteVoiceCapture(ownerId: string, captureId: string, message: string, nowMs: number) {
@@ -711,10 +1130,79 @@ export async function unresolvedVoiceCaptureCount(ownerId: string, activityId: s
   const rows = await db.select({ count: sql<number>`count(*)` }).from(voiceCaptureIntents).where(and(
     eq(voiceCaptureIntents.ownerId, ownerId),
     eq(voiceCaptureIntents.activityId, activityId),
-    inArray(voiceCaptureIntents.status, ["pending", "activity_related", "uncertain", "deleting"]),
+    inArray(voiceCaptureIntents.status, [
+      "activity_related",
+      "uncertain",
+      "deleting",
+      "quarantined_conflict",
+    ]),
   ));
   return Number(rows[0]?.count ?? 0);
 }
+
+export async function prepareVoiceCapturesForFinish(
+  ownerId: string,
+  activityId: string,
+  nowMs: number,
+): Promise<VoiceFinishGuard> {
+  const db = getDb();
+  const active = await db.select().from(voiceCaptureIntents).where(and(
+    eq(voiceCaptureIntents.ownerId, ownerId),
+    eq(voiceCaptureIntents.activityId, activityId),
+    inArray(voiceCaptureIntents.status, [
+      "pending",
+      "activity_related",
+      "uncertain",
+      "deleting",
+      "quarantined_conflict",
+    ]),
+  ));
+  const untouched = active.filter((intent) =>
+    finishDispositionForVoiceStatus(intent.status as VoiceIntentStatus) === "discard_unclassified");
+  const untouchedIds = untouched.map((intent) => intent.captureId);
+  if (untouchedIds.length) {
+    await db.batch([
+      db.update(voiceCaptureIntents).set({
+        status: "discarded_unclassified",
+        decisionSource: "finish_guard",
+        decisionReason: "The capture remained unclassified when the activity was finished.",
+        decidedAt: nowMs,
+        updatedAt: nowMs,
+      }).where(and(
+        eq(voiceCaptureIntents.ownerId, ownerId),
+        eq(voiceCaptureIntents.activityId, activityId),
+        inArray(voiceCaptureIntents.captureId, untouchedIds),
+        eq(voiceCaptureIntents.status, "pending"),
+      )),
+      db.update(voiceSpecialistResponses).set({
+        status: "discarded",
+        updatedAt: nowMs,
+      }).where(and(
+        eq(voiceSpecialistResponses.ownerId, ownerId),
+        inArray(voiceSpecialistResponses.captureId, untouchedIds),
+        eq(voiceSpecialistResponses.status, "provisional"),
+      )),
+    ]);
+  }
+
+  const guard: VoiceFinishGuard = {
+    discardedUnclassified: untouchedIds,
+    awaitingDelivery: [],
+    needsDecision: [],
+    deleting: [],
+    conflicts: [],
+  };
+  active.forEach((intent) => {
+    const disposition = finishDispositionForVoiceStatus(intent.status as VoiceIntentStatus);
+    if (disposition === "block_for_delivery") guard.awaitingDelivery.push(intent.captureId);
+    if (disposition === "needs_user_decision") guard.needsDecision.push(intent.captureId);
+    if (disposition === "block_for_deletion") guard.deleting.push(intent.captureId);
+    if (intent.status === "quarantined_conflict") guard.conflicts.push(intent.captureId);
+  });
+  return guard;
+}
+
+export { voiceFinishGuardMessage };
 
 export async function saveLeetCodeCodeAttempt(
   ownerId: string,
@@ -832,12 +1320,9 @@ export async function saveSpecialistFinalization(
 ) {
   const db = getDb();
   if (payload.complete) {
-    const unresolvedCaptures = await unresolvedVoiceCaptureCount(ownerId, activityId);
-    if (unresolvedCaptures > 0) {
-      throw new Error(
-        `${unresolvedCaptures} voice capture${unresolvedCaptures === 1 ? " is" : "s are"} still awaiting an attach/delete decision.`,
-      );
-    }
+    const voiceGuard = await prepareVoiceCapturesForFinish(ownerId, activityId, nowMs);
+    const voiceConflict = voiceFinishGuardMessage(voiceGuard);
+    if (voiceConflict) throw new Error(voiceConflict);
   }
   const profileAction = payload.solutionProfileAction ?? "create_or_revise";
   if (payload.questionMetadata) {
