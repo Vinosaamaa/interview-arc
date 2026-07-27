@@ -5,9 +5,11 @@ url = "https://limitless-mcp.vinosama.workers.dev/mcp"
 bearer_token_env_var = "INTERVIEW_ARC_MCP_TOKEN"
 enabled_tools = [
   "append_practice_transcript",
+  "resolve_voice_capture",
+  "save_leetcode_code_attempt",
   "add_practice_note",
-  "save_provisional_solution_profile",
   "save_specialist_finalization",
+  "save_provisional_solution_profile",
   "get_problem_solution_profile",
   "get_activity_practice_record",
   "upsert_personal_bank_question",
