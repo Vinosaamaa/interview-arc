@@ -230,7 +230,44 @@ export const voiceCaptureIntents = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt,
   },
-  (table) => [primaryKey({ columns: [table.ownerId, table.captureId] })],
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.captureId] }),
+    index("voice_capture_intents_owner_status_updated_idx").on(
+      table.ownerId,
+      table.status,
+      table.updatedAt,
+      table.captureId,
+    ),
+  ],
+);
+
+// A specialist can classify the protocol-v2 envelope immediately after Voice
+// inserts it, before Voice's background metadata registration reaches the
+// Worker. This short-lived owner-scoped row closes that race without storing
+// transcript text or audio.
+export const deferredVoiceCaptureDecisions = sqliteTable(
+  "deferred_voice_capture_decisions",
+  {
+    ownerId,
+    captureId: text("capture_id").notNull(),
+    activityId: text("activity_id").notNull(),
+    turnId: text("turn_id").notNull(),
+    decision: text("decision", {
+      enum: ["activity_related", "unrelated", "uncertain"],
+    }).notNull(),
+    decisionSource: text("decision_source").notNull(),
+    decisionReason: text("decision_reason").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.captureId] }),
+    index("deferred_voice_capture_decisions_owner_expiry_idx").on(
+      table.ownerId,
+      table.expiresAt,
+    ),
+  ],
 );
 
 // Exact user code is versioned independently from the generated reference

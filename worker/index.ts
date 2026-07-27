@@ -1,12 +1,16 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
-import { TRUSTED_EMAIL_HEADER } from "../db/owner";
+import { resolveOwnerId, TRUSTED_EMAIL_HEADER } from "../db/owner";
+import { connectOwnerLiveUpdates, OwnerLiveUpdateHub } from "./live-update-hub";
+
+export { OwnerLiveUpdateHub };
 
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
   AUDIO: R2Bucket;
+  LIVE_UPDATES: DurableObjectNamespace;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -315,6 +319,11 @@ const worker = {
     const authenticatedRequest = new Request(request, { headers });
 
     const url = new URL(authenticatedRequest.url);
+
+    if (url.pathname === "/api/live-events") {
+      const ownerId = await resolveOwnerId(authenticatedRequest);
+      return connectOwnerLiveUpdates(env.LIVE_UPDATES, ownerId, authenticatedRequest);
+    }
 
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];

@@ -1301,7 +1301,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [viewMemoryReady, setViewMemoryReady] = useState(false);
   const [viewDirection, setViewDirection] = useState<"forward" | "backward">("forward");
   const [viewTransitionId, setViewTransitionId] = useState(0);
-  const { draft, setDraft, now, setNow, hydrated, enqueue, reconcileTimers } = useLiveState(journal.date);
+  const { draft, setDraft, now, setNow, hydrated, enqueue } = useLiveState(journal.date);
   const yesterdayDate = shiftDate(journal.date, -1);
   const yesterdayDraft = useReadOnlyLiveState(yesterdayDate);
   const [composer, setComposer] = useState<ComposerState>(EMPTY_COMPOSER);
@@ -3108,14 +3108,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   useEffect(() => {
     if (!pipWindow || pipWindow.closed) return;
-    // A visible document-PiP window gets its own clock and reconciliation loop,
-    // so a hidden/throttled dashboard tab cannot freeze its timer.
+    // A visible document-PiP window gets its own display clock. Server
+    // reconciliation is shared by the owner-scoped push connection.
     const interval = pipWindow.setInterval(() => {
       setNow(Date.now());
-      void reconcileTimers();
     }, 1000);
     return () => pipWindow.clearInterval(interval);
-  }, [pipWindow, reconcileTimers, setNow]);
+  }, [pipWindow, setNow]);
 
   const logEntries = useMemo(() => {
     const entries: LogEntry[] = [];

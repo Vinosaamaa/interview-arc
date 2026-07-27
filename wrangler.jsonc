@@ -43,5 +43,19 @@
       "binding": "AUDIO",
       "bucket_name": "interview-arc-audio"
     }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "LIVE_UPDATES",
+        "class_name": "OwnerLiveUpdateHub"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1-live-update-hub",
+      "new_sqlite_classes": ["OwnerLiveUpdateHub"]
+    }
   ]
 }

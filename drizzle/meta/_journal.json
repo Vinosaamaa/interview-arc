@@ -99,6 +99,13 @@
       "when": 1785096099509,
       "tag": "0013_bizarre_the_hand",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1785114014752,
+      "tag": "0014_outgoing_shinko_yamashiro",
+      "breakpoints": true
     }
   ]
 }

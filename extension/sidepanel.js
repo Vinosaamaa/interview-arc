@@ -7,7 +7,12 @@ let problemUrl = "";
 let state = null;
 let activity = null;
 let renderInterval = null;
-let refreshInterval = null;
+let liveSocket = null;
+let liveReconnectTimer = null;
+let fallbackRefreshTimer = null;
+let fallbackAttempt = 0;
+let liveGeneration = 0;
+let liveRevision = 0;
 let refreshPromise = null;
 let refreshQueued = false;
 let mutationQueue = Promise.resolve();
@@ -16,6 +21,70 @@ let mutationSequence = 0;
 let contextRevision = 0;
 let renderedActivityId = "";
 let notesDirty = false;
+
+function tokenProtocol(value) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return `ia-bearer.${btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "")}`;
+}
+
+function fallbackDelay() {
+  return Math.min(120_000, 15_000 * (2 ** Math.min(fallbackAttempt, 3)));
+}
+
+function stopLiveUpdates() {
+  liveGeneration += 1;
+  if (liveReconnectTimer) window.clearTimeout(liveReconnectTimer);
+  if (fallbackRefreshTimer) window.clearTimeout(fallbackRefreshTimer);
+  liveReconnectTimer = null;
+  fallbackRefreshTimer = null;
+  liveSocket?.close(1000, "client closed");
+  liveSocket = null;
+}
+
+function scheduleFallbackRefresh() {
+  if (fallbackRefreshTimer || !token) return;
+  fallbackRefreshTimer = window.setTimeout(() => {
+    fallbackRefreshTimer = null;
+    if (liveSocket?.readyState === WebSocket.OPEN || !token) return;
+    fallbackAttempt += 1;
+    if (!document.hidden) refresh().catch(() => {});
+    scheduleFallbackRefresh();
+  }, fallbackDelay());
+}
+
+function connectLiveUpdates() {
+  stopLiveUpdates();
+  if (!token) return;
+  const generation = liveGeneration;
+  liveSocket = new WebSocket(
+    "wss://limitless-mcp.vinosama.workers.dev/events",
+    ["interview-arc-live", tokenProtocol(token)],
+  );
+  liveSocket.addEventListener("open", () => {
+    fallbackAttempt = 0;
+    if (fallbackRefreshTimer) window.clearTimeout(fallbackRefreshTimer);
+    fallbackRefreshTimer = null;
+    setSyncStatus("live");
+  });
+  liveSocket.addEventListener("message", (event) => {
+    try {
+      const update = JSON.parse(event.data);
+      if (update.type === "practice_changed" && Number(update.revision) > liveRevision) {
+        liveRevision = Number(update.revision);
+        refresh().catch(() => {});
+      }
+    } catch {}
+  });
+  liveSocket.addEventListener("close", () => {
+    if (generation !== liveGeneration) return;
+    liveSocket = null;
+    scheduleFallbackRefresh();
+    liveReconnectTimer = window.setTimeout(connectLiveUpdates, Math.min(30_000, 1_000 * (2 ** Math.min(fallbackAttempt, 5))));
+  });
+  liveSocket.addEventListener("error", () => liveSocket?.close());
+}
 
 class CompanionAPIError extends Error {
   constructor(message, status = 0) {
@@ -123,6 +192,7 @@ async function handleConnectionFailure(error) {
   if (error instanceof CompanionAPIError && error.unauthorized) {
     await chrome.storage.local.remove("interviewArcToken");
     token = "";
+    stopLiveUpdates();
     showConnect();
     return;
   }
@@ -350,8 +420,10 @@ elements["connect-button"].addEventListener("click", async () => {
   try {
     const { context, nextState } = await validateConnection(value);
     token = value;
+    liveRevision = 0;
     await chrome.storage.local.set({ interviewArcToken: token });
     applyCompanionState(nextState, context);
+    connectLiveUpdates();
   } catch (error) {
     elements["connect-error"].textContent = error instanceof CompanionAPIError
       ? error.message
@@ -441,6 +513,8 @@ elements["retry-connection"].addEventListener("click", () => refresh().catch(() 
 elements.disconnect.addEventListener("click", async () => {
   await chrome.storage.local.remove("interviewArcToken");
   token = "";
+  liveRevision = 0;
+  stopLiveUpdates();
   activity = null;
   showConnect();
 });
@@ -460,11 +534,9 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo) => {
   if (!token) showConnect();
   else {
     try { await refresh(); } catch {}
+    connectLiveUpdates();
   }
   renderInterval = window.setInterval(renderClock, 1000);
-  refreshInterval = window.setInterval(() => {
-    if (token && !document.hidden) refresh().catch(() => {});
-  }, 1000);
 })();
 
 document.addEventListener("visibilitychange", () => {
@@ -473,5 +545,5 @@ document.addEventListener("visibilitychange", () => {
 
 window.addEventListener("unload", () => {
   window.clearInterval(renderInterval);
-  window.clearInterval(refreshInterval);
+  stopLiveUpdates();
 });

@@ -245,7 +245,8 @@ test("external timer reconciliation is revision-aware and preserves unrelated pr
   const client = await readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8");
   assert.match(liveSync, /queueRef\.current\.length > 0/);
   assert.match(liveSync, /lastTimerSyncServerNowRef/);
-  assert.match(liveSync, /setInterval\(\(\) => void reconcileTimers\(\), 1000\)/);
+  assert.match(liveSync, /subscribeToLiveUpdates/);
+  assert.doesNotMatch(liveSync, /setInterval\(\(\) => void reconcileTimers\(\), 1000\)/);
   assert.match(route, /readTimerSyncState/);
   assert.match(route, /private, no-store/);
   assert.match(client, /pipWindow\.setInterval/);
@@ -597,7 +598,9 @@ test("the Chrome companion follows live Interview Arc focus and public LeetCode 
   assert.match(serviceWorker, /chrome\.action\.setIcon/);
   assert.match(serviceWorker, /chrome\.runtime\.onStartup/);
   assert.match(serviceWorker, /chrome\.tabs\.query\(\{\}\)/);
-  assert.match(sidePanel, /window\.setInterval\(\(\) => \{/);
+  assert.match(sidePanel, /new WebSocket/);
+  assert.match(sidePanel, /scheduleFallbackRefresh/);
+  assert.doesNotMatch(sidePanel, /refreshInterval/);
   assert.match(sidePanel, /if \(context\.problemUrl\) query\.set\("url", context\.problemUrl\)/);
   assert.match(sidePanel, /chrome\.tabs\.create\(\{ url \}\)/);
   assert.match(sidePanel, /if \(refreshPromise\) \{\s*refreshQueued = true;\s*return refreshPromise;/);

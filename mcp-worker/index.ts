@@ -20,6 +20,7 @@ import {
 } from "../db/live-state";
 import { buildPracticeSnapshot, buildPublicationQueue, dateInPracticeTimeZone } from "../db/practice-snapshot";
 import { leetCodeQuestionMetadataSchema } from "../db/question-metadata";
+import { connectOwnerLiveUpdates, publishOwnerLiveUpdate } from "../worker/live-update-hub";
 import {
   addPracticeNote,
   appendTranscriptTurns,
@@ -38,6 +39,7 @@ import {
   readSpecialistTasks,
   readVoiceCaptureIntent,
   readVoiceCaptureIntents,
+  readVoiceCaptureIntentsPage,
   registerVoiceCaptureIntent,
   registerActivityAudioClip,
   registerSpecialistTask,
@@ -56,6 +58,7 @@ import {
 interface Env {
   DB: D1Database;
   AUDIO: R2Bucket;
+  LIVE_UPDATES: DurableObjectNamespace;
 }
 
 function safeAudioFilename(value: string) {
@@ -93,6 +96,18 @@ async function uploadPracticeAudio(ownerId: string, request: Request, env: Env) 
       httpMetadata: { contentType: file.type, contentDisposition: `inline; filename="${filename}"` },
       customMetadata: { ownerId, activityId, clipId, ...(transcriptTurnId ? { transcriptTurnId } : {}) },
     });
+    if (captureId) {
+      const finalIntent = await readVoiceCaptureIntent(ownerId, captureId);
+      if (!finalIntent || finalIntent.status !== "accepted") {
+        await env.AUDIO.delete(objectKey);
+        await completeDeleteVoiceCapture(ownerId, captureId, Date.now());
+        return json(request, {
+          error: "Voice capture deletion won the upload race; the late object was removed.",
+          code: "voice_capture_deleting",
+          retryable: false,
+        }, { status: 409 });
+      }
+    }
     await updateActivityAudioClipStatus(ownerId, clipId, "available", Date.now());
   } catch (error) {
     await updateActivityAudioClipStatus(ownerId, clipId, "failed", Date.now());
@@ -198,7 +213,7 @@ async function scheduleCompletedVoiceActivity(
   }
 }
 
-async function voiceTimerMutation(ownerId: string, request: Request) {
+async function voiceTimerMutation(ownerId: string, request: Request, env: Env) {
   const body = (await request.json()) as {
     protocolVersion?: number;
     mutation?:
@@ -276,6 +291,7 @@ async function voiceTimerMutation(ownerId: string, request: Request) {
     } else {
       return json(request, { error: "Unsupported timer mutation." }, { status: 400 });
     }
+    await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "timer");
     return json(request, {
       protocolVersion: VOICE_PROTOCOL_VERSION,
       timerInstrument: await readVoiceTimerInstrument(ownerId),
@@ -288,7 +304,7 @@ async function voiceTimerMutation(ownerId: string, request: Request) {
   }
 }
 
-async function saveVoiceCapture(ownerId: string, request: Request) {
+async function saveVoiceCapture(ownerId: string, request: Request, env: Env) {
   const body = (await request.json()) as {
     protocolVersion?: number;
     activityId?: string;
@@ -326,6 +342,7 @@ async function saveVoiceCapture(ownerId: string, request: Request) {
       body: transcript,
       occurredAt,
     }, Date.now());
+    await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_capture");
     return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, turn, legacyAccepted: true }, { status: 201 });
   }
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(transcript));
@@ -342,10 +359,11 @@ async function saveVoiceCapture(ownerId: string, request: Request) {
     checksum,
     occurredAt,
   }, Date.now());
+  await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_capture");
   return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, turn }, { status: 201 });
 }
 
-async function registerVoiceIntent(ownerId: string, request: Request) {
+async function registerVoiceIntent(ownerId: string, request: Request, env: Env) {
   const body = (await request.json()) as {
     protocolVersion?: number;
     captureId?: string;
@@ -372,30 +390,108 @@ async function registerVoiceIntent(ownerId: string, request: Request) {
       || !/^[a-f0-9]{64}$/.test(input.checksum)) {
     return json(request, { error: "Complete capture identity, specialty, and SHA-256 checksum are required." }, { status: 400 });
   }
+  const existing = await readVoiceCaptureIntent(ownerId, input.captureId);
+  if (existing) {
+    const identityMatches = existing.activityId === input.activityId
+      && existing.turnId === input.turnId
+      && existing.clipId === input.clipId
+      && existing.specialty === input.specialty
+      && existing.checksum === input.checksum
+      && existing.occurredAt === input.occurredAt;
+    if (!identityMatches) {
+      return json(request, {
+        error: "This capture ID is already registered with different immutable identity fields.",
+        code: "voice_capture_identity_conflict",
+        retryable: false,
+        existingStatus: existing.status,
+      }, { status: 409 });
+    }
+    return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, intent: existing, idempotent: true });
+  }
   const snapshot = await buildPracticeSnapshot(ownerId, dateInPracticeTimeZone(), { includeAll: true });
   const activity = snapshot.activities.find((candidate) => candidate.id === input.activityId);
   const beganWhileRunning = await activityTimerWasRunningAt(ownerId, input.activityId, input.occurredAt);
   if (!activity || activity.type !== input.specialty || !beganWhileRunning) {
     return json(request, { error: "The recording did not begin while this Interview Arc activity stopwatch was running." }, { status: 409 });
   }
-  const intent = await registerVoiceCaptureIntent(ownerId, input as Parameters<typeof registerVoiceCaptureIntent>[1], Date.now());
+  let intent;
+  try {
+    intent = await registerVoiceCaptureIntent(
+      ownerId,
+      input as Parameters<typeof registerVoiceCaptureIntent>[1],
+      Date.now(),
+    );
+  } catch (error) {
+    if (error instanceof Error && (
+      error.message.includes("cannot be rebound")
+      || error.message.includes("deferred voice decision does not match")
+    )) {
+      return json(request, {
+        error: error.message,
+        code: "voice_capture_identity_conflict",
+        retryable: false,
+      }, { status: 409 });
+    }
+    throw error;
+  }
+  await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_intent");
   return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, intent }, { status: 201 });
 }
 
 async function listVoiceIntents(ownerId: string, request: Request) {
-  const ids = new URL(request.url).searchParams.getAll("captureId").map((value) => value.trim()).filter(Boolean);
+  const url = new URL(request.url);
+  const ids = url.searchParams.getAll("captureId").map((value) => value.trim()).filter(Boolean);
+  const status = url.searchParams.get("status");
+  const limit = Math.max(1, Math.min(100, Number(url.searchParams.get("limit") ?? 100)));
+  const cursor = url.searchParams.get("cursor");
+  let cursorUpdatedAt: number | undefined;
+  let cursorCaptureId: string | undefined;
+  if (cursor) {
+    try {
+      const normalizedCursor = cursor.replace(/-/g, "+").replace(/_/g, "/")
+        .padEnd(Math.ceil(cursor.length / 4) * 4, "=");
+      const decoded = JSON.parse(new TextDecoder().decode(
+        Uint8Array.from(atob(normalizedCursor), (character) => character.charCodeAt(0)),
+      )) as { updatedAt?: number; captureId?: string };
+      if (Number.isFinite(decoded.updatedAt) && decoded.captureId) {
+        cursorUpdatedAt = Number(decoded.updatedAt);
+        cursorCaptureId = decoded.captureId;
+      }
+    } catch {
+      return json(request, { error: "Invalid voice-intent cursor." }, { status: 400 });
+    }
+  }
+  const unresolvedStatuses = ["pending", "activity_related", "uncertain", "deleting"] as const;
+  const page = (status === "unresolved" || status === "retained") && ids.length === 0
+    ? await readVoiceCaptureIntentsPage(ownerId, {
+      statuses: status === "unresolved" ? [...unresolvedStatuses] : undefined,
+      cursorUpdatedAt,
+      cursorCaptureId,
+      limit: limit + 1,
+    })
+    : null;
+  const pageRows = page?.slice(0, limit) ?? null;
+  const last = pageRows?.at(-1);
+  const nextCursor = page && page.length > limit && last
+    ? btoa(JSON.stringify({ updatedAt: last.updatedAt, captureId: last.captureId }))
+      .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "")
+    : null;
   const [intents, legacyOrphans] = await Promise.all([
-    readVoiceCaptureIntents(ownerId, ids.length ? ids : undefined),
-    ids.length ? Promise.resolve([]) : readLikelyLegacyVoiceOrphans(ownerId),
+    pageRows ? Promise.resolve(pageRows) : readVoiceCaptureIntents(ownerId, ids.length ? ids : undefined),
+    ids.length || status === "unresolved" || status === "retained"
+      ? Promise.resolve([])
+      : readLikelyLegacyVoiceOrphans(ownerId),
   ]);
-  return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, intents, legacyOrphans });
+  return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, intents, legacyOrphans, nextCursor });
 }
 
-async function decideVoiceIntent(ownerId: string, request: Request, captureId: string) {
+async function decideVoiceIntent(ownerId: string, request: Request, captureId: string, env: Env) {
   const body = (await request.json()) as {
     protocolVersion?: number;
     decision?: "activity_related" | "unrelated" | "uncertain";
     reason?: string;
+    activityId?: string;
+    turnId?: string;
   };
   if (body.protocolVersion !== VOICE_PROTOCOL_VERSION || !body.decision) {
     return json(request, { error: "A supported protocol version and decision are required." }, { status: 400 });
@@ -407,7 +503,9 @@ async function decideVoiceIntent(ownerId: string, request: Request, captureId: s
     "voice-user",
     body.reason ?? "Resolved from the local pending-capture card.",
     Date.now(),
+    body.activityId && body.turnId ? { activityId: body.activityId, turnId: body.turnId } : undefined,
   );
+  await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_intent");
   return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, intent });
 }
 
@@ -419,6 +517,7 @@ async function deleteVoiceCaptureGraph(ownerId: string, request: Request, env: E
       await env.AUDIO.delete(clip.objectKey);
     }
     await completeDeleteVoiceCapture(ownerId, captureId, Date.now());
+    await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_capture");
     return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, captureId, status: "deleted" });
   } catch (error) {
     await failDeleteVoiceCapture(ownerId, captureId, error instanceof Error ? error.message : String(error), Date.now());
@@ -448,7 +547,18 @@ async function saveVoiceDelivery(ownerId: string, request: Request) {
 function bearerToken(request: Request) {
   const authorization = request.headers.get("authorization") ?? "";
   const match = authorization.match(/^Bearer\s+(.+)$/i);
-  return match?.[1]?.trim() ?? "";
+  if (match?.[1]) return match[1].trim();
+  const encoded = (request.headers.get("sec-websocket-protocol") ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .find((value) => value.startsWith("ia-bearer."));
+  if (!encoded) return "";
+  try {
+    const body = encoded.slice("ia-bearer.".length).replace(/-/g, "+").replace(/_/g, "/");
+    return atob(body.padEnd(Math.ceil(body.length / 4) * 4, "="));
+  } catch {
+    return "";
+  }
 }
 
 function corsHeaders(request: Request) {
@@ -507,7 +617,7 @@ async function companionState(ownerId: string, request: Request) {
   return json(request, { ...snapshot, currentActivity });
 }
 
-async function companionMutation(ownerId: string, request: Request) {
+async function companionMutation(ownerId: string, request: Request, env: Env) {
   const body = (await request.json()) as {
     date?: string;
     url?: string;
@@ -639,12 +749,17 @@ async function companionMutation(ownerId: string, request: Request) {
   const responseUrl = new URL("/companion/state", request.url);
   responseUrl.searchParams.set("date", date);
   if (problemUrl) responseUrl.searchParams.set("url", problemUrl);
+  await publishOwnerLiveUpdate(
+    env.LIVE_UPDATES,
+    ownerId,
+    mutation.type === "timer" ? "timer" : "practice",
+  );
   return companionState(ownerId, new Request(responseUrl, {
     headers: request.headers,
   }));
 }
 
-function createServer(ownerId: string) {
+function createServer(ownerId: string, env: Env) {
   const server = new McpServer({ name: "Interview Arc", version: "1.0.0" });
 
   server.registerTool(
@@ -688,10 +803,6 @@ function createServer(ownerId: string) {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async ({ captureId, activityId, turnId, decision, reason }) => {
-      const existing = await readVoiceCaptureIntent(ownerId, captureId);
-      if (!existing || existing.activityId !== activityId || existing.turnId !== turnId) {
-        throw new Error("The capture envelope does not match the registered owner-scoped intent.");
-      }
       const intent = await resolveVoiceCaptureIntent(
         ownerId,
         captureId,
@@ -699,7 +810,9 @@ function createServer(ownerId: string) {
         "specialist",
         reason,
         Date.now(),
+        { activityId, turnId },
       );
+      await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_intent");
       const receipt = decision === "unrelated"
         ? "*Not attached to this practice activity · Transcript not saved · Recording not uploaded*"
         : null;
@@ -1169,8 +1282,11 @@ export default {
     if (url.pathname === "/companion/state" && request.method === "GET") {
       return companionState(ownerId, request);
     }
+    if (url.pathname === "/events" && request.method === "GET") {
+      return connectOwnerLiveUpdates(env.LIVE_UPDATES, ownerId, request);
+    }
     if (url.pathname === "/companion/mutations" && request.method === "POST") {
-      return companionMutation(ownerId, request);
+      return companionMutation(ownerId, request, env);
     }
     if (url.pathname === "/audio/upload" && request.method === "POST") {
       return uploadPracticeAudio(ownerId, request, env);
@@ -1179,20 +1295,20 @@ export default {
       return voiceContext(ownerId, request);
     }
     if (url.pathname === "/voice/timers" && request.method === "POST") {
-      return voiceTimerMutation(ownerId, request);
+      return voiceTimerMutation(ownerId, request, env);
     }
     if (url.pathname === "/voice/intents" && request.method === "POST") {
-      return registerVoiceIntent(ownerId, request);
+      return registerVoiceIntent(ownerId, request, env);
     }
     if (url.pathname === "/voice/intents" && request.method === "GET") {
       return listVoiceIntents(ownerId, request);
     }
     const voiceIntentDecision = url.pathname.match(/^\/voice\/intents\/([^/]+)\/decision$/);
     if (voiceIntentDecision && request.method === "POST") {
-      return decideVoiceIntent(ownerId, request, decodeURIComponent(voiceIntentDecision[1]));
+      return decideVoiceIntent(ownerId, request, decodeURIComponent(voiceIntentDecision[1]), env);
     }
     if (url.pathname === "/voice/captures" && request.method === "POST") {
-      return saveVoiceCapture(ownerId, request);
+      return saveVoiceCapture(ownerId, request, env);
     }
     const voiceCaptureDelete = url.pathname.match(/^\/voice\/captures\/([^/]+)$/);
     if (voiceCaptureDelete && request.method === "DELETE") {
@@ -1206,7 +1322,7 @@ export default {
       return saveVoiceDelivery(ownerId, request);
     }
     if (url.pathname === "/mcp" || url.pathname.startsWith("/mcp/")) {
-      return createMcpHandler(createServer(ownerId))(request, env, ctx);
+      return createMcpHandler(createServer(ownerId, env))(request, env, ctx);
     }
     return json(request, { error: "Not found" }, { status: 404 });
   },
