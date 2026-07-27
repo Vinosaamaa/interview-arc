@@ -64,6 +64,9 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
   into a dated Past attempt.
 - Treat `practice/*/sessions/*.md` and `audio-answers/*.md` as durable journal artifacts.
 - Use the contracts under `docs/contracts/` as the canonical field names.
+- Follow `../contracts/live-update-reliability.md` for website, Picture-in-
+  Picture, Companion, Voice-facing, and synchronization changes. D1 and REST
+  mutations remain authoritative; push is owner-scoped invalidation only.
 - `scripts/import-content.mjs` mirrors versioned journals, artifacts, story files,
   and all three banks into the shared D1 content tables. Do not generate or
   commit a TypeScript content bundle.

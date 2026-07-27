@@ -19,6 +19,8 @@ import { resolveOwnerId } from "../../../db/owner";
 import { buildPracticeSnapshot } from "../../../db/practice-snapshot";
 import { toRouteErrorMessage } from "../route-helpers";
 import { clearActivityReviewSchedules, scheduleReview, setProblemStar, upsertOwnerBankQuestion } from "../../../db/durable-practice";
+import { env } from "cloudflare:workers";
+import { publishOwnerLiveUpdate } from "../../../worker/live-update-hub";
 
 type Mutation =
   | {
@@ -199,6 +201,11 @@ export async function POST(request: Request) {
     }
 
     const state = await readLiveState(ownerId, date);
+    await publishOwnerLiveUpdate(
+      env.LIVE_UPDATES,
+      ownerId,
+      mutation.type === "timer" ? "timer" : mutation.type === "publication-status" ? "publication" : "practice",
+    );
     return Response.json(state);
   } catch (error) {
     if (error instanceof TimerStateConflictError) {

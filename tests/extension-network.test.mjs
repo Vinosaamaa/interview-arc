@@ -85,7 +85,7 @@ test("the side panel routes Companion requests through the service worker", asyn
   assert.match(sidePanel, /chrome\.runtime\.sendMessage/);
   assert.doesNotMatch(sidePanel, /fetch\(`\\$\\{API_BASE\\}/);
   assert.match(serviceWorker, /InterviewArcCompanionNetwork\.performRequest/);
-  assert.equal(manifest.version, "1.1.6");
+  assert.equal(manifest.version, "1.1.7");
   assert.equal(manifest.icons["128"], "icons/brand-128.png");
   assert.equal(manifest.action.default_icon["16"], "icons/brand-16.png");
   const sidePanelMarkup = await readFile(

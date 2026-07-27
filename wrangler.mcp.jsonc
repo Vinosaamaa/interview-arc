@@ -17,5 +17,14 @@
       "binding": "AUDIO",
       "bucket_name": "interview-arc-audio"
     }
-  ]
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "LIVE_UPDATES",
+        "class_name": "OwnerLiveUpdateHub",
+        "script_name": "limitless"
+      }
+    ]
+  }
 }

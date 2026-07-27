@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import {
   activityDeliveryAnalyses,
@@ -6,6 +6,7 @@ import {
   activityFinalizations,
   activitySolutionLinks,
   contentBank,
+  deferredVoiceCaptureDecisions,
   leetcodeCodeAttempts,
   ownerBankQuestions,
   practiceNotes,
@@ -334,6 +335,7 @@ export async function registerVoiceCaptureIntent(
   nowMs: number,
 ) {
   const db = getDb();
+  await purgeExpiredDeferredVoiceCaptureDecisions(ownerId, nowMs);
   const existing = await readVoiceCaptureIntent(ownerId, input.captureId);
   if (existing) {
     if (existing.activityId !== input.activityId
@@ -353,6 +355,33 @@ export async function registerVoiceCaptureIntent(
     createdAt: nowMs,
     updatedAt: nowMs,
   }).onConflictDoNothing();
+  const deferred = (await db.select().from(deferredVoiceCaptureDecisions).where(and(
+    eq(deferredVoiceCaptureDecisions.ownerId, ownerId),
+    eq(deferredVoiceCaptureDecisions.captureId, input.captureId),
+  )))[0];
+  if (deferred) {
+    if (deferred.expiresAt <= nowMs) {
+      await db.delete(deferredVoiceCaptureDecisions).where(and(
+        eq(deferredVoiceCaptureDecisions.ownerId, ownerId),
+        eq(deferredVoiceCaptureDecisions.captureId, input.captureId),
+      ));
+    } else if (deferred.activityId === input.activityId && deferred.turnId === input.turnId) {
+      await applyVoiceCaptureDecision(
+        ownerId,
+        input.captureId,
+        deferred.decision,
+        deferred.decisionSource,
+        deferred.decisionReason,
+        nowMs,
+      );
+      await db.delete(deferredVoiceCaptureDecisions).where(and(
+        eq(deferredVoiceCaptureDecisions.ownerId, ownerId),
+        eq(deferredVoiceCaptureDecisions.captureId, input.captureId),
+      ));
+    } else {
+      throw new Error("A deferred voice decision does not match the registered capture identity.");
+    }
+  }
   return readVoiceCaptureIntent(ownerId, input.captureId);
 }
 
@@ -373,6 +402,37 @@ export async function readVoiceCaptureIntents(ownerId: string, captureIds?: stri
       ? and(eq(voiceCaptureIntents.ownerId, ownerId), inArray(voiceCaptureIntents.captureId, captureIds))
       : eq(voiceCaptureIntents.ownerId, ownerId),
   );
+}
+
+export async function readVoiceCaptureIntentsPage(
+  ownerId: string,
+  {
+    statuses,
+    cursorUpdatedAt,
+    cursorCaptureId,
+    limit,
+  }: {
+    statuses?: Array<"pending" | "activity_related" | "accepted" | "unrelated" | "uncertain" | "deleting" | "deleted">;
+    cursorUpdatedAt?: number;
+    cursorCaptureId?: string;
+    limit: number;
+  },
+) {
+  const db = getDb();
+  const afterCursor = cursorUpdatedAt !== undefined && cursorCaptureId
+    ? or(
+      gt(voiceCaptureIntents.updatedAt, cursorUpdatedAt),
+      and(
+        eq(voiceCaptureIntents.updatedAt, cursorUpdatedAt),
+        gt(voiceCaptureIntents.captureId, cursorCaptureId),
+      ),
+    )
+    : undefined;
+  return db.select().from(voiceCaptureIntents).where(and(
+    eq(voiceCaptureIntents.ownerId, ownerId),
+    statuses?.length ? inArray(voiceCaptureIntents.status, statuses) : undefined,
+    afterCursor,
+  )).orderBy(asc(voiceCaptureIntents.updatedAt), asc(voiceCaptureIntents.captureId)).limit(limit);
 }
 
 export async function readLikelyLegacyVoiceOrphans(ownerId: string) {
@@ -459,12 +519,86 @@ export async function resolveVoiceCaptureIntent(
   source: string,
   reason: string,
   nowMs: number,
+  expectedIdentity?: { activityId: string; turnId: string },
+) {
+  const db = getDb();
+  await purgeExpiredDeferredVoiceCaptureDecisions(ownerId, nowMs);
+  const existing = await readVoiceCaptureIntent(ownerId, captureId);
+  if (!existing) {
+    if (!expectedIdentity?.activityId || !expectedIdentity.turnId) {
+      throw new Error("The voice capture is unavailable or already resolved.");
+    }
+    await db.insert(deferredVoiceCaptureDecisions).values({
+      ownerId,
+      captureId,
+      activityId: expectedIdentity.activityId,
+      turnId: expectedIdentity.turnId,
+      decision,
+      decisionSource: source.slice(0, 80),
+      decisionReason: reason.slice(0, 2_000),
+      expiresAt: nowMs + 86_400_000,
+      createdAt: nowMs,
+      updatedAt: nowMs,
+    }).onConflictDoUpdate({
+      target: [deferredVoiceCaptureDecisions.ownerId, deferredVoiceCaptureDecisions.captureId],
+      set: {
+        activityId: expectedIdentity.activityId,
+        turnId: expectedIdentity.turnId,
+        decision,
+        decisionSource: source.slice(0, 80),
+        decisionReason: reason.slice(0, 2_000),
+        expiresAt: nowMs + 86_400_000,
+        updatedAt: nowMs,
+      },
+    });
+    // Close the narrow race where registration completed after the initial
+    // read but before the deferred row was written.
+    const registered = await readVoiceCaptureIntent(ownerId, captureId);
+    if (registered) {
+      if (registered.activityId !== expectedIdentity.activityId || registered.turnId !== expectedIdentity.turnId) {
+        throw new Error("The capture envelope does not match the registered owner-scoped intent.");
+      }
+      const resolved = await applyVoiceCaptureDecision(ownerId, captureId, decision, source, reason, nowMs);
+      await db.delete(deferredVoiceCaptureDecisions).where(and(
+        eq(deferredVoiceCaptureDecisions.ownerId, ownerId),
+        eq(deferredVoiceCaptureDecisions.captureId, captureId),
+      ));
+      return resolved;
+    }
+    return {
+      captureId,
+      activityId: expectedIdentity.activityId,
+      turnId: expectedIdentity.turnId,
+      status: decision,
+      deferred: true,
+    };
+  }
+  if (expectedIdentity
+      && (existing.activityId !== expectedIdentity.activityId || existing.turnId !== expectedIdentity.turnId)) {
+    throw new Error("The capture envelope does not match the registered owner-scoped intent.");
+  }
+  return applyVoiceCaptureDecision(ownerId, captureId, decision, source, reason, nowMs);
+}
+
+async function purgeExpiredDeferredVoiceCaptureDecisions(ownerId: string, nowMs: number) {
+  const db = getDb();
+  await db.delete(deferredVoiceCaptureDecisions).where(and(
+    eq(deferredVoiceCaptureDecisions.ownerId, ownerId),
+    lt(deferredVoiceCaptureDecisions.expiresAt, nowMs),
+  ));
+}
+
+async function applyVoiceCaptureDecision(
+  ownerId: string,
+  captureId: string,
+  decision: VoiceCaptureDecision,
+  source: string,
+  reason: string,
+  nowMs: number,
 ) {
   const db = getDb();
   const existing = await readVoiceCaptureIntent(ownerId, captureId);
-  if (!existing) {
-    throw new Error("The voice capture is unavailable or already resolved.");
-  }
+  if (!existing) throw new Error("The voice capture is unavailable or already resolved.");
   if (existing.status === decision
       || (existing.status === "accepted" && decision === "activity_related")
       || (existing.status === "deleted" && decision === "unrelated")) {

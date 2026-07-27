@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mutationFailureDisposition } from "./mutation-queue";
 import { applyTimerSync, type TimerSyncState } from "./timer-reconciliation";
+import { subscribeToLiveUpdates } from "./live-event-policy";
 import {
   EMPTY_DRAFT,
   type ExtraActivity,
@@ -243,7 +244,6 @@ export type LiveStateController = {
   hydrated: boolean;
   synced: boolean;
   enqueue: (...mutations: Mutation[]) => void;
-  reconcileTimers: () => Promise<void>;
 };
 
 export function useLiveState(date: string): LiveStateController {
@@ -435,14 +435,18 @@ export function useLiveState(date: string): LiveStateController {
     };
   }, [flush]);
 
-  // Voice and the Chrome companion mutate the same D1 clocks. Reconcile only
-  // the lightweight timer/focus projection once per second; the full practice
-  // record remains on its existing load/mutation path.
+  // Voice and the Chrome companion mutate the same D1 state. The owner-scoped
+  // WebSocket wakes this client after committed mutations. Only a bounded,
+  // low-frequency fallback read runs while push is unavailable.
   useEffect(() => {
     if (!hydrated) return;
     void reconcileTimers();
-    const interval = window.setInterval(() => void reconcileTimers(), 1000);
-    return () => window.clearInterval(interval);
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return subscribeToLiveUpdates({
+      url: `${protocol}//${window.location.host}/api/live-events`,
+      onUpdate: () => void reconcileTimers(),
+      onFallback: reconcileTimers,
+    });
   }, [hydrated, reconcileTimers]);
 
   // Drive the display. The dashboard owns auto-finish because each session can
@@ -461,5 +465,5 @@ export function useLiveState(date: string): LiveStateController {
     setDraft(updater);
   }, []);
 
-  return { draft, setDraft: setDraftPublic, now, setNow, hydrated, synced, enqueue, reconcileTimers };
+  return { draft, setDraft: setDraftPublic, now, setNow, hydrated, synced, enqueue };
 }
