@@ -148,6 +148,8 @@ type ComposerState = {
   query: string;
   selectedId: string;
   selectedActivities: StagedActivity[];
+  focusSelected: boolean;
+  focusMinutes: string;
   minutes: string;
   customOpen: boolean;
   customEditingKey: string;
@@ -197,6 +199,8 @@ const EMPTY_COMPOSER: ComposerState = {
   query: "",
   selectedId: "",
   selectedActivities: [],
+  focusSelected: false,
+  focusMinutes: "60",
   minutes: "30",
   customOpen: false,
   customEditingKey: "",
@@ -726,7 +730,7 @@ function PipNowPanel({
   onOutcome,
   onToggleStar,
 }: {
-  activity?: JournalActivity | ExtraActivity | null;
+  activity?: JournalActivity | ExtraActivity | FocusBlock | null;
   activityTimer?: TimerDraft;
   session?: PracticeSession | null;
   sessionTimer?: TimerDraft;
@@ -741,6 +745,7 @@ function PipNowPanel({
   onOutcome: (id: string, outcome?: Outcome) => void;
   onToggleStar: (type: ActivityType, questionId?: string) => void;
 }) {
+  const focusActivity = activity?.activityClass === "focus_block";
   const sessionAllocated = session?.allocatedSeconds ?? SESSION_SECONDS;
   const sessionLeft = session ? remaining(sessionTimer, now, sessionAllocated) : 0;
   const sessionOvertime = session ? overtime(sessionTimer, now, sessionAllocated) : 0;
@@ -786,9 +791,9 @@ function PipNowPanel({
       {activity ? (
         <section className={`pip-clock activity ${activityRunning ? "running" : ""} ${activityComplete ? "complete" : ""}`}>
           <div className="pip-problem">
-            <span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span>
+            <span className={`type-mark ${focusActivity ? "focus-block" : activity.type}`}>{focusActivity ? "J" : typeMark(activity.type)}</span>
             <div>
-              <small>{typeLabel(activity.type)} stopwatch</small>
+              <small>{focusActivity ? "Career focus stopwatch" : `${typeLabel(activity.type)} stopwatch`}</small>
               <strong className="pip-problem-title">{activity.title}</strong>
             </div>
           </div>
@@ -798,11 +803,11 @@ function PipNowPanel({
               <button type="button" className="pip-btn primary" onClick={() => onToggleActivity(activity.id)} disabled={activityComplete || activityLocked} aria-label={activityRunning ? `Pause ${activity.title}` : `Start ${activity.title}`}>
                 <span aria-hidden="true">{activityRunning ? "Ⅱ" : "▶"}</span>
               </button>
-              <button type="button" className="pip-btn" onClick={() => onCompleteActivity(activity.id)} disabled={activityComplete || !activityStarted || !outcome || activityLocked} aria-label={`Finish ${activity.title}`} title={activityLocked ? "This session is finished" : !activityStarted ? "Start the stopwatch before finishing" : !outcome ? "Choose a result before finishing" : "Finish activity"}>
+              <button type="button" className="pip-btn" onClick={() => onCompleteActivity(activity.id)} disabled={activityComplete || !activityStarted || (!focusActivity && !outcome) || activityLocked} aria-label={`Finish ${activity.title}`} title={activityLocked ? "This session is finished" : !activityStarted ? "Start the stopwatch before finishing" : !focusActivity && !outcome ? "Choose a result before finishing" : "Finish activity"}>
                 <span aria-hidden="true">{activityComplete ? "✓" : "■"}</span>
               </button>
-              <ResultFlag activityType={activity.type} outcome={outcome} onChange={(next) => onOutcome(activity.id, next)} disabled={!activityStarted || activityComplete || activityLocked} />
-              <button
+              {!focusActivity && <ResultFlag activityType={activity.type} outcome={outcome} onChange={(next) => onOutcome(activity.id, next)} disabled={!activityStarted || activityComplete || activityLocked} />}
+              {!focusActivity && <button
                 type="button"
                 className={`pip-btn pip-star ${starred ? "starred" : ""}`}
                 onClick={() => onToggleStar(activity.type, activity.questionId)}
@@ -812,10 +817,10 @@ function PipNowPanel({
                 title={activity.questionId ? starred ? "Remove from starred problems" : "Keep this problem in your starred review set" : "A stable bank question is required to star this activity"}
               >
                 <Icon name="star" />
-              </button>
+              </button>}
             </div>
           </div>
-          {activity.url ? <a className="pip-open" href={activity.url} target="_blank" rel="noreferrer">Open problem ↗</a> : null}
+          {!focusActivity && activity.url ? <a className="pip-open" href={activity.url} target="_blank" rel="noreferrer">Open problem ↗</a> : null}
         </section>
       ) : (
         <p className="pip-empty">No active problem yet. Add or start one on Today.</p>
@@ -1772,12 +1777,16 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       draft.publicationStatuses[activity.id] !== "published" && !activity.artifactPath
     );
   }, [draft.extraActivities, draft.publicationStatuses]);
+  const currentFocusBlocks = draft.focusBlocks;
   const allSessions: PracticeSession[] = useMemo(() => {
-    const visibleActivityIds = new Set(allTodayActivities.map((activity) => activity.id));
+    const visibleActivityIds = new Set([
+      ...allTodayActivities.map((activity) => activity.id),
+      ...currentFocusBlocks.map((block) => block.id),
+    ]);
     return draft.sessions.filter((session) =>
       session.activityIds.some((activityId) => visibleActivityIds.has(activityId))
     );
-  }, [allTodayActivities, draft.sessions]);
+  }, [allTodayActivities, currentFocusBlocks, draft.sessions]);
   const sessionByActivityId = useMemo(() => {
     const membership = new Map<string, PracticeSession>();
     allSessions.forEach((session) => session.activityIds.forEach((activityId) => membership.set(activityId, session)));
@@ -1785,7 +1794,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }, [allSessions]);
   const assignedExtraIds = new Set(allSessions.flatMap((session) => session.activityIds));
   const looseActivities = allTodayActivities.filter((activity) => !assignedExtraIds.has(activity.id));
-  const currentFocusBlocks = draft.focusBlocks;
+  const looseFocusBlocks = currentFocusBlocks.filter((block) => !assignedExtraIds.has(block.id));
 
   const careerQueryParams = useCallback((cursor?: string) => {
     const params = new URLSearchParams({
@@ -1873,7 +1882,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const finished = allSessions.filter((session) => session.activityIds.length > 0
       && !draft.sessionTimers[session.id]?.completed
       && session.activityIds.every((activityId) => draft.timers[activityId]?.completed)
-      && session.activityIds.every((activityId) => Boolean(draft.outcomes[activityId])));
+      && session.activityIds.every((activityId) => (
+        currentFocusBlocks.some((block) => block.id === activityId)
+        || Boolean(draft.outcomes[activityId])
+      )));
     if (!finished.length) return;
     const timestamp = Date.now();
     finished.forEach((session) => enqueue({
@@ -1900,25 +1912,38 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         }),
       ),
     }));
-  }, [allSessions, draft.outcomes, draft.sessionTimers, draft.timers, enqueue, setDraft]);
+  }, [allSessions, currentFocusBlocks, draft.outcomes, draft.sessionTimers, draft.timers, enqueue, setDraft]);
 
-  const activeActivity =
+  const activePracticeActivity =
     allTodayActivities.find((activity) => Boolean(draft.timers[activity.id]?.runningSince) && !draft.timers[activity.id]?.completed) ??
     null;
-  const lastFocusedActivity =
+  const activeFocusBlock =
+    currentFocusBlocks.find((block) => Boolean(draft.timers[block.id]?.runningSince) && !draft.timers[block.id]?.completed) ??
+    null;
+  const activeActivity = activePracticeActivity;
+  const lastFocusedPracticeActivity =
     allTodayActivities.find((activity) => activity.id === draft.focusedActivityId) ?? null;
-  const focusedSession = activeActivity
-    ? sessionByActivityId.get(activeActivity.id) ?? null
+  const lastFocusedBlock =
+    currentFocusBlocks.find((block) => block.id === draft.focusedActivityId) ?? null;
+  const lastFocusedActivity = lastFocusedPracticeActivity;
+  const focusedSubject = activePracticeActivity ?? activeFocusBlock ?? lastFocusedPracticeActivity ?? lastFocusedBlock;
+  const focusedSession = focusedSubject
+    ? sessionByActivityId.get(focusedSubject.id) ?? null
     : allSessions.find((session) => session.id === draft.focusedSessionId) ?? null;
 
   // The pop-out may offer the last paused activity as a resume target, but only
   // an actively running stopwatch is exposed to Voice as linked work.
   const pipActivity =
-    activeActivity ??
-    lastFocusedActivity ??
+    activePracticeActivity ??
+    activeFocusBlock ??
+    lastFocusedPracticeActivity ??
+    lastFocusedBlock ??
     allTodayActivities.find((activity) => !draft.timers[activity.id]?.completed) ??
+    currentFocusBlocks.find((block) => !draft.timers[block.id]?.completed) ??
     allTodayActivities[0] ??
+    currentFocusBlocks[0] ??
     null;
+  const pipPracticeActivity = pipActivity?.activityClass === "focus_block" ? null : pipActivity;
   const pipSession =
     focusedSession ?? allSessions.find((session) => draft.sessionTimers[session.id]?.runningSince) ?? allSessions[0] ?? null;
 
@@ -2138,7 +2163,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const existing = draft.sessionTimers[sessionId];
     if (!existing?.startedAt || existing.completed) return;
     const session = allSessions.find((candidate) => candidate.id === sessionId);
+    const practiceActivityIds = new Set(allTodayActivities.map((activity) => activity.id));
     const missingResults = session?.activityIds.filter((activityId) => (
+      practiceActivityIds.has(activityId) &&
       Boolean(draft.timers[activityId]?.startedAt) && !draft.outcomes[activityId]
     )) ?? [];
     if (missingResults.length) {
@@ -2238,7 +2265,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const existing = draft.timers[blockId];
     if (!existing?.startedAt || existing.completed) return;
     setNow(timestamp);
-    enqueue({ type: "timer", subjectId: blockId, kind: "activity", action: "finish" });
+    const parentSession = sessionByActivityId.get(blockId);
+    enqueue({ type: "timer", subjectId: blockId, kind: "activity", action: "finish", sessionId: parentSession?.id });
     setDraft((current) => ({
       ...current,
       timers: {
@@ -2252,7 +2280,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         },
       },
       focusedActivityId: blockId,
-      focusedSessionId: null,
+      focusedSessionId: parentSession?.id ?? null,
       focusedAt: timestamp,
     }));
   }
@@ -2316,10 +2344,29 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       showUiToast("Started career time stays in Career Work.");
       return;
     }
-    enqueue({ type: "focus-block-remove", id: blockId });
+    const parentSession = sessionByActivityId.get(blockId);
+    const nextSession = parentSession ? {
+      ...parentSession,
+      activityIds: parentSession.activityIds.filter((id) => id !== blockId),
+      allocatedSeconds: Math.max(0, parentSession.allocatedSeconds - (currentFocusBlocks.find((block) => block.id === blockId)?.plannedSeconds ?? 0)),
+    } : null;
+    const removesEmptySession = Boolean(nextSession && nextSession.activityIds.length === 0);
+    enqueue(
+      { type: "focus-block-remove", id: blockId },
+      ...(nextSession
+        ? removesEmptySession
+          ? [{ type: "session-remove" as const, sessionId: nextSession.id, activityIds: [] }]
+          : [{ type: "session-upsert" as const, session: nextSession as LocalSession }]
+        : []),
+    );
     setDraft((current) => ({
       ...current,
       focusBlocks: current.focusBlocks.filter((block) => block.id !== blockId),
+      sessions: nextSession
+        ? removesEmptySession
+          ? current.sessions.filter((session) => session.id !== nextSession.id)
+          : current.sessions.map((session) => session.id === nextSession.id ? nextSession as LocalSession : session)
+        : current.sessions,
     }));
   }
 
@@ -2472,9 +2519,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (sessionTimer?.runningSince || sessionTimer?.completed || sessionTimer?.elapsedSeconds) return false;
     return session.activityIds.every((activityId) => {
       const activity = allTodayActivities.find((candidate) => candidate.id === activityId);
+      const focusBlock = currentFocusBlocks.find((candidate) => candidate.id === activityId);
       const timer = draft.timers[activityId];
       return !timer?.runningSince && !timer?.completed && !timer?.elapsedSeconds &&
-        activity?.status !== "completed" &&
+        (focusBlock || activity?.status !== "completed") &&
         !activity?.artifactPath && !draft.publicationStatuses[activityId];
     });
   }
@@ -2850,7 +2898,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   function saveActivity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!composer.editingId) {
-      if (!composer.selectedActivities.length) return;
+      if (!composer.selectedActivities.length && !composer.focusSelected) return;
       const blocked = todayBlockedQuestions();
       const duplicate = composer.selectedActivities.find((item) => {
         const identity: QuestionBankItem = {
@@ -2869,16 +2917,34 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         showUiToast(`${duplicate.title} is already on Today or selected more than once.`);
         return;
       }
-      const { activities, session } = buildSelectedActivityBatch({
+      const batchStamp = Date.now().toString(36);
+      const { activities, session: builtSession } = buildSelectedActivityBatch({
         date: journal.date,
-        stamp: Date.now().toString(36),
+        stamp: batchStamp,
         sessionNumber: allSessions.length + 1,
         destination: composer.batchDestination,
         items: composer.selectedActivities,
       });
+      const focusBlock: FocusBlock | null = composer.focusSelected ? {
+        id: `${journal.date}-focus-job-applications-${batchStamp}`,
+        workbenchId: draft.workbench?.id,
+        activityClass: "focus_block",
+        focusCategory: "job_applications",
+        title: "Job applications",
+        plannedSeconds: Math.max(60, Math.min(12 * 60 * 60, Math.round((Number(composer.focusMinutes) || 60) * 60))),
+        date: journal.date,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      } : null;
+      const session = builtSession && focusBlock ? {
+        ...builtSession,
+        allocatedSeconds: builtSession.allocatedSeconds + focusBlock.plannedSeconds,
+        activityIds: [...builtSession.activityIds, focusBlock.id],
+      } : builtSession;
       setDraft((current) => ({
         ...current,
         extraActivities: [...current.extraActivities, ...activities],
+        focusBlocks: focusBlock ? [...current.focusBlocks, focusBlock] : current.focusBlocks,
         sessions: session ? [...current.sessions, session] : current.sessions,
       }));
       enqueue(
@@ -2897,11 +2963,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           })),
         ...(session ? [{ type: "session-upsert" as const, session }] : []),
         ...activities.map((activity) => ({ type: "extra-upsert" as const, activity })),
+        ...(focusBlock ? [{ type: "focus-block-upsert" as const, block: focusBlock }] : []),
       );
       closeComposer();
+      const addedCount = activities.length + (focusBlock ? 1 : 0);
       showUiToast(session
-        ? `${activities.length} ${activities.length === 1 ? "activity" : "activities"} added as ${session.label}.`
-        : `${activities.length} ${activities.length === 1 ? "activity" : "activities"} added to Today.`);
+        ? `${addedCount} ${addedCount === 1 ? "activity" : "activities"} added as ${session.label}.`
+        : `${addedCount} ${addedCount === 1 ? "activity" : "activities"} added to Today.`);
       return;
     }
     const bank = bankFor(composer.type);
@@ -3186,7 +3254,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     }
     setLifecycleDialog(null);
     const ids = new Set(session.activityIds);
-    enqueue({ type: "session-remove", id: session.id, activityIds: session.activityIds });
+    const focusIds = currentFocusBlocks.filter((block) => ids.has(block.id)).map((block) => block.id);
+    enqueue(
+      { type: "session-remove", id: session.id, activityIds: session.activityIds },
+      ...focusIds.map((id) => ({ type: "focus-block-remove" as const, id })),
+    );
     setDraft((current) => {
       const timers = { ...current.timers };
       const sessionTimers = { ...current.sessionTimers };
@@ -3208,6 +3280,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         publicationStatuses,
         notes,
         extraActivities: current.extraActivities.filter((activity) => !ids.has(activity.id)),
+        focusBlocks: current.focusBlocks.filter((block) => !ids.has(block.id)),
         sessions: current.sessions.filter((item) => item.id !== session.id),
       };
     });
@@ -3773,13 +3846,20 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return allTodayActivities.filter((activity) => session.activityIds.includes(activity.id));
   }
 
+  function sessionFocusBlocks(session: PracticeSession) {
+    return currentFocusBlocks.filter((block) => session.activityIds.includes(block.id));
+  }
+
   function renderSession(session: PracticeSession, index: number) {
     const activities = sessionActivities(session);
+    const focusBlocksInSession = sessionFocusBlocks(session);
+    const sessionItemCount = activities.length + focusBlocksInSession.length;
     const coding = activities.filter((activity) => activity.type === "leetcode");
     const mockActivities = activities
       .filter((activity) => activity.type !== "leetcode")
       .sort((left, right) => (left.type === right.type ? 0 : left.type === "system_design" ? -1 : 1));
-    const complete = activities.filter(isActivityComplete).length;
+    const complete = activities.filter(isActivityComplete).length
+      + focusBlocksInSession.filter((block) => draft.timers[block.id]?.completed).length;
     const codingSeconds = coding.reduce((sum, activity) => sum + elapsed(draft.timers[activity.id], now), 0);
     const localSession = draft.sessions.find((item) => item.id === session.id);
     const sessionLocked = Boolean(draft.sessionTimers[session.id]?.completed);
@@ -3787,10 +3867,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       <article className="session-sheet" key={session.id}>
         <header className="session-sheet-header">
           <div className="session-number"><span>{String(index + 1).padStart(2, "0")}</span><small>{session.source === "daily" ? "Required" : "Added"}</small></div>
-          <div className="session-heading-copy"><p>Practice session</p><h2>{session.label}</h2><span>{activities.length} activities · {formatDuration(session.allocatedSeconds)} window</span></div>
+          <div className="session-heading-copy"><p>Practice session</p><h2>{session.label}</h2><span>{sessionItemCount} {sessionItemCount === 1 ? "activity" : "activities"} · {formatDuration(session.allocatedSeconds)} window</span></div>
           <SessionCountdown session={session} timer={draft.sessionTimers[session.id]} now={now} onToggle={toggleSessionTimer} onComplete={completeSessionTimer} />
-          <div className="session-progress"><strong>{complete}/{activities.length}</strong><span>finished</span></div>
-          {localSession && <div className="session-header-actions"><button className="edit-session" onClick={() => openEditSession(localSession)} disabled={!isSessionEditable(localSession)} title={isSessionEditable(localSession) ? "Change this session recipe" : "A session recipe locks after timing or completion begins"}>Edit recipe</button><button className={`icon-action danger ${!isSessionEditable(localSession) ? "action-locked" : ""}`} onClick={() => removeSession(localSession)} aria-disabled={!isSessionEditable(localSession)} aria-label={`Remove ${localSession.label}`} title={isSessionEditable(localSession) ? "Remove untouched session" : "Started sessions stay in your history"}><Icon name="close" /></button></div>}
+          <div className="session-progress"><strong>{complete}/{sessionItemCount}</strong><span>finished</span></div>
+          {localSession && <div className="session-header-actions">{focusBlocksInSession.length === 0 && <button className="edit-session" onClick={() => openEditSession(localSession)} disabled={!isSessionEditable(localSession)} title={isSessionEditable(localSession) ? "Change this session recipe" : "A session recipe locks after timing or completion begins"}>Edit recipe</button>}<button className={`icon-action danger ${!isSessionEditable(localSession) ? "action-locked" : ""}`} onClick={() => removeSession(localSession)} aria-disabled={!isSessionEditable(localSession)} aria-label={`Remove ${localSession.label}`} title={isSessionEditable(localSession) ? "Remove untouched session" : "Started sessions stay in your history"}><Icon name="close" /></button></div>}
         </header>
 
         {coding.length > 0 && <section className="coding-ledger">
@@ -3836,6 +3916,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             );
           })}
         </div>
+        {focusBlocksInSession.length > 0 && <section className="session-career-focus" aria-label="Career focus in this session">
+          <div className="ledger-heading"><div><span className="type-chip focus-block">Career focus</span><h3>Job application work inside this session</h3><p>Time is recorded without a result, review, or publication artifact.</p></div></div>
+          <div className="career-focus-list">{focusBlocksInSession.map((block) => <article className={`career-focus-card ${draft.timers[block.id]?.completed ? "completed" : ""}`} key={block.id}><span className="career-focus-mark" aria-hidden="true">J</span><div className="career-focus-copy"><small>Focus block · {Math.round(block.plannedSeconds / 60)} planned min</small><strong>{block.title}</strong>{block.note && <p>{block.note}</p>}</div><ActivityTimer activity={block} timer={draft.timers[block.id]} now={now} onToggle={toggleTimer} onComplete={completeFocusBlock} locked={sessionLocked} /><div className="career-focus-actions"><button className="icon-action" onClick={() => editFocusBlock(block)} disabled={Boolean(draft.timers[block.id]?.completed || sessionLocked)} aria-label={`Edit ${block.title}`}>✎</button><button className="icon-action" onClick={() => removeFocusBlockFromToday(block.id)} disabled={Boolean(draft.timers[block.id]?.startedAt || sessionLocked)} aria-label={`Remove ${block.title}`}>×</button></div></article>)}</div>
+        </section>}
       </article>
     );
   }
@@ -3880,13 +3964,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             : <div className="orchestrator-empty"><strong>No activity running.</strong><span>Start any activity stopwatch when you are ready. Voice stays unlinked until then.</span></div>}
         </section>
 
-        <div className="today-actions"><div><h2>Current workbench</h2><p>It stays open across Pacific midnight until you publish it or explicitly start fresh.</p></div><div><button className="secondary-action" onClick={() => allTodayActivities.length || allSessions.length || currentFocusBlocks.length ? setFreshDayConfirmOpen(true) : startFreshPracticeDay()}>Start fresh day</button><button className="career-action" onClick={() => setFocusComposerOpen(true)}>＋ Job application block</button><button className="secondary-action" onClick={openNewActivity}>Add activities</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
+        <div className="today-actions"><div><h2>Current workbench</h2><p>It stays open across Pacific midnight until you publish it or explicitly start fresh.</p></div><div><button className="secondary-action" onClick={() => allTodayActivities.length || allSessions.length || currentFocusBlocks.length ? setFreshDayConfirmOpen(true) : startFreshPracticeDay()}>Start fresh day</button><button className="secondary-action" onClick={openNewActivity}>Add activities</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
         <section className="session-stack">{allSessions.length ? allSessions.map(renderSession) : <div className="quiet-empty session-empty"><strong>No session planned yet.</strong><span>Add another session to choose up to six coding questions and one question from each available interview bank.</span></div>}</section>
 
         <section className="loose-section">
           <div className="section-title"><div><span className="eyebrow">STANDALONE PRACTICE</span><h2>Outside a full session</h2><p>Each card keeps only the controls you need: stopwatch, result, journal state, star, and remove.</p></div></div>
           {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add activities” above to select across the banks or create a custom prompt.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <StandaloneActivityCard key={activity.id} title={activity.title} onRemove={() => removeActivity(activity.id)} removeDisabled={Boolean(draft.timers[activity.id]?.startedAt)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><small>{typeLabel(activity.type)} · local draft</small><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} /><ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} disabled={!draft.timers[activity.id]?.startedAt || draft.publicationStatuses[activity.id] === "published"} required={requiredResultIds.includes(activity.id)} /><PublicationControl status={publicationStatusFor(activity)} /><button className={`star-control ${isStarred(activity.type, activity.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(activity.type, activity.questionId)} disabled={!activity.questionId} aria-label={`${isStarred(activity.type, activity.questionId) ? "Unstar" : "Star"} ${activity.title}`}>★</button></StandaloneActivityCard>)}</div>}
-          {currentFocusBlocks.length > 0 && <section className="career-focus-section" aria-labelledby="career-focus-title"><header><div><span className="eyebrow">CAREER WORK</span><h3 id="career-focus-title">Job application focus</h3></div><small>Time only · no result or publication required</small></header><div className="career-focus-list">{currentFocusBlocks.map((block) => <article className={`career-focus-card ${draft.timers[block.id]?.completed ? "completed" : ""}`} key={block.id}><span className="career-focus-mark" aria-hidden="true">J</span><div className="career-focus-copy"><small>Focus block · {Math.round(block.plannedSeconds / 60)} planned min</small><strong>{block.title}</strong>{block.note && <p>{block.note}</p>}</div><ActivityTimer activity={block} timer={draft.timers[block.id]} now={now} onToggle={toggleTimer} onComplete={completeFocusBlock} /><div className="career-focus-actions"><button className="icon-action" onClick={() => editFocusBlock(block)} disabled={Boolean(draft.timers[block.id]?.completed)} aria-label={`Edit ${block.title}`}>✎</button><button className="icon-action" onClick={() => removeFocusBlockFromToday(block.id)} disabled={Boolean(draft.timers[block.id]?.startedAt)} aria-label={`Remove ${block.title}`}>×</button></div></article>)}</div></section>}
+          {looseFocusBlocks.length > 0 && <section className="career-focus-section" aria-labelledby="career-focus-title"><header><div><span className="eyebrow">CAREER WORK</span><h3 id="career-focus-title">Job application focus</h3></div><small>Time only · no result or publication required</small></header><div className="career-focus-list">{looseFocusBlocks.map((block) => <article className={`career-focus-card ${draft.timers[block.id]?.completed ? "completed" : ""}`} key={block.id}><span className="career-focus-mark" aria-hidden="true">J</span><div className="career-focus-copy"><small>Focus block · {Math.round(block.plannedSeconds / 60)} planned min</small><strong>{block.title}</strong>{block.note && <p>{block.note}</p>}</div><ActivityTimer activity={block} timer={draft.timers[block.id]} now={now} onToggle={toggleTimer} onComplete={completeFocusBlock} /><div className="career-focus-actions"><button className="icon-action" onClick={() => editFocusBlock(block)} disabled={Boolean(draft.timers[block.id]?.completed)} aria-label={`Edit ${block.title}`}>✎</button><button className="icon-action" onClick={() => removeFocusBlockFromToday(block.id)} disabled={Boolean(draft.timers[block.id]?.startedAt)} aria-label={`Remove ${block.title}`}>×</button></div></article>)}</div></section>}
         </section>
       </>
     );
@@ -4399,8 +4483,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const derivedBlocked = Boolean(derivedUrl && isQuestionBlocked({ id: derivedUrl.questionId ?? `personal-${composer.type}-${slugify(derivedUrl.title)}`, title: derivedUrl.title, url: derivedUrl.url, topics: [], targetMinutes: derivedUrl.targetMinutes, active: true }, composerBlocked));
   const canSaveActivity = composer.editingId
     ? !derivedBlocked && (composer.type === "leetcode" ? Boolean(composer.selectedId || derivedUrl) : Boolean(composer.selectedId || derivedUrl || composer.query.trim()))
-    : composer.selectedActivities.length > 0;
-  const selectedActivityMinutes = composer.selectedActivities.reduce((total, activity) => total + activity.minutes, 0);
+    : composer.selectedActivities.length > 0 || composer.focusSelected;
+  const selectedActivityCount = composer.selectedActivities.length + (composer.focusSelected ? 1 : 0);
+  const selectedActivityMinutes = composer.selectedActivities.reduce((total, activity) => total + activity.minutes, 0)
+    + (composer.focusSelected ? Math.max(1, Number(composer.focusMinutes) || 60) : 0);
   const stagedByType = (["leetcode", "system_design", "behavioral"] as const).map((type) => ({
     type,
     items: composer.selectedActivities.filter((item) => item.type === type),
@@ -5099,8 +5185,36 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             </div>
             <small>{sessionAvailability.coding} coding, {sessionAvailability.systemDesign} system-design, and {sessionAvailability.behavioral} behavioral questions are available after today&apos;s other picks. A recipe locks once its timer, activity work, or completion begins.</small>
             <button className="primary-action full-width" onClick={saveFullSession} disabled={!canSaveSession}>{composer.editingSessionId ? "Save session recipe" : `Add session ${allSessions.length + 1}`}</button>
-          </div> : <form className="multi-activity-composer" onSubmit={saveActivity}>
+          </div> : <form className={`multi-activity-composer ${composer.customOpen || composer.reviewOpen ? "expanded-details" : ""}`} onSubmit={saveActivity}>
             <div className="type-selector" role="group" aria-label="Practice type">{(["leetcode", "system_design", "behavioral"] as const).map((type) => <button type="button" key={type} className={`${type} ${composer.type === type ? "active" : ""}`} onClick={() => switchComposerType(type)}>{typeLabel(type)}{composer.selectedActivities.some((item) => item.type === type) && <small>{composer.selectedActivities.filter((item) => item.type === type).length}</small>}</button>)}</div>
+            <div
+              className={`career-quick-add ${composer.focusSelected ? "selected" : ""}`}
+              role="button"
+              tabIndex={0}
+              aria-pressed={composer.focusSelected}
+              onClick={() => setComposer((current) => ({ ...current, focusSelected: !current.focusSelected }))}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setComposer((current) => ({ ...current, focusSelected: !current.focusSelected }));
+                }
+              }}
+            >
+              <span className="career-focus-mark" aria-hidden="true">J</span>
+              <span><strong>Job applications</strong><small>Career focus · time only · no result or publication</small></span>
+              <label onClick={(event) => event.stopPropagation()}>
+                <span>Minutes</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="720"
+                  value={composer.focusMinutes}
+                  onChange={(event) => setComposer((current) => ({ ...current, focusMinutes: event.target.value, focusSelected: true }))}
+                  aria-label="Job application focus minutes"
+                />
+              </label>
+              <i aria-hidden="true">{composer.focusSelected ? "Selected" : "Add"}</i>
+            </div>
             <div className="activity-picker-toolbar">
               <div className="activity-picker-heading"><span>Search this specialty, then keep selecting across searches and tabs.</span>{hasComposerFilters && <button type="button" className="filter-clear" onClick={clearComposerFilters}>Clear</button>}<div className="bank-icon-tools activity-picker-tools"><button type="button" className={`collection-toggle icon-tool ${composerStarFilter ? "active" : ""}`} onClick={toggleComposerStarFilter} aria-pressed={composerStarFilter} aria-label={composerStarFilter ? "Show all questions" : "Show starred questions"} title={composerStarFilter ? "Showing starred questions" : "Show starred questions"}><Icon name="star" /></button><details className={`control-menu icon-menu ${activeComposerFilterCount > 0 ? "active" : ""}`}><summary aria-label={`Activity filters${activeComposerFilterCount ? `, ${activeComposerFilterCount} active` : ""}`} title={`${activeComposerFilterCount || "No"} active filters`}><Icon name="filter" />{activeComposerFilterCount > 0 && <i>{activeComposerFilterCount}</i>}</summary><div className="control-popover compact-filter-popover activity-filter-menu"><div className="compact-filter-group review" role="group" aria-label="Review filters">{([['due', 'Due now'], ['needs_review', 'Needs review']] as const).map(([filter, label]) => <button type="button" key={filter} className={composerAttentionFilters.includes(filter) ? "active" : ""} aria-pressed={composerAttentionFilters.includes(filter)} onClick={() => toggleComposerAttentionFilter(filter)}><span>{label}</span><small>{composerAttentionCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div><div className="compact-filter-group result" role="group" aria-label="Result filters">{([['solved', 'Solved'], ['helped', 'Solved with help'], ['failed', 'Failed'], ['todo', 'To do']] as const).map(([filter, label]) => <button type="button" key={filter} className={composerAttentionFilters.includes(filter) ? "active" : ""} aria-pressed={composerAttentionFilters.includes(filter)} onClick={() => toggleComposerAttentionFilter(filter)}><span>{label}</span><small>{composerAttentionCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div><div className="compact-filter-group difficulty" role="group" aria-label="Difficulty filters">{(["easy", "medium", "hard"] as const).map((filter) => <button type="button" key={filter} className={composerLevelFilters.includes(filter) ? "active" : ""} aria-pressed={composerLevelFilters.includes(filter)} onClick={() => toggleComposerLevelFilter(filter)}><span>{filter[0].toUpperCase() + filter.slice(1)}</span><small>{composerLevelCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div></div></details><details className="control-menu sort-menu icon-menu"><summary aria-label={`Sort by ${activeComposerSort.label}, ${composerSortDir === "asc" ? "ascending" : "descending"}`} title={`Sort: ${activeComposerSort.label} · ${composerSortDir === "asc" ? "low to high" : "high to low"}`}><span className={`bank-sort-glyph ${activeComposerSort.icon}`} aria-hidden="true" /><small className="sort-direction-badge" aria-hidden="true">{composerSortDir === "asc" ? "↑" : "↓"}</small></summary><div className="control-popover"><strong>Order by</strong>{COMPOSER_SORT_OPTIONS.map((option) => { const active = composerSortKey === option.key; return <button key={option.key} type="button" className={active ? "active" : ""} onClick={() => toggleComposerSort(option.key)} aria-pressed={active}><span>{option.label}</span><small aria-hidden="true">{active ? composerSortDir === "asc" ? "↑ low to high" : "↓ high to low" : ""}</small></button>; })}</div></details></div></div>
               <label className="bank-search-bar activity-picker-search"><span className="bank-search-icon" aria-hidden="true"><svg viewBox="0 0 20 20" width="16" height="16" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.8"/><path d="M12.8 12.8 17 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg></span><input autoFocus type="search" value={composer.query} onChange={(event) => updateComposerQuery(event.target.value)} placeholder={composer.type === "leetcode" ? "Search titles and topics, or paste a LeetCode URL" : "Search titles and topics, or paste a public URL"} aria-label="Search activity questions" />{composer.query ? <button type="button" className="bank-search-clear" onClick={() => updateComposerQuery("")} aria-label="Clear search">×</button> : <span className="bank-search-clear-spacer" aria-hidden="true" />}<span className="bank-result-count" aria-live="polite">{filteredQuestionEntries.length}</span></label>
@@ -5120,16 +5234,16 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
               {composer.type === "leetcode" && !composer.customUrl.trim() && !composer.customPrompt.trim() && <p>A title-only coding activity is allowed, but the specialist may need you to provide the full prompt later.</p>}
               <div className="custom-activity-actions"><button type="button" onClick={() => setComposer((current) => ({ ...current, customOpen: false, customEditingKey: "" }))}>Cancel</button><button type="button" className="primary-action" disabled={!composer.customTitle.trim() || customUrlInvalid} onClick={stageCustomActivity}>{composer.customEditingKey ? "Save selection" : "Add to selections"}</button></div>
             </section>}
-            {composer.reviewOpen && <section className="selection-review" aria-label="Review selected activities"><header><div><strong>Review selections</strong><small>Remove anything without searching for it again.</small></div><button type="button" onClick={() => setComposer((current) => ({ ...current, selectedActivities: [] }))} disabled={!composer.selectedActivities.length}>Clear all</button></header>{stagedByType.length ? stagedByType.map((group) => <div className="selection-review-group" key={group.type}><h3>{typeLabel(group.type)}</h3>{group.items.map((item) => <article key={item.key}><div><strong>{item.title}</strong><small>{item.minutes} min{item.source === "custom" ? " · Custom" : ""}</small></div>{item.source === "custom" && <button type="button" onClick={() => editStagedActivity(item)} aria-label={`Edit ${item.title}`}>Edit</button>}<button type="button" onClick={() => removeStagedActivity(item.key)} aria-label={`Remove ${item.title}`}>×</button></article>)}</div>) : <p className="no-results">No activities selected yet.</p>}</section>}
+            {composer.reviewOpen && <section className="selection-review" aria-label="Review selected activities"><header><div><strong>Review selections</strong><small>Remove anything without searching for it again.</small></div><button type="button" onClick={() => setComposer((current) => ({ ...current, selectedActivities: [], focusSelected: false }))} disabled={!selectedActivityCount}>Clear all</button></header>{composer.focusSelected && <div className="selection-review-group"><h3>Career focus</h3><article><div><strong>Job applications</strong><small>{Math.max(1, Number(composer.focusMinutes) || 60)} min · Time only</small></div><button type="button" onClick={() => setComposer((current) => ({ ...current, focusSelected: false }))} aria-label="Remove Job applications">×</button></article></div>}{stagedByType.length ? stagedByType.map((group) => <div className="selection-review-group" key={group.type}><h3>{typeLabel(group.type)}</h3>{group.items.map((item) => <article key={item.key}><div><strong>{item.title}</strong><small>{item.minutes} min{item.source === "custom" ? " · Custom" : ""}</small></div>{item.source === "custom" && <button type="button" onClick={() => editStagedActivity(item)} aria-label={`Edit ${item.title}`}>Edit</button>}<button type="button" onClick={() => removeStagedActivity(item.key)} aria-label={`Remove ${item.title}`}>×</button></article>)}</div>) : !composer.focusSelected && <p className="no-results">No activities selected yet.</p>}</section>}
             <footer className="activity-selection-footer">
-              <div className="selection-summary"><strong className="selection-count" key={composer.selectedActivities.length}>{composer.selectedActivities.length} selected</strong><small>{composer.batchDestination === "session" ? `${selectedActivityMinutes} min session countdown` : `${selectedActivityMinutes} total minutes`}</small></div>
+              <div className="selection-summary"><strong className="selection-count" key={selectedActivityCount}>{selectedActivityCount} selected</strong><small>{composer.batchDestination === "session" ? `${selectedActivityMinutes} min session countdown` : `${selectedActivityMinutes} total minutes`}</small></div>
               {!composer.editingId && <div className="activity-destination" role="radiogroup" aria-label="Add selected activities as">
                 <span>Add as</span>
                 <button type="button" role="radio" aria-checked={composer.batchDestination === "standalone"} className={composer.batchDestination === "standalone" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, batchDestination: "standalone" }))}>Standalone</button>
                 <button type="button" role="radio" aria-checked={composer.batchDestination === "session"} className={composer.batchDestination === "session" ? "active" : ""} onClick={() => setComposer((current) => ({ ...current, batchDestination: "session" }))}>One session</button>
               </div>}
-              <button type="button" onClick={() => setComposer((current) => ({ ...current, reviewOpen: !current.reviewOpen }))} disabled={!composer.selectedActivities.length}>{composer.reviewOpen ? "Hide review" : "Review selections"}</button>
-              <button className="primary-action" type="submit" disabled={!canSaveActivity}>{composer.editingId ? "Save changes" : composer.selectedActivities.length ? composer.batchDestination === "session" ? `Add ${composer.selectedActivities.length} as one session` : `Add ${composer.selectedActivities.length} to Today` : "Add to Today"}</button>
+              <button type="button" onClick={() => setComposer((current) => ({ ...current, reviewOpen: !current.reviewOpen }))} disabled={!selectedActivityCount}>{composer.reviewOpen ? "Hide review" : "Review selections"}</button>
+              <button className="primary-action" type="submit" disabled={!canSaveActivity}>{composer.editingId ? "Save changes" : selectedActivityCount ? composer.batchDestination === "session" ? `Add ${selectedActivityCount} as one session` : `Add ${selectedActivityCount} to Today` : "Add to Today"}</button>
             </footer>
           </form>}
           </AnimatedComposerStage>
@@ -5218,12 +5332,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         activityTimer={pipActivity ? draft.timers[pipActivity.id] : undefined}
         session={pipSession}
         sessionTimer={pipSession ? draft.sessionTimers[pipSession.id] : undefined}
-        outcome={pipActivity ? draft.outcomes[pipActivity.id] ?? pipActivity.outcome : undefined}
-        starred={pipActivity ? isStarred(pipActivity.type, pipActivity.questionId) : false}
+        outcome={pipPracticeActivity ? draft.outcomes[pipPracticeActivity.id] ?? pipPracticeActivity.outcome : undefined}
+        starred={pipPracticeActivity ? isStarred(pipPracticeActivity.type, pipPracticeActivity.questionId) : false}
         activityLocked={Boolean(pipSession && draft.sessionTimers[pipSession.id]?.completed)}
         now={now}
         onToggleActivity={toggleTimer}
-        onCompleteActivity={completeTimer}
+        onCompleteActivity={(activityId) => currentFocusBlocks.some((block) => block.id === activityId) ? completeFocusBlock(activityId) : completeTimer(activityId)}
         onToggleSession={toggleSessionTimer}
         onCompleteSession={completeSessionTimer}
         onOutcome={setOutcome}

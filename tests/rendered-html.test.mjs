@@ -212,7 +212,7 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /"Close timer" : "Pop out timer"/);
   assert.match(client, /const sessionOvertime = session \? overtime\(sessionTimer, now, sessionAllocated\) : 0/);
   assert.match(client, /sessionOvertime \? `\+\$\{formatClock\(sessionOvertime\)\}` : formatClock\(sessionLeft\)/);
-  assert.match(client, /disabled=\{activityComplete \|\| !activityStarted \|\| !outcome \|\| activityLocked\}/);
+  assert.match(client, /disabled=\{activityComplete \|\| !activityStarted \|\| \(!focusActivity && !outcome\) \|\| activityLocked\}/);
   assert.match(client, /<span aria-hidden="true">✦<\/span>Petals/);
   assert.match(css, /\.petal-field\.paused \{ opacity: 0; visibility: hidden;/);
   assert.match(css, /\.pip-toggle\.active \{/);
@@ -314,6 +314,10 @@ test("activity composer keeps specialty controls independent and contains every 
   assert.match(client, /COMPOSER_SORT_OPTIONS/);
   assert.match(client, /activity-card-meta/);
   assert.match(client, /function composerQuestionMetadata/);
+  assert.match(client, /className=\{`career-quick-add \$\{composer\.focusSelected \? "selected" : ""\}`\}/);
+  assert.match(client, /Job applications/);
+  assert.match(client, /focusSelected: !current\.focusSelected/);
+  assert.match(client, /selectedActivityCount/);
   assert.match(client, /acceptanceRate\.toFixed\(1\).*% acceptance/);
   assert.match(client, /frequencyScore.*frequencyScale.*frequency/);
   assert.match(css, /\.activity-card-meta > span \{[^}]*text-overflow: ellipsis;/);
@@ -321,5 +325,6 @@ test("activity composer keeps specialty controls independent and contains every 
   assert.match(css, /\.activity-composer-dialog \.bank-results \{[^}]*max-height: min\(280px, 34vh\);/);
   assert.match(css, /\.custom-activity-actions \.primary-action \{[^}]*color: white;/);
   assert.match(css, /\.activity-selection-footer \{[^}]*bottom: 0;/);
+  assert.match(css, /\.career-quick-add\.selected \{[^}]*background: #f2f8df;/);
   assert.match(css, /grid-template-columns: minmax\(110px, 1fr\) auto 160px 160px;/);
 });

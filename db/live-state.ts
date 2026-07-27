@@ -148,15 +148,31 @@ export type ActiveVoiceActivity = ActivityPayload & {
   timer: TimerState;
 };
 
-export type VoiceTimerActivity = ActivityPayload & {
-  type: "leetcode" | "system_design" | "behavioral";
-  title: string;
-  questionId?: string;
-  url?: string;
-  allocatedSeconds: number;
-  timer: TimerState | null;
-  starred: boolean;
-};
+export type VoiceTimerActivity =
+  | (ActivityPayload & {
+      activityClass: "practice";
+      type: "leetcode" | "system_design" | "behavioral";
+      title: string;
+      questionId?: string;
+      url?: string;
+      allocatedSeconds: number;
+      timer: TimerState | null;
+      starred: boolean;
+      requiresOutcome: true;
+      outcome?: "solved" | "solved_after_reviewing_approach" | "failed";
+    })
+  | {
+      id: string;
+      date: string;
+      activityClass: "focus_block";
+      type: "focus_block";
+      focusCategory: string;
+      title: string;
+      allocatedSeconds: number;
+      timer: TimerState | null;
+      starred: false;
+      requiresOutcome: false;
+    };
 
 export type VoiceTimerInstrument = {
   serverNow: number;
@@ -207,7 +223,7 @@ export async function readActiveVoiceActivity(ownerId: string): Promise<ActiveVo
 }
 
 function isVoiceActivityPayload(payload: ActivityPayload | undefined): payload is ActivityPayload & {
-  type: VoiceTimerActivity["type"];
+  type: ActiveVoiceActivity["type"];
   title: string;
   allocatedSeconds: number;
 } {
@@ -237,7 +253,7 @@ export async function readVoiceTimerInstrument(ownerId: string): Promise<VoiceTi
   if (!workbench) {
     return { serverNow: Date.now(), session: null, activity: null, activities: [] };
   }
-  const [sessionRows, activityRows] = await Promise.all([
+  const [sessionRows, activityRows, focusBlockRows] = await Promise.all([
     db.select().from(liveSessions).where(and(
       eq(liveSessions.ownerId, ownerId),
       eq(liveSessions.workbenchId, workbench.id),
@@ -246,16 +262,21 @@ export async function readVoiceTimerInstrument(ownerId: string): Promise<VoiceTi
       eq(extraActivities.ownerId, ownerId),
       eq(extraActivities.workbenchId, workbench.id),
     )),
+    db.select().from(focusBlocks).where(and(
+      eq(focusBlocks.ownerId, ownerId),
+      eq(focusBlocks.workbenchId, workbench.id),
+    )),
   ]);
   const subjectIds = [
     ...sessionRows.map((row) => row.id),
     ...activityRows.map((row) => row.id),
+    ...focusBlockRows.map((row) => row.id),
   ];
   const questionIds = activityRows.flatMap((row) => {
     const questionId = (row.payload as ActivityPayload).questionId;
     return typeof questionId === "string" ? [questionId] : [];
   });
-  const [timerRows, preferenceRows] = await Promise.all([
+  const [timerRows, preferenceRows, outcomeRows] = await Promise.all([
     subjectIds.length
       ? db.select().from(timers).where(and(
           eq(timers.ownerId, ownerId),
@@ -266,6 +287,12 @@ export async function readVoiceTimerInstrument(ownerId: string): Promise<VoiceTi
       ? db.select().from(problemPreferences).where(and(
           eq(problemPreferences.ownerId, ownerId),
           inArray(problemPreferences.questionId, questionIds),
+        ))
+      : Promise.resolve([]),
+    activityRows.length
+      ? db.select().from(outcomes).where(and(
+          eq(outcomes.ownerId, ownerId),
+          inArray(outcomes.activityId, activityRows.map((row) => row.id)),
         ))
       : Promise.resolve([]),
   ]);
@@ -287,6 +314,12 @@ export async function readVoiceTimerInstrument(ownerId: string): Promise<VoiceTi
   );
   const activityById = new Map(
     activityRows.map((row) => [row.id, row.payload as ActivityPayload]),
+  );
+  const focusBlockById = new Map(
+    focusBlockRows.map((row) => [row.id, row]),
+  );
+  const outcomeByActivityId = new Map(
+    outcomeRows.map((row) => [row.activityId, row.outcome]),
   );
 
   const runningSessionTimer = timerRows
@@ -324,6 +357,23 @@ export async function readVoiceTimerInstrument(ownerId: string): Promise<VoiceTi
   );
   const activities = activityIds.flatMap((activityId) => {
     const payload = activityById.get(activityId);
+    const focusBlock = focusBlockById.get(activityId);
+    if (focusBlock) {
+      const timer = activityTimerById.get(activityId) ?? null;
+      if (timer?.completed) return [];
+      return [{
+        id: focusBlock.id,
+        date: focusBlock.date,
+        activityClass: "focus_block" as const,
+        type: "focus_block" as const,
+        focusCategory: focusBlock.category,
+        title: focusBlock.title,
+        allocatedSeconds: focusBlock.plannedSeconds,
+        timer,
+        starred: false as const,
+        requiresOutcome: false as const,
+      } satisfies VoiceTimerActivity];
+    }
     if (!isVoiceActivityPayload(payload)) return [];
     const timer = activityTimerById.get(activityId) ?? null;
     if (timer?.completed) return [];
@@ -331,6 +381,7 @@ export async function readVoiceTimerInstrument(ownerId: string): Promise<VoiceTi
     const questionId = typeof payload.questionId === "string" ? payload.questionId : undefined;
     return [{
       ...payload,
+      activityClass: "practice" as const,
       type: specialty,
       title: payload.title,
       questionId,
@@ -338,6 +389,10 @@ export async function readVoiceTimerInstrument(ownerId: string): Promise<VoiceTi
       allocatedSeconds: payload.allocatedSeconds,
       timer,
       starred: Boolean(questionId && starredKeys.has(`${specialty}:${questionId}`)),
+      requiresOutcome: true as const,
+      ...(outcomeByActivityId.get(activityId) ? {
+        outcome: outcomeByActivityId.get(activityId) as "solved" | "solved_after_reviewing_approach" | "failed",
+      } : {}),
     } satisfies VoiceTimerActivity];
   });
   const runningActivity = activities.find((candidate) => candidate.timer?.runningSince) ?? null;
@@ -642,10 +697,17 @@ export async function applyTimerAction(
       .where(and(eq(liveSessions.ownerId, ownerId), eq(liveSessions.id, subjectId)));
     const storedSession = sessionRows[0]?.payload as SessionPayload | undefined;
     const activityIds = storedSession?.activityIds ?? [];
+    const focusBlockIds = new Set(activityIds.length
+      ? (await db.select({ id: focusBlocks.id }).from(focusBlocks).where(and(
+          eq(focusBlocks.ownerId, ownerId),
+          inArray(focusBlocks.id, activityIds),
+        ))).map((row) => row.id)
+      : []);
     const missingResults: string[] = [];
     for (const activityId of activityIds) {
       const child = await loadTimer(db, ownerId, activityId, "activity");
       if (!child?.startedAt) continue;
+      if (focusBlockIds.has(activityId)) continue;
       const voiceGuard = await prepareVoiceCapturesForFinish(ownerId, activityId, nowMs);
       const voiceConflict = voiceFinishGuardMessage(voiceGuard);
       if (voiceConflict) throw new TimerStateConflictError(voiceConflict);
@@ -661,7 +723,9 @@ export async function applyTimerAction(
     for (const activityId of activityIds) {
       const child = await loadTimer(db, ownerId, activityId, "activity");
       if (child?.startedAt && !child.completed) {
-        await applyTimerAction(ownerId, activityId, "activity", "finish", nowMs);
+        await applyTimerAction(ownerId, activityId, "activity", "finish", nowMs, {
+          requiresOutcome: !focusBlockIds.has(activityId),
+        });
       }
     }
   }
@@ -763,6 +827,7 @@ export async function applyFocusTimerAction(
   subjectId: string,
   action: TimerAction,
   nowMs: number,
+  sessionId?: string | null,
 ) {
   const db = getDb();
   const rows = await db.select({ id: focusBlocks.id }).from(focusBlocks).where(and(
@@ -770,7 +835,10 @@ export async function applyFocusTimerAction(
     eq(focusBlocks.id, subjectId),
   ));
   if (!rows[0]) throw new TimerStateConflictError("This career focus block no longer exists.");
-  return applyTimerAction(ownerId, subjectId, "activity", action, nowMs, { requiresOutcome: false });
+  return applyTimerAction(ownerId, subjectId, "activity", action, nowMs, {
+    requiresOutcome: false,
+    sessionId,
+  });
 }
 
 // Voice locks its destination when recording begins. This check deliberately

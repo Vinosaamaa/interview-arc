@@ -13,8 +13,11 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
 - Allow another configurable session; use 6/1/1 as the starting recipe.
 - Let an unstarted website-created session be edited. Lock its recipe once its session timer, activity timing, result, or publication work begins.
 - Allow an extra activity in any category with its own stopwatch and optional planning estimate.
-- Offer Job applications as a separate Career Focus quick action, not as a
-  fourth practice specialty. It shares the one-active-stopwatch rule but has no
+- Offer Job applications only inside the **Activities** composer as a compact
+  Career Focus row, not as a fourth practice specialty and not inside the Full
+  session recipe. The existing Standalone / One session destination applies,
+  so a focus block may be scheduled alone or share a session countdown with
+  practice activities. It shares the one-active-stopwatch rule but has no
   outcome, specialist, review, solution, Past card, Problem Bank row, or
   publication lifecycle. Follow `../contracts/career-work.md`.
 - On Today, use the masthead tally for yesterday's completed activities, recorded time, and sessions. Read owner-scoped D1 state for yesterday so unpublished work is not omitted; fall back to the versioned journal offline.

@@ -125,7 +125,7 @@ export async function POST(request: Request) {
           if (mutation.kind !== "activity") {
             return Response.json({ error: "Career focus blocks use activity stopwatches." }, { status: 400 });
           }
-          await applyFocusTimerAction(ownerId, mutation.subjectId, mutation.action, now);
+          await applyFocusTimerAction(ownerId, mutation.subjectId, mutation.action, now, mutation.sessionId);
         } else {
           await applyTimerAction(ownerId, mutation.subjectId, mutation.kind, mutation.action, now, {
             sessionId: mutation.sessionId,
