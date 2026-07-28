@@ -555,7 +555,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   border-radius: 12px;
   background: #faf8fd;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) 92px 62px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   color: #26332f;
@@ -568,10 +568,65 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .career-quick-add > span:nth-child(2) { min-width: 0; display: grid; gap: 3px; text-align: left; }
 .career-quick-add > span:nth-child(2) strong { font-size: .85rem; }
 .career-quick-add > span:nth-child(2) small { overflow: hidden; color: #718078; font-size: .7rem; text-overflow: ellipsis; white-space: nowrap; }
-.career-quick-add label { display: grid; gap: 3px; color: #718078; font-size: .62rem; font-weight: 760; text-transform: uppercase; }
-.career-quick-add input { width: 92px; min-height: 36px; padding: 7px 9px; border: 1px solid #b9c5bd; border-radius: 8px; background: white; color: var(--ink); font: inherit; }
-.career-quick-add > i { min-height: 32px; padding: 0 10px; border: 1px solid #b8c5be; border-radius: 999px; display: grid; place-items: center; color: #5f6d66; font-size: .68rem; font-style: normal; font-weight: 780; }
-.career-quick-add.selected > i { border-color: #81954b; background: #e5f3b6; color: #536b18; }
+.career-quick-add-controls {
+  display: grid;
+  grid-template-columns: 104px 78px;
+  align-items: center;
+  gap: 10px;
+}
+.career-duration-control {
+  min-width: 0;
+  width: 104px;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid #b9c5bd;
+  border-radius: 9px;
+  background: white;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #718078;
+  cursor: text;
+}
+.career-duration-control:focus-within {
+  border-color: #7c9650;
+  box-shadow: 0 0 0 3px rgba(124,150,80,.16);
+}
+.career-duration-control input {
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 760;
+}
+.career-duration-control > span {
+  flex: 0 0 auto;
+  color: #718078;
+  font-size: .68rem;
+  font-weight: 720;
+  text-transform: lowercase;
+}
+.career-quick-add-controls > i {
+  width: 78px;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid #b8c5be;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: #5f6d66;
+  font-size: .68rem;
+  font-style: normal;
+  font-weight: 780;
+  white-space: nowrap;
+}
+.career-quick-add.selected .career-quick-add-controls > i { border-color: #81954b; background: #e5f3b6; color: #536b18; }
 .multi-activity-composer .type-selector button { position: relative; }
 .multi-activity-composer .type-selector button small {
   position: absolute;
@@ -1031,9 +1086,8 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .multi-activity-composer.expanded-details .activity-selection-footer {
     margin-inline: -20px;
   }
-  .career-quick-add { grid-template-columns: auto minmax(0, 1fr) 82px; }
-  .career-quick-add > i { display: none; }
-  .career-quick-add input { width: 82px; }
+  .career-quick-add { grid-template-columns: auto minmax(0, 1fr); row-gap: 8px; }
+  .career-quick-add-controls { grid-column: 2; justify-self: start; }
   .activity-selection-footer .selection-summary { grid-column: 1; grid-row: 1; }
   .activity-selection-footer .activity-destination { grid-column: 1 / -1; grid-row: 2; }
   .activity-selection-footer > button:not(.primary-action) { grid-column: 1; grid-row: 3; }
@@ -1044,6 +1098,12 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 }
 
 @media (max-width: 520px) {
+  .career-quick-add-controls {
+    width: 100%;
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(96px, 1fr) 78px;
+  }
+  .career-duration-control { width: 100%; }
   .topbar > div:first-child strong { font-size: .82rem; }
   .topbar .music-dock { max-width: 86px; }
   .today-masthead { grid-template-columns: 70px 1fr; }

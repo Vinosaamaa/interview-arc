@@ -317,6 +317,10 @@ test("activity composer keeps specialty controls independent and contains every 
   assert.match(client, /className=\{`career-quick-add \$\{composer\.focusSelected \? "selected" : ""\}`\}/);
   assert.match(client, /Job applications/);
   assert.match(client, /focusSelected: !current\.focusSelected/);
+  assert.match(client, /className="career-quick-add-controls"/);
+  assert.match(client, /className="career-duration-control"/);
+  assert.match(client, /aria-label="Planned minutes"/);
+  assert.match(client, /<span aria-hidden="true">min<\/span>/);
   assert.match(client, /selectedActivityCount/);
   assert.match(client, /acceptanceRate\.toFixed\(1\).*% acceptance/);
   assert.match(client, /frequencyScore.*frequencyScale.*frequency/);
@@ -326,5 +330,8 @@ test("activity composer keeps specialty controls independent and contains every 
   assert.match(css, /\.custom-activity-actions \.primary-action \{[^}]*color: white;/);
   assert.match(css, /\.activity-selection-footer \{[^}]*bottom: 0;/);
   assert.match(css, /\.career-quick-add\.selected \{[^}]*background: #f2f8df;/);
+  assert.match(css, /\.career-quick-add-controls \{[^}]*grid-template-columns: 104px 78px;/);
+  assert.match(css, /\.career-quick-add-controls > i \{[^}]*width: 78px;[^}]*height: 40px;[^}]*overflow: hidden;/);
+  assert.doesNotMatch(css, /\.career-quick-add > i \{[^}]*display: none;/);
   assert.match(css, /grid-template-columns: minmax\(110px, 1fr\) auto 160px 160px;/);
 });

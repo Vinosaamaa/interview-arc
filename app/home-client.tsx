@@ -5202,18 +5202,24 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             >
               <span className="career-focus-mark" aria-hidden="true">J</span>
               <span><strong>Job applications</strong><small>Career focus · time only · no result or publication</small></span>
-              <label onClick={(event) => event.stopPropagation()}>
-                <span>Minutes</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="720"
-                  value={composer.focusMinutes}
-                  onChange={(event) => setComposer((current) => ({ ...current, focusMinutes: event.target.value, focusSelected: true }))}
-                  aria-label="Job application focus minutes"
-                />
-              </label>
-              <i aria-hidden="true">{composer.focusSelected ? "Selected" : "Add"}</i>
+              <span className="career-quick-add-controls">
+                <label
+                  className="career-duration-control"
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  <input
+                    type="number"
+                    min="1"
+                    max="720"
+                    value={composer.focusMinutes}
+                    onChange={(event) => setComposer((current) => ({ ...current, focusMinutes: event.target.value, focusSelected: true }))}
+                    aria-label="Planned minutes"
+                  />
+                  <span aria-hidden="true">min</span>
+                </label>
+                <i aria-hidden="true">{composer.focusSelected ? "Selected" : "Add"}</i>
+              </span>
             </div>
             <div className="activity-picker-toolbar">
               <div className="activity-picker-heading"><span>Search this specialty, then keep selecting across searches and tabs.</span>{hasComposerFilters && <button type="button" className="filter-clear" onClick={clearComposerFilters}>Clear</button>}<div className="bank-icon-tools activity-picker-tools"><button type="button" className={`collection-toggle icon-tool ${composerStarFilter ? "active" : ""}`} onClick={toggleComposerStarFilter} aria-pressed={composerStarFilter} aria-label={composerStarFilter ? "Show all questions" : "Show starred questions"} title={composerStarFilter ? "Showing starred questions" : "Show starred questions"}><Icon name="star" /></button><details className={`control-menu icon-menu ${activeComposerFilterCount > 0 ? "active" : ""}`}><summary aria-label={`Activity filters${activeComposerFilterCount ? `, ${activeComposerFilterCount} active` : ""}`} title={`${activeComposerFilterCount || "No"} active filters`}><Icon name="filter" />{activeComposerFilterCount > 0 && <i>{activeComposerFilterCount}</i>}</summary><div className="control-popover compact-filter-popover activity-filter-menu"><div className="compact-filter-group review" role="group" aria-label="Review filters">{([['due', 'Due now'], ['needs_review', 'Needs review']] as const).map(([filter, label]) => <button type="button" key={filter} className={composerAttentionFilters.includes(filter) ? "active" : ""} aria-pressed={composerAttentionFilters.includes(filter)} onClick={() => toggleComposerAttentionFilter(filter)}><span>{label}</span><small>{composerAttentionCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div><div className="compact-filter-group result" role="group" aria-label="Result filters">{([['solved', 'Solved'], ['helped', 'Solved with help'], ['failed', 'Failed'], ['todo', 'To do']] as const).map(([filter, label]) => <button type="button" key={filter} className={composerAttentionFilters.includes(filter) ? "active" : ""} aria-pressed={composerAttentionFilters.includes(filter)} onClick={() => toggleComposerAttentionFilter(filter)}><span>{label}</span><small>{composerAttentionCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div><div className="compact-filter-group difficulty" role="group" aria-label="Difficulty filters">{(["easy", "medium", "hard"] as const).map((filter) => <button type="button" key={filter} className={composerLevelFilters.includes(filter) ? "active" : ""} aria-pressed={composerLevelFilters.includes(filter)} onClick={() => toggleComposerLevelFilter(filter)}><span>{filter[0].toUpperCase() + filter.slice(1)}</span><small>{composerLevelCount(filter)}</small><i aria-hidden="true">✓</i></button>)}</div></div></details><details className="control-menu sort-menu icon-menu"><summary aria-label={`Sort by ${activeComposerSort.label}, ${composerSortDir === "asc" ? "ascending" : "descending"}`} title={`Sort: ${activeComposerSort.label} · ${composerSortDir === "asc" ? "low to high" : "high to low"}`}><span className={`bank-sort-glyph ${activeComposerSort.icon}`} aria-hidden="true" /><small className="sort-direction-badge" aria-hidden="true">{composerSortDir === "asc" ? "↑" : "↓"}</small></summary><div className="control-popover"><strong>Order by</strong>{COMPOSER_SORT_OPTIONS.map((option) => { const active = composerSortKey === option.key; return <button key={option.key} type="button" className={active ? "active" : ""} onClick={() => toggleComposerSort(option.key)} aria-pressed={active}><span>{option.label}</span><small aria-hidden="true">{active ? composerSortDir === "asc" ? "↑ low to high" : "↓ high to low" : ""}</small></button>; })}</div></details></div></div>
