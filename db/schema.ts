@@ -565,6 +565,28 @@ export const integrationTokens = sqliteTable("integration_tokens", {
   revokedAt: integer("revoked_at"),
 });
 
+// Native Today planning mutations are identity-idempotent. The request hash
+// rejects a changed retry while the stored response lets an exact retry return
+// the original authoritative result without creating duplicate work.
+export const todayPlanningMutations = sqliteTable(
+  "today_planning_mutations",
+  {
+    ownerId,
+    mutationId: text("mutation_id").notNull(),
+    workbenchId: text("workbench_id").notNull(),
+    requestHash: text("request_hash").notNull(),
+    response: text("response", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.mutationId] }),
+    index("today_planning_mutations_owner_workbench_idx").on(
+      table.ownerId,
+      table.workbenchId,
+    ),
+  ],
+);
+
 // Website-created activities (extras and full-session problems). Stored as a
 // JSON payload matching the client draft shape so the schema stays stable while
 // the UI model evolves; the columns that need indexing are lifted out.
