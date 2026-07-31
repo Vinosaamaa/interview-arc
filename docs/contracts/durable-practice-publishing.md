@@ -161,6 +161,16 @@ Every complete bundle contains:
   an attempt transcript. Past retains the activity transcript, feedback,
   timing, notes, result, and recording links.
 
+For a CLI-native Java LeetCode activity, the specialist may maintain one local
+working file at
+`practice/leetcode/solutions/<four-digit-number>-<canonical-title-slug>.java`.
+It must not create per-problem directories, separate prompt Markdown files, or
+local/Git snapshots of failed intermediate submissions. The file becomes a
+publishable Git solution only after an authoritative LeetCode `Accepted`
+verdict. The specialist does not commit it; the coordinator includes the exact
+accepted source with the activity publication. An unfinished or unaccepted
+working file is not a publication artifact.
+
 For an owner-private LeetCode question created from a public problem URL, the
 LeetCode specialist also performs a metadata preflight during the first
 complete finalization. It supplies `questionMetadata` with every currently
