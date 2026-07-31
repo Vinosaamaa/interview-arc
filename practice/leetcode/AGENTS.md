@@ -209,6 +209,82 @@ A complete review may cover:
 
 Clearly distinguish user work from generated coaching material.
 
+## CLI Java Editing And Authoritative Submission
+
+When the user practices LeetCode from Codex CLI, use one evolving Java file
+instead of creating a per-problem directory, a separate `problem.md`, or a
+series of local attempt snapshots.
+
+### Prepare The Problem
+
+1. Resolve the focused activity and verify the official public LeetCode problem
+   number, title, and URL from the bank, the exact user-supplied public URL, or
+   another permitted public source. Never invent any of them.
+2. Present an original concise restatement, constraints, examples, and the Java
+   method signature in the visible specialist conversation. Do not copy the
+   protected official statement.
+3. Create or resume exactly one working source file at:
+
+   `practice/leetcode/solutions/<four-digit-number>-<canonical-title-slug>.java`
+
+   Zero-pad the official number to four digits. For example:
+
+   - `0001-two-sum.java`
+   - `0123-best-time-to-buy-and-sell-stock-iii.java`
+   - `0200-number-of-islands.java`
+
+4. Put the verified title, public URL, original restatement, constraints, and
+   examples in a header comment, followed by the required method signature in
+   a non-public `class Solution`. A non-public class keeps the descriptive file
+   name valid Java.
+5. Every time the file is prepared or resumed, give the user the complete
+   absolute editor command:
+
+   `micro -syntax java "<absolute-path-to-the-file>"`
+
+   The user opens `micro`. Do not assume that Codex can safely create or target
+   a Warp pane, and do not replace the running Codex process with the editor.
+
+### Test And Submit
+
+- Re-read the same file whenever the user asks to test or submit. All edits
+  replace the evolving contents of that file; do not create attempt-numbered,
+  dated, backup, or failed-submission source files.
+- For local testing, compile the current source and exercise the provided
+  examples, boundary cases, targeted adversarial cases, and a brute-force
+  differential oracle when practical. Temporary generated harnesses must stay
+  outside the durable solution directory.
+- Report **Locally verified** separately from the authoritative platform
+  verdict. Local compilation and generated tests never imply LeetCode
+  acceptance.
+- Submit only after the user explicitly asks. Use the user-authorized
+  persistent Chromium profile, open only the exact problem, submit through the
+  normal LeetCode UI, and observe only that submission's verdict and any
+  failing input LeetCode returns. Never inspect or export cookies, crawl the
+  account, open submission history, access editorials or official solutions,
+  or call authenticated/private endpoints directly.
+- Preserve the Java file as a durable local/Git solution only after LeetCode
+  returns **Accepted**. If the activity ends without a correct solution, remove
+  the unfinished solution artifact rather than publishing it.
+- The specialist may create and update the local working file, but it never
+  switches branches, commits, opens the publication PR, or deploys. The
+  coordinator remains the only task that publishes the accepted source file to
+  Git/GitHub.
+
+### Transcript And Code Boundaries
+
+Save meaningful problem discussion, the user's reasoning, hints, feedback,
+relevant test conclusions, the authoritative submission verdict, and the final
+reflection as activity exchanges. Do not save terminal-control chatter, the
+`micro` command, browser-automation mechanics, ordinary file saves, or
+irrelevant raw compiler output as practice dialogue.
+
+The structured Code Attempt contract remains the source of exact user code
+evidence when the user explicitly crosses an attempt boundary. This CLI policy
+forbids multiple *local or Git source files*; it does not rewrite or conflate
+the D1 activity evidence required by the durable-practice contract. Generated
+reference implementations are never user Code Attempts.
+
 ## Voice intent and exact code boundaries
 
 For an `interview-arc-voice:v2` envelope, classify and save the same model turn
