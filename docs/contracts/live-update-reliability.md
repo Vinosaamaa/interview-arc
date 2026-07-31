@@ -17,6 +17,11 @@ a replacement database.
 - Clients discard invalid or stale revisions and then read the appropriate REST
   projection. No transcript, token, note, code, or audio content travels in a
   push envelope.
+- Website clients reconcile `timer` scope through the compact timer projection.
+  Every other scope reconciles the full authoritative practice projection so
+  Voice- or Companion-originated session, activity, focus-block, workbench, and
+  publication changes cannot leave an already-open Today view structurally
+  stale.
 - Event publication is best effort after the authoritative mutation commits.
   A hub outage must never turn a successful D1 mutation into a client-visible
   failure; bounded snapshot recovery closes that gap.
