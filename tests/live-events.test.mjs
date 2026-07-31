@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   boundedFallbackDelay,
+  liveUpdateReconciliationMode,
   parseLiveUpdate,
 } from "../app/live-event-policy.ts";
 
@@ -30,6 +31,23 @@ test("fallback refresh backs off and remains bounded", () => {
   assert.equal(boundedFallbackDelay(9, 1), 138_000);
 });
 
+test("structural practice events require full-state reconciliation", () => {
+  assert.equal(liveUpdateReconciliationMode({
+    type: "practice_changed",
+    revision: 13,
+    scope: "timer",
+    occurredAt: 1_721_000_000_000,
+  }), "timers");
+  for (const scope of ["practice", "publication", "voice_capture", "voice_intent"]) {
+    assert.equal(liveUpdateReconciliationMode({
+      type: "practice_changed",
+      revision: 14,
+      scope,
+      occurredAt: 1_721_000_000_001,
+    }), "practice");
+  }
+});
+
 test("all live clients use server push instead of recurring one-second HTTP reads", async () => {
   const [liveSync, homeClient, companion, workerConfig, mcpConfig] = await Promise.all([
     readFile(new URL("../app/live-sync.ts", import.meta.url), "utf8"),
@@ -40,6 +58,8 @@ test("all live clients use server push instead of recurring one-second HTTP read
   ]);
 
   assert.match(liveSync, /subscribeToLiveUpdates/);
+  assert.match(liveSync, /reconcilePracticeState/);
+  assert.match(liveSync, /onFallback:\s*reconcilePracticeState/);
   assert.doesNotMatch(liveSync, /setInterval\(\(\) => void reconcileTimers\(\), 1000\)/);
   assert.doesNotMatch(homeClient, /void reconcileTimers\(\);\s*\}, 1000\)/);
   assert.match(companion, /new WebSocket/);

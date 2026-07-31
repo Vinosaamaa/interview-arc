@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mutationFailureDisposition } from "./mutation-queue";
 import { applyTimerSync, type TimerSyncState } from "./timer-reconciliation";
-import { subscribeToLiveUpdates } from "./live-event-policy";
+import { liveUpdateReconciliationMode, subscribeToLiveUpdates } from "./live-event-policy";
 import {
   EMPTY_DRAFT,
   type ExtraActivity,
@@ -275,6 +275,7 @@ export function useLiveState(date: string): LiveStateController {
   const flushingRef = useRef(false);
   const reconcilingRef = useRef(false);
   const lastTimerSyncServerNowRef = useRef(0);
+  const lastPracticeSyncServerNowRef = useRef(0);
 
   const persistQueue = useCallback(() => {
     try {
@@ -373,6 +374,29 @@ export function useLiveState(date: string): LiveStateController {
     }
   }, []);
 
+  const reconcilePracticeState = useCallback(async () => {
+    if (reconcilingRef.current || flushingRef.current || queueRef.current.length > 0) return;
+    reconcilingRef.current = true;
+    try {
+      const response = await fetch(`/api/state?date=${encodeURIComponent(date)}`, { cache: "no-store" });
+      if (!response.ok) return;
+      const state = (await response.json()) as ServerLiveState;
+
+      // Do not overwrite a browser mutation that began while this request was
+      // in flight. Its mutation response will carry the authoritative state.
+      if (flushingRef.current || queueRef.current.length > 0) return;
+      if (state.serverNow < lastPracticeSyncServerNowRef.current) return;
+      lastPracticeSyncServerNowRef.current = state.serverNow;
+      offsetRef.current = state.serverNow - Date.now();
+      setDraft(() => serverToDraft(state, offsetRef.current, date));
+      setSynced(true);
+    } catch {
+      // A later push event or bounded fallback read will converge on D1.
+    } finally {
+      reconcilingRef.current = false;
+    }
+  }, [date]);
+
   // Hydrate from localStorage immediately, then reconcile with the server.
   // The local paint must not run after the server merge: a fast /api/state
   // response can land before rAF, and overwriting with the stale local draft
@@ -453,19 +477,27 @@ export function useLiveState(date: string): LiveStateController {
     };
   }, [flush]);
 
-  // Voice and the Chrome companion mutate the same D1 state. The owner-scoped
-  // WebSocket wakes this client after committed mutations. Only a bounded,
-  // low-frequency fallback read runs while push is unavailable.
+  // Voice and the Chrome companion mutate the same D1 state. Timer events can
+  // use the compact timer endpoint; every other committed event reconciles the
+  // full practice structure so session/activity creates and deletes appear in
+  // an already-open website. Only a bounded, low-frequency fallback read runs
+  // while push is unavailable.
   useEffect(() => {
     if (!hydrated) return;
     void reconcileTimers();
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     return subscribeToLiveUpdates({
       url: `${protocol}//${window.location.host}/api/live-events`,
-      onUpdate: () => void reconcileTimers(),
-      onFallback: reconcileTimers,
+      onUpdate: (update) => {
+        if (liveUpdateReconciliationMode(update) === "timers") {
+          void reconcileTimers();
+        } else {
+          void reconcilePracticeState();
+        }
+      },
+      onFallback: reconcilePracticeState,
     });
-  }, [hydrated, reconcileTimers]);
+  }, [hydrated, reconcilePracticeState, reconcileTimers]);
 
   // Drive the display. The dashboard owns auto-finish because each session can
   // have a different allocation.

@@ -5,6 +5,12 @@ export type LiveUpdate = {
   occurredAt: number;
 };
 
+export type LiveUpdateReconciliation = "timers" | "practice";
+
+export function liveUpdateReconciliationMode(update: LiveUpdate): LiveUpdateReconciliation {
+  return update.scope === "timer" ? "timers" : "practice";
+}
+
 export function parseLiveUpdate(value: string): LiveUpdate | null {
   try {
     const parsed = JSON.parse(value) as Partial<LiveUpdate>;
