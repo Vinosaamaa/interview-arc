@@ -8,7 +8,11 @@ import {
   applyTimerAction,
   activityTimerWasRunningAt,
   readActiveVoiceActivity,
+  readLiveState,
   readVoiceTimerInstrument,
+  removeExtraActivity,
+  removeFocusBlock,
+  removeLiveSession,
   setActivityNote,
   setOutcome,
   setPublicationStatus,
@@ -63,6 +67,18 @@ import {
   typedExchangeReceipt,
   voiceDecisionReceipt,
 } from "../db/practice-exchange-policy";
+import {
+  applyPlanningSelection,
+  readPlanningMutation,
+  rememberPlanningMutation,
+  TodayPlanningConflictError,
+} from "../db/today-planning";
+import {
+  filterPlanningCatalog,
+  planningRequestFingerprint,
+  type PlanningSelection,
+  type PlanningSpecialty,
+} from "../db/today-planning-policy";
 
 interface Env {
   DB: D1Database;
@@ -316,6 +332,388 @@ async function voiceTimerMutation(ownerId: string, request: Request, env: Env) {
   } catch (error) {
     if (error instanceof TimerStateConflictError) {
       return json(request, { error: error.message }, { status: 409 });
+    }
+    throw error;
+  }
+}
+
+const planningSpecialties = ["leetcode", "system_design", "behavioral"] as const;
+
+function planningBankKey(specialty: PlanningSpecialty) {
+  return specialty === "system_design" ? "systemDesign" : specialty;
+}
+
+function mergePlanningQuestions(
+  specialty: PlanningSpecialty,
+  canonical: Awaited<ReturnType<typeof loadContentIndex>>["questionBanks"]["leetcode"],
+  personalRows: unknown[],
+) {
+  const personal = personalRows
+    .filter((row): row is Record<string, unknown> => (
+      Boolean(row)
+      && typeof row === "object"
+      && (row as { specialty?: unknown }).specialty === specialty
+      && typeof (row as { questionId?: unknown }).questionId === "string"
+    ))
+    .map((row) => ({
+      id: String(row.questionId),
+      title: String(row.title ?? row.questionId),
+      prompt: typeof row.prompt === "string" ? row.prompt : undefined,
+      url: typeof row.url === "string" ? row.url : undefined,
+      difficulty: ["easy", "medium", "hard"].includes(String(row.difficulty))
+        ? row.difficulty as "easy" | "medium" | "hard"
+        : undefined,
+      acceptanceRate: typeof row.acceptanceRate === "number" ? row.acceptanceRate : undefined,
+      source: typeof row.source === "string" ? row.source : "personal",
+      companyTags: Array.isArray(row.companyTags) ? row.companyTags.map(String) : [],
+      companySignals: Array.isArray(row.companySignals) ? row.companySignals as never[] : [],
+      topics: Array.isArray(row.topics) ? row.topics.map(String) : [],
+      tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
+      priority: typeof row.priority === "number" ? row.priority : 0,
+      targetMinutes: typeof row.targetMinutes === "number"
+        ? row.targetMinutes
+        : specialty === "leetcode" ? 40 : 60,
+      active: row.active !== false,
+    }));
+  const personalById = new Map(personal.map((question) => [question.id, question]));
+  return [
+    ...personal.filter((question) => !canonical.some((item) => item.id === question.id)),
+    ...canonical.map((question) => ({
+      ...question,
+      ...(personalById.get(question.id) ?? {}),
+      topics: [...new Set([
+        ...question.topics,
+        ...(personalById.get(question.id)?.topics ?? []),
+      ])],
+      tags: [...new Set([
+        ...(question.tags ?? []),
+        ...(personalById.get(question.id)?.tags ?? []),
+      ])],
+    })),
+  ];
+}
+
+async function planningData(ownerId: string, request: Request) {
+  const url = new URL(request.url);
+  const specialtyValue = url.searchParams.get("specialty") ?? "leetcode";
+  if (!planningSpecialties.includes(specialtyValue as PlanningSpecialty)) {
+    return json(request, { error: "Invalid planning specialty." }, { status: 400 });
+  }
+  const specialty = specialtyValue as PlanningSpecialty;
+  const date = dateInPracticeTimeZone();
+  const [content, state] = await Promise.all([
+    loadContentIndex(),
+    readLiveState(ownerId, date),
+  ]);
+  const canonical = content.questionBanks[planningBankKey(specialty)];
+  const questions = mergePlanningQuestions(
+    specialty,
+    canonical,
+    state.personalQuestions,
+  );
+  const starredQuestionIds = new Set(
+    state.problemPreferences.flatMap((candidate) => {
+      const row = candidate as {
+        specialty?: unknown;
+        questionId?: unknown;
+        starred?: unknown;
+      };
+      return row.specialty === specialty
+        && typeof row.questionId === "string"
+        && row.starred === true
+        ? [row.questionId]
+        : [];
+    }),
+  );
+  const blockedQuestionIds = new Set(
+    state.extraActivities.flatMap((candidate) => {
+      const row = candidate as { questionId?: unknown };
+      return typeof row.questionId === "string" ? [row.questionId] : [];
+    }),
+  );
+  const recencyByQuestionId = new Map<string, number>();
+  for (const candidate of state.historyActivities) {
+    const row = candidate as { id?: unknown; questionId?: unknown };
+    if (typeof row.id !== "string" || typeof row.questionId !== "string") continue;
+    const completedAt = state.timers[row.id]?.completedAt;
+    if (completedAt && completedAt > (recencyByQuestionId.get(row.questionId) ?? 0)) {
+      recencyByQuestionId.set(row.questionId, completedAt);
+    }
+  }
+  const levels = new Set(
+    (url.searchParams.get("difficulty") ?? "")
+      .split(",")
+      .filter((value): value is "easy" | "medium" | "hard" => (
+        ["easy", "medium", "hard"].includes(value)
+      )),
+  );
+  const catalog = filterPlanningCatalog(questions, {
+    search: url.searchParams.get("search") ?? "",
+    starredQuestionIds,
+    starredOnly: url.searchParams.get("starred") === "true",
+    levels,
+    sort: ["frequency", "recent", "acceptance"].includes(url.searchParams.get("sort") ?? "")
+      ? url.searchParams.get("sort") as "frequency" | "recent" | "acceptance"
+      : "frequency",
+    direction: url.searchParams.get("direction") === "asc" ? "asc" : "desc",
+    page: Number(url.searchParams.get("page") ?? 1),
+    pageSize: Number(url.searchParams.get("pageSize") ?? 30),
+    blockedQuestionIds,
+    recencyByQuestionId,
+  });
+  return json(request, {
+    protocolVersion: 1,
+    date,
+    workbench: state.workbench,
+    summary: {
+      sessionCount: state.sessions.length,
+      activityCount: state.extraActivities.length,
+      focusBlockCount: state.focusBlocks.length,
+      plannedSeconds: [
+        ...state.sessions.map((candidate) => Number((candidate as { allocatedSeconds?: unknown }).allocatedSeconds ?? 0)),
+        ...state.extraActivities
+          .filter((candidate) => !(candidate as { sessionId?: unknown }).sessionId)
+          .map((candidate) => Number((candidate as { allocatedSeconds?: unknown }).allocatedSeconds ?? 0)),
+        ...state.focusBlocks
+          .filter((candidate) => !state.sessions.some((session) => (
+            Array.isArray((session as { activityIds?: unknown }).activityIds)
+            && ((session as { activityIds: unknown[] }).activityIds).includes(
+              (candidate as { id?: unknown }).id,
+            )
+          )))
+          .map((candidate) => Number((candidate as { plannedSeconds?: unknown }).plannedSeconds ?? 0)),
+      ].reduce((total, seconds) => total + seconds, 0),
+    },
+    current: {
+      sessions: state.sessions,
+      activities: state.extraActivities,
+      focusBlocks: state.focusBlocks,
+      timers: state.timers,
+      sessionTimers: state.sessionTimers,
+    },
+    catalog: { specialty, ...catalog },
+  });
+}
+
+const planningSelectionSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("practice"),
+    specialty: z.enum(planningSpecialties),
+    questionId: z.string().min(1).optional(),
+    title: z.string().trim().min(1).max(500),
+    url: z.string().url().max(2_000).optional(),
+    prompt: z.string().max(20_000).optional(),
+    minutes: z.number().int().min(1).max(720),
+    topics: z.array(z.string().min(1).max(120)).max(50).optional(),
+  }),
+  z.object({
+    kind: z.literal("focus"),
+    focusCategory: z.literal("job_applications"),
+    title: z.string().trim().min(1).max(500),
+    minutes: z.number().int().min(1).max(720),
+    note: z.string().max(20_000).optional(),
+  }),
+]);
+
+const planningMutationSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("add_selection"),
+    mutationId: z.string().min(1).max(120),
+    workbenchId: z.string().min(1),
+    destination: z.enum(["standalone", "session"]),
+    selections: z.array(planningSelectionSchema).min(1).max(30),
+  }),
+  z.object({
+    type: z.literal("create_full_session"),
+    mutationId: z.string().min(1).max(120),
+    workbenchId: z.string().min(1),
+    coding: z.number().int().min(0).max(20),
+    systemDesign: z.number().int().min(0).max(10),
+    behavioral: z.number().int().min(0).max(10),
+  }).refine((value) => value.coding + value.systemDesign + value.behavioral > 0),
+  z.object({
+    type: z.literal("problem_star"),
+    mutationId: z.string().min(1).max(120),
+    workbenchId: z.string().min(1),
+    specialty: z.enum(planningSpecialties),
+    questionId: z.string().min(1),
+    starred: z.boolean(),
+  }),
+  z.object({
+    type: z.literal("personal_question_upsert"),
+    mutationId: z.string().min(1).max(120),
+    workbenchId: z.string().min(1),
+    specialty: z.enum(planningSpecialties),
+    question: z.object({
+      questionId: z.string().min(1),
+      title: z.string().trim().min(1).max(500),
+      prompt: z.string().max(20_000).optional(),
+      url: z.string().url().max(2_000).optional(),
+      tags: z.array(z.string().max(120)).max(50).optional(),
+      targetMinutes: z.number().int().min(1).max(720).optional(),
+    }),
+  }),
+  z.object({
+    type: z.literal("remove"),
+    mutationId: z.string().min(1).max(120),
+    workbenchId: z.string().min(1),
+    kind: z.enum(["activity", "focus", "session"]),
+    id: z.string().min(1),
+  }),
+]);
+
+async function voicePlanningMutation(ownerId: string, request: Request, env: Env) {
+  const parsed = planningMutationSchema.safeParse(await request.json());
+  if (!parsed.success) {
+    return json(request, {
+      error: "Invalid planning mutation.",
+      details: parsed.error.issues,
+    }, { status: 400 });
+  }
+  const mutation = parsed.data;
+  const date = dateInPracticeTimeZone();
+  try {
+    const state = await readLiveState(ownerId, date);
+    if (!state.workbench || state.workbench.id !== mutation.workbenchId) {
+      return json(request, {
+        error: "Today changed in another surface. Refresh and review your selection.",
+        code: "stale_workbench",
+        retryable: false,
+      }, { status: 409 });
+    }
+    let result: unknown;
+    if (mutation.type === "add_selection") {
+      result = await applyPlanningSelection(ownerId, {
+        date,
+        workbenchId: mutation.workbenchId,
+        mutationId: mutation.mutationId,
+        destination: mutation.destination,
+        sessionNumber: state.sessions.length + 1,
+        selections: mutation.selections as PlanningSelection[],
+      });
+    } else if (mutation.type === "create_full_session") {
+      const content = await loadContentIndex();
+      const blocked = new Set(state.extraActivities.flatMap((candidate) => {
+        const questionId = (candidate as { questionId?: unknown }).questionId;
+        return typeof questionId === "string" ? [questionId] : [];
+      }));
+      const take = (
+        specialty: PlanningSpecialty,
+        count: number,
+      ): PlanningSelection[] => {
+        const questions = filterPlanningCatalog(
+          content.questionBanks[planningBankKey(specialty)],
+          {
+            blockedQuestionIds: blocked,
+            sort: "frequency",
+            direction: "desc",
+            page: 1,
+            pageSize: Math.max(1, count),
+          },
+        ).items.filter((question) => question.eligible).slice(0, count);
+        questions.forEach((question) => blocked.add(question.id));
+        return questions.map((question) => ({
+          kind: "practice",
+          specialty,
+          questionId: question.id,
+          title: question.title,
+          url: question.url,
+          prompt: question.prompt,
+          minutes: question.targetMinutes,
+          topics: question.topics,
+        }));
+      };
+      const selections = [
+        ...take("leetcode", mutation.coding),
+        ...take("system_design", mutation.systemDesign),
+        ...take("behavioral", mutation.behavioral),
+      ];
+      if (selections.length !== mutation.coding + mutation.systemDesign + mutation.behavioral) {
+        return json(request, {
+          error: "Not enough eligible questions remain for that full session.",
+          code: "insufficient_eligible_questions",
+          retryable: false,
+        }, { status: 409 });
+      }
+      result = await applyPlanningSelection(ownerId, {
+        date,
+        workbenchId: mutation.workbenchId,
+        mutationId: mutation.mutationId,
+        destination: "session",
+        sessionNumber: state.sessions.length + 1,
+        selections,
+      });
+    } else {
+      const requestHash = await planningRequestFingerprint(mutation);
+      const receipt = await readPlanningMutation(ownerId, mutation.mutationId);
+      if (receipt) {
+        if (receipt.requestHash !== requestHash) {
+          throw new TodayPlanningConflictError(
+            "planning_mutation_identity_conflict",
+            "That mutation identifier was already used for different content.",
+          );
+        }
+        result = { duplicate: true, result: receipt.response };
+      } else {
+        if (mutation.type === "problem_star") {
+          await setProblemStar(
+            ownerId,
+            mutation.specialty,
+            mutation.questionId,
+            mutation.starred,
+            Date.now(),
+          );
+        } else if (mutation.type === "personal_question_upsert") {
+          await upsertOwnerBankQuestion(
+            ownerId,
+            mutation.specialty,
+            mutation.question,
+            Date.now(),
+          );
+        } else if (mutation.kind === "activity") {
+          await removeExtraActivity(ownerId, mutation.id);
+        } else if (mutation.kind === "focus") {
+          await removeFocusBlock(ownerId, mutation.id);
+        } else {
+          await removeLiveSession(ownerId, mutation.id);
+        }
+        const response = { mutationId: mutation.mutationId, applied: true };
+        await rememberPlanningMutation(ownerId, {
+          mutationId: mutation.mutationId,
+          workbenchId: mutation.workbenchId,
+          requestHash,
+          response,
+          createdAt: Date.now(),
+        });
+        result = { duplicate: false, result: response };
+      }
+    }
+    await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "practice");
+    const authoritative = await readLiveState(ownerId, date);
+    return json(request, {
+      protocolVersion: 1,
+      ...result as Record<string, unknown>,
+      authoritative: {
+        workbench: authoritative.workbench,
+        sessions: authoritative.sessions,
+        activities: authoritative.extraActivities,
+        focusBlocks: authoritative.focusBlocks,
+      },
+    });
+  } catch (error) {
+    if (error instanceof TodayPlanningConflictError) {
+      return json(request, {
+        error: error.message,
+        code: error.code,
+        retryable: false,
+      }, { status: 409 });
+    }
+    if (error instanceof TimerStateConflictError) {
+      return json(request, {
+        error: error.message,
+        code: "planning_conflict",
+        retryable: false,
+      }, { status: 409 });
     }
     throw error;
   }
@@ -1428,6 +1826,12 @@ export default {
     }
     if (url.pathname === "/voice/timers" && request.method === "POST") {
       return voiceTimerMutation(ownerId, request, env);
+    }
+    if (url.pathname === "/voice/planning" && request.method === "GET") {
+      return planningData(ownerId, request);
+    }
+    if (url.pathname === "/voice/planning/mutations" && request.method === "POST") {
+      return voicePlanningMutation(ownerId, request, env);
     }
     if (url.pathname === "/voice/intents" && request.method === "POST") {
       return registerVoiceIntent(ownerId, request, env);
