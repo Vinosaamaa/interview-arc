@@ -3,12 +3,20 @@ import type { QuestionBankItem } from "../app/content-types";
 export type PlanningSpecialty = "leetcode" | "system_design" | "behavioral";
 export type PlanningSort = "frequency" | "recent" | "acceptance";
 export type PlanningDirection = "asc" | "desc";
+export type PlanningAttention =
+  | "due"
+  | "needs_review"
+  | "solved"
+  | "helped"
+  | "failed"
+  | "todo";
 
 export type PlanningCatalogItem = QuestionBankItem & {
   eligible: boolean;
   disabledReason: string | null;
   starred: boolean;
   lastCompletedAt: number | null;
+  attention: PlanningAttention[];
 };
 
 type CatalogOptions = {
@@ -16,6 +24,8 @@ type CatalogOptions = {
   starredQuestionIds?: Set<string>;
   starredOnly?: boolean;
   levels?: Set<"easy" | "medium" | "hard">;
+  attentionFilters?: Set<PlanningAttention>;
+  attentionByQuestionId?: Map<string, Set<PlanningAttention>>;
   sort?: PlanningSort;
   direction?: PlanningDirection;
   page?: number;
@@ -58,13 +68,41 @@ export function filterPlanningCatalog(
   const starred = options.starredQuestionIds ?? new Set<string>();
   const blocked = options.blockedQuestionIds ?? new Set<string>();
   const recency = options.recencyByQuestionId ?? new Map<string, number>();
+  const attentionByQuestionId = options.attentionByQuestionId ?? new Map();
   const direction = options.direction === "asc" ? 1 : -1;
   const sort = options.sort ?? "frequency";
   const page = Math.max(1, Math.floor(options.page ?? 1));
   const pageSize = Math.max(1, Math.min(100, Math.floor(options.pageSize ?? 30)));
 
-  const filtered = questions
+  const candidates = questions
     .filter((question) => question.active)
+    .map((question): PlanningCatalogItem => ({
+      ...question,
+      eligible: !blocked.has(question.id),
+      disabledReason: blocked.has(question.id) ? "Already on Today" : null,
+      starred: starred.has(question.id),
+      lastCompletedAt: recency.get(question.id) ?? null,
+      attention: [
+        ...(attentionByQuestionId.get(question.id)
+          ?? new Set<PlanningAttention>(["todo"])),
+      ],
+    }));
+
+  const attentionCounts = Object.fromEntries(
+    (["due", "needs_review", "solved", "helped", "failed", "todo"] as PlanningAttention[])
+      .map((attention) => [
+        attention,
+        candidates.filter((question) => question.attention.includes(attention)).length,
+      ]),
+  );
+  const difficultyCounts = Object.fromEntries(
+    (["easy", "medium", "hard"] as const).map((difficulty) => [
+      difficulty,
+      candidates.filter((question) => level(question) === difficulty).length,
+    ]),
+  );
+
+  const filtered = candidates
     .filter((question) => {
       if (!query) return true;
       return normalized([
@@ -79,13 +117,15 @@ export function filterPlanningCatalog(
     .filter((question) => !options.levels?.size || (
       level(question) != null && options.levels.has(level(question)!)
     ))
-    .map((question): PlanningCatalogItem => ({
-      ...question,
-      eligible: !blocked.has(question.id),
-      disabledReason: blocked.has(question.id) ? "Already on Today" : null,
-      starred: starred.has(question.id),
-      lastCompletedAt: recency.get(question.id) ?? null,
-    }))
+    .filter((question) => {
+      const filters = options.attentionFilters ?? new Set<PlanningAttention>();
+      const review = [...filters].filter(
+        (filter) => filter === "due" || filter === "needs_review",
+      );
+      const result = [...filters].filter((filter) => !review.includes(filter));
+      return (review.length === 0 || review.some((filter) => question.attention.includes(filter)))
+        && (result.length === 0 || result.some((filter) => question.attention.includes(filter)));
+    })
     .sort((left, right) => {
       let comparison = 0;
       if (sort === "acceptance") {
@@ -107,6 +147,8 @@ export function filterPlanningCatalog(
     pageSize,
     total: filtered.length,
     hasMore: offset + pageSize < filtered.length,
+    attentionCounts,
+    difficultyCounts,
   };
 }
 

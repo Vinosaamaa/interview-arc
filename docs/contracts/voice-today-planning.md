@@ -14,6 +14,9 @@ Query parameters:
 - `specialty`: `leetcode`, `system_design`, or `behavioral`
 - `search`: bounded free-text search
 - `starred`: `true` to show owner-starred questions only
+- `attention`: comma-separated `due`, `needs_review`, `solved`, `helped`,
+  `failed`, `todo`; review filters OR together, result filters OR together,
+  and the two groups combine with AND, matching the website composer
 - `difficulty`: comma-separated `easy`, `medium`, `hard`
 - `sort`: `frequency`, `recent`, or `acceptance`
 - `direction`: `asc` or `desc`
@@ -50,6 +53,8 @@ Supported mutation types:
 - `problem_star`;
 - `personal_question_upsert`;
 - `remove`: remove an untouched activity, focus block, or session.
+- `start_fresh_today`: archive the current workbench and create the supplied
+  new workbench identity only after the canonical missing-result guard passes.
 
 Job applications is a focus selection inside Activities. It is never a fourth
 full-session specialty.
@@ -61,6 +66,10 @@ optional focus block, optional session, and mutation receipt in one D1 batch.
 
 Successful mutations publish exactly one owner-scoped `practice_changed`
 revision. Voice refreshes from this invalidation and does not poll.
+
+`start_fresh_today` returns `planning_conflict` with the canonical missing-result
+message when any started practice activity lacks a result. Voice presents that
+blocker and leaves the current workbench untouched.
 
 ## Concurrency
 

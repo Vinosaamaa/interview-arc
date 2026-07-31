@@ -13,6 +13,7 @@ import {
   removeExtraActivity,
   removeFocusBlock,
   removeLiveSession,
+  startFreshWorkbench,
   setActivityNote,
   setOutcome,
   setPublicationStatus,
@@ -78,6 +79,7 @@ import {
   planningRequestFingerprint,
   type PlanningSelection,
   type PlanningSpecialty,
+  type PlanningAttention,
 } from "../db/today-planning-policy";
 
 interface Env {
@@ -393,6 +395,56 @@ function mergePlanningQuestions(
   ];
 }
 
+function planningAttentionByQuestionId(
+  specialty: PlanningSpecialty,
+  state: Awaited<ReturnType<typeof readLiveState>>,
+  date: string,
+) {
+  const latest = new Map<string, { activityId: string; completedAt: number }>();
+  for (const candidate of state.historyActivities) {
+    const row = candidate as {
+      id?: unknown;
+      questionId?: unknown;
+      type?: unknown;
+    };
+    if (
+      typeof row.id !== "string"
+      || typeof row.questionId !== "string"
+      || row.type !== specialty
+    ) continue;
+    const completedAt = state.timers[row.id]?.completedAt;
+    if (!completedAt) continue;
+    const current = latest.get(row.questionId);
+    if (!current || completedAt > current.completedAt) {
+      latest.set(row.questionId, { activityId: row.id, completedAt });
+    }
+  }
+  return new Map(
+    [...latest.entries()].map(([questionId, attempt]) => {
+      const attention = new Set<PlanningAttention>();
+      const outcome = state.outcomes[attempt.activityId];
+      if (outcome === "solved") attention.add("solved");
+      if (outcome === "solved_after_reviewing_approach") attention.add("helped");
+      if (outcome === "failed") attention.add("failed");
+      const review = state.reviews[attempt.activityId] as {
+        status?: unknown;
+        dueDate?: unknown;
+      } | undefined;
+      const reviewOpen = review
+        && review.status !== "dismissed"
+        && review.status !== "completed";
+      if (reviewOpen) attention.add("needs_review");
+      if (
+        review?.status === "due"
+        || (review?.status === "scheduled"
+          && typeof review.dueDate === "string"
+          && review.dueDate <= date)
+      ) attention.add("due");
+      return [questionId, attention] as const;
+    }),
+  );
+}
+
 async function planningData(ownerId: string, request: Request) {
   const url = new URL(request.url);
   const specialtyValue = url.searchParams.get("specialty") ?? "leetcode";
@@ -447,11 +499,26 @@ async function planningData(ownerId: string, request: Request) {
         ["easy", "medium", "hard"].includes(value)
       )),
   );
+  const attentionFilters = new Set(
+    (url.searchParams.get("attention") ?? "")
+      .split(",")
+      .filter((value): value is PlanningAttention => (
+        ["due", "needs_review", "solved", "helped", "failed", "todo"].includes(value)
+      )),
+  );
+  const attentionByQuestionId = planningAttentionByQuestionId(specialty, state, date);
+  for (const question of questions) {
+    if (!attentionByQuestionId.has(question.id)) {
+      attentionByQuestionId.set(question.id, new Set(["todo"]));
+    }
+  }
   const catalog = filterPlanningCatalog(questions, {
     search: url.searchParams.get("search") ?? "",
     starredQuestionIds,
     starredOnly: url.searchParams.get("starred") === "true",
     levels,
+    attentionFilters,
+    attentionByQuestionId,
     sort: ["frequency", "recent", "acceptance"].includes(url.searchParams.get("sort") ?? "")
       ? url.searchParams.get("sort") as "frequency" | "recent" | "acceptance"
       : "frequency",
@@ -560,6 +627,12 @@ const planningMutationSchema = z.discriminatedUnion("type", [
     kind: z.enum(["activity", "focus", "session"]),
     id: z.string().min(1),
   }),
+  z.object({
+    type: z.literal("start_fresh_today"),
+    mutationId: z.string().min(1).max(120),
+    workbenchId: z.string().min(1),
+    newWorkbenchId: z.string().min(1).max(180),
+  }),
 ]);
 
 async function voicePlanningMutation(ownerId: string, request: Request, env: Env) {
@@ -574,6 +647,63 @@ async function voicePlanningMutation(ownerId: string, request: Request, env: Env
   const date = dateInPracticeTimeZone();
   try {
     const state = await readLiveState(ownerId, date);
+    if (mutation.type === "start_fresh_today") {
+      const requestHash = await planningRequestFingerprint(mutation);
+      const receipt = await readPlanningMutation(ownerId, mutation.mutationId);
+      if (receipt) {
+        if (receipt.requestHash !== requestHash) {
+          throw new TodayPlanningConflictError(
+            "planning_mutation_identity_conflict",
+            "That mutation identifier was already used for different content.",
+          );
+        }
+        const authoritative = await readLiveState(ownerId, date);
+        return json(request, {
+          protocolVersion: 1,
+          duplicate: true,
+          result: receipt.response,
+          authoritative: {
+            workbench: authoritative.workbench,
+            sessions: authoritative.sessions,
+            activities: authoritative.extraActivities,
+            focusBlocks: authoritative.focusBlocks,
+          },
+        });
+      }
+      if (!state.workbench || state.workbench.id !== mutation.workbenchId) {
+        return json(request, {
+          error: "Today changed in another surface. Refresh before starting fresh.",
+          code: "stale_workbench",
+          retryable: false,
+        }, { status: 409 });
+      }
+      await startFreshWorkbench(ownerId, date, Date.now(), mutation.newWorkbenchId);
+      const response = {
+        mutationId: mutation.mutationId,
+        applied: true,
+        workbenchId: mutation.newWorkbenchId,
+      };
+      await rememberPlanningMutation(ownerId, {
+        mutationId: mutation.mutationId,
+        workbenchId: mutation.workbenchId,
+        requestHash,
+        response,
+        createdAt: Date.now(),
+      });
+      await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "practice");
+      const authoritative = await readLiveState(ownerId, date);
+      return json(request, {
+        protocolVersion: 1,
+        duplicate: false,
+        result: response,
+        authoritative: {
+          workbench: authoritative.workbench,
+          sessions: authoritative.sessions,
+          activities: authoritative.extraActivities,
+          focusBlocks: authoritative.focusBlocks,
+        },
+      });
+    }
     if (!state.workbench || state.workbench.id !== mutation.workbenchId) {
       return json(request, {
         error: "Today changed in another surface. Refresh and review your selection.",
