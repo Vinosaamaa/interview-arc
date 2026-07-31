@@ -257,12 +257,12 @@ series of local attempt snapshots.
 - Report **Locally verified** separately from the authoritative platform
   verdict. Local compilation and generated tests never imply LeetCode
   acceptance.
-- Submit only after the user explicitly asks. Use the user-authorized
-  persistent Chromium profile, open only the exact problem, submit through the
-  normal LeetCode UI, and observe only that submission's verdict and any
-  failing input LeetCode returns. Never inspect or export cookies, crawl the
-  account, open submission history, access editorials or official solutions,
-  or call authenticated/private endpoints directly.
+- Submit only after the user explicitly asks. Follow the persistent one-tab
+  Playwright contract below. Submit through the normal LeetCode UI and observe
+  only that submission's verdict and any failing input LeetCode returns. Never
+  inspect or export cookies, crawl the account, open submission history, access
+  editorials or official solutions, or call authenticated/private endpoints
+  directly.
 - Preserve the Java file as a durable local/Git solution only after LeetCode
   returns **Accepted**. If the activity ends without a correct solution, remove
   the unfinished solution artifact rather than publishing it.
@@ -270,6 +270,57 @@ series of local attempt snapshots.
   switches branches, commits, opens the publication PR, or deploys. The
   coordinator remains the only task that publishes the accepted source file to
   Git/GitHub.
+
+### Persistent One-Tab Playwright Contract
+
+Use only Playwright with its locally installed **Chrome for Testing** and the
+user-authorized persistent profile at the outer workspace path
+`browser-profiles/leetcode-submitter`. Do not substitute the Codex in-app
+browser, the user's ordinary Chrome profile, coordinate-based computer control,
+or an ephemeral browser profile.
+
+- Run Chromium headed, not headless, while keeping it behind the user's active
+  terminal. Do not minimize or suspend it. If initial launch activates the
+  browser, immediately restore the prior terminal focus after the page is
+  ready.
+- Keep the Chromium process independent from one Playwright connection and
+  reconnect through its loopback-only CDP endpoint after Codex, cmux, or the
+  Playwright controller restarts. Never expose that endpoint beyond localhost.
+- Maintain exactly one automation-owned LeetCode problem tab across the entire
+  practice day. Do not open a tab per problem. Completing, publishing, or
+  abandoning an Interview Arc activity does not close the browser or tab.
+  Close them only when the user explicitly asks or closes them personally.
+- Before navigating, reacquire the existing page. If another CLI currently
+  controls it, wait for that single controller instead of launching a second
+  browser or creating another problem tab.
+- For the first problem, navigate the single tab to the verified canonical
+  public problem URL. Wait for the matching problem identity and editable Java
+  editor, then leave the browser in the background while the user works in
+  `micro`.
+- For a new activity/problem, reuse that same tab and navigate it directly to
+  the new verified canonical problem URL. Confirm the number/title/slug, select
+  Java when necessary, and wait for the editable problem page. Never close the
+  prior activity's tab because the prior and next problems intentionally share
+  one tab.
+- For each explicit submission, re-read the evolving Java file, reacquire the
+  same tab, verify the current problem, replace the editor contents, focus the
+  editor, and send `Meta+Enter` (Command-Enter). Wait for the resulting verdict
+  view and report only that attempt's visible verdict and failing input.
+- LeetCode may navigate the same tab from the editable problem page to a
+  submission/result page. Before retrying revised code for that problem, use
+  Playwright's browser Back operation, then wait for the canonical problem URL
+  and editable Java editor before replacing the code and pressing
+  Command-Enter again. Navigate to the canonical problem URL only when browser
+  history is unavailable or the restored page is stale.
+- Repeat the Back → editor-ready → replace code → Command-Enter → verdict cycle
+  for every failed submission. Never create a retry tab, inspect submission
+  history, or retain a second local source file.
+- Use targeted URL, problem-title, editor, submission-state, and verdict waits.
+  Do not wait for global network idle, add arbitrary sleeps, poll continuously,
+  or use screenshots/pixel coordinates for routine submission.
+- If authentication expires, preserve the browser/profile and ask the user to
+  sign in. Do not discard the profile, copy credentials, or create another
+  authenticated browser.
 
 ### Transcript And Code Boundaries
 
