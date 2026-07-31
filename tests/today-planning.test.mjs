@@ -68,6 +68,22 @@ test("planning catalog marks blocked questions without hiding them", () => {
   assert.equal(result.items[0].disabledReason, "Already on Today");
 });
 
+test("planning catalog applies website-equivalent attention groups", () => {
+  const result = filterPlanningCatalog(questions, {
+    attentionFilters: new Set(["due", "solved"]),
+    attentionByQuestionId: new Map([
+      ["course-schedule", new Set(["due", "solved"])],
+      ["two-sum", new Set(["todo"])],
+    ]),
+    page: 1,
+    pageSize: 20,
+  });
+
+  assert.deepEqual(result.items.map((item) => item.id), ["course-schedule"]);
+  assert.deepEqual(result.items[0].attention, ["due", "solved"]);
+  assert.equal(result.attentionCounts.due, 1);
+});
+
 test("one mutation id deterministically builds standalone or one-session work", () => {
   const batch = buildPlanningBatch({
     date: "2026-07-30",
@@ -136,4 +152,6 @@ test("the Voice planning bridge is authenticated, idempotent, and push-driven", 
   assert.match(schema, /todayPlanningMutations/);
   assert.match(migration, /PRIMARY KEY\(`owner_id`, `mutation_id`\)/);
   assert.match(contract, /Job applications is a focus selection inside Activities/);
+  assert.match(bridge, /start_fresh_today/);
+  assert.match(contract, /start_fresh_today/);
 });
