@@ -6,6 +6,7 @@ import {
   buildPlanningBatch,
   filterPlanningCatalog,
   planningRequestFingerprint,
+  selectExactPlanningQuestions,
 } from "../db/today-planning-policy.ts";
 
 const questions = [
@@ -38,6 +39,57 @@ const questions = [
   },
 ];
 
+test("exact-count planning preserves requested filters and deterministic order", () => {
+  const candidates = Array.from({ length: 12 }, (_, index) => ({
+    id: `hard-${index + 1}`,
+    title: `Hard ${String(index + 1).padStart(2, "0")}`,
+    difficulty: "hard",
+    companySignals: [{
+      company: "Meta",
+      window: "30 days",
+      frequencyScore: 12 - index,
+      frequencyScale: 12,
+    }],
+    topics: ["Graph"],
+    targetMinutes: 40,
+    active: true,
+  }));
+  candidates.push({
+    id: "easy-higher-frequency",
+    title: "Easy Higher Frequency",
+    difficulty: "easy",
+    companySignals: [{ company: "Meta", window: "30 days", frequencyScore: 99, frequencyScale: 100 }],
+    topics: ["Array"],
+    targetMinutes: 30,
+    active: true,
+  });
+
+  const selected = selectExactPlanningQuestions(candidates, {
+    count: 10,
+    levels: new Set(["hard"]),
+    sort: "frequency",
+    direction: "desc",
+  });
+
+  assert.deepEqual(selected.map((question) => question.id), [
+    "hard-1", "hard-2", "hard-3", "hard-4", "hard-5",
+    "hard-6", "hard-7", "hard-8", "hard-9", "hard-10",
+  ]);
+});
+
+test("exact-count planning fails instead of relaxing an insufficient filter", () => {
+  assert.throws(
+    () => selectExactPlanningQuestions(questions, {
+      count: 2,
+      levels: new Set(["hard"]),
+      sort: "frequency",
+      direction: "desc",
+    }),
+    (error) => error?.code === "insufficient_eligible_questions"
+      && /requested 2.*found 0/i.test(error.message),
+  );
+});
+
 test("planning catalog applies specialty-local search, filters, sort, and paging", () => {
   const result = filterPlanningCatalog(questions, {
     search: "graph",
@@ -53,6 +105,19 @@ test("planning catalog applies specialty-local search, filters, sort, and paging
   assert.equal(result.total, 1);
   assert.deepEqual(result.items.map((item) => item.id), ["course-schedule"]);
   assert.equal(result.hasMore, false);
+});
+
+test("planning catalog resolves an exact public question id", () => {
+  const result = filterPlanningCatalog([
+    { ...questions[0], id: "lc-207" },
+    questions[1],
+  ], {
+    search: "lc-207",
+    page: 1,
+    pageSize: 20,
+  });
+
+  assert.deepEqual(result.items.map((item) => item.id), ["lc-207"]);
 });
 
 test("planning catalog marks blocked questions without hiding them", () => {

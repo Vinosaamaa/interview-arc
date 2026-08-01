@@ -63,6 +63,11 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
 
 ## Data Sources
 
+- Follow `../contracts/specialist-today-controls.md` for specialist catalog,
+  Today planning, timer, result, guarded advance, idempotency, and
+  authoritative read-back behavior. These MCP tools must reuse the same D1
+  mutations and owner-scoped live-update path as the website and Voice.
+
 - Treat `data/daily/YYYY-MM-DD.json` as the canonical daily plan and finalized activity summary.
 - Treat `practice/leetcode/bank/questions.json` as user-maintained metadata, not scraped data.
 - Treat `practice/system-design/bank/questions.json` and `practice/behavioral/bank/questions.json` as the matching prompt banks.
