@@ -157,6 +157,61 @@ The PR records:
 - before/after evidence for visible work;
 - risks, rollback, changed contracts, and postmortems.
 
+## Execution time and metered-cost record
+
+Every implementation PR must keep a concise execution ledger so the user can
+see where the work went. Record elapsed time separately for:
+
+- intake, instruction reading, and issue preparation;
+- reproduction and diagnosis;
+- implementation;
+- focused local checks;
+- full build and packaging, identifying whether it ran locally or in hosted CI;
+- artifact download, provenance validation, staging, and signing;
+- installation or deployment;
+- installed or production verification;
+- external waiting and infrastructure blockers.
+
+For each phase, record the start and end time or elapsed minutes. When phases
+overlap, say so and do not double-count them. Report both total wall-clock time
+and estimated active engineering time. Post an interim ledger update whenever
+work exceeds 30 minutes rather than waiting until the end.
+
+Also record measurable metered usage:
+
+- every GitHub Actions run used for the change, including run URL, runner OS,
+  conclusion, and actual runtime;
+- artifacts uploaded and their retention period;
+- paid external API or hosted-service usage when the provider exposes it.
+
+Do not invent a monetary amount. Label it `unknown` when account-level billing
+data is unavailable, and distinguish a job that never started from one that
+ran and consumed minutes.
+
+Use the cheapest trustworthy validation path and avoid redundant work. Run the
+focused local checks that are supported and proportionate on the current
+machine, but do not interpret `local-first` as a requirement to compile,
+package, install, or repair an optional local toolchain when the repository's
+approved release path owns that work.
+
+For website work, keep the supported local-D1 checks, focused tests, lint, and
+build before the independent hosted checks. For Voice work, the Hosted CI
+efficiency rules in `interview-arc-voice/AGENTS.md` and the detailed
+`interview-arc-voice/docs/artifact-promotion.md` contract are authoritative.
+The ledger must identify the focused local checks, complete PR workflow,
+applicable staged-artifact verification, and whether merged `main` promoted
+tree-equivalent bytes or rebuilt. When promotion proves that merged `main` is
+byte-identical to the already staged PR artifact, record reuse of those exact
+local bytes; do not download, rebuild, or repeat an equivalent staged smoke
+test merely because the merge commit or artifact name changed. All
+lane-specific signing, installation, and installed-app requirements below
+still apply.
+
+If hosted CI is blocked by billing or infrastructure, do not retry it blindly:
+record whether the job started and consumed runner time, complete every safe
+focused check, and state explicitly which required CI or release evidence is
+still missing.
+
 ## Release, verification, and closure
 
 After review, follow the selected lane:
