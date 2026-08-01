@@ -172,20 +172,18 @@ see where the work went. Record elapsed time separately for:
 - installed or production verification;
 - external waiting and infrastructure blockers.
 
-For each phase, record the start and end time or elapsed minutes. When phases
-overlap, say so and do not double-count them. Report both total wall-clock time
-and estimated active engineering time. Post an interim ledger update whenever
-work exceeds 30 minutes rather than waiting until the end.
+For each phase, record the start and end time or elapsed minutes and the
+concrete work completed. Mark an expected phase that did not run and explain
+why. When phases overlap, say so and do not double-count them. Explain every
+repeated build or hosted run. Report both total wall-clock time and estimated
+active engineering time, and label reconstructed times as estimates rather
+than implying stopwatch precision. Post an interim ledger update whenever work
+exceeds 30 minutes rather than waiting until the end.
 
-The final user-facing handoff for every implementation turn must repeat the
-granular ledger; a PR link or one combined total is not a substitute. List each
-phase that occurred, its elapsed minutes, and the concrete work completed in
-that phase. Mark phases that did not run and explain why when they would
-normally be expected. Separate active work from external waiting, identify
-overlap, explain every repeated build or hosted run, and label reconstructed
-times as estimates rather than implying stopwatch precision. This ledger is an
-administrative coordination record and must not be appended to a practice
-activity transcript.
+The final user-facing handoff for every implementation turn must repeat this
+complete ledger; a PR link or one combined total is not a substitute. The
+ledger is an administrative coordination record and must not be appended to a
+practice activity transcript.
 
 Also record measurable metered usage:
 
