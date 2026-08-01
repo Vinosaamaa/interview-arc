@@ -223,6 +223,16 @@ series of local attempt snapshots.
 2. Present an original concise restatement, constraints, examples, and the Java
    method signature in the visible specialist conversation. Do not copy the
    protected official statement.
+   - When an example depends on a graph, tree, grid, diagram, or other visual,
+     inspect the original in the persistent Playwright-controlled Chrome for
+     Testing tab. Reproduce every faithfully representable relationship as
+     concise ASCII/text in both the conversation and the Java header comment.
+   - If ASCII/text would lose material information, bring that existing tab to
+     the foreground so the user can inspect the original visual. Reuse the same
+     tab, and return it to the background when the inspection is complete.
+   - Screenshots are transient comprehension aids only. Never use image
+     coordinates for submission, commit copied problem images, omit a material
+     visual relationship, or invent one that cannot be verified.
 3. Create or resume exactly one working source file at:
 
    `practice/leetcode/solutions/<four-digit-number>-<canonical-title-slug>.java`
@@ -321,6 +331,23 @@ or an ephemeral browser profile.
 - If authentication expires, preserve the browser/profile and ask the user to
   sign in. Do not discard the profile, copy credentials, or create another
   authenticated browser.
+
+### Interview Arc Control Boundary
+
+- Read current owner-scoped Today state only through the registered Interview
+  Arc MCP tools. `get_today_practice` is read-only; its presence does not imply
+  permission or capability to mutate timers or planning state.
+- Do not claim to pause, resume, stop, advance, delete, or create Today work
+  unless the corresponding owner-scoped MCP mutation is registered and
+  discoverable in the current connection. Never substitute website automation
+  or an undocumented direct HTTP request.
+- When supported mutation tools are available, use them only after an explicit
+  user command, preserve D1 timer/result/finalization guards, and report the
+  authoritative read-back state.
+- A request such as “create one session with ten hard problems” must apply the
+  exact requested filters and count. If eligible inventory is insufficient,
+  report that fact instead of silently weakening the criteria or inventing
+  activities.
 
 ### Transcript And Code Boundaries
 
