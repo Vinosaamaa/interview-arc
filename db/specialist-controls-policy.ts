@@ -17,6 +17,8 @@ export function selectNextPracticeActivity(input: {
 }) {
   if (input.explicitNextActivityId) {
     if (
+      input.explicitNextActivityId === input.currentActivityId
+      ||
       !input.practiceActivityIds.has(input.explicitNextActivityId)
       || input.completedActivityIds.has(input.explicitNextActivityId)
     ) {
@@ -35,17 +37,17 @@ export function selectNextPracticeActivity(input: {
       "Automatic advance requires the current activity to belong to a session.",
     );
   }
-  const next = input.sessionActivityIds
-    .slice(currentIndex + 1)
-    .find((activityId) => (
+  for (let index = currentIndex + 1; index < input.sessionActivityIds.length; index += 1) {
+    const activityId = input.sessionActivityIds[index];
+    if (
       input.practiceActivityIds.has(activityId)
       && !input.completedActivityIds.has(activityId)
-    ));
-  if (!next) {
-    throw new SpecialistControlError(
-      "no_next_activity",
-      "No unfinished practice activity remains after the current activity in this session.",
-    );
+    ) {
+      return activityId;
+    }
   }
-  return next;
+  throw new SpecialistControlError(
+    "no_next_activity",
+    "No unfinished practice activity remains after the current activity in this session.",
+  );
 }

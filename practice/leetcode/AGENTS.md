@@ -103,16 +103,9 @@ Do not treat the second flow as a successful attempt. Choose the record kind fro
 
 ## Session Commands
 
-The specialist may use `query_practice_catalog` and `plan_today_practice` when
-the user explicitly asks it to find or add coding work. Read Today first and
-preserve the exact requested filters and count; never silently substitute an
-easier or otherwise ineligible problem. The specialist may use
-`control_practice_timer` only for an explicit timer command, and
-`set_practice_result` only for the user's stated result or an authorized
-platform verdict. For “mark this solved, stop its timer, and start the next
-problem,” set the explicit result first, then use guarded
-`finish_and_advance`. Follow
-`../../docs/contracts/specialist-today-controls.md`.
+For coding catalog, planning, result, and `control_practice_timer` commands,
+follow `../../docs/contracts/specialist-today-controls.md`; preserve the exact
+requested coding filters and count rather than substituting another problem.
 
 ### Start Or Resume A Problem
 

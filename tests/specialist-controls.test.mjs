@@ -48,11 +48,23 @@ test("advance rejects an unknown or completed explicit destination", () => {
     }),
     (error) => error?.code === "next_activity_unavailable",
   );
+
+  assert.throws(
+    () => selectNextPracticeActivity({
+      currentActivityId: "activity-1",
+      explicitNextActivityId: "activity-1",
+      sessionActivityIds: ["activity-1", "activity-2"],
+      practiceActivityIds: new Set(["activity-1", "activity-2"]),
+      completedActivityIds: new Set(),
+    }),
+    (error) => error?.code === "next_activity_unavailable",
+  );
 });
 
 test("specialist Today controls are registered, allowlisted, and contract-bound", async () => {
-  const [worker, config, contract, leetcodeGuide] = await Promise.all([
+  const [worker, store, config, contract, leetcodeGuide] = await Promise.all([
     readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8"),
+    readFile(new URL("../db/specialist-controls-store.ts", import.meta.url), "utf8"),
     readFile(new URL("../.codex/config.toml", import.meta.url), "utf8"),
     readFile(new URL("../docs/contracts/specialist-today-controls.md", import.meta.url), "utf8"),
     readFile(new URL("../practice/leetcode/AGENTS.md", import.meta.url), "utf8"),
@@ -70,6 +82,9 @@ test("specialist Today controls are registered, allowlisted, and contract-bound"
   assert.match(worker, /expectedWorkbenchId/);
   assert.match(worker, /expectedRevision/);
   assert.match(worker, /mutationId/);
+  assert.match(store, /db\.batch/);
+  assert.match(store, /revisionGuard/);
+  assert.match(store, /todayPlanningMutations/);
   assert.match(contract, /explicit user instruction/i);
   assert.match(contract, /authoritative D1 read-back/i);
   assert.match(leetcodeGuide, /control_practice_timer/);

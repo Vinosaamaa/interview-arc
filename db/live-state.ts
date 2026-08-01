@@ -652,10 +652,23 @@ export async function applyTimerAction(
   kind: TimerKind,
   action: TimerAction,
   nowMs: number,
-  options: { sessionId?: string | null; activityIds?: string[]; requiresOutcome?: boolean } = {},
+  options: {
+    sessionId?: string | null;
+    activityIds?: string[];
+    requiresOutcome?: boolean;
+    expectedRevision?: number;
+  } = {},
 ): Promise<TimerState> {
   const db = getDb();
   const existing = await loadTimer(db, ownerId, subjectId, kind);
+  if (
+    options.expectedRevision != null
+    && (existing?.revision ?? 0) !== options.expectedRevision
+  ) {
+    throw new TimerStateConflictError(
+      "The timer changed in another surface. Read Today again before retrying.",
+    );
+  }
 
   // Finished timers are locked permanently and never resume.
   if (existing?.completed) return toTimerState(existing);
@@ -774,6 +787,9 @@ export async function applyTimerAction(
           revision: next.revision,
           updatedAt: nowMs,
         },
+        ...(options.expectedRevision != null
+          ? { setWhere: eq(timers.revision, options.expectedRevision) }
+          : {}),
       });
   } else {
     await closeTimerInterval(ownerId, subjectId, kind, nowMs);
@@ -805,10 +821,21 @@ export async function applyTimerAction(
           revision: next.revision,
           updatedAt: nowMs,
         },
+        ...(options.expectedRevision != null
+          ? { setWhere: eq(timers.revision, options.expectedRevision) }
+          : {}),
       });
   }
 
   const updated = await loadTimer(db, ownerId, subjectId, kind);
+  if (
+    options.expectedRevision != null
+    && (!updated || updated.revision !== next.revision || updated.updatedAt !== nowMs)
+  ) {
+    throw new TimerStateConflictError(
+      "The timer changed in another surface. Read Today again before retrying.",
+    );
+  }
   if (kind === "activity" && action === "finish" && options.sessionId) {
     const sessionRows = await db.select().from(liveSessions).where(and(eq(liveSessions.ownerId, ownerId), eq(liveSessions.id, options.sessionId)));
     const session = sessionRows[0]?.payload as SessionPayload | undefined;

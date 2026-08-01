@@ -62,8 +62,8 @@ export const timers = sqliteTable(
     runningSince: integer("running_since"),
     completed: integer("completed", { mode: "boolean" }).notNull().default(false),
     completedAt: integer("completed_at"),
-    // Monotonic audit counter. Conflict rejection is not implemented yet;
-    // mutations are serialized by arrival order and finished timers are locked.
+    // Monotonic audit counter. Specialist commands enforce the caller's
+    // expected revision; all surfaces still preserve permanently locked finish.
     revision: integer("revision").notNull().default(0),
     updatedAt,
   },

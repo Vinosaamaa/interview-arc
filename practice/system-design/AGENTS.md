@@ -110,12 +110,9 @@ The default role is not "answer generator." The default role is "coach plus inte
 
 ### Session Commands
 
-The specialist may use `query_practice_catalog` and `plan_today_practice` when
-the user explicitly asks it to find or add system-design work. It may use
-`control_practice_timer` only for an explicit timer command and
-`set_practice_result` only for the user's stated result or an authorized
-platform verdict. Never infer completion from coaching progress. Follow
-`../../docs/contracts/specialist-today-controls.md`.
+For system-design catalog, planning, timer, and result commands, follow
+`../../docs/contracts/specialist-today-controls.md`; coaching progress is not a
+system-design completion signal.
 
 - A natural request such as “let's do the mock interview,” “ask the current
   question,” or “continue the interview” starts or resumes the focused

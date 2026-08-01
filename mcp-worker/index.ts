@@ -87,6 +87,7 @@ import {
   selectNextPracticeActivity,
   SpecialistControlError,
 } from "../db/specialist-controls-policy";
+import { finishAndAdvancePracticeActivity } from "../db/specialist-controls-store";
 
 interface Env {
   DB: D1Database;
@@ -451,18 +452,30 @@ function planningAttentionByQuestionId(
   );
 }
 
-async function planningData(ownerId: string, request: Request) {
+type PlanningDataContext = {
+  date: string;
+  content: Awaited<ReturnType<typeof loadContentIndex>>;
+  state: Awaited<ReturnType<typeof readLiveState>>;
+};
+
+async function planningData(
+  ownerId: string,
+  request: Request,
+  context?: PlanningDataContext,
+) {
   const url = new URL(request.url);
   const specialtyValue = url.searchParams.get("specialty") ?? "leetcode";
   if (!planningSpecialties.includes(specialtyValue as PlanningSpecialty)) {
     return json(request, { error: "Invalid planning specialty." }, { status: 400 });
   }
   const specialty = specialtyValue as PlanningSpecialty;
-  const date = dateInPracticeTimeZone();
-  const [content, state] = await Promise.all([
-    loadContentIndex(),
-    readLiveState(ownerId, date),
-  ]);
+  const date = context?.date ?? dateInPracticeTimeZone();
+  const [content, state] = context
+    ? [context.content, context.state]
+    : await Promise.all([
+      loadContentIndex(),
+      readLiveState(ownerId, date),
+    ]);
   const canonical = content.questionBanks[planningBankKey(specialty)];
   const questions = mergePlanningQuestions(
     specialty,
@@ -1508,9 +1521,13 @@ function specialistPlanningRequest(input: SpecialistCatalogInput) {
   return new Request(url);
 }
 
-async function specialistCatalog(ownerId: string, input: SpecialistCatalogInput) {
+async function specialistCatalog(
+  ownerId: string,
+  input: SpecialistCatalogInput,
+  context?: PlanningDataContext,
+) {
   const payload = await decodeInternalResponse(
-    await planningData(ownerId, specialistPlanningRequest(input)),
+    await planningData(ownerId, specialistPlanningRequest(input), context),
   );
   const catalog = payload.catalog as { items?: unknown[] } | undefined;
   if (input.questionId || input.title) {
@@ -2168,13 +2185,28 @@ function createServer(ownerId: string, env: Env) {
           if (!input.selections?.length) {
             throw new SpecialistControlError("selection_required", "Exact planning requires at least one specialty and question ID.");
           }
+          const uniqueSelections = new Set(
+            input.selections.map((selection) => `${selection.specialty}:${selection.questionId}`),
+          );
+          if (uniqueSelections.size !== input.selections.length) {
+            throw new SpecialistControlError(
+              "duplicate_selection",
+              "Each specialty and question ID may appear only once in one planning mutation.",
+            );
+          }
           destination = input.destination ?? "standalone";
+          const date = dateInPracticeTimeZone();
+          const [content, state] = await Promise.all([
+            loadContentIndex(),
+            readLiveState(ownerId, date),
+          ]);
+          const context = { date, content, state };
           selections = await Promise.all(input.selections.map(async (selection) => {
             const payload = await specialistCatalog(ownerId, {
               specialty: selection.specialty,
               questionId: selection.questionId,
               pageSize: 100,
-            });
+            }, context);
             const item = (payload.catalog as { items: unknown[] }).items[0];
             return planningSelectionFromCatalogItem(selection.specialty, item);
           }));
@@ -2186,6 +2218,12 @@ function createServer(ownerId: string, env: Env) {
           const items: unknown[] = [];
           let page = 1;
           let hasMore = true;
+          const date = dateInPracticeTimeZone();
+          const [content, state] = await Promise.all([
+            loadContentIndex(),
+            readLiveState(ownerId, date),
+          ]);
+          const context = { date, content, state };
           while (hasMore) {
             const payload = await specialistCatalog(ownerId, {
               specialty: input.specialty,
@@ -2197,7 +2235,7 @@ function createServer(ownerId: string, env: Env) {
               direction: input.direction,
               page,
               pageSize: 100,
-            });
+            }, context);
             const catalog = payload.catalog as { items: unknown[]; hasMore: boolean };
             items.push(...catalog.items);
             hasMore = catalog.hasMore;
@@ -2279,6 +2317,7 @@ function createServer(ownerId: string, env: Env) {
         }
         const now = Date.now();
         let advancedTo: string | null = null;
+        let receiptStored = false;
         if (input.action === "finish_and_advance") {
           if (!activity.timer?.startedAt || activity.timer.completed) {
             throw new SpecialistControlError("timer_not_finishable", "The current activity must be started and unfinished before advancing.");
@@ -2304,26 +2343,49 @@ function createServer(ownerId: string, env: Env) {
             ))),
           });
           const nextPayload = specialistPracticeActivity(prepared.state, advancedTo);
-          if (input.expectedNextRevision != null) {
-            requireTimerRevision(prepared.state, advancedTo, input.expectedNextRevision);
+          if (input.expectedNextRevision == null) {
+            throw new SpecialistControlError(
+              "next_timer_revision_required",
+              "Finish-and-advance requires the next activity's current timer revision.",
+            );
           }
+          requireTimerRevision(prepared.state, advancedTo, input.expectedNextRevision);
           const nextTimer = prepared.state.timers[advancedTo];
           if (nextTimer?.completed) {
             throw new SpecialistControlError("next_activity_unavailable", "The next activity is already finished.");
           }
-          await applyTimerAction(ownerId, input.activityId, "activity", "finish", now, {
-            sessionId: activityPayload.sessionId,
-          });
-          await scheduleCompletedVoiceActivity(ownerId, activity, activity.outcome, prepared.date, now);
-          if (nextPayload.sessionId) {
-            const nextSession = specialistSession(prepared.state, nextPayload.sessionId);
-            await applyTimerAction(ownerId, nextPayload.sessionId, "session", "start", now, {
-              activityIds: nextSession.activityIds,
-            });
+          const voiceGuard = await prepareVoiceCapturesForFinish(ownerId, input.activityId, now);
+          const voiceConflict = voiceFinishGuardMessage(voiceGuard);
+          if (voiceConflict) {
+            throw new TimerStateConflictError(voiceConflict);
           }
-          await applyTimerAction(ownerId, advancedTo, "activity", "start", now, {
-            sessionId: nextPayload.sessionId,
+          const atomicReceipt = {
+            mutationId: input.mutationId,
+            activityId: input.activityId,
+            action: input.action,
+            advancedTo,
+            applied: true,
+          };
+          await finishAndAdvancePracticeActivity({
+            ownerId,
+            currentActivityId: input.activityId,
+            expectedCurrentRevision: input.expectedRevision,
+            nextActivityId: advancedTo,
+            nextSessionId: nextPayload.sessionId,
+            expectedNextRevision: input.expectedNextRevision,
+            mutationId: input.mutationId,
+            workbenchId: input.expectedWorkbenchId,
+            requestHash: prepared.requestHash,
+            receipt: atomicReceipt,
+            now,
           });
+          receiptStored = true;
+          try {
+            await scheduleCompletedVoiceActivity(ownerId, activity, activity.outcome, prepared.date, now);
+          } catch {
+            // Review scheduling is repairable metadata. The atomic timer and
+            // receipt commit remains successful and an exact retry is safe.
+          }
         } else {
           const action: TimerAction = input.action === "resume" ? "start" : input.action;
           if (action === "start" && activityPayload.sessionId) {
@@ -2334,6 +2396,7 @@ function createServer(ownerId: string, env: Env) {
           }
           await applyTimerAction(ownerId, input.activityId, "activity", action, now, {
             sessionId: activityPayload.sessionId,
+            expectedRevision: input.expectedRevision,
           });
           if (action === "finish" && activity.outcome) {
             await scheduleCompletedVoiceActivity(ownerId, activity, activity.outcome, prepared.date, now);
@@ -2346,7 +2409,9 @@ function createServer(ownerId: string, env: Env) {
           advancedTo,
           applied: true,
         };
-        await rememberSpecialistMutation(ownerId, input, prepared.requestHash, result);
+        if (!receiptStored) {
+          await rememberSpecialistMutation(ownerId, input, prepared.requestHash, result);
+        }
         await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "timer");
         const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
         const payload = { duplicate: false, result, authoritative };

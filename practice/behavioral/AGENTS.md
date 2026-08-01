@@ -76,12 +76,9 @@ all pending practice`.
 
 ## Session Commands
 
-The specialist may use `query_practice_catalog` and `plan_today_practice` when
-the user explicitly asks it to find or add behavioral work. It may use
-`control_practice_timer` only for an explicit timer command and
-`set_practice_result` only for the user's stated result or an authorized
-platform verdict. Never infer completion from answer quality. Follow
-`../../docs/contracts/specialist-today-controls.md`.
+For behavioral catalog, planning, timer, and result commands, follow
+`../../docs/contracts/specialist-today-controls.md`; answer quality is not a
+behavioral completion signal.
 
 - A natural request such as “let's do the mock interview,” “ask the current
   question,” or “continue” starts or resumes the focused behavioral activity

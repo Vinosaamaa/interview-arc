@@ -173,19 +173,15 @@ export function selectExactPlanningQuestions(
   questions: QuestionBankItem[],
   options: ExactPlanningOptions,
 ) {
-  const selected: PlanningCatalogItem[] = [];
-  let page = 1;
-  let hasMore = true;
-  while (selected.length < options.count && hasMore) {
-    const result = filterPlanningCatalog(questions, {
-      ...options,
-      page,
-      pageSize: 100,
-    });
-    selected.push(...result.items.filter((question) => question.eligible));
-    hasMore = result.hasMore;
-    page += 1;
-  }
+  const blocked = options.blockedQuestionIds ?? new Set<string>();
+  const eligibleQuestions = questions.filter((question) => !blocked.has(question.id));
+  const result = filterPlanningCatalog(eligibleQuestions, {
+    ...options,
+    blockedQuestionIds: new Set(),
+    page: 1,
+    pageSize: Math.max(1, options.count),
+  });
+  const selected = result.items;
   if (selected.length < options.count) {
     throw new PlanningSelectionError(
       "insufficient_eligible_questions",
