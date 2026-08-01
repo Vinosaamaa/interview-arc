@@ -77,10 +77,17 @@ import {
 import {
   filterPlanningCatalog,
   planningRequestFingerprint,
+  PlanningSelectionError,
+  selectExactPlanningQuestions,
   type PlanningSelection,
   type PlanningSpecialty,
   type PlanningAttention,
 } from "../db/today-planning-policy";
+import {
+  selectNextPracticeActivity,
+  SpecialistControlError,
+} from "../db/specialist-controls-policy";
+import { finishAndAdvancePracticeActivity } from "../db/specialist-controls-store";
 
 interface Env {
   DB: D1Database;
@@ -445,18 +452,30 @@ function planningAttentionByQuestionId(
   );
 }
 
-async function planningData(ownerId: string, request: Request) {
+type PlanningDataContext = {
+  date: string;
+  content: Awaited<ReturnType<typeof loadContentIndex>>;
+  state: Awaited<ReturnType<typeof readLiveState>>;
+};
+
+async function planningData(
+  ownerId: string,
+  request: Request,
+  context?: PlanningDataContext,
+) {
   const url = new URL(request.url);
   const specialtyValue = url.searchParams.get("specialty") ?? "leetcode";
   if (!planningSpecialties.includes(specialtyValue as PlanningSpecialty)) {
     return json(request, { error: "Invalid planning specialty." }, { status: 400 });
   }
   const specialty = specialtyValue as PlanningSpecialty;
-  const date = dateInPracticeTimeZone();
-  const [content, state] = await Promise.all([
-    loadContentIndex(),
-    readLiveState(ownerId, date),
-  ]);
+  const date = context?.date ?? dateInPracticeTimeZone();
+  const [content, state] = context
+    ? [context.content, context.state]
+    : await Promise.all([
+      loadContentIndex(),
+      readLiveState(ownerId, date),
+    ]);
   const canonical = content.questionBanks[planningBankKey(specialty)];
   const questions = mergePlanningQuestions(
     specialty,
@@ -1324,6 +1343,254 @@ async function companionMutation(ownerId: string, request: Request, env: Env) {
   }));
 }
 
+type SpecialistPracticeActivity = {
+  id: string;
+  title: string;
+  type: "leetcode" | "system_design" | "behavioral";
+  questionId?: string;
+  sessionId?: string;
+  reviewOfActivityId?: string;
+};
+
+type SpecialistSession = {
+  id: string;
+  activityIds: string[];
+};
+
+function specialistPracticeActivity(state: Awaited<ReturnType<typeof readLiveState>>, activityId: string) {
+  const activity = state.extraActivities.find((candidate) => (
+    Boolean(candidate)
+    && typeof candidate === "object"
+    && (candidate as { id?: unknown }).id === activityId
+  )) as SpecialistPracticeActivity | undefined;
+  if (!activity || !["leetcode", "system_design", "behavioral"].includes(activity.type)) {
+    throw new SpecialistControlError(
+      "practice_activity_not_found",
+      "The requested practice activity is not available in the current workbench.",
+    );
+  }
+  return activity;
+}
+
+function specialistSession(state: Awaited<ReturnType<typeof readLiveState>>, sessionId: string) {
+  const session = state.sessions.find((candidate) => (
+    Boolean(candidate)
+    && typeof candidate === "object"
+    && (candidate as { id?: unknown }).id === sessionId
+  )) as SpecialistSession | undefined;
+  if (!session || !Array.isArray(session.activityIds)) {
+    throw new SpecialistControlError(
+      "session_not_found",
+      "The requested session is not available in the current workbench.",
+    );
+  }
+  return session;
+}
+
+async function decodeInternalResponse(response: Response) {
+  const payload = await response.json() as Record<string, unknown>;
+  if (!response.ok) {
+    throw new SpecialistControlError(
+      typeof payload.code === "string" ? payload.code : `http_${response.status}`,
+      typeof payload.error === "string" ? payload.error : "The authoritative Interview Arc mutation failed.",
+    );
+  }
+  return payload;
+}
+
+async function prepareSpecialistMutation(
+  ownerId: string,
+  input: {
+    operation: string;
+    mutationId: string;
+    expectedWorkbenchId: string;
+  } & Record<string, unknown>,
+) {
+  const requestHash = await planningRequestFingerprint(input);
+  const receipt = await readPlanningMutation(ownerId, input.mutationId);
+  const date = dateInPracticeTimeZone();
+  if (receipt) {
+    if (receipt.requestHash !== requestHash) {
+      throw new SpecialistControlError(
+        "specialist_mutation_identity_conflict",
+        "That mutation identifier was already used for different content.",
+      );
+    }
+    return {
+      date,
+      duplicate: true as const,
+      requestHash,
+      priorResponse: receipt.response,
+      state: await readLiveState(ownerId, date),
+    };
+  }
+  const state = await readLiveState(ownerId, date);
+  if (!state.workbench || state.workbench.id !== input.expectedWorkbenchId) {
+    throw new SpecialistControlError(
+      "stale_workbench",
+      "Today changed in another surface. Read Today again before retrying the command.",
+    );
+  }
+  return {
+    date,
+    duplicate: false as const,
+    requestHash,
+    priorResponse: null,
+    state,
+  };
+}
+
+function requireTimerRevision(
+  state: Awaited<ReturnType<typeof readLiveState>>,
+  activityId: string,
+  expectedRevision: number,
+) {
+  const actualRevision = state.timers[activityId]?.revision ?? 0;
+  if (actualRevision !== expectedRevision) {
+    throw new SpecialistControlError(
+      "stale_timer_revision",
+      `The activity timer changed from revision ${expectedRevision} to ${actualRevision}. Read Today again before retrying.`,
+    );
+  }
+}
+
+async function rememberSpecialistMutation(
+  ownerId: string,
+  input: { mutationId: string; expectedWorkbenchId: string },
+  requestHash: string,
+  response: Record<string, unknown>,
+) {
+  await rememberPlanningMutation(ownerId, {
+    mutationId: input.mutationId,
+    workbenchId: input.expectedWorkbenchId,
+    requestHash,
+    response,
+    createdAt: Date.now(),
+  });
+}
+
+function specialistToolFailure(error: unknown) {
+  if (
+    error instanceof SpecialistControlError
+    || error instanceof PlanningSelectionError
+    || error instanceof TodayPlanningConflictError
+    || error instanceof TimerStateConflictError
+  ) {
+    const code = "code" in error && typeof error.code === "string"
+      ? error.code
+      : error instanceof TimerStateConflictError
+        ? "timer_state_conflict"
+        : "specialist_control_conflict";
+    return {
+      isError: true,
+      content: [{ type: "text" as const, text: error.message }],
+      structuredContent: { error: error.message, code, retryable: false },
+    };
+  }
+  throw error;
+}
+
+const specialistCatalogSchema = z.object({
+  specialty: z.enum(planningSpecialties),
+  search: z.string().max(500).optional(),
+  questionId: z.string().min(1).max(500).optional(),
+  title: z.string().min(1).max(500).optional(),
+  starredOnly: z.boolean().optional(),
+  difficulty: z.array(z.enum(["easy", "medium", "hard"])).max(3).optional(),
+  attention: z.array(z.enum(["due", "needs_review", "solved", "helped", "failed", "todo"])).max(6).optional(),
+  sort: z.enum(["frequency", "recent", "acceptance"]).optional(),
+  direction: z.enum(["asc", "desc"]).optional(),
+  page: z.number().int().min(1).optional(),
+  pageSize: z.number().int().min(1).max(100).optional(),
+});
+
+type SpecialistCatalogInput = z.infer<typeof specialistCatalogSchema>;
+
+function specialistPlanningRequest(input: SpecialistCatalogInput) {
+  const url = new URL("https://interview-arc.local/voice/planning");
+  url.searchParams.set("specialty", input.specialty);
+  const search = input.questionId ?? input.title ?? input.search;
+  if (search) url.searchParams.set("search", search);
+  if (input.starredOnly) url.searchParams.set("starred", "true");
+  if (input.difficulty?.length) url.searchParams.set("difficulty", input.difficulty.join(","));
+  if (input.attention?.length) url.searchParams.set("attention", input.attention.join(","));
+  if (input.sort) url.searchParams.set("sort", input.sort);
+  if (input.direction) url.searchParams.set("direction", input.direction);
+  if (input.page) url.searchParams.set("page", String(input.page));
+  if (input.pageSize) url.searchParams.set("pageSize", String(input.pageSize));
+  return new Request(url);
+}
+
+async function specialistCatalog(
+  ownerId: string,
+  input: SpecialistCatalogInput,
+  context?: PlanningDataContext,
+) {
+  const payload = await decodeInternalResponse(
+    await planningData(ownerId, specialistPlanningRequest(input), context),
+  );
+  const catalog = payload.catalog as { items?: unknown[] } | undefined;
+  if (input.questionId || input.title) {
+    const expected = (input.questionId ?? input.title ?? "").normalize("NFKC").toLowerCase();
+    const exact = (catalog?.items ?? []).filter((candidate) => {
+      const item = candidate as { id?: unknown; title?: unknown };
+      const value = input.questionId ? item.id : item.title;
+      return typeof value === "string" && value.normalize("NFKC").toLowerCase() === expected;
+    });
+    if (exact.length !== 1) {
+      throw new SpecialistControlError(
+        "catalog_question_not_found",
+        `No authoritative ${input.specialty} question matched the requested ${input.questionId ? "ID" : "title"}.`,
+      );
+    }
+    payload.catalog = { ...catalog, items: exact, total: 1, hasMore: false };
+  }
+  return payload;
+}
+
+function planningSelectionFromCatalogItem(
+  specialty: PlanningSpecialty,
+  candidate: unknown,
+): PlanningSelection {
+  const item = candidate as {
+    id?: unknown;
+    title?: unknown;
+    url?: unknown;
+    prompt?: unknown;
+    targetMinutes?: unknown;
+    topics?: unknown;
+    eligible?: unknown;
+    disabledReason?: unknown;
+  };
+  if (item.eligible !== true) {
+    throw new SpecialistControlError(
+      "practice_question_ineligible",
+      typeof item.disabledReason === "string" ? item.disabledReason : "That question is not eligible for Today.",
+    );
+  }
+  if (typeof item.id !== "string" || typeof item.title !== "string" || typeof item.targetMinutes !== "number") {
+    throw new SpecialistControlError("invalid_catalog_item", "The authoritative catalog returned an incomplete question.");
+  }
+  return {
+    kind: "practice",
+    specialty,
+    questionId: item.id,
+    title: item.title,
+    ...(typeof item.url === "string" ? { url: item.url } : {}),
+    ...(typeof item.prompt === "string" ? { prompt: item.prompt } : {}),
+    minutes: item.targetMinutes,
+    ...(Array.isArray(item.topics) ? { topics: item.topics.map(String) } : {}),
+  };
+}
+
+async function authoritativeSpecialistState(ownerId: string, date?: string) {
+  const [snapshot, timerInstrument] = await Promise.all([
+    buildPracticeSnapshot(ownerId, date),
+    readVoiceTimerInstrument(ownerId),
+  ]);
+  return { snapshot, timerInstrument };
+}
+
 function createServer(ownerId: string, env: Env) {
   const server = new McpServer({ name: "Interview Arc", version: "1.0.0" });
 
@@ -1863,6 +2130,350 @@ function createServer(ownerId: string, env: Env) {
         content: [{ type: "text", text: `Saved ${input.status} delivery analysis for ${input.activityId}.` }],
         structuredContent: { analysisId, activityId: input.activityId, status: input.status },
       };
+    },
+  );
+
+  server.registerTool(
+    "query_practice_catalog",
+    {
+      description: "Query the authenticated owner's authoritative practice catalog by specialty, exact public question ID or title, search, star, review/result state, difficulty, and sort order. This is read-only and returns the current workbench identity needed by mutation tools.",
+      inputSchema: specialistCatalogSchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const payload = await specialistCatalog(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+          structuredContent: payload,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "plan_today_practice",
+    {
+      description: "Add an exact authoritative question selection to Today or create one exact-count filtered practice session. Requires the current workbench ID and a stable mutation ID. Filtered sessions never silently relax criteria.",
+      inputSchema: {
+        mode: z.enum(["exact_selection", "filtered_session"]),
+        expectedWorkbenchId: z.string().min(1),
+        mutationId: z.string().min(1).max(120),
+        destination: z.enum(["standalone", "session"]).optional(),
+        selections: z.array(z.object({
+          specialty: z.enum(planningSpecialties),
+          questionId: z.string().min(1),
+        })).min(1).max(30).optional(),
+        specialty: z.enum(planningSpecialties).optional(),
+        count: z.number().int().min(1).max(30).optional(),
+        search: z.string().max(500).optional(),
+        starredOnly: z.boolean().optional(),
+        difficulty: z.array(z.enum(["easy", "medium", "hard"])).max(3).optional(),
+        attention: z.array(z.enum(["due", "needs_review", "solved", "helped", "failed", "todo"])).max(6).optional(),
+        sort: z.enum(["frequency", "recent", "acceptance"]).optional(),
+        direction: z.enum(["asc", "desc"]).optional(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        let selections: PlanningSelection[];
+        let destination: "standalone" | "session";
+        if (input.mode === "exact_selection") {
+          if (!input.selections?.length) {
+            throw new SpecialistControlError("selection_required", "Exact planning requires at least one specialty and question ID.");
+          }
+          const uniqueSelections = new Set(
+            input.selections.map((selection) => `${selection.specialty}:${selection.questionId}`),
+          );
+          if (uniqueSelections.size !== input.selections.length) {
+            throw new SpecialistControlError(
+              "duplicate_selection",
+              "Each specialty and question ID may appear only once in one planning mutation.",
+            );
+          }
+          destination = input.destination ?? "standalone";
+          const date = dateInPracticeTimeZone();
+          const [content, state] = await Promise.all([
+            loadContentIndex(),
+            readLiveState(ownerId, date),
+          ]);
+          const context = { date, content, state };
+          selections = await Promise.all(input.selections.map(async (selection) => {
+            const payload = await specialistCatalog(ownerId, {
+              specialty: selection.specialty,
+              questionId: selection.questionId,
+              pageSize: 100,
+            }, context);
+            const item = (payload.catalog as { items: unknown[] }).items[0];
+            return planningSelectionFromCatalogItem(selection.specialty, item);
+          }));
+        } else {
+          if (!input.specialty || !input.count) {
+            throw new SpecialistControlError("filtered_session_required", "Filtered session planning requires a specialty and exact count.");
+          }
+          destination = "session";
+          const items: unknown[] = [];
+          let page = 1;
+          let hasMore = true;
+          const date = dateInPracticeTimeZone();
+          const [content, state] = await Promise.all([
+            loadContentIndex(),
+            readLiveState(ownerId, date),
+          ]);
+          const context = { date, content, state };
+          while (hasMore) {
+            const payload = await specialistCatalog(ownerId, {
+              specialty: input.specialty,
+              search: input.search,
+              starredOnly: input.starredOnly,
+              difficulty: input.difficulty,
+              attention: input.attention,
+              sort: input.sort,
+              direction: input.direction,
+              page,
+              pageSize: 100,
+            }, context);
+            const catalog = payload.catalog as { items: unknown[]; hasMore: boolean };
+            items.push(...catalog.items);
+            hasMore = catalog.hasMore;
+            page += 1;
+          }
+          const blocked = new Set(items.flatMap((candidate) => {
+            const item = candidate as { id?: unknown; eligible?: unknown };
+            return item.eligible === false && typeof item.id === "string" ? [item.id] : [];
+          }));
+          const chosen = selectExactPlanningQuestions(items as never[], {
+            count: input.count,
+            blockedQuestionIds: blocked,
+            sort: input.sort,
+            direction: input.direction,
+            levels: input.difficulty?.length ? new Set(input.difficulty) : undefined,
+          });
+          selections = chosen.map((item) => planningSelectionFromCatalogItem(input.specialty!, item));
+        }
+        const response = await voicePlanningMutation(ownerId, new Request(
+          "https://interview-arc.local/voice/planning/mutations",
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              type: "add_selection",
+              mutationId: input.mutationId,
+              workbenchId: input.expectedWorkbenchId,
+              destination,
+              selections,
+            }),
+          },
+        ), env);
+        const result = await decodeInternalResponse(response);
+        const authoritative = await authoritativeSpecialistState(ownerId);
+        const payload = { ...result, authoritative };
+        return {
+          content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+          structuredContent: payload,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "control_practice_timer",
+    {
+      description: "Execute an explicitly requested authoritative practice-timer command. Supports start, pause, resume, finish, and guarded finish-and-advance. Requires current workbench/timer revisions plus a stable mutation ID; exact retries are idempotent.",
+      inputSchema: {
+        expectedWorkbenchId: z.string().min(1),
+        mutationId: z.string().min(1).max(120),
+        activityId: z.string().min(1),
+        expectedRevision: z.number().int().nonnegative(),
+        action: z.enum(["start", "pause", "resume", "finish", "finish_and_advance"]),
+        nextActivityId: z.string().min(1).optional(),
+        expectedNextRevision: z.number().int().nonnegative().optional(),
+        authorization: z.literal("explicit_user_instruction"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const prepared = await prepareSpecialistMutation(ownerId, {
+          operation: "control_practice_timer",
+          ...input,
+        });
+        if (prepared.duplicate) {
+          const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
+          const payload = { duplicate: true, result: prepared.priorResponse, authoritative };
+          return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
+        }
+        const activityPayload = specialistPracticeActivity(prepared.state, input.activityId);
+        requireTimerRevision(prepared.state, input.activityId, input.expectedRevision);
+        const instrument = await readVoiceTimerInstrument(ownerId);
+        const activity = instrument.activities.find((candidate) => candidate.id === input.activityId);
+        if (!activity || activity.activityClass !== "practice") {
+          throw new SpecialistControlError("practice_activity_not_found", "The practice activity is not available to the timer instrument.");
+        }
+        const now = Date.now();
+        let advancedTo: string | null = null;
+        let receiptStored = false;
+        if (input.action === "finish_and_advance") {
+          if (!activity.timer?.startedAt || activity.timer.completed) {
+            throw new SpecialistControlError("timer_not_finishable", "The current activity must be started and unfinished before advancing.");
+          }
+          if (!activity.outcome) {
+            throw new SpecialistControlError("result_required", "Set an explicit result before finishing and advancing.");
+          }
+          const sessionActivityIds = activityPayload.sessionId
+            ? specialistSession(prepared.state, activityPayload.sessionId).activityIds
+            : [];
+          advancedTo = selectNextPracticeActivity({
+            currentActivityId: input.activityId,
+            explicitNextActivityId: input.nextActivityId,
+            sessionActivityIds,
+            practiceActivityIds: new Set(prepared.state.extraActivities.flatMap((candidate) => {
+              const item = candidate as { id?: unknown; type?: unknown };
+              return typeof item.id === "string" && ["leetcode", "system_design", "behavioral"].includes(String(item.type))
+                ? [item.id]
+                : [];
+            })),
+            completedActivityIds: new Set(Object.entries(prepared.state.timers).flatMap(([id, timer]) => (
+              timer?.completed ? [id] : []
+            ))),
+          });
+          const nextPayload = specialistPracticeActivity(prepared.state, advancedTo);
+          if (input.expectedNextRevision == null) {
+            throw new SpecialistControlError(
+              "next_timer_revision_required",
+              "Finish-and-advance requires the next activity's current timer revision.",
+            );
+          }
+          requireTimerRevision(prepared.state, advancedTo, input.expectedNextRevision);
+          const nextTimer = prepared.state.timers[advancedTo];
+          if (nextTimer?.completed) {
+            throw new SpecialistControlError("next_activity_unavailable", "The next activity is already finished.");
+          }
+          const voiceGuard = await prepareVoiceCapturesForFinish(ownerId, input.activityId, now);
+          const voiceConflict = voiceFinishGuardMessage(voiceGuard);
+          if (voiceConflict) {
+            throw new TimerStateConflictError(voiceConflict);
+          }
+          const atomicReceipt = {
+            mutationId: input.mutationId,
+            activityId: input.activityId,
+            action: input.action,
+            advancedTo,
+            applied: true,
+          };
+          await finishAndAdvancePracticeActivity({
+            ownerId,
+            currentActivityId: input.activityId,
+            expectedCurrentRevision: input.expectedRevision,
+            nextActivityId: advancedTo,
+            nextSessionId: nextPayload.sessionId,
+            expectedNextRevision: input.expectedNextRevision,
+            mutationId: input.mutationId,
+            workbenchId: input.expectedWorkbenchId,
+            requestHash: prepared.requestHash,
+            receipt: atomicReceipt,
+            now,
+          });
+          receiptStored = true;
+          try {
+            await scheduleCompletedVoiceActivity(ownerId, activity, activity.outcome, prepared.date, now);
+          } catch {
+            // Review scheduling is repairable metadata. The atomic timer and
+            // receipt commit remains successful and an exact retry is safe.
+          }
+        } else {
+          const action: TimerAction = input.action === "resume" ? "start" : input.action;
+          if (action === "start" && activityPayload.sessionId) {
+            const session = specialistSession(prepared.state, activityPayload.sessionId);
+            await applyTimerAction(ownerId, activityPayload.sessionId, "session", "start", now, {
+              activityIds: session.activityIds,
+            });
+          }
+          await applyTimerAction(ownerId, input.activityId, "activity", action, now, {
+            sessionId: activityPayload.sessionId,
+            expectedRevision: input.expectedRevision,
+          });
+          if (action === "finish" && activity.outcome) {
+            await scheduleCompletedVoiceActivity(ownerId, activity, activity.outcome, prepared.date, now);
+          }
+        }
+        const result = {
+          mutationId: input.mutationId,
+          activityId: input.activityId,
+          action: input.action,
+          advancedTo,
+          applied: true,
+        };
+        if (!receiptStored) {
+          await rememberSpecialistMutation(ownerId, input, prepared.requestHash, result);
+        }
+        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "timer");
+        const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
+        const payload = { duplicate: false, result, authoritative };
+        return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "set_practice_result",
+    {
+      description: "Set or clear a practice result only from an explicit user instruction or an authorized platform verdict. Never infer a result from elapsed time, specialist feedback, or generated code. Requires a current workbench ID and stable mutation ID.",
+      inputSchema: {
+        expectedWorkbenchId: z.string().min(1),
+        mutationId: z.string().min(1).max(120),
+        activityId: z.string().min(1),
+        result: z.enum(["solved", "solved_after_reviewing_approach", "failed"]).nullable(),
+        authorization: z.enum(["explicit_user_instruction", "authorized_platform_verdict"]),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const prepared = await prepareSpecialistMutation(ownerId, {
+          operation: "set_practice_result",
+          ...input,
+        });
+        if (prepared.duplicate) {
+          const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
+          const payload = { duplicate: true, result: prepared.priorResponse, authoritative };
+          return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
+        }
+        specialistPracticeActivity(prepared.state, input.activityId);
+        const instrument = await readVoiceTimerInstrument(ownerId);
+        const activity = instrument.activities.find((candidate) => candidate.id === input.activityId);
+        if (!activity || activity.activityClass !== "practice") {
+          throw new SpecialistControlError("practice_activity_not_found", "The practice activity is not available to the timer instrument.");
+        }
+        const now = Date.now();
+        await setOutcome(ownerId, input.activityId, input.result, now);
+        if (!input.result) {
+          await clearActivityReviewSchedules(ownerId, input.activityId);
+        } else if (activity.timer?.completed) {
+          await scheduleCompletedVoiceActivity(ownerId, activity, input.result, prepared.date, now);
+        }
+        const result = {
+          mutationId: input.mutationId,
+          activityId: input.activityId,
+          result: input.result,
+          authorization: input.authorization,
+          applied: true,
+        };
+        await rememberSpecialistMutation(ownerId, input, prepared.requestHash, result);
+        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "practice");
+        const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
+        const payload = { duplicate: false, result, authoritative };
+        return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
     },
   );
 

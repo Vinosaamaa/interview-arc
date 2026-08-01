@@ -103,6 +103,10 @@ Do not treat the second flow as a successful attempt. Choose the record kind fro
 
 ## Session Commands
 
+For coding catalog, planning, result, and `control_practice_timer` commands,
+follow `../../docs/contracts/specialist-today-controls.md`; preserve the exact
+requested coding filters and count rather than substituting another problem.
+
 ### Start Or Resume A Problem
 
 When the user says `Start a new session`, clearly begins one problem, asks about

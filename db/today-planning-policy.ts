@@ -11,6 +11,16 @@ export type PlanningAttention =
   | "failed"
   | "todo";
 
+export class PlanningSelectionError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "PlanningSelectionError";
+    this.code = code;
+  }
+}
+
 export type PlanningCatalogItem = QuestionBankItem & {
   eligible: boolean;
   disabledReason: string | null;
@@ -32,6 +42,10 @@ type CatalogOptions = {
   pageSize?: number;
   blockedQuestionIds?: Set<string>;
   recencyByQuestionId?: Map<string, number>;
+};
+
+type ExactPlanningOptions = Omit<CatalogOptions, "page" | "pageSize"> & {
+  count: number;
 };
 
 function normalized(value: string) {
@@ -106,6 +120,7 @@ export function filterPlanningCatalog(
     .filter((question) => {
       if (!query) return true;
       return normalized([
+        question.id,
         question.title,
         question.prompt ?? "",
         ...(question.topics ?? []),
@@ -122,7 +137,9 @@ export function filterPlanningCatalog(
       const review = [...filters].filter(
         (filter) => filter === "due" || filter === "needs_review",
       );
-      const result = [...filters].filter((filter) => !review.includes(filter));
+      const result = [...filters].filter(
+        (filter) => filter !== "due" && filter !== "needs_review",
+      );
       return (review.length === 0 || review.some((filter) => question.attention.includes(filter)))
         && (result.length === 0 || result.some((filter) => question.attention.includes(filter)));
     })
@@ -150,6 +167,28 @@ export function filterPlanningCatalog(
     attentionCounts,
     difficultyCounts,
   };
+}
+
+export function selectExactPlanningQuestions(
+  questions: QuestionBankItem[],
+  options: ExactPlanningOptions,
+) {
+  const blocked = options.blockedQuestionIds ?? new Set<string>();
+  const eligibleQuestions = questions.filter((question) => !blocked.has(question.id));
+  const result = filterPlanningCatalog(eligibleQuestions, {
+    ...options,
+    blockedQuestionIds: new Set(),
+    page: 1,
+    pageSize: Math.max(1, options.count),
+  });
+  const selected = result.items;
+  if (selected.length < options.count) {
+    throw new PlanningSelectionError(
+      "insufficient_eligible_questions",
+      `The requested ${options.count} eligible questions could not be selected; found ${selected.length}.`,
+    );
+  }
+  return selected.slice(0, options.count);
 }
 
 export type PlanningSelection =
