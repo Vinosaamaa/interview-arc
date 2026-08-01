@@ -195,24 +195,17 @@ package, install, or repair an optional local toolchain when the repository's
 approved release path owns that work.
 
 For website work, keep the supported local-D1 checks, focused tests, lint, and
-build before the independent hosted checks. For Voice work, follow the hosted
-CI efficiency and immutable artifact-provenance contract in the Voice
-repository:
-
-1. Iterate with focused lightweight local checks and do not use full hosted
-   package builds for every intermediate push.
-2. When the branch is ready, run one complete pull-request validation and
-   package workflow.
-3. Download and stage that exact PR artifact when the selected verification
-   lane requires a staged-app check.
-4. After merge, promote the PR artifact only when its embedded immutable Git
-   tree exactly equals merged `main`. A different tree, missing artifact, or
-   invalid provenance must run the complete merged-main build.
-5. When promotion proves that merged `main` is byte-identical to the already
-   staged PR artifact, record the promotion and reuse those exact local bytes;
-   do not download, rebuild, or repeat an equivalent staged smoke test merely
-   because the merge commit or artifact name changed. Continue to perform the
-   lane's required signing, installation, and installed-app verification.
+build before the independent hosted checks. For Voice work, the Hosted CI
+efficiency rules in `interview-arc-voice/AGENTS.md` and the detailed
+`interview-arc-voice/docs/artifact-promotion.md` contract are authoritative.
+The ledger must identify the focused local checks, complete PR workflow,
+applicable staged-artifact verification, and whether merged `main` promoted
+tree-equivalent bytes or rebuilt. When promotion proves that merged `main` is
+byte-identical to the already staged PR artifact, record reuse of those exact
+local bytes; do not download, rebuild, or repeat an equivalent staged smoke
+test merely because the merge commit or artifact name changed. All
+lane-specific signing, installation, and installed-app requirements below
+still apply.
 
 If hosted CI is blocked by billing or infrastructure, do not retry it blindly:
 record whether the job started and consumed runner time, complete every safe
