@@ -164,9 +164,17 @@ the user can see what this specific task actually did. The ledger is live
 instrumentation, not a standard release checklist and not a narrative
 reconstructed at handoff time.
 
-Before the first substantive action, read the current system clock and record
-`ledger_started_at`. At the instant each actual task step begins and ends,
-record an exact Pacific timestamp in this format:
+Wall-clock timing begins when the user submits the request, including model
+processing before the first tool call. Use the client's exact “worked for” or
+turn duration as the authoritative wall-clock measurement when it is exposed.
+The first shell or tool timestamp marks only the start of tool execution; never
+substitute it for the request-submission time. If neither the request timestamp
+nor a client-measured duration is available, report total wall-clock time as
+`unknown`.
+
+Before the first substantive tool action, read the current system clock and
+record `tool_execution_started_at`. At the boundaries of each meaningful work
+block, record an exact Pacific timestamp in this format:
 
 ```text
 YYYY-MM-DD HH:MM:SS PDT (-0700)
@@ -178,48 +186,53 @@ timestamps. Derive each step duration arithmetically from its recorded start
 and end; never infer it from memory, file modification times, commit times, or
 approximate conversation position.
 
-Name every row after the concrete action performed and its target or outcome,
-such as inspecting one reported layout, changing one configuration, waiting
-for one named workflow, or verifying one installed behavior. Author these rows
-from the current task; never begin with a universal list of phases. If an
-action did not happen, omit it completely. Do not add `Not run`, `N/A`,
-zero-duration placeholders, or empty rows merely to satisfy a template. If an
-action repeats, record each occurrence separately and explain why it repeated.
+Name every row after a meaningful task-specific work block and its target or
+outcome. Author the blocks from the current task; never begin with a universal
+list of phases. Consolidate related actions whose individual durations are
+under two minutes into one concise block. Never expose one- or two-second shell
+commands as separate rows. If the whole task takes less than two minutes, use
+one row for the complete task. If an action did not happen, omit it completely.
+Do not add `Not run`, `N/A`, zero-duration placeholders, or empty rows merely
+to satisfy a template. If a meaningful action repeats, record the repeated
+block separately and explain why it repeated.
 
 Use this flexible template for only the steps that actually occurred:
 
 ```markdown
 ## Execution ledger
 
-- ledger_started_at: YYYY-MM-DD HH:MM:SS PDT/PST (UTC offset)
+- request_submitted_at: exact client timestamp or unavailable
+- tool_execution_started_at: YYYY-MM-DD HH:MM:SS PDT/PST (UTC offset)
 - ledger_finished_at: YYYY-MM-DD HH:MM:SS PDT/PST (UTC offset)
 - client_measured_duration: HH:MM:SS or unavailable
 - reconciliation: matched, or a concrete explanation of the resolved difference
 
-| Actual step performed | Started | Ended | Duration | Result |
+| Meaningful work block | Started | Ended | Duration | Result |
 | --- | --- | --- | ---: | --- |
-| Concrete action from this task | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | Concrete result |
+| Concise task-specific work block | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | Concrete result |
 
-- timestamp-derived wall-clock total: HH:MM:SS
+- client-measured wall-clock total: HH:MM:SS or unknown
 - active engineering total: HH:MM:SS or unknown
 - uninstrumented gaps or overlap notes, only when present:
 - hosted runs, artifacts, and metered usage, only when used:
 ```
 
-Record an external wait or blocker as its own task-specific row only when it
-actually occurs. When actions overlap, identify the overlap and do not
-double-count it.
+Record an external wait or blocker as its own task-specific block only when it
+actually occurs and lasts at least two minutes. Consolidate shorter waits into
+one concise note rather than publishing individual micro-rows. When actions
+overlap, identify the overlap and do not double-count it.
 
-At handoff, calculate total wall-clock time from `ledger_started_at` through the
-final recorded timestamp. When the client exposes an exact “worked for” or turn
-duration covering the same interval, compare it with the timestamp-derived
-total and reconcile any discrepancy before responding. Do not publish two
-inconsistent totals. Calculate active engineering time only from recorded,
-non-overlapping active intervals after excluding external waits. If exact
-instrumentation was missed, report the affected duration as `unknown`; do not
-substitute a confident-looking estimate. Historical work that predates this
-rule may be explicitly labeled `reconstructed`, but reconstructed values must
-not be presented as exact measurements.
+At handoff, use the client's exact “worked for” or turn duration as total
+wall-clock time because it includes pre-tool model processing. If the client
+also exposes the request timestamp, reconcile it with the final timestamp. Do
+not calculate wall-clock time from `tool_execution_started_at`; that would omit
+pre-tool processing. If client timing is unavailable, report wall-clock time as
+`unknown`. Calculate active engineering time only from recorded,
+non-overlapping meaningful work blocks after excluding external waits. If
+exact instrumentation was missed, report the affected duration as `unknown`;
+do not substitute a confident-looking estimate. Historical work that predates
+this rule may be explicitly labeled `reconstructed`, but reconstructed values
+must not be presented as exact measurements.
 
 Post an interim ledger update whenever wall-clock time exceeds 30 minutes
 rather than waiting until the end.
