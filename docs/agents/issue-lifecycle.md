@@ -160,7 +160,24 @@ The PR records:
 ## Execution time and metered-cost record
 
 Every implementation PR must keep a concise execution ledger so the user can
-see where the work went. Record elapsed time separately for:
+see where the work went. The ledger is live instrumentation, not a narrative
+reconstructed at handoff time.
+
+Before the first substantive action, read the current system clock and record
+`ledger_started_at`. At the instant each phase begins and ends, record an exact
+Pacific timestamp in this format:
+
+```text
+YYYY-MM-DD HH:MM:SS PDT (-0700)
+YYYY-MM-DD HH:MM:SS PST (-0800)
+```
+
+Use `PDT` or `PST` according to the clock on that date. Do not round these
+timestamps. Derive each phase duration arithmetically from its recorded start
+and end; never infer it from memory, file modification times, commit times, or
+approximate conversation position.
+
+Record exact start, end, derived duration, and completed work separately for:
 
 - intake, instruction reading, and issue preparation;
 - reproduction and diagnosis;
@@ -172,13 +189,23 @@ see where the work went. Record elapsed time separately for:
 - installed or production verification;
 - external waiting and infrastructure blockers.
 
-For each phase, record the start and end time or elapsed minutes and the
-concrete work completed. Mark an expected phase that did not run and explain
-why. When phases overlap, say so and do not double-count them. Explain every
-repeated build or hosted run. Report both total wall-clock time and estimated
-active engineering time, and label reconstructed times as estimates rather
-than implying stopwatch precision. Post an interim ledger update whenever work
-exceeds 30 minutes rather than waiting until the end.
+Mark an expected phase that did not run and explain why. Record external waits
+as their own intervals. When phases overlap, identify the overlap and do not
+double-count it. Explain every repeated build or hosted run.
+
+At handoff, calculate total wall-clock time from `ledger_started_at` through the
+final recorded timestamp. When the client exposes an exact “worked for” or turn
+duration covering the same interval, compare it with the timestamp-derived
+total and reconcile any discrepancy before responding. Do not publish two
+inconsistent totals. Calculate active engineering time only from recorded,
+non-overlapping active intervals after excluding external waits. If exact
+instrumentation was missed, report the affected duration as `unknown`; do not
+substitute a confident-looking estimate. Historical work that predates this
+rule may be explicitly labeled `reconstructed`, but reconstructed values must
+not be presented as exact measurements.
+
+Post an interim ledger update whenever wall-clock time exceeds 30 minutes
+rather than waiting until the end.
 
 The final user-facing handoff for every implementation turn must repeat this
 complete ledger; a PR link or one combined total is not a substitute. The
