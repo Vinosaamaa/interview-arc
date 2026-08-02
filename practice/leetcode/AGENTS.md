@@ -414,9 +414,10 @@ or tab for authentication.
 - Use targeted URL, problem-title, editor, submission-state, and verdict waits.
   Do not wait for global network idle, add arbitrary sleeps, poll continuously,
   or use screenshots/pixel coordinates for routine submission.
-- If authentication expires, preserve the browser/profile and ask the user to
-  sign in. Do not discard the profile, copy credentials, or create another
-  authenticated browser.
+- If authentication expires, preserve the browser/profile, foreground the
+  existing dedicated tab, and ask the user to sign in there. Restore the
+  previously active app afterward. Do not discard the profile, copy
+  credentials, or create another authenticated browser.
 
 ### Interview Arc Control Boundary
 
