@@ -232,10 +232,10 @@ series of local attempt snapshots.
      Google Chrome tab. Reproduce every faithfully representable relationship
      as concise ASCII/text in both the conversation and the Java header comment.
    - If ASCII/text would lose material information and the user needs to inspect
-     that visual, bring the existing tab to the foreground. This is the only
-     routine practice flow that may foreground the dedicated browser. Reuse the
-     same tab, then restore the previously active app as soon as the inspection
-     is complete.
+     that visual, bring the existing tab to the foreground. Material visual
+     inspection and user authentication are the only flows that may foreground
+     the dedicated browser. Reuse the same tab, then restore the previously
+     active app as soon as the inspection is complete.
    - Screenshots are transient comprehension aids only. Never use image
      coordinates for submission, commit copied problem images, omit a material
      visual relationship, or invent one that cannot be verified.
@@ -256,9 +256,9 @@ series of local attempt snapshots.
 5. Every time the file is prepared or resumed, give the user the complete
    absolute editor command:
 
-   `micro -syntax java "<absolute-path-to-the-file>"`
+   `nvim "<absolute-path-to-the-file>"`
 
-   The user opens `micro`. Do not assume that Codex can safely create or target
+   The user opens `nvim`. Do not assume that Codex can safely create or target
    a Warp pane, and do not replace the running Codex process with the editor.
 
 ### Test And Submit
@@ -350,7 +350,10 @@ different browser lifecycle from the approved CDP browser.
 The dedicated profile is durable authentication state. Never delete, replace,
 copy, or recreate it merely because Codex, cmux, Playwright, or the CDP
 connection restarted. If LeetCode authentication expires, keep the browser and
-profile intact and ask the user to sign in within that dedicated window.
+profile intact, bring that existing dedicated tab to the foreground, and ask
+the user to sign in there. After authentication succeeds, restore the app that
+was active before the authentication flow. Never open another browser, profile,
+or tab for authentication.
 
 #### Ordinary-Chrome safety boundary
 
@@ -372,10 +375,10 @@ profile intact and ask the user to sign in within that dedicated window.
 - Run the dedicated Chrome headed, not headless, while keeping it behind the
   user's active app. Do not minimize or suspend it. Routine navigation, code
   insertion, submission, verdict reading, and tab reuse must remain in the
-  background. Foreground the existing tab only for the material visual fallback
-  defined in **Prepare The Problem**, and restore the previously active app
-  immediately afterward. If authentication expires, ask the user to switch to
-  the preserved dedicated window rather than automatically foregrounding it.
+  background. Foreground the existing dedicated tab only for the material
+  visual fallback defined in **Prepare The Problem** or when the user must
+  authenticate. In both cases, restore the previously active app immediately
+  after the user finishes interacting with Chrome.
 - Keep the Chrome process independent from one Playwright connection and
   reconnect through its loopback-only CDP endpoint after Codex, cmux, or the
   Playwright controller restarts. Never expose that endpoint beyond localhost.
@@ -389,7 +392,7 @@ profile intact and ask the user to sign in within that dedicated window.
 - For the first problem, navigate the single tab to the verified canonical
   public problem URL. Wait for the matching problem identity and editable Java
   editor, then leave the browser in the background while the user works in
-  `micro`.
+  `nvim`.
 - For a new activity/problem, reuse that same tab and navigate it directly to
   the new verified canonical problem URL. Confirm the number/title/slug, select
   Java when necessary, and wait for the editable problem page. Never close the
@@ -411,9 +414,9 @@ profile intact and ask the user to sign in within that dedicated window.
 - Use targeted URL, problem-title, editor, submission-state, and verdict waits.
   Do not wait for global network idle, add arbitrary sleeps, poll continuously,
   or use screenshots/pixel coordinates for routine submission.
-- If authentication expires, preserve the browser/profile and ask the user to
-  sign in. Do not discard the profile, copy credentials, or create another
-  authenticated browser.
+- If authentication expires, follow the dedicated-profile authentication
+  procedure above. Do not discard the profile, copy credentials, or create
+  another authenticated browser.
 
 ### Interview Arc Control Boundary
 
