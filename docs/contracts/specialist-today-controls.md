@@ -43,6 +43,13 @@ schema. A specialist must receive an explicit user instruction before changing
 a timer or result. An authorized platform verdict may set a result, but may not
 implicitly start, stop, finish, or advance a timer.
 
+Any eligible planned practice activity in the current open workbench is a valid
+timer or result target, even when no activity or session is focused yet. MCP
+controls resolve their target from the authoritative workbench state and join
+its timer and outcome by activity ID. They must not use the Voice timer
+instrument as an activity catalog: that instrument intentionally projects only
+an already-running session or one explicitly focused activity.
+
 `finish_and_advance` preflights the current result, current and next timer
 revisions, next-activity eligibility, and session order before finishing. Voice
 capture finish guards remain authoritative. If a guard fails, the operation

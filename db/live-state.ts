@@ -30,6 +30,7 @@ import {
   readDurablePracticeSummary,
   voiceFinishGuardMessage,
 } from "./durable-practice";
+import { voiceTimerActivityIds } from "./voice-timer-policy";
 
 export type TimerKind = "activity" | "session";
 export type TimerAction = "start" | "pause" | "finish";
@@ -352,8 +353,9 @@ export async function readVoiceTimerInstrument(ownerId: string): Promise<VoiceTi
       }
     : null;
 
-  const activityIds = session?.activityIds ?? (
-    focus?.activityId ? [focus.activityId] : []
+  const activityIds = voiceTimerActivityIds(
+    session?.activityIds ?? null,
+    focus?.activityId ?? null,
   );
   const activities = activityIds.flatMap((activityId) => {
     const payload = activityById.get(activityId);
