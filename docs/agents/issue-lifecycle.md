@@ -189,6 +189,35 @@ Record exact start, end, derived duration, and completed work separately for:
 - installed or production verification;
 - external waiting and infrastructure blockers.
 
+Use this exact template for the PR record and final handoff; do not rename,
+combine, or omit rows:
+
+```markdown
+## Execution ledger
+
+- ledger_started_at: YYYY-MM-DD HH:MM:SS PDT/PST (UTC offset)
+- ledger_finished_at: YYYY-MM-DD HH:MM:SS PDT/PST (UTC offset)
+- client_measured_duration: HH:MM:SS or unavailable
+- reconciliation: matched, or a concrete explanation of the resolved difference
+
+| Phase | Started | Ended | Duration | Status and work completed |
+| --- | --- | --- | ---: | --- |
+| Intake, instructions, issue preparation | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | |
+| Reproduction and diagnosis | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | |
+| Implementation | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | |
+| Focused local checks | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | |
+| Full build and packaging | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | |
+| Artifact provenance, staging, signing | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | |
+| Installation or deployment | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | |
+| Installed or production verification | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | |
+| External waiting or blockers | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | |
+
+- timestamp-derived wall-clock total: HH:MM:SS
+- active engineering total: HH:MM:SS or unknown
+- overlap/exclusion notes:
+- GitHub Actions and metered usage:
+```
+
 Mark an expected phase that did not run and explain why. Record external waits
 as their own intervals. When phases overlap, identify the overlap and do not
 double-count it. Explain every repeated build or hosted run.
