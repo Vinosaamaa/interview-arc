@@ -228,9 +228,9 @@ series of local attempt snapshots.
    method signature in the visible specialist conversation. Do not copy the
    protected official statement.
    - When an example depends on a graph, tree, grid, diagram, or other visual,
-     inspect the original in the persistent Playwright-controlled Chrome for
-     Testing tab. Reproduce every faithfully representable relationship as
-     concise ASCII/text in both the conversation and the Java header comment.
+     inspect the original in the persistent Playwright-controlled dedicated
+     Google Chrome tab. Reproduce every faithfully representable relationship
+     as concise ASCII/text in both the conversation and the Java header comment.
    - If ASCII/text would lose material information, bring that existing tab to
      the foreground so the user can inspect the original visual. Reuse the same
      tab, and return it to the background when the inspection is complete.
