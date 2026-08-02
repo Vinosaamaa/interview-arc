@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, gt, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import {
   activityDeliveryAnalyses,
@@ -973,24 +973,74 @@ export async function commitRelatedVoiceCapture(
   )) {
     throw new Error("Only an acknowledged activity-related capture can be committed.");
   }
+  const commitIntentPredicate = and(
+    eq(voiceCaptureIntents.ownerId, ownerId),
+    eq(voiceCaptureIntents.captureId, input.captureId),
+    eq(voiceCaptureIntents.activityId, input.activityId),
+    eq(voiceCaptureIntents.specialty, input.specialty),
+    eq(voiceCaptureIntents.turnId, input.turnId),
+    eq(voiceCaptureIntents.checksum, input.checksum),
+    inArray(voiceCaptureIntents.status, ["activity_related", "accepted"]),
+  );
+  const guardedTranscriptInsert = (value: typeof practiceTranscriptTurns.$inferInsert) => (
+    db.insert(practiceTranscriptTurns).select(
+      db.select({
+        ownerId: sql<string>`${value.ownerId}`.as("owner_id"),
+        activityId: sql<string>`${value.activityId}`.as("activity_id"),
+        turnId: sql<string>`${value.turnId}`.as("turn_id"),
+        specialty: sql<string>`${value.specialty}`.as("specialty"),
+        speaker: sql<string>`${value.speaker}`.as("speaker"),
+        body: sql<string>`${value.body}`.as("body"),
+        source: sql<string>`${value.source}`.as("source"),
+        sequence: sql<number>`${value.sequence}`.as("sequence"),
+        occurredAt: sql<number>`${value.occurredAt}`.as("occurred_at"),
+        updatedAt: sql<number>`${value.updatedAt}`.as("updated_at"),
+      }).from(voiceCaptureIntents).where(commitIntentPredicate).limit(1),
+    ).onConflictDoNothing()
+  );
   const response = await readVoiceSpecialistResponse(ownerId, input.captureId);
   if (!response) {
-    const turn = await appendVoiceTranscriptTurn(ownerId, {
-      activityId: input.activityId,
-      specialty: input.specialty,
-      turnId: input.turnId,
-      body: input.transcript,
-      occurredAt: input.occurredAt,
-    }, nowMs);
-    await db.update(voiceCaptureIntents).set({
-      status: "accepted",
-      updatedAt: nowMs,
-      lastError: null,
-    }).where(and(
-      eq(voiceCaptureIntents.ownerId, ownerId),
-      eq(voiceCaptureIntents.captureId, input.captureId),
+    const existingTurns = await db.select().from(practiceTranscriptTurns).where(and(
+      eq(practiceTranscriptTurns.ownerId, ownerId),
+      eq(practiceTranscriptTurns.activityId, input.activityId),
+      eq(practiceTranscriptTurns.turnId, input.turnId),
     ));
-    return turn;
+    const latest = await db.select({ sequence: practiceTranscriptTurns.sequence })
+      .from(practiceTranscriptTurns)
+      .where(and(
+        eq(practiceTranscriptTurns.ownerId, ownerId),
+        eq(practiceTranscriptTurns.activityId, input.activityId),
+      ))
+      .orderBy(desc(practiceTranscriptTurns.sequence))
+      .limit(1);
+    const userValue = {
+      ownerId,
+      activityId: input.activityId,
+      turnId: input.turnId,
+      specialty: input.specialty,
+      speaker: "user" as const,
+      body: input.transcript,
+      source: "audio_transcript" as const,
+      sequence: existingTurns[0]?.sequence ?? (latest[0]?.sequence ?? -1) + 1,
+      occurredAt: input.occurredAt,
+      updatedAt: nowMs,
+    };
+    if (existingTurns[0] && !sameVoiceCommitTurn(existingTurns[0], userValue)) {
+      throw new Error("A stable Voice exchange turn conflicts with existing durable transcript content.");
+    }
+    await db.batch([
+      guardedTranscriptInsert(userValue),
+      db.update(voiceCaptureIntents).set({
+        status: "accepted",
+        updatedAt: nowMs,
+        lastError: null,
+      }).where(commitIntentPredicate),
+    ]);
+    const committedIntent = await readVoiceCaptureIntent(ownerId, input.captureId);
+    if (committedIntent?.status !== "accepted") {
+      throw new Error("The Voice capture was deleted before its durable transcript could be committed.");
+    }
+    return userValue;
   }
   if (response.status === "quarantined_conflict"
       || response.activityId !== input.activityId
@@ -1051,24 +1101,26 @@ export async function commitRelatedVoiceCapture(
     }
   }
   await db.batch([
-    db.insert(practiceTranscriptTurns).values(userValue).onConflictDoNothing(),
-    db.insert(practiceTranscriptTurns).values(responseValue).onConflictDoNothing(),
+    guardedTranscriptInsert(userValue),
+    guardedTranscriptInsert(responseValue),
     db.update(voiceSpecialistResponses).set({
       status: "materialized",
       updatedAt: nowMs,
     }).where(and(
       eq(voiceSpecialistResponses.ownerId, ownerId),
       eq(voiceSpecialistResponses.captureId, input.captureId),
+      exists(db.select({ one: sql<number>`1` }).from(voiceCaptureIntents).where(commitIntentPredicate)),
     )),
     db.update(voiceCaptureIntents).set({
       status: "accepted",
       updatedAt: nowMs,
       lastError: null,
-    }).where(and(
-      eq(voiceCaptureIntents.ownerId, ownerId),
-      eq(voiceCaptureIntents.captureId, input.captureId),
-    )),
+    }).where(commitIntentPredicate),
   ]);
+  const committedIntent = await readVoiceCaptureIntent(ownerId, input.captureId);
+  if (committedIntent?.status !== "accepted") {
+    throw new Error("The Voice capture was deleted before its durable exchange could be committed.");
+  }
   return userValue;
 }
 
@@ -1088,7 +1140,13 @@ export async function completeDeleteVoiceCapture(ownerId: string, captureId: str
   const db = getDb();
   const intent = await readVoiceCaptureIntent(ownerId, captureId);
   if (!intent) return;
-  const response = await readVoiceSpecialistResponse(ownerId, captureId);
+  const response = (await db.select({
+    userTurnId: voiceSpecialistResponses.userTurnId,
+    responseTurnId: voiceSpecialistResponses.responseTurnId,
+  }).from(voiceSpecialistResponses).where(and(
+    eq(voiceSpecialistResponses.ownerId, ownerId),
+    eq(voiceSpecialistResponses.captureId, captureId),
+  )).limit(1))[0] ?? null;
   const transcriptTurnIds = voiceCaptureDeleteTurnIds(intent.turnId, response);
   await db.delete(activityDeliveryAnalyses).where(and(
     eq(activityDeliveryAnalyses.ownerId, ownerId),

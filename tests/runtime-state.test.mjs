@@ -161,6 +161,29 @@ test("deleting a related Voice capture removes both canonical transcript turns",
   assert.deepEqual(voiceCaptureDeleteTurnIds("voice-user-1", null), ["voice-user-1"]);
 });
 
+test("Voice commit and delete serialize on intent state and enforce response-turn ownership", async () => {
+  const durableStore = await readFile(new URL("../db/durable-practice.ts", import.meta.url), "utf8");
+  const schema = await readFile(new URL("../db/schema.ts", import.meta.url), "utf8");
+  const migration = await readFile(new URL("../drizzle/0019_voice_response_identity.sql", import.meta.url), "utf8");
+  const commitBody = durableStore.slice(
+    durableStore.indexOf("export async function commitRelatedVoiceCapture"),
+    durableStore.indexOf("export async function beginDeleteVoiceCapture"),
+  );
+  const deleteBody = durableStore.slice(
+    durableStore.indexOf("export async function completeDeleteVoiceCapture"),
+    durableStore.indexOf("export async function failDeleteVoiceCapture"),
+  );
+
+  assert.match(commitBody, /const commitIntentPredicate/);
+  assert.match(commitBody, /\.insert\(practiceTranscriptTurns\)\.select\(/);
+  assert.match(commitBody, /const committedIntent = await readVoiceCaptureIntent/);
+  assert.match(commitBody, /committedIntent\?\.status !== "accepted"/);
+  assert.match(deleteBody, /select\(\{[\s\S]*userTurnId:[\s\S]*responseTurnId:/);
+  assert.doesNotMatch(deleteBody, /readVoiceSpecialistResponse/);
+  assert.match(schema, /uniqueIndex\("voice_specialist_responses_owner_response_unique"\)/);
+  assert.match(migration, /CREATE UNIQUE INDEX `voice_specialist_responses_owner_response_unique`/);
+});
+
 test("Voice decision receipts distinguish syncing, excluded, uncertain, failed, and duplicate states", () => {
   assert.equal(
     voiceDecisionReceipt("activity_related", "Course Schedule"),

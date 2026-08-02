@@ -181,6 +181,15 @@ IDs and an unrelated or unresolved capture to yield only its user turn ID.
 Merged-release verification must show zero transcript turns and zero audio
 clips after deleting the related fixture.
 
+Review of that repair found two adjacent invariants that also needed database
+enforcement. A delivery that had already read an accepted intent could race a
+concurrent delete and recreate transcript rows, and `response_turn_id` was
+indexed but not owner-unique. Commits now insert transcript rows through the
+current committable intent predicate inside one D1 batch and verify the final
+accepted state before reporting success. Migration `0019` makes each
+specialist response turn ID unique per owner, proving that deletion of the
+canonical response cannot remove another capture's answer.
+
 ## Prevention and follow-up
 
 | Action | Owner | Tracking | Status |
