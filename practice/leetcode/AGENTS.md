@@ -231,9 +231,11 @@ series of local attempt snapshots.
      inspect the original in the persistent Playwright-controlled dedicated
      Google Chrome tab. Reproduce every faithfully representable relationship
      as concise ASCII/text in both the conversation and the Java header comment.
-   - If ASCII/text would lose material information, bring that existing tab to
-     the foreground so the user can inspect the original visual. Reuse the same
-     tab, and return it to the background when the inspection is complete.
+   - If ASCII/text would lose material information and the user needs to inspect
+     that visual, bring the existing tab to the foreground. This is the only
+     routine practice flow that may foreground the dedicated browser. Reuse the
+     same tab, then restore the previously active app as soon as the inspection
+     is complete.
    - Screenshots are transient comprehension aids only. Never use image
      coordinates for submission, commit copied problem images, omit a material
      visual relationship, or invent one that cannot be verified.
@@ -308,6 +310,9 @@ LEETCODE_CHROME_PROFILE="$(dirname "$LEETCODE_REPO_ROOT")/browser-profiles/leetc
 
 if ! curl --fail --silent --show-error \
   http://127.0.0.1:9223/json/version >/dev/null; then
+  LEETCODE_RETURN_BUNDLE_ID="$(osascript -e \
+    'tell application "System Events" to get bundle identifier of first application process whose frontmost is true')"
+
   open -g -na "Google Chrome" --args \
     --remote-debugging-address=127.0.0.1 \
     --remote-debugging-port=9223 \
@@ -315,11 +320,28 @@ if ! curl --fail --silent --show-error \
     --no-first-run \
     --no-default-browser-check \
     https://leetcode.com/problemset/
+
+  for LEETCODE_CDP_ATTEMPT in {1..50}; do
+    if curl --fail --silent \
+      http://127.0.0.1:9223/json/version >/dev/null; then
+      break
+    fi
+    sleep 0.2
+  done
+
+  open -b "$LEETCODE_RETURN_BUNDLE_ID"
 fi
+
+curl --fail --silent --show-error \
+  http://127.0.0.1:9223/json/version >/dev/null
 ```
 
-After launch, retry only the targeted CDP connection for a bounded startup
-window, then connect Playwright with
+The launch block remembers the frontmost application, uses `open -g` to avoid
+activation, waits at most ten seconds for the dedicated CDP endpoint, and then
+explicitly restores the original application because macOS or Chrome can still
+steal focus while a new instance initializes. If the final endpoint check
+fails, stop and report the launch failure instead of opening another browser.
+Then connect Playwright with
 `chromium.connectOverCDP("http://127.0.0.1:9223")`. Reacquire the existing
 browser context and its single LeetCode problem page. Do not launch Playwright's
 bundled Chromium and do not call `launchPersistentContext`; both create a
@@ -347,10 +369,13 @@ profile intact and ask the user to sign in within that dedicated window.
 - Do not close the dedicated browser during normal practice. Close it only
   when the user explicitly asks or closes it personally.
 
-- Run the dedicated Chrome headed, not headless, while keeping it behind the user's active
-  terminal. Do not minimize or suspend it. If initial launch activates the
-  browser, immediately restore the prior terminal focus after the page is
-  ready.
+- Run the dedicated Chrome headed, not headless, while keeping it behind the
+  user's active app. Do not minimize or suspend it. Routine navigation, code
+  insertion, submission, verdict reading, and tab reuse must remain in the
+  background. Foreground the existing tab only for the material visual fallback
+  defined in **Prepare The Problem**, and restore the previously active app
+  immediately afterward. If authentication expires, ask the user to switch to
+  the preserved dedicated window rather than automatically foregrounding it.
 - Keep the Chrome process independent from one Playwright connection and
   reconnect through its loopback-only CDP endpoint after Codex, cmux, or the
   Playwright controller restarts. Never expose that endpoint beyond localhost.
