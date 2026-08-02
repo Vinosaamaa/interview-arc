@@ -26,6 +26,7 @@ import {
   type CanonicalExchangeIdentity,
   type VoiceFinishGuard,
   type VoiceIntentStatus,
+  voiceCommitStatusAllowsReplay,
   voiceFinishGuardMessage,
 } from "./practice-exchange-policy";
 import {
@@ -959,7 +960,7 @@ export async function commitRelatedVoiceCapture(
   const db = getDb();
   const intent = await readVoiceCaptureIntent(ownerId, input.captureId);
   if (!intent
-      || intent.status !== "activity_related"
+      || !voiceCommitStatusAllowsReplay(intent.status as VoiceIntentStatus)
       || intent.activityId !== input.activityId
       || intent.specialty !== input.specialty
       || intent.turnId !== input.turnId

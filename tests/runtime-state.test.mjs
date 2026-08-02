@@ -21,6 +21,7 @@ import { isJournalPath, journalBranch, parsePorcelain } from "../scripts/journal
 import {
   finishDispositionForVoiceStatus,
   sameCanonicalExchange,
+  voiceCommitStatusAllowsReplay,
   voiceDecisionReceipt,
   voiceFinishGuardMessage,
 } from "../db/practice-exchange-policy.ts";
@@ -110,6 +111,13 @@ test("canonical exchange retries are identity-idempotent and conflicting rewrite
     ...canonical,
     responseBody: "Use recursion instead.",
   }), false);
+});
+
+test("an accepted Voice capture can replay the exact transcript commit", () => {
+  assert.equal(voiceCommitStatusAllowsReplay("activity_related"), true);
+  assert.equal(voiceCommitStatusAllowsReplay("accepted"), true);
+  assert.equal(voiceCommitStatusAllowsReplay("unrelated"), false);
+  assert.equal(voiceCommitStatusAllowsReplay("quarantined_conflict"), false);
 });
 
 test("Voice decision receipts distinguish syncing, excluded, uncertain, failed, and duplicate states", () => {
