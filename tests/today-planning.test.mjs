@@ -202,20 +202,59 @@ test("request fingerprints are stable across object key order and reject changed
 
   assert.equal(first, retry);
   assert.notEqual(first, changed);
+
+  const today = await planningRequestFingerprint({
+    operation: "plan_today_practice",
+    practiceDate: "2026-08-02",
+    mutationId: "same",
+  });
+  const tomorrow = await planningRequestFingerprint({
+    operation: "plan_today_practice",
+    practiceDate: "2026-08-03",
+    mutationId: "same",
+  });
+  assert.notEqual(today, tomorrow);
 });
 
-test("specialist planning retries replay before catalog eligibility is evaluated", () => {
+test("specialist planning retries validate identity and legacy scope", () => {
   const prior = {
-    mutationId: "voice-plan-1",
-    activityIds: ["activity-1"],
-    specialistRequestHash: "request-hash-1",
+    workbenchId: "workbench-1",
+    createdAt: Date.parse("2026-08-02T16:00:00Z"),
+    response: {
+      mutationId: "voice-plan-1",
+      activityIds: ["activity-1"],
+      specialistRequestHash: "request-hash-1",
+    },
   };
-  assert.deepEqual(specialistPlanningReplay(prior, "request-hash-1"), prior);
+  const context = {
+    expectedWorkbenchId: "workbench-1",
+    practiceDate: "2026-08-02",
+    receiptPracticeDate: "2026-08-02",
+  };
+  assert.deepEqual(
+    specialistPlanningReplay(prior, "request-hash-1", context),
+    prior.response,
+  );
   assert.throws(
-    () => specialistPlanningReplay(prior, "changed-request-hash"),
+    () => specialistPlanningReplay(prior, "changed-request-hash", context),
     (error) => error?.code === "planning_mutation_identity_conflict",
   );
-  assert.equal(specialistPlanningReplay({ mutationId: "legacy" }, "request-hash-1"), null);
+  const legacy = {
+    workbenchId: "workbench-1",
+    createdAt: prior.createdAt,
+    response: { mutationId: "legacy", activityIds: ["activity-legacy"] },
+  };
+  assert.deepEqual(
+    specialistPlanningReplay(legacy, "request-hash-1", context),
+    legacy.response,
+  );
+  assert.throws(
+    () => specialistPlanningReplay(legacy, "request-hash-1", {
+      ...context,
+      practiceDate: "2026-08-03",
+    }),
+    (error) => error?.code === "planning_mutation_identity_conflict",
+  );
 });
 
 test("the Voice planning bridge is authenticated, idempotent, and push-driven", async () => {
@@ -234,4 +273,18 @@ test("the Voice planning bridge is authenticated, idempotent, and push-driven", 
   assert.match(contract, /Job applications is a focus selection inside Activities/);
   assert.match(bridge, /start_fresh_today/);
   assert.match(contract, /start_fresh_today/);
+
+  const planningTool = bridge.slice(
+    bridge.indexOf('"plan_today_practice"'),
+    bridge.indexOf('"control_practice_timer"'),
+  );
+  assert.ok(
+    planningTool.indexOf("readPlanningMutation") < planningTool.indexOf("specialistCatalog"),
+    "an exact planning retry must be replayed before catalog eligibility is evaluated",
+  );
+  assert.match(
+    planningTool,
+    /voicePlanningMutation\([\s\S]*env, priorReceipt\)/,
+    "the authoritative mutation path must reuse the preflight receipt",
+  );
 });

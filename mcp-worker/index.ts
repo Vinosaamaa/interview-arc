@@ -756,7 +756,12 @@ const planningMutationSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
-async function voicePlanningMutation(ownerId: string, request: Request, env: Env) {
+async function voicePlanningMutation(
+  ownerId: string,
+  request: Request,
+  env: Env,
+  preflightReceipt?: Awaited<ReturnType<typeof readPlanningMutation>>,
+) {
   const parsed = planningMutationSchema.safeParse(await request.json());
   if (!parsed.success) {
     return json(request, {
@@ -842,7 +847,7 @@ async function voicePlanningMutation(ownerId: string, request: Request, env: Env
         sessionNumber: state.sessions.length + 1,
         selections: mutation.selections as PlanningSelection[],
         specialistRequestHash: mutation.specialistRequestHash,
-      });
+      }, Date.now(), preflightReceipt);
     } else if (mutation.type === "create_full_session") {
       const content = await loadContentIndex();
       const blocked = new Set(state.extraActivities.flatMap((candidate) => {
@@ -2261,13 +2266,19 @@ function createServer(ownerId: string, env: Env) {
     },
     async (input) => {
       try {
+        const date = dateInPracticeTimeZone();
         const specialistRequestHash = await planningRequestFingerprint({
           operation: "plan_today_practice",
+          practiceDate: date,
           ...input,
         });
         const priorReceipt = await readPlanningMutation(ownerId, input.mutationId);
         const replay = priorReceipt
-          ? specialistPlanningReplay(priorReceipt.response, specialistRequestHash)
+          ? specialistPlanningReplay(priorReceipt, specialistRequestHash, {
+            expectedWorkbenchId: input.expectedWorkbenchId,
+            practiceDate: date,
+            receiptPracticeDate: dateInPracticeTimeZone(new Date(priorReceipt.createdAt)),
+          })
           : null;
         if (replay) {
           const authoritative = await authoritativeSpecialistState(ownerId);
@@ -2293,7 +2304,6 @@ function createServer(ownerId: string, env: Env) {
             );
           }
           destination = input.destination ?? "standalone";
-          const date = dateInPracticeTimeZone();
           const [content, state] = await Promise.all([
             loadContentIndex(),
             readLiveState(ownerId, date),
@@ -2316,7 +2326,6 @@ function createServer(ownerId: string, env: Env) {
           const items: unknown[] = [];
           let page = 1;
           let hasMore = true;
-          const date = dateInPracticeTimeZone();
           const [content, state] = await Promise.all([
             loadContentIndex(),
             readLiveState(ownerId, date),
@@ -2366,7 +2375,7 @@ function createServer(ownerId: string, env: Env) {
               specialistRequestHash,
             }),
           },
-        ), env);
+        ), env, priorReceipt);
         const result = await decodeInternalResponse(response);
         const authoritative = await authoritativeSpecialistState(ownerId);
         const payload = { ...result, authoritative };

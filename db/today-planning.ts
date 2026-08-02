@@ -71,9 +71,12 @@ export async function applyPlanningSelection(
   ownerId: string,
   input: AddPlanningSelectionInput,
   now = Date.now(),
+  preflightReceipt?: Awaited<ReturnType<typeof readPlanningMutation>>,
 ) {
   const requestHash = await planningRequestFingerprint(input);
-  const existingReceipt = await readPlanningMutation(ownerId, input.mutationId);
+  const existingReceipt = preflightReceipt === undefined
+    ? await readPlanningMutation(ownerId, input.mutationId)
+    : preflightReceipt;
   if (existingReceipt) {
     if (existingReceipt.requestHash !== requestHash) {
       throw new TodayPlanningConflictError(
