@@ -105,6 +105,9 @@ The website must not imply that browser draft state has already been published t
 
 ## UX Direction
 
+- Follow the canonical [UI Design Skill Routing](../../AGENTS.md#ui-design-skill-routing)
+  rules before designing or redesigning website UI.
+
 - Treat the arrival screen as the product's signature moment. Show it on every
   full page entry and keep it visible until the user explicitly enters. Draw
   fresh encouragement and one 4K photograph from the local, licensed wallpaper
