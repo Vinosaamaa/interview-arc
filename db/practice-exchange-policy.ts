@@ -36,6 +36,10 @@ export function finishDispositionForVoiceStatus(status: VoiceIntentStatus): Voic
   return "nonblocking";
 }
 
+export function voiceCommitStatusAllowsReplay(status: VoiceIntentStatus) {
+  return status === "activity_related" || status === "accepted";
+}
+
 export function voiceFinishGuardMessage(guard: VoiceFinishGuard) {
   if (guard.conflicts.length) {
     return `${guard.conflicts.length} voice capture ${guard.conflicts.length === 1 ? "has" : "have"} conflicting durable content. Review or discard before finishing.`;

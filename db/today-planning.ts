@@ -30,6 +30,7 @@ export type AddPlanningSelectionInput = {
   destination: "standalone" | "session";
   sessionNumber: number;
   selections: PlanningSelection[];
+  specialistRequestHash?: string;
 };
 
 export async function readPlanningMutation(
@@ -138,6 +139,9 @@ export async function applyPlanningSelection(
     activityIds: built.activities.map((activity) => activity.id),
     focusBlockIds: built.focusBlocks.map((block) => block.id),
     sessionId: built.session?.id ?? null,
+    ...(input.specialistRequestHash
+      ? { specialistRequestHash: input.specialistRequestHash }
+      : {}),
   };
   const statements = [
     ...built.activities.map((activity) => db.insert(extraActivities).values({

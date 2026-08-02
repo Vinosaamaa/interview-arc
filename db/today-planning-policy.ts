@@ -21,6 +21,22 @@ export class PlanningSelectionError extends Error {
   }
 }
 
+export function specialistPlanningReplay(
+  response: unknown,
+  specialistRequestHash: string,
+) {
+  if (!response || typeof response !== "object") return null;
+  const stored = response as Record<string, unknown>;
+  if (typeof stored.specialistRequestHash !== "string") return null;
+  if (stored.specialistRequestHash !== specialistRequestHash) {
+    throw new PlanningSelectionError(
+      "planning_mutation_identity_conflict",
+      "That planning mutation identifier was already used for different content.",
+    );
+  }
+  return response;
+}
+
 export type PlanningCatalogItem = QuestionBankItem & {
   eligible: boolean;
   disabledReason: string | null;

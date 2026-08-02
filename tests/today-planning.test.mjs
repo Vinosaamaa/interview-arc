@@ -6,6 +6,7 @@ import {
   buildPlanningBatch,
   filterPlanningCatalog,
   planningRequestFingerprint,
+  specialistPlanningReplay,
   selectExactPlanningQuestions,
 } from "../db/today-planning-policy.ts";
 
@@ -201,6 +202,20 @@ test("request fingerprints are stable across object key order and reject changed
 
   assert.equal(first, retry);
   assert.notEqual(first, changed);
+});
+
+test("specialist planning retries replay before catalog eligibility is evaluated", () => {
+  const prior = {
+    mutationId: "voice-plan-1",
+    activityIds: ["activity-1"],
+    specialistRequestHash: "request-hash-1",
+  };
+  assert.deepEqual(specialistPlanningReplay(prior, "request-hash-1"), prior);
+  assert.throws(
+    () => specialistPlanningReplay(prior, "changed-request-hash"),
+    (error) => error?.code === "planning_mutation_identity_conflict",
+  );
+  assert.equal(specialistPlanningReplay({ mutationId: "legacy" }, "request-hash-1"), null);
 });
 
 test("the Voice planning bridge is authenticated, idempotent, and push-driven", async () => {
