@@ -21,6 +21,32 @@ Use the closest specialist guide and keep work in its owning area:
 
 If a task starts at the repository root, explicitly read the owning guide before changing files. Keep shared field names and enums in `docs/contracts/`; do not redefine incompatible versions inside specialist folders.
 
+## UI Design Skill Routing
+
+For new UI, visual redesigns, or material changes to an existing interface,
+use the installed `frontend-design` skill as the primary design authority even
+when the user does not name a skill. Read its complete `SKILL.md`, announce its
+use, ground the direction in Interview Arc's actual subject matter, and perform
+its design-plan and self-critique passes before generating a mockup or changing
+code.
+
+- Use `imagegen` when the requested deliverable is a raster mockup, wallpaper,
+  or presentation board. It renders the approved direction; it does not replace
+  frontend design reasoning.
+- Use `impeccable` only when the user explicitly requests it or when a separate
+  product-polish audit is needed for interaction quality, accessibility, and
+  implementation hardening.
+- Use `ui-ux-pro-max` only when the user explicitly requests it or when a
+  separate structured reference/audit is needed. Do not blend all three UI
+  skills by default; overlapping visual authorities create an incoherent
+  direction.
+- Explicit user skill selection wins. For controlled comparisons, keep each
+  skill in a separate task and prevent agents from inspecting one another's
+  outputs until the comparison is complete.
+- Preserve approved visual references under `docs/design/<feature>/`, link
+  them from the owning issue, and treat them as design evidence rather than
+  production screenshots.
+
 The user may keep every specialist as a long-lived Codex task inside the same outer Interview Prep project. Do not require separate local projects or worktrees. Codex tasks share committed and working-tree files, not one another's unrecorded transcript, so write durable decisions and published results to the repository.
 
 For first-time task creation and durable specialist registration, follow
