@@ -105,16 +105,8 @@ The website must not imply that browser draft state has already been published t
 
 ## UX Direction
 
-- Use the repository's `frontend-design` skill as the primary design lead for
-  new website UI and visual redesigns. Establish one subject-specific signature
-  element, keep surrounding controls restrained, and critique the direction for
-  generic dashboard patterns before implementation. Use `imagegen` only to
-  render approved raster mockups; route alternative UI skills according to the
-  root `AGENTS.md` instead of mixing multiple design authorities by default.
-- Store approved feature mockups under `docs/design/<feature>/` and link the
-  canonical file from the owning issue. A mockup communicates design intent;
-  production behavior, accessibility, responsive layout, and authoritative
-  data rules still require explicit acceptance criteria and tests.
+- Follow the canonical [UI Design Skill Routing](../../AGENTS.md#ui-design-skill-routing)
+  rules before designing or redesigning website UI.
 
 - Treat the arrival screen as the product's signature moment. Show it on every
   full page entry and keep it visible until the user explicitly enters. Draw
