@@ -88,6 +88,8 @@ import { finishAndAdvancePracticeActivity } from "../db/specialist-controls-stor
 import {
   controlPracticeTimer,
   setPracticeResult,
+  type PracticeResultControlDependencies,
+  type PracticeTimerControlDependencies,
   type SpecialistPracticeActivity,
 } from "../db/specialist-controls-runtime";
 
@@ -1413,6 +1415,42 @@ async function rememberSpecialistMutation(
   });
 }
 
+function specialistControlDependencies(ownerId: string, date: string): {
+  timer: PracticeTimerControlDependencies;
+  result: PracticeResultControlDependencies;
+} {
+  const scheduleCompletedActivity = (
+    activity: Parameters<typeof scheduleCompletedVoiceActivity>[1],
+    outcome: OutcomeValue,
+    now: number,
+  ) => scheduleCompletedVoiceActivity(ownerId, activity, outcome, date, now);
+
+  return {
+    timer: {
+      now: Date.now,
+      applyTimerAction: async (subjectId, kind, action, now, options) => {
+        await applyTimerAction(ownerId, subjectId, kind, action, now, options);
+      },
+      prepareVoiceCapturesForFinish: (activityId, now) => (
+        prepareVoiceCapturesForFinish(ownerId, activityId, now)
+      ),
+      voiceFinishGuardMessage: (guard) => voiceFinishGuardMessage(
+        guard as Awaited<ReturnType<typeof prepareVoiceCapturesForFinish>>,
+      ),
+      finishAndAdvancePracticeActivity: (control) => (
+        finishAndAdvancePracticeActivity({ ownerId, ...control })
+      ),
+      scheduleCompletedActivity,
+    },
+    result: {
+      now: Date.now,
+      setOutcome: (activityId, outcome, now) => setOutcome(ownerId, activityId, outcome, now),
+      clearActivityReviewSchedules: (activityId) => clearActivityReviewSchedules(ownerId, activityId),
+      scheduleCompletedActivity,
+    },
+  };
+}
+
 function specialistToolFailure(error: unknown) {
   if (
     error instanceof SpecialistControlError
@@ -2252,28 +2290,12 @@ function createServer(ownerId: string, env: Env) {
           const payload = { duplicate: true, result: prepared.priorResponse, authoritative };
           return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
         }
+        const dependencies = specialistControlDependencies(ownerId, prepared.date);
         const { result, receiptStored } = await controlPracticeTimer(
           prepared.state,
           input,
           prepared.requestHash,
-          {
-            now: Date.now,
-            applyTimerAction: async (subjectId, kind, action, now, options) => {
-              await applyTimerAction(ownerId, subjectId, kind, action, now, options);
-            },
-            prepareVoiceCapturesForFinish: (activityId, now) => (
-              prepareVoiceCapturesForFinish(ownerId, activityId, now)
-            ),
-            voiceFinishGuardMessage: (guard) => voiceFinishGuardMessage(
-              guard as Awaited<ReturnType<typeof prepareVoiceCapturesForFinish>>,
-            ),
-            finishAndAdvancePracticeActivity: (control) => (
-              finishAndAdvancePracticeActivity({ ownerId, ...control })
-            ),
-            scheduleCompletedActivity: (activity, outcome, now) => (
-              scheduleCompletedVoiceActivity(ownerId, activity, outcome, prepared.date, now)
-            ),
-          },
+          dependencies.timer,
         );
         if (!receiptStored) {
           await rememberSpecialistMutation(ownerId, input, prepared.requestHash, result);
@@ -2312,14 +2334,8 @@ function createServer(ownerId: string, env: Env) {
           const payload = { duplicate: true, result: prepared.priorResponse, authoritative };
           return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
         }
-        const result = await setPracticeResult(prepared.state, input, {
-          now: Date.now,
-          setOutcome: (activityId, outcome, now) => setOutcome(ownerId, activityId, outcome, now),
-          clearActivityReviewSchedules: (activityId) => clearActivityReviewSchedules(ownerId, activityId),
-          scheduleCompletedActivity: (activity, outcome, now) => (
-            scheduleCompletedVoiceActivity(ownerId, activity, outcome, prepared.date, now)
-          ),
-        });
+        const dependencies = specialistControlDependencies(ownerId, prepared.date);
+        const result = await setPracticeResult(prepared.state, input, dependencies.result);
         await rememberSpecialistMutation(ownerId, input, prepared.requestHash, result);
         await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "practice");
         const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
