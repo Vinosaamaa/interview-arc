@@ -83,11 +83,15 @@ import {
   type PlanningSpecialty,
   type PlanningAttention,
 } from "../db/today-planning-policy";
-import {
-  selectNextPracticeActivity,
-  SpecialistControlError,
-} from "../db/specialist-controls-policy";
+import { SpecialistControlError } from "../db/specialist-controls-policy";
 import { finishAndAdvancePracticeActivity } from "../db/specialist-controls-store";
+import {
+  controlPracticeTimer,
+  setPracticeResult,
+  type PracticeResultControlDependencies,
+  type PracticeTimerControlDependencies,
+  type SpecialistPracticeActivity,
+} from "../db/specialist-controls-runtime";
 
 interface Env {
   DB: D1Database;
@@ -221,7 +225,7 @@ async function voiceContext(ownerId: string, request: Request) {
 
 async function scheduleCompletedVoiceActivity(
   ownerId: string,
-  activity: Extract<Awaited<ReturnType<typeof readVoiceTimerInstrument>>["activities"][number], { activityClass: "practice" }>,
+  activity: Pick<SpecialistPracticeActivity, "id" | "type" | "questionId" | "reviewOfActivityId">,
   outcome: OutcomeValue,
   date: string,
   now: number,
@@ -1343,50 +1347,6 @@ async function companionMutation(ownerId: string, request: Request, env: Env) {
   }));
 }
 
-type SpecialistPracticeActivity = {
-  id: string;
-  title: string;
-  type: "leetcode" | "system_design" | "behavioral";
-  questionId?: string;
-  sessionId?: string;
-  reviewOfActivityId?: string;
-};
-
-type SpecialistSession = {
-  id: string;
-  activityIds: string[];
-};
-
-function specialistPracticeActivity(state: Awaited<ReturnType<typeof readLiveState>>, activityId: string) {
-  const activity = state.extraActivities.find((candidate) => (
-    Boolean(candidate)
-    && typeof candidate === "object"
-    && (candidate as { id?: unknown }).id === activityId
-  )) as SpecialistPracticeActivity | undefined;
-  if (!activity || !["leetcode", "system_design", "behavioral"].includes(activity.type)) {
-    throw new SpecialistControlError(
-      "practice_activity_not_found",
-      "The requested practice activity is not available in the current workbench.",
-    );
-  }
-  return activity;
-}
-
-function specialistSession(state: Awaited<ReturnType<typeof readLiveState>>, sessionId: string) {
-  const session = state.sessions.find((candidate) => (
-    Boolean(candidate)
-    && typeof candidate === "object"
-    && (candidate as { id?: unknown }).id === sessionId
-  )) as SpecialistSession | undefined;
-  if (!session || !Array.isArray(session.activityIds)) {
-    throw new SpecialistControlError(
-      "session_not_found",
-      "The requested session is not available in the current workbench.",
-    );
-  }
-  return session;
-}
-
 async function decodeInternalResponse(response: Response) {
   const payload = await response.json() as Record<string, unknown>;
   if (!response.ok) {
@@ -1440,20 +1400,6 @@ async function prepareSpecialistMutation(
   };
 }
 
-function requireTimerRevision(
-  state: Awaited<ReturnType<typeof readLiveState>>,
-  activityId: string,
-  expectedRevision: number,
-) {
-  const actualRevision = state.timers[activityId]?.revision ?? 0;
-  if (actualRevision !== expectedRevision) {
-    throw new SpecialistControlError(
-      "stale_timer_revision",
-      `The activity timer changed from revision ${expectedRevision} to ${actualRevision}. Read Today again before retrying.`,
-    );
-  }
-}
-
 async function rememberSpecialistMutation(
   ownerId: string,
   input: { mutationId: string; expectedWorkbenchId: string },
@@ -1467,6 +1413,42 @@ async function rememberSpecialistMutation(
     response,
     createdAt: Date.now(),
   });
+}
+
+function specialistControlDependencies(ownerId: string, date: string): {
+  timer: PracticeTimerControlDependencies;
+  result: PracticeResultControlDependencies;
+} {
+  const scheduleCompletedActivity = (
+    activity: Parameters<typeof scheduleCompletedVoiceActivity>[1],
+    outcome: OutcomeValue,
+    now: number,
+  ) => scheduleCompletedVoiceActivity(ownerId, activity, outcome, date, now);
+
+  return {
+    timer: {
+      now: Date.now,
+      applyTimerAction: async (subjectId, kind, action, now, options) => {
+        await applyTimerAction(ownerId, subjectId, kind, action, now, options);
+      },
+      prepareVoiceCapturesForFinish: (activityId, now) => (
+        prepareVoiceCapturesForFinish(ownerId, activityId, now)
+      ),
+      voiceFinishGuardMessage: (guard) => voiceFinishGuardMessage(
+        guard as Awaited<ReturnType<typeof prepareVoiceCapturesForFinish>>,
+      ),
+      finishAndAdvancePracticeActivity: (control) => (
+        finishAndAdvancePracticeActivity({ ownerId, ...control })
+      ),
+      scheduleCompletedActivity,
+    },
+    result: {
+      now: Date.now,
+      setOutcome: (activityId, outcome, now) => setOutcome(ownerId, activityId, outcome, now),
+      clearActivityReviewSchedules: (activityId) => clearActivityReviewSchedules(ownerId, activityId),
+      scheduleCompletedActivity,
+    },
+  };
 }
 
 function specialistToolFailure(error: unknown) {
@@ -2308,107 +2290,13 @@ function createServer(ownerId: string, env: Env) {
           const payload = { duplicate: true, result: prepared.priorResponse, authoritative };
           return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
         }
-        const activityPayload = specialistPracticeActivity(prepared.state, input.activityId);
-        requireTimerRevision(prepared.state, input.activityId, input.expectedRevision);
-        const instrument = await readVoiceTimerInstrument(ownerId);
-        const activity = instrument.activities.find((candidate) => candidate.id === input.activityId);
-        if (!activity || activity.activityClass !== "practice") {
-          throw new SpecialistControlError("practice_activity_not_found", "The practice activity is not available to the timer instrument.");
-        }
-        const now = Date.now();
-        let advancedTo: string | null = null;
-        let receiptStored = false;
-        if (input.action === "finish_and_advance") {
-          if (!activity.timer?.startedAt || activity.timer.completed) {
-            throw new SpecialistControlError("timer_not_finishable", "The current activity must be started and unfinished before advancing.");
-          }
-          if (!activity.outcome) {
-            throw new SpecialistControlError("result_required", "Set an explicit result before finishing and advancing.");
-          }
-          const sessionActivityIds = activityPayload.sessionId
-            ? specialistSession(prepared.state, activityPayload.sessionId).activityIds
-            : [];
-          advancedTo = selectNextPracticeActivity({
-            currentActivityId: input.activityId,
-            explicitNextActivityId: input.nextActivityId,
-            sessionActivityIds,
-            practiceActivityIds: new Set(prepared.state.extraActivities.flatMap((candidate) => {
-              const item = candidate as { id?: unknown; type?: unknown };
-              return typeof item.id === "string" && ["leetcode", "system_design", "behavioral"].includes(String(item.type))
-                ? [item.id]
-                : [];
-            })),
-            completedActivityIds: new Set(Object.entries(prepared.state.timers).flatMap(([id, timer]) => (
-              timer?.completed ? [id] : []
-            ))),
-          });
-          const nextPayload = specialistPracticeActivity(prepared.state, advancedTo);
-          if (input.expectedNextRevision == null) {
-            throw new SpecialistControlError(
-              "next_timer_revision_required",
-              "Finish-and-advance requires the next activity's current timer revision.",
-            );
-          }
-          requireTimerRevision(prepared.state, advancedTo, input.expectedNextRevision);
-          const nextTimer = prepared.state.timers[advancedTo];
-          if (nextTimer?.completed) {
-            throw new SpecialistControlError("next_activity_unavailable", "The next activity is already finished.");
-          }
-          const voiceGuard = await prepareVoiceCapturesForFinish(ownerId, input.activityId, now);
-          const voiceConflict = voiceFinishGuardMessage(voiceGuard);
-          if (voiceConflict) {
-            throw new TimerStateConflictError(voiceConflict);
-          }
-          const atomicReceipt = {
-            mutationId: input.mutationId,
-            activityId: input.activityId,
-            action: input.action,
-            advancedTo,
-            applied: true,
-          };
-          await finishAndAdvancePracticeActivity({
-            ownerId,
-            currentActivityId: input.activityId,
-            expectedCurrentRevision: input.expectedRevision,
-            nextActivityId: advancedTo,
-            nextSessionId: nextPayload.sessionId,
-            expectedNextRevision: input.expectedNextRevision,
-            mutationId: input.mutationId,
-            workbenchId: input.expectedWorkbenchId,
-            requestHash: prepared.requestHash,
-            receipt: atomicReceipt,
-            now,
-          });
-          receiptStored = true;
-          try {
-            await scheduleCompletedVoiceActivity(ownerId, activity, activity.outcome, prepared.date, now);
-          } catch {
-            // Review scheduling is repairable metadata. The atomic timer and
-            // receipt commit remains successful and an exact retry is safe.
-          }
-        } else {
-          const action: TimerAction = input.action === "resume" ? "start" : input.action;
-          if (action === "start" && activityPayload.sessionId) {
-            const session = specialistSession(prepared.state, activityPayload.sessionId);
-            await applyTimerAction(ownerId, activityPayload.sessionId, "session", "start", now, {
-              activityIds: session.activityIds,
-            });
-          }
-          await applyTimerAction(ownerId, input.activityId, "activity", action, now, {
-            sessionId: activityPayload.sessionId,
-            expectedRevision: input.expectedRevision,
-          });
-          if (action === "finish" && activity.outcome) {
-            await scheduleCompletedVoiceActivity(ownerId, activity, activity.outcome, prepared.date, now);
-          }
-        }
-        const result = {
-          mutationId: input.mutationId,
-          activityId: input.activityId,
-          action: input.action,
-          advancedTo,
-          applied: true,
-        };
+        const dependencies = specialistControlDependencies(ownerId, prepared.date);
+        const { result, receiptStored } = await controlPracticeTimer(
+          prepared.state,
+          input,
+          prepared.requestHash,
+          dependencies.timer,
+        );
         if (!receiptStored) {
           await rememberSpecialistMutation(ownerId, input, prepared.requestHash, result);
         }
@@ -2446,26 +2334,8 @@ function createServer(ownerId: string, env: Env) {
           const payload = { duplicate: true, result: prepared.priorResponse, authoritative };
           return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
         }
-        specialistPracticeActivity(prepared.state, input.activityId);
-        const instrument = await readVoiceTimerInstrument(ownerId);
-        const activity = instrument.activities.find((candidate) => candidate.id === input.activityId);
-        if (!activity || activity.activityClass !== "practice") {
-          throw new SpecialistControlError("practice_activity_not_found", "The practice activity is not available to the timer instrument.");
-        }
-        const now = Date.now();
-        await setOutcome(ownerId, input.activityId, input.result, now);
-        if (!input.result) {
-          await clearActivityReviewSchedules(ownerId, input.activityId);
-        } else if (activity.timer?.completed) {
-          await scheduleCompletedVoiceActivity(ownerId, activity, input.result, prepared.date, now);
-        }
-        const result = {
-          mutationId: input.mutationId,
-          activityId: input.activityId,
-          result: input.result,
-          authorization: input.authorization,
-          applied: true,
-        };
+        const dependencies = specialistControlDependencies(ownerId, prepared.date);
+        const result = await setPracticeResult(prepared.state, input, dependencies.result);
         await rememberSpecialistMutation(ownerId, input, prepared.requestHash, result);
         await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "practice");
         const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
