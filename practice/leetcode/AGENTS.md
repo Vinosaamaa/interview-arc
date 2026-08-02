@@ -287,17 +287,71 @@ series of local attempt snapshots.
 
 ### Persistent One-Tab Playwright Contract
 
-Use only Playwright with its locally installed **Chrome for Testing** and the
-user-authorized persistent profile at the outer workspace path
-`browser-profiles/leetcode-submitter`. Do not substitute the Codex in-app
-browser, the user's ordinary Chrome profile, coordinate-based computer control,
-or an ephemeral browser profile.
+Use Playwright over CDP with a dedicated instance of the locally installed
+regular **Google Chrome** application and the user-authorized persistent profile
+at the outer workspace path `browser-profiles/leetcode-submitter`. This is a
+separate process and profile from the user's ordinary Google Chrome session.
+Do not substitute Chrome for Testing, the Codex in-app browser, the user's
+ordinary Chrome profile, coordinate-based computer control, or an ephemeral
+profile.
 
-- Run Chromium headed, not headless, while keeping it behind the user's active
+#### Idempotent launch and reconnect
+
+Run the launch procedure from the `interview-arc` repository root. First test
+the loopback CDP endpoint. When it already responds, reuse that browser and do
+not launch another one. Otherwise launch the dedicated browser with exactly
+this profile and endpoint:
+
+```bash
+LEETCODE_REPO_ROOT="$(git rev-parse --show-toplevel)"
+LEETCODE_CHROME_PROFILE="$(dirname "$LEETCODE_REPO_ROOT")/browser-profiles/leetcode-submitter"
+
+if ! curl --fail --silent --show-error \
+  http://127.0.0.1:9223/json/version >/dev/null; then
+  open -g -na "Google Chrome" --args \
+    --remote-debugging-address=127.0.0.1 \
+    --remote-debugging-port=9223 \
+    --user-data-dir="$LEETCODE_CHROME_PROFILE" \
+    --no-first-run \
+    --no-default-browser-check \
+    https://leetcode.com/problemset/
+fi
+```
+
+After launch, retry only the targeted CDP connection for a bounded startup
+window, then connect Playwright with
+`chromium.connectOverCDP("http://127.0.0.1:9223")`. Reacquire the existing
+browser context and its single LeetCode problem page. Do not launch Playwright's
+bundled Chromium and do not call `launchPersistentContext`; both create a
+different browser lifecycle from the approved CDP browser.
+
+The dedicated profile is durable authentication state. Never delete, replace,
+copy, or recreate it merely because Codex, cmux, Playwright, or the CDP
+connection restarted. If LeetCode authentication expires, keep the browser and
+profile intact and ask the user to sign in within that dedicated window.
+
+#### Ordinary-Chrome safety boundary
+
+- Never run `killall`, `pkill`, a generic `kill`, AppleScript `quit`, or any
+  other command targeting Google Chrome by application or process name. Such a
+  command can terminate the user's ordinary Chrome windows.
+- Never start remote debugging against the ordinary Chrome profile under the
+  user's Library directory. The only authorized profile is the workspace's
+  `browser-profiles/leetcode-submitter` directory, and the only authorized CDP
+  endpoint is loopback port `9223`.
+- Before any explicit dedicated-browser shutdown, verify one running process
+  contains both the exact `--user-data-dir` above and
+  `--remote-debugging-port=9223`. Close that verified browser through its CDP
+  `Browser.close` command. If identity cannot be proven, leave every Chrome
+  process running and report the ambiguity.
+- Do not close the dedicated browser during normal practice. Close it only
+  when the user explicitly asks or closes it personally.
+
+- Run the dedicated Chrome headed, not headless, while keeping it behind the user's active
   terminal. Do not minimize or suspend it. If initial launch activates the
   browser, immediately restore the prior terminal focus after the page is
   ready.
-- Keep the Chromium process independent from one Playwright connection and
+- Keep the Chrome process independent from one Playwright connection and
   reconnect through its loopback-only CDP endpoint after Codex, cmux, or the
   Playwright controller restarts. Never expose that endpoint beyond localhost.
 - Maintain exactly one automation-owned LeetCode problem tab across the entire
