@@ -159,6 +159,25 @@ test("pause, resume, and finish preserve optimistic timer revisions", async () =
   assert.equal(state.timers["activity-1"].completed, true);
 });
 
+test("repairable review scheduling cannot turn a committed finish into failure", async () => {
+  const state = liveState({ activities: [practiceActivity("activity-1")] });
+  state.outcomes["activity-1"] = "failed";
+  const runtime = harness(state);
+  await controlPracticeTimer(state, timerInput(), "hash-1", runtime.dependencies);
+  runtime.dependencies.scheduleCompletedActivity = async () => {
+    throw new Error("temporary review scheduling failure");
+  };
+
+  const response = await controlPracticeTimer(state, timerInput({
+    mutationId: "mutation-2",
+    expectedRevision: 1,
+    action: "finish",
+  }), "hash-2", runtime.dependencies);
+
+  assert.equal(response.result.applied, true);
+  assert.equal(state.timers["activity-1"].completed, true);
+});
+
 test("an unfocused planned activity accepts an explicit result", async () => {
   const state = liveState({ activities: [practiceActivity("activity-1")] });
   const changed = [];

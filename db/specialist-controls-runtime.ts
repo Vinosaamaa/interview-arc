@@ -254,7 +254,12 @@ async function applyOrdinaryPracticeTimerAction(
     expectedRevision: input.expectedRevision,
   });
   if (action === "finish" && activity.outcome) {
-    await dependencies.scheduleCompletedActivity(activity, activity.outcome, now);
+    try {
+      await dependencies.scheduleCompletedActivity(activity, activity.outcome, now);
+    } catch {
+      // The timer is authoritative. Review scheduling is repairable metadata
+      // and must not turn a committed finish into an unreceipted failure.
+    }
   }
 }
 
