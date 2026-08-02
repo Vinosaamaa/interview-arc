@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="3840" height="2160" viewBox="0 0 3840 2160">
+  <title>Interview Arc terminal wallpaper</title>
+  <desc>A warm parchment coding surface with a crisp editorial wordmark, leaf emblem, and recall spine.</desc>
+
+  <image href="interview-arc-parchment-base.png" x="0" y="0" width="3840" height="2160" preserveAspectRatio="none"/>
+
+  <!-- Recall spine: native vector geometry keeps the linework crisp at 4K. -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 126 -30
+             C 72 118, 83 252, 145 427
+             C 205 598, 216 752, 145 921
+             C 72 1096, 76 1262, 166 1444
+             C 253 1621, 226 1817, 144 2010
+             C 120 2067, 112 2120, 127 2195"
+          stroke="#6F7868" stroke-width="4" opacity="0.66"/>
+
+    <path d="M 150 548 C 211 518, 261 466, 329 411"
+          stroke="#9EA386" stroke-width="3" stroke-dasharray="14 15" opacity="0.55"/>
+    <path d="M 126 919 C 69 883, 40 836, 17 784"
+          stroke="#9EA386" stroke-width="3" stroke-dasharray="14 15" opacity="0.48"/>
+    <path d="M 146 1083 C 208 1051, 251 1004, 283 949"
+          stroke="#9EA386" stroke-width="3" stroke-dasharray="14 15" opacity="0.46"/>
+    <path d="M 173 1750 C 238 1735, 283 1700, 329 1649"
+          stroke="#9EA386" stroke-width="3" stroke-dasharray="14 15" opacity="0.52"/>
+    <path d="M 133 1968 C 71 1943, 35 1904, 7 1853"
+          stroke="#9EA386" stroke-width="3" stroke-dasharray="14 15" opacity="0.44"/>
+  </g>
+
+  <!-- Recall markers. -->
+  <g stroke="#7F876D" stroke-width="2.5">
+    <circle cx="181" cy="475" r="13" fill="#B6BB43"/>
+    <circle cx="87" cy="1067" r="13" fill="#919A7E"/>
+    <circle cx="219" cy="1633" r="13" fill="#B6BB43"/>
+    <circle cx="149" cy="1948" r="13" fill="#919A7E"/>
+  </g>
+
+  <!-- Botanical leaves connected to the spine. -->
+  <g fill="#7B866C" stroke="#66725F" stroke-width="2" opacity="0.86">
+    <path d="M 182 755 C 207 694, 249 666, 303 666 C 280 716, 240 746, 182 755 Z"/>
+    <path d="M 185 759 C 218 738, 255 710, 295 676" fill="none"/>
+    <path d="M 187 767 C 223 744, 267 748, 306 780 C 258 795, 219 788, 187 767 Z"/>
+    <path d="M 189 766 C 229 767, 263 773, 299 780" fill="none"/>
+
+    <path d="M 194 1506 C 161 1451, 124 1421, 78 1413 C 88 1467, 126 1500, 194 1506 Z"/>
+    <path d="M 190 1503 C 151 1479, 116 1449, 84 1419" fill="none"/>
+    <path d="M 198 1514 C 159 1504, 124 1515, 93 1548 C 143 1556, 177 1544, 198 1514 Z"/>
+    <path d="M 195 1515 C 158 1522, 129 1534, 101 1546" fill="none"/>
+  </g>
+
+  <!-- Wordmark and emblem: rendered as native text/vector at final output size. -->
+  <g fill="#18382E">
+    <text x="221" y="188"
+          font-family="Didot, 'Bodoni 72 Smallcaps', 'Bodoni 72', serif"
+          font-size="73" font-weight="400" letter-spacing="13">INTERVIEW ARC</text>
+    <rect x="1048" y="112" width="3" height="91" rx="1.5" opacity="0.58"/>
+
+    <g transform="translate(1082 122) scale(0.9)">
+      <path d="M 8 84 C 11 58, 15 33, 28 7" fill="none" stroke="#18382E" stroke-width="7" stroke-linecap="round"/>
+      <path d="M 18 52 C 22 30, 35 17, 53 14 C 52 34, 40 49, 18 52 Z"/>
+      <path d="M 13 67 C 28 51, 45 48, 61 55 C 51 73, 32 78, 13 67 Z"/>
+      <path d="M 26 25 C 23 14, 27 5, 38 0 C 43 12, 39 21, 26 25 Z"/>
+    </g>
+  </g>
+</svg>

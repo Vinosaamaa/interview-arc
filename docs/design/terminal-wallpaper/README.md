@@ -18,6 +18,10 @@ Suggested terminal colors:
 - cursor/accent: `#A5B52E`;
 - selection: `#DDE4D6` at an opacity appropriate to the terminal.
 
-The source direction was created with `frontend-design`; the raster was
-generated with the built-in image-generation tool and promoted to the required
-4K project asset after visual inspection.
+The source direction was created with `frontend-design`. The quiet parchment
+texture was produced with the built-in image-generation tool, while the
+wordmark, leaf emblem, recall spine, nodes, and botanical accents are maintained
+as native 3840×2160 vector geometry in
+[`interview-arc-terminal-wallpaper-4k.svg`](interview-arc-terminal-wallpaper-4k.svg).
+The checked-in PNG is rendered from that SVG at its final resolution so fine
+edges are not softened by post-render upscaling.
