@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // Live practice state owned by the deployed website. Durable narrative content
 // (daily journals, attempt write-ups, transcripts) stays in Git; these tables
@@ -276,7 +276,7 @@ export const voiceSpecialistResponses = sqliteTable(
   },
   (table) => [
     primaryKey({ columns: [table.ownerId, table.captureId] }),
-    index("voice_specialist_responses_owner_response_idx").on(
+    uniqueIndex("voice_specialist_responses_owner_response_unique").on(
       table.ownerId,
       table.responseTurnId,
     ),

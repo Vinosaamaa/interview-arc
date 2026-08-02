@@ -82,6 +82,16 @@ export function sameVoiceCommitTurn(
     && existing.occurredAt === incoming.occurredAt;
 }
 
+export function voiceCaptureDeleteTurnIds(
+  userTurnId: string,
+  response: { userTurnId: string; responseTurnId: string } | null | undefined,
+) {
+  return [...new Set([
+    userTurnId,
+    ...(response?.userTurnId === userTurnId ? [response.responseTurnId] : []),
+  ])];
+}
+
 export function voiceFinishGuardMessage(guard: VoiceFinishGuard) {
   if (guard.conflicts.length) {
     return `${guard.conflicts.length} voice capture ${guard.conflicts.length === 1 ? "has" : "have"} conflicting durable content. Review or discard before finishing.`;
