@@ -26,6 +26,7 @@ import {
   sameVoiceCommitTurn,
   type CanonicalExchangeIdentity,
   voiceCaptureAllowsCommit,
+  voiceCaptureDeleteTurnIds,
   type VoiceFinishGuard,
   type VoiceIntentStatus,
   voiceFinishGuardMessage,
@@ -1087,6 +1088,8 @@ export async function completeDeleteVoiceCapture(ownerId: string, captureId: str
   const db = getDb();
   const intent = await readVoiceCaptureIntent(ownerId, captureId);
   if (!intent) return;
+  const response = await readVoiceSpecialistResponse(ownerId, captureId);
+  const transcriptTurnIds = voiceCaptureDeleteTurnIds(intent.turnId, response);
   await db.delete(activityDeliveryAnalyses).where(and(
     eq(activityDeliveryAnalyses.ownerId, ownerId),
     eq(activityDeliveryAnalyses.transcriptTurnId, intent.turnId),
@@ -1098,13 +1101,10 @@ export async function completeDeleteVoiceCapture(ownerId: string, captureId: str
   await db.delete(practiceTranscriptTurns).where(and(
     eq(practiceTranscriptTurns.ownerId, ownerId),
     eq(practiceTranscriptTurns.activityId, intent.activityId),
-    eq(practiceTranscriptTurns.turnId, intent.turnId),
+    inArray(practiceTranscriptTurns.turnId, transcriptTurnIds),
   ));
   await db.batch([
-    db.update(voiceSpecialistResponses).set({
-      status: "discarded",
-      updatedAt: nowMs,
-    }).where(and(
+    db.delete(voiceSpecialistResponses).where(and(
       eq(voiceSpecialistResponses.ownerId, ownerId),
       eq(voiceSpecialistResponses.captureId, captureId),
     )),

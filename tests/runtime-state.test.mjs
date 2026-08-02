@@ -23,6 +23,7 @@ import {
   sameCanonicalExchange,
   sameVoiceCommitTurn,
   voiceCaptureAllowsCommit,
+  voiceCaptureDeleteTurnIds,
   voiceCommitStatusAllowsReplay,
   voiceDecisionReceipt,
   voiceFinishGuardMessage,
@@ -147,6 +148,17 @@ test("an accepted Voice capture can replay the exact durable transcript commit",
     ...existingDurableTurn,
     body: "Changed durable content.",
   }), false);
+});
+
+test("deleting a related Voice capture removes both canonical transcript turns", () => {
+  assert.deepEqual(
+    voiceCaptureDeleteTurnIds(
+      "voice-user-1",
+      { userTurnId: "voice-user-1", responseTurnId: "specialist-1" },
+    ),
+    ["voice-user-1", "specialist-1"],
+  );
+  assert.deepEqual(voiceCaptureDeleteTurnIds("voice-user-1", null), ["voice-user-1"]);
 });
 
 test("Voice decision receipts distinguish syncing, excluded, uncertain, failed, and duplicate states", () => {

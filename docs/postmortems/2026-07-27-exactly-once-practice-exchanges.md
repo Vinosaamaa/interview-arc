@@ -165,6 +165,22 @@ Still required before closing the issue:
 - Verify acknowledged `audio_lost` is rendered without a player or fabricated
   Delivery Coach evidence.
 
+### 2026-08-02 deletion-graph follow-up
+
+Production cleanup after the exactly-once verification found that deleting an
+accepted related capture removed its user turn and private audio, but left the
+materialized canonical specialist turn in D1. The deletion implementation
+selected only `intent.turnId`; it marked the response reservation discarded
+without deleting either the response row or `responseTurnId` transcript row.
+
+The repair derives the complete canonical turn set from the owner-scoped
+specialist response, deletes both turns plus the response reservation, and
+retains only the terminal capture-intent tombstone needed for idempotent
+deletion. Regression coverage requires a related capture to yield both turn
+IDs and an unrelated or unresolved capture to yield only its user turn ID.
+Merged-release verification must show zero transcript turns and zero audio
+clips after deleting the related fixture.
+
 ## Prevention and follow-up
 
 | Action | Owner | Tracking | Status |
@@ -178,6 +194,7 @@ Still required before closing the issue:
 | Add explicit acknowledged `audio_lost` terminal state | Interview Arc + Arc Voice | #93 / #64 | Implemented locally; release verification pending |
 | Keep Insert Again idempotent and visibly recoverable | Arc Voice | #68 | Paired dependency |
 | Preserve status-first bounded reconciliation | Arc Voice | #72 | Paired dependency |
+| Delete the complete canonical Voice graph while retaining the intent tombstone | Interview Arc | #125 | Implemented after production cleanup found an orphan specialist turn |
 
 ## Technical glossary
 
