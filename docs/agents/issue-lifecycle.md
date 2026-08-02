@@ -159,13 +159,14 @@ The PR records:
 
 ## Execution time and metered-cost record
 
-Every implementation PR must keep a concise execution ledger so the user can
-see where the work went. The ledger is live instrumentation, not a narrative
+Every implementation PR must keep a concise chronological execution ledger so
+the user can see what this specific task actually did. The ledger is live
+instrumentation, not a standard release checklist and not a narrative
 reconstructed at handoff time.
 
 Before the first substantive action, read the current system clock and record
-`ledger_started_at`. At the instant each phase begins and ends, record an exact
-Pacific timestamp in this format:
+`ledger_started_at`. At the instant each actual task step begins and ends,
+record an exact Pacific timestamp in this format:
 
 ```text
 YYYY-MM-DD HH:MM:SS PDT (-0700)
@@ -173,24 +174,19 @@ YYYY-MM-DD HH:MM:SS PST (-0800)
 ```
 
 Use `PDT` or `PST` according to the clock on that date. Do not round these
-timestamps. Derive each phase duration arithmetically from its recorded start
+timestamps. Derive each step duration arithmetically from its recorded start
 and end; never infer it from memory, file modification times, commit times, or
 approximate conversation position.
 
-Record exact start, end, derived duration, and completed work separately for:
+Name every row after the concrete action performed and its target or outcome,
+such as inspecting one reported layout, changing one configuration, waiting
+for one named workflow, or verifying one installed behavior. Author these rows
+from the current task; never begin with a universal list of phases. If an
+action did not happen, omit it completely. Do not add `Not run`, `N/A`,
+zero-duration placeholders, or empty rows merely to satisfy a template. If an
+action repeats, record each occurrence separately and explain why it repeated.
 
-- intake, instruction reading, and issue preparation;
-- reproduction and diagnosis;
-- implementation;
-- focused local checks;
-- full build and packaging, identifying whether it ran locally or in hosted CI;
-- artifact download, provenance validation, staging, and signing;
-- installation or deployment;
-- installed or production verification;
-- external waiting and infrastructure blockers.
-
-Use this exact template for the PR record and final handoff; do not rename,
-combine, or omit rows:
+Use this flexible template for only the steps that actually occurred:
 
 ```markdown
 ## Execution ledger
@@ -200,27 +196,19 @@ combine, or omit rows:
 - client_measured_duration: HH:MM:SS or unavailable
 - reconciliation: matched, or a concrete explanation of the resolved difference
 
-| Phase | Started | Ended | Duration | Status and work completed |
+| Actual step performed | Started | Ended | Duration | Result |
 | --- | --- | --- | ---: | --- |
-| Intake, instructions, issue preparation | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | |
-| Reproduction and diagnosis | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | |
-| Implementation | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | |
-| Focused local checks | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | |
-| Full build and packaging | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | |
-| Artifact provenance, staging, signing | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | |
-| Installation or deployment | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | |
-| Installed or production verification | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | |
-| External waiting or blockers | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | |
+| Concrete action from this task | exact Pacific timestamp | exact Pacific timestamp | HH:MM:SS | Concrete result |
 
 - timestamp-derived wall-clock total: HH:MM:SS
 - active engineering total: HH:MM:SS or unknown
-- overlap/exclusion notes:
-- GitHub Actions and metered usage:
+- uninstrumented gaps or overlap notes, only when present:
+- hosted runs, artifacts, and metered usage, only when used:
 ```
 
-Mark an expected phase that did not run and explain why. Record external waits
-as their own intervals. When phases overlap, identify the overlap and do not
-double-count it. Explain every repeated build or hosted run.
+Record an external wait or blocker as its own task-specific row only when it
+actually occurs. When actions overlap, identify the overlap and do not
+double-count it.
 
 At handoff, calculate total wall-clock time from `ledger_started_at` through the
 final recorded timestamp. When the client exposes an exact “worked for” or turn
@@ -241,16 +229,18 @@ complete ledger; a PR link or one combined total is not a substitute. The
 ledger is an administrative coordination record and must not be appended to a
 practice activity transcript.
 
-Also record measurable metered usage:
+For services actually used during the task, also record measurable metered
+usage:
 
 - every GitHub Actions run used for the change, including run URL, runner OS,
   conclusion, and actual runtime;
 - artifacts uploaded and their retention period;
 - paid external API or hosted-service usage when the provider exposes it.
 
-Do not invent a monetary amount. Label it `unknown` when account-level billing
-data is unavailable, and distinguish a job that never started from one that
-ran and consumed minutes.
+Do not create a metered-usage section for a service the task did not use. Do
+not invent a monetary amount. Label the amount `unknown` when an actually used
+provider does not expose account-level billing data, and distinguish a job that
+never started from one that ran and consumed minutes.
 
 Use the cheapest trustworthy validation path and avoid redundant work. Run the
 focused local checks that are supported and proportionate on the current
