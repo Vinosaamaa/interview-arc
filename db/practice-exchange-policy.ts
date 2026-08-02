@@ -20,6 +20,9 @@ export type VoiceFinishDisposition =
 export type VoiceFinishGuard = {
   discardedUnclassified: string[];
   awaitingDelivery: string[];
+  missingDurableExchange: string[];
+  awaitingAudio: string[];
+  audioLostNeedsAcknowledgement: string[];
   needsDecision: string[];
   deleting: string[];
   conflicts: string[];
@@ -42,6 +45,15 @@ export function voiceFinishGuardMessage(guard: VoiceFinishGuard) {
   }
   if (guard.awaitingDelivery.length) {
     return `${guard.awaitingDelivery.length} related voice capture${guard.awaitingDelivery.length === 1 ? " is" : "s are"} still syncing. Retry delivery or Discard before finishing.`;
+  }
+  if (guard.missingDurableExchange.length) {
+    return `${guard.missingDurableExchange.length} accepted voice exchange${guard.missingDurableExchange.length === 1 ? " is" : "s are"} missing canonical D1 transcript content. Retry delivery or repair the capture before finishing.`;
+  }
+  if (guard.audioLostNeedsAcknowledgement.length) {
+    return `${guard.audioLostNeedsAcknowledgement.length} voice recording${guard.audioLostNeedsAcknowledgement.length === 1 ? " is" : "s are"} permanently unavailable. Acknowledge the preserved transcript and recording-loss incident before finishing.`;
+  }
+  if (guard.awaitingAudio.length) {
+    return `${guard.awaitingAudio.length} related voice recording${guard.awaitingAudio.length === 1 ? " has" : "s have"} not reached private cloud storage. The original is protected locally; Retry upload before finishing.`;
   }
   if (guard.deleting.length) {
     return `${guard.deleting.length} voice capture deletion${guard.deleting.length === 1 ? " is" : "s are"} still in progress. Retry or wait before finishing.`;

@@ -1,36 +1,71 @@
 import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import {
+  outcomes,
   practiceFocus,
+  practiceWorkbenches,
+  reviewSchedules,
   timerIntervals,
   timers,
   todayPlanningMutations,
 } from "./schema";
+import { reviewIntervalDays, type ReviewReason } from "./review-cadence";
 import { SpecialistControlError } from "./specialist-controls-policy";
 import { foldElapsed, nextTimerState } from "./timer-state";
 
 type StoredTimer = typeof timers.$inferSelect;
 
+function addDays(date: string, days: number) {
+  const value = new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function outcomeRevisionGuard(
+  ownerId: string,
+  workbenchId: string,
+  activityId: string,
+  expectedRevision: number,
+) {
+  return getDb().update(practiceWorkbenches).set({
+    updatedAt: sql`${practiceWorkbenches.updatedAt}`,
+  }).where(and(
+    eq(practiceWorkbenches.ownerId, ownerId),
+    eq(practiceWorkbenches.id, workbenchId),
+    sql`CASE WHEN COALESCE((
+      SELECT ${outcomes.revision}
+      FROM ${outcomes}
+      WHERE ${outcomes.ownerId} = ${ownerId}
+        AND ${outcomes.activityId} = ${activityId}
+    ), 0) = ${expectedRevision} THEN 1 ELSE json('revision_conflict') END`,
+  ));
+}
+
 function revisionGuard(
   ownerId: string,
+  workbenchId: string,
   subjectId: string,
   kind: "activity" | "session",
   expectedRevision: number,
 ) {
-  return getDb().select({
-    ok: sql<number>`CASE WHEN COALESCE((
+  return getDb().update(practiceWorkbenches).set({
+    updatedAt: sql`${practiceWorkbenches.updatedAt}`,
+  }).where(and(
+    eq(practiceWorkbenches.ownerId, ownerId),
+    eq(practiceWorkbenches.id, workbenchId),
+    sql`CASE WHEN COALESCE((
       SELECT ${timers.revision}
       FROM ${timers}
       WHERE ${timers.ownerId} = ${ownerId}
         AND ${timers.subjectId} = ${subjectId}
         AND ${timers.kind} = ${kind}
     ), 0) = ${expectedRevision} THEN 1 ELSE json('revision_conflict') END`,
-  });
+  ));
 }
 
-function pauseStatements(ownerId: string, timer: StoredTimer, now: number) {
+function pauseStatements(ownerId: string, workbenchId: string, timer: StoredTimer, now: number) {
   return [
-    revisionGuard(ownerId, timer.subjectId, timer.kind, timer.revision),
+    revisionGuard(ownerId, workbenchId, timer.subjectId, timer.kind, timer.revision),
     getDb().update(timerIntervals).set({ endedAt: now }).where(and(
       eq(timerIntervals.ownerId, ownerId),
       eq(timerIntervals.subjectId, timer.subjectId),
@@ -121,9 +156,9 @@ export async function finishAndAdvancePracticeActivity(input: {
 
   const finished = nextTimerState(current, "finish", input.now);
   const started = nextTimerState(next, "start", input.now);
-  const statements = [
-    revisionGuard(input.ownerId, input.currentActivityId, "activity", input.expectedCurrentRevision),
-    revisionGuard(input.ownerId, input.nextActivityId, "activity", input.expectedNextRevision),
+  const statements: Parameters<typeof db.batch>[0][number][] = [
+    revisionGuard(input.ownerId, input.workbenchId, input.currentActivityId, "activity", input.expectedCurrentRevision),
+    revisionGuard(input.ownerId, input.workbenchId, input.nextActivityId, "activity", input.expectedNextRevision),
     db.update(timerIntervals).set({ endedAt: input.now }).where(and(
       eq(timerIntervals.ownerId, input.ownerId),
       eq(timerIntervals.subjectId, input.currentActivityId),
@@ -143,8 +178,8 @@ export async function finishAndAdvancePracticeActivity(input: {
       eq(timers.kind, "activity"),
       eq(timers.revision, input.expectedCurrentRevision),
     )),
-    ...runningActivities.flatMap((timer) => pauseStatements(input.ownerId, timer, input.now)),
-    ...runningSessions.flatMap((timer) => pauseStatements(input.ownerId, timer, input.now)),
+    ...runningActivities.flatMap((timer) => pauseStatements(input.ownerId, input.workbenchId, timer, input.now)),
+    ...runningSessions.flatMap((timer) => pauseStatements(input.ownerId, input.workbenchId, timer, input.now)),
   ];
 
   const nextSession = nextSessionRows[0];
@@ -152,6 +187,7 @@ export async function finishAndAdvancePracticeActivity(input: {
     const sessionStarted = nextTimerState(nextSession, "start", input.now);
     statements.push(revisionGuard(
       input.ownerId,
+      input.workbenchId,
       input.nextSessionId,
       "session",
       nextSession?.revision ?? 0,
@@ -244,6 +280,284 @@ export async function finishAndAdvancePracticeActivity(input: {
       throw new SpecialistControlError(
         "stale_timer_revision",
         "A timer changed while the command was committing. Read Today again before retrying.",
+      );
+    }
+    throw error;
+  }
+}
+
+export async function startSessionPracticeActivity(input: {
+  ownerId: string;
+  activityId: string;
+  expectedActivityRevision: number;
+  sessionId: string;
+  sessionActivityIds: string[];
+  mutationId: string;
+  workbenchId: string;
+  requestHash: string;
+  receipt: Record<string, unknown>;
+  now: number;
+}) {
+  const db = getDb();
+  const [activityRows, sessionRows, runningActivities, runningSessions] = await Promise.all([
+    db.select().from(timers).where(and(
+      eq(timers.ownerId, input.ownerId),
+      eq(timers.subjectId, input.activityId),
+      eq(timers.kind, "activity"),
+    )),
+    db.select().from(timers).where(and(
+      eq(timers.ownerId, input.ownerId),
+      eq(timers.subjectId, input.sessionId),
+      eq(timers.kind, "session"),
+    )),
+    db.select().from(timers).where(and(
+      eq(timers.ownerId, input.ownerId),
+      eq(timers.kind, "activity"),
+      isNotNull(timers.runningSince),
+      ne(timers.subjectId, input.activityId),
+    )),
+    db.select().from(timers).where(and(
+      eq(timers.ownerId, input.ownerId),
+      eq(timers.kind, "session"),
+      isNotNull(timers.runningSince),
+      ne(timers.subjectId, input.sessionId),
+    )),
+  ]);
+  const activity = activityRows[0];
+  const session = sessionRows[0];
+  if ((activity?.revision ?? 0) !== input.expectedActivityRevision || activity?.completed) {
+    throw new SpecialistControlError(
+      "stale_timer_revision",
+      "The activity timer changed or is already finished. Read Today again before retrying.",
+    );
+  }
+  if (session?.completed) {
+    throw new SpecialistControlError("timer_not_startable", "The parent session is already finished.");
+  }
+
+  const statements: Parameters<typeof db.batch>[0][number][] = [
+    revisionGuard(input.ownerId, input.workbenchId, input.activityId, "activity", input.expectedActivityRevision),
+    revisionGuard(input.ownerId, input.workbenchId, input.sessionId, "session", session?.revision ?? 0),
+    ...runningActivities.flatMap((timer) => pauseStatements(input.ownerId, input.workbenchId, timer, input.now)),
+    ...runningSessions.flatMap((timer) => pauseStatements(input.ownerId, input.workbenchId, timer, input.now)),
+  ];
+
+  if (!session?.runningSince) {
+    const startedSession = nextTimerState(session, "start", input.now);
+    statements.push(db.insert(timers).values({
+      ownerId: input.ownerId,
+      subjectId: input.sessionId,
+      kind: "session",
+      accumulatedSeconds: startedSession.accumulatedSeconds,
+      startedAt: session?.startedAt ?? input.now,
+      runningSince: input.now,
+      completed: false,
+      revision: startedSession.revision,
+      updatedAt: input.now,
+    }).onConflictDoUpdate({
+      target: [timers.ownerId, timers.subjectId, timers.kind],
+      set: {
+        runningSince: input.now,
+        completed: false,
+        revision: startedSession.revision,
+        updatedAt: input.now,
+      },
+      setWhere: eq(timers.revision, session?.revision ?? 0),
+    }));
+    statements.push(db.insert(timerIntervals).values({
+      ownerId: input.ownerId,
+      subjectId: input.sessionId,
+      kind: "session",
+      startedAt: input.now,
+    }).onConflictDoNothing());
+  }
+
+  if (!activity?.runningSince) {
+    const startedActivity = nextTimerState(activity, "start", input.now);
+    statements.push(db.insert(timers).values({
+      ownerId: input.ownerId,
+      subjectId: input.activityId,
+      kind: "activity",
+      accumulatedSeconds: startedActivity.accumulatedSeconds,
+      startedAt: activity?.startedAt ?? input.now,
+      runningSince: input.now,
+      completed: false,
+      revision: startedActivity.revision,
+      updatedAt: input.now,
+    }).onConflictDoUpdate({
+      target: [timers.ownerId, timers.subjectId, timers.kind],
+      set: {
+        runningSince: input.now,
+        completed: false,
+        revision: startedActivity.revision,
+        updatedAt: input.now,
+      },
+      setWhere: eq(timers.revision, input.expectedActivityRevision),
+    }));
+    statements.push(db.insert(timerIntervals).values({
+      ownerId: input.ownerId,
+      subjectId: input.activityId,
+      kind: "activity",
+      startedAt: input.now,
+    }).onConflictDoNothing());
+  }
+
+  statements.push(db.insert(practiceFocus).values({
+    ownerId: input.ownerId,
+    activityId: input.activityId,
+    sessionId: input.sessionId,
+    focusedAt: input.now,
+    updatedAt: input.now,
+  }).onConflictDoUpdate({
+    target: practiceFocus.ownerId,
+    set: {
+      activityId: input.activityId,
+      sessionId: input.sessionId,
+      focusedAt: input.now,
+      updatedAt: input.now,
+    },
+  }));
+  statements.push(db.insert(todayPlanningMutations).values({
+    ownerId: input.ownerId,
+    mutationId: input.mutationId,
+    workbenchId: input.workbenchId,
+    requestHash: input.requestHash,
+    response: input.receipt,
+    createdAt: input.now,
+  }));
+
+  try {
+    await db.batch(statements as [(typeof statements)[number], ...(typeof statements)[number][]]);
+  } catch (error) {
+    if (String(error).toLowerCase().includes("malformed json")) {
+      throw new SpecialistControlError(
+        "stale_timer_revision",
+        "A timer changed while the command was committing. Read Today again before retrying.",
+      );
+    }
+    throw error;
+  }
+}
+
+export async function setPracticeResultAtomic(input: {
+  ownerId: string;
+  activityId: string;
+  result: "solved" | "solved_after_reviewing_approach" | "failed" | null;
+  expectedRevision: number;
+  activity: {
+    specialty: "leetcode" | "system_design" | "behavioral";
+    questionId?: string;
+    reviewOfActivityId?: string;
+    completed: boolean;
+  };
+  completedDate: string;
+  mutationId: string;
+  workbenchId: string;
+  requestHash: string;
+  receipt: Record<string, unknown>;
+  now: number;
+}) {
+  const db = getDb();
+  const existingRows = await db.select().from(outcomes).where(and(
+    eq(outcomes.ownerId, input.ownerId),
+    eq(outcomes.activityId, input.activityId),
+  ));
+  const existing = existingRows[0];
+  if ((existing?.revision ?? 0) !== input.expectedRevision) {
+    throw new SpecialistControlError(
+      "stale_result_revision",
+      "The activity result changed. Read Today again before retrying.",
+    );
+  }
+  const reviewKey = `${input.activity.specialty}:${input.activity.questionId ?? input.activityId}`;
+  const priorReviews = await db.select().from(reviewSchedules).where(and(
+    eq(reviewSchedules.ownerId, input.ownerId),
+    eq(reviewSchedules.reviewKey, reviewKey),
+  ));
+  const prior = priorReviews[0];
+  const statements: Parameters<typeof db.batch>[0][number][] = [
+    outcomeRevisionGuard(input.ownerId, input.workbenchId, input.activityId, input.expectedRevision),
+  ];
+  if (input.result) {
+    statements.push(db.insert(outcomes).values({
+      ownerId: input.ownerId,
+      activityId: input.activityId,
+      outcome: input.result,
+      revision: input.expectedRevision + 1,
+      updatedAt: input.now,
+    }).onConflictDoUpdate({
+      target: [outcomes.ownerId, outcomes.activityId],
+      set: {
+        outcome: input.result,
+        revision: input.expectedRevision + 1,
+        updatedAt: input.now,
+      },
+      setWhere: eq(outcomes.revision, input.expectedRevision),
+    }));
+  } else if (existing) {
+    statements.push(db.delete(outcomes).where(and(
+      eq(outcomes.ownerId, input.ownerId),
+      eq(outcomes.activityId, input.activityId),
+      eq(outcomes.revision, input.expectedRevision),
+    )));
+  }
+
+  let reason: ReviewReason | null = null;
+  if (input.activity.completed && input.result === "failed") reason = "failed";
+  if (input.activity.completed && input.result === "solved_after_reviewing_approach") reason = "approach_review";
+  if (input.activity.completed && input.result === "solved" && input.activity.reviewOfActivityId) reason = "successful_recall";
+  if (reason) {
+    const intervalDays = reviewIntervalDays(reason, prior?.intervalDays);
+    statements.push(db.insert(reviewSchedules).values({
+      ownerId: input.ownerId,
+      reviewKey,
+      activityId: input.activityId,
+      questionId: input.activity.questionId ?? null,
+      specialty: input.activity.specialty,
+      status: "scheduled",
+      reason,
+      dueDate: addDays(input.completedDate, intervalDays),
+      intervalDays,
+      stage: reason === "successful_recall" ? (prior?.stage ?? 0) + 1 : 0,
+      reviewCount: reason === "successful_recall" ? (prior?.reviewCount ?? 0) + 1 : (prior?.reviewCount ?? 0),
+      createdAt: prior?.createdAt ?? input.now,
+      updatedAt: input.now,
+    }).onConflictDoUpdate({
+      target: [reviewSchedules.ownerId, reviewSchedules.reviewKey],
+      set: {
+        activityId: input.activityId,
+        questionId: input.activity.questionId ?? null,
+        specialty: input.activity.specialty,
+        status: "scheduled",
+        reason,
+        dueDate: addDays(input.completedDate, intervalDays),
+        intervalDays,
+        stage: reason === "successful_recall" ? (prior?.stage ?? 0) + 1 : 0,
+        reviewCount: reason === "successful_recall" ? (prior?.reviewCount ?? 0) + 1 : (prior?.reviewCount ?? 0),
+        updatedAt: input.now,
+      },
+    }));
+  } else {
+    statements.push(db.delete(reviewSchedules).where(and(
+      eq(reviewSchedules.ownerId, input.ownerId),
+      eq(reviewSchedules.activityId, input.activityId),
+    )));
+  }
+  statements.push(db.insert(todayPlanningMutations).values({
+    ownerId: input.ownerId,
+    mutationId: input.mutationId,
+    workbenchId: input.workbenchId,
+    requestHash: input.requestHash,
+    response: input.receipt,
+    createdAt: input.now,
+  }));
+  try {
+    await db.batch(statements as [(typeof statements)[number], ...(typeof statements)[number][]]);
+  } catch (error) {
+    if (String(error).toLowerCase().includes("malformed json")) {
+      throw new SpecialistControlError(
+        "stale_result_revision",
+        "The activity result changed while the command was committing. Read Today again before retrying.",
       );
     }
     throw error;

@@ -123,6 +123,22 @@ Attach or Discard. A confirmed related capture missing delivery requires Retry
 or Discard. Local 24-hour expiry must first record
 `expired_unclassified` on the server before deleting the local record.
 
+Finish, parent-session Finish, workbench closure, and complete specialist
+finalization use the same authoritative evidence gate. Every `accepted`
+capture must have the exact canonical user/specialist pair materialized in D1
+and its matching `activity_audio_clips.status` must be `available`. The gate
+reads indexed D1 state; it never performs an R2 object lookup. Missing,
+`local_only`, `uploading`, and `failed` clips block with Retry upload. Proven
+irrecoverable local-source loss becomes `audio_lost`; it blocks until explicit
+acknowledgement, then preserves the canonical transcript and renders
+**Recording unavailable** without inventing audio or Delivery Coach evidence.
+
+An untouched pending capture that reaches 24 hours is not deleted by local age
+alone. Voice sends its stable capture/activity/turn identity, the Worker
+verifies the owner-scoped pending row, records `expired_unclassified`, and only
+then may Voice remove the local transcript/audio. `uncertain` never
+auto-expires; it remains an Attach-or-Discard decision.
+
 Publishing reads only materialized D1 turns. It never guesses missing Voice
 decisions, reconstructs specialist answers from task history, or publishes
 provisional responses.
@@ -321,6 +337,13 @@ Multiple takes may share one user turn. Older clips without a turn link remain
 readable in an unlinked activity-level recording section; never guess their
 answer association.
 
+The upload boundary is D1 status `available`, written only after the private R2
+put succeeds. Voice retains the original local M4A and stable clip identity
+until that acknowledgement. A repeated upload uses the same identity and must
+not duplicate the D1 row or R2 object. D1 `audio_lost` is a terminal incident,
+not a substitute for `available`; it requires the explicit acknowledgement
+described above.
+
 ## Interview Arc Voice
 
 Interview Arc Voice uses protocol version `2` and the same personal integration
@@ -328,7 +351,8 @@ token as MCP and the Chrome companion.
 
 1. `GET /voice/context` returns the **single activity whose stopwatch is
    currently running**, its `startedAt` and `runningSince` timer timestamps,
-   deterministic speech metadata, and registered specialist task. The
+   authoritative open `workbenchId`, deterministic speech metadata, and
+   registered specialist task. The
    timestamps permit safe late binding only when the activity was already
    running when recording began. It never returns credentials.
 2. The client records one continuous local M4A and transcribes it with Groq
@@ -347,6 +371,10 @@ token as MCP and the Chrome companion.
    duplicate it. Uncertain captures require a Voice Attach/Delete decision.
 7. Delivery Coach runs asynchronously. Its owner-scoped result is saved with
    `save_delivery_analysis` and references the same activity, turn, and clip.
+8. **Captures in this Workbench** contains every local linked capture for the
+   authoritative open workbench, including more than twenty. Complete capture
+   metadata remains until successful workbench rollover; General Dictation
+   stays in the separate newest-20/24-hour Recent Transcripts history.
 
 Focused activity lookup is global rather than limited to the current calendar
 day. A mock that crosses Pacific midnight keeps its original activity and
@@ -355,8 +383,9 @@ activity completion timestamp.
 
 Persistent dashboard focus is only navigation history. A paused, unstarted, or
 finished activity is never a Voice target. Voice refreshes context on launch,
-wake, link-mode changes, immediately before recording, and by short background
-polling. The recording locks its activity at capture start; the server accepts
+wake, link-mode changes, immediately before recording, and owner-scoped live
+invalidation, with bounded status-first fallback while disconnected. It never
+uses an unconditional one-second poll. The recording locks its activity at capture start; the server accepts
 it after a later pause only when an immutable activity timer interval proves
 the stopwatch was running at that start timestamp.
 

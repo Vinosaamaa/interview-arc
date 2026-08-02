@@ -64,6 +64,17 @@ export type PracticeTimerControlDependencies = {
     receipt: Record<string, unknown>;
     now: number;
   }) => Promise<void>;
+  startSessionPracticeActivity: (input: {
+    activityId: string;
+    expectedActivityRevision: number;
+    sessionId: string;
+    sessionActivityIds: string[];
+    mutationId: string;
+    workbenchId: string;
+    requestHash: string;
+    receipt: Record<string, unknown>;
+    now: number;
+  }) => Promise<void>;
   scheduleCompletedActivity: (
     activity: SpecialistPracticeRuntime,
     outcome: OutcomeValue,
@@ -75,19 +86,30 @@ export type PracticeResultControlInput = {
   expectedWorkbenchId: string;
   mutationId: string;
   activityId: string;
+  expectedRevision: number;
   result: OutcomeValue | null;
   authorization: "explicit_user_instruction" | "authorized_platform_verdict";
 };
 
 export type PracticeResultControlDependencies = {
   now: () => number;
-  setOutcome: (activityId: string, result: OutcomeValue | null, now: number) => Promise<void>;
-  clearActivityReviewSchedules: (activityId: string) => Promise<void>;
-  scheduleCompletedActivity: (
-    activity: SpecialistPracticeRuntime,
-    outcome: OutcomeValue,
-    now: number,
-  ) => Promise<void>;
+  setPracticeResultAtomic: (input: {
+    activityId: string;
+    result: OutcomeValue | null;
+    expectedRevision: number;
+    activity: {
+      specialty: "leetcode" | "system_design" | "behavioral";
+      questionId?: string;
+      reviewOfActivityId?: string;
+      completed: boolean;
+    };
+    completedDate: string;
+    mutationId: string;
+    workbenchId: string;
+    requestHash: string;
+    receipt: Record<string, unknown>;
+    now: number;
+  }) => Promise<void>;
 };
 
 function requireWorkbench(state: LiveState, expectedWorkbenchId: string) {
@@ -241,13 +263,30 @@ async function applyOrdinaryPracticeTimerAction(
   activity: SpecialistPracticeRuntime,
   dependencies: PracticeTimerControlDependencies,
   now: number,
+  requestHash: string,
 ) {
   const action: TimerAction = input.action === "resume" ? "start" : input.action as TimerAction;
   if (action === "start" && activity.sessionId) {
     const session = specialistSession(state, activity.sessionId);
-    await dependencies.applyTimerAction(activity.sessionId, "session", "start", now, {
-      activityIds: session.activityIds,
+    const receipt = {
+      mutationId: input.mutationId,
+      activityId: input.activityId,
+      action: input.action,
+      advancedTo: null,
+      applied: true,
+    };
+    await dependencies.startSessionPracticeActivity({
+      activityId: input.activityId,
+      expectedActivityRevision: input.expectedRevision,
+      sessionId: activity.sessionId,
+      sessionActivityIds: session.activityIds,
+      mutationId: input.mutationId,
+      workbenchId: input.expectedWorkbenchId,
+      requestHash,
+      receipt,
+      now,
     });
+    return true;
   }
   await dependencies.applyTimerAction(input.activityId, "activity", action, now, {
     sessionId: activity.sessionId,
@@ -261,6 +300,7 @@ async function applyOrdinaryPracticeTimerAction(
       // and must not turn a committed finish into an unreceipted failure.
     }
   }
+  return false;
 }
 
 export async function controlPracticeTimer(
@@ -285,7 +325,24 @@ export async function controlPracticeTimer(
       now,
     );
   } else {
-    await applyOrdinaryPracticeTimerAction(state, input, activity, dependencies, now);
+    const receiptStored = await applyOrdinaryPracticeTimerAction(
+      state,
+      input,
+      activity,
+      dependencies,
+      now,
+      requestHash,
+    );
+    return {
+      result: {
+        mutationId: input.mutationId,
+        activityId: input.activityId,
+        action: input.action,
+        advancedTo,
+        applied: true,
+      },
+      receiptStored,
+    };
   }
 
   return {
@@ -296,30 +353,51 @@ export async function controlPracticeTimer(
       advancedTo,
       applied: true,
     },
-    receiptStored: input.action === "finish_and_advance",
+    receiptStored: true,
   };
 }
 
 export async function setPracticeResult(
   state: LiveState,
   input: PracticeResultControlInput,
+  requestHash: string,
+  completedDate: string,
   dependencies: PracticeResultControlDependencies,
 ) {
   requireWorkbench(state, input.expectedWorkbenchId);
   const activityPayload = specialistPracticeActivity(state, input.activityId);
   const activity = specialistPracticeRuntime(state, activityPayload);
-  const now = dependencies.now();
-  await dependencies.setOutcome(input.activityId, input.result, now);
-  if (!input.result) {
-    await dependencies.clearActivityReviewSchedules(input.activityId);
-  } else if (activity.timer?.completed) {
-    await dependencies.scheduleCompletedActivity(activity, input.result, now);
+  const actualRevision = state.outcomeRevisions[input.activityId] ?? 0;
+  if (actualRevision !== input.expectedRevision) {
+    throw new SpecialistControlError(
+      "stale_result_revision",
+      `The activity result changed from revision ${input.expectedRevision} to ${actualRevision}. Read Today again before retrying.`,
+    );
   }
-  return {
+  const now = dependencies.now();
+  const result = {
     mutationId: input.mutationId,
     activityId: input.activityId,
     result: input.result,
     authorization: input.authorization,
     applied: true,
   };
+  await dependencies.setPracticeResultAtomic({
+    activityId: input.activityId,
+    result: input.result,
+    expectedRevision: input.expectedRevision,
+    activity: {
+      specialty: activity.type,
+      ...(activity.questionId ? { questionId: activity.questionId } : {}),
+      ...(activity.reviewOfActivityId ? { reviewOfActivityId: activity.reviewOfActivityId } : {}),
+      completed: Boolean(activity.timer?.completed),
+    },
+    completedDate,
+    mutationId: input.mutationId,
+    workbenchId: input.expectedWorkbenchId,
+    requestHash,
+    receipt: result,
+    now,
+  });
+  return result;
 }

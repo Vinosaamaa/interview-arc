@@ -1140,6 +1140,27 @@ export async function unresolvedVoiceCaptureCount(ownerId: string, activityId: s
   return Number(rows[0]?.count ?? 0);
 }
 
+function hasCanonicalMaterializedVoiceExchange(
+  intent: typeof voiceCaptureIntents.$inferSelect,
+  response: typeof voiceSpecialistResponses.$inferSelect | undefined,
+  userTurn: typeof practiceTranscriptTurns.$inferSelect | null | undefined,
+  specialistTurn: typeof practiceTranscriptTurns.$inferSelect | null | undefined,
+) {
+  return response?.status === "materialized"
+    && response.activityId === intent.activityId
+    && response.userTurnId === intent.turnId
+    && response.specialty === intent.specialty
+    && userTurn?.activityId === intent.activityId
+    && userTurn.specialty === intent.specialty
+    && userTurn.speaker === "user"
+    && userTurn.source === "audio_transcript"
+    && specialistTurn?.activityId === intent.activityId
+    && specialistTurn.specialty === intent.specialty
+    && specialistTurn.speaker === "specialist"
+    && specialistTurn.source === "codex"
+    && specialistTurn.body === response.responseBody;
+}
+
 export async function prepareVoiceCapturesForFinish(
   ownerId: string,
   activityId: string,
@@ -1152,6 +1173,7 @@ export async function prepareVoiceCapturesForFinish(
     inArray(voiceCaptureIntents.status, [
       "pending",
       "activity_related",
+      "accepted",
       "uncertain",
       "deleting",
       "quarantined_conflict",
@@ -1188,16 +1210,61 @@ export async function prepareVoiceCapturesForFinish(
   const guard: VoiceFinishGuard = {
     discardedUnclassified: untouchedIds,
     awaitingDelivery: [],
+    missingDurableExchange: [],
+    awaitingAudio: [],
+    audioLostNeedsAcknowledgement: [],
     needsDecision: [],
     deleting: [],
     conflicts: [],
   };
+  const accepted = active.filter((intent) => intent.status === "accepted");
+  const clips = accepted.length
+    ? await db.select().from(activityAudioClips).where(and(
+      eq(activityAudioClips.ownerId, ownerId),
+      inArray(activityAudioClips.id, accepted.map((intent) => intent.clipId)),
+    ))
+    : [];
+  const clipById = new Map(clips.map((clip) => [clip.id, clip]));
+  const responses = accepted.length
+    ? await db.select().from(voiceSpecialistResponses).where(and(
+      eq(voiceSpecialistResponses.ownerId, ownerId),
+      inArray(voiceSpecialistResponses.captureId, accepted.map((intent) => intent.captureId)),
+    ))
+    : [];
+  const responseByCaptureId = new Map(responses.map((response) => [response.captureId, response]));
+  const canonicalTurnIds = responses.flatMap((response) => [response.userTurnId, response.responseTurnId]);
+  const canonicalTurns = canonicalTurnIds.length
+    ? await db.select().from(practiceTranscriptTurns).where(and(
+      eq(practiceTranscriptTurns.ownerId, ownerId),
+      eq(practiceTranscriptTurns.activityId, activityId),
+      inArray(practiceTranscriptTurns.turnId, canonicalTurnIds),
+    ))
+    : [];
+  const turnById = new Map(canonicalTurns.map((turn) => [turn.turnId, turn]));
   active.forEach((intent) => {
     const disposition = finishDispositionForVoiceStatus(intent.status as VoiceIntentStatus);
     if (disposition === "block_for_delivery") guard.awaitingDelivery.push(intent.captureId);
     if (disposition === "needs_user_decision") guard.needsDecision.push(intent.captureId);
     if (disposition === "block_for_deletion") guard.deleting.push(intent.captureId);
     if (intent.status === "quarantined_conflict") guard.conflicts.push(intent.captureId);
+    if (intent.status === "accepted") {
+      const response = responseByCaptureId.get(intent.captureId);
+      const userTurn = response ? turnById.get(response.userTurnId) : null;
+      const specialistTurn = response ? turnById.get(response.responseTurnId) : null;
+      const hasCanonicalExchange = hasCanonicalMaterializedVoiceExchange(
+        intent,
+        response,
+        userTurn,
+        specialistTurn,
+      );
+      if (!hasCanonicalExchange) guard.missingDurableExchange.push(intent.captureId);
+      const clip = clipById.get(intent.clipId);
+      if (clip?.status === "audio_lost") {
+        if (!clip.audioLostAcknowledgedAt) guard.audioLostNeedsAcknowledgement.push(intent.captureId);
+      } else if (clip?.status !== "available") {
+        guard.awaitingAudio.push(intent.captureId);
+      }
+    }
   });
   return guard;
 }
@@ -1638,6 +1705,162 @@ export async function updateActivityAudioClipStatus(
 ) {
   const db = getDb();
   await db.update(activityAudioClips).set({ status, updatedAt: nowMs }).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.id, id)));
+}
+
+export async function reportActivityAudioLost(
+  ownerId: string,
+  id: string,
+  reason: string,
+  nowMs: number,
+) {
+  const db = getDb();
+  const rows = await db.select().from(activityAudioClips).where(and(
+    eq(activityAudioClips.ownerId, ownerId),
+    eq(activityAudioClips.id, id),
+  ));
+  const clip = rows[0];
+  if (!clip) throw new Error("The audio clip does not exist.");
+  if (clip.status === "available") throw new Error("Available cloud audio cannot be declared lost.");
+  await db.update(activityAudioClips).set({
+    status: "audio_lost",
+    audioLostReason: reason.trim().slice(0, 500) || "The original local recording is unavailable.",
+    audioLostDetectedAt: clip.audioLostDetectedAt ?? nowMs,
+    updatedAt: nowMs,
+  }).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.id, id)));
+}
+
+export async function acknowledgeActivityAudioLost(ownerId: string, id: string, nowMs: number) {
+  const db = getDb();
+  const rows = await db.select().from(activityAudioClips).where(and(
+    eq(activityAudioClips.ownerId, ownerId),
+    eq(activityAudioClips.id, id),
+  ));
+  if (rows[0]?.status !== "audio_lost") throw new Error("Only a confirmed recording-loss incident can be acknowledged.");
+  await db.update(activityAudioClips).set({
+    audioLostAcknowledgedAt: rows[0].audioLostAcknowledgedAt ?? nowMs,
+    updatedAt: nowMs,
+  }).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.id, id)));
+}
+
+export async function acknowledgePublishWithoutDeliveryReview(ownerId: string, id: string, nowMs: number) {
+  const db = getDb();
+  const rows = await db.select().from(activityDeliveryAnalyses).where(and(
+    eq(activityDeliveryAnalyses.ownerId, ownerId),
+    eq(activityDeliveryAnalyses.id, id),
+  ));
+  if (rows[0]?.status !== "failed") throw new Error("Only a failed delivery review can be explicitly skipped.");
+  await db.update(activityDeliveryAnalyses).set({
+    publishWithoutReviewAcknowledgedAt: rows[0].publishWithoutReviewAcknowledgedAt ?? nowMs,
+    updatedAt: nowMs,
+  }).where(and(eq(activityDeliveryAnalyses.ownerId, ownerId), eq(activityDeliveryAnalyses.id, id)));
+}
+
+export type PublicationEvidenceBlocker = {
+  activityId: string;
+  captureId: string;
+  clipId: string;
+  kind: "transcript_not_materialized" | "audio_not_available" | "audio_lost_unacknowledged" | "delivery_review_pending" | "delivery_review_failed";
+  status: string;
+};
+
+export async function readPublicationEvidenceState(ownerId: string, activityIds: string[]) {
+  if (!activityIds.length) return { blockers: [] as PublicationEvidenceBlocker[], unavailableClipIds: [] as string[] };
+  const db = getDb();
+  const intents = await db.select().from(voiceCaptureIntents).where(and(
+    eq(voiceCaptureIntents.ownerId, ownerId),
+    inArray(voiceCaptureIntents.activityId, activityIds),
+    eq(voiceCaptureIntents.status, "accepted"),
+  ));
+  if (!intents.length) return { blockers: [] as PublicationEvidenceBlocker[], unavailableClipIds: [] as string[] };
+  const clipIds = intents.map((intent) => intent.clipId);
+  const [clips, analyses, responses] = await Promise.all([
+    db.select().from(activityAudioClips).where(and(
+      eq(activityAudioClips.ownerId, ownerId),
+      inArray(activityAudioClips.id, clipIds),
+    )),
+    db.select().from(activityDeliveryAnalyses).where(and(
+      eq(activityDeliveryAnalyses.ownerId, ownerId),
+      inArray(activityDeliveryAnalyses.audioClipId, clipIds),
+    )),
+    db.select().from(voiceSpecialistResponses).where(and(
+      eq(voiceSpecialistResponses.ownerId, ownerId),
+      inArray(voiceSpecialistResponses.captureId, intents.map((intent) => intent.captureId)),
+    )),
+  ]);
+  const canonicalTurnIds = responses.flatMap((response) => [response.userTurnId, response.responseTurnId]);
+  const canonicalTurns = canonicalTurnIds.length
+    ? await db.select().from(practiceTranscriptTurns).where(and(
+      eq(practiceTranscriptTurns.ownerId, ownerId),
+      inArray(practiceTranscriptTurns.activityId, activityIds),
+      inArray(practiceTranscriptTurns.turnId, canonicalTurnIds),
+    ))
+    : [];
+  const clipById = new Map(clips.map((clip) => [clip.id, clip]));
+  const analysisByClipId = new Map(analyses.map((analysis) => [analysis.audioClipId, analysis]));
+  const responseByCaptureId = new Map(responses.map((response) => [response.captureId, response]));
+  const turnByActivityAndId = new Map(canonicalTurns.map((turn) => [`${turn.activityId}\u0000${turn.turnId}`, turn]));
+  const blockers: PublicationEvidenceBlocker[] = [];
+  const unavailableClipIds: string[] = [];
+  for (const intent of intents) {
+    const response = responseByCaptureId.get(intent.captureId);
+    const userTurn = response
+      ? turnByActivityAndId.get(`${intent.activityId}\u0000${response.userTurnId}`)
+      : undefined;
+    const specialistTurn = response
+      ? turnByActivityAndId.get(`${intent.activityId}\u0000${response.responseTurnId}`)
+      : undefined;
+    if (!hasCanonicalMaterializedVoiceExchange(intent, response, userTurn, specialistTurn)) {
+      blockers.push({
+        activityId: intent.activityId,
+        captureId: intent.captureId,
+        clipId: intent.clipId,
+        kind: "transcript_not_materialized",
+        status: response?.status ?? "missing",
+      });
+      continue;
+    }
+    const clip = clipById.get(intent.clipId);
+    if (clip?.status === "audio_lost") {
+      if (clip.audioLostAcknowledgedAt) unavailableClipIds.push(intent.clipId);
+      else blockers.push({
+        activityId: intent.activityId,
+        captureId: intent.captureId,
+        clipId: intent.clipId,
+        kind: "audio_lost_unacknowledged",
+        status: "audio_lost",
+      });
+      continue;
+    }
+    if (clip?.status !== "available") {
+      blockers.push({
+        activityId: intent.activityId,
+        captureId: intent.captureId,
+        clipId: intent.clipId,
+        kind: "audio_not_available",
+        status: clip?.status ?? "missing",
+      });
+      continue;
+    }
+    const analysis = analysisByClipId.get(intent.clipId);
+    if (analysis?.status === "queued" || analysis?.status === "processing") {
+      blockers.push({
+        activityId: intent.activityId,
+        captureId: intent.captureId,
+        clipId: intent.clipId,
+        kind: "delivery_review_pending",
+        status: analysis.status,
+      });
+    } else if (analysis?.status === "failed" && !analysis.publishWithoutReviewAcknowledgedAt) {
+      blockers.push({
+        activityId: intent.activityId,
+        captureId: intent.captureId,
+        clipId: intent.clipId,
+        kind: "delivery_review_failed",
+        status: "failed",
+      });
+    }
+  }
+  return { blockers, unavailableClipIds };
 }
 
 export async function saveActivityDeliveryAnalysis(
