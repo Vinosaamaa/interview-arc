@@ -256,9 +256,9 @@ series of local attempt snapshots.
 5. Every time the file is prepared or resumed, give the user the complete
    absolute editor command:
 
-   `micro -syntax java "<absolute-path-to-the-file>"`
+   `nvim "<absolute-path-to-the-file>"`
 
-   The user opens `micro`. Do not assume that Codex can safely create or target
+   The user opens `nvim`. Do not assume that Codex can safely create or target
    a Warp pane, and do not replace the running Codex process with the editor.
 
 ### Test And Submit
@@ -392,7 +392,7 @@ or tab for authentication.
 - For the first problem, navigate the single tab to the verified canonical
   public problem URL. Wait for the matching problem identity and editable Java
   editor, then leave the browser in the background while the user works in
-  `micro`.
+  `nvim`.
 - For a new activity/problem, reuse that same tab and navigate it directly to
   the new verified canonical problem URL. Confirm the number/title/slug, select
   Java when necessary, and wait for the editable problem page. Never close the
@@ -414,10 +414,9 @@ or tab for authentication.
 - Use targeted URL, problem-title, editor, submission-state, and verdict waits.
   Do not wait for global network idle, add arbitrary sleeps, poll continuously,
   or use screenshots/pixel coordinates for routine submission.
-- If authentication expires, preserve the browser/profile, foreground the
-  existing dedicated tab, and ask the user to sign in there. Restore the
-  previously active app afterward. Do not discard the profile, copy
-  credentials, or create another authenticated browser.
+- If authentication expires, follow the dedicated-profile authentication
+  procedure above. Do not discard the profile, copy credentials, or create
+  another authenticated browser.
 
 ### Interview Arc Control Boundary
 
