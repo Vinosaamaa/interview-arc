@@ -140,12 +140,8 @@ If the repository has its own `.venv/`, use `./.venv/bin/python` instead.
 ## Source Control And Verification
 
 - Make code, schema, and instruction changes on a feature branch.
-- For every implementation turn, start the live execution ledger before the
-  first substantive action. Add one exact Pacific start/end row for each
-  concrete action this task actually performs; never impose a fixed phase list
-  or include placeholders for actions that did not happen. Reconcile the
-  timestamp-derived total with any exact client “worked for” duration before
-  reporting it. Follow `docs/agents/issue-lifecycle.md`.
+- For every implementation turn, follow the canonical live-execution-ledger
+  requirements in `docs/agents/issue-lifecycle.md`.
 - Before starting a website feature branch, protect any journal-only working-tree
   changes with the checkpoint helper. It must refuse to move journal files when
   unrelated code changes are uncommitted.
