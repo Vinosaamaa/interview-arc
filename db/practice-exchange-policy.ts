@@ -36,6 +36,52 @@ export function finishDispositionForVoiceStatus(status: VoiceIntentStatus): Voic
   return "nonblocking";
 }
 
+export function voiceCommitStatusAllowsReplay(status: VoiceIntentStatus) {
+  return status === "activity_related" || status === "accepted";
+}
+
+export type VoiceCommitIdentity = {
+  activityId: string;
+  specialty: string;
+  turnId: string;
+  checksum: string;
+};
+
+export function voiceCaptureAllowsCommit(
+  intent: (VoiceCommitIdentity & { status: VoiceIntentStatus }) | null | undefined,
+  incoming: VoiceCommitIdentity,
+) {
+  return Boolean(
+    intent
+    && voiceCommitStatusAllowsReplay(intent.status)
+    && intent.activityId === incoming.activityId
+    && intent.specialty === incoming.specialty
+    && intent.turnId === incoming.turnId
+    && intent.checksum === incoming.checksum,
+  );
+}
+
+export type VoiceCommitTurnIdentity = {
+  specialty: string;
+  speaker: string;
+  body: string;
+  source: string;
+  sequence: number;
+  occurredAt: number;
+};
+
+export function sameVoiceCommitTurn(
+  existing: VoiceCommitTurnIdentity,
+  incoming: VoiceCommitTurnIdentity,
+) {
+  return existing.specialty === incoming.specialty
+    && existing.speaker === incoming.speaker
+    && existing.body === incoming.body
+    && existing.source === incoming.source
+    && existing.sequence === incoming.sequence
+    && existing.occurredAt === incoming.occurredAt;
+}
+
 export function voiceFinishGuardMessage(guard: VoiceFinishGuard) {
   if (guard.conflicts.length) {
     return `${guard.conflicts.length} voice capture ${guard.conflicts.length === 1 ? "has" : "have"} conflicting durable content. Review or discard before finishing.`;

@@ -23,7 +23,9 @@ import {
 import {
   finishDispositionForVoiceStatus,
   sameCanonicalExchange,
+  sameVoiceCommitTurn,
   type CanonicalExchangeIdentity,
+  voiceCaptureAllowsCommit,
   type VoiceFinishGuard,
   type VoiceIntentStatus,
   voiceFinishGuardMessage,
@@ -958,12 +960,16 @@ export async function commitRelatedVoiceCapture(
 ) {
   const db = getDb();
   const intent = await readVoiceCaptureIntent(ownerId, input.captureId);
-  if (!intent
-      || intent.status !== "activity_related"
-      || intent.activityId !== input.activityId
-      || intent.specialty !== input.specialty
-      || intent.turnId !== input.turnId
-      || intent.checksum !== input.checksum) {
+  if (!voiceCaptureAllowsCommit(
+    intent ? {
+      status: intent.status as VoiceIntentStatus,
+      activityId: intent.activityId,
+      specialty: intent.specialty,
+      turnId: intent.turnId,
+      checksum: intent.checksum,
+    } : null,
+    input,
+  )) {
     throw new Error("Only an acknowledged activity-related capture can be committed.");
   }
   const response = await readVoiceSpecialistResponse(ownerId, input.captureId);
@@ -1039,13 +1045,7 @@ export async function commitRelatedVoiceCapture(
     [userValue, existingTurns.find((turn) => turn.turnId === input.turnId)],
     [responseValue, existingTurns.find((turn) => turn.turnId === response.responseTurnId)],
   ] as const) {
-    if (existingTurn
-        && (existingTurn.specialty !== value.specialty
-          || existingTurn.speaker !== value.speaker
-          || existingTurn.body !== value.body
-          || existingTurn.source !== value.source
-          || existingTurn.sequence !== value.sequence
-          || existingTurn.occurredAt !== value.occurredAt)) {
+    if (existingTurn && !sameVoiceCommitTurn(existingTurn, value)) {
       throw new Error("A stable Voice exchange turn conflicts with existing durable transcript content.");
     }
   }

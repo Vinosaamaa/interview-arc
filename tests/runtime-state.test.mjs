@@ -21,6 +21,9 @@ import { isJournalPath, journalBranch, parsePorcelain } from "../scripts/journal
 import {
   finishDispositionForVoiceStatus,
   sameCanonicalExchange,
+  sameVoiceCommitTurn,
+  voiceCaptureAllowsCommit,
+  voiceCommitStatusAllowsReplay,
   voiceDecisionReceipt,
   voiceFinishGuardMessage,
 } from "../db/practice-exchange-policy.ts";
@@ -109,6 +112,40 @@ test("canonical exchange retries are identity-idempotent and conflicting rewrite
   assert.equal(sameCanonicalExchange(canonical, {
     ...canonical,
     responseBody: "Use recursion instead.",
+  }), false);
+});
+
+test("an accepted Voice capture can replay the exact durable transcript commit", () => {
+  assert.equal(voiceCommitStatusAllowsReplay("activity_related"), true);
+  assert.equal(voiceCommitStatusAllowsReplay("accepted"), true);
+  assert.equal(voiceCommitStatusAllowsReplay("unrelated"), false);
+  assert.equal(voiceCommitStatusAllowsReplay("quarantined_conflict"), false);
+
+  const incoming = {
+    activityId: "activity-1",
+    specialty: "leetcode",
+    turnId: "voice-user-1",
+    checksum: "sha256:fixture",
+  };
+  assert.equal(voiceCaptureAllowsCommit({ status: "accepted", ...incoming }, incoming), true);
+  assert.equal(voiceCaptureAllowsCommit({
+    status: "accepted",
+    ...incoming,
+    checksum: "sha256:changed",
+  }, incoming), false);
+
+  const existingDurableTurn = {
+    specialty: "leetcode",
+    speaker: "user",
+    body: "Use dynamic programming.",
+    source: "audio_transcript",
+    sequence: 4,
+    occurredAt: 1_234,
+  };
+  assert.equal(sameVoiceCommitTurn(existingDurableTurn, { ...existingDurableTurn }), true);
+  assert.equal(sameVoiceCommitTurn(existingDurableTurn, {
+    ...existingDurableTurn,
+    body: "Changed durable content.",
   }), false);
 });
 

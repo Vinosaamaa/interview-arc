@@ -21,6 +21,48 @@ export class PlanningSelectionError extends Error {
   }
 }
 
+export type SpecialistPlanningReceipt = {
+  workbenchId: string;
+  response: unknown;
+  createdAt: number;
+};
+
+export function specialistPlanningReplay(
+  receipt: SpecialistPlanningReceipt,
+  specialistRequestHash: string,
+  context: {
+    expectedWorkbenchId: string;
+    practiceDate: string;
+    receiptPracticeDate: string;
+  },
+) {
+  if (!receipt.response || typeof receipt.response !== "object") return null;
+  const stored = receipt.response as Record<string, unknown>;
+  if (typeof stored.specialistRequestHash === "string") {
+    if (stored.specialistRequestHash === specialistRequestHash) return receipt.response;
+    throw new PlanningSelectionError(
+      "planning_mutation_identity_conflict",
+      "That planning mutation identifier was already used for different content.",
+    );
+  }
+
+  // Receipts written before specialist request hashes were persisted cannot
+  // prove the full original filter set. Replaying them is still safe inside
+  // the same owner-scoped workbench and practice day because the mutation id
+  // already identifies one immutable result. Never carry that compatibility
+  // behavior across a workbench or day boundary.
+  if (
+    receipt.workbenchId !== context.expectedWorkbenchId
+    || context.receiptPracticeDate !== context.practiceDate
+  ) {
+    throw new PlanningSelectionError(
+      "planning_mutation_identity_conflict",
+      "That legacy planning mutation belongs to a different workbench or practice day.",
+    );
+  }
+  return receipt.response;
+}
+
 export type PlanningCatalogItem = QuestionBankItem & {
   eligible: boolean;
   disabledReason: string | null;
