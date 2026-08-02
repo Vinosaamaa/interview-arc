@@ -31,6 +31,7 @@ function liveState({ activities, sessions = [] }) {
     timers: {},
     sessionTimers: {},
     outcomes: {},
+    outcomeRevisions: {},
     publicationStatuses: {},
     notes: {},
     structuredNotes: {},
@@ -80,6 +81,11 @@ function harness(state) {
     prepareVoiceCapturesForFinish: async () => ({}),
     voiceFinishGuardMessage: () => null,
     finishAndAdvancePracticeActivity: async () => {},
+    startSessionPracticeActivity: async (input) => {
+      calls.push({ atomicSessionStart: input });
+      state.sessionTimers[input.sessionId] = timerState(state.sessionTimers[input.sessionId], "start", input.now);
+      state.timers[input.activityId] = timerState(state.timers[input.activityId], "start", input.now);
+    },
     scheduleCompletedActivity: async () => {},
   };
   return {
@@ -185,16 +191,16 @@ test("an unfocused planned activity accepts an explicit result", async () => {
     expectedWorkbenchId: "workbench-1",
     mutationId: "result-1",
     activityId: "activity-1",
+    expectedRevision: 0,
     result: "solved",
     authorization: "explicit_user_instruction",
-  }, {
+  }, "result-request-hash", "2026-08-02", {
     now: () => 1_000,
-    setOutcome: async (activityId, result) => {
-      state.outcomes[activityId] = result;
-      changed.push([activityId, result]);
+    setPracticeResultAtomic: async (input) => {
+      state.outcomes[input.activityId] = input.result;
+      state.outcomeRevisions[input.activityId] = input.expectedRevision + 1;
+      changed.push([input.activityId, input.result]);
     },
-    clearActivityReviewSchedules: async () => {},
-    scheduleCompletedActivity: async () => {},
   });
 
   assert.deepEqual(changed, [["activity-1", "solved"]]);
@@ -232,10 +238,10 @@ test("starting a session activity also starts its parent session", async () => {
 
   await controlPracticeTimer(state, timerInput(), "hash", runtime.dependencies);
 
-  assert.deepEqual(runtime.calls.map(({ subjectId, kind, action }) => ({ subjectId, kind, action })), [
-    { subjectId: "session-1", kind: "session", action: "start" },
-    { subjectId: "activity-1", kind: "activity", action: "start" },
-  ]);
+  assert.equal(runtime.calls.length, 1);
+  assert.equal(runtime.calls[0].atomicSessionStart.sessionId, "session-1");
+  assert.equal(runtime.calls[0].atomicSessionStart.activityId, "activity-1");
+  assert.equal(runtime.calls[0].atomicSessionStart.receipt.mutationId, "mutation-1");
   assert.equal(state.sessionTimers["session-1"].revision, 1);
   assert.equal(state.timers["activity-1"].revision, 1);
 });

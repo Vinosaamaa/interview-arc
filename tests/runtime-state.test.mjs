@@ -79,12 +79,18 @@ test("voice finish recovery tells the user the exact action required", () => {
   const empty = {
     discardedUnclassified: [],
     awaitingDelivery: [],
+    missingDurableExchange: [],
+    awaitingAudio: [],
+    audioLostNeedsAcknowledgement: [],
     needsDecision: [],
     deleting: [],
     conflicts: [],
   };
   assert.equal(voiceFinishGuardMessage(empty), null);
   assert.match(voiceFinishGuardMessage({ ...empty, awaitingDelivery: ["c1"] }), /Retry delivery or Discard/);
+  assert.match(voiceFinishGuardMessage({ ...empty, missingDurableExchange: ["c1"] }), /canonical D1 transcript/);
+  assert.match(voiceFinishGuardMessage({ ...empty, awaitingAudio: ["c1"] }), /Retry upload/);
+  assert.match(voiceFinishGuardMessage({ ...empty, audioLostNeedsAcknowledgement: ["c1"] }), /Acknowledge/);
   assert.match(voiceFinishGuardMessage({ ...empty, needsDecision: ["c1"] }), /Attach or Discard/);
   assert.match(voiceFinishGuardMessage({ ...empty, deleting: ["c1"] }), /Retry or wait/);
   assert.match(voiceFinishGuardMessage({ ...empty, conflicts: ["c1"] }), /conflicting durable content/);
@@ -385,6 +391,7 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   const deliveryCoach = await readFile(new URL("../drizzle/0007_flat_may_parker.sql", import.meta.url), "utf8");
   const workbenches = await readFile(new URL("../drizzle/0011_workbenches_and_provisional_profiles.sql", import.meta.url), "utf8");
   const personalMetadata = await readFile(new URL("../drizzle/0012_personal_leetcode_metadata.sql", import.meta.url), "utf8");
+  const voiceEvidence = await readFile(new URL("../drizzle/0018_voice_evidence_guards.sql", import.meta.url), "utf8");
   for (const table of ["timers", "outcomes", "extra_activities", "live_sessions"]) {
     assert.match(live, new RegExp("CREATE TABLE `" + table + "`"));
   }
@@ -415,6 +422,10 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   assert.match(personalMetadata, /ALTER TABLE `owner_bank_questions` ADD `problem_number` integer/);
   assert.match(personalMetadata, /ADD `acceptance_rate` real/);
   assert.match(personalMetadata, /ADD `metadata_references` text DEFAULT '\[\]' NOT NULL/);
+  assert.match(voiceEvidence, /ADD `audio_lost_reason` text/);
+  assert.match(voiceEvidence, /ADD `audio_lost_acknowledged_at` integer/);
+  assert.match(voiceEvidence, /ADD `publish_without_review_acknowledged_at` integer/);
+  assert.doesNotMatch(voiceEvidence, /CREATE TABLE `today_planning_mutations`/);
 });
 
 test("content highlights persist editable notes", async () => {
@@ -549,15 +560,22 @@ test("private R2 audio stays owner-authorized and seekable", async () => {
 test("Interview Arc Voice persists exact turns, idempotent clips, and per-answer delivery evidence", async () => {
   const bridge = await readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8");
   const durableStore = await readFile(new URL("../db/durable-practice.ts", import.meta.url), "utf8");
+  const snapshot = await readFile(new URL("../db/practice-snapshot.ts", import.meta.url), "utf8");
   const client = await readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8");
   for (const route of ["/voice/context", "/voice/timers", "/voice/captures", "/voice/delivery"]) {
     assert.match(bridge, new RegExp(route.replace("/", "\\/")));
   }
+  assert.match(bridge, /audio-loss/);
+  assert.match(bridge, /acknowledgeVoiceAudioLoss/);
+  assert.match(bridge, /publish-without-review/);
   assert.match(bridge, /startedAt: activity\.timer\.startedAt/);
   assert.match(bridge, /runningSince: activity\.timer\.runningSince/);
   assert.match(bridge, /requestedClipId \|\| crypto\.randomUUID\(\)/);
   assert.match(durableStore, /appendVoiceTranscriptTurn/);
   assert.match(durableStore, /Delivery analysis must reference a private clip linked to the same user transcript turn/);
+  assert.match(durableStore, /hasCanonicalMaterializedVoiceExchange/);
+  assert.match(durableStore, /clip\?\.status !== "available"/);
+  assert.match(snapshot, /recordingUnavailableClipIds/);
   assert.ok(client.indexOf("<DeliveryReview") < client.indexOf('"Your answer"'));
   assert.match(client, /GroupedAnswerPlayback/);
   assert.match(client, /onEnded=\{continueToNextSegment\}/);
@@ -572,8 +590,10 @@ test("Voice context reads the active stopwatch directly instead of rebuilding al
   );
 
   assert.match(liveState, /export async function readActiveVoiceActivity/);
+  assert.match(liveState, /export async function readVoiceTimerTarget/);
   assert.match(voiceContextBody, /const date = dateInPracticeTimeZone\(\)/);
   assert.match(voiceContextBody, /readActiveVoiceActivity\(ownerId\)/);
+  assert.match(voiceContextBody, /workbenchId: typeof activity\.workbenchId === "string"/);
   assert.doesNotMatch(voiceContextBody, /buildPracticeSnapshot/);
   assert.doesNotMatch(voiceContextBody, /includeAll/);
 });
@@ -626,11 +646,29 @@ test("Voice protocol v2 gates content behind an explicit per-capture decision", 
   assert.match(durable, /Only an acknowledged activity-related capture can be committed/);
   assert.match(durable, /A captureId cannot be rebound/);
   assert.match(durable, /discarded_unclassified/);
+  assert.match(durable, /hasCanonicalMaterializedVoiceExchange/);
+  assert.match(durable, /audioLostAcknowledgedAt/);
   assert.match(worker, /\/voice\/intents/);
+  assert.match(worker, /audio_already_available/);
+  assert.ok(
+    worker.indexOf("await env.AUDIO.put")
+      < worker.indexOf('updateActivityAudioClipStatus(ownerId, clipId, "available"'),
+    "D1 available must be written only after the private R2 put completes",
+  );
   assert.match(worker, /resolve_voice_capture/);
   assert.match(worker, /resolve_voice_capture_and_save_response/);
   assert.match(worker, /save_practice_exchange/);
   assert.match(worker, /save_leetcode_code_attempt/);
+  const typedExchangeSchema = worker.slice(
+    worker.indexOf('"save_practice_exchange"'),
+    worker.indexOf('"resolve_voice_capture"'),
+  );
+  assert.doesNotMatch(typedExchangeSchema, /expectedRevision/);
+  const resultControlSchema = worker.slice(
+    worker.indexOf('"set_practice_result"'),
+    worker.indexOf('"get_today_practice"'),
+  );
+  assert.match(resultControlSchema, /expectedRevision: z\.number\(\)\.int\(\)\.nonnegative\(\)/);
   assert.match(exchangePolicy, /Transcript not saved · Recording not uploaded/);
   assert.match(leetcodeGuide, /ambiguous.*uncertain/is);
   assert.match(leetcodeGuide, /Scratch Notes/);

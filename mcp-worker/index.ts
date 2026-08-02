@@ -10,6 +10,7 @@ import {
   readActiveVoiceActivity,
   readLiveState,
   readVoiceTimerInstrument,
+  readVoiceTimerTarget,
   removeExtraActivity,
   removeFocusBlock,
   removeLiveSession,
@@ -29,6 +30,8 @@ import { leetCodeQuestionMetadataSchema } from "../db/question-metadata";
 import { connectOwnerLiveUpdates, publishOwnerLiveUpdate } from "../worker/live-update-hub";
 import {
   addPracticeNote,
+  acknowledgeActivityAudioLost,
+  acknowledgePublishWithoutDeliveryReview,
   appendTranscriptTurns,
   appendVoiceTranscriptTurn,
   beginDeleteVoiceCapture,
@@ -51,6 +54,7 @@ import {
   registerVoiceCaptureIntent,
   registerActivityAudioClip,
   registerSpecialistTask,
+  reportActivityAudioLost,
   resolveVoiceCaptureAndSaveResponse,
   resolveVoiceCaptureIntent,
   saveActivityDeliveryAnalysis,
@@ -84,7 +88,11 @@ import {
   type PlanningAttention,
 } from "../db/today-planning-policy";
 import { SpecialistControlError } from "../db/specialist-controls-policy";
-import { finishAndAdvancePracticeActivity } from "../db/specialist-controls-store";
+import {
+  finishAndAdvancePracticeActivity,
+  setPracticeResultAtomic,
+  startSessionPracticeActivity,
+} from "../db/specialist-controls-store";
 import {
   controlPracticeTimer,
   setPracticeResult,
@@ -154,6 +162,71 @@ async function uploadPracticeAudio(ownerId: string, request: Request, env: Env) 
   return json(request, { clipId, activityId, transcriptTurnId: transcriptTurnId ?? null, filename, mimeType: file.type, label, durationSeconds: durationSeconds ?? null, status: "available" }, { status: 201 });
 }
 
+async function reportVoiceAudioLoss(
+  ownerId: string,
+  request: Request,
+  captureId: string,
+  env: Env,
+) {
+  const body = (await request.json()) as {
+    clipId?: string;
+    reason?: "local_source_missing" | "local_source_unreadable";
+  };
+  const intent = await readVoiceCaptureIntent(ownerId, captureId);
+  if (!intent || intent.status !== "accepted" || !body.clipId || intent.clipId !== body.clipId) {
+    return json(request, {
+      error: "Audio loss can be reported only for the matching accepted Voice capture.",
+    }, { status: 409 });
+  }
+  if (!body.reason || !["local_source_missing", "local_source_unreadable"].includes(body.reason)) {
+    return json(request, { error: "A supported privacy-safe loss reason is required." }, { status: 400 });
+  }
+  const clip = await readActivityAudioClip(ownerId, body.clipId);
+  if (clip?.status === "available") {
+    return json(request, {
+      error: "The original recording is already durable in private storage.",
+      code: "audio_already_available",
+      retryable: false,
+    }, { status: 409 });
+  }
+  await reportActivityAudioLost(ownerId, body.clipId, body.reason, Date.now());
+  await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_capture");
+  return json(request, {
+    captureId,
+    clipId: body.clipId,
+    status: "audio_lost",
+    acknowledged: false,
+  });
+}
+
+async function acknowledgeVoiceAudioLoss(
+  ownerId: string,
+  request: Request,
+  captureId: string,
+  env: Env,
+) {
+  const body = (await request.json()) as { clipId?: string };
+  const intent = await readVoiceCaptureIntent(ownerId, captureId);
+  if (!intent || intent.status !== "accepted" || !body.clipId || intent.clipId !== body.clipId) {
+    return json(request, {
+      error: "Audio loss can be acknowledged only for the matching accepted Voice capture.",
+    }, { status: 409 });
+  }
+  await acknowledgeActivityAudioLost(ownerId, body.clipId, Date.now());
+  await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_capture");
+  return json(request, {
+    captureId,
+    clipId: body.clipId,
+    status: "audio_lost",
+    acknowledged: true,
+  });
+}
+
+async function acknowledgeDeliveryReviewBypass(ownerId: string, request: Request, analysisId: string) {
+  await acknowledgePublishWithoutDeliveryReview(ownerId, analysisId, Date.now());
+  return json(request, { analysisId, publishWithoutDeliveryReview: true });
+}
+
 const VOICE_PROTOCOL_VERSION = 2;
 
 function voiceSpecialty(value: "leetcode" | "system_design" | "behavioral") {
@@ -198,6 +271,9 @@ async function voiceContext(ownerId: string, request: Request) {
     date,
     focusedActivity: {
       activityId: activity.id,
+      workbenchId: typeof activity.workbenchId === "string"
+        ? activity.workbenchId
+        : timerInstrument.workbenchId,
       questionId: activity.questionId ?? null,
       specialty: voiceSpecialty(activity.type),
       interviewArcSpecialty: activity.type,
@@ -282,26 +358,46 @@ async function voiceTimerMutation(ownerId: string, request: Request, env: Env) {
           activityIds: instrument.session.activityIds,
         });
       } else {
-        const activity = instrument.activities.find((candidate) => candidate.id === mutation.subjectId);
-        if (!activity) {
-          return json(request, { error: "The requested activity is not available in the current session." }, { status: 404 });
+        const target = await readVoiceTimerTarget(ownerId, mutation.subjectId);
+        const activity = target?.activity;
+        if (!target || !activity) {
+          return json(request, { error: "The requested activity is not available in the open workbench." }, { status: 404 });
         }
         if (mutation.action === "finish" && activity.requiresOutcome) {
           return json(request, {
             error: "Choose a result in the Finish drawer before completing this activity.",
           }, { status: 409 });
         }
-        if (mutation.action === "start" && instrument.session) {
-          await applyTimerAction(ownerId, instrument.session.id, "session", "start", now, {
-            activityIds: instrument.session.activityIds,
-          });
-        }
         if (activity.activityClass === "focus_block") {
           await applyFocusTimerAction(ownerId, activity.id, mutation.action, now, instrument.session?.id);
         } else {
-          await applyTimerAction(ownerId, activity.id, "activity", mutation.action, now, {
-            sessionId: instrument.session?.id,
-          });
+          const session = target.session;
+          if (mutation.action === "start" && session) {
+            const mutationId = `voice-timer-${crypto.randomUUID()}`;
+            const result = {
+              mutationId,
+              activityId: activity.id,
+              action: "start",
+              advancedTo: null,
+              applied: true,
+            };
+            await startSessionPracticeActivity({
+              ownerId,
+              activityId: activity.id,
+              expectedActivityRevision: activity.timer?.revision ?? 0,
+              sessionId: session.id,
+              sessionActivityIds: session.activityIds,
+              mutationId,
+              workbenchId: target.workbenchId,
+              requestHash: await planningRequestFingerprint(result),
+              receipt: result,
+              now,
+            });
+          } else {
+            await applyTimerAction(ownerId, activity.id, "activity", mutation.action, now, {
+              sessionId: target.session?.id ?? instrument.session?.id,
+            });
+          }
         }
       }
     } else if (mutation.type === "finish-activity") {
@@ -1440,13 +1536,14 @@ function specialistControlDependencies(ownerId: string, date: string): {
       finishAndAdvancePracticeActivity: (control) => (
         finishAndAdvancePracticeActivity({ ownerId, ...control })
       ),
+      startSessionPracticeActivity: (control) => (
+        startSessionPracticeActivity({ ownerId, ...control })
+      ),
       scheduleCompletedActivity,
     },
     result: {
       now: Date.now,
-      setOutcome: (activityId, outcome, now) => setOutcome(ownerId, activityId, outcome, now),
-      clearActivityReviewSchedules: (activityId) => clearActivityReviewSchedules(ownerId, activityId),
-      scheduleCompletedActivity,
+      setPracticeResultAtomic: (control) => setPracticeResultAtomic({ ownerId, ...control }),
     },
   };
 }
@@ -2318,6 +2415,7 @@ function createServer(ownerId: string, env: Env) {
         expectedWorkbenchId: z.string().min(1),
         mutationId: z.string().min(1).max(120),
         activityId: z.string().min(1),
+        expectedRevision: z.number().int().nonnegative(),
         result: z.enum(["solved", "solved_after_reviewing_approach", "failed"]).nullable(),
         authorization: z.enum(["explicit_user_instruction", "authorized_platform_verdict"]),
       },
@@ -2335,8 +2433,13 @@ function createServer(ownerId: string, env: Env) {
           return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
         }
         const dependencies = specialistControlDependencies(ownerId, prepared.date);
-        const result = await setPracticeResult(prepared.state, input, dependencies.result);
-        await rememberSpecialistMutation(ownerId, input, prepared.requestHash, result);
+        const result = await setPracticeResult(
+          prepared.state,
+          input,
+          prepared.requestHash,
+          prepared.date,
+          dependencies.result,
+        );
         await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "practice");
         const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
         const payload = { duplicate: false, result, authoritative };
@@ -2465,12 +2568,24 @@ export default {
     if (voiceCaptureDelete && request.method === "DELETE") {
       return deleteVoiceCaptureGraph(ownerId, request, env, decodeURIComponent(voiceCaptureDelete[1]));
     }
+    const voiceAudioLoss = url.pathname.match(/^\/voice\/captures\/([^/]+)\/audio-loss$/);
+    if (voiceAudioLoss && request.method === "POST") {
+      return reportVoiceAudioLoss(ownerId, request, decodeURIComponent(voiceAudioLoss[1]), env);
+    }
+    const voiceAudioLossAcknowledgement = url.pathname.match(/^\/voice\/captures\/([^/]+)\/audio-loss\/acknowledge$/);
+    if (voiceAudioLossAcknowledgement && request.method === "POST") {
+      return acknowledgeVoiceAudioLoss(ownerId, request, decodeURIComponent(voiceAudioLossAcknowledgement[1]), env);
+    }
     const legacyVoiceCaptureDelete = url.pathname.match(/^\/voice\/legacy-orphans\/([^/]+)$/);
     if (legacyVoiceCaptureDelete && request.method === "DELETE") {
       return deleteLegacyVoiceCaptureGraph(ownerId, request, env, decodeURIComponent(legacyVoiceCaptureDelete[1]));
     }
     if (url.pathname === "/voice/delivery" && request.method === "POST") {
       return saveVoiceDelivery(ownerId, request);
+    }
+    const deliveryReviewBypass = url.pathname.match(/^\/voice\/delivery\/([^/]+)\/publish-without-review$/);
+    if (deliveryReviewBypass && request.method === "POST") {
+      return acknowledgeDeliveryReviewBypass(ownerId, request, decodeURIComponent(deliveryReviewBypass[1]));
     }
     if (url.pathname === "/mcp" || url.pathname.startsWith("/mcp/")) {
       return createMcpHandler(createServer(ownerId, env))(request, env, ctx);

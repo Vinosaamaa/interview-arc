@@ -38,6 +38,17 @@ with changed content is an identity conflict. Reusing it with identical content
 returns the saved receipt and a fresh authoritative D1 read-back without
 applying the mutation twice.
 
+Starting an activity nested in a session is one guarded D1 mutation. The
+parent session, requested child, competing-stopwatch pauses, focus state, and
+mutation receipt either commit together or do not commit. A stale parent or
+child timer revision cannot leave a parent running without its requested
+child.
+
+Result mutation is likewise one guarded D1 mutation. Outcome, outcome
+revision, review schedule (including a review deletion), and mutation receipt
+commit together. A stale result command receives a structured conflict and
+cannot overwrite a newer outcome or delete review metadata created by it.
+
 Timer and result commands require the authorization value documented by their
 schema. A specialist must receive an explicit user instruction before changing
 a timer or result. An authorized platform verdict may set a result, but may not
@@ -52,8 +63,12 @@ an already-running session or one explicitly focused activity.
 
 `finish_and_advance` preflights the current result, current and next timer
 revisions, next-activity eligibility, and session order before finishing. Voice
-capture finish guards remain authoritative. If a guard fails, the operation
-returns a visible structured error and does not advance.
+capture finish guards remain authoritative. An accepted related Voice capture
+must have its canonical D1 user/specialist pair and either an `available`
+private-audio row or an acknowledged `audio_lost` record. Untouched `pending`
+captures are terminalized as `discarded_unclassified`; `uncertain` remains an
+explicit Attach-or-Discard blocker. If any guard fails, the operation returns a
+visible structured error and does not advance.
 
 ## Read-Back And Synchronization
 

@@ -5,6 +5,7 @@ import { loadContentIndex } from "./content";
 import { readLiveState, type PublicationStatusValue, type TimerState } from "./live-state";
 import { derivePublicationStatus } from "./publication-state";
 import { dedupeSnapshotRows } from "./snapshot-rows";
+import { readPublicationEvidenceState } from "./durable-practice";
 
 export type ConnectedActivity = JournalActivity & {
   timer?: TimerState;
@@ -16,6 +17,7 @@ export type ConnectedActivity = JournalActivity & {
   specialistFinalization: unknown | null;
   audioClips: unknown[];
   deliveryAnalyses: unknown[];
+  recordingUnavailableClipIds?: string[];
   sessionId?: string;
   practiceDate: string;
 };
@@ -112,7 +114,7 @@ export async function buildPublicationQueue(ownerId: string, requestedDate?: str
   (live.historyActivities as JournalActivity[]).forEach((activity) => byId.set(activity.id, activity));
   const artifacts = new Map(content.artifacts.filter((artifact) => artifact.activityId).map((artifact) => [artifact.activityId, artifact]));
 
-  const activities = [...byId.values()].flatMap((activity) => {
+  const candidates = [...byId.values()].flatMap((activity) => {
     const timer = live.timers[activity.id];
     const outcome = live.outcomes[activity.id] ?? activity.outcome;
     const artifact = artifacts.get(activity.id);
@@ -144,8 +146,26 @@ export async function buildPublicationQueue(ownerId: string, requestedDate?: str
       ...(timer ? { elapsedSeconds: timer.accumulatedSeconds } : {}),
     } satisfies ConnectedActivity];
   });
+  const evidence = await readPublicationEvidenceState(ownerId, candidates.map((activity) => activity.id));
+  const blockersByActivity = new Map<string, typeof evidence.blockers>();
+  evidence.blockers.forEach((blocker) => blockersByActivity.set(
+    blocker.activityId,
+    [...(blockersByActivity.get(blocker.activityId) ?? []), blocker],
+  ));
+  const blockedActivities = candidates.flatMap((activity) => {
+    const blockers = blockersByActivity.get(activity.id) ?? [];
+    return blockers.length ? [{ activityId: activity.id, title: activity.title, blockers }] : [];
+  });
+  const activities = candidates.flatMap((activity) => blockersByActivity.has(activity.id)
+    ? []
+    : [{
+      ...activity,
+      recordingUnavailableClipIds: evidence.unavailableClipIds.filter((clipId) => (
+        activity.audioClips.some((clip) => (clip as { id?: unknown }).id === clipId)
+      )),
+    }]);
   const groups = [...new Set(activities.map((activity) => activity.practiceDate))]
     .sort()
     .map((date) => ({ date, activities: activities.filter((activity) => activity.practiceDate === date) }));
-  return { timeZone: "America/Los_Angeles", activities, groups };
+  return { timeZone: "America/Los_Angeles", activities, groups, blockedActivities };
 }

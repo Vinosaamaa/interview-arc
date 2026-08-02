@@ -123,6 +123,18 @@ Implemented safeguards:
   distinct recovery instructions.
 - `/voice/intents/:captureId/expire` records `expired_unclassified` before the
   native app may delete local evidence.
+- Finish and publication verify the canonical materialized user/specialist pair
+  rather than accepting an intent status alone.
+- A related capture cannot finish until its D1 audio row is `available`, which
+  is written only after the private R2 put succeeds. The guard never performs
+  an R2 object read.
+- If the retained local recording is irrecoverably missing or unreadable,
+  Voice reports a privacy-safe `audio_lost` state. Finish remains blocked until
+  the user acknowledges that incident; publication renders **Recording
+  unavailable** and cannot invent playback or Delivery Coach evidence.
+- The server rejects an `audio_lost` report when the clip is already
+  `available`, fencing the R2-upload/local-cleanup race in favor of durable
+  evidence.
 - Specialist contracts require one visible acknowledged receipt per exchange;
   receipts remain outside durable and published content.
 - MCP Worker registration and both Codex allowlists are validated in order.
@@ -147,6 +159,11 @@ Still required before closing the issue:
   replay, Finish with untouched pending, uncertain recovery, and expiry.
 - Complete the paired native Voice release work for local expiry and recovery
   surfaces.
+- Verify accepted delivery cannot finish before both canonical transcript
+  turns and D1 `available` audio evidence exist, including session and
+  workbench completion.
+- Verify acknowledged `audio_lost` is rendered without a player or fabricated
+  Delivery Coach evidence.
 
 ## Prevention and follow-up
 
@@ -156,6 +173,9 @@ Still required before closing the issue:
 | Validate Worker tool catalog against both allowlists | Interview Arc | #93 | Implemented locally |
 | Add authoritative unclassified-expiry endpoint | Interview Arc | #93 | Implemented locally |
 | Make native expiry wait for server acknowledgement | Arc Voice | #64 | Paired dependency |
+| Require canonical D1 pair plus durable private audio at Finish/publication | Interview Arc | #93 | Implemented locally; production verification pending |
+| Keep every open-workbench linked capture actionable until authoritative resolution | Arc Voice | #64 | Implemented locally; packaged verification pending |
+| Add explicit acknowledged `audio_lost` terminal state | Interview Arc + Arc Voice | #93 / #64 | Implemented locally; release verification pending |
 | Keep Insert Again idempotent and visibly recoverable | Arc Voice | #68 | Paired dependency |
 | Preserve status-first bounded reconciliation | Arc Voice | #72 | Paired dependency |
 

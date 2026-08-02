@@ -68,6 +68,7 @@ export type LiveState = {
   timers: Record<string, TimerState>;
   sessionTimers: Record<string, TimerState>;
   outcomes: Record<string, OutcomeValue>;
+  outcomeRevisions: Record<string, number>;
   publicationStatuses: Record<string, PublicationStatusValue>;
   notes: Record<string, string>;
   structuredNotes: Record<string, unknown[]>;
@@ -177,6 +178,7 @@ export type VoiceTimerActivity =
 
 export type VoiceTimerInstrument = {
   serverNow: number;
+  workbenchId: string | null;
   session: (SessionPayload & {
     label: string;
     allocatedSeconds: number;
@@ -185,6 +187,101 @@ export type VoiceTimerInstrument = {
   activity: VoiceTimerActivity | null;
   activities: VoiceTimerActivity[];
 };
+
+export type VoiceTimerTarget = {
+  workbenchId: string;
+  activity: VoiceTimerActivity;
+  session: { id: string; activityIds: string[] } | null;
+};
+
+export async function readVoiceTimerTarget(
+  ownerId: string,
+  activityId: string,
+): Promise<VoiceTimerTarget | null> {
+  const db = getDb();
+  const workbenchRows = await db
+    .select()
+    .from(practiceWorkbenches)
+    .where(and(
+      eq(practiceWorkbenches.ownerId, ownerId),
+      eq(practiceWorkbenches.status, "open"),
+    ))
+    .orderBy(desc(practiceWorkbenches.openedAt))
+    .limit(1);
+  const workbench = workbenchRows[0];
+  if (!workbench) return null;
+
+  const [activityRows, focusBlockRows, sessionRows, timerRows] = await Promise.all([
+    db.select().from(extraActivities).where(and(
+      eq(extraActivities.ownerId, ownerId),
+      eq(extraActivities.workbenchId, workbench.id),
+      eq(extraActivities.id, activityId),
+    )),
+    db.select().from(focusBlocks).where(and(
+      eq(focusBlocks.ownerId, ownerId),
+      eq(focusBlocks.workbenchId, workbench.id),
+      eq(focusBlocks.id, activityId),
+    )),
+    db.select().from(liveSessions).where(and(
+      eq(liveSessions.ownerId, ownerId),
+      eq(liveSessions.workbenchId, workbench.id),
+    )),
+    db.select().from(timers).where(and(
+      eq(timers.ownerId, ownerId),
+      eq(timers.subjectId, activityId),
+      eq(timers.kind, "activity"),
+    )),
+  ]);
+  const timer = timerRows[0] ? toTimerState(timerRows[0]) : null;
+  if (timer?.completed) return null;
+  const focusBlock = focusBlockRows[0];
+  if (focusBlock) {
+    return {
+      workbenchId: workbench.id,
+      activity: {
+        id: focusBlock.id,
+        date: focusBlock.date,
+        activityClass: "focus_block",
+        type: "focus_block",
+        focusCategory: focusBlock.category,
+        title: focusBlock.title,
+        allocatedSeconds: focusBlock.plannedSeconds,
+        timer,
+        starred: false,
+        requiresOutcome: false,
+      },
+      session: null,
+    };
+  }
+
+  const activityRow = activityRows[0];
+  const payload = activityRow?.payload as ActivityPayload | undefined;
+  if (!activityRow || !isVoiceActivityPayload(payload)) return null;
+  const sessionRow = sessionRows.find((row) => {
+    const candidate = row.payload as SessionPayload;
+    return Array.isArray(candidate.activityIds) && candidate.activityIds.includes(activityId);
+  });
+  const sessionPayload = sessionRow?.payload as SessionPayload | undefined;
+  const questionId = typeof payload.questionId === "string" ? payload.questionId : undefined;
+  return {
+    workbenchId: workbench.id,
+    activity: {
+      ...payload,
+      activityClass: "practice",
+      type: payload.type,
+      title: payload.title,
+      questionId,
+      url: typeof payload.url === "string" ? payload.url : undefined,
+      allocatedSeconds: payload.allocatedSeconds,
+      timer,
+      starred: false,
+      requiresOutcome: true,
+    },
+    session: sessionRow && sessionPayload
+      ? { id: sessionRow.id, activityIds: sessionPayload.activityIds }
+      : null,
+  };
+}
 
 export async function readActiveVoiceActivity(ownerId: string): Promise<ActiveVoiceActivity | null> {
   const db = getDb();
@@ -252,7 +349,7 @@ export async function readVoiceTimerInstrument(ownerId: string): Promise<VoiceTi
   ]);
   const workbench = workbenchRows[0];
   if (!workbench) {
-    return { serverNow: Date.now(), session: null, activity: null, activities: [] };
+    return { serverNow: Date.now(), workbenchId: null, session: null, activity: null, activities: [] };
   }
   const [sessionRows, activityRows, focusBlockRows] = await Promise.all([
     db.select().from(liveSessions).where(and(
@@ -357,7 +454,7 @@ export async function readVoiceTimerInstrument(ownerId: string): Promise<VoiceTi
     session?.activityIds ?? null,
     focus?.activityId ?? null,
   );
-  const activities = activityIds.flatMap((activityId) => {
+  const activities: VoiceTimerActivity[] = activityIds.flatMap<VoiceTimerActivity>((activityId) => {
     const payload = activityById.get(activityId);
     const focusBlock = focusBlockById.get(activityId);
     if (focusBlock) {
@@ -404,6 +501,7 @@ export async function readVoiceTimerInstrument(ownerId: string): Promise<VoiceTi
 
   return {
     serverNow: Date.now(),
+    workbenchId: workbench.id,
     session,
     activity: runningActivity ?? focusedActivity,
     activities,
@@ -499,7 +597,11 @@ export async function readLiveState(
   const durable = await readDurablePracticeSummary(ownerId, [...historyActivityIds], date);
 
   const outcomeMap: Record<string, OutcomeValue> = {};
-  for (const row of outcomeRows) outcomeMap[row.activityId] = row.outcome as OutcomeValue;
+  const outcomeRevisionMap: Record<string, number> = {};
+  for (const row of outcomeRows) {
+    outcomeMap[row.activityId] = row.outcome as OutcomeValue;
+    outcomeRevisionMap[row.activityId] = row.revision;
+  }
 
   const publicationMap: Record<string, PublicationStatusValue> = {};
   for (const row of publicationRows) {
@@ -521,6 +623,7 @@ export async function readLiveState(
     timers: activityTimers,
     sessionTimers,
     outcomes: outcomeMap,
+    outcomeRevisions: outcomeRevisionMap,
     publicationStatuses: publicationMap,
     notes: noteMap,
     structuredNotes: durable.notes,
