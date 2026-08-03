@@ -26,6 +26,7 @@ import {
   type OutcomeValue,
   type PublicationStatusValue,
   type TimerAction,
+  type LiveState,
 } from "../db/live-state";
 import { buildPracticeSnapshot, buildPublicationQueue, dateInPracticeTimeZone } from "../db/practice-snapshot";
 import { leetCodeQuestionMetadataSchema } from "../db/question-metadata";
@@ -1580,6 +1581,43 @@ function specialistToolFailure(error: unknown) {
   throw error;
 }
 
+type SpecialistTimerMutationInput = {
+  expectedWorkbenchId: string;
+  mutationId: string;
+};
+
+async function runSpecialistTimerMutation<TInput extends SpecialistTimerMutationInput>(
+  ownerId: string,
+  env: Env,
+  operation: string,
+  input: TInput,
+  mutate: (
+    state: LiveState,
+    requestHash: string,
+    dependencies: PracticeTimerControlDependencies,
+  ) => Promise<{ result: Record<string, unknown>; receiptStored: boolean }>,
+) {
+  try {
+    const prepared = await prepareSpecialistMutation(ownerId, { operation, ...input });
+    if (prepared.duplicate) {
+      const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
+      const payload = { duplicate: true, result: prepared.priorResponse, authoritative };
+      return { content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
+    }
+    const dependencies = specialistControlDependencies(ownerId, prepared.date).timer;
+    const { result, receiptStored } = await mutate(prepared.state, prepared.requestHash, dependencies);
+    if (!receiptStored) {
+      await rememberSpecialistMutation(ownerId, input, prepared.requestHash, result);
+    }
+    await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "timer");
+    const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
+    const payload = { duplicate: false, result, authoritative };
+    return { content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
+  } catch (error) {
+    return specialistToolFailure(error);
+  }
+}
+
 const specialistCatalogSchema = z.object({
   specialty: z.enum(planningSpecialties),
   search: z.string().max(500).optional(),
@@ -2417,35 +2455,18 @@ function createServer(ownerId: string, env: Env) {
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
-    async (input) => {
-      try {
-        const prepared = await prepareSpecialistMutation(ownerId, {
-          operation: "control_practice_timer",
-          ...input,
-        });
-        if (prepared.duplicate) {
-          const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
-          const payload = { duplicate: true, result: prepared.priorResponse, authoritative };
-          return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
-        }
-        const dependencies = specialistControlDependencies(ownerId, prepared.date);
-        const { result, receiptStored } = await controlPracticeTimer(
-          prepared.state,
-          input,
-          prepared.requestHash,
-          dependencies.timer,
-        );
-        if (!receiptStored) {
-          await rememberSpecialistMutation(ownerId, input, prepared.requestHash, result);
-        }
-        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "timer");
-        const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
-        const payload = { duplicate: false, result, authoritative };
-        return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
-      } catch (error) {
-        return specialistToolFailure(error);
-      }
-    },
+    async (input) => runSpecialistTimerMutation(
+      ownerId,
+      env,
+      "control_practice_timer",
+      input,
+      (state, requestHash, dependencies) => controlPracticeTimer(
+        state,
+        input,
+        requestHash,
+        dependencies,
+      ),
+    ),
   );
 
   server.registerTool(
@@ -2462,28 +2483,16 @@ function createServer(ownerId: string, env: Env) {
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
-    async (input) => {
-      try {
-        const prepared = await prepareSpecialistMutation(ownerId, {
-          operation: "control_practice_session_timer",
-          ...input,
-        });
-        if (prepared.duplicate) {
-          const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
-          const payload = { duplicate: true, result: prepared.priorResponse, authoritative };
-          return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
-        }
-        const dependencies = specialistControlDependencies(ownerId, prepared.date);
-        const result = await controlPracticeSessionTimer(prepared.state, input, dependencies.timer);
-        await rememberSpecialistMutation(ownerId, input, prepared.requestHash, result);
-        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "timer");
-        const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
-        const payload = { duplicate: false, result, authoritative };
-        return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
-      } catch (error) {
-        return specialistToolFailure(error);
-      }
-    },
+    async (input) => runSpecialistTimerMutation(
+      ownerId,
+      env,
+      "control_practice_session_timer",
+      input,
+      async (state, _requestHash, dependencies) => ({
+        result: await controlPracticeSessionTimer(state, input, dependencies),
+        receiptStored: false,
+      }),
+    ),
   );
 
   server.registerTool(

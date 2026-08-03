@@ -114,10 +114,6 @@ For system-design catalog, planning, timer, and result commands, follow
 `../../docs/contracts/specialist-today-controls.md`; coaching progress is not a
 system-design completion signal.
 
-Use `control_practice_session_timer` only after an explicit user instruction to
-start, pause, resume, or finish the parent session countdown. Resuming the
-session does not implicitly resume the current mock activity.
-
 - A natural request such as “let's do the mock interview,” “ask the current
   question,” or “continue the interview” starts or resumes the focused
   system-design activity from `get_today_practice`. Reuse its `activity_id` and
