@@ -16,6 +16,7 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "mcp:config:check": "node scripts/validate-mcp-tool-allowlist.mjs",
     "mcp:config:sync-outer": "node scripts/validate-mcp-tool-allowlist.mjs --sync-outer",
+    "code-attempt-review:backfill": "node --experimental-strip-types scripts/backfill-code-attempt-review.mjs",
     "journal:checkpoint": "node scripts/journal-branch.mjs checkpoint",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",

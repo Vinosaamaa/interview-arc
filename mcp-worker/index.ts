@@ -1,6 +1,8 @@
 import { createMcpHandler } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { codeAttemptReviewInputSchema } from "./code-attempt-review-schema";
+import { codeLineCount } from "../db/code-attempt-review";
 import { loadContentIndex } from "../db/content";
 import { resolveIntegrationOwner } from "../db/integrations";
 import {
@@ -1840,7 +1842,7 @@ function createServer(ownerId: string, env: Env) {
   server.registerTool(
     "save_leetcode_code_attempt",
     {
-      description: "Save an exact owner-provided LeetCode attempt after an explicit attempt boundary. Ordinary snippets and generated reference solutions must not use this tool.",
+      description: "Save an exact owner-provided LeetCode attempt after an explicit attempt boundary. Use a pending review while evaluation runs, then complete that same immutable attempt from the visible specialist review. Ordinary snippets and generated reference solutions must not use this tool.",
       inputSchema: {
         id: z.string().min(1),
         activityId: z.string().min(1),
@@ -1849,21 +1851,30 @@ function createServer(ownerId: string, env: Env) {
         language: z.string().min(1).max(40),
         code: z.string().min(1).max(300_000),
         occurredAt: z.number().int().positive(),
-        review: z.unknown().optional(),
+        review: codeAttemptReviewInputSchema,
+        reviewResponseTurnId: z.string().min(1).optional(),
         observedCorrectness: z.enum(["not_verified", "appears_correct", "issues_found", "incomplete"]),
-        concreteFindings: z.array(z.string()).max(100),
-        edgeCases: z.array(z.string()).max(100),
+        concreteFindings: z.array(z.string().max(2_000)).max(100),
+        edgeCases: z.array(z.string().max(2_000)).max(100),
         complexity: z.object({ time: z.string().optional(), space: z.string().optional() }).optional(),
         finalDeclaration: z.string().min(1).max(2_000),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async (input) => {
-      await saveLeetCodeCodeAttempt(ownerId, input, Date.now());
-      const lineCount = input.code.split(/\r?\n/).length;
+      const saved = await saveLeetCodeCodeAttempt(ownerId, input, Date.now());
+      const lineCount = codeLineCount(input.code);
       return {
         content: [{ type: "text", text: `Saved Code Attempt ${input.sequence} · ${input.language} · ${lineCount} lines.` }],
-        structuredContent: { id: input.id, activityId: input.activityId, sequence: input.sequence, language: input.language, lineCount },
+        structuredContent: {
+          id: input.id,
+          activityId: input.activityId,
+          sequence: input.sequence,
+          language: input.language,
+          lineCount,
+          status: saved.status,
+          reviewStatus: saved.reviewStatus,
+        },
       };
     },
   );

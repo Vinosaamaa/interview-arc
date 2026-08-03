@@ -39,6 +39,16 @@ import {
   type LeetCodeQuestionMetadata,
 } from "./question-metadata";
 import { reviewIntervalDays, type ReviewReason } from "./review-cadence";
+import {
+  assertCodeAttemptReviewParity,
+  codeAttemptEvaluationEvidence,
+  codeLineCount,
+  normalizeCodeAttemptReview,
+  pendingCodeAttemptReviewIds,
+  planCodeAttemptWrite,
+  type CodeAttemptReviewV1,
+  type CodeAttemptReviewWrite,
+} from "./code-attempt-review";
 
 export type Specialty = "leetcode" | "system_design" | "behavioral";
 export type NoteKind = "remember" | "insight" | "mistake" | "pattern" | "question";
@@ -46,6 +56,7 @@ export type TranscriptSpeaker = "user" | "specialist";
 export type TranscriptSource = "codex" | "dictation" | "audio_transcript";
 export type VoiceCaptureDecision = "activity_related" | "unrelated" | "uncertain";
 export type { ReviewReason } from "./review-cadence";
+export type { CodeAttemptReviewV1 } from "./code-attempt-review";
 
 export type DeliveryAnalysisPayload = {
   schemaVersion: 1;
@@ -1329,51 +1340,151 @@ export async function prepareVoiceCapturesForFinish(
 
 export { voiceFinishGuardMessage };
 
-export async function saveLeetCodeCodeAttempt(
-  ownerId: string,
-  input: {
-    id: string;
-    activityId: string;
-    originatingTurnId: string;
-    sequence: number;
-    language: string;
-    code: string;
-    occurredAt: number;
-    review?: unknown;
-    observedCorrectness: "not_verified" | "appears_correct" | "issues_found" | "incomplete";
-    concreteFindings: string[];
-    edgeCases: string[];
-    complexity?: { time?: string; space?: string };
-    finalDeclaration: string;
-  },
-  nowMs: number,
-) {
-  const db = getDb();
-  const values = {
-    ownerId,
-    ...input,
+type SaveLeetCodeCodeAttemptInput = {
+  id: string;
+  activityId: string;
+  originatingTurnId: string;
+  sequence: number;
+  language: string;
+  code: string;
+  occurredAt: number;
+  review: CodeAttemptReviewV1;
+  reviewResponseTurnId?: string;
+  observedCorrectness: "not_verified" | "appears_correct" | "issues_found" | "incomplete";
+  concreteFindings: string[];
+  edgeCases: string[];
+  complexity?: { time?: string; space?: string };
+  finalDeclaration: string;
+};
+
+type CodeAttemptProjectionInput = Omit<CodeAttemptReviewWrite, "review" | "reviewResponseTurnId" | "complexity"> & {
+  review: unknown;
+  reviewResponseTurnId?: string | null;
+  complexity?: { time?: string; space?: string } | null;
+};
+
+function projectCodeAttempt(input: CodeAttemptProjectionInput) {
+  return {
+    id: input.id,
+    activityId: input.activityId,
+    originatingTurnId: input.originatingTurnId,
+    sequence: input.sequence,
     language: input.language.trim().slice(0, 40),
     code: input.code,
-    lineCount: input.code.split(/\r?\n/).length,
-    review: input.review ?? null,
+    occurredAt: input.occurredAt,
+    review: input.review,
+    reviewResponseTurnId: input.reviewResponseTurnId?.trim() || null,
+    observedCorrectness: input.observedCorrectness,
     concreteFindings: input.concreteFindings,
     edgeCases: input.edgeCases,
     complexity: input.complexity ?? null,
+    finalDeclaration: input.finalDeclaration,
+  };
+}
+
+function codeAttemptWrite(input: SaveLeetCodeCodeAttemptInput): CodeAttemptReviewWrite {
+  return { ...projectCodeAttempt(input), review: input.review };
+}
+
+function storedCodeAttemptWrite(row: typeof leetcodeCodeAttempts.$inferSelect) {
+  return projectCodeAttempt({
+    ...row,
+    concreteFindings: row.concreteFindings as string[],
+    edgeCases: row.edgeCases as string[],
+    complexity: row.complexity as { time?: string; space?: string } | null,
+  });
+}
+
+export async function saveLeetCodeCodeAttempt(
+  ownerId: string,
+  input: SaveLeetCodeCodeAttemptInput,
+  nowMs: number,
+) {
+  const db = getDb();
+  const review = normalizeCodeAttemptReview(input.review);
+  if (!review) throw new Error("Code Attempt review must use the versioned pending or complete contract.");
+  if (review.status === "complete" && review.provenance === "explicit_evidence_backfill") {
+    throw new Error("Historical review backfill is available only through the coordinator audit command.");
+  }
+  const incoming = codeAttemptWrite({ ...input, review });
+  if (review.status === "pending" && incoming.reviewResponseTurnId) {
+    throw new Error("A pending Code Attempt review cannot name a specialist review turn.");
+  }
+  if (review.status === "complete" && !incoming.reviewResponseTurnId) {
+    throw new Error("A complete Code Attempt review requires its visible specialist review turn ID.");
+  }
+  const [existingRows, sequenceRows, originatingTurns, reviewTurns] = await Promise.all([
+    db.select().from(leetcodeCodeAttempts).where(and(
+      eq(leetcodeCodeAttempts.ownerId, ownerId),
+      eq(leetcodeCodeAttempts.id, incoming.id),
+    )),
+    db.select({ id: leetcodeCodeAttempts.id }).from(leetcodeCodeAttempts).where(and(
+      eq(leetcodeCodeAttempts.ownerId, ownerId),
+      eq(leetcodeCodeAttempts.activityId, incoming.activityId),
+      eq(leetcodeCodeAttempts.sequence, incoming.sequence),
+    )),
+    db.select().from(practiceTranscriptTurns).where(and(
+      eq(practiceTranscriptTurns.ownerId, ownerId),
+      eq(practiceTranscriptTurns.activityId, incoming.activityId),
+      eq(practiceTranscriptTurns.turnId, incoming.originatingTurnId),
+    )),
+    incoming.reviewResponseTurnId
+      ? db.select().from(practiceTranscriptTurns).where(and(
+        eq(practiceTranscriptTurns.ownerId, ownerId),
+        eq(practiceTranscriptTurns.activityId, incoming.activityId),
+        eq(practiceTranscriptTurns.turnId, incoming.reviewResponseTurnId),
+      ))
+      : Promise.resolve([]),
+  ]);
+  const sequenceConflict = sequenceRows.find((row) => row.id !== incoming.id);
+  if (sequenceConflict) throw new Error(`Code Attempt ${incoming.sequence} already belongs to another code version.`);
+  const originatingTurn = originatingTurns[0];
+  if (!originatingTurn || originatingTurn.speaker !== "user") {
+    throw new Error("The Code Attempt originating turn is not an owner-scoped user turn in this activity.");
+  }
+  const reviewTurn = reviewTurns[0];
+  if (review.status === "complete") {
+    if (!reviewTurn || reviewTurn.speaker !== "specialist") {
+      throw new Error("The visible Code Attempt review is not an owner-scoped specialist turn in this activity.");
+    }
+    assertCodeAttemptReviewParity(
+      review,
+      reviewTurn.body,
+      codeAttemptEvaluationEvidence(incoming),
+    );
+  }
+
+  const existing = existingRows[0] ?? null;
+  const plan = planCodeAttemptWrite(existing ? storedCodeAttemptWrite(existing) : null, incoming);
+  if (plan.kind === "duplicate") return { status: "duplicate" as const, reviewStatus: review.status };
+  const values = {
+    ownerId,
+    ...incoming,
+    lineCount: codeLineCount(incoming.code),
     createdAt: nowMs,
     updatedAt: nowMs,
   };
-  await db.insert(leetcodeCodeAttempts).values(values).onConflictDoUpdate({
-    target: [leetcodeCodeAttempts.ownerId, leetcodeCodeAttempts.id],
-    set: {
-      review: values.review,
-      observedCorrectness: values.observedCorrectness,
-      concreteFindings: values.concreteFindings,
-      edgeCases: values.edgeCases,
-      complexity: values.complexity,
-      finalDeclaration: values.finalDeclaration,
-      updatedAt: nowMs,
-    },
-  });
+  if (plan.kind === "insert") {
+    await db.insert(leetcodeCodeAttempts).values(values);
+    return { status: "inserted" as const, reviewStatus: review.status };
+  }
+  if (plan.kind === "backfill_review") throw new Error("Historical review backfill requires the coordinator audit command.");
+  const updated = await db.update(leetcodeCodeAttempts).set({
+    review,
+    reviewResponseTurnId: incoming.reviewResponseTurnId,
+    observedCorrectness: incoming.observedCorrectness,
+    concreteFindings: incoming.concreteFindings,
+    edgeCases: incoming.edgeCases,
+    complexity: incoming.complexity,
+    finalDeclaration: incoming.finalDeclaration,
+    updatedAt: nowMs,
+  }).where(and(
+    eq(leetcodeCodeAttempts.ownerId, ownerId),
+    eq(leetcodeCodeAttempts.id, incoming.id),
+    eq(leetcodeCodeAttempts.updatedAt, existing!.updatedAt),
+  )).returning({ id: leetcodeCodeAttempts.id });
+  if (!updated.length) throw new Error("The Code Attempt changed during review completion; reread it and retry.");
+  return { status: "updated" as const, reviewStatus: review.status };
 }
 
 export async function addPracticeNote(
@@ -1444,6 +1555,19 @@ export async function saveSpecialistFinalization(
   nowMs: number,
 ) {
   const db = getDb();
+  if (payload.complete && specialty === "leetcode") {
+    const attempts = await db.select({
+      id: leetcodeCodeAttempts.id,
+      review: leetcodeCodeAttempts.review,
+    }).from(leetcodeCodeAttempts).where(and(
+      eq(leetcodeCodeAttempts.ownerId, ownerId),
+      eq(leetcodeCodeAttempts.activityId, activityId),
+    ));
+    const pendingAttemptIds = pendingCodeAttemptReviewIds(attempts);
+    if (pendingAttemptIds.length) {
+      throw new Error(`Complete every pending Code Attempt review before finalization: ${pendingAttemptIds.join(", ")}.`);
+    }
+  }
   if (payload.complete) {
     const voiceGuard = await prepareVoiceCapturesForFinish(ownerId, activityId, nowMs);
     const voiceConflict = voiceFinishGuardMessage(voiceGuard);
