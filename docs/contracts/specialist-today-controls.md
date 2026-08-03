@@ -3,7 +3,7 @@
 ## Purpose
 
 Interview Arc specialists may operate the authenticated owner's Today workbench
-through five MCP tools. D1 remains authoritative. The tools do not scrape
+through six MCP tools. D1 remains authoritative. The tools do not scrape
 LeetCode, infer outcomes, or replace the website and Voice interfaces.
 
 ## Tool Catalog
@@ -24,6 +24,9 @@ LeetCode, infer outcomes, or replace the website and Voice interfaces.
   parent session countdown. Pausing or finishing the session pauses its running
   child according to the same authoritative D1 rules as the website. Resuming a
   session does not implicitly choose or start a child activity.
+- `control_practice_workbench` archives the current workbench and opens one
+  empty replacement only after an explicit user instruction. The server
+  generates the replacement identity; specialists must not invent it.
 - `set_practice_result` sets or clears Solved, Solved with help, or Failed.
   It requires an explicit user instruction or an authorized platform verdict.
   Specialist coaching, elapsed time, generated reference code, and local
@@ -54,10 +57,22 @@ revision, review schedule (including a review deletion), and mutation receipt
 commit together. A stale result command receives a structured conflict and
 cannot overwrite a newer outcome or delete review metadata created by it.
 
+Workbench rollover is one guarded D1 mutation. Every started practice activity
+must already have an explicit result, and existing Voice finish guards remain
+authoritative. Eligible unfinished activity, focus-block, and session timers;
+the focus pointer; old-workbench archive state; replacement workbench; and
+mutation receipt commit together or do not commit. The operation never deletes
+history. An exact retry returns the original replacement identity and cannot
+create another workbench.
+
 Timer and result commands require the authorization value documented by their
 schema. A specialist must receive an explicit user instruction before changing
 a timer or result. An authorized platform verdict may set a result, but may not
 implicitly start, stop, finish, or advance a timer.
+
+Workbench rollover also requires `authorization: explicit_user_instruction`.
+A specialist must never infer rollover from elapsed time, completion, Pacific
+midnight, publication, or an empty Today list.
 
 Session commands require an exact current-workbench `sessionId`. They reuse the
 session's canonical child IDs and the existing D1 timer mutation so website,

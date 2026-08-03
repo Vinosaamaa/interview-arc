@@ -45,6 +45,27 @@ export type PracticeSessionTimerControlInput = {
   action: "start" | "pause" | "resume" | "finish";
 };
 
+export type PracticeWorkbenchControlInput = {
+  expectedWorkbenchId: string;
+  mutationId: string;
+  action: "start_fresh";
+  authorization: "explicit_user_instruction";
+};
+
+export type PracticeWorkbenchControlDependencies = {
+  now: () => number;
+  newWorkbenchId: () => string;
+  startFreshPracticeWorkbench: (input: {
+    workbenchId: string;
+    newWorkbenchId: string;
+    openedPacificDate: string;
+    mutationId: string;
+    requestHash: string;
+    receipt: Record<string, unknown>;
+    now: number;
+  }) => Promise<void>;
+};
+
 export type PracticeTimerControlDependencies = {
   now: () => number;
   applyTimerAction: (
@@ -138,6 +159,35 @@ function requireWorkbench(state: LiveState, expectedWorkbenchId: string) {
       "Today changed in another surface. Read Today again before retrying the command.",
     );
   }
+}
+
+export async function controlPracticeWorkbench(
+  state: Pick<LiveState, "workbench">,
+  input: PracticeWorkbenchControlInput,
+  requestHash: string,
+  openedPacificDate: string,
+  dependencies: PracticeWorkbenchControlDependencies,
+) {
+  requireWorkbench(state as LiveState, input.expectedWorkbenchId);
+  const now = dependencies.now();
+  const workbenchId = dependencies.newWorkbenchId();
+  const result = {
+    mutationId: input.mutationId,
+    action: input.action,
+    archivedWorkbenchId: input.expectedWorkbenchId,
+    workbenchId,
+    applied: true,
+  };
+  await dependencies.startFreshPracticeWorkbench({
+    workbenchId: input.expectedWorkbenchId,
+    newWorkbenchId: workbenchId,
+    openedPacificDate,
+    mutationId: input.mutationId,
+    requestHash,
+    receipt: result,
+    now,
+  });
+  return { result, receiptStored: true };
 }
 
 export function specialistPracticeActivity(state: LiveState, activityId: string) {

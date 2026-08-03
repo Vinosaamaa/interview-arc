@@ -96,14 +96,17 @@ import {
   controlSessionPracticeTimer,
   finishAndAdvancePracticeActivity,
   setPracticeResultAtomic,
+  startFreshPracticeWorkbench,
   startSessionPracticeActivity,
 } from "../db/specialist-controls-store";
 import {
+  controlPracticeWorkbench,
   controlPracticeSessionTimer,
   controlPracticeTimer,
   setPracticeResult,
   type PracticeResultControlDependencies,
   type PracticeTimerControlDependencies,
+  type PracticeWorkbenchControlDependencies,
   type SpecialistPracticeActivity,
 } from "../db/specialist-controls-runtime";
 
@@ -1527,6 +1530,7 @@ async function rememberSpecialistMutation(
 function specialistControlDependencies(ownerId: string, date: string): {
   timer: PracticeTimerControlDependencies;
   result: PracticeResultControlDependencies;
+  workbench: PracticeWorkbenchControlDependencies;
 } {
   const scheduleCompletedActivity = (
     activity: Parameters<typeof scheduleCompletedVoiceActivity>[1],
@@ -1560,6 +1564,11 @@ function specialistControlDependencies(ownerId: string, date: string): {
     result: {
       now: Date.now,
       setPracticeResultAtomic: (control) => setPracticeResultAtomic({ ownerId, ...control }),
+    },
+    workbench: {
+      now: Date.now,
+      newWorkbenchId: () => `workbench-${date}-${crypto.randomUUID()}`,
+      startFreshPracticeWorkbench: (control) => startFreshPracticeWorkbench({ ownerId, ...control }),
     },
   };
 }
@@ -2499,6 +2508,46 @@ function createServer(ownerId: string, env: Env) {
         dependencies,
       ),
     ),
+  );
+
+  server.registerTool(
+    "control_practice_workbench",
+    {
+      description: "Archive the current Today workbench and open one empty replacement after an explicit user instruction. Preserves history, finalizes eligible started timers, enforces result and Voice guards, and is identity-idempotent.",
+      inputSchema: {
+        expectedWorkbenchId: z.string().min(1),
+        mutationId: z.string().min(1).max(120),
+        action: z.literal("start_fresh"),
+        authorization: z.literal("explicit_user_instruction"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const prepared = await prepareSpecialistMutation(ownerId, {
+          operation: "control_practice_workbench",
+          ...input,
+        });
+        if (prepared.duplicate) {
+          const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
+          const payload = { duplicate: true, result: prepared.priorResponse, authoritative };
+          return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
+        }
+        const control = await controlPracticeWorkbench(
+          prepared.state,
+          input,
+          prepared.requestHash,
+          prepared.date,
+          specialistControlDependencies(ownerId, prepared.date).workbench,
+        );
+        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "practice");
+        const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
+        const payload = { duplicate: false, result: control.result, authoritative };
+        return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
   );
 
   server.registerTool(
