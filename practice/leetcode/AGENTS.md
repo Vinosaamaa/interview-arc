@@ -26,6 +26,11 @@ later in this guide.
 - If neither a current nor provisional profile exists, do the canonical prompt
   preflight once and call `save_provisional_solution_profile`. Later attempts
   reuse that prepared profile even when prior practice has not been published.
+- A Solution Profile preflight is a private D1 knowledge load, not Chrome
+  profile discovery, browser startup, or a visible setup phase. Load the
+  current or provisional profile once after resolving `questionId`; do not
+  repeat research or browser/runtime discovery when the required state already
+  exists, and do not reveal the private answer before the user's fresh attempt.
 - Save every related typed user/specialist pair immediately with
   `save_practice_exchange`. Use stable user and response turn IDs. The visible
   success receipt is not part of the durable transcript. Keep
@@ -91,6 +96,24 @@ later in this guide.
 
 The coordinator owns Git rendering and production publication through `Publish
 all pending practice`.
+
+## Administrative Instruction Maintenance
+
+Executable product changes remain coordinator-only. This specialist must not
+edit website, app, Worker, MCP, API, D1/R2, migration, browser-companion,
+native-app, script, test, build, or other executable product files.
+
+When the user explicitly asks to make a LeetCode coaching or workflow behavior
+durable, this specialist may update its owning `AGENTS.md`, `README.md`, or
+directly related Markdown instruction/contract files. Follow the root
+specialist-documentation boundary: read `../../docs/agents/issue-lifecycle.md`,
+reuse or create the owning issue, use an isolated worktree and feature branch,
+keep the active practice checkout untouched, and keep the diff documentation
+only. The specialist may prepare a documentation-only pull request when the
+user requests the durable change, but it never merges or deploys it. If the
+requested behavior needs executable changes, document the requirement and hand
+it to the coordinator instead of implementing it. This administrative work is
+never part of the focused practice transcript or D1 activity draft.
 
 ## What This Task Is For
 
@@ -224,13 +247,22 @@ series of local attempt snapshots.
 1. Resolve the focused activity and verify the official public LeetCode problem
    number, title, and URL from the bank, the exact user-supplied public URL, or
    another permitted public source. Never invent any of them.
-2. Present an original concise restatement, constraints, examples, and the Java
-   method signature in the visible specialist conversation. Do not copy the
-   protected official statement.
-   - When an example depends on a graph, tree, grid, diagram, or other visual,
-     inspect the original in the persistent Playwright-controlled dedicated
-     Google Chrome tab. Reproduce every faithfully representable relationship
-     as concise ASCII/text in both the conversation and the Java header comment.
+2. Reacquire the existing persistent Playwright-controlled LeetCode tab,
+   navigate that same tab to the verified problem when necessary, and verify
+   the matching number/title/slug and editable Java editor. Java is the durable
+   practice language: inspect the current selector value and change it only
+   when it is not already Java. Do not repeat browser/runtime discovery, open a
+   second tab, or reopen the language menu when the existing CDP endpoint, tab,
+   and Java selection are already available.
+3. Read the exact Java starter scaffold from the live editor before creating or
+   resetting the working file. Then present an original concise restatement,
+   constraints, examples, and required Java API in the visible specialist
+   conversation. Do not copy the protected official statement.
+   - Before delivering the prompt, inspect every statement example for a
+     material graph, tree, grid, diagram, or other visual. Prompt preparation is
+     incomplete until each material relationship has been accounted for.
+     Reproduce every faithfully representable relationship as concise
+     ASCII/text in both the conversation and the Java header comment.
    - If ASCII/text would lose material information and the user needs to inspect
      that visual, bring the existing tab to the foreground. Material visual
      inspection and user authentication are the only flows that may foreground
@@ -239,7 +271,7 @@ series of local attempt snapshots.
    - Screenshots are transient comprehension aids only. Never use image
      coordinates for submission, commit copied problem images, omit a material
      visual relationship, or invent one that cannot be verified.
-3. Create or resume exactly one working source file at:
+4. Create or resume exactly one working source file at:
 
    `practice/leetcode/solutions/<four-digit-number>-<canonical-title-slug>.java`
 
@@ -249,11 +281,23 @@ series of local attempt snapshots.
    - `0123-best-time-to-buy-and-sell-stock-iii.java`
    - `0200-number-of-islands.java`
 
-4. Put the verified title, public URL, original restatement, constraints, and
-   examples in a header comment, followed by the required method signature in
-   a non-public `class Solution`. A non-public class keeps the descriptive file
-   name valid Java.
-5. Every time the file is prepared or resumed, give the user the complete
+5. Put the verified title, public URL, original restatement, constraints, and
+   examples in a header comment, followed by the exact Java starter scaffold
+   read from the editor. Preserve every supplied import, annotation, definition
+   comment (including `TreeNode`, `ListNode`, graph-node, or other provided
+   types), helper type, class name and modifier, method signature, generic type,
+   API comment, and instantiation/call comment. Never replace the platform
+   scaffold with a generic `class Solution`, omit supplied comments or types,
+   or invent placeholder exceptions, return values, helpers, or other code.
+   This starter-code fidelity rule does not authorize copying an official
+   statement, editorial, or solution.
+
+   Preserve a platform-supplied public class even when its name conflicts with
+   the descriptive working filename. When local compilation requires a matching
+   filename, copy the current source into a correctly named temporary harness
+   outside the durable solution directory; do not alter the working scaffold
+   merely to satisfy the local filesystem.
+6. Every time the file is prepared or resumed, give the user the complete
    absolute editor command:
 
    `nvim "<absolute-path-to-the-file>"`
@@ -394,10 +438,10 @@ or tab for authentication.
   editor, then leave the browser in the background while the user works in
   `nvim`.
 - For a new activity/problem, reuse that same tab and navigate it directly to
-  the new verified canonical problem URL. Confirm the number/title/slug, select
-  Java when necessary, and wait for the editable problem page. Never close the
-  prior activity's tab because the prior and next problems intentionally share
-  one tab.
+  the new verified canonical problem URL. Confirm the number/title/slug, verify
+  that the persistent editor selection is still Java, change it only if it is
+  not, and wait for the editable problem page. Never close the prior activity's
+  tab because the prior and next problems intentionally share one tab.
 - For each explicit submission, re-read the evolving Java file, reacquire the
   same tab, verify the current problem, replace the editor contents, focus the
   editor, and send `Meta+Enter` (Command-Enter). Wait for the resulting verdict

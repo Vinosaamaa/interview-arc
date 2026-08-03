@@ -140,6 +140,25 @@ If the repository has its own `.venv/`, use `./.venv/bin/python` instead.
 ## Source Control And Verification
 
 - Make code, schema, and instruction changes on a feature branch.
+- Executable product changes are coordinator-only. A LeetCode, system-design,
+  or behavioral specialist must not implement changes to the website, app,
+  Worker, MCP, APIs, D1/R2 behavior, migrations, browser companion, native
+  Voice app, scripts, tests, build configuration, or other executable product
+  code. The specialist may diagnose the behavior and prepare a precise handoff
+  for the coordinator.
+- On an explicit user request, a specialist may persist behavior-only guidance
+  in its owning `AGENTS.md`, `README.md`, or directly related Markdown
+  instruction/contract files. Before doing so, read
+  `docs/agents/issue-lifecycle.md`, reuse or create the owning issue, and work
+  in an isolated worktree on a feature branch so the active practice checkout
+  remains untouched. Keep the diff documentation-only. The specialist may
+  open a documentation-only pull request when the user requests the durable
+  change; it must not merge, deploy, or broaden the PR into product code.
+- If an instruction correction requires executable code, schema, migration,
+  or generated product artifacts, stop after documenting the requirement and
+  hand it to the coordinator. Instruction-maintenance discussion and its
+  execution ledger are administration and must never enter a practice
+  transcript or D1 activity draft.
 - For every implementation turn, follow the canonical live-execution-ledger
   requirements in `docs/agents/issue-lifecycle.md`.
 - Before starting a website feature branch, protect any journal-only working-tree
