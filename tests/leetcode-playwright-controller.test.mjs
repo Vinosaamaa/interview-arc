@@ -428,12 +428,36 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
       }
       throw new Error(`unexpected operation ${payload.operation}`);
     },
-    waitForFunction: async (_fn, payload, options) => {
+    waitForFunction: async (predicate, payload, options) => {
       operations.push(["waitForFunction", payload.kind, options.timeout]);
       assert.equal(payload.expectedSlug, identity.slug);
-      return {
-        jsonValue: async () => payload.kind === "editor" ? true : null,
+      const previous = {
+        document: Object.getOwnPropertyDescriptor(globalThis, "document"),
+        location: Object.getOwnPropertyDescriptor(globalThis, "location"),
+        monaco: Object.getOwnPropertyDescriptor(globalThis, "monaco"),
       };
+      Object.defineProperties(globalThis, {
+        document: { configurable: true, value: {
+          title: `${identity.title} - LeetCode`,
+          querySelector: () => ({ textContent: "Java" }),
+        } },
+        location: { configurable: true, value: {
+          pathname: `/problems/${identity.slug}/description/`,
+        } },
+        monaco: { configurable: true, value: { editor: { getModels: () => [{
+          getLanguageId: () => "java",
+          uri: { toString: () => "file:///Solution.java" },
+        }] } } },
+      });
+      try {
+        assert.equal(predicate(payload), true);
+      } finally {
+        for (const [name, descriptor] of Object.entries(previous)) {
+          if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+          else delete globalThis[name];
+        }
+      }
+      return { dispose: async () => {} };
     },
     keyboard: { press: async (gesture) => { gestures.push(gesture); } },
   };
