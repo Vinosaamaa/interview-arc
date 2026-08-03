@@ -150,8 +150,35 @@ const TARGET_SELECTORS = Object.freeze({
   ],
 });
 
+const TARGET_ROUTES = Object.freeze({
+  resultAttempt: "^(?:/submissions/(?:detail/)?|/problems/[a-z0-9-]+/submissions/)([^/]+)/?$",
+});
+
+export function leetcodeAttemptKeyFromPath(pathname) {
+  return pathname.match(new RegExp(TARGET_ROUTES.resultAttempt))?.[1] ?? null;
+}
+
+export function isAutomationOwnedLeetCodeUrl(value) {
+  try {
+    const candidate = new URL(value);
+    return candidate.hostname === "leetcode.com"
+      && (
+        /^\/problems\/[a-z0-9-]+\/$/.test(candidate.pathname)
+        || leetcodeAttemptKeyFromPath(candidate.pathname) !== null
+        || /^\/problemset(?:\/all)?\/?$/.test(candidate.pathname)
+      );
+  } catch {
+    return false;
+  }
+}
+
 export function createPlaywrightPageAdapter(page) {
-  const evaluate = (operation, source) => page.evaluate(({ operation: selectedOperation, selectors, source: exactSource }) => {
+  const evaluate = (operation, source) => page.evaluate(({
+    operation: selectedOperation,
+    selectors,
+    routes,
+    source: exactSource,
+  }) => {
     if (selectedOperation === "visible-language") {
       for (const selector of selectors.language) {
         const element = document.querySelector(selector);
@@ -195,7 +222,7 @@ export function createPlaywrightPageAdapter(page) {
         root = document.querySelector(selector);
         if (root) break;
       }
-      const pathMatch = location.pathname.match(/^\/submissions\/(?:detail\/)?([^/]+)\/?$/);
+      const pathMatch = location.pathname.match(new RegExp(routes.resultAttempt));
       const linkedAttempt = root?.querySelector?.('a[href*="/submissions/"]')?.getAttribute("href")
         ?.match(/\/submissions\/(?:detail\/)?([^/]+)/)?.[1];
       return {
@@ -207,7 +234,7 @@ export function createPlaywrightPageAdapter(page) {
       };
     }
     throw new Error(`Unsupported page operation: ${selectedOperation}`);
-  }, { operation, selectors: TARGET_SELECTORS, source });
+  }, { operation, selectors: TARGET_SELECTORS, routes: TARGET_ROUTES, source });
 
   return {
     url: () => page.url(),
@@ -256,7 +283,7 @@ export function createPlaywrightPageAdapter(page) {
     pressSubmit: () => page.keyboard.press("Meta+Enter"),
     async waitForNewAttemptVerdict(baseline, timeoutMs, signal) {
       const handle = await page.waitForFunction(
-        ({ baselineAttemptKey, selectors }) => {
+        ({ baselineAttemptKey, selectors, routes }) => {
           let root = null;
           for (const selector of selectors.resultRoot) {
             root = document.querySelector(selector);
@@ -264,7 +291,7 @@ export function createPlaywrightPageAdapter(page) {
           }
           if (!root) return false;
 
-          const pathMatch = location.pathname.match(/^\/submissions\/(?:detail\/)?([^/]+)\/?$/);
+          const pathMatch = location.pathname.match(new RegExp(routes.resultAttempt));
           const linkedAttempt = root.querySelector('a[href*="/submissions/"]')?.getAttribute("href")
             ?.match(/\/submissions\/(?:detail\/)?([^/]+)/)?.[1];
           const attemptKey = pathMatch?.[1]
@@ -278,6 +305,7 @@ export function createPlaywrightPageAdapter(page) {
           kind: "attempt-transition",
           baselineAttemptKey: baseline?.attemptKey ?? null,
           selectors: TARGET_SELECTORS,
+          routes: TARGET_ROUTES,
         },
         { timeout: timeoutMs, polling: 100 },
       );
@@ -290,7 +318,12 @@ export function createPlaywrightPageAdapter(page) {
             { once: true },
           )),
         ]);
-        const result = await page.evaluate(({ operation, selectors, attemptKey: expectedAttemptKey }) => {
+        const result = await page.evaluate(({
+          operation,
+          selectors,
+          routes,
+          attemptKey: expectedAttemptKey,
+        }) => {
           if (operation !== "attempt-result") return null;
           let root = null;
           for (const selector of selectors.resultRoot) {
@@ -298,7 +331,7 @@ export function createPlaywrightPageAdapter(page) {
             if (root) break;
           }
           if (!root) return null;
-          const pathMatch = location.pathname.match(/^\/submissions\/(?:detail\/)?([^/]+)\/?$/);
+          const pathMatch = location.pathname.match(new RegExp(routes.resultAttempt));
           const linkedAttempt = root.querySelector('a[href*="/submissions/"]')?.getAttribute("href")
             ?.match(/\/submissions\/(?:detail\/)?([^/]+)/)?.[1];
           const currentAttemptKey = pathMatch?.[1]
@@ -329,6 +362,7 @@ export function createPlaywrightPageAdapter(page) {
         }, {
           operation: "attempt-result",
           selectors: TARGET_SELECTORS,
+          routes: TARGET_ROUTES,
           attemptKey,
         });
         if (!result?.verdict) {
@@ -406,19 +440,7 @@ export async function ensureBrowserController(dependencies, { allowLaunch = true
     const identityCheck = await dependencies.validateBrowserIdentity?.(browser, endpoint);
     const problemPages = browser.contexts()
       .flatMap((context) => context.pages())
-      .filter((page) => {
-        try {
-          const candidate = new URL(page.url());
-          return candidate.hostname === "leetcode.com"
-            && (
-              /^\/problems\/[a-z0-9-]+\/$/.test(candidate.pathname)
-              || /^\/submissions\/(?:detail\/)?[^/]+\/?$/.test(candidate.pathname)
-              || /^\/problemset\/?$/.test(candidate.pathname)
-            );
-        } catch {
-          return false;
-        }
-      });
+      .filter((page) => isAutomationOwnedLeetCodeUrl(page.url()));
     if (problemPages.length !== 1) {
       throw new ControllerError(
         "problem_tab_ambiguous",
@@ -586,7 +608,7 @@ export class LeetCodeController {
 
   async retry(identity, javaFile) {
     const currentPath = new URL(this.page.url()).pathname;
-    if (currentPath.startsWith("/submissions/")) {
+    if (leetcodeAttemptKeyFromPath(currentPath) !== null) {
       let backFailure;
       try {
         await this.page.goBack();

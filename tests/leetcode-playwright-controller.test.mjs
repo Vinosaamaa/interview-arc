@@ -10,6 +10,8 @@ import {
   createPlaywrightPageAdapter,
   ensureBrowserController,
   firstUtf8Difference,
+  isAutomationOwnedLeetCodeUrl,
+  leetcodeAttemptKeyFromPath,
   parseCli,
   preflightReceiptForRequest,
   runControllerCommand,
@@ -184,6 +186,38 @@ test("ensure reacquires exactly one existing LeetCode problem tab and cleans up 
     );
     assert.equal(cleaned, 1);
   }
+});
+
+test("tab discovery and retry recognize LeetCode's nested result route", async () => {
+  const nestedResultUrl = `${identity.url}submissions/2092298572/`;
+  assert.equal(isAutomationOwnedLeetCodeUrl(nestedResultUrl), true);
+  assert.equal(
+    leetcodeAttemptKeyFromPath(new URL(nestedResultUrl).pathname),
+    "2092298572",
+  );
+
+  const nestedPage = { url: () => nestedResultUrl };
+  const browser = { contexts: () => [{ pages: () => [nestedPage] }] };
+  const lease = await ensureBrowserController({
+    probeCdp: async () => ({ live: true }),
+    loadPlaywright: async () => ({ chromium: {} }),
+    launchChrome: async () => assert.fail("must not launch"),
+    connectOverCdp: async () => browser,
+    pageAdapterFactory: (page) => page,
+  });
+  assert.equal(lease.page, nestedPage);
+
+  let currentUrl = nestedResultUrl;
+  const adapter = pageAdapter({
+    url: () => currentUrl,
+    goBack: async () => {
+      adapter.calls.push(["back"]);
+      currentUrl = identity.url;
+    },
+  });
+  await controllerWith(adapter, "class Codec {}\n").retry(identity, "/tmp/0297.java");
+  assert.deepEqual(adapter.calls[0], ["back"]);
+  assert.equal(adapter.calls.filter(([name]) => name === "press").length, 1);
 });
 
 test("submit fails closed before mutation when URL, title, language, or Java model identity drifts", async () => {
