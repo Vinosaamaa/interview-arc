@@ -93,7 +93,10 @@ copy are rejected.
 
 `fullCases` must contain every Quick case in the same order and at least one
 additional case. Publication rejects an equal, smaller, partial, malformed, or
-identity-mismatched suite.
+identity-mismatched suite. Quick is bounded at 64 cases, Full local at 256
+cases, and each case name at 160 characters. Compiler and harness output each
+have an explicit 1 MiB process buffer; exceeding it fails locally with a
+nonzero, actionable error instead of growing memory without limit.
 
 ## Quick suite and Full local suite
 

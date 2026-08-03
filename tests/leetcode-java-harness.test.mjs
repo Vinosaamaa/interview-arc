@@ -35,6 +35,29 @@ function prepareHarness({ activityId, signature, source, env }) {
   return JSON.parse(result.stdout);
 }
 
+async function writeManifest(prepared, {
+  activityId,
+  sourceFileName = "Solution.java",
+  mainClass = "HarnessMain",
+  harnessFiles,
+  quickCases,
+  fullCases,
+  runTimeoutMs = 2_000,
+}) {
+  await writeFile(path.join(prepared.stagingDirectory, "manifest.json"), `${JSON.stringify({
+    schemaVersion: 1,
+    activityId,
+    generationId: prepared.generationId,
+    signatureHash: prepared.signatureHash,
+    sourceFileName,
+    mainClass,
+    harnessFiles,
+    quickCases,
+    fullCases,
+    runTimeoutMs,
+  }, null, 2)}\n`);
+}
+
 async function readyHarness({
   activityId,
   signature,
@@ -52,18 +75,15 @@ async function readyHarness({
   for (const [file, content] of Object.entries(harnessFiles)) {
     await writeFile(path.join(prepared.stagingDirectory, file), content);
   }
-  await writeFile(path.join(prepared.stagingDirectory, "manifest.json"), `${JSON.stringify({
-    schemaVersion: 1,
+  await writeManifest(prepared, {
     activityId,
-    generationId: prepared.generationId,
-    signatureHash: prepared.signatureHash,
     sourceFileName,
     mainClass,
     harnessFiles: Object.keys(harnessFiles),
     quickCases,
     fullCases,
     runTimeoutMs,
-  }, null, 2)}\n`);
+  });
   const published = cli(["publish", "--activity-id", activityId, "--generation-id", prepared.generationId], context.env);
   assert.equal(published.status, 0, published.stderr);
   return { ...context, prepared };
@@ -153,18 +173,15 @@ test("publish atomically exposes a ready ordinary-array harness and Quick tests 
     "}",
     "",
   ].join("\n"));
-  await writeFile(path.join(prepared.stagingDirectory, "manifest.json"), `${JSON.stringify({
-    schemaVersion: 1,
+  await writeManifest(prepared, {
     activityId: "activity-array-sum",
-    generationId: prepared.generationId,
-    signatureHash: prepared.signatureHash,
     sourceFileName: "Solution.java",
     mainClass: "HarnessMain",
     harnessFiles: ["HarnessMain.java"],
     quickCases: ["visible-example"],
     fullCases: ["visible-example", "empty-boundary"],
     runTimeoutMs: 2_000,
-  }, null, 2)}\n`);
+  });
 
   const publish = cli([
     "publish",
@@ -291,18 +308,15 @@ test("a failed generation can be repaired and published without reserving a seco
     "}",
     "",
   ].join("\n"));
-  await writeFile(path.join(prepared.stagingDirectory, "manifest.json"), `${JSON.stringify({
-    schemaVersion: 1,
+  await writeManifest(prepared, {
     activityId: "activity-helper-repair",
-    generationId: prepared.generationId,
-    signatureHash: prepared.signatureHash,
     sourceFileName: "Solution.java",
     mainClass: "HarnessMain",
     harnessFiles: ["HarnessMain.java"],
     quickCases: ["repair-smoke"],
     fullCases: ["repair-smoke", "repair-boundary"],
     runTimeoutMs: 2_000,
-  })}\n`);
+  });
 
   const publish = cli(["publish", "--activity-id", "activity-helper-repair", "--generation-id", prepared.generationId], env);
   assert.equal(publish.status, 0, publish.stderr);
@@ -586,18 +600,15 @@ test("publication rejects incomplete or non-superset staging and never exposes p
     source,
     env,
   });
-  await writeFile(path.join(prepared.stagingDirectory, "manifest.json"), `${JSON.stringify({
-    schemaVersion: 1,
+  await writeManifest(prepared, {
     activityId: "activity-invalid-publication",
-    generationId: prepared.generationId,
-    signatureHash: prepared.signatureHash,
     sourceFileName: "Solution.java",
     mainClass: "HarnessMain",
     harnessFiles: ["HarnessMain.java"],
     quickCases: ["same-case"],
     fullCases: ["same-case"],
     runTimeoutMs: 2_000,
-  })}\n`);
+  });
 
   const publish = cli(["publish", "--activity-id", "activity-invalid-publication", "--generation-id", prepared.generationId], env);
   assert.equal(publish.status, 2);
@@ -618,22 +629,41 @@ test("publication requires Full to preserve Quick case order before adding cases
     env,
   });
   await writeFile(path.join(prepared.stagingDirectory, "HarnessMain.java"), "public class HarnessMain {}\n");
-  await writeFile(path.join(prepared.stagingDirectory, "manifest.json"), `${JSON.stringify({
-    schemaVersion: 1,
+  await writeManifest(prepared, {
     activityId: "activity-invalid-order",
-    generationId: prepared.generationId,
-    signatureHash: prepared.signatureHash,
     sourceFileName: "Solution.java",
     mainClass: "HarnessMain",
     harnessFiles: ["HarnessMain.java"],
     quickCases: ["visible-a", "smoke-b"],
     fullCases: ["smoke-b", "visible-a", "boundary-c"],
     runTimeoutMs: 2_000,
-  })}\n`);
+  });
 
   const publish = cli(["publish", "--activity-id", "activity-invalid-order", "--generation-id", prepared.generationId], env);
   assert.equal(publish.status, 2);
   assert.match(publish.stderr, /preserve Quick case order/);
+});
+
+test("publication bounds suite size before any child-process output can grow without limit", async () => {
+  const { source, env } = await sandbox();
+  const prepared = prepareHarness({
+    activityId: "activity-case-limit",
+    signature: "case-limit|int solve()",
+    source,
+    env,
+  });
+  await writeFile(path.join(prepared.stagingDirectory, "HarnessMain.java"), "public class HarnessMain {}\n");
+  const quickCases = Array.from({ length: 64 }, (_, index) => `quick-${index}`);
+  await writeManifest(prepared, {
+    activityId: "activity-case-limit",
+    harnessFiles: ["HarnessMain.java"],
+    quickCases,
+    fullCases: [...quickCases, ...Array.from({ length: 193 }, (_, index) => `full-${index}`)],
+  });
+
+  const publish = cli(["publish", "--activity-id", "activity-case-limit", "--generation-id", prepared.generationId], env);
+  assert.equal(publish.status, 2);
+  assert.match(publish.stderr, /at most 256 cases/);
 });
 
 test("future LeetCode specialists receive the complete nonblocking harness contract", async () => {
@@ -666,7 +696,8 @@ test("future LeetCode specialists receive the complete nonblocking harness contr
     "public-class filename",
     "temporary compilation workspace",
   ]) assert.match(harnessContract, new RegExp(phrase, "i"));
-  assert.match(durableContract, /raw\s+runner commands.*preparation status.*compiler\s+plumbing/is);
+  assert.match(durableContract, /Durable-practice boundary.*leetcode-java-harness\.md.*authoritative/is);
+  assert.match(durableContract, /Publishing never ingests local\s+harness state or plumbing/i);
   assert.match(logContract, /local harness conclusion/i);
   assert.match(workflow, /actions\/setup-java@v4/);
   assert.match(workflow, /java-version: ['"]17['"]/);

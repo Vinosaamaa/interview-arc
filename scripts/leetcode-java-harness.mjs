@@ -9,6 +9,10 @@ import { fileURLToPath } from "node:url";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+const MAX_QUICK_CASES = 64;
+const MAX_FULL_CASES = 256;
+const MAX_CASE_NAME_LENGTH = 160;
+const MAX_PROCESS_OUTPUT_BYTES = 1024 * 1024;
 
 class CliError extends Error {
   constructor(message, exitCode = 2) {
@@ -204,6 +208,11 @@ function validateManifest(value, status) {
   if (new Set(manifest.harnessFiles).size !== manifest.harnessFiles.length) fail("Harness filenames must be unique.");
   if (manifest.harnessFiles.includes(manifest.sourceFileName)) fail("Harness files cannot replace the user source compilation copy.");
   if (!textList(manifest.quickCases) || !textList(manifest.fullCases)) fail("Quick and full case lists must be nonempty.");
+  if (manifest.quickCases.length > MAX_QUICK_CASES) fail(`Quick may contain at most ${MAX_QUICK_CASES} cases.`);
+  if (manifest.fullCases.length > MAX_FULL_CASES) fail(`Full local may contain at most ${MAX_FULL_CASES} cases.`);
+  if ([...manifest.quickCases, ...manifest.fullCases].some((name) => name.length > MAX_CASE_NAME_LENGTH)) {
+    fail(`Harness case names may contain at most ${MAX_CASE_NAME_LENGTH} characters.`);
+  }
   if (new Set(manifest.quickCases).size !== manifest.quickCases.length || new Set(manifest.fullCases).size !== manifest.fullCases.length) {
     fail("Harness case names must be unique within each suite.");
   }
@@ -311,9 +320,7 @@ function assertExactCaseSet(actual, expected) {
   }
 }
 
-async function run(options) {
-  const activityId = safeActivityId(required(options, "activity-id"));
-  const generationId = required(options, "generation-id");
+async function readReadyHarness(activityId, generationId) {
   const paths = generationPaths(activityId, generationId);
   const status = await readJson(paths.statusFile).catch(() => null);
   if (!status) fail("No harness state exists for this activity generation. Start the activity again to prepare tests.");
@@ -343,8 +350,10 @@ async function run(options) {
   if (currentHash !== status.contentHash) fail("Published harness integrity changed; prepare this activity harness again.");
   const sourceStat = await stat(status.sourceFile).catch(() => null);
   if (!sourceStat?.isFile()) fail(`The evolving Java source file is unavailable: ${status.sourceFile}`);
-  const suite = options.get("full") ? "Full local" : "Quick";
-  const selectedCases = options.get("full") ? manifest.fullCases : manifest.quickCases;
+  return { paths, status, manifest };
+}
+
+async function prepareCompilationWorkspace(paths, status, manifest) {
   const workspace = await mkdtemp(path.join(os.tmpdir(), "interview-arc-java-compile-"));
   try {
     await copyFile(status.sourceFile, path.join(workspace, manifest.sourceFileName));
@@ -353,32 +362,64 @@ async function run(options) {
     }
     const classes = path.join(workspace, "classes");
     await mkdir(classes);
+    return { workspace, classes };
+  } catch (error) {
+    await rm(workspace, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+function compileHarness(workspace, classes, manifest) {
+  const compile = spawnSync("javac", ["-encoding", "UTF-8", "-d", classes, manifest.sourceFileName, ...manifest.harnessFiles], {
+    cwd: workspace,
+    encoding: "utf8",
+    timeout: 30_000,
+    maxBuffer: MAX_PROCESS_OUTPUT_BYTES,
+  });
+  if (compile.error?.code === "ETIMEDOUT") fail("Compilation timed out after 30000ms.", 124);
+  if (compile.error?.code === "ENOBUFS") fail(`Compilation output exceeded ${MAX_PROCESS_OUTPUT_BYTES} bytes.`, 65);
+  if (compile.error) fail(`Compilation could not start: ${compile.error.message}`, 70);
+  if (compile.status !== 0) fail(`Compilation failed:\n${compile.stderr.trim()}`, 65);
+}
+
+function executeHarness(workspace, classes, manifest, full) {
+  const execute = spawnSync("java", ["-cp", classes, manifest.mainClass, full ? "full" : "quick"], {
+    cwd: workspace,
+    encoding: "utf8",
+    timeout: manifest.runTimeoutMs,
+    maxBuffer: MAX_PROCESS_OUTPUT_BYTES,
+  });
+  if (execute.error?.code === "ETIMEDOUT") {
+    fail(`Runtime timed out after ${manifest.runTimeoutMs}ms. Check for a runaway loop or reduce the failing case.`, 124);
+  }
+  if (execute.error?.code === "ENOBUFS") fail(`Harness output exceeded ${MAX_PROCESS_OUTPUT_BYTES} bytes.`, 70);
+  if (execute.error) fail(`Runtime could not start: ${execute.error.message}`, 70);
+  if (execute.status !== 0) fail(`Runtime failed with exit ${execute.status}:\n${execute.stderr.trim()}`, 70);
+  return parseCaseEvents(execute.stdout, full ? manifest.fullCases : manifest.quickCases);
+}
+
+function reportSuite(suite, events) {
+  for (const event of events) process.stdout.write(`${renderCase(event)}\n`);
+  const passed = events.filter((event) => event.passed).length;
+  if (passed !== events.length) {
+    process.stdout.write(`Local verification failed: ${suite} suite passed ${passed}/${events.length} tests.\n`);
+    process.exitCode = 1;
+    return;
+  }
+  process.stdout.write(`Locally verified: ${suite} suite passed ${passed}/${events.length} tests. This is not a LeetCode Accepted verdict.\n`);
+}
+
+async function run(options) {
+  const activityId = safeActivityId(required(options, "activity-id"));
+  const generationId = required(options, "generation-id");
+  const full = options.get("full") === true;
+  const suite = full ? "Full local" : "Quick";
+  const { paths, status, manifest } = await readReadyHarness(activityId, generationId);
+  const { workspace, classes } = await prepareCompilationWorkspace(paths, status, manifest);
+  try {
     process.stdout.write(`Suite: ${suite}\n`);
-    const compile = spawnSync("javac", ["-encoding", "UTF-8", "-d", classes, manifest.sourceFileName, ...manifest.harnessFiles], {
-      cwd: workspace,
-      encoding: "utf8",
-      timeout: 30_000,
-    });
-    if (compile.error?.code === "ETIMEDOUT") fail("Compilation timed out after 30000ms.", 124);
-    if (compile.error) fail(`Compilation could not start: ${compile.error.message}`, 70);
-    if (compile.status !== 0) fail(`Compilation failed:\n${compile.stderr.trim()}`, 65);
-    const execute = spawnSync("java", ["-cp", classes, manifest.mainClass, options.get("full") ? "full" : "quick"], {
-      cwd: workspace,
-      encoding: "utf8",
-      timeout: manifest.runTimeoutMs,
-    });
-    if (execute.error?.code === "ETIMEDOUT") fail(`Runtime timed out after ${manifest.runTimeoutMs}ms. Check for a runaway loop or reduce the failing case.`, 124);
-    if (execute.error) fail(`Runtime could not start: ${execute.error.message}`, 70);
-    if (execute.status !== 0) fail(`Runtime failed with exit ${execute.status}:\n${execute.stderr.trim()}`, 70);
-    const events = parseCaseEvents(execute.stdout, selectedCases);
-    for (const event of events) process.stdout.write(`${renderCase(event)}\n`);
-    const passed = events.filter((event) => event.passed).length;
-    if (passed !== events.length) {
-      process.stdout.write(`Local verification failed: ${suite} suite passed ${passed}/${events.length} tests.\n`);
-      process.exitCode = 1;
-      return;
-    }
-    process.stdout.write(`Locally verified: ${suite} suite passed ${passed}/${events.length} tests. This is not a LeetCode Accepted verdict.\n`);
+    compileHarness(workspace, classes, manifest);
+    reportSuite(suite, executeHarness(workspace, classes, manifest, full));
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }
