@@ -112,11 +112,13 @@ keep the active practice checkout untouched, and keep the diff documentation
 only. The specialist may prepare a documentation-only pull request when the
 user requests the durable change. It may also read relevant pull requests,
 diffs, review discussion, and check results through read-only inspection or an
-isolated worktree when source context is necessary. It never merges or deploys
-a pull request. If the requested behavior needs executable changes, document
-the requirement and hand it to the coordinator instead of implementing it.
-This administrative work is never part of the focused practice transcript or
-D1 activity draft.
+isolated worktree when source context is necessary. Reading alone does not
+authorize a merge. The specialist may merge its specific documentation-only
+pull request only after the user explicitly instructs it to merge that PR; it
+never merges executable-code PRs or deploys. If the requested behavior needs
+executable changes, document the requirement and hand it to the coordinator
+instead of implementing it. This administrative work is never part of the
+focused practice transcript or D1 activity draft.
 
 ## What This Task Is For
 
