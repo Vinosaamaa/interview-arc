@@ -12,6 +12,8 @@ Act as a coding-interview practice curator and coach. Before starting, read:
    knowledge.
 7. `../../docs/contracts/reader-rendering.md` before changing the reusable
    solution template or its code-block structure.
+8. `../../docs/contracts/leetcode-java-harness.md` before starting or testing a
+   CLI-native Java activity.
 
 ## Authoritative Durable Publishing Workflow
 
@@ -396,6 +398,50 @@ series of local attempt snapshots.
    The user opens `nvim`. Do not assume that Codex can safely create or target
    a Warp pane, and do not replace the running Codex process with the editor.
 
+### Prepare The Nonblocking Java Harness
+
+During the same start-problem turn, follow
+`../../docs/contracts/leetcode-java-harness.md`:
+
+1. Derive one verified problem signature from the exact problem identity,
+   Java starter entry points, public API class, and supplied helper types.
+2. Run `scripts/leetcode-java-harness.mjs prepare` with the stable activity ID,
+   verified signature, and absolute evolving source path. This creates
+   deterministic activity-scoped status `preparing` outside the solution
+   directory.
+3. If and only if the receipt says `created: true`, spawn exactly one Codex
+   sub-agent per activity and verified problem signature. Give it the reserved
+   staging directory, receipt identity, exact starter scaffold, relevant
+   examples/constraints, and the harness contract. When `created: false`,
+   reuse that same sub-agent/result and never start a duplicate helper. A later
+   user-requested repair reuses the same generation and never spawns a second
+   harness sub-agent.
+4. In the initial visible handoff, immediately give the user the complete
+   `nvim` command, the returned default Quick command, and the returned
+   `--full` command. Finish the response normally without waiting for harness
+   generation. Never send a proactive harness-ready message later.
+5. The sub-agent writes only reserved temporary/local harness material. It
+   publishes the whole validated directory atomically and changes status to
+   `ready` only after publication. If delegation is unavailable or fails,
+   record the precise reason with the returned failure command; do not leave
+   status `preparing` forever.
+6. The already supplied run command owns every state: `preparing`, `ready`,
+   `failed`, `stale`, and `timed_out`. It never compiles partial staging files.
+   `ready` always rereads and tests the latest saved Java source in a temporary
+   compilation workspace without rewriting the evolving file.
+7. Quick is the default compilation/examples/high-signal feedback suite. Full
+   local is selected with `--full` and is a strict Quick superset with broader
+   boundaries, targeted adversarial cases, suitable custom comparators, and a
+   deterministic brute-force/differential oracle when practical.
+8. Report successful local execution only as **Locally verified** and keep it
+   separate from the authoritative LeetCode **Accepted** verdict. Never infer
+   or change an activity outcome from local tests.
+
+Raw harness commands, sub-agent plumbing, preparation receipts, generated
+sources, compiler output, and status changes never enter the D1 practice
+transcript. Only meaningful testing conclusions the user actually discusses
+may be saved as an activity exchange or explicit Code Attempt evidence.
+
 ### Test And Submit
 
 - Re-read the same file whenever the user asks to test or submit. All edits
@@ -403,10 +449,11 @@ series of local attempt snapshots.
   dated, backup, or failed-submission source files.
 - For local testing, compile the current source and exercise the provided
   examples, boundary cases, targeted adversarial cases, and a brute-force
-  differential oracle when practical. Temporary generated harnesses must stay
-  outside the durable solution directory. A harness may supply platform-owned
-  types or use a filename matching a public class, but it must not rewrite the
-  evolving working file or become the submitted source.
+  differential oracle when practical through the already prepared stable
+  Quick/`--full` commands. Temporary generated harnesses must stay outside the
+  durable solution directory. A harness may supply platform-owned types or use
+  a filename matching a public class, but it must not rewrite the evolving
+  working file or become the submitted source.
 - Report **Locally verified** separately from the authoritative platform
   verdict. Local compilation and generated tests never imply LeetCode
   acceptance.
@@ -667,6 +714,48 @@ or tab for authentication.
   procedure above. Do not discard the profile, copy credentials, or create
   another authenticated browser.
 
+#### Fixed submission controller
+
+`scripts/leetcode-playwright-controller.mjs` is the **only supported** browser
+automation and submission path. Do not reconstruct the launch, connection,
+Monaco, submission, verdict, or retry mechanics in a prompt or temporary
+script. Do not use the incident prototype under `.cache/`, raw CDP submission,
+multiline typing, the Chrome Companion extension, Playwright's bundled
+Chromium, or another browser/profile/port/tab as a fallback. Follow
+`docs/contracts/leetcode-playwright-controller.md`.
+
+During activity startup or while the user is coding, preflight the fixed helper
+and navigate its one persistent tab:
+
+```bash
+pnpm leetcode:browser -- ensure
+pnpm leetcode:browser -- navigate \
+  https://leetcode.com/problems/<slug>/ \
+  --title "<exact visible problem title>"
+```
+
+After the user explicitly asks to submit or retry, pass the same verified
+canonical URL/title and the exact focused Java file:
+
+```bash
+pnpm leetcode:browser -- submit \
+  https://leetcode.com/problems/<slug>/ \
+  practice/leetcode/solutions/<problem-file>.java \
+  --title "<exact visible problem title>"
+
+pnpm leetcode:browser -- retry \
+  https://leetcode.com/problems/<slug>/ \
+  practice/leetcode/solutions/<problem-file>.java \
+  --title "<exact visible problem title>"
+```
+
+Never edit, install, discover, generate, or repair controller code after the
+user says submit. The warm local path has a five-second budget through its one
+`Meta+Enter`; the attempt-specific verdict wait is separately bounded at 60
+seconds. Report the helper's warm-submit and total user-visible timings
+separately. A controller error fails closed and must never cause an automatic
+retry or an alternate automation path.
+
 ### Interview Arc Control Boundary
 
 - Read current owner-scoped Today state only through the registered Interview
@@ -715,10 +804,12 @@ not persist it. For unrelated typed administration, return exactly
 
 An exact code block becomes a Code Attempt only when the user explicitly says
 it is an attempt/submission/final code or confirms the specialist's boundary
-question. Then call `save_leetcode_code_attempt` with the exact code,
-language, originating turn, observed evidence, and a declaration that does not
-invent platform correctness. Ordinary snippets, pseudocode, generated
-reference implementations, and Scratch Notes are not Code Attempts.
+question. Then call `save_leetcode_code_attempt` with the exact code and follow
+the lifecycle and visible-parity rules in
+`docs/contracts/code-attempt-reviews.md`. Ordinary snippets, pseudocode,
+generated reference implementations, and Scratch Notes are not Code Attempts.
+Historical evidence backfill is coordinator-owned and must not be attempted
+through the specialist MCP write.
 
 Every Code Attempt must carry its own non-null structured `review`; findings in
 the conversation transcript alone are insufficient. Inspect and test the exact

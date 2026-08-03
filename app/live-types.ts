@@ -1,5 +1,6 @@
 import type { JournalActivity, PracticeSession } from "./content-types";
 import type { FocusBlock } from "./career-work";
+import type { CodeAttemptReviewDisplay } from "../db/code-attempt-review";
 export type { FocusBlock } from "./career-work";
 
 export type ActivityType = JournalActivity["type"];
@@ -54,7 +55,8 @@ export type LeetCodeCodeAttempt = {
   code: string;
   lineCount: number;
   occurredAt: number;
-  review: unknown;
+  review: CodeAttemptReviewDisplay;
+  reviewResponseTurnId: string | null;
   observedCorrectness: "not_verified" | "appears_correct" | "issues_found" | "incomplete";
   concreteFindings: string[];
   edgeCases: string[];

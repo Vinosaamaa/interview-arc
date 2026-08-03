@@ -1134,7 +1134,33 @@ function CodeAttemptBody({ attempt }: { attempt: LeetCodeCodeAttempt }) {
     {attempt.complexity && <div className="code-attempt-complexity">{attempt.complexity.time && <span>Time: {attempt.complexity.time}</span>}{attempt.complexity.space && <span>Space: {attempt.complexity.space}</span>}</div>}
     {attempt.concreteFindings.length > 0 && <ul>{attempt.concreteFindings.map((finding) => <li key={finding}>{finding}</li>)}</ul>}
     {attempt.edgeCases.length > 0 && <details className="code-attempt-review"><summary>Edge cases reviewed</summary><ul>{attempt.edgeCases.map((edgeCase) => <li key={edgeCase}>{edgeCase}</li>)}</ul></details>}
+    <AttemptReview review={attempt.review} />
   </div>;
+}
+
+function AttemptReview({ review }: { review: LeetCodeCodeAttempt["review"] }) {
+  if (review.status === "not_recorded") {
+    return <section className="attempt-review not-recorded" aria-label="Attempt Review">
+      <h4>Attempt Review</h4>
+      <p>Review not recorded</p>
+    </section>;
+  }
+  if (review.status === "pending") {
+    return <section className="attempt-review pending" aria-label="Attempt Review">
+      <h4>Attempt Review</h4>
+      <p>Review pending</p>
+    </section>;
+  }
+  return <section className="attempt-review complete" aria-label="Attempt Review">
+    <header><h4>Attempt Review</h4><small>{review.provenance === "explicit_evidence_backfill" ? "Evidence backfill" : "Specialist review"}</small></header>
+    <p className="attempt-review-summary">{review.summary}</p>
+    <div className="attempt-review-columns">
+      <section><h5>What Went Well</h5><ul>{review.whatWentWell.map((item) => <li key={item}>{item}</li>)}</ul></section>
+      <section><h5>What To Improve</h5><ul>{review.whatToImprove.map((item) => <li key={item}>{item}</li>)}</ul></section>
+    </div>
+    <section className="attempt-review-testing"><h5>Testing Evidence</h5><ul>{review.testingEvidence.map((item) => <li key={item}>{item}</li>)}</ul></section>
+    {review.nextStep && <p className="attempt-review-next"><strong>Next Step</strong><span>{review.nextStep}</span></p>}
+  </section>;
 }
 
 function DeliveryReview({ analysis, segmentLabel }: { analysis: DeliveryAnalysis; segmentLabel?: string }) {

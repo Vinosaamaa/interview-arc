@@ -1,4 +1,5 @@
 import { readActivityPracticeRecord } from "../../../db/durable-practice";
+import { codeAttemptReviewForDisplay } from "../../../db/code-attempt-review";
 import { resolveOwnerId } from "../../../db/owner";
 import { toRouteErrorMessage } from "../route-helpers";
 
@@ -61,7 +62,8 @@ export async function GET(request: Request) {
         code: attempt.code,
         lineCount: attempt.lineCount,
         occurredAt: attempt.occurredAt,
-        review: attempt.review,
+        review: codeAttemptReviewForDisplay(attempt.review),
+        reviewResponseTurnId: attempt.reviewResponseTurnId,
         observedCorrectness: attempt.observedCorrectness,
         concreteFindings: attempt.concreteFindings,
         edgeCases: attempt.edgeCases,
