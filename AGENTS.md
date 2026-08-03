@@ -116,7 +116,30 @@ Leave unavailable fields empty or set their source to `unknown`. Never invent ti
 
 ## LeetCode Boundary
 
-Do not crawl LeetCode, inspect authenticated/private endpoints or cookies, or copy editorials or solution content. The user may deliberately provide a CSV, JSON, PDF, or saved MHTML snapshot of a company list. Parse only visible metadata and public problem URLs from that supplied artifact, deduplicate by canonical problem slug, and never treat solved icons in the snapshot as Interview Arc progress unless the user explicitly asks. Do not invent LeetCode URLs. Label AI-generated coaching or solutions as generated material rather than official LeetCode content.
+Do not bulk-crawl LeetCode, export or inspect cookies, or call undocumented
+authenticated/private GraphQL, JSON, REST, or other account endpoints directly.
+After the user's fresh attempt ends—or whenever the user explicitly asks for a
+full solution, review, or alternatives—the LeetCode specialist reviews the
+visible official Editorial tab through the normal UI in the existing dedicated
+tab before answering. Identify editorial-derived approaches, paraphrase them in
+original language, and cite the editorial as a source actually consulted.
+Treat its algorithm and correctness argument as reference evidence, not its
+exact implementation style. Independently rewrite reference code to be
+asymptotically optimal, concise, idiomatic, and interview-ready while preserving
+the necessary invariants and edge-case behavior. Remove unnecessary ceremony,
+duplicate state, and abstractions; never sacrifice correctness or complexity
+merely to shorten the code. If a rewrite changes a tradeoff, state it instead
+of calling the implementation equally optimal. If access is unavailable or
+Premium-locked, say so and proceed with original analysis; never claim it was
+reviewed. Do not copy protected editorial prose or official code verbatim.
+
+The user may deliberately provide a CSV, JSON, PDF, or saved MHTML snapshot of
+a company list. Parse only visible metadata and public problem URLs from that
+supplied artifact, deduplicate by canonical problem slug, and never treat solved
+icons in the snapshot as Interview Arc progress unless the user explicitly
+asks. Do not invent LeetCode URLs. Label specialist explanations and code as
+original coaching material, while accurately naming the official editorial as
+a consulted reference when it was actually reviewed.
 
 For a system-design bank question with `source: SystemDesign.io` and `solutionReference: true`, the system-design task must review the question page's current recommended solution links and design details before starting the mock. Those references form a private rubric; do not front-load or copy their answer before the user reasons.
 
@@ -140,6 +163,40 @@ If the repository has its own `.venv/`, use `./.venv/bin/python` instead.
 ## Source Control And Verification
 
 - Make code, schema, and instruction changes on a feature branch.
+- Executable product changes are coordinator-only. A LeetCode, system-design,
+  or behavioral specialist must not implement changes to the website, app,
+  Worker, MCP, APIs, D1/R2 behavior, migrations, browser companion, native
+  Voice app, scripts, tests, build configuration, or other executable product
+  code. The specialist may diagnose the behavior and prepare a precise handoff
+  for the coordinator.
+- On an explicit user request, a specialist may persist behavior-only guidance
+  in its owning `AGENTS.md`, `README.md`, or directly related Markdown
+  instruction/contract files. Before doing so, read
+  `docs/agents/issue-lifecycle.md`, reuse or create the owning issue, and work
+  in an isolated worktree on a feature branch so the active practice checkout
+  remains untouched. Keep the diff documentation-only. The specialist may
+  open a documentation-only pull request when the user requests the durable
+  change. It may merge that specific documentation-only pull request only when
+  the user explicitly instructs it to do so after review; otherwise leave it
+  open. It must not deploy or broaden the PR into product code.
+- A clear user agreement or directive about durable specialist behavior is
+  standing authorization to persist that decision automatically; do not wait
+  for a separate “update AGENTS.md” command. Update the narrowest owning
+  Markdown instructions and any directly conflicting contract in the same
+  issue/worktree/PR when practical. Questions, brainstorming, unresolved
+  alternatives, and discussion the user explicitly labels “decide later” are
+  not durable decisions and must not be written prematurely.
+- A specialist may read a relevant pull request, including its diff, review
+  discussion, and check results, when that context is needed to understand its
+  own behavior. Use read-only GitHub inspection or an isolated worktree when
+  source inspection is necessary. Reading a pull request alone never authorizes
+  a merge. The explicit merge exception applies only to the specialist's
+  documentation-only PR; executable-code PRs remain coordinator-owned.
+- If an instruction correction requires executable code, schema, migration,
+  or generated product artifacts, stop after documenting the requirement and
+  hand it to the coordinator. Instruction-maintenance discussion and its
+  execution ledger are administration and must never enter a practice
+  transcript or D1 activity draft.
 - For every implementation turn, follow the canonical live-execution-ledger
   requirements in `docs/agents/issue-lifecycle.md`.
 - Before starting a website feature branch, protect any journal-only working-tree

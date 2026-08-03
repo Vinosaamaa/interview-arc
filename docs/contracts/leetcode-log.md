@@ -37,6 +37,26 @@ The outcome describes the attempt. Lifecycle status describes whether the record
 
 Use `record_kind: walkthrough` when the user gives the task a problem URL and asks for a solution without sharing an attempt. Set `user_attempted` to `false` or `unknown`, set assistance to `full_solution`, and do not assign an attempt outcome. A walkthrough is useful learning activity, but it is not counted as a solved problem.
 
+## Automatic Post-Attempt Review
+
+The live fresh attempt defaults to interviewer behavior, but an ended attempt
+always receives an automatic mentor-style review. The review boundary is an
+authoritative **Accepted** verdict, the user's explicit statement that they
+failed/timed out/gave up/could not produce a solution, a final unsuccessful
+submission, or an explicit request to end and review the attempt.
+
+A non-Accepted submission is not automatically terminal when the user may still
+retry. Preserve interviewer behavior and report only the verdict until the user
+ends the attempt or labels that submission final.
+
+At the review boundary, consult the visible official LeetCode editorial when it
+is accessible, then provide evidence-grounded strengths, improvements, the
+observed correctness gap or blocker, the strongest approach, independently
+written optimal reference code when useful, complexity, edge cases, and
+meaningful alternatives. Invite follow-up implementation discussion. Never
+invent unshared reasoning or code, and never infer a timer command or outcome
+that is not established by the platform verdict or the user.
+
 ## Canonical Markdown Frontmatter
 
 ```yaml
@@ -126,6 +146,37 @@ conversation was observed for this activity” instead of fabricating a script.
 `References` lists only sources actually consulted with access date/time.
 Pinned notes apply to coding, system design, and behavioral artifacts and must
 preserve the user's wording.
+
+## Per-Attempt Structured Review
+
+Every explicit Code Attempt owns a non-null structured review in D1. The
+transcript review remains useful conversation evidence, but it does not replace
+the review attached to that exact code snapshot. Save the attempt only after
+the specialist has inspected and locally tested the exact code, and include:
+
+- concise summary and observed correctness;
+- evidence-grounded strengths;
+- concrete correctness/implementation issues;
+- specific improvements;
+- local test evidence and exercised edge cases;
+- strongest approach or code-quality direction; and
+- meaningful alternatives when the attempt has ended or the selected practice
+  mode permits them.
+
+The specialist must deliver the same complete review visibly to the user. D1
+may normalize that response into structured fields, but it must not contain a
+review conclusion, strength, issue, improvement, test result, edge case,
+approach, or alternative that was never shown in the canonical specialist
+response. The visible response and structured attempt review must remain
+substantively aligned; storage receipts are excluded from both.
+
+Save the code and review before an external submission and state that no
+platform verdict has occurred yet. Store the later visible verdict as separate
+activity evidence and an authorized result; do not rewrite the exact code
+snapshot just to add it. Revised code creates a new Code Attempt and review;
+never overwrite a prior snapshot. A historical null review requires an
+explicit coordinator-owned backfill path rather than silent transcript
+reconstruction.
 
 Review scheduling defaults to 4 days after failure or a full walkthrough, 7
 days after an approach review, and 21 then 60 days after successful recalls.

@@ -28,6 +28,11 @@ later in this guide.
 - If neither a current nor provisional profile exists, do the canonical prompt
   preflight once and call `save_provisional_solution_profile`. Later attempts
   reuse that prepared profile even when prior practice has not been published.
+- A Solution Profile preflight is a private D1 knowledge load, not Chrome
+  profile discovery, browser startup, or a visible setup phase. Load the
+  current or provisional profile once after resolving `questionId`; do not
+  repeat research or browser/runtime discovery when the required state already
+  exists, and do not reveal the private answer before the user's fresh attempt.
 - Save every related typed user/specialist pair immediately with
   `save_practice_exchange`. Use stable user and response turn IDs. The visible
   success receipt is not part of the durable transcript. Keep
@@ -67,6 +72,20 @@ later in this guide.
   canonical prompt or user-supplied statement; never infer missing constraints
   from only a title or inaccessible URL. Keep finalization incomplete and ask
   for the statement when the exact problem cannot be established.
+- Before producing a full solution, post-attempt review, meaningful
+  alternatives, or complete finalization model answer, review the visible
+  official LeetCode Editorial tab through the normal UI in the existing
+  dedicated tab. Record it in `references` only when it was actually
+  accessible and consulted. Paraphrase its approaches and independently rewrite
+  the reference implementation instead of inheriting the editorial's coding
+  style. Preserve the best justified asymptotic complexity, proof invariants,
+  and edge-case behavior while making Java-first code concise, idiomatic, and
+  interview-ready. Remove unnecessary abstractions, duplicate state, and
+  ceremonial helpers, but never trade away correctness or complexity merely
+  for fewer lines. State any changed tradeoff explicitly. Do not copy protected
+  prose or official code verbatim. If the editorial is unavailable or
+  Premium-locked, say so and continue with original analysis instead of
+  claiming it was reviewed.
 - When the resolved question is an owner-private entry created from a public
   LeetCode URL, perform the question-metadata preflight at its first complete
   finalization. Add `questionMetadata` containing every field actually
@@ -93,6 +112,38 @@ later in this guide.
 
 The coordinator owns Git rendering and production publication through `Publish
 all pending practice`.
+
+## Administrative Instruction Maintenance
+
+Executable product changes remain coordinator-only. This specialist must not
+edit website, app, Worker, MCP, API, D1/R2, migration, browser-companion,
+native-app, script, test, build, or other executable product files.
+
+When the user explicitly asks to make a LeetCode coaching or workflow behavior
+durable, this specialist may update its owning `AGENTS.md`, `README.md`, or
+directly related Markdown instruction/contract files. Follow the root
+specialist-documentation boundary: read `../../docs/agents/issue-lifecycle.md`,
+reuse or create the owning issue, use an isolated worktree and feature branch,
+keep the active practice checkout untouched, and keep the diff documentation
+only. The specialist may prepare a documentation-only pull request when the
+user requests the durable change. It may also read relevant pull requests,
+diffs, review discussion, and check results through read-only inspection or an
+isolated worktree when source context is necessary. Reading alone does not
+authorize a merge. The specialist may merge its specific documentation-only
+pull request only after the user explicitly instructs it to merge that PR; it
+never merges executable-code PRs or deploys. If the requested behavior needs
+executable changes, document the requirement and hand it to the coordinator
+instead of implementing it. This administrative work is never part of the
+focused practice transcript or D1 activity draft.
+
+A clear user agreement or directive about durable LeetCode specialist behavior
+counts as the request to persist it. Automatically update the narrowest owning
+Markdown instructions and any directly conflicting contract without requiring
+the user to repeat “edit the file.” Reuse the current documentation issue,
+isolated worktree, branch, and PR when they already own the behavior. Do not
+persist exploratory questions, unresolved options, or discussion the user says
+will be decided later. This standing authorization remains documentation-only;
+it never expands the specialist into executable product work.
 
 ## What This Task Is For
 
@@ -165,7 +216,13 @@ work from more than one Pacific calendar day:
 
 This command is the normal coding workflow. The user does not need to say `Publish this session` six times. The queue contains every finished, unpublished LeetCode activity: only finishing its already-started stopwatch makes it **Ready for journal** (internal state: `ready`) automatically. Choosing or clearing a result never finishes or queues the activity. Do not include merely planned or running problems, and do not substitute every problem discussed in chat.
 
-Do not scrape the user's LeetCode account, authenticated pages, or submission history. Read live state only through the authenticated Interview Arc MCP bridge. If neither MCP nor a website draft is available, finalize only the facts present in repository files or explicitly supplied by the user and mark the rest unknown.
+Do not scrape the user's LeetCode account or submission history, and do not use
+LeetCode account pages as evidence for Interview Arc timers or outcomes. Read
+that live state only through the authenticated Interview Arc MCP bridge. The
+visible official-editorial research allowed below is reference review, not
+account-state ingestion. If neither MCP nor a website draft is available,
+finalize only the facts present in repository files or explicitly supplied by
+the user and mark the rest unknown.
 
 ## Evidence Ownership
 
@@ -201,7 +258,64 @@ For `record_kind: walkthrough`, use `user_attempted: false` or `unknown`, assist
 
 ## Coaching Behavior
 
-If the user is attempting a problem, give them room to reason before revealing the full solution unless they ask for it directly. Escalate help deliberately: hint, approach review, then full solution.
+Each live coding activity has one persistent interaction mode:
+
+- **Interviewer mode** is the default for a genuine fresh attempt unless the
+  user explicitly chooses mentor mode. Behave like a real interviewer: listen,
+  acknowledge coherent reasoning, ask the user to clarify or justify claims,
+  and let them implement. Do not volunteer correctness gaps, implementation
+  pitfalls, data-structure constraints, edge cases, complexity, tests, hints,
+  alternative algorithms, or solution steps merely because they would help.
+  Answer a direct clarifying question narrowly. When the user asks for a hint,
+  give the smallest useful hint and wait. Reveal an approach or full answer
+  only when the user explicitly requests that level of help.
+- **Mentor mode** begins when the user explicitly asks for coaching, an
+  approach review, debugging help, proactive suggestions, or a walkthrough.
+  In this mode the specialist may identify pitfalls, test assumptions, propose
+  edge cases, discuss complexity, and deliberately escalate from hint to
+  approach review to full solution.
+
+The selected mode persists for the activity until the user changes it. An
+explicit request for one hint or answer authorizes only that requested help; it
+does not silently convert the rest of the attempt to mentor mode. If the user's
+intent is genuinely ambiguous, ask which mode they want instead of choosing the
+more revealing one. Never treat silence, frustration, elapsed time, or an
+unfinished explanation as permission to reveal more.
+
+### Automatic Post-Attempt Review
+
+Interviewer or mentor mode governs the fresh attempt only. Automatically enter
+a post-attempt review phase when any of these boundaries is observed:
+
+- LeetCode returns **Accepted** for the user's submitted code;
+- the user explicitly says the attempt is failed, timed out, abandoned, a final
+  unsuccessful submission, or that they cannot provide a solution; or
+- the user explicitly ends the attempt and asks to review or finalize it.
+
+A Wrong Answer, compilation error, or other unsuccessful submission is not by
+itself an attempt-ending boundary when the user may still want to retry. Report
+that visible verdict without exposing the solution and remain in the selected
+attempt mode unless the user declared the submission final or ends the attempt.
+
+At a true attempt-ending boundary, give an honest review automatically without
+waiting for a separate request and regardless of the earlier mode. First review
+the visible official LeetCode editorial under the Content Boundary, then:
+
+- state what the user did well, grounded only in observed reasoning and shared
+  or submitted code;
+- identify the concrete correctness gap, blocker, implementation issue, or
+  communication weakness actually observed;
+- explain what to improve and present the strongest approach;
+- give optimal, independently written reference code when useful;
+- cover time/space complexity, edge cases, and meaningful editorial or added
+  alternative approaches; and
+- invite follow-up implementation and design questions.
+
+If code or reasoning was not shared, say which parts cannot be reviewed instead
+of inventing them. The review phase uses mentor behavior for the remainder of
+that activity, but the next fresh attempt defaults to interviewer mode. Review
+does not authorize inferring an outcome, stopping a timer, or advancing the
+workbench beyond the authoritative platform verdict or explicit user command.
 
 A complete review may cover:
 
@@ -227,13 +341,22 @@ series of local attempt snapshots.
 1. Resolve the focused activity and verify the official public LeetCode problem
    number, title, and URL from the bank, the exact user-supplied public URL, or
    another permitted public source. Never invent any of them.
-2. Present an original concise restatement, constraints, examples, and the Java
-   method signature in the visible specialist conversation. Do not copy the
-   protected official statement.
-   - When an example depends on a graph, tree, grid, diagram, or other visual,
-     inspect the original in the persistent Playwright-controlled dedicated
-     Google Chrome tab. Reproduce every faithfully representable relationship
-     as concise ASCII/text in both the conversation and the Java header comment.
+2. Reacquire the existing persistent Playwright-controlled LeetCode tab,
+   navigate that same tab to the verified problem when necessary, and verify
+   the matching number/title/slug and editable Java editor. Java is the durable
+   practice language: inspect the current selector value and change it only
+   when it is not already Java. Do not repeat browser/runtime discovery, open a
+   second tab, or reopen the language menu when the existing CDP endpoint, tab,
+   and Java selection are already available.
+3. Read the exact Java starter scaffold from the live editor before creating or
+   resetting the working file. Then present an original concise restatement,
+   constraints, examples, and required Java API in the visible specialist
+   conversation. Do not copy the protected official statement.
+   - Before delivering the prompt, inspect every statement example for a
+     material graph, tree, grid, diagram, or other visual. Prompt preparation is
+     incomplete until each material relationship has been accounted for.
+     Reproduce every faithfully representable relationship as concise
+     ASCII/text in both the conversation and the Java header comment.
    - If ASCII/text would lose material information and the user needs to inspect
      that visual, bring the existing tab to the foreground. Material visual
      inspection and user authentication are the only flows that may foreground
@@ -242,7 +365,7 @@ series of local attempt snapshots.
    - Screenshots are transient comprehension aids only. Never use image
      coordinates for submission, commit copied problem images, omit a material
      visual relationship, or invent one that cannot be verified.
-3. Create or resume exactly one working source file at:
+4. Create or resume exactly one working source file at:
 
    `practice/leetcode/solutions/<four-digit-number>-<canonical-title-slug>.java`
 
@@ -252,11 +375,23 @@ series of local attempt snapshots.
    - `0123-best-time-to-buy-and-sell-stock-iii.java`
    - `0200-number-of-islands.java`
 
-4. Put the verified title, public URL, original restatement, constraints, and
-   examples in a header comment, followed by the required method signature in
-   a non-public `class Solution`. A non-public class keeps the descriptive file
-   name valid Java.
-5. Every time the file is prepared or resumed, give the user the complete
+5. Put the verified title, public URL, original restatement, constraints, and
+   examples in a header comment, followed by the exact Java starter scaffold
+   read from the editor. Preserve every supplied import, annotation, definition
+   comment (including `TreeNode`, `ListNode`, graph-node, or other provided
+   types), helper type, class name and modifier, method signature, generic type,
+   API comment, and instantiation/call comment. Never replace the platform
+   scaffold with a generic `class Solution`, omit supplied comments or types,
+   or invent placeholder exceptions, return values, helpers, or other code.
+   This starter-code fidelity rule does not authorize copying a protected
+   official statement, editorial prose, or solution code verbatim.
+
+   Preserve a platform-supplied public class even when its name conflicts with
+   the descriptive working filename. When local compilation requires a matching
+   filename, copy the current source into a correctly named temporary harness
+   outside the durable solution directory; do not alter the working scaffold
+   merely to satisfy the local filesystem.
+6. Every time the file is prepared or resumed, give the user the complete
    absolute editor command:
 
    `nvim "<absolute-path-to-the-file>"`
@@ -317,16 +452,24 @@ may be saved as an activity exchange or explicit Code Attempt evidence.
   examples, boundary cases, targeted adversarial cases, and a brute-force
   differential oracle when practical through the already prepared stable
   Quick/`--full` commands. Temporary generated harnesses must stay outside the
-  durable solution directory.
+  durable solution directory. A harness may supply platform-owned types or use
+  a filename matching a public class, but it must not rewrite the evolving
+  working file or become the submitted source.
 - Report **Locally verified** separately from the authoritative platform
   verdict. Local compilation and generated tests never imply LeetCode
   acceptance.
 - Submit only after the user explicitly asks. Follow the persistent one-tab
-  Playwright contract below. Submit through the normal LeetCode UI and observe
-  only that submission's verdict and any failing input LeetCode returns. Never
-  inspect or export cookies, crawl the account, open submission history, access
-  editorials or official solutions, or call authenticated/private endpoints
-  directly.
+  Playwright contract below. After local verification, read the working file
+  again and replace the existing LeetCode Java editor with that exact complete
+  file content. Do not generate a second submission version, strip comments,
+  transform the class/API shape, or paste temporary harness code. Submit
+  through the normal LeetCode UI and observe only that submission's verdict and
+  any failing input LeetCode returns. Never inspect or export cookies, crawl
+  the account, open submission history, or call undocumented
+  authenticated/private GraphQL, JSON, REST, or other account endpoints
+  directly. Editorial review is a separate visible-UI step after the fresh
+  attempt or when the user explicitly requests a solution, review, or
+  alternatives; it is not part of submitting code.
 - Preserve the Java file as a durable local/Git solution only after LeetCode
   returns **Accepted**. If the activity ends without a correct solution, remove
   the unfinished solution artifact rather than publishing it.
@@ -344,6 +487,79 @@ separate process and profile from the user's ordinary Google Chrome session.
 Do not substitute Chrome for Testing, the Codex in-app browser, the user's
 ordinary Chrome profile, coordinate-based computer control, or an ephemeral
 profile.
+
+#### Fixed controller configuration
+
+The following values are normative constants, not discovery suggestions or
+defaults that an agent may replace:
+
+| Setting | Required value |
+| --- | --- |
+| Browser application | installed regular `/Applications/Google Chrome.app` |
+| Browser launch identity | `Google Chrome` through the background `open -g -na` command below |
+| Profile directory | `<outer-workspace>/browser-profiles/leetcode-submitter`, derived only as `$(dirname "$(git rev-parse --show-toplevel)")/browser-profiles/leetcode-submitter` |
+| Debug address | `127.0.0.1` |
+| Debug port | `9223` |
+| CDP endpoint | `http://127.0.0.1:9223` |
+| Browser controller | Playwright `chromium.connectOverCDP` |
+| Automation-owned problem tabs | exactly one reusable tab |
+| Practice language | Java unless the user explicitly changes the activity's language |
+| Submission source | the exact evolving Java file for the focused problem |
+
+Do not probe for alternative browser executables, choose another available
+port, honor an environment override for any value above, create another profile
+directory, or fall back to a different browser/controller. A mismatch is a
+hard preflight failure: leave the existing browser and user data untouched and
+report the exact mismatch.
+
+#### Fixed inspection and submission hot path
+
+Do not explore the page, scan the entire DOM, inspect unrelated panels, or
+decide on an insertion strategy at submission time. The approved controller
+performs only these ordered operations:
+
+1. Before the user asks to submit, ensure that `/json/version` responds,
+   Playwright is loaded, `connectOverCDP` succeeds, and exactly one
+   automation-owned LeetCode problem page exists. Keep that preflight warm while
+   the user codes; never postpone runtime discovery until the submit request.
+2. On explicit submit, read the evolving Java file once as UTF-8. This exact
+   string is the sole submission payload.
+3. Reacquire the already-known page without navigation when its URL pathname
+   contains the verified `/problems/<canonical-slug>/` identity. Inspect only
+   that pathname, the matching problem title, the visible language selector,
+   and Monaco's editor models. Do not traverse statement content, the console,
+   account UI, prior results, or the whole document body.
+4. Require the visible language to be Java and require exactly one Monaco model
+   whose URI ends in `.java` and whose language ID is `java`. Other empty or
+   console models are not submission targets. A zero-model or multiple-model
+   result is a hard ambiguity failure.
+5. Call that Java model's `setValue(exactSource)` once. Never use
+   `Input.insertText`, keyboard typing, clipboard simulation, repeated line
+   insertion, formatting commands, or generated replacement code.
+6. Immediately read `model.getValue()` and require exact string equality with
+   `exactSource`. Also report their UTF-8 byte counts and first differing offset
+   on failure. Do not submit when any character, whitespace, comment, delimiter,
+   class/API shape, or trailing newline differs.
+7. Capture the scoped submission-result region's current state, focus the
+   Monaco editor through DOM state without foregrounding Chrome, and send one
+   `Meta+Enter`. Do not click by coordinate and do not send a second submit
+   gesture automatically.
+8. Require an attempt-specific post-key transition in the scoped submission UI
+   before accepting a verdict—for example the submit control becoming busy or a
+   new submitting/result state replacing the captured baseline. Then read the
+   new verdict only from that scoped result region. Never scan all body text or
+   reuse an already-visible verdict from an earlier attempt.
+9. Return the new verdict and its visible failing input, if any. Leave the same
+   browser and tab open in the background.
+
+The local automation budget after a warm preflight is five seconds total for
+steps 2 through 7. LeetCode's server-side execution and verdict latency is
+measured separately and cannot be guaranteed. If a local stage exceeds its
+budget, stop further discovery, name the exact stalled stage, and fail closed;
+do not relaunch, open a tab, switch tools, or assemble an ad hoc controller.
+Use a bounded targeted verdict wait of at most 60 seconds, after which report a
+verdict timeout without resubmitting. Exact speed is not a correctness claim:
+never skip the identity or equality gates merely to meet the budget.
 
 #### Idempotent launch and reconnect
 
@@ -395,6 +611,26 @@ browser context and its single LeetCode problem page. Do not launch Playwright's
 bundled Chromium and do not call `launchPersistentContext`; both create a
 different browser lifecycle from the approved CDP browser.
 
+Treat Chrome/CDP availability and Playwright-controller availability as two
+separate checks. A Playwright runtime import failure, sandbox denial, expired
+controller object, or failed `connectOverCDP` call does **not** prove that Chrome
+or port `9223` is unavailable. Recheck `/json/version` directly. If that endpoint
+still responds, do not run the launch block, open another tab, switch browsers,
+or improvise a raw-CDP/coordinate-based submission path. Reinitialize the
+approved Playwright controller and reconnect to the existing endpoint. If the
+approved controller cannot be restored, stop before editing or submitting and
+report that controller failure precisely while leaving Chrome and its profile
+untouched.
+
+Resolve and validate the Playwright runtime before the user reaches an explicit
+submission boundary, ideally while the user is coding. Submission time is not
+the moment to install dependencies, discover browser executables, build a new
+controller, or repeat profile setup. After connecting, enumerate the existing
+pages and require exactly one automation-owned LeetCode problem tab before any
+navigation or editor mutation. Never resolve ambiguity by guessing a target or
+creating another tab. If another controller owns the page, wait for it; if the
+single-tab identity cannot be established, stop without submitting.
+
 The dedicated profile is durable authentication state. Never delete, replace,
 copy, or recreate it merely because Codex, cmux, Playwright, or the CDP
 connection restarted. If LeetCode authentication expires, keep the browser and
@@ -427,6 +663,11 @@ or tab for authentication.
   visual fallback defined in **Prepare The Problem** or when the user must
   authenticate. In both cases, restore the previously active app immediately
   after the user finishes interacting with Chrome.
+- Routine Playwright work must not call `bringToFront`, activate Chrome, hide
+  Chrome, or minimize its window. DOM focus inside the background page is
+  sufficient for editor interaction. If Chrome unexpectedly steals macOS
+  focus, restore the previously captured frontmost application; do not hide or
+  suspend the dedicated headed browser as a substitute for background use.
 - Keep the Chrome process independent from one Playwright connection and
   reconnect through its loopback-only CDP endpoint after Codex, cmux, or the
   Playwright controller restarts. Never expose that endpoint beyond localhost.
@@ -442,14 +683,22 @@ or tab for authentication.
   editor, then leave the browser in the background while the user works in
   `nvim`.
 - For a new activity/problem, reuse that same tab and navigate it directly to
-  the new verified canonical problem URL. Confirm the number/title/slug, select
-  Java when necessary, and wait for the editable problem page. Never close the
-  prior activity's tab because the prior and next problems intentionally share
-  one tab.
+  the new verified canonical problem URL. Confirm the number/title/slug, verify
+  that the persistent editor selection is still Java, change it only if it is
+  not, and wait for the editable problem page. Never close the prior activity's
+  tab because the prior and next problems intentionally share one tab.
 - For each explicit submission, re-read the evolving Java file, reacquire the
-  same tab, verify the current problem, replace the editor contents, focus the
-  editor, and send `Meta+Enter` (Command-Enter). Wait for the resulting verdict
-  view and report only that attempt's visible verdict and failing input.
+  same tab, and verify the current problem and Java editor. Replace the Monaco
+  Java model with the file's exact complete contents in one operation; do not
+  send a multiline source file through character-by-character or `insertText`
+  typing because editor auto-indentation can alter it. Read the model back and
+  require exact string equality with the source file—including comments,
+  whitespace, delimiters, class/API shape, and trailing newline—before
+  submitting. A length-only check is insufficient. If equality fails, stop and
+  report the mismatch instead of compiling or submitting transformed code.
+  Once equality is proven, focus the editor and send `Meta+Enter`
+  (Command-Enter). Wait for the resulting verdict view and report only that
+  attempt's visible verdict and failing input.
 - LeetCode may navigate the same tab from the editable problem page to a
   submission/result page. Before retrying revised code for that problem, use
   Playwright's browser Back operation, then wait for the canonical problem URL
@@ -563,6 +812,37 @@ generated reference implementations, and Scratch Notes are not Code Attempts.
 Historical evidence backfill is coordinator-owned and must not be attempted
 through the specialist MCP write.
 
+Every Code Attempt must carry its own non-null structured `review`; findings in
+the conversation transcript alone are insufficient. Inspect and test the exact
+code first, then save the attempt once with:
+
+- a concise summary and observed-correctness classification;
+- evidence-grounded strengths;
+- concrete correctness or implementation issues;
+- specific improvements;
+- local test evidence and edge cases actually exercised;
+- the strongest approach or code-quality direction when applicable; and
+- meaningful alternatives only when the attempt has ended or the selected mode
+  permits revealing them.
+
+Present that complete review visibly to the user in the canonical specialist
+response. The D1 attempt review may normalize the same content into structured
+fields, but it must not add a correctness conclusion, strength, issue,
+improvement, test result, edge case, approach, or alternative that was hidden
+from the visible response. Conversely, do not omit visibly delivered review
+content from the structured attempt review. Receipts and storage mechanics are
+not review content and remain outside the transcript.
+
+Keep complexity and the final declaration in their existing top-level attempt
+fields as well. Save the exact code and review before any external submission;
+state that no platform verdict has occurred yet. Record the later visible
+verdict as its own activity evidence and authorized result, and let it trigger
+the post-attempt review when applicable; never rewrite the exact code snapshot
+merely to add a verdict. A later code revision is a new Code Attempt with a new
+ID and its own review. If a historical attempt has a null review, report the gap
+and request coordinator-owned backfill support rather than claiming the
+exact-once record was amended.
+
 Every created or revised reusable coding Solution Profile must be independently
 reviewable in the Problem Bank. Include, in order: problem summary, pattern and
 constraints, best approach, correctness argument, **Java first** and Python
@@ -575,11 +855,23 @@ when substantive sections or code are actually missing or improved.
 
 ## Content Boundary
 
-- Do not bulk-crawl LeetCode or inspect authenticated pages, private endpoints,
-  cookies, account state, submissions, editorials, or solutions. A
-  finalization may open the exact user-supplied public problem URL once to read
-  its visible official metadata; that narrow metadata preflight is not
-  permission to copy the problem statement or solution content.
+- Do not bulk-crawl LeetCode, export or inspect cookies, inspect account state
+  or submission history, or call undocumented authenticated/private GraphQL,
+  JSON, REST, or other endpoints directly. A finalization may use the normal
+  visible UI in the existing dedicated tab for the exact problem page and its
+  official Editorial tab.
+- After the user's fresh attempt ends—or whenever the user asks for a full
+  solution, post-attempt review, or alternatives—review that visible official
+  editorial before answering. Summarize its approaches in original language,
+  distinguish editorial-derived approaches from added specialist analysis, and
+  list the editorial in `references`. Generate original Java-first code that
+  preserves the best justified asymptotic complexity and correctness invariants
+  while improving unnecessary verbosity or structure in the editorial code.
+  Prefer the smallest clear implementation, not the fewest lines; explain any
+  meaningful implementation tradeoff. If access is unavailable or
+  Premium-locked, state that explicitly and never claim it was consulted. Do
+  not expose the editorial before a fresh attempt unless the user asks for the
+  answer.
 - Accept manual metadata and user-provided CSV, JSON, PDF, or saved MHTML snapshots. A user-saved company page is an authorized input artifact, not permission to automate the live account.
 - For a saved MHTML company list, run `scripts/import_leetcode_company_mhtml.py` from the repository root. Import every complete visible table row, preserve the public problem number, title, URL, difficulty, acceptance rate, and structured company-frequency signal, then report source, imported, updated, and total counts.
 - Deduplicate in this order: canonical LeetCode URL slug, public displayed problem number, then normalized title. Merge company signals rather than creating another copy of a known problem.
@@ -590,8 +882,12 @@ when substantive sections or code are actually missing or improved.
   unverified search result.
 - Never invent a LeetCode URL; use a validated URL from the bank or the URL the user supplied.
 - Link to the original problem for prompt reading and submission.
-- Do not copy protected statements or official solutions into this repository.
-- Label AI-generated explanations or code as original coaching material, not official LeetCode content.
+- Do not copy protected statements, editorial prose, or official solution code
+  verbatim into this repository. Store original explanations and code, and cite
+  the official editorial when it actually informed them.
+- Label specialist-generated explanations and code as original coaching
+  material. Accurately identify editorial-derived approaches without
+  misrepresenting generated code as official LeetCode code.
 
 ## Files
 
