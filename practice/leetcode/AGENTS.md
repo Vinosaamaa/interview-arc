@@ -74,10 +74,16 @@ later in this guide.
   alternatives, or complete finalization model answer, review the visible
   official LeetCode Editorial tab through the normal UI in the existing
   dedicated tab. Record it in `references` only when it was actually
-  accessible and consulted. Paraphrase its approaches and write original
-  reference code; do not copy protected prose or official code verbatim. If
-  the editorial is unavailable or Premium-locked, say so and continue with
-  original analysis instead of claiming it was reviewed.
+  accessible and consulted. Paraphrase its approaches and independently rewrite
+  the reference implementation instead of inheriting the editorial's coding
+  style. Preserve the best justified asymptotic complexity, proof invariants,
+  and edge-case behavior while making Java-first code concise, idiomatic, and
+  interview-ready. Remove unnecessary abstractions, duplicate state, and
+  ceremonial helpers, but never trade away correctness or complexity merely
+  for fewer lines. State any changed tradeoff explicitly. Do not copy protected
+  prose or official code verbatim. If the editorial is unavailable or
+  Premium-locked, say so and continue with original analysis instead of
+  claiming it was reviewed.
 - When the resolved question is an owner-private entry created from a public
   LeetCode URL, perform the question-metadata preflight at its first complete
   finalization. Add `questionMetadata` containing every field actually
@@ -562,11 +568,15 @@ when substantive sections or code are actually missing or improved.
 - After the user's fresh attempt ends—or whenever the user asks for a full
   solution, post-attempt review, or alternatives—review that visible official
   editorial before answering. Summarize its approaches in original language,
-  generate original code, distinguish editorial-derived approaches from added
-  specialist analysis, and list the editorial in `references`. If access is
-  unavailable or Premium-locked, state that explicitly and never claim it was
-  consulted. Do not expose the editorial before a fresh attempt unless the user
-  asks for the answer.
+  distinguish editorial-derived approaches from added specialist analysis, and
+  list the editorial in `references`. Generate original Java-first code that
+  preserves the best justified asymptotic complexity and correctness invariants
+  while improving unnecessary verbosity or structure in the editorial code.
+  Prefer the smallest clear implementation, not the fewest lines; explain any
+  meaningful implementation tradeoff. If access is unavailable or
+  Premium-locked, state that explicitly and never claim it was consulted. Do
+  not expose the editorial before a fresh attempt unless the user asks for the
+  answer.
 - Accept manual metadata and user-provided CSV, JSON, PDF, or saved MHTML snapshots. A user-saved company page is an authorized input artifact, not permission to automate the live account.
 - For a saved MHTML company list, run `scripts/import_leetcode_company_mhtml.py` from the repository root. Import every complete visible table row, preserve the public problem number, title, URL, difficulty, acceptance rate, and structured company-frequency signal, then report source, imported, updated, and total counts.
 - Deduplicate in this order: canonical LeetCode URL slug, public displayed problem number, then normalized title. Merge company signals rather than creating another copy of a known problem.

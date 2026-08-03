@@ -199,8 +199,11 @@ must include a capture time and every source actually consulted.
   endpoints. Editorial review is separate: after a fresh attempt or when the
   user requests a solution/review/alternatives, follow the LeetCode specialist
   guide and review the visible official Editorial tab through the normal UI.
-  Paraphrase its approaches, generate original code, and cite it only when
-  actually consulted; never copy protected prose or official code verbatim.
+  Paraphrase its approaches and cite it only when actually consulted. Generate
+  independently written, Java-first reference code that preserves the best
+  justified asymptotic complexity, correctness invariants, and edge-case
+  behavior while removing unnecessary verbosity or abstraction. Never copy
+  protected prose or official code verbatim, and state any changed tradeoff.
 - Prefer the exact public LeetCode URL supplied by the user for official
   metadata. If access is blocked, omit the unavailable fields instead of
   guessing them.

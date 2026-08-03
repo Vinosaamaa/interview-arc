@@ -122,10 +122,16 @@ After the user's fresh attempt ends—or whenever the user explicitly asks for a
 full solution, review, or alternatives—the LeetCode specialist reviews the
 visible official Editorial tab through the normal UI in the existing dedicated
 tab before answering. Identify editorial-derived approaches, paraphrase them in
-original language, write original reference code, and cite the editorial as a
-source actually consulted. If access is unavailable or Premium-locked, say so
-and proceed with original analysis; never claim it was reviewed. Do not copy
-protected editorial prose or official code verbatim.
+original language, and cite the editorial as a source actually consulted.
+Treat its algorithm and correctness argument as reference evidence, not its
+exact implementation style. Independently rewrite reference code to be
+asymptotically optimal, concise, idiomatic, and interview-ready while preserving
+the necessary invariants and edge-case behavior. Remove unnecessary ceremony,
+duplicate state, and abstractions; never sacrifice correctness or complexity
+merely to shorten the code. If a rewrite changes a tradeoff, state it instead
+of calling the implementation equally optimal. If access is unavailable or
+Premium-locked, say so and proceed with original analysis; never claim it was
+reviewed. Do not copy protected editorial prose or official code verbatim.
 
 The user may deliberately provide a CSV, JSON, PDF, or saved MHTML snapshot of
 a company list. Parse only visible metadata and public problem URLs from that
