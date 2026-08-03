@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  controlPracticeSessionTimer,
   controlPracticeTimer,
   setPracticeResult,
 } from "../db/specialist-controls-runtime.ts";
@@ -107,6 +108,140 @@ function timerInput(overrides = {}) {
     ...overrides,
   };
 }
+
+function sessionTimerInput(overrides = {}) {
+  return {
+    expectedWorkbenchId: "workbench-1",
+    mutationId: "session-mutation-1",
+    sessionId: "session-1",
+    expectedRevision: 1,
+    action: "pause",
+    ...overrides,
+  };
+}
+
+test("a specialist can pause and resume the current workbench session", async () => {
+  const state = liveState({
+    activities: [practiceActivity("activity-1", "session-1")],
+    sessions: [{ id: "session-1", activityIds: ["activity-1"] }],
+  });
+  state.sessionTimers["session-1"] = timerState(undefined, "start", 1_000);
+  const runtime = harness(state);
+
+  runtime.setNow(6_000);
+  const paused = await controlPracticeSessionTimer(
+    state,
+    sessionTimerInput(),
+    runtime.dependencies,
+  );
+
+  assert.equal(paused.applied, true);
+  assert.deepEqual(runtime.calls[0], {
+    subjectId: "session-1",
+    kind: "session",
+    action: "pause",
+    options: {
+      activityIds: ["activity-1"],
+      expectedRevision: 1,
+    },
+  });
+  assert.equal(state.sessionTimers["session-1"].revision, 2);
+  assert.equal(state.sessionTimers["session-1"].runningSince, null);
+
+  runtime.setNow(7_000);
+  const resumed = await controlPracticeSessionTimer(
+    state,
+    sessionTimerInput({
+      mutationId: "session-mutation-2",
+      expectedRevision: 2,
+      action: "resume",
+    }),
+    runtime.dependencies,
+  );
+
+  assert.equal(resumed.applied, true);
+  assert.equal(runtime.calls[1].action, "start");
+  assert.equal(state.sessionTimers["session-1"].revision, 3);
+  assert.equal(state.sessionTimers["session-1"].runningSince, 7_000);
+});
+
+test("session start and finish use the canonical workbench child activities", async () => {
+  const state = liveState({
+    activities: [
+      practiceActivity("activity-1", "session-1"),
+      practiceActivity("activity-2", "session-1"),
+    ],
+    sessions: [{ id: "session-1", activityIds: ["activity-1", "activity-2"] }],
+  });
+  const runtime = harness(state);
+
+  await controlPracticeSessionTimer(state, sessionTimerInput({
+    expectedRevision: 0,
+    action: "start",
+  }), runtime.dependencies);
+  await controlPracticeSessionTimer(state, sessionTimerInput({
+    mutationId: "session-mutation-2",
+    expectedRevision: 1,
+    action: "finish",
+  }), runtime.dependencies);
+
+  assert.deepEqual(runtime.calls.map((call) => call.options.activityIds), [
+    ["activity-1", "activity-2"],
+    ["activity-1", "activity-2"],
+  ]);
+  assert.equal(state.sessionTimers["session-1"].completed, true);
+  assert.equal(state.sessionTimers["session-1"].revision, 2);
+});
+
+test("session controls reject stale workbenches, stale revisions, and unknown sessions", async () => {
+  const state = liveState({
+    activities: [practiceActivity("activity-1", "session-1")],
+    sessions: [{ id: "session-1", activityIds: ["activity-1"] }],
+  });
+  state.sessionTimers["session-1"] = timerState(undefined, "start", 1_000);
+  const runtime = harness(state);
+
+  await assert.rejects(
+    controlPracticeSessionTimer(state, sessionTimerInput({
+      expectedWorkbenchId: "old-workbench",
+    }), runtime.dependencies),
+    (error) => error?.code === "stale_workbench",
+  );
+  await assert.rejects(
+    controlPracticeSessionTimer(state, sessionTimerInput({
+      expectedRevision: 0,
+    }), runtime.dependencies),
+    (error) => error?.code === "stale_timer_revision",
+  );
+  await assert.rejects(
+    controlPracticeSessionTimer(state, sessionTimerInput({
+      sessionId: "missing-session",
+      expectedRevision: 0,
+    }), runtime.dependencies),
+    (error) => error?.code === "session_not_found",
+  );
+  assert.equal(runtime.calls.length, 0);
+});
+
+test("a completed session remains permanently locked", async () => {
+  const state = liveState({
+    activities: [practiceActivity("activity-1", "session-1")],
+    sessions: [{ id: "session-1", activityIds: ["activity-1"] }],
+  });
+  state.sessionTimers["session-1"] = {
+    ...timerState(undefined, "start", 1_000),
+    completed: true,
+    completedAt: 2_000,
+    runningSince: null,
+  };
+  const runtime = harness(state);
+
+  await assert.rejects(
+    controlPracticeSessionTimer(state, sessionTimerInput({ action: "resume" }), runtime.dependencies),
+    (error) => error?.code === "timer_completed",
+  );
+  assert.equal(runtime.calls.length, 0);
+});
 
 test("an unfocused planned activity in the open workbench can be started", async () => {
   const state = liveState({ activities: [practiceActivity("activity-1")] });

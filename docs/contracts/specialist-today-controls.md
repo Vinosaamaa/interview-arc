@@ -3,7 +3,7 @@
 ## Purpose
 
 Interview Arc specialists may operate the authenticated owner's Today workbench
-through four MCP tools. D1 remains authoritative. The tools do not scrape
+through five MCP tools. D1 remains authoritative. The tools do not scrape
 LeetCode, infer outcomes, or replace the website and Voice interfaces.
 
 ## Tool Catalog
@@ -20,6 +20,10 @@ LeetCode, infer outcomes, or replace the website and Voice interfaces.
   activity and starts the next unfinished practice activity in canonical
   session order. It never wraps or leaves the session unless the user names an
   explicit eligible destination.
+- `control_practice_session_timer` starts, pauses, resumes, or finishes one
+  parent session countdown. Pausing or finishing the session pauses its running
+  child according to the same authoritative D1 rules as the website. Resuming a
+  session does not implicitly choose or start a child activity.
 - `set_practice_result` sets or clears Solved, Solved with help, or Failed.
   It requires an explicit user instruction or an authorized platform verdict.
   Specialist coaching, elapsed time, generated reference code, and local
@@ -31,7 +35,8 @@ Every mutation includes:
 
 - `expectedWorkbenchId`, read from a current Today or catalog response;
 - a stable `mutationId`, reused unchanged for an exact retry; and
-- for timer commands, `expectedRevision` for the activity timer.
+- for timer commands, `expectedRevision` for the targeted activity or session
+  timer.
 
 The server rejects a stale workbench or timer revision. Reusing a mutation ID
 with changed content is an identity conflict. Reusing it with identical content
@@ -53,6 +58,13 @@ Timer and result commands require the authorization value documented by their
 schema. A specialist must receive an explicit user instruction before changing
 a timer or result. An authorized platform verdict may set a result, but may not
 implicitly start, stop, finish, or advance a timer.
+
+Session commands require an exact current-workbench `sessionId`. They reuse the
+session's canonical child IDs and the existing D1 timer mutation so website,
+Voice, and specialist behavior cannot diverge. `pause` folds the session time
+and pauses its running child. `resume` continues only the parent countdown.
+`finish` preserves all existing child-result, Voice-capture, and permanent-lock
+guards.
 
 Any eligible planned practice activity in the current open workbench is a valid
 timer or result target, even when no activity or session is focused yet. MCP

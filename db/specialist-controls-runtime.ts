@@ -37,6 +37,14 @@ export type PracticeTimerControlInput = {
   expectedNextRevision?: number;
 };
 
+export type PracticeSessionTimerControlInput = {
+  expectedWorkbenchId: string;
+  mutationId: string;
+  sessionId: string;
+  expectedRevision: number;
+  action: "start" | "pause" | "resume" | "finish";
+};
+
 export type PracticeTimerControlDependencies = {
   now: () => number;
   applyTimerAction: (
@@ -171,6 +179,62 @@ function requireTimerRevision(state: LiveState, activityId: string, expectedRevi
       `The activity timer changed from revision ${expectedRevision} to ${actualRevision}. Read Today again before retrying.`,
     );
   }
+}
+
+function requireSessionTimerRevision(state: LiveState, sessionId: string, expectedRevision: number) {
+  const actualRevision = state.sessionTimers[sessionId]?.revision ?? 0;
+  if (actualRevision !== expectedRevision) {
+    throw new SpecialistControlError(
+      "stale_timer_revision",
+      `The session timer changed from revision ${expectedRevision} to ${actualRevision}. Read Today again before retrying.`,
+    );
+  }
+}
+
+export async function controlPracticeSessionTimer(
+  state: LiveState,
+  input: PracticeSessionTimerControlInput,
+  dependencies: Pick<PracticeTimerControlDependencies, "now" | "applyTimerAction">,
+) {
+  requireWorkbench(state, input.expectedWorkbenchId);
+  const session = specialistSession(state, input.sessionId);
+  requireSessionTimerRevision(state, input.sessionId, input.expectedRevision);
+  const timer = state.sessionTimers[input.sessionId];
+  if (timer?.completed) {
+    throw new SpecialistControlError(
+      "timer_completed",
+      "The session timer is already finished and cannot be changed.",
+    );
+  }
+  if (input.action === "pause" && !timer?.runningSince) {
+    throw new SpecialistControlError(
+      "timer_not_running",
+      "The session timer must be running before it can be paused.",
+    );
+  }
+  if (input.action === "resume" && (!timer?.startedAt || timer.runningSince)) {
+    throw new SpecialistControlError(
+      "timer_not_paused",
+      "The session timer must be started and paused before it can be resumed.",
+    );
+  }
+  if (input.action === "finish" && !timer?.startedAt) {
+    throw new SpecialistControlError(
+      "timer_not_finishable",
+      "The session timer must be started before it can be finished.",
+    );
+  }
+  const action: TimerAction = input.action === "resume" ? "start" : input.action;
+  await dependencies.applyTimerAction(input.sessionId, "session", action, dependencies.now(), {
+    activityIds: session.activityIds,
+    expectedRevision: input.expectedRevision,
+  });
+  return {
+    mutationId: input.mutationId,
+    sessionId: input.sessionId,
+    action: input.action,
+    applied: true,
+  };
 }
 
 async function finishAndAdvancePracticeTimer(

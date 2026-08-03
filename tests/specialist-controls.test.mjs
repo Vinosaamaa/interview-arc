@@ -73,6 +73,7 @@ test("specialist Today controls are registered, allowlisted, and contract-bound"
     "query_practice_catalog",
     "plan_today_practice",
     "control_practice_timer",
+    "control_practice_session_timer",
     "set_practice_result",
   ]) {
     assert.match(worker, new RegExp(`server\\.registerTool\\(\\s*["']${tool}["']`));

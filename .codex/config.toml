@@ -23,6 +23,7 @@ enabled_tools = [
   "query_practice_catalog",
   "plan_today_practice",
   "control_practice_timer",
+  "control_practice_session_timer",
   "set_practice_result",
   "get_today_practice",
   "get_publication_queue",

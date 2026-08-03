@@ -97,6 +97,7 @@ import {
   startSessionPracticeActivity,
 } from "../db/specialist-controls-store";
 import {
+  controlPracticeSessionTimer,
   controlPracticeTimer,
   setPracticeResult,
   type PracticeResultControlDependencies,
@@ -2437,6 +2438,44 @@ function createServer(ownerId: string, env: Env) {
         if (!receiptStored) {
           await rememberSpecialistMutation(ownerId, input, prepared.requestHash, result);
         }
+        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "timer");
+        const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
+        const payload = { duplicate: false, result, authoritative };
+        return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "control_practice_session_timer",
+    {
+      description: "Execute an explicitly requested authoritative session-countdown command. Supports start, pause, resume, and finish. Requires the current workbench and session timer revisions plus a stable mutation ID; exact retries are idempotent.",
+      inputSchema: {
+        expectedWorkbenchId: z.string().min(1),
+        mutationId: z.string().min(1).max(120),
+        sessionId: z.string().min(1),
+        expectedRevision: z.number().int().nonnegative(),
+        action: z.enum(["start", "pause", "resume", "finish"]),
+        authorization: z.literal("explicit_user_instruction"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const prepared = await prepareSpecialistMutation(ownerId, {
+          operation: "control_practice_session_timer",
+          ...input,
+        });
+        if (prepared.duplicate) {
+          const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
+          const payload = { duplicate: true, result: prepared.priorResponse, authoritative };
+          return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
+        }
+        const dependencies = specialistControlDependencies(ownerId, prepared.date);
+        const result = await controlPracticeSessionTimer(prepared.state, input, dependencies.timer);
+        await rememberSpecialistMutation(ownerId, input, prepared.requestHash, result);
         await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "timer");
         const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
         const payload = { duplicate: false, result, authoritative };
