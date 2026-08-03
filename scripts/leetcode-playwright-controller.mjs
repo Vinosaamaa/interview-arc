@@ -150,8 +150,36 @@ const TARGET_SELECTORS = Object.freeze({
   ],
 });
 
+const TARGET_ROUTES = Object.freeze({
+  resultAttempt: "^(?:/submissions/(?:detail/)?|/problems/[a-z0-9-]+/submissions/)([^/]+)/?$",
+});
+
+export function leetcodeAttemptKeyFromPath(pathname) {
+  return pathname.match(new RegExp(TARGET_ROUTES.resultAttempt))?.[1] ?? null;
+}
+
+export function isAutomationOwnedLeetCodeUrl(value) {
+  try {
+    const candidate = new URL(value);
+    return candidate.hostname === "leetcode.com"
+      && (
+        /^\/problems\/[a-z0-9-]+\/$/.test(candidate.pathname)
+        || leetcodeAttemptKeyFromPath(candidate.pathname) !== null
+        || /^\/problemset(?:\/all)?\/?$/.test(candidate.pathname)
+      );
+  } catch {
+    return false;
+  }
+}
+
 export function createPlaywrightPageAdapter(page) {
-  const evaluate = (operation, source) => page.evaluate(({ operation: selectedOperation, selectors, source: exactSource }) => {
+  const evaluate = (operation, source, expectedAttemptKey = null) => page.evaluate(({
+    operation: selectedOperation,
+    selectors,
+    routes,
+    source: exactSource,
+    expectedAttemptKey: selectedAttemptKey,
+  }) => {
     if (selectedOperation === "visible-language") {
       for (const selector of selectors.language) {
         const element = document.querySelector(selector);
@@ -189,25 +217,64 @@ export function createPlaywrightPageAdapter(page) {
       }
       return false;
     }
-    if (selectedOperation === "submission-snapshot") {
+    if (["submission-snapshot", "attempt-key", "attempt-result"].includes(selectedOperation)) {
       let root = null;
       for (const selector of selectors.resultRoot) {
         root = document.querySelector(selector);
         if (root) break;
       }
-      const pathMatch = location.pathname.match(/^\/submissions\/(?:detail\/)?([^/]+)\/?$/);
+      const pathMatch = location.pathname.match(new RegExp(routes.resultAttempt));
       const linkedAttempt = root?.querySelector?.('a[href*="/submissions/"]')?.getAttribute("href")
         ?.match(/\/submissions\/(?:detail\/)?([^/]+)/)?.[1];
-      return {
-        attemptKey: pathMatch?.[1]
-          ?? root?.getAttribute?.("data-submission-id")
-          ?? linkedAttempt
-          ?? null,
-        text: root?.textContent?.trim() ?? "",
-      };
+      const attemptKey = pathMatch?.[1]
+        ?? root?.getAttribute?.("data-submission-id")
+        ?? linkedAttempt
+        ?? null;
+      if (selectedOperation === "attempt-key") return attemptKey;
+      const text = root?.textContent?.trim() ?? "";
+      if (selectedOperation === "submission-snapshot") return { attemptKey, text };
+      if (!root || attemptKey !== selectedAttemptKey) return null;
+      const verdicts = [
+        "Accepted",
+        "Wrong Answer",
+        "Time Limit Exceeded",
+        "Memory Limit Exceeded",
+        "Runtime Error",
+        "Compile Error",
+        "Output Limit Exceeded",
+      ];
+      const verdict = verdicts.find((candidate) => text.includes(candidate)) ?? null;
+      let failingInput = null;
+      for (const selector of selectors.failingInput) {
+        const element = root.querySelector(selector);
+        if (element?.textContent?.trim()) {
+          failingInput = element.textContent.trim();
+          break;
+        }
+      }
+      return { verdict, failingInput };
     }
     throw new Error(`Unsupported page operation: ${selectedOperation}`);
-  }, { operation, selectors: TARGET_SELECTORS, source });
+  }, {
+    operation,
+    selectors: TARGET_SELECTORS,
+    routes: TARGET_ROUTES,
+    source,
+    expectedAttemptKey,
+  });
+
+  const abortableDelay = (delayMs, signal) => new Promise((resolve, reject) => {
+    let timer;
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+    timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, delayMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 
   return {
     url: () => page.url(),
@@ -255,93 +322,36 @@ export function createPlaywrightPageAdapter(page) {
     submissionSnapshot: () => evaluate("submission-snapshot"),
     pressSubmit: () => page.keyboard.press("Meta+Enter"),
     async waitForNewAttemptVerdict(baseline, timeoutMs, signal) {
-      const handle = await page.waitForFunction(
-        ({ baselineAttemptKey, selectors }) => {
-          let root = null;
-          for (const selector of selectors.resultRoot) {
-            root = document.querySelector(selector);
-            if (root) break;
-          }
-          if (!root) return false;
-
-          const pathMatch = location.pathname.match(/^\/submissions\/(?:detail\/)?([^/]+)\/?$/);
-          const linkedAttempt = root.querySelector('a[href*="/submissions/"]')?.getAttribute("href")
-            ?.match(/\/submissions\/(?:detail\/)?([^/]+)/)?.[1];
-          const attemptKey = pathMatch?.[1]
-            ?? root.getAttribute("data-submission-id")
-            ?? linkedAttempt
-            ?? null;
-          if (!attemptKey || attemptKey === baselineAttemptKey) return false;
-          return attemptKey;
-        },
-        {
-          kind: "attempt-transition",
-          baselineAttemptKey: baseline?.attemptKey ?? null,
-          selectors: TARGET_SELECTORS,
-        },
-        { timeout: timeoutMs, polling: 100 },
-      );
-      try {
-        const attemptKey = await Promise.race([
-          handle.jsonValue(),
-          new Promise((_, reject) => signal?.addEventListener(
-            "abort",
-            () => reject(signal.reason),
-            { once: true },
-          )),
-        ]);
-        const result = await page.evaluate(({ operation, selectors, attemptKey: expectedAttemptKey }) => {
-          if (operation !== "attempt-result") return null;
-          let root = null;
-          for (const selector of selectors.resultRoot) {
-            root = document.querySelector(selector);
-            if (root) break;
-          }
-          if (!root) return null;
-          const pathMatch = location.pathname.match(/^\/submissions\/(?:detail\/)?([^/]+)\/?$/);
-          const linkedAttempt = root.querySelector('a[href*="/submissions/"]')?.getAttribute("href")
-            ?.match(/\/submissions\/(?:detail\/)?([^/]+)/)?.[1];
-          const currentAttemptKey = pathMatch?.[1]
-            ?? root.getAttribute("data-submission-id")
-            ?? linkedAttempt
-            ?? null;
-          if (currentAttemptKey !== expectedAttemptKey) return null;
-          const text = root.textContent?.trim() ?? "";
-          const verdicts = [
-            "Accepted",
-            "Wrong Answer",
-            "Time Limit Exceeded",
-            "Memory Limit Exceeded",
-            "Runtime Error",
-            "Compile Error",
-            "Output Limit Exceeded",
-          ];
-          const verdict = verdicts.find((candidate) => text.includes(candidate)) ?? null;
-          let failingInput = null;
-          for (const selector of selectors.failingInput) {
-            const element = root.querySelector(selector);
-            if (element?.textContent?.trim()) {
-              failingInput = element.textContent.trim();
-              break;
-            }
-          }
-          return { verdict, failingInput };
-        }, {
-          operation: "attempt-result",
-          selectors: TARGET_SELECTORS,
-          attemptKey,
-        });
-        if (!result?.verdict) {
-          throw new ControllerError(
-            "submission_verdict_missing",
-            "The new attempt appeared without a scoped terminal verdict.",
-            { attemptKey },
-          );
-        }
-        return { transitioned: true, attemptKey, ...result };
-      } finally {
-        await handle.dispose?.();
+      const deadline = Date.now() + timeoutMs;
+      let attemptKey = null;
+      while (Date.now() < deadline) {
+        if (signal?.aborted) throw signal.reason;
+        attemptKey = await evaluate("attempt-key");
+        if (attemptKey && attemptKey !== baseline?.attemptKey) break;
+        await abortableDelay(100, signal);
       }
+      if (!attemptKey || attemptKey === baseline?.attemptKey) {
+        throw new ControllerError(
+          "submission_transition_missing",
+          "No new attempt-specific submission transition appeared before timeout.",
+          { timeoutMs },
+        );
+      }
+      let result = null;
+      while (Date.now() < deadline) {
+        if (signal?.aborted) throw signal.reason;
+        result = await evaluate("attempt-result", undefined, attemptKey);
+        if (result?.verdict) break;
+        await abortableDelay(100, signal);
+      }
+      if (!result?.verdict) {
+        throw new ControllerError(
+          "submission_verdict_missing",
+          "The new attempt did not expose a scoped terminal verdict before timeout.",
+          { attemptKey, timeoutMs },
+        );
+      }
+      return { transitioned: true, attemptKey, ...result };
     },
   };
 }
@@ -406,19 +416,7 @@ export async function ensureBrowserController(dependencies, { allowLaunch = true
     const identityCheck = await dependencies.validateBrowserIdentity?.(browser, endpoint);
     const problemPages = browser.contexts()
       .flatMap((context) => context.pages())
-      .filter((page) => {
-        try {
-          const candidate = new URL(page.url());
-          return candidate.hostname === "leetcode.com"
-            && (
-              /^\/problems\/[a-z0-9-]+\/$/.test(candidate.pathname)
-              || /^\/submissions\/(?:detail\/)?[^/]+\/?$/.test(candidate.pathname)
-              || /^\/problemset\/?$/.test(candidate.pathname)
-            );
-        } catch {
-          return false;
-        }
-      });
+      .filter((page) => isAutomationOwnedLeetCodeUrl(page.url()));
     if (problemPages.length !== 1) {
       throw new ControllerError(
         "problem_tab_ambiguous",
@@ -586,7 +584,7 @@ export class LeetCodeController {
 
   async retry(identity, javaFile) {
     const currentPath = new URL(this.page.url()).pathname;
-    if (currentPath.startsWith("/submissions/")) {
+    if (leetcodeAttemptKeyFromPath(currentPath) !== null) {
       let backFailure;
       try {
         await this.page.goBack();

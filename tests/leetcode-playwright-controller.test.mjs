@@ -10,6 +10,8 @@ import {
   createPlaywrightPageAdapter,
   ensureBrowserController,
   firstUtf8Difference,
+  isAutomationOwnedLeetCodeUrl,
+  leetcodeAttemptKeyFromPath,
   parseCli,
   preflightReceiptForRequest,
   runControllerCommand,
@@ -186,6 +188,38 @@ test("ensure reacquires exactly one existing LeetCode problem tab and cleans up 
   }
 });
 
+test("tab discovery and retry recognize LeetCode's nested result route", async () => {
+  const nestedResultUrl = `${identity.url}submissions/2092298572/`;
+  assert.equal(isAutomationOwnedLeetCodeUrl(nestedResultUrl), true);
+  assert.equal(
+    leetcodeAttemptKeyFromPath(new URL(nestedResultUrl).pathname),
+    "2092298572",
+  );
+
+  const nestedPage = { url: () => nestedResultUrl };
+  const browser = { contexts: () => [{ pages: () => [nestedPage] }] };
+  const lease = await ensureBrowserController({
+    probeCdp: async () => ({ live: true }),
+    loadPlaywright: async () => ({ chromium: {} }),
+    launchChrome: async () => assert.fail("must not launch"),
+    connectOverCdp: async () => browser,
+    pageAdapterFactory: (page) => page,
+  });
+  assert.equal(lease.page, nestedPage);
+
+  let currentUrl = nestedResultUrl;
+  const adapter = pageAdapter({
+    url: () => currentUrl,
+    goBack: async () => {
+      adapter.calls.push(["back"]);
+      currentUrl = identity.url;
+    },
+  });
+  await controllerWith(adapter, "class Codec {}\n").retry(identity, "/tmp/0297.java");
+  assert.deepEqual(adapter.calls[0], ["back"]);
+  assert.equal(adapter.calls.filter(([name]) => name === "press").length, 1);
+});
+
 test("submit fails closed before mutation when URL, title, language, or Java model identity drifts", async () => {
   const variants = [
     { url: () => "https://leetcode.com/problems/two-sum/", code: "problem_slug_mismatch" },
@@ -350,6 +384,7 @@ test("navigate reuses the existing page and verifies the editable Java problem",
 test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM focus, and one gesture", async () => {
   const operations = [];
   const gestures = [];
+  let resultReads = 0;
   const page = {
     url: () => identity.url,
     title: async () => `${identity.title} - LeetCode`,
@@ -366,7 +401,10 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
       if (payload.operation === "submission-snapshot") {
         return { attemptKey: "old", text: "Accepted" };
       }
+      if (payload.operation === "attempt-key") return "new";
       if (payload.operation === "attempt-result") {
+        resultReads += 1;
+        if (resultReads === 1) return { verdict: null, failingInput: null };
         return { verdict: "Accepted", failingInput: null };
       }
       throw new Error(`unexpected operation ${payload.operation}`);
@@ -374,9 +412,7 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
     waitForFunction: async (_fn, payload, options) => {
       operations.push(["waitForFunction", payload.kind, options.timeout]);
       return {
-        jsonValue: async () => payload.kind === "editor"
-          ? true
-          : "new",
+        jsonValue: async () => payload.kind === "editor" ? true : null,
       };
     },
     keyboard: { press: async (gesture) => { gestures.push(gesture); } },
@@ -397,8 +433,8 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
   assert.deepEqual(gestures, ["Meta+Enter"]);
   assert.equal(verdict.attemptKey, "new");
   assert.equal(operations.some(([, kind]) => kind === "editor"), true);
-  assert.equal(operations.some(([, kind]) => kind === "attempt-transition"), true);
-  assert.equal(operations.filter(([operation]) => operation === "attempt-result").length, 1);
+  assert.equal(operations.some(([operation]) => operation === "attempt-key"), true);
+  assert.equal(operations.filter(([operation]) => operation === "attempt-result").length, 2);
   assert.equal(operations.some(([operation]) => operation === "body-text"), false);
   assert.equal(operations.filter(([operation]) => operation === "replace-exact").length, 1);
 });
@@ -555,6 +591,11 @@ test("the checked-in hot path contains no alternate controller, typing, tab, foc
   assert.doesNotMatch(source, /process\.env\.(?:PORT|CDP|CHROME|PROFILE)/);
   assert.doesNotMatch(source, /writeFile\([^,]*import\.meta\.url/);
   assert.equal(source.match(/"Meta\+Enter"/g)?.length, 1);
+  assert.equal(
+    source.match(/new RegExp\(routes\.resultAttempt\)/g)?.length,
+    1,
+    "browser-side attempt route parsing should have one implementation",
+  );
   assert.match(source, /chromium\.connectOverCDP\(endpoint/);
 });
 
