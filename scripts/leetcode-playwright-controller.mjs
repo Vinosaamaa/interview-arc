@@ -151,6 +151,7 @@ const TARGET_SELECTORS = Object.freeze({
 });
 
 const TARGET_ROUTES = Object.freeze({
+  problemEditor: "^/problems/([a-z0-9-]+)/(?:description/)?$",
   resultAttempt: "^(?:/submissions/(?:detail/)?|/problems/[a-z0-9-]+/submissions/)([^/]+)/?$",
 });
 
@@ -159,7 +160,7 @@ export function leetcodeAttemptKeyFromPath(pathname) {
 }
 
 export function leetcodeProblemSlugFromPath(pathname) {
-  return pathname.match(/^\/problems\/([a-z0-9-]+)\/(?:description\/)?$/)?.[1] ?? null;
+  return pathname.match(new RegExp(TARGET_ROUTES.problemEditor))?.[1] ?? null;
 }
 
 export function isAutomationOwnedLeetCodeUrl(value) {
@@ -287,8 +288,9 @@ export function createPlaywrightPageAdapter(page) {
     goBack: () => page.goBack({ waitUntil: "domcontentloaded", timeout: 15_000 }),
     async waitForEditableProblem(identity) {
       const handle = await page.waitForFunction(
-        ({ kind, expectedPath, expectedTitle, selectors }) => {
-          if (kind !== "editor" || location.pathname !== expectedPath) return false;
+        ({ kind, expectedSlug, expectedTitle, selectors, routes }) => {
+          const visibleSlug = location.pathname.match(new RegExp(routes.problemEditor))?.[1] ?? null;
+          if (kind !== "editor" || visibleSlug !== expectedSlug) return false;
           if (document.title !== expectedTitle && document.title !== `${expectedTitle} - LeetCode`) {
             return false;
           }
@@ -306,9 +308,10 @@ export function createPlaywrightPageAdapter(page) {
         },
         {
           kind: "editor",
-          expectedPath: new URL(identity.url).pathname,
+          expectedSlug: identity.slug,
           expectedTitle: identity.title,
           selectors: TARGET_SELECTORS,
+          routes: TARGET_ROUTES,
         },
         { timeout: 30_000, polling: 100 },
       );
