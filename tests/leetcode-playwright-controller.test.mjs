@@ -430,6 +430,7 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
     },
     waitForFunction: async (_fn, payload, options) => {
       operations.push(["waitForFunction", payload.kind, options.timeout]);
+      assert.equal(payload.expectedSlug, identity.slug);
       return {
         jsonValue: async () => payload.kind === "editor" ? true : null,
       };
