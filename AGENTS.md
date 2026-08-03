@@ -116,7 +116,24 @@ Leave unavailable fields empty or set their source to `unknown`. Never invent ti
 
 ## LeetCode Boundary
 
-Do not crawl LeetCode, inspect authenticated/private endpoints or cookies, or copy editorials or solution content. The user may deliberately provide a CSV, JSON, PDF, or saved MHTML snapshot of a company list. Parse only visible metadata and public problem URLs from that supplied artifact, deduplicate by canonical problem slug, and never treat solved icons in the snapshot as Interview Arc progress unless the user explicitly asks. Do not invent LeetCode URLs. Label AI-generated coaching or solutions as generated material rather than official LeetCode content.
+Do not bulk-crawl LeetCode, export or inspect cookies, or call undocumented
+authenticated/private GraphQL, JSON, REST, or other account endpoints directly.
+After the user's fresh attempt ends—or whenever the user explicitly asks for a
+full solution, review, or alternatives—the LeetCode specialist reviews the
+visible official Editorial tab through the normal UI in the existing dedicated
+tab before answering. Identify editorial-derived approaches, paraphrase them in
+original language, write original reference code, and cite the editorial as a
+source actually consulted. If access is unavailable or Premium-locked, say so
+and proceed with original analysis; never claim it was reviewed. Do not copy
+protected editorial prose or official code verbatim.
+
+The user may deliberately provide a CSV, JSON, PDF, or saved MHTML snapshot of
+a company list. Parse only visible metadata and public problem URLs from that
+supplied artifact, deduplicate by canonical problem slug, and never treat solved
+icons in the snapshot as Interview Arc progress unless the user explicitly
+asks. Do not invent LeetCode URLs. Label specialist explanations and code as
+original coaching material, while accurately naming the official editorial as
+a consulted reference when it was actually reviewed.
 
 For a system-design bank question with `source: SystemDesign.io` and `solutionReference: true`, the system-design task must review the question page's current recommended solution links and design details before starting the mock. Those references form a private rubric; do not front-load or copy their answer before the user reasons.
 

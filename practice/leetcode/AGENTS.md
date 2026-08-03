@@ -70,6 +70,14 @@ later in this guide.
   canonical prompt or user-supplied statement; never infer missing constraints
   from only a title or inaccessible URL. Keep finalization incomplete and ask
   for the statement when the exact problem cannot be established.
+- Before producing a full solution, post-attempt review, meaningful
+  alternatives, or complete finalization model answer, review the visible
+  official LeetCode Editorial tab through the normal UI in the existing
+  dedicated tab. Record it in `references` only when it was actually
+  accessible and consulted. Paraphrase its approaches and write original
+  reference code; do not copy protected prose or official code verbatim. If
+  the editorial is unavailable or Premium-locked, say so and continue with
+  original analysis instead of claiming it was reviewed.
 - When the resolved question is an owner-private entry created from a public
   LeetCode URL, perform the question-metadata preflight at its first complete
   finalization. Add `questionMetadata` containing every field actually
@@ -190,7 +198,13 @@ work from more than one Pacific calendar day:
 
 This command is the normal coding workflow. The user does not need to say `Publish this session` six times. The queue contains every finished, unpublished LeetCode activity: only finishing its already-started stopwatch makes it **Ready for journal** (internal state: `ready`) automatically. Choosing or clearing a result never finishes or queues the activity. Do not include merely planned or running problems, and do not substitute every problem discussed in chat.
 
-Do not scrape the user's LeetCode account, authenticated pages, or submission history. Read live state only through the authenticated Interview Arc MCP bridge. If neither MCP nor a website draft is available, finalize only the facts present in repository files or explicitly supplied by the user and mark the rest unknown.
+Do not scrape the user's LeetCode account or submission history, and do not use
+LeetCode account pages as evidence for Interview Arc timers or outcomes. Read
+that live state only through the authenticated Interview Arc MCP bridge. The
+visible official-editorial research allowed below is reference review, not
+account-state ingestion. If neither MCP nor a website draft is available,
+finalize only the facts present in repository files or explicitly supplied by
+the user and mark the rest unknown.
 
 ## Evidence Ownership
 
@@ -294,8 +308,8 @@ series of local attempt snapshots.
    API comment, and instantiation/call comment. Never replace the platform
    scaffold with a generic `class Solution`, omit supplied comments or types,
    or invent placeholder exceptions, return values, helpers, or other code.
-   This starter-code fidelity rule does not authorize copying an official
-   statement, editorial, or solution.
+   This starter-code fidelity rule does not authorize copying a protected
+   official statement, editorial prose, or solution code verbatim.
 
    Preserve a platform-supplied public class even when its name conflicts with
    the descriptive working filename. When local compilation requires a matching
@@ -331,8 +345,11 @@ series of local attempt snapshots.
   transform the class/API shape, or paste temporary harness code. Submit
   through the normal LeetCode UI and observe only that submission's verdict and
   any failing input LeetCode returns. Never inspect or export cookies, crawl
-  the account, open submission history, access editorials or official
-  solutions, or call authenticated/private endpoints directly.
+  the account, open submission history, or call undocumented
+  authenticated/private GraphQL, JSON, REST, or other account endpoints
+  directly. Editorial review is a separate visible-UI step after the fresh
+  attempt or when the user explicitly requests a solution, review, or
+  alternatives; it is not part of submitting code.
 - Preserve the Java file as a durable local/Git solution only after LeetCode
   returns **Accepted**. If the activity ends without a correct solution, remove
   the unfinished solution artifact rather than publishing it.
@@ -537,11 +554,19 @@ when substantive sections or code are actually missing or improved.
 
 ## Content Boundary
 
-- Do not bulk-crawl LeetCode or inspect authenticated pages, private endpoints,
-  cookies, account state, submissions, editorials, or solutions. A
-  finalization may open the exact user-supplied public problem URL once to read
-  its visible official metadata; that narrow metadata preflight is not
-  permission to copy the problem statement or solution content.
+- Do not bulk-crawl LeetCode, export or inspect cookies, inspect account state
+  or submission history, or call undocumented authenticated/private GraphQL,
+  JSON, REST, or other endpoints directly. A finalization may use the normal
+  visible UI in the existing dedicated tab for the exact problem page and its
+  official Editorial tab.
+- After the user's fresh attempt ends—or whenever the user asks for a full
+  solution, post-attempt review, or alternatives—review that visible official
+  editorial before answering. Summarize its approaches in original language,
+  generate original code, distinguish editorial-derived approaches from added
+  specialist analysis, and list the editorial in `references`. If access is
+  unavailable or Premium-locked, state that explicitly and never claim it was
+  consulted. Do not expose the editorial before a fresh attempt unless the user
+  asks for the answer.
 - Accept manual metadata and user-provided CSV, JSON, PDF, or saved MHTML snapshots. A user-saved company page is an authorized input artifact, not permission to automate the live account.
 - For a saved MHTML company list, run `scripts/import_leetcode_company_mhtml.py` from the repository root. Import every complete visible table row, preserve the public problem number, title, URL, difficulty, acceptance rate, and structured company-frequency signal, then report source, imported, updated, and total counts.
 - Deduplicate in this order: canonical LeetCode URL slug, public displayed problem number, then normalized title. Merge company signals rather than creating another copy of a known problem.
@@ -552,8 +577,12 @@ when substantive sections or code are actually missing or improved.
   unverified search result.
 - Never invent a LeetCode URL; use a validated URL from the bank or the URL the user supplied.
 - Link to the original problem for prompt reading and submission.
-- Do not copy protected statements or official solutions into this repository.
-- Label AI-generated explanations or code as original coaching material, not official LeetCode content.
+- Do not copy protected statements, editorial prose, or official solution code
+  verbatim into this repository. Store original explanations and code, and cite
+  the official editorial when it actually informed them.
+- Label specialist-generated explanations and code as original coaching
+  material. Accurately identify editorial-derived approaches without
+  misrepresenting generated code as official LeetCode code.
 
 ## Files
 
