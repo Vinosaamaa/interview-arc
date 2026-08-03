@@ -134,6 +134,15 @@ executable changes, document the requirement and hand it to the coordinator
 instead of implementing it. This administrative work is never part of the
 focused practice transcript or D1 activity draft.
 
+A clear user agreement or directive about durable LeetCode specialist behavior
+counts as the request to persist it. Automatically update the narrowest owning
+Markdown instructions and any directly conflicting contract without requiring
+the user to repeat “edit the file.” Reuse the current documentation issue,
+isolated worktree, branch, and PR when they already own the behavior. Do not
+persist exploratory questions, unresolved options, or discussion the user says
+will be decided later. This standing authorization remains documentation-only;
+it never expands the specialist into executable product work.
+
 ## What This Task Is For
 
 The user may use this long-lived task in two different ways:

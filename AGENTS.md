@@ -179,6 +179,13 @@ If the repository has its own `.venv/`, use `./.venv/bin/python` instead.
   change. It may merge that specific documentation-only pull request only when
   the user explicitly instructs it to do so after review; otherwise leave it
   open. It must not deploy or broaden the PR into product code.
+- A clear user agreement or directive about durable specialist behavior is
+  standing authorization to persist that decision automatically; do not wait
+  for a separate “update AGENTS.md” command. Update the narrowest owning
+  Markdown instructions and any directly conflicting contract in the same
+  issue/worktree/PR when practical. Questions, brainstorming, unresolved
+  alternatives, and discussion the user explicitly labels “decide later” are
+  not durable decisions and must not be written prematurely.
 - A specialist may read a relevant pull request, including its diff, review
   discussion, and check results, when that context is needed to understand its
   own behavior. Use read-only GitHub inspection or an isolated worktree when
