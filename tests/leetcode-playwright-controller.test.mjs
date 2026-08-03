@@ -692,4 +692,14 @@ test("the specialist guide and owning contract name the checked-in helper as the
   assert.match(contract, /warm(?:-|\s+)submit/i);
   assert.match(contract, /five-second/i);
   assert.match(contract, /60-second/i);
+  for (const content of [guide, contract]) {
+    assert.match(content, /mandatory specialist route/i);
+    assert.match(content, /no side diagnostics/i);
+    assert.match(content, /lost or ambiguous/i);
+    assert.match(content, /never (?:re)?send .*submit.*retry/is);
+  }
+  assert.doesNotMatch(guide, /LEETCODE_REPO_ROOT=/);
+  assert.doesNotMatch(guide, /curl .*127\.0\.0\.1:9223/is);
+  assert.match(guide, /node scripts\/leetcode-playwright-controller\.mjs (?:ensure|navigate)/);
+  assert.doesNotMatch(guide, /pnpm leetcode:browser/);
 });
