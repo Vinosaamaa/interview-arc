@@ -140,6 +140,30 @@ conversation was observed for this activity” instead of fabricating a script.
 Pinned notes apply to coding, system design, and behavioral artifacts and must
 preserve the user's wording.
 
+## Per-Attempt Structured Review
+
+Every explicit Code Attempt owns a non-null structured review in D1. The
+transcript review remains useful conversation evidence, but it does not replace
+the review attached to that exact code snapshot. Save the attempt only after
+the specialist has inspected and locally tested the exact code, and include:
+
+- concise summary and observed correctness;
+- evidence-grounded strengths;
+- concrete correctness/implementation issues;
+- specific improvements;
+- local test evidence and exercised edge cases;
+- strongest approach or code-quality direction; and
+- meaningful alternatives when the attempt has ended or the selected practice
+  mode permits them.
+
+Save the code and review before an external submission and state that no
+platform verdict has occurred yet. Store the later visible verdict as separate
+activity evidence and an authorized result; do not rewrite the exact code
+snapshot just to add it. Revised code creates a new Code Attempt and review;
+never overwrite a prior snapshot. A historical null review requires an
+explicit coordinator-owned backfill path rather than silent transcript
+reconstruction.
+
 Review scheduling defaults to 4 days after failure or a full walkthrough, 7
 days after an approach review, and 21 then 60 days after successful recalls.
 

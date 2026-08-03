@@ -614,6 +614,29 @@ language, originating turn, observed evidence, and a declaration that does not
 invent platform correctness. Ordinary snippets, pseudocode, generated
 reference implementations, and Scratch Notes are not Code Attempts.
 
+Every Code Attempt must carry its own non-null structured `review`; findings in
+the conversation transcript alone are insufficient. Inspect and test the exact
+code first, then save the attempt once with:
+
+- a concise summary and observed-correctness classification;
+- evidence-grounded strengths;
+- concrete correctness or implementation issues;
+- specific improvements;
+- local test evidence and edge cases actually exercised;
+- the strongest approach or code-quality direction when applicable; and
+- meaningful alternatives only when the attempt has ended or the selected mode
+  permits revealing them.
+
+Keep complexity and the final declaration in their existing top-level attempt
+fields as well. Save the exact code and review before any external submission;
+state that no platform verdict has occurred yet. Record the later visible
+verdict as its own activity evidence and authorized result, and let it trigger
+the post-attempt review when applicable; never rewrite the exact code snapshot
+merely to add a verdict. A later code revision is a new Code Attempt with a new
+ID and its own review. If a historical attempt has a null review, report the gap
+and request coordinator-owned backfill support rather than claiming the
+exact-once record was amended.
+
 Every created or revised reusable coding Solution Profile must be independently
 reviewable in the Problem Bank. Include, in order: problem summary, pattern and
 constraints, best approach, correctness argument, **Java first** and Python
