@@ -467,9 +467,15 @@ not persist it. For unrelated typed administration, return exactly
 An exact code block becomes a Code Attempt only when the user explicitly says
 it is an attempt/submission/final code or confirms the specialist's boundary
 question. Then call `save_leetcode_code_attempt` with the exact code,
-language, originating turn, observed evidence, and a declaration that does not
-invent platform correctness. Ordinary snippets, pseudocode, generated
-reference implementations, and Scratch Notes are not Code Attempts.
+language, originating turn, observed evidence, a declaration that does not
+invent platform correctness, and the review lifecycle defined in
+`docs/contracts/code-attempt-reviews.md`. Save `pending` immediately when
+evaluation is still running, then complete the same attempt without changing
+its code identity. The complete structured review must match the visible
+specialist response named by `reviewResponseTurnId`. Ordinary snippets,
+pseudocode, generated reference implementations, and Scratch Notes are not
+Code Attempts. Historical evidence backfill is coordinator-owned and must not
+be attempted through the specialist MCP write.
 
 Every created or revised reusable coding Solution Profile must be independently
 reviewable in the Problem Bank. Include, in order: problem summary, pattern and

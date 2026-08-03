@@ -882,6 +882,34 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 }
 .code-attempt-complexity { display: flex; flex-wrap: wrap; gap: 8px 18px; color: #53625b; }
 .code-attempts-group > div { display: grid; gap: 14px; }
+.attempt-review {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid #c6d6ce;
+  border-left: 4px solid #4d7f72;
+  border-radius: 10px;
+  background: #fffef9;
+  color: #334d46;
+}
+.attempt-review > header { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
+.attempt-review h4,
+.attempt-review h5 { margin: 0; color: #173d37; }
+.attempt-review h4 { font: 750 .78rem/1.2 var(--font-geist-mono); letter-spacing: .08em; text-transform: uppercase; }
+.attempt-review h5 { font-size: .85rem; }
+.attempt-review header small { color: #75847e; font: 700 .68rem/1.2 var(--font-geist-mono); }
+.attempt-review-summary { margin: 12px 0 14px; font-size: .95rem; line-height: 1.6; }
+.attempt-review-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.attempt-review-columns > section,
+.attempt-review-testing { min-width: 0; padding: 12px; border-radius: 8px; background: #eef4ef; }
+.attempt-review ul { margin: 8px 0 0; padding-left: 18px; }
+.attempt-review li { margin: 5px 0; line-height: 1.55; overflow-wrap: anywhere; }
+.attempt-review-testing { margin-top: 12px; background: #f3f1e8; }
+.attempt-review-next { margin: 12px 0 0; display: grid; gap: 3px; }
+.attempt-review-next strong { color: #173d37; font-size: .8rem; }
+.attempt-review.pending,
+.attempt-review.not-recorded { border-left-color: #9aa9a2; background: #f5f6f2; }
+.attempt-review.pending p,
+.attempt-review.not-recorded p { margin: 8px 0 0; color: #67756f; }
 .conversation-group .answer-playback,
 .conversation-group .answer-player { width: 100%; min-width: 0; max-width: 100%; }
 .answer-recording-details { margin-top: 9px; border-top: 1px solid rgba(220,232,222,.2); }
@@ -898,6 +926,12 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .syntax-number { color: #8bc8ff; }
 .syntax-comment { color: #7f9789; font-style: italic; }
 .language-code-tabs { padding: 20px 0 0; border-top: 1px solid #dbe4e0; }
+
+@media (max-width: 700px) {
+  .attempt-review { padding: 14px; }
+  .attempt-review > header { align-items: start; flex-direction: column; gap: 5px; }
+  .attempt-review-columns { grid-template-columns: 1fr; }
+}
 .language-code-tabs > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .language-code-tabs h3 { margin: 0; }
 .language-code-tabs [role="tablist"] { display: flex; padding: 3px; border-radius: 10px; background: #e8efeb; }

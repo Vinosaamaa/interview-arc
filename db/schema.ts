@@ -332,6 +332,7 @@ export const leetcodeCodeAttempts = sqliteTable(
     lineCount: integer("line_count").notNull(),
     occurredAt: integer("occurred_at").notNull(),
     review: text("review", { mode: "json" }),
+    reviewResponseTurnId: text("review_response_turn_id"),
     observedCorrectness: text("observed_correctness", {
       enum: ["not_verified", "appears_correct", "issues_found", "incomplete"],
     }).notNull().default("not_verified"),
@@ -343,6 +344,27 @@ export const leetcodeCodeAttempts = sqliteTable(
     updatedAt,
   },
   (table) => [primaryKey({ columns: [table.ownerId, table.id] })],
+);
+
+// Historical review repair is explicit and auditable. The source specialist
+// turn remains in the activity transcript; this row records which visible
+// evidence authorized the one-time structured backfill.
+export const leetcodeCodeAttemptReviewBackfills = sqliteTable(
+  "leetcode_code_attempt_review_backfills",
+  {
+    ownerId,
+    attemptId: text("attempt_id").notNull(),
+    activityId: text("activity_id").notNull(),
+    reviewResponseTurnId: text("review_response_turn_id").notNull(),
+    review: text("review", { mode: "json" }).notNull(),
+    evidenceHash: text("evidence_hash").notNull(),
+    reason: text("reason").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.attemptId] }),
+    index("code_attempt_review_backfills_activity_idx").on(table.ownerId, table.activityId),
+  ],
 );
 
 // A specialist writes one ready bundle after flushing its draft. The
@@ -699,6 +721,7 @@ export type PracticeTranscriptTurnRow = typeof practiceTranscriptTurns.$inferSel
 export type VoiceCaptureIntentRow = typeof voiceCaptureIntents.$inferSelect;
 export type VoiceSpecialistResponseRow = typeof voiceSpecialistResponses.$inferSelect;
 export type LeetCodeCodeAttemptRow = typeof leetcodeCodeAttempts.$inferSelect;
+export type LeetCodeCodeAttemptReviewBackfillRow = typeof leetcodeCodeAttemptReviewBackfills.$inferSelect;
 export type ActivityFinalizationRow = typeof activityFinalizations.$inferSelect;
 export type ReviewScheduleRow = typeof reviewSchedules.$inferSelect;
 export type SpecialistTaskRow = typeof specialistTasks.$inferSelect;
