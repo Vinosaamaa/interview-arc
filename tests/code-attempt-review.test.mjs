@@ -225,17 +225,12 @@ test("the D1 migration preserves legacy nullable reviews while recording parity 
   assert.match(schema, /leetcodeCodeAttemptReviewBackfills/);
   assert.match(migration, /ALTER TABLE `leetcode_code_attempts` ADD `review_response_turn_id` text/);
   assert.match(migration, /CREATE TABLE `leetcode_code_attempt_review_backfills`/);
-  assert.match(migration, /CREATE TRIGGER `validate_code_attempt_review_backfill`/);
-  assert.match(migration, /CREATE TRIGGER `apply_code_attempt_review_backfill`/);
   assert.match(migration, /CREATE UNIQUE INDEX `code_attempts_owner_activity_sequence_idx`/);
-  assert.match(migration, /CREATE TRIGGER `prevent_pending_code_attempt_finalization_insert`/);
-  assert.match(migration, /CREATE TRIGGER `prevent_pending_code_attempt_finalization_update`/);
-  assert.match(migration, /CREATE TRIGGER `prevent_code_attempt_after_finalization`/);
-  assert.match(migration, /UPDATE `leetcode_code_attempts`/);
-  assert.doesNotMatch(migration, /UPDATE `leetcode_code_attempts` SET `review`/);
+  assert.doesNotMatch(migration, /CREATE TRIGGER/);
+  assert.doesNotMatch(migration, /UPDATE `leetcode_code_attempts`/);
 });
 
-test("D1 atomically protects attempt sequence and review-before-finalization invariants", async () => {
+test("D1 atomically protects one attempt sequence per owner and activity", async () => {
   const migration = await readFile(new URL("../drizzle/0020_code_attempt_reviews.sql", import.meta.url), "utf8");
   const db = new DatabaseSync(":memory:");
   db.exec(`
@@ -247,62 +242,18 @@ test("D1 atomically protects attempt sequence and review-before-finalization inv
       review TEXT,
       PRIMARY KEY (owner_id, id)
     );
-    CREATE TABLE practice_transcript_turns (
-      owner_id TEXT NOT NULL,
-      activity_id TEXT NOT NULL,
-      turn_id TEXT NOT NULL,
-      speaker TEXT NOT NULL,
-      body TEXT NOT NULL
-    );
-    CREATE TABLE activity_finalizations (
-      owner_id TEXT NOT NULL,
-      activity_id TEXT NOT NULL,
-      specialty TEXT NOT NULL,
-      status TEXT NOT NULL,
-      payload TEXT NOT NULL,
-      PRIMARY KEY (owner_id, activity_id)
-    );
   `);
   for (const statement of migration.split("--> statement-breakpoint")) {
     if (statement.trim()) db.exec(statement);
   }
 
-  const pending = JSON.stringify({ schemaVersion: 1, status: "pending" });
-  const complete = JSON.stringify({
-    schemaVersion: 1,
-    status: "complete",
-    summary: "Reviewed.",
-    whatWentWell: ["Correct."],
-    whatToImprove: ["None."],
-    testingEvidence: ["Tests passed."],
-    provenance: "specialist_observed",
-    reviewedAt: 1,
-  });
   const insertAttempt = db.prepare(
     "INSERT INTO leetcode_code_attempts (owner_id, id, activity_id, sequence, review) VALUES (?, ?, ?, ?, ?)",
   );
-  insertAttempt.run("owner", "attempt-1", "activity-1", 1, pending);
+  insertAttempt.run("owner", "attempt-1", "activity-1", 1, null);
   assert.throws(
-    () => db.exec("INSERT INTO activity_finalizations VALUES ('owner', 'activity-1', 'leetcode', 'ready', '{}')"),
-    /pending_code_attempt_review/,
-  );
-  db.prepare("UPDATE leetcode_code_attempts SET review = ? WHERE owner_id = ? AND id = ?")
-    .run(complete, "owner", "attempt-1");
-  db.exec("INSERT INTO activity_finalizations VALUES ('owner', 'activity-1', 'leetcode', 'ready', '{}')");
-  assert.throws(
-    () => insertAttempt.run("owner", "attempt-2", "activity-1", 2, complete),
-    /code_attempt_after_finalization/,
-  );
-
-  insertAttempt.run("owner", "attempt-3", "activity-2", 1, pending);
-  assert.throws(
-    () => insertAttempt.run("owner", "attempt-4", "activity-2", 1, complete),
+    () => insertAttempt.run("owner", "attempt-2", "activity-1", 1, null),
     /UNIQUE constraint failed/,
-  );
-  db.exec("INSERT INTO activity_finalizations VALUES ('owner', 'activity-2', 'leetcode', 'draft', '{}')");
-  assert.throws(
-    () => db.exec("UPDATE activity_finalizations SET status = 'ready' WHERE owner_id = 'owner' AND activity_id = 'activity-2'"),
-    /pending_code_attempt_review/,
   );
 });
 
@@ -349,10 +300,19 @@ test("the MCP write contract requires specialist-observed review data and leaves
   assert.match(durable, /eq\(practiceTranscriptTurns\.ownerId, ownerId\)/);
   assert.match(durable, /Complete every pending Code Attempt review before finalization/);
   assert.match(durable, /Historical review backfill is available only through the coordinator audit command/);
+  assert.match(durable, /function d1TransactionalInvariantGuard/);
+  assert.match(durable, /function isD1TransactionalInvariantFailure/);
+  assert.match(durable, /const noReadyFinalizationGuard = d1TransactionalInvariantGuard/);
+  assert.match(durable, /db\.batch\(\[\s*noReadyFinalizationGuard,\s*db\.insert\(leetcodeCodeAttempts\)/);
+  assert.match(durable, /const noPendingReviewGuard = d1TransactionalInvariantGuard/);
+  assert.match(durable, /db\.batch\(\[noPendingReviewGuard, finalizationWrite\]\)/);
   assert.match(coordinatorScript, /explicit_evidence_backfill/);
   assert.match(coordinatorScript, /--apply/);
   assert.match(coordinatorScript, /--confirm-remote/);
   assert.match(coordinatorScript, /assertCodeAttemptReviewParity/);
   assert.match(coordinatorScript, /assertAuditReceipt/);
+  assert.match(coordinatorScript, /SELECT json_extract\(/);
+  assert.match(coordinatorScript, /UPDATE leetcode_code_attempts/);
+  assert.match(coordinatorScript, /The audited review was not applied to the exact historical Code Attempt/);
   assert.match(coordinatorScript, /SELECT id, owner_id, activity_id[\s\S]*SELECT body, speaker[\s\S]*SELECT review_response_turn_id/);
 });

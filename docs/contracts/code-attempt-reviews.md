@@ -38,9 +38,10 @@ type CodeAttemptReviewV1 =
 - Complete LeetCode finalization is blocked while any new V1 review remains
   pending. Legacy null or unknown review objects do not retroactively block an
   already-readable historical activity.
-- D1 enforces one sequence per owner/activity and guards both race directions:
-  a ready/published finalization rejects later attempts, and a finalization
-  transition to ready rejects any existing pending V1 review.
+- D1 enforces one sequence per owner/activity. Runtime writes use transactional
+  D1 batches to guard both race directions: a ready/published finalization
+  rejects later attempts, and a finalization transition to ready rejects any
+  existing pending V1 review. A failed guard rolls back its paired mutation.
 
 ## Reader behavior
 
@@ -75,9 +76,10 @@ uses that owner scope for every evidence and audit operation.
 
 The command first reads owner-scoped D1 evidence, rejects invented or hidden
 conclusions, verifies that immutable code and evaluation evidence are unchanged,
-and computes an evidence hash. Applying inserts one audit row. D1 validates the
-review provenance and visible response ownership in the same transaction, then
-updates only `review` and `review_response_turn_id`. An exact rerun is
+and computes an evidence hash. Applying uses one transactional D1 batch to
+revalidate the legacy attempt and visible specialist response, insert one audit
+row, and update only `review` and `review_response_turn_id`. After that batch
+commits, a separate read verifies both exact persisted rows. An exact rerun is
 idempotent; conflicting audit evidence fails.
 
 Never commit a backfill input file, owner identifier, transcript body, exact
