@@ -220,6 +220,25 @@ test("tab discovery and retry recognize LeetCode's nested result route", async (
   assert.equal(adapter.calls.filter(([name]) => name === "press").length, 1);
 });
 
+test("tab discovery and identity verification recognize LeetCode's redirected description route", async () => {
+  const descriptionUrl = `${identity.url}description/`;
+  assert.equal(isAutomationOwnedLeetCodeUrl(descriptionUrl), true);
+
+  const descriptionPage = { url: () => descriptionUrl };
+  const browser = { contexts: () => [{ pages: () => [descriptionPage] }] };
+  const lease = await ensureBrowserController({
+    probeCdp: async () => ({ live: true }),
+    loadPlaywright: async () => ({ chromium: {} }),
+    launchChrome: async () => assert.fail("must not launch"),
+    connectOverCdp: async () => browser,
+    pageAdapterFactory: (page) => page,
+  });
+  assert.equal(lease.page, descriptionPage);
+
+  const adapter = pageAdapter({ url: () => descriptionUrl });
+  await controllerWith(adapter).verifyEditableProblem(identity);
+});
+
 test("submit fails closed before mutation when URL, title, language, or Java model identity drifts", async () => {
   const variants = [
     { url: () => "https://leetcode.com/problems/two-sum/", code: "problem_slug_mismatch" },

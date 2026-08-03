@@ -158,12 +158,16 @@ export function leetcodeAttemptKeyFromPath(pathname) {
   return pathname.match(new RegExp(TARGET_ROUTES.resultAttempt))?.[1] ?? null;
 }
 
+export function leetcodeProblemSlugFromPath(pathname) {
+  return pathname.match(/^\/problems\/([a-z0-9-]+)\/(?:description\/)?$/)?.[1] ?? null;
+}
+
 export function isAutomationOwnedLeetCodeUrl(value) {
   try {
     const candidate = new URL(value);
     return candidate.hostname === "leetcode.com"
       && (
-        /^\/problems\/[a-z0-9-]+\/$/.test(candidate.pathname)
+        leetcodeProblemSlugFromPath(candidate.pathname) !== null
         || leetcodeAttemptKeyFromPath(candidate.pathname) !== null
         || /^\/problemset(?:\/all)?\/?$/.test(candidate.pathname)
       );
@@ -453,7 +457,7 @@ export class LeetCodeController {
   async verifyEditableProblem(identity) {
     this.assertActive();
     const currentUrl = new URL(this.page.url());
-    if (currentUrl.pathname !== new URL(identity.url).pathname) {
+    if (leetcodeProblemSlugFromPath(currentUrl.pathname) !== identity.slug) {
       throw new ControllerError(
         "problem_slug_mismatch",
         "The persistent tab does not show the focused problem.",
