@@ -87,6 +87,11 @@ function harness(state) {
       state.sessionTimers[input.sessionId] = timerState(state.sessionTimers[input.sessionId], "start", input.now);
       state.timers[input.activityId] = timerState(state.timers[input.activityId], "start", input.now);
     },
+    controlSessionPracticeTimer: async (input) => {
+      calls.push({ atomicSessionControl: input });
+      const action = input.action === "resume" ? "start" : input.action;
+      state.sessionTimers[input.sessionId] = timerState(state.sessionTimers[input.sessionId], action, input.now);
+    },
     scheduleCompletedActivity: async () => {},
   };
   return {
@@ -132,19 +137,27 @@ test("a specialist can pause and resume the current workbench session", async ()
   const paused = await controlPracticeSessionTimer(
     state,
     sessionTimerInput(),
+    "request-hash-1",
     runtime.dependencies,
   );
 
-  assert.equal(paused.applied, true);
-  assert.deepEqual(runtime.calls[0], {
-    subjectId: "session-1",
-    kind: "session",
+  assert.equal(paused.result.applied, true);
+  assert.equal(paused.receiptStored, true);
+  assert.deepEqual(runtime.calls[0].atomicSessionControl, {
+    sessionId: "session-1",
     action: "pause",
-    options: {
-      activityIds: ["activity-1"],
-      expectedRevision: 1,
-    },
+    expectedRevision: 1,
+    mutationId: "session-mutation-1",
+    workbenchId: "workbench-1",
+    requestHash: "request-hash-1",
+    receipt: paused.result,
+    now: 6_000,
+    activityIds: ["activity-1"],
   });
+  assert.deepEqual(
+    runtime.calls[0].atomicSessionControl.activityIds,
+    ["activity-1"],
+  );
   assert.equal(state.sessionTimers["session-1"].revision, 2);
   assert.equal(state.sessionTimers["session-1"].runningSince, null);
 
@@ -156,11 +169,13 @@ test("a specialist can pause and resume the current workbench session", async ()
       expectedRevision: 2,
       action: "resume",
     }),
+    "request-hash-2",
     runtime.dependencies,
   );
 
-  assert.equal(resumed.applied, true);
-  assert.equal(runtime.calls[1].action, "start");
+  assert.equal(resumed.result.applied, true);
+  assert.equal(resumed.receiptStored, true);
+  assert.equal(runtime.calls[1].atomicSessionControl.action, "resume");
   assert.equal(state.sessionTimers["session-1"].revision, 3);
   assert.equal(state.sessionTimers["session-1"].runningSince, 7_000);
 });
@@ -178,14 +193,14 @@ test("session start and finish use the canonical workbench child activities", as
   await controlPracticeSessionTimer(state, sessionTimerInput({
     expectedRevision: 0,
     action: "start",
-  }), runtime.dependencies);
+  }), "request-hash-1", runtime.dependencies);
   await controlPracticeSessionTimer(state, sessionTimerInput({
     mutationId: "session-mutation-2",
     expectedRevision: 1,
     action: "finish",
-  }), runtime.dependencies);
+  }), "request-hash-2", runtime.dependencies);
 
-  assert.deepEqual(runtime.calls.map((call) => call.options.activityIds), [
+  assert.deepEqual(runtime.calls.map((call) => call.atomicSessionControl.activityIds), [
     ["activity-1", "activity-2"],
     ["activity-1", "activity-2"],
   ]);
@@ -204,20 +219,20 @@ test("session controls reject stale workbenches, stale revisions, and unknown se
   await assert.rejects(
     controlPracticeSessionTimer(state, sessionTimerInput({
       expectedWorkbenchId: "old-workbench",
-    }), runtime.dependencies),
+    }), "request-hash", runtime.dependencies),
     (error) => error?.code === "stale_workbench",
   );
   await assert.rejects(
     controlPracticeSessionTimer(state, sessionTimerInput({
       expectedRevision: 0,
-    }), runtime.dependencies),
+    }), "request-hash", runtime.dependencies),
     (error) => error?.code === "stale_timer_revision",
   );
   await assert.rejects(
     controlPracticeSessionTimer(state, sessionTimerInput({
       sessionId: "missing-session",
       expectedRevision: 0,
-    }), runtime.dependencies),
+    }), "request-hash", runtime.dependencies),
     (error) => error?.code === "session_not_found",
   );
   assert.equal(runtime.calls.length, 0);
@@ -237,7 +252,7 @@ test("a completed session remains permanently locked", async () => {
   const runtime = harness(state);
 
   await assert.rejects(
-    controlPracticeSessionTimer(state, sessionTimerInput({ action: "resume" }), runtime.dependencies),
+    controlPracticeSessionTimer(state, sessionTimerInput({ action: "resume" }), "request-hash", runtime.dependencies),
     (error) => error?.code === "timer_completed",
   );
   assert.equal(runtime.calls.length, 0);

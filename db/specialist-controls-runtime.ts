@@ -83,6 +83,17 @@ export type PracticeTimerControlDependencies = {
     receipt: Record<string, unknown>;
     now: number;
   }) => Promise<void>;
+  controlSessionPracticeTimer: (input: {
+    sessionId: string;
+    action: "start" | "pause" | "resume" | "finish";
+    expectedRevision: number;
+    activityIds: string[];
+    mutationId: string;
+    workbenchId: string;
+    requestHash: string;
+    receipt: Record<string, unknown>;
+    now: number;
+  }) => Promise<void>;
   scheduleCompletedActivity: (
     activity: SpecialistPracticeRuntime,
     outcome: OutcomeValue,
@@ -194,7 +205,8 @@ function requireSessionTimerRevision(state: LiveState, sessionId: string, expect
 export async function controlPracticeSessionTimer(
   state: LiveState,
   input: PracticeSessionTimerControlInput,
-  dependencies: Pick<PracticeTimerControlDependencies, "now" | "applyTimerAction">,
+  requestHash: string,
+  dependencies: Pick<PracticeTimerControlDependencies, "now" | "controlSessionPracticeTimer">,
 ) {
   requireWorkbench(state, input.expectedWorkbenchId);
   const session = specialistSession(state, input.sessionId);
@@ -224,17 +236,24 @@ export async function controlPracticeSessionTimer(
       "The session timer must be started before it can be finished.",
     );
   }
-  const action: TimerAction = input.action === "resume" ? "start" : input.action;
-  await dependencies.applyTimerAction(input.sessionId, "session", action, dependencies.now(), {
-    activityIds: session.activityIds,
-    expectedRevision: input.expectedRevision,
-  });
-  return {
+  const result = {
     mutationId: input.mutationId,
     sessionId: input.sessionId,
     action: input.action,
     applied: true,
   };
+  await dependencies.controlSessionPracticeTimer({
+    sessionId: input.sessionId,
+    action: input.action,
+    expectedRevision: input.expectedRevision,
+    activityIds: session.activityIds,
+    mutationId: input.mutationId,
+    workbenchId: input.expectedWorkbenchId,
+    requestHash,
+    receipt: result,
+    now: dependencies.now(),
+  });
+  return { result, receiptStored: true };
 }
 
 async function finishAndAdvancePracticeTimer(

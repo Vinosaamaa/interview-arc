@@ -93,6 +93,7 @@ import {
 } from "../db/today-planning-policy";
 import { SpecialistControlError } from "../db/specialist-controls-policy";
 import {
+  controlSessionPracticeTimer,
   finishAndAdvancePracticeActivity,
   setPracticeResultAtomic,
   startSessionPracticeActivity,
@@ -1551,6 +1552,9 @@ function specialistControlDependencies(ownerId: string, date: string): {
       startSessionPracticeActivity: (control) => (
         startSessionPracticeActivity({ ownerId, ...control })
       ),
+      controlSessionPracticeTimer: (control) => (
+        controlSessionPracticeTimer({ ownerId, ...control })
+      ),
       scheduleCompletedActivity,
     },
     result: {
@@ -2488,10 +2492,12 @@ function createServer(ownerId: string, env: Env) {
       env,
       "control_practice_session_timer",
       input,
-      async (state, _requestHash, dependencies) => ({
-        result: await controlPracticeSessionTimer(state, input, dependencies),
-        receiptStored: false,
-      }),
+      (state, requestHash, dependencies) => controlPracticeSessionTimer(
+        state,
+        input,
+        requestHash,
+        dependencies,
+      ),
     ),
   );
 

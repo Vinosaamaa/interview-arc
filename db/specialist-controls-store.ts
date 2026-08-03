@@ -1,7 +1,8 @@
-import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import {
   outcomes,
+  focusBlocks,
   practiceFocus,
   practiceWorkbenches,
   reviewSchedules,
@@ -9,6 +10,10 @@ import {
   timers,
   todayPlanningMutations,
 } from "./schema";
+import {
+  prepareVoiceCapturesForFinish,
+  voiceFinishGuardMessage,
+} from "./durable-practice";
 import { reviewIntervalDays, type ReviewReason } from "./review-cadence";
 import { SpecialistControlError } from "./specialist-controls-policy";
 import { foldElapsed, nextTimerState } from "./timer-state";
@@ -85,6 +90,207 @@ function pauseStatements(ownerId: string, workbenchId: string, timer: StoredTime
       eq(timers.revision, timer.revision),
     )),
   ];
+}
+
+function finishStatements(ownerId: string, workbenchId: string, timer: StoredTimer, now: number) {
+  const finished = nextTimerState(timer, "finish", now);
+  return [
+    revisionGuard(ownerId, workbenchId, timer.subjectId, timer.kind, timer.revision),
+    getDb().update(timerIntervals).set({ endedAt: now }).where(and(
+      eq(timerIntervals.ownerId, ownerId),
+      eq(timerIntervals.subjectId, timer.subjectId),
+      eq(timerIntervals.kind, timer.kind),
+      sql`${timerIntervals.endedAt} IS NULL`,
+    )),
+    getDb().update(timers).set({
+      accumulatedSeconds: finished.accumulatedSeconds,
+      runningSince: null,
+      completed: true,
+      completedAt: now,
+      revision: finished.revision,
+      updatedAt: now,
+    }).where(and(
+      eq(timers.ownerId, ownerId),
+      eq(timers.subjectId, timer.subjectId),
+      eq(timers.kind, timer.kind),
+      eq(timers.revision, timer.revision),
+    )),
+  ];
+}
+
+export async function controlSessionPracticeTimer(input: {
+  ownerId: string;
+  sessionId: string;
+  action: "start" | "pause" | "resume" | "finish";
+  expectedRevision: number;
+  activityIds: string[];
+  mutationId: string;
+  workbenchId: string;
+  requestHash: string;
+  receipt: Record<string, unknown>;
+  now: number;
+}) {
+  const db = getDb();
+  const [timerRows, focusRows, focusBlockRows, outcomeRows] = await Promise.all([
+    db.select().from(timers).where(eq(timers.ownerId, input.ownerId)),
+    db.select().from(practiceFocus).where(eq(practiceFocus.ownerId, input.ownerId)),
+    input.activityIds.length
+      ? db.select({ id: focusBlocks.id }).from(focusBlocks).where(and(
+        eq(focusBlocks.ownerId, input.ownerId),
+        inArray(focusBlocks.id, input.activityIds),
+      ))
+      : Promise.resolve([] as { id: string }[]),
+    input.activityIds.length
+      ? db.select({ activityId: outcomes.activityId }).from(outcomes).where(and(
+        eq(outcomes.ownerId, input.ownerId),
+        inArray(outcomes.activityId, input.activityIds),
+      ))
+      : Promise.resolve([] as { activityId: string }[]),
+  ]);
+  const sessionTimer = timerRows.find((timer) => (
+    timer.kind === "session" && timer.subjectId === input.sessionId
+  ));
+  if ((sessionTimer?.revision ?? 0) !== input.expectedRevision) {
+    throw new SpecialistControlError(
+      "stale_timer_revision",
+      "The session timer changed. Read Today again before retrying.",
+    );
+  }
+  if (sessionTimer?.completed) {
+    throw new SpecialistControlError("timer_completed", "The session timer is already finished and cannot be changed.");
+  }
+  if (input.action === "pause" && !sessionTimer?.runningSince) {
+    throw new SpecialistControlError("timer_not_running", "The session timer must be running before it can be paused.");
+  }
+  if (input.action === "resume" && (!sessionTimer?.startedAt || sessionTimer.runningSince)) {
+    throw new SpecialistControlError("timer_not_paused", "The session timer must be started and paused before it can be resumed.");
+  }
+  if (input.action === "finish" && !sessionTimer?.startedAt) {
+    throw new SpecialistControlError("timer_not_finishable", "The session timer must be started before it can be finished.");
+  }
+
+  const activityIds = new Set(input.activityIds);
+  const childTimers = timerRows.filter((timer) => timer.kind === "activity" && activityIds.has(timer.subjectId));
+  const focusBlockIds = new Set(focusBlockRows.map((row) => row.id));
+  if (input.action === "finish") {
+    const activitiesWithResults = new Set(outcomeRows.map((row) => row.activityId));
+    const missingResults: string[] = [];
+    for (const child of childTimers) {
+      if (!child.startedAt || child.completed || focusBlockIds.has(child.subjectId)) continue;
+      const voiceGuard = await prepareVoiceCapturesForFinish(input.ownerId, child.subjectId, input.now);
+      const voiceConflict = voiceFinishGuardMessage(voiceGuard);
+      if (voiceConflict) throw new SpecialistControlError("timer_state_conflict", voiceConflict);
+      if (!activitiesWithResults.has(child.subjectId)) missingResults.push(child.subjectId);
+    }
+    if (missingResults.length) {
+      throw new SpecialistControlError(
+        "result_required",
+        `Choose a result for ${missingResults.length === 1 ? "the started activity" : "every started activity"} before finishing this session.`,
+      );
+    }
+  }
+
+  const statements: Parameters<typeof db.batch>[0][number][] = [];
+  if (input.action === "start" || input.action === "resume") {
+    const otherRunningSessions = timerRows.filter((timer) => (
+      timer.kind === "session" && timer.subjectId !== input.sessionId && timer.runningSince != null
+    ));
+    const runningActivitiesOutside = timerRows.filter((timer) => (
+      timer.kind === "activity" && !activityIds.has(timer.subjectId) && timer.runningSince != null
+    ));
+    statements.push(
+      ...otherRunningSessions.flatMap((timer) => pauseStatements(input.ownerId, input.workbenchId, timer, input.now)),
+      ...runningActivitiesOutside.flatMap((timer) => pauseStatements(input.ownerId, input.workbenchId, timer, input.now)),
+    );
+    statements.push(revisionGuard(
+      input.ownerId,
+      input.workbenchId,
+      input.sessionId,
+      "session",
+      input.expectedRevision,
+    ));
+    if (!sessionTimer?.runningSince) {
+      const started = nextTimerState(sessionTimer, "start", input.now);
+      statements.push(db.insert(timers).values({
+        ownerId: input.ownerId,
+        subjectId: input.sessionId,
+        kind: "session",
+        accumulatedSeconds: started.accumulatedSeconds,
+        startedAt: sessionTimer?.startedAt ?? input.now,
+        runningSince: input.now,
+        completed: false,
+        revision: started.revision,
+        updatedAt: input.now,
+      }).onConflictDoUpdate({
+        target: [timers.ownerId, timers.subjectId, timers.kind],
+        set: {
+          accumulatedSeconds: started.accumulatedSeconds,
+          startedAt: sessionTimer?.startedAt ?? input.now,
+          runningSince: input.now,
+          completed: false,
+          revision: started.revision,
+          updatedAt: input.now,
+        },
+        setWhere: eq(timers.revision, input.expectedRevision),
+      }));
+      statements.push(db.insert(timerIntervals).values({
+        ownerId: input.ownerId,
+        subjectId: input.sessionId,
+        kind: "session",
+        startedAt: input.now,
+      }).onConflictDoNothing());
+    }
+    const currentActivityId = focusRows[0]?.activityId;
+    statements.push(db.insert(practiceFocus).values({
+      ownerId: input.ownerId,
+      activityId: currentActivityId && activityIds.has(currentActivityId) ? currentActivityId : null,
+      sessionId: input.sessionId,
+      focusedAt: input.now,
+      updatedAt: input.now,
+    }).onConflictDoUpdate({
+      target: practiceFocus.ownerId,
+      set: {
+        activityId: currentActivityId && activityIds.has(currentActivityId) ? currentActivityId : null,
+        sessionId: input.sessionId,
+        focusedAt: input.now,
+        updatedAt: input.now,
+      },
+    }));
+  } else if (input.action === "pause") {
+    statements.push(
+      ...childTimers.filter((timer) => timer.runningSince != null).flatMap((timer) => (
+        pauseStatements(input.ownerId, input.workbenchId, timer, input.now)
+      )),
+      ...pauseStatements(input.ownerId, input.workbenchId, sessionTimer!, input.now),
+    );
+  } else {
+    statements.push(
+      ...childTimers.filter((timer) => timer.startedAt && !timer.completed).flatMap((timer) => (
+        finishStatements(input.ownerId, input.workbenchId, timer, input.now)
+      )),
+      ...finishStatements(input.ownerId, input.workbenchId, sessionTimer!, input.now),
+    );
+  }
+
+  statements.push(db.insert(todayPlanningMutations).values({
+    ownerId: input.ownerId,
+    mutationId: input.mutationId,
+    workbenchId: input.workbenchId,
+    requestHash: input.requestHash,
+    response: input.receipt,
+    createdAt: input.now,
+  }));
+  try {
+    await db.batch(statements as [(typeof statements)[number], ...(typeof statements)[number][]]);
+  } catch (error) {
+    if (String(error).toLowerCase().includes("malformed json")) {
+      throw new SpecialistControlError(
+        "stale_timer_revision",
+        "A session or child timer changed while the command was committing. Read Today again before retrying.",
+      );
+    }
+    throw error;
+  }
 }
 
 export async function finishAndAdvancePracticeActivity(input: {
