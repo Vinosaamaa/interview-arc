@@ -13,6 +13,8 @@ const MAX_QUICK_CASES = 64;
 const MAX_FULL_CASES = 256;
 const MAX_CASE_NAME_LENGTH = 160;
 const MAX_PROCESS_OUTPUT_BYTES = 1024 * 1024;
+const ACTIVITY_LOCK_TIMEOUT_MS = 70_000;
+const STALE_ACTIVITY_LOCK_MS = 120_000;
 
 class CliError extends Error {
   constructor(message, exitCode = 2) {
@@ -89,6 +91,49 @@ function generationPaths(activityId, generationId) {
   };
 }
 
+async function activityLock(activityId) {
+  const activityDirectory = path.join(stateRoot(), activityId);
+  const lockDirectory = path.join(activityDirectory, ".state-lock");
+  const deadline = Date.now() + ACTIVITY_LOCK_TIMEOUT_MS;
+  await mkdir(activityDirectory, { recursive: true, mode: 0o700 });
+  while (true) {
+    try {
+      await mkdir(lockDirectory, { mode: 0o700 });
+      try {
+        await atomicJson(path.join(lockDirectory, "owner.json"), {
+          schemaVersion: 1,
+          pid: process.pid,
+          createdAt: Date.now(),
+        });
+      } catch (error) {
+        await rm(lockDirectory, { recursive: true, force: true });
+        throw error;
+      }
+      return async () => rm(lockDirectory, { recursive: true, force: true });
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      const lockStat = await stat(lockDirectory).catch(() => null);
+      if (lockStat && Date.now() - lockStat.mtimeMs >= STALE_ACTIVITY_LOCK_MS) {
+        await rm(lockDirectory, { recursive: true, force: true });
+        continue;
+      }
+      if (Date.now() >= deadline) {
+        fail("Timed out waiting for another harness operation on this activity to finish.", 75);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }
+}
+
+async function withActivityLock(activityId, operation) {
+  const release = await activityLock(activityId);
+  try {
+    return await operation();
+  } finally {
+    await release();
+  }
+}
+
 function runCommand(activityId, generationId, full = false) {
   const command = `node ${JSON.stringify(SCRIPT_PATH)} run --activity-id ${activityId} --generation-id ${generationId}`;
   return full ? `${command} --full` : command;
@@ -112,74 +157,75 @@ async function prepare(options) {
   const sourceStat = await stat(sourceFile).catch(() => null);
   if (!sourceStat?.isFile()) fail(`Java source file does not exist: ${sourceFile}`);
 
-  const signatureHash = sha256(problemSignature);
-  const generationId = signatureHash.slice(0, 20);
-  const paths = generationPaths(activityId, generationId);
-  await mkdir(paths.generationDirectory, { recursive: true, mode: 0o700 });
+  return withActivityLock(activityId, async () => {
+    const signatureHash = sha256(problemSignature);
+    const generationId = signatureHash.slice(0, 20);
+    const paths = generationPaths(activityId, generationId);
+    await mkdir(paths.generationDirectory, { recursive: true, mode: 0o700 });
 
-  let created = false;
-  let status;
-  try {
-    const handle = await open(paths.statusFile, "wx", 0o600);
-    const createdAt = Date.now();
-    status = {
+    let created = false;
+    let status;
+    try {
+      const handle = await open(paths.statusFile, "wx", 0o600);
+      const createdAt = Date.now();
+      status = {
+        schemaVersion: 1,
+        activityId,
+        generationId,
+        problemSignature,
+        signatureHash,
+        sourceFile,
+        status: "preparing",
+        createdAt,
+        deadlineAt: createdAt + preparationTimeoutMs,
+        updatedAt: createdAt,
+      };
+      await handle.writeFile(`${JSON.stringify(status, null, 2)}\n`);
+      await handle.close();
+      await mkdir(paths.stagingDirectory, { recursive: true, mode: 0o700 });
+      created = true;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      status = await readJson(paths.statusFile);
+    }
+
+    const previousActive = await readJson(paths.activeFile).catch(() => null);
+    if (previousActive?.generationId && previousActive.generationId !== generationId) {
+      const previousPaths = generationPaths(activityId, previousActive.generationId);
+      const previousStatus = await readJson(previousPaths.statusFile).catch(() => null);
+      if (previousStatus && previousStatus.status !== "stale") {
+        await atomicJson(previousPaths.statusFile, {
+          ...previousStatus,
+          previousStatus: previousStatus.status,
+          status: "stale",
+          staleReason: "The verified problem starter signature changed.",
+          updatedAt: Date.now(),
+        });
+      }
+    }
+    await atomicJson(paths.activeFile, {
       schemaVersion: 1,
       activityId,
       generationId,
-      problemSignature,
       signatureHash,
-      sourceFile,
-      status: "preparing",
-      createdAt,
-      deadlineAt: createdAt + preparationTimeoutMs,
-      updatedAt: createdAt,
-    };
-    await handle.writeFile(`${JSON.stringify(status, null, 2)}\n`);
-    await handle.close();
-    await mkdir(paths.stagingDirectory, { recursive: true, mode: 0o700 });
-    created = true;
-  } catch (error) {
-    if (error?.code !== "EEXIST") throw error;
-    status = await readJson(paths.statusFile);
-  }
+      updatedAt: Date.now(),
+    });
 
-  await mkdir(paths.activityDirectory, { recursive: true, mode: 0o700 });
-  const previousActive = await readJson(paths.activeFile).catch(() => null);
-  if (previousActive?.generationId && previousActive.generationId !== generationId) {
-    const previousPaths = generationPaths(activityId, previousActive.generationId);
-    const previousStatus = await readJson(previousPaths.statusFile).catch(() => null);
-    if (previousStatus && previousStatus.status !== "stale") {
-      await atomicJson(previousPaths.statusFile, {
-        ...previousStatus,
-        previousStatus: previousStatus.status,
-        status: "stale",
-        staleReason: "The verified problem starter signature changed.",
-        updatedAt: Date.now(),
-      });
-    }
-  }
-  await atomicJson(paths.activeFile, {
-    schemaVersion: 1,
-    activityId,
-    generationId,
-    signatureHash,
-    updatedAt: Date.now(),
+    process.stdout.write(`${JSON.stringify({
+      activityId,
+      generationId,
+      signatureHash,
+      status: status.status,
+      created,
+      statusFile: paths.statusFile,
+      stagingDirectory: paths.stagingDirectory,
+      deadlineAt: status.deadlineAt,
+      quickCommand: runCommand(activityId, generationId),
+      fullCommand: runCommand(activityId, generationId, true),
+      publishCommand: stateCommand("publish", activityId, generationId),
+      failureCommand: `${stateCommand("fail", activityId, generationId)} --reason ${JSON.stringify("<actionable reason>")}`,
+    })}\n`);
   });
-
-  process.stdout.write(`${JSON.stringify({
-    activityId,
-    generationId,
-    signatureHash,
-    status: status.status,
-    created,
-    statusFile: paths.statusFile,
-    stagingDirectory: paths.stagingDirectory,
-    deadlineAt: status.deadlineAt,
-    quickCommand: runCommand(activityId, generationId),
-    fullCommand: runCommand(activityId, generationId, true),
-    publishCommand: stateCommand("publish", activityId, generationId),
-    failureCommand: `${stateCommand("fail", activityId, generationId)} --reason ${JSON.stringify("<actionable reason>")}`,
-  })}\n`);
 }
 
 function textList(value) {
@@ -240,28 +286,30 @@ async function bundleHash(directory, manifest) {
 async function publish(options) {
   const activityId = safeActivityId(required(options, "activity-id"));
   const generationId = required(options, "generation-id");
-  const paths = generationPaths(activityId, generationId);
-  const status = await readJson(paths.statusFile).catch(() => null);
-  if (!status) fail("No reserved harness generation exists to publish.");
-  const active = await readJson(paths.activeFile).catch(() => null);
-  if (active?.generationId !== generationId) fail("This harness generation is stale; prepare the verified current signature instead.");
-  if (status.status === "ready") {
-    process.stdout.write(`${JSON.stringify({ status: "ready", duplicate: true, generationId })}\n`);
-    return;
-  }
-  if (!["preparing", "failed", "timed_out"].includes(status.status)) {
-    fail(`Harness generation cannot publish from status: ${status.status}.`);
-  }
-  const manifest = validateManifest(await readJson(path.join(paths.stagingDirectory, "manifest.json")), status);
-  for (const file of manifest.harnessFiles) {
-    const fileStat = await lstat(path.join(paths.stagingDirectory, file)).catch(() => null);
-    if (!fileStat?.isFile() || fileStat.isSymbolicLink()) fail(`Harness file is missing or unsafe: ${file}`);
-  }
-  const contentHash = await bundleHash(paths.stagingDirectory, manifest);
-  await rename(paths.stagingDirectory, paths.publishedDirectory);
-  const ready = { ...status, status: "ready", contentHash, updatedAt: Date.now() };
-  await atomicJson(paths.statusFile, ready);
-  process.stdout.write(`${JSON.stringify({ status: "ready", duplicate: false, generationId, contentHash })}\n`);
+  return withActivityLock(activityId, async () => {
+    const paths = generationPaths(activityId, generationId);
+    const status = await readJson(paths.statusFile).catch(() => null);
+    if (!status) fail("No reserved harness generation exists to publish.");
+    const active = await readJson(paths.activeFile).catch(() => null);
+    if (active?.generationId !== generationId) fail("This harness generation is stale; prepare the verified current signature instead.");
+    if (status.status === "ready") {
+      process.stdout.write(`${JSON.stringify({ status: "ready", duplicate: true, generationId })}\n`);
+      return;
+    }
+    if (!["preparing", "failed", "timed_out"].includes(status.status)) {
+      fail(`Harness generation cannot publish from status: ${status.status}.`);
+    }
+    const manifest = validateManifest(await readJson(path.join(paths.stagingDirectory, "manifest.json")), status);
+    for (const file of manifest.harnessFiles) {
+      const fileStat = await lstat(path.join(paths.stagingDirectory, file)).catch(() => null);
+      if (!fileStat?.isFile() || fileStat.isSymbolicLink()) fail(`Harness file is missing or unsafe: ${file}`);
+    }
+    const contentHash = await bundleHash(paths.stagingDirectory, manifest);
+    await rename(paths.stagingDirectory, paths.publishedDirectory);
+    const ready = { ...status, status: "ready", contentHash, updatedAt: Date.now() };
+    await atomicJson(paths.statusFile, ready);
+    process.stdout.write(`${JSON.stringify({ status: "ready", duplicate: false, generationId, contentHash })}\n`);
+  });
 }
 
 async function markFailed(options) {
@@ -269,19 +317,21 @@ async function markFailed(options) {
   const generationId = required(options, "generation-id");
   const reason = required(options, "reason").trim();
   if (!reason) fail("Harness failure reason cannot be empty.");
-  const paths = generationPaths(activityId, generationId);
-  const status = await readJson(paths.statusFile).catch(() => null);
-  if (!status) fail("No reserved harness generation exists to mark failed.");
-  const active = await readJson(paths.activeFile).catch(() => null);
-  if (active?.generationId !== generationId) fail("This harness generation is stale and cannot replace current status.");
-  if (status.status === "failed") {
-    if (status.reason !== reason) fail("This harness generation already has a different terminal failure reason.");
-    process.stdout.write(`${JSON.stringify({ status: "failed", duplicate: true, generationId, reason })}\n`);
-    return;
-  }
-  if (status.status !== "preparing") fail(`Harness generation cannot fail from status: ${status.status}.`);
-  await atomicJson(paths.statusFile, { ...status, status: "failed", reason, updatedAt: Date.now() });
-  process.stdout.write(`${JSON.stringify({ status: "failed", duplicate: false, generationId, reason })}\n`);
+  return withActivityLock(activityId, async () => {
+    const paths = generationPaths(activityId, generationId);
+    const status = await readJson(paths.statusFile).catch(() => null);
+    if (!status) fail("No reserved harness generation exists to mark failed.");
+    const active = await readJson(paths.activeFile).catch(() => null);
+    if (active?.generationId !== generationId) fail("This harness generation is stale and cannot replace current status.");
+    if (status.status === "failed") {
+      if (status.reason !== reason) fail("This harness generation already has a different terminal failure reason.");
+      process.stdout.write(`${JSON.stringify({ status: "failed", duplicate: true, generationId, reason })}\n`);
+      return;
+    }
+    if (status.status !== "preparing") fail(`Harness generation cannot fail from status: ${status.status}.`);
+    await atomicJson(paths.statusFile, { ...status, status: "failed", reason, updatedAt: Date.now() });
+    process.stdout.write(`${JSON.stringify({ status: "failed", duplicate: false, generationId, reason })}\n`);
+  });
 }
 
 function renderCase(testCase) {
@@ -414,15 +464,17 @@ async function run(options) {
   const generationId = required(options, "generation-id");
   const full = options.get("full") === true;
   const suite = full ? "Full local" : "Quick";
-  const { paths, status, manifest } = await readReadyHarness(activityId, generationId);
-  const { workspace, classes } = await prepareCompilationWorkspace(paths, status, manifest);
-  try {
-    process.stdout.write(`Suite: ${suite}\n`);
-    compileHarness(workspace, classes, manifest);
-    reportSuite(suite, executeHarness(workspace, classes, manifest, full));
-  } finally {
-    await rm(workspace, { recursive: true, force: true });
-  }
+  return withActivityLock(activityId, async () => {
+    const { paths, status, manifest } = await readReadyHarness(activityId, generationId);
+    const { workspace, classes } = await prepareCompilationWorkspace(paths, status, manifest);
+    try {
+      process.stdout.write(`Suite: ${suite}\n`);
+      compileHarness(workspace, classes, manifest);
+      reportSuite(suite, executeHarness(workspace, classes, manifest, full));
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
 }
 
 const { command, options } = argsFrom(process.argv.slice(2));

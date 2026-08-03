@@ -31,7 +31,10 @@ sub-agent publish/failure commands. An exact repeat returns `created: false`
 and the same generation. The primary specialist spawns a helper only when
 `created` is true, which enforces exactly one Codex sub-agent per activity and
 verified signature. A changed verified signature creates a new generation and
-marks the old one stale.
+marks the old one stale. An activity-scoped local mutex serializes prepare,
+publish/fail, and run operations. A signature transition therefore cannot
+reorder `active.json` or invalidate a test midway through compilation and
+execution; a crashed lock expires with an actionable bounded wait.
 
 The initial visible specialist response must immediately provide all three
 user commands before harness generation finishes:

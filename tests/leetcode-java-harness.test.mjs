@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import test from "node:test";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -21,6 +21,18 @@ function cli(args, env) {
     env,
     encoding: "utf8",
     timeout: 10_000,
+  });
+}
+
+function cliAsync(args, env) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [runner, ...args], { cwd: repoRoot, env });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8").on("data", (chunk) => { stdout += chunk; });
+    child.stderr.setEncoding("utf8").on("data", (chunk) => { stderr += chunk; });
+    child.on("error", reject);
+    child.on("close", (status) => resolve({ status, stdout, stderr }));
   });
 }
 
@@ -355,6 +367,71 @@ test("a verified starter-signature change invalidates the old stable command wit
   assert.match(stale.stderr, /stale because the verified problem signature changed/i);
   assert.equal(JSON.parse(await readFile(first.statusFile, "utf8")).status, "stale");
   assert.equal(await readFile(source, "utf8"), originalSource);
+});
+
+test("concurrent signature prepares serialize to one active generation and stale every predecessor", async () => {
+  const { root, source, env } = await sandbox();
+  const activityId = "activity-concurrent-signatures";
+  const signatures = Array.from({ length: 8 }, (_, index) => `problem-${index}|int solve${index}(int)`);
+  const results = await Promise.all(signatures.map((signature) => cliAsync([
+    "prepare",
+    "--activity-id", activityId,
+    "--signature", signature,
+    "--source", source,
+  ], env)));
+  for (const result of results) assert.equal(result.status, 0, result.stderr);
+  const receipts = results.map((result) => JSON.parse(result.stdout));
+  const active = JSON.parse(await readFile(path.join(root, "state", activityId, "active.json"), "utf8"));
+  const statuses = await Promise.all(receipts.map((receipt) => readFile(receipt.statusFile, "utf8").then(JSON.parse)));
+  const activeStatuses = statuses.filter((status) => status.status !== "stale");
+
+  assert.equal(activeStatuses.length, 1);
+  assert.equal(activeStatuses[0].generationId, active.generationId);
+  assert.ok(receipts.some((receipt) => receipt.generationId === active.generationId));
+});
+
+test("a signature transition waits for an in-flight run instead of producing a stale verification race", async () => {
+  const harness = [
+    "public class HarnessMain {",
+    "  public static void main(String[] args) throws Exception {",
+    "    Thread.sleep(500);",
+    "    System.out.println(\"{\\\"type\\\":\\\"case\\\",\\\"name\\\":\\\"slow-smoke\\\",\\\"input\\\":\\\"1\\\",\\\"expected\\\":\\\"1\\\",\\\"actual\\\":\\\"1\\\",\\\"passed\\\":true}\");",
+    "    if (args[0].equals(\"full\")) System.out.println(\"{\\\"type\\\":\\\"case\\\",\\\"name\\\":\\\"full-boundary\\\",\\\"input\\\":\\\"0\\\",\\\"expected\\\":\\\"0\\\",\\\"actual\\\":\\\"0\\\",\\\"passed\\\":true}\");",
+    "  }",
+    "}",
+    "",
+  ].join("\n");
+  const { source, env, prepared } = await readyHarness({
+    activityId: "activity-run-transition",
+    signature: "run-transition|int solve(int)",
+    sourceContent: "class Solution { int solve(int value) { return value; } }\n",
+    harnessFiles: { "HarnessMain.java": harness },
+    quickCases: ["slow-smoke"],
+    fullCases: ["slow-smoke", "full-boundary"],
+  });
+  const runPromise = cliAsync([
+    "run", "--activity-id", "activity-run-transition", "--generation-id", prepared.generationId,
+  ], env);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  let prepareSettled = false;
+  const nextPrepare = cliAsync([
+    "prepare",
+    "--activity-id", "activity-run-transition",
+    "--signature", "run-transition|long solve(long)",
+    "--source", source,
+  ], env).then((result) => {
+    prepareSettled = true;
+    return result;
+  });
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.equal(prepareSettled, false);
+
+  const run = await runPromise;
+  const preparedNext = await nextPrepare;
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+  assert.match(run.stdout, /Locally verified: Quick/);
+  assert.equal(preparedNext.status, 0, preparedNext.stderr);
+  assert.notEqual(JSON.parse(preparedNext.stdout).generationId, prepared.generationId);
 });
 
 test("preparing state expires into a persistent timed-out status with repair guidance", async () => {
