@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 import {
@@ -103,6 +104,14 @@ test("complete structured reviews cannot contain conclusions hidden from the vis
   assert.throws(
     () => assertCodeAttemptReviewParity(review, visibleResponse, ["A different test was run."]),
     /stored evaluation evidence/i,
+  );
+  assert.throws(
+    () => assertCodeAttemptReviewParity(
+      { ...review, summary: "解析需要修复。" },
+      visibleResponse,
+      [review.testingEvidence[0]],
+    ),
+    /visible specialist review/i,
   );
 });
 
@@ -218,8 +227,83 @@ test("the D1 migration preserves legacy nullable reviews while recording parity 
   assert.match(migration, /CREATE TABLE `leetcode_code_attempt_review_backfills`/);
   assert.match(migration, /CREATE TRIGGER `validate_code_attempt_review_backfill`/);
   assert.match(migration, /CREATE TRIGGER `apply_code_attempt_review_backfill`/);
+  assert.match(migration, /CREATE UNIQUE INDEX `code_attempts_owner_activity_sequence_idx`/);
+  assert.match(migration, /CREATE TRIGGER `prevent_pending_code_attempt_finalization_insert`/);
+  assert.match(migration, /CREATE TRIGGER `prevent_pending_code_attempt_finalization_update`/);
+  assert.match(migration, /CREATE TRIGGER `prevent_code_attempt_after_finalization`/);
   assert.match(migration, /UPDATE `leetcode_code_attempts`/);
   assert.doesNotMatch(migration, /UPDATE `leetcode_code_attempts` SET `review`/);
+});
+
+test("D1 atomically protects attempt sequence and review-before-finalization invariants", async () => {
+  const migration = await readFile(new URL("../drizzle/0020_code_attempt_reviews.sql", import.meta.url), "utf8");
+  const db = new DatabaseSync(":memory:");
+  db.exec(`
+    CREATE TABLE leetcode_code_attempts (
+      owner_id TEXT NOT NULL,
+      id TEXT NOT NULL,
+      activity_id TEXT NOT NULL,
+      sequence INTEGER NOT NULL,
+      review TEXT,
+      PRIMARY KEY (owner_id, id)
+    );
+    CREATE TABLE practice_transcript_turns (
+      owner_id TEXT NOT NULL,
+      activity_id TEXT NOT NULL,
+      turn_id TEXT NOT NULL,
+      speaker TEXT NOT NULL,
+      body TEXT NOT NULL
+    );
+    CREATE TABLE activity_finalizations (
+      owner_id TEXT NOT NULL,
+      activity_id TEXT NOT NULL,
+      specialty TEXT NOT NULL,
+      status TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      PRIMARY KEY (owner_id, activity_id)
+    );
+  `);
+  for (const statement of migration.split("--> statement-breakpoint")) {
+    if (statement.trim()) db.exec(statement);
+  }
+
+  const pending = JSON.stringify({ schemaVersion: 1, status: "pending" });
+  const complete = JSON.stringify({
+    schemaVersion: 1,
+    status: "complete",
+    summary: "Reviewed.",
+    whatWentWell: ["Correct."],
+    whatToImprove: ["None."],
+    testingEvidence: ["Tests passed."],
+    provenance: "specialist_observed",
+    reviewedAt: 1,
+  });
+  const insertAttempt = db.prepare(
+    "INSERT INTO leetcode_code_attempts (owner_id, id, activity_id, sequence, review) VALUES (?, ?, ?, ?, ?)",
+  );
+  insertAttempt.run("owner", "attempt-1", "activity-1", 1, pending);
+  assert.throws(
+    () => db.exec("INSERT INTO activity_finalizations VALUES ('owner', 'activity-1', 'leetcode', 'ready', '{}')"),
+    /pending_code_attempt_review/,
+  );
+  db.prepare("UPDATE leetcode_code_attempts SET review = ? WHERE owner_id = ? AND id = ?")
+    .run(complete, "owner", "attempt-1");
+  db.exec("INSERT INTO activity_finalizations VALUES ('owner', 'activity-1', 'leetcode', 'ready', '{}')");
+  assert.throws(
+    () => insertAttempt.run("owner", "attempt-2", "activity-1", 2, complete),
+    /code_attempt_after_finalization/,
+  );
+
+  insertAttempt.run("owner", "attempt-3", "activity-2", 1, pending);
+  assert.throws(
+    () => insertAttempt.run("owner", "attempt-4", "activity-2", 1, complete),
+    /UNIQUE constraint failed/,
+  );
+  db.exec("INSERT INTO activity_finalizations VALUES ('owner', 'activity-2', 'leetcode', 'draft', '{}')");
+  assert.throws(
+    () => db.exec("UPDATE activity_finalizations SET status = 'ready' WHERE owner_id = 'owner' AND activity_id = 'activity-2'"),
+    /pending_code_attempt_review/,
+  );
 });
 
 test("the shared Code Attempt card renders the same normalized review inline and in User Code Attempts", async () => {
@@ -242,18 +326,24 @@ test("the shared Code Attempt card renders the same normalized review inline and
 });
 
 test("the MCP write contract requires specialist-observed review data and leaves evidence backfill to the coordinator", async () => {
-  const [worker, durable, coordinatorScript] = await Promise.all([
-    readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8"),
+  const [{ codeAttemptReviewInputSchema }, durable, coordinatorScript] = await Promise.all([
+    import("../mcp-worker/code-attempt-review-schema.ts"),
     readFile(new URL("../db/durable-practice.ts", import.meta.url), "utf8"),
     readFile(new URL("../scripts/backfill-code-attempt-review.mjs", import.meta.url), "utf8"),
   ]);
 
-  const toolStart = worker.indexOf('"save_leetcode_code_attempt"');
-  const toolEnd = worker.indexOf('\n  server.registerTool(', toolStart + 1);
-  const tool = worker.slice(toolStart, toolEnd);
-  assert.match(tool, /review: z\.discriminatedUnion/);
-  assert.match(tool, /provenance: z\.literal\("specialist_observed"\)/);
-  assert.doesNotMatch(tool, /explicit_evidence_backfill|backfillReason/);
+  assert.equal(codeAttemptReviewInputSchema.safeParse({ schemaVersion: 1, status: "pending" }).success, true);
+  assert.equal(codeAttemptReviewInputSchema.safeParse({ schemaVersion: 1, status: "pending", hidden: true }).success, false);
+  assert.equal(codeAttemptReviewInputSchema.safeParse({
+    schemaVersion: 1,
+    status: "complete",
+    summary: "Visible review.",
+    whatWentWell: ["Good."],
+    whatToImprove: ["Improve."],
+    testingEvidence: ["Tested."],
+    provenance: "explicit_evidence_backfill",
+    reviewedAt: 1,
+  }).success, false);
 
   assert.match(durable, /eq\(leetcodeCodeAttempts\.ownerId, ownerId\)/);
   assert.match(durable, /eq\(practiceTranscriptTurns\.ownerId, ownerId\)/);
@@ -263,9 +353,6 @@ test("the MCP write contract requires specialist-observed review data and leaves
   assert.match(coordinatorScript, /--apply/);
   assert.match(coordinatorScript, /--confirm-remote/);
   assert.match(coordinatorScript, /assertCodeAttemptReviewParity/);
-  assert.ok(
-    coordinatorScript.indexOf("const existingAudit = execute")
-      < coordinatorScript.indexOf("INSERT INTO leetcode_code_attempt_review_backfills"),
-    "exact retries must compare the audit receipt before the validating insert trigger runs",
-  );
+  assert.match(coordinatorScript, /assertAuditReceipt/);
+  assert.match(coordinatorScript, /SELECT id, owner_id, activity_id[\s\S]*SELECT body, speaker[\s\S]*SELECT review_response_turn_id/);
 });

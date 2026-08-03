@@ -1,5 +1,8 @@
 ALTER TABLE `leetcode_code_attempts` ADD `review_response_turn_id` text;
 --> statement-breakpoint
+CREATE UNIQUE INDEX `code_attempts_owner_activity_sequence_idx`
+ON `leetcode_code_attempts` (`owner_id`,`activity_id`,`sequence`);
+--> statement-breakpoint
 CREATE TABLE `leetcode_code_attempt_review_backfills` (
 	`owner_id` text NOT NULL,
 	`attempt_id` text NOT NULL,
@@ -52,4 +55,42 @@ BEGIN
 	WHERE `owner_id` = NEW.`owner_id`
 		AND `id` = NEW.`attempt_id`
 		AND `activity_id` = NEW.`activity_id`;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `prevent_pending_code_attempt_finalization_insert`
+BEFORE INSERT ON `activity_finalizations`
+WHEN NEW.`specialty` = 'leetcode' AND NEW.`status` = 'ready'
+BEGIN
+	SELECT CASE WHEN EXISTS (
+		SELECT 1 FROM `leetcode_code_attempts`
+		WHERE `owner_id` = NEW.`owner_id`
+			AND `activity_id` = NEW.`activity_id`
+			AND json_extract(`review`, '$.schemaVersion') = 1
+			AND json_extract(`review`, '$.status') = 'pending'
+	) THEN RAISE(ABORT, 'pending_code_attempt_review') END;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `prevent_pending_code_attempt_finalization_update`
+BEFORE UPDATE OF `status`, `payload` ON `activity_finalizations`
+WHEN NEW.`specialty` = 'leetcode' AND NEW.`status` = 'ready'
+BEGIN
+	SELECT CASE WHEN EXISTS (
+		SELECT 1 FROM `leetcode_code_attempts`
+		WHERE `owner_id` = NEW.`owner_id`
+			AND `activity_id` = NEW.`activity_id`
+			AND json_extract(`review`, '$.schemaVersion') = 1
+			AND json_extract(`review`, '$.status') = 'pending'
+	) THEN RAISE(ABORT, 'pending_code_attempt_review') END;
+END;
+--> statement-breakpoint
+CREATE TRIGGER `prevent_code_attempt_after_finalization`
+BEFORE INSERT ON `leetcode_code_attempts`
+BEGIN
+	SELECT CASE WHEN EXISTS (
+		SELECT 1 FROM `activity_finalizations`
+		WHERE `owner_id` = NEW.`owner_id`
+			AND `activity_id` = NEW.`activity_id`
+			AND `specialty` = 'leetcode'
+			AND `status` IN ('ready', 'published')
+	) THEN RAISE(ABORT, 'code_attempt_after_finalization') END;
 END;

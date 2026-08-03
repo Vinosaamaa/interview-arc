@@ -127,6 +127,11 @@ const EVALUATION_EVIDENCE_FIELDS = [
   "complexity",
   "finalDeclaration",
 ] as const;
+const MUTABLE_ATTEMPT_FIELDS = [
+  "review",
+  "reviewResponseTurnId",
+  ...EVALUATION_EVIDENCE_FIELDS,
+] as const;
 
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
@@ -148,7 +153,10 @@ export function planCodeAttemptWrite(
   if (identityChanged) {
     throw new Error("A code attempt retry cannot change immutable code attempt identity.");
   }
-  if (canonicalJson(existing) === canonicalJson(incoming)) return { kind: "duplicate" };
+  const mutableFieldsMatch = MUTABLE_ATTEMPT_FIELDS.every(
+    (field) => canonicalJson(existing[field]) === canonicalJson(incoming[field]),
+  );
+  if (mutableFieldsMatch) return { kind: "duplicate" };
   const existingReview = normalizeCodeAttemptReview(existing.review);
   if (!existingReview) {
     if (incoming.review.status === "complete" && incoming.review.provenance === "explicit_evidence_backfill") {
@@ -173,9 +181,17 @@ function comparableText(value: string) {
   return value
     .normalize("NFKC")
     .toLocaleLowerCase("en-US")
-    .replace(/[^a-z0-9+#]+/g, " ")
+    .replace(/[^\p{L}\p{N}+#]+/gu, " ")
     .trim()
     .replace(/\s+/g, " ");
+}
+
+export function codeLineCount(code: string) {
+  let lines = 1;
+  for (let index = 0; index < code.length; index += 1) {
+    if (code.charCodeAt(index) === 10) lines += 1;
+  }
+  return lines;
 }
 
 export function assertCodeAttemptReviewParity(

@@ -20,7 +20,7 @@ type CodeAttemptReviewV1 =
       testingEvidence: string[];
       nextStep?: string;
       provenance: "specialist_observed" | "explicit_evidence_backfill";
-      reviewedAt: number;
+      reviewedAt: number; // Unix epoch milliseconds in UTC
     };
 ```
 
@@ -38,6 +38,9 @@ type CodeAttemptReviewV1 =
 - Complete LeetCode finalization is blocked while any new V1 review remains
   pending. Legacy null or unknown review objects do not retroactively block an
   already-readable historical activity.
+- D1 enforces one sequence per owner/activity and guards both race directions:
+  a ready/published finalization rejects later attempts, and a finalization
+  transition to ready rejects any existing pending V1 review.
 
 ## Reader behavior
 
@@ -65,8 +68,10 @@ pnpm code-attempt-review:backfill --input <local-input.json> --apply
 
 Remote use additionally requires both `--remote` and `--confirm-remote`, and
 must follow explicit production-mutation authorization. The input names the
-owner, attempt, activity, already-stored visible specialist response turn,
-complete review, and audit reason.
+attempt, activity, already-stored visible specialist response turn, complete
+review, and audit reason. `ownerId` is optional: when omitted, the command
+requires the attempt/activity pair to resolve to exactly one owner before it
+uses that owner scope for every evidence and audit operation.
 
 The command first reads owner-scoped D1 evidence, rejects invented or hidden
 conclusions, verifies that immutable code and evaluation evidence are unchanged,

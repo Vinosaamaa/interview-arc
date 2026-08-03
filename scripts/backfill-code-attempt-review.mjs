@@ -33,28 +33,33 @@ function jsonValue(value, label) {
   }
 }
 
-function rowsFromWrangler(output) {
+function resultSetsFromWrangler(output) {
   const parsed = JSON.parse(output);
   const batches = Array.isArray(parsed) ? parsed : [parsed];
-  return batches.flatMap((batch) => batch?.results ?? batch?.result?.[0]?.results ?? []);
+  return batches.map((batch) => batch?.results ?? batch?.result?.[0]?.results ?? []);
 }
 
 const inputPath = argumentValue("--input");
 if (!inputPath) {
-  fail("Usage: pnpm code-attempt-review:backfill --input <gitignored.json> [--apply] [--remote --confirm-remote]");
+  fail("Usage: pnpm code-attempt-review:backfill --input <gitignored.json> [--apply] [--remote --confirm-remote] [--persist-to <local-dir>]");
 }
 
 const remote = process.argv.includes("--remote");
 const apply = process.argv.includes("--apply");
+const persistTo = argumentValue("--persist-to");
 if (remote && !process.argv.includes("--confirm-remote")) {
   fail("Remote review backfill requires the explicit --confirm-remote acknowledgement.");
 }
+if (remote && persistTo) fail("--persist-to is available only for local D1 validation.");
 
 const root = process.cwd();
 const wrangler = path.join(root, "node_modules", ".bin", "wrangler");
 const input = JSON.parse(await readFile(path.resolve(inputPath), "utf8"));
-for (const field of ["ownerId", "attemptId", "activityId", "reviewResponseTurnId", "reason"]) {
+for (const field of ["attemptId", "activityId", "reviewResponseTurnId", "reason"]) {
   if (typeof input[field] !== "string" || !input[field].trim()) fail(`Backfill input requires ${field}.`);
+}
+if (input.ownerId !== undefined && (typeof input.ownerId !== "string" || !input.ownerId.trim())) {
+  fail("Backfill ownerId must be a non-empty string when provided.");
 }
 const review = normalizeCodeAttemptReview(input.review);
 if (!review || review.status !== "complete" || review.provenance !== "explicit_evidence_backfill") {
@@ -62,24 +67,34 @@ if (!review || review.status !== "complete" || review.provenance !== "explicit_e
 }
 
 function execute(sql) {
-  const args = ["d1", "execute", "DB", remote ? "--remote" : "--local", "--command", sql, "--json"];
-  return rowsFromWrangler(execFileSync(wrangler, args, { cwd: root, encoding: "utf8" }));
+  const args = [
+    "d1", "execute", "DB", remote ? "--remote" : "--local",
+    ...(persistTo ? ["--persist-to", path.resolve(persistTo)] : []),
+    "--command", sql, "--json",
+  ];
+  return resultSetsFromWrangler(execFileSync(wrangler, args, { cwd: root, encoding: "utf8" }));
 }
 
-const attempts = execute(`SELECT id, activity_id, originating_turn_id, sequence, language, code, occurred_at,
+const ownerFilter = input.ownerId === undefined ? "" : ` AND owner_id = ${sqlText(input.ownerId)}`;
+const ownerForAttempt = `(SELECT owner_id FROM leetcode_code_attempts
+  WHERE id = ${sqlText(input.attemptId)} AND activity_id = ${sqlText(input.activityId)}${ownerFilter}
+  GROUP BY owner_id HAVING COUNT(*) = 1)`;
+const [attempts, visibleTurns, existingAudits] = execute(`SELECT id, owner_id, activity_id, originating_turn_id, sequence, language, code, occurred_at,
   review, review_response_turn_id, observed_correctness, concrete_findings, edge_cases, complexity,
   final_declaration, updated_at
 FROM leetcode_code_attempts
-WHERE owner_id = ${sqlText(input.ownerId)} AND id = ${sqlText(input.attemptId)};`);
-if (attempts.length !== 1) fail("The owner-scoped historical Code Attempt was not found.");
+WHERE id = ${sqlText(input.attemptId)} AND activity_id = ${sqlText(input.activityId)}${ownerFilter};
+SELECT body, speaker
+FROM practice_transcript_turns
+WHERE owner_id = ${ownerForAttempt}
+  AND activity_id = ${sqlText(input.activityId)}
+  AND turn_id = ${sqlText(input.reviewResponseTurnId)};
+SELECT review_response_turn_id, review, evidence_hash, reason
+FROM leetcode_code_attempt_review_backfills
+WHERE owner_id = ${ownerForAttempt} AND attempt_id = ${sqlText(input.attemptId)};`);
+if (attempts.length !== 1) fail("The uniquely owner-scoped historical Code Attempt was not found.");
 const stored = attempts[0];
 if (stored.activity_id !== input.activityId) fail("The Code Attempt does not belong to the requested activity.");
-
-const visibleTurns = execute(`SELECT body, speaker
-FROM practice_transcript_turns
-WHERE owner_id = ${sqlText(input.ownerId)}
-  AND activity_id = ${sqlText(input.activityId)}
-  AND turn_id = ${sqlText(input.reviewResponseTurnId)};`);
 if (visibleTurns.length !== 1 || visibleTurns[0].speaker !== "specialist") {
   fail("The owner-scoped visible specialist review turn was not found in this activity.");
 }
@@ -127,47 +142,46 @@ const evidencePayload = JSON.stringify({
 });
 const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(evidencePayload));
 const evidenceHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+const expectedAudit = {
+  reviewResponseTurnId: input.reviewResponseTurnId,
+  review: JSON.stringify(review),
+  evidenceHash,
+  reason: input.reason.trim(),
+};
+
+function assertAuditReceipt(audit, expected) {
+  if (
+    !audit
+    || audit.review_response_turn_id !== expected.reviewResponseTurnId
+    || audit.review !== expected.review
+    || audit.evidence_hash !== expected.evidenceHash
+    || audit.reason !== expected.reason
+  ) {
+    fail("A conflicting review-backfill audit row already exists.");
+  }
+}
 
 if (!apply) {
   console.log(`Validated ${remote ? "remote" : "local"} backfill evidence. Re-run with --apply to write audit evidence ${evidenceHash}.`);
   process.exit(0);
 }
 
-const existingAudit = execute(`SELECT review_response_turn_id, review, evidence_hash, reason
-FROM leetcode_code_attempt_review_backfills
-WHERE owner_id = ${sqlText(input.ownerId)} AND attempt_id = ${sqlText(input.attemptId)};`)[0];
+const existingAudit = existingAudits[0];
 if (existingAudit) {
-  if (
-    existingAudit.review_response_turn_id !== input.reviewResponseTurnId
-    || existingAudit.review !== JSON.stringify(review)
-    || existingAudit.evidence_hash !== evidenceHash
-    || existingAudit.reason !== input.reason.trim()
-  ) {
-    fail("A conflicting review-backfill audit row already exists.");
-  }
+  assertAuditReceipt(existingAudit, expectedAudit);
   console.log(`Review backfill already applied with evidence hash ${evidenceHash}.`);
   process.exit(0);
 }
 
-execute(`INSERT INTO leetcode_code_attempt_review_backfills
+const [, auditRows] = execute(`INSERT INTO leetcode_code_attempt_review_backfills
   (owner_id, attempt_id, activity_id, review_response_turn_id, review, evidence_hash, reason, created_at)
 VALUES (
-  ${sqlText(input.ownerId)}, ${sqlText(input.attemptId)}, ${sqlText(input.activityId)},
+  ${sqlText(stored.owner_id)}, ${sqlText(input.attemptId)}, ${sqlText(input.activityId)},
   ${sqlText(input.reviewResponseTurnId)}, ${sqlText(JSON.stringify(review))}, ${sqlText(evidenceHash)},
   ${sqlText(input.reason.trim())}, ${Date.now()}
-)
-;`);
-
-const audit = execute(`SELECT review_response_turn_id, review, evidence_hash, reason
+);
+SELECT review_response_turn_id, review, evidence_hash, reason
 FROM leetcode_code_attempt_review_backfills
-WHERE owner_id = ${sqlText(input.ownerId)} AND attempt_id = ${sqlText(input.attemptId)};`)[0];
-if (
-  !audit
-  || audit.review_response_turn_id !== input.reviewResponseTurnId
-  || audit.review !== JSON.stringify(review)
-  || audit.evidence_hash !== evidenceHash
-  || audit.reason !== input.reason.trim()
-) {
-  fail("A conflicting review-backfill audit row already exists.");
-}
+WHERE owner_id = ${sqlText(stored.owner_id)} AND attempt_id = ${sqlText(input.attemptId)};`);
+assertAuditReceipt(auditRows[0], expectedAudit);
 console.log(`Applied ${remote ? "remote" : "local"} review backfill with evidence hash ${evidenceHash}.`);

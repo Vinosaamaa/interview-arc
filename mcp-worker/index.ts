@@ -1,6 +1,8 @@
 import { createMcpHandler } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { codeAttemptReviewInputSchema } from "./code-attempt-review-schema";
+import { codeLineCount } from "../db/code-attempt-review";
 import { loadContentIndex } from "../db/content";
 import { resolveIntegrationOwner } from "../db/integrations";
 import {
@@ -1849,27 +1851,11 @@ function createServer(ownerId: string, env: Env) {
         language: z.string().min(1).max(40),
         code: z.string().min(1).max(300_000),
         occurredAt: z.number().int().positive(),
-        review: z.discriminatedUnion("status", [
-          z.object({
-            schemaVersion: z.literal(1),
-            status: z.literal("pending"),
-          }).strict(),
-          z.object({
-            schemaVersion: z.literal(1),
-            status: z.literal("complete"),
-            summary: z.string().min(1).max(4_000),
-            whatWentWell: z.array(z.string().min(1).max(2_000)).min(1).max(50),
-            whatToImprove: z.array(z.string().min(1).max(2_000)).min(1).max(50),
-            testingEvidence: z.array(z.string().min(1).max(2_000)).min(1).max(100),
-            nextStep: z.string().min(1).max(2_000).optional(),
-            provenance: z.literal("specialist_observed"),
-            reviewedAt: z.number().int().positive(),
-          }).strict(),
-        ]),
+        review: codeAttemptReviewInputSchema,
         reviewResponseTurnId: z.string().min(1).optional(),
         observedCorrectness: z.enum(["not_verified", "appears_correct", "issues_found", "incomplete"]),
-        concreteFindings: z.array(z.string()).max(100),
-        edgeCases: z.array(z.string()).max(100),
+        concreteFindings: z.array(z.string().max(2_000)).max(100),
+        edgeCases: z.array(z.string().max(2_000)).max(100),
         complexity: z.object({ time: z.string().optional(), space: z.string().optional() }).optional(),
         finalDeclaration: z.string().min(1).max(2_000),
       },
@@ -1877,7 +1863,7 @@ function createServer(ownerId: string, env: Env) {
     },
     async (input) => {
       const saved = await saveLeetCodeCodeAttempt(ownerId, input, Date.now());
-      const lineCount = input.code.split(/\r?\n/).length;
+      const lineCount = codeLineCount(input.code);
       return {
         content: [{ type: "text", text: `Saved Code Attempt ${input.sequence} · ${input.language} · ${lineCount} lines.` }],
         structuredContent: {

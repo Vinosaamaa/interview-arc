@@ -42,6 +42,7 @@ import { reviewIntervalDays, type ReviewReason } from "./review-cadence";
 import {
   assertCodeAttemptReviewParity,
   codeAttemptEvaluationEvidence,
+  codeLineCount,
   normalizeCodeAttemptReview,
   pendingCodeAttemptReviewIds,
   planCodeAttemptWrite,
@@ -1356,7 +1357,13 @@ type SaveLeetCodeCodeAttemptInput = {
   finalDeclaration: string;
 };
 
-function codeAttemptWrite(input: SaveLeetCodeCodeAttemptInput): CodeAttemptReviewWrite {
+type CodeAttemptProjectionInput = Omit<CodeAttemptReviewWrite, "review" | "reviewResponseTurnId" | "complexity"> & {
+  review: unknown;
+  reviewResponseTurnId?: string | null;
+  complexity?: { time?: string; space?: string } | null;
+};
+
+function projectCodeAttempt(input: CodeAttemptProjectionInput) {
   return {
     id: input.id,
     activityId: input.activityId,
@@ -1375,23 +1382,17 @@ function codeAttemptWrite(input: SaveLeetCodeCodeAttemptInput): CodeAttemptRevie
   };
 }
 
+function codeAttemptWrite(input: SaveLeetCodeCodeAttemptInput): CodeAttemptReviewWrite {
+  return { ...projectCodeAttempt(input), review: input.review };
+}
+
 function storedCodeAttemptWrite(row: typeof leetcodeCodeAttempts.$inferSelect) {
-  return {
-    id: row.id,
-    activityId: row.activityId,
-    originatingTurnId: row.originatingTurnId,
-    sequence: row.sequence,
-    language: row.language,
-    code: row.code,
-    occurredAt: row.occurredAt,
-    review: row.review,
-    reviewResponseTurnId: row.reviewResponseTurnId,
-    observedCorrectness: row.observedCorrectness,
+  return projectCodeAttempt({
+    ...row,
     concreteFindings: row.concreteFindings as string[],
     edgeCases: row.edgeCases as string[],
     complexity: row.complexity as { time?: string; space?: string } | null,
-    finalDeclaration: row.finalDeclaration,
-  };
+  });
 }
 
 export async function saveLeetCodeCodeAttempt(
@@ -1417,7 +1418,7 @@ export async function saveLeetCodeCodeAttempt(
       eq(leetcodeCodeAttempts.ownerId, ownerId),
       eq(leetcodeCodeAttempts.id, incoming.id),
     )),
-    db.select().from(leetcodeCodeAttempts).where(and(
+    db.select({ id: leetcodeCodeAttempts.id }).from(leetcodeCodeAttempts).where(and(
       eq(leetcodeCodeAttempts.ownerId, ownerId),
       eq(leetcodeCodeAttempts.activityId, incoming.activityId),
       eq(leetcodeCodeAttempts.sequence, incoming.sequence),
@@ -1459,7 +1460,7 @@ export async function saveLeetCodeCodeAttempt(
   const values = {
     ownerId,
     ...incoming,
-    lineCount: incoming.code.split(/\r?\n/).length,
+    lineCount: codeLineCount(incoming.code),
     createdAt: nowMs,
     updatedAt: nowMs,
   };

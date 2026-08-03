@@ -343,7 +343,14 @@ export const leetcodeCodeAttempts = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt,
   },
-  (table) => [primaryKey({ columns: [table.ownerId, table.id] })],
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.id] }),
+    uniqueIndex("code_attempts_owner_activity_sequence_idx").on(
+      table.ownerId,
+      table.activityId,
+      table.sequence,
+    ),
+  ],
 );
 
 // Historical review repair is explicit and auditable. The source specialist
