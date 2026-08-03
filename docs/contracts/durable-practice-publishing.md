@@ -187,6 +187,11 @@ verdict. The specialist does not commit it; the coordinator includes the exact
 accepted source with the activity publication. An unfinished or unaccepted
 working file is not a publication artifact.
 
+For the temporary self-test workflow, the **Durable-practice boundary** in
+`leetcode-java-harness.md` is authoritative. Publishing never ingests local
+harness state or plumbing; it may render a meaningful local conclusion only
+when that conclusion already belongs to an observed activity exchange.
+
 For an owner-private LeetCode question created from a public problem URL, the
 LeetCode specialist also performs a metadata preflight during the first
 complete finalization. It supplies `questionMetadata` with every currently
