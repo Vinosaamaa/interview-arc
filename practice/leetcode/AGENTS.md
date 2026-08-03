@@ -627,6 +627,14 @@ code first, then save the attempt once with:
 - meaningful alternatives only when the attempt has ended or the selected mode
   permits revealing them.
 
+Present that complete review visibly to the user in the canonical specialist
+response. The D1 attempt review may normalize the same content into structured
+fields, but it must not add a correctness conclusion, strength, issue,
+improvement, test result, edge case, approach, or alternative that was hidden
+from the visible response. Conversely, do not omit visibly delivered review
+content from the structured attempt review. Receipts and storage mechanics are
+not review content and remain outside the transcript.
+
 Keep complexity and the final declaration in their existing top-level attempt
 fields as well. Save the exact code and review before any external submission;
 state that no platform verdict has occurred yet. Record the later visible

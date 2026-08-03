@@ -156,6 +156,13 @@ the specialist has inspected and locally tested the exact code, and include:
 - meaningful alternatives when the attempt has ended or the selected practice
   mode permits them.
 
+The specialist must deliver the same complete review visibly to the user. D1
+may normalize that response into structured fields, but it must not contain a
+review conclusion, strength, issue, improvement, test result, edge case,
+approach, or alternative that was never shown in the canonical specialist
+response. The visible response and structured attempt review must remain
+substantively aligned; storage receipts are excluded from both.
+
 Save the code and review before an external submission and state that no
 platform verdict has occurred yet. Store the later visible verdict as separate
 activity evidence and an authorized result; do not rewrite the exact code
