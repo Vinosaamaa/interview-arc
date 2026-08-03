@@ -464,6 +464,55 @@ directory, or fall back to a different browser/controller. A mismatch is a
 hard preflight failure: leave the existing browser and user data untouched and
 report the exact mismatch.
 
+#### Fixed inspection and submission hot path
+
+Do not explore the page, scan the entire DOM, inspect unrelated panels, or
+decide on an insertion strategy at submission time. The approved controller
+performs only these ordered operations:
+
+1. Before the user asks to submit, ensure that `/json/version` responds,
+   Playwright is loaded, `connectOverCDP` succeeds, and exactly one
+   automation-owned LeetCode problem page exists. Keep that preflight warm while
+   the user codes; never postpone runtime discovery until the submit request.
+2. On explicit submit, read the evolving Java file once as UTF-8. This exact
+   string is the sole submission payload.
+3. Reacquire the already-known page without navigation when its URL pathname
+   contains the verified `/problems/<canonical-slug>/` identity. Inspect only
+   that pathname, the matching problem title, the visible language selector,
+   and Monaco's editor models. Do not traverse statement content, the console,
+   account UI, prior results, or the whole document body.
+4. Require the visible language to be Java and require exactly one Monaco model
+   whose URI ends in `.java` and whose language ID is `java`. Other empty or
+   console models are not submission targets. A zero-model or multiple-model
+   result is a hard ambiguity failure.
+5. Call that Java model's `setValue(exactSource)` once. Never use
+   `Input.insertText`, keyboard typing, clipboard simulation, repeated line
+   insertion, formatting commands, or generated replacement code.
+6. Immediately read `model.getValue()` and require exact string equality with
+   `exactSource`. Also report their UTF-8 byte counts and first differing offset
+   on failure. Do not submit when any character, whitespace, comment, delimiter,
+   class/API shape, or trailing newline differs.
+7. Capture the scoped submission-result region's current state, focus the
+   Monaco editor through DOM state without foregrounding Chrome, and send one
+   `Meta+Enter`. Do not click by coordinate and do not send a second submit
+   gesture automatically.
+8. Require an attempt-specific post-key transition in the scoped submission UI
+   before accepting a verdict—for example the submit control becoming busy or a
+   new submitting/result state replacing the captured baseline. Then read the
+   new verdict only from that scoped result region. Never scan all body text or
+   reuse an already-visible verdict from an earlier attempt.
+9. Return the new verdict and its visible failing input, if any. Leave the same
+   browser and tab open in the background.
+
+The local automation budget after a warm preflight is five seconds total for
+steps 2 through 7. LeetCode's server-side execution and verdict latency is
+measured separately and cannot be guaranteed. If a local stage exceeds its
+budget, stop further discovery, name the exact stalled stage, and fail closed;
+do not relaunch, open a tab, switch tools, or assemble an ad hoc controller.
+Use a bounded targeted verdict wait of at most 60 seconds, after which report a
+verdict timeout without resubmitting. Exact speed is not a correctness claim:
+never skip the identity or equality gates merely to meet the budget.
+
 #### Idempotent launch and reconnect
 
 Run the launch procedure from the `interview-arc` repository root. First test
