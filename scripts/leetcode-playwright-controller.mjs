@@ -196,11 +196,13 @@ export function createPlaywrightPageAdapter(page) {
         const label = element?.textContent?.trim();
         if (label) return label;
       }
-      const exactJavaButtons = [...document.querySelectorAll("button")].filter((button) => (
-        button.textContent?.trim() === "Java" && button.getClientRects().length > 0
-      ));
-      if (exactJavaButtons.length === 1) return "Java";
-      return "";
+      let exactJavaButton = null;
+      for (const button of document.querySelectorAll("button")) {
+        if (button.textContent?.trim() !== "Java" || button.getClientRects().length === 0) continue;
+        if (exactJavaButton) return "";
+        exactJavaButton = button;
+      }
+      return exactJavaButton ? "Java" : "";
     }
 
     const models = globalThis.monaco?.editor?.getModels?.() ?? [];
@@ -297,24 +299,12 @@ export function createPlaywrightPageAdapter(page) {
     goBack: () => page.goBack({ waitUntil: "domcontentloaded", timeout: 15_000 }),
     async waitForEditableProblem(identity) {
       const handle = await page.waitForFunction(
-        ({ kind, expectedSlug, expectedTitle, selectors, routes }) => {
+        ({ kind, expectedSlug, expectedTitle, routes }) => {
           const visibleSlug = location.pathname.match(new RegExp(routes.problemEditor))?.[1] ?? null;
           if (kind !== "editor" || visibleSlug !== expectedSlug) return false;
           if (document.title !== expectedTitle && document.title !== `${expectedTitle} - LeetCode`) {
             return false;
           }
-          let visibleLanguage = "";
-          for (const selector of selectors.language) {
-            visibleLanguage = document.querySelector(selector)?.textContent?.trim() ?? "";
-            if (visibleLanguage) break;
-          }
-          if (!visibleLanguage) {
-            const exactJavaButtons = [...document.querySelectorAll("button")].filter((button) => (
-              button.textContent?.trim() === "Java" && button.getClientRects().length > 0
-            ));
-            if (exactJavaButtons.length === 1) visibleLanguage = "Java";
-          }
-          if (visibleLanguage.toLowerCase() !== "java") return false;
           const javaModels = (globalThis.monaco?.editor?.getModels?.() ?? []).filter((model) => (
             model.getLanguageId?.().toLowerCase() === "java"
             && model.uri?.toString?.().toLowerCase().endsWith(".java")
@@ -325,7 +315,6 @@ export function createPlaywrightPageAdapter(page) {
           kind: "editor",
           expectedSlug: identity.slug,
           expectedTitle: identity.title,
-          selectors: TARGET_SELECTORS,
           routes: TARGET_ROUTES,
         },
         { timeout: 30_000, polling: 100 },

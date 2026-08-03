@@ -430,9 +430,21 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
     title: async () => `${identity.title} - LeetCode`,
     goto: async (url) => { operations.push(["goto", url]); },
     goBack: async () => { operations.push(["goBack"]); },
-    evaluate: async (_fn, payload) => {
+    evaluate: async (browserOperation, payload) => {
       operations.push([payload.operation, payload.source]);
-      if (payload.operation === "visible-language") return "Java";
+      if (payload.operation === "visible-language") {
+        const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+        Object.defineProperty(globalThis, "document", { configurable: true, value: {
+          querySelector: () => null,
+          querySelectorAll: () => [{ textContent: "Java", getClientRects: () => [{}] }],
+        } });
+        try {
+          return browserOperation(payload);
+        } finally {
+          if (previousDocument) Object.defineProperty(globalThis, "document", previousDocument);
+          else delete globalThis.document;
+        }
+      }
       if (payload.operation === "monaco-models") {
         return [{ uri: "file:///Solution.java", languageId: "java" }];
       }
@@ -460,10 +472,6 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
       Object.defineProperties(globalThis, {
         document: { configurable: true, value: {
           title: `${identity.title} - LeetCode`,
-          querySelector: () => null,
-          querySelectorAll: (selector) => selector === "button"
-            ? [{ textContent: "Java", getClientRects: () => [{}] }]
-            : [],
         } },
         location: { configurable: true, value: {
           pathname: `/problems/${identity.slug}/description/`,
