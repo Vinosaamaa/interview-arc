@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import { sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/d1";
 
 import {
   assertCodeAttemptReviewParity,
@@ -10,6 +12,35 @@ import {
   planCodeAttemptWrite,
   normalizeCodeAttemptReview,
 } from "../db/code-attempt-review.ts";
+import { d1TransactionalInvariantGuard } from "../db/d1-transactional-guard.ts";
+
+test("transactional invariant guards are executable D1 batch queries", async () => {
+  const sqlite = new DatabaseSync(":memory:");
+  const client = {
+    prepare(query) {
+      return {
+        bind(...params) {
+          return { params, query };
+        },
+      };
+    },
+    async batch(statements) {
+      assert.equal(statements.length, 1);
+      assert.match(statements[0].query, /select json_extract/i);
+      return statements.map((statement) => ({
+        success: true,
+        results: sqlite.prepare(statement.query).all(...statement.params),
+        meta: {},
+      }));
+    },
+  };
+  const db = drizzle(client);
+  const guard = d1TransactionalInvariantGuard(db, sql`1 = 1`);
+
+  assert.equal(typeof guard._prepare, "function");
+  assert.deepEqual(await db.batch([guard]), [[{ allowed: 1 }]]);
+  sqlite.close();
+});
 
 test("new code-attempt reviews accept only the versioned pending or complete contract", () => {
   assert.deepEqual(
@@ -300,8 +331,8 @@ test("the MCP write contract requires specialist-observed review data and leaves
   assert.match(durable, /eq\(practiceTranscriptTurns\.ownerId, ownerId\)/);
   assert.match(durable, /Complete every pending Code Attempt review before finalization/);
   assert.match(durable, /Historical review backfill is available only through the coordinator audit command/);
-  assert.match(durable, /function d1TransactionalInvariantGuard/);
-  assert.match(durable, /function isD1TransactionalInvariantFailure/);
+  assert.match(durable, /d1TransactionalInvariantGuard/);
+  assert.match(durable, /isD1TransactionalInvariantFailure/);
   assert.match(durable, /const noReadyFinalizationGuard = d1TransactionalInvariantGuard/);
   assert.match(durable, /db\.batch\(\[\s*noReadyFinalizationGuard,\s*db\.insert\(leetcodeCodeAttempts\)/);
   assert.match(durable, /const noPendingReviewGuard = d1TransactionalInvariantGuard/);

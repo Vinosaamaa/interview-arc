@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, exists, gt, inArray, isNotNull, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, exists, gt, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import {
   activityDeliveryAnalyses,
@@ -49,6 +49,10 @@ import {
   type CodeAttemptReviewV1,
   type CodeAttemptReviewWrite,
 } from "./code-attempt-review";
+import {
+  d1TransactionalInvariantGuard,
+  isD1TransactionalInvariantFailure,
+} from "./d1-transactional-guard";
 
 export type Specialty = "leetcode" | "system_design" | "behavioral";
 export type NoteKind = "remember" | "insight" | "mistake" | "pattern" | "question";
@@ -57,19 +61,6 @@ export type TranscriptSource = "codex" | "dictation" | "audio_transcript";
 export type VoiceCaptureDecision = "activity_related" | "unrelated" | "uncertain";
 export type { ReviewReason } from "./review-cadence";
 export type { CodeAttemptReviewV1 } from "./code-attempt-review";
-
-function d1TransactionalInvariantGuard(condition: SQL) {
-  return getDb().select({
-    allowed: sql<number>`json_extract(
-      CASE WHEN ${condition} THEN '{"allowed":1}' ELSE 'invalid' END,
-      '$.allowed'
-    )`,
-  });
-}
-
-function isD1TransactionalInvariantFailure(error: unknown) {
-  return String(error).toLowerCase().includes("malformed json");
-}
 
 export type DeliveryAnalysisPayload = {
   schemaVersion: 1;
@@ -1478,7 +1469,7 @@ export async function saveLeetCodeCodeAttempt(
     updatedAt: nowMs,
   };
   if (plan.kind === "insert") {
-    const noReadyFinalizationGuard = d1TransactionalInvariantGuard(sql`NOT EXISTS (
+    const noReadyFinalizationGuard = d1TransactionalInvariantGuard(db, sql`NOT EXISTS (
           SELECT 1 FROM ${activityFinalizations}
           WHERE ${activityFinalizations.ownerId} = ${ownerId}
             AND ${activityFinalizations.activityId} = ${incoming.activityId}
@@ -1702,7 +1693,7 @@ export async function saveSpecialistFinalization(
       },
     });
   if (payload.complete && specialty === "leetcode") {
-    const noPendingReviewGuard = d1TransactionalInvariantGuard(sql`NOT EXISTS (
+    const noPendingReviewGuard = d1TransactionalInvariantGuard(db, sql`NOT EXISTS (
           SELECT 1 FROM ${leetcodeCodeAttempts}
           WHERE ${leetcodeCodeAttempts.ownerId} = ${ownerId}
             AND ${leetcodeCodeAttempts.activityId} = ${activityId}
