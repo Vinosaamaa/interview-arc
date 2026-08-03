@@ -152,6 +152,7 @@ const TARGET_SELECTORS = Object.freeze({
 
 const TARGET_ROUTES = Object.freeze({
   problemEditor: "^/problems/([a-z0-9-]+)/(?:description/)?$",
+  problemTab: "^/problems/([a-z0-9-]+)/(?:description/|editorial/|solutions/|submissions/)?$",
   resultAttempt: "^(?:/submissions/(?:detail/)?|/problems/[a-z0-9-]+/submissions/)([^/]+)/?$",
 });
 
@@ -160,6 +161,10 @@ export function leetcodeAttemptKeyFromPath(pathname) {
 }
 
 export function leetcodeProblemSlugFromPath(pathname) {
+  return pathname.match(new RegExp(TARGET_ROUTES.problemTab))?.[1] ?? null;
+}
+
+export function leetcodeEditorSlugFromPath(pathname) {
   return pathname.match(new RegExp(TARGET_ROUTES.problemEditor))?.[1] ?? null;
 }
 
@@ -191,6 +196,10 @@ export function createPlaywrightPageAdapter(page) {
         const label = element?.textContent?.trim();
         if (label) return label;
       }
+      const exactJavaButtons = [...document.querySelectorAll("button")].filter((button) => (
+        button.textContent?.trim() === "Java" && button.getClientRects().length > 0
+      ));
+      if (exactJavaButtons.length === 1) return "Java";
       return "";
     }
 
@@ -298,6 +307,12 @@ export function createPlaywrightPageAdapter(page) {
           for (const selector of selectors.language) {
             visibleLanguage = document.querySelector(selector)?.textContent?.trim() ?? "";
             if (visibleLanguage) break;
+          }
+          if (!visibleLanguage) {
+            const exactJavaButtons = [...document.querySelectorAll("button")].filter((button) => (
+              button.textContent?.trim() === "Java" && button.getClientRects().length > 0
+            ));
+            if (exactJavaButtons.length === 1) visibleLanguage = "Java";
           }
           if (visibleLanguage.toLowerCase() !== "java") return false;
           const javaModels = (globalThis.monaco?.editor?.getModels?.() ?? []).filter((model) => (
@@ -460,7 +475,7 @@ export class LeetCodeController {
   async verifyEditableProblem(identity) {
     this.assertActive();
     const currentUrl = new URL(this.page.url());
-    if (leetcodeProblemSlugFromPath(currentUrl.pathname) !== identity.slug) {
+    if (leetcodeEditorSlugFromPath(currentUrl.pathname) !== identity.slug) {
       throw new ControllerError(
         "problem_slug_mismatch",
         "The persistent tab does not show the focused problem.",

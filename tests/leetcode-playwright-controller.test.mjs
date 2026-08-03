@@ -239,6 +239,27 @@ test("tab discovery and identity verification recognize LeetCode's redirected de
   await controllerWith(adapter).verifyEditableProblem(identity);
 });
 
+test("tab discovery can reacquire a known non-editor problem section without accepting it for submission", async () => {
+  const editorialUrl = `${identity.url}editorial/`;
+  assert.equal(isAutomationOwnedLeetCodeUrl(editorialUrl), true);
+
+  const editorialPage = { url: () => editorialUrl };
+  const browser = { contexts: () => [{ pages: () => [editorialPage] }] };
+  const lease = await ensureBrowserController({
+    probeCdp: async () => ({ live: true }),
+    loadPlaywright: async () => ({ chromium: {} }),
+    launchChrome: async () => assert.fail("must not launch"),
+    connectOverCdp: async () => browser,
+    pageAdapterFactory: (page) => page,
+  });
+  assert.equal(lease.page, editorialPage);
+
+  await assert.rejects(
+    () => controllerWith(pageAdapter({ url: () => editorialUrl })).verifyEditableProblem(identity),
+    (error) => error.code === "problem_slug_mismatch",
+  );
+});
+
 test("submit fails closed before mutation when URL, title, language, or Java model identity drifts", async () => {
   const variants = [
     { url: () => "https://leetcode.com/problems/two-sum/", code: "problem_slug_mismatch" },
@@ -439,7 +460,10 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
       Object.defineProperties(globalThis, {
         document: { configurable: true, value: {
           title: `${identity.title} - LeetCode`,
-          querySelector: () => ({ textContent: "Java" }),
+          querySelector: () => null,
+          querySelectorAll: (selector) => selector === "button"
+            ? [{ textContent: "Java", getClientRects: () => [{}] }]
+            : [],
         } },
         location: { configurable: true, value: {
           pathname: `/problems/${identity.slug}/description/`,
