@@ -152,6 +152,7 @@ const TARGET_SELECTORS = Object.freeze({
 
 const TARGET_ROUTES = Object.freeze({
   problemEditor: "^/problems/([a-z0-9-]+)/(?:description/)?$",
+  problemTab: "^/problems/([a-z0-9-]+)/(?:description/|editorial/|solutions/|submissions/)?$",
   resultAttempt: "^(?:/submissions/(?:detail/)?|/problems/[a-z0-9-]+/submissions/)([^/]+)/?$",
 });
 
@@ -160,6 +161,10 @@ export function leetcodeAttemptKeyFromPath(pathname) {
 }
 
 export function leetcodeProblemSlugFromPath(pathname) {
+  return pathname.match(new RegExp(TARGET_ROUTES.problemTab))?.[1] ?? null;
+}
+
+export function leetcodeEditorSlugFromPath(pathname) {
   return pathname.match(new RegExp(TARGET_ROUTES.problemEditor))?.[1] ?? null;
 }
 
@@ -191,7 +196,13 @@ export function createPlaywrightPageAdapter(page) {
         const label = element?.textContent?.trim();
         if (label) return label;
       }
-      return "";
+      let exactJavaButton = null;
+      for (const button of document.querySelectorAll("button")) {
+        if (button.textContent?.trim() !== "Java" || button.getClientRects().length === 0) continue;
+        if (exactJavaButton) return "";
+        exactJavaButton = button;
+      }
+      return exactJavaButton ? "Java" : "";
     }
 
     const models = globalThis.monaco?.editor?.getModels?.() ?? [];
@@ -288,18 +299,12 @@ export function createPlaywrightPageAdapter(page) {
     goBack: () => page.goBack({ waitUntil: "domcontentloaded", timeout: 15_000 }),
     async waitForEditableProblem(identity) {
       const handle = await page.waitForFunction(
-        ({ kind, expectedSlug, expectedTitle, selectors, routes }) => {
+        ({ kind, expectedSlug, expectedTitle, routes }) => {
           const visibleSlug = location.pathname.match(new RegExp(routes.problemEditor))?.[1] ?? null;
           if (kind !== "editor" || visibleSlug !== expectedSlug) return false;
           if (document.title !== expectedTitle && document.title !== `${expectedTitle} - LeetCode`) {
             return false;
           }
-          let visibleLanguage = "";
-          for (const selector of selectors.language) {
-            visibleLanguage = document.querySelector(selector)?.textContent?.trim() ?? "";
-            if (visibleLanguage) break;
-          }
-          if (visibleLanguage.toLowerCase() !== "java") return false;
           const javaModels = (globalThis.monaco?.editor?.getModels?.() ?? []).filter((model) => (
             model.getLanguageId?.().toLowerCase() === "java"
             && model.uri?.toString?.().toLowerCase().endsWith(".java")
@@ -310,7 +315,6 @@ export function createPlaywrightPageAdapter(page) {
           kind: "editor",
           expectedSlug: identity.slug,
           expectedTitle: identity.title,
-          selectors: TARGET_SELECTORS,
           routes: TARGET_ROUTES,
         },
         { timeout: 30_000, polling: 100 },
@@ -460,7 +464,7 @@ export class LeetCodeController {
   async verifyEditableProblem(identity) {
     this.assertActive();
     const currentUrl = new URL(this.page.url());
-    if (leetcodeProblemSlugFromPath(currentUrl.pathname) !== identity.slug) {
+    if (leetcodeEditorSlugFromPath(currentUrl.pathname) !== identity.slug) {
       throw new ControllerError(
         "problem_slug_mismatch",
         "The persistent tab does not show the focused problem.",

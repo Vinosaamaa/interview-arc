@@ -239,6 +239,27 @@ test("tab discovery and identity verification recognize LeetCode's redirected de
   await controllerWith(adapter).verifyEditableProblem(identity);
 });
 
+test("tab discovery can reacquire a known non-editor problem section without accepting it for submission", async () => {
+  const editorialUrl = `${identity.url}editorial/`;
+  assert.equal(isAutomationOwnedLeetCodeUrl(editorialUrl), true);
+
+  const editorialPage = { url: () => editorialUrl };
+  const browser = { contexts: () => [{ pages: () => [editorialPage] }] };
+  const lease = await ensureBrowserController({
+    probeCdp: async () => ({ live: true }),
+    loadPlaywright: async () => ({ chromium: {} }),
+    launchChrome: async () => assert.fail("must not launch"),
+    connectOverCdp: async () => browser,
+    pageAdapterFactory: (page) => page,
+  });
+  assert.equal(lease.page, editorialPage);
+
+  await assert.rejects(
+    () => controllerWith(pageAdapter({ url: () => editorialUrl })).verifyEditableProblem(identity),
+    (error) => error.code === "problem_slug_mismatch",
+  );
+});
+
 test("submit fails closed before mutation when URL, title, language, or Java model identity drifts", async () => {
   const variants = [
     { url: () => "https://leetcode.com/problems/two-sum/", code: "problem_slug_mismatch" },
@@ -409,9 +430,21 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
     title: async () => `${identity.title} - LeetCode`,
     goto: async (url) => { operations.push(["goto", url]); },
     goBack: async () => { operations.push(["goBack"]); },
-    evaluate: async (_fn, payload) => {
+    evaluate: async (browserOperation, payload) => {
       operations.push([payload.operation, payload.source]);
-      if (payload.operation === "visible-language") return "Java";
+      if (payload.operation === "visible-language") {
+        const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+        Object.defineProperty(globalThis, "document", { configurable: true, value: {
+          querySelector: () => null,
+          querySelectorAll: () => [{ textContent: "Java", getClientRects: () => [{}] }],
+        } });
+        try {
+          return browserOperation(payload);
+        } finally {
+          if (previousDocument) Object.defineProperty(globalThis, "document", previousDocument);
+          else delete globalThis.document;
+        }
+      }
       if (payload.operation === "monaco-models") {
         return [{ uri: "file:///Solution.java", languageId: "java" }];
       }
@@ -439,7 +472,6 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
       Object.defineProperties(globalThis, {
         document: { configurable: true, value: {
           title: `${identity.title} - LeetCode`,
-          querySelector: () => ({ textContent: "Java" }),
         } },
         location: { configurable: true, value: {
           pathname: `/problems/${identity.slug}/description/`,
