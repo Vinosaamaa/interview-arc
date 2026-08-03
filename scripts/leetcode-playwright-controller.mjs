@@ -253,9 +253,9 @@ export function createPlaywrightPageAdapter(page) {
     },
     submissionSnapshot: () => evaluate("submission-snapshot"),
     pressSubmit: () => page.keyboard.press("Meta+Enter"),
-    async waitForNewAttemptVerdict(baseline, timeoutMs) {
+    async waitForNewAttemptVerdict(baseline, timeoutMs, signal) {
       const handle = await page.waitForFunction(
-        ({ baselineAttemptKey, selectors, verdicts }) => {
+        ({ baselineAttemptKey, selectors }) => {
           let root = null;
           for (const selector of selectors.resultRoot) {
             root = document.querySelector(selector);
@@ -271,10 +271,51 @@ export function createPlaywrightPageAdapter(page) {
             ?? linkedAttempt
             ?? null;
           if (!attemptKey || attemptKey === baselineAttemptKey) return false;
-
+          return attemptKey;
+        },
+        {
+          kind: "attempt-transition",
+          baselineAttemptKey: baseline?.attemptKey ?? null,
+          selectors: TARGET_SELECTORS,
+        },
+        { timeout: timeoutMs, polling: 100 },
+      );
+      try {
+        const attemptKey = await Promise.race([
+          handle.jsonValue(),
+          new Promise((_, reject) => signal?.addEventListener(
+            "abort",
+            () => reject(signal.reason),
+            { once: true },
+          )),
+        ]);
+        const result = await page.evaluate(({ operation, selectors, attemptKey: expectedAttemptKey }) => {
+          if (operation !== "attempt-result") return null;
+          let root = null;
+          for (const selector of selectors.resultRoot) {
+            root = document.querySelector(selector);
+            if (root) break;
+          }
+          if (!root) return null;
+          const pathMatch = location.pathname.match(/^\/submissions\/(?:detail\/)?([^/]+)\/?$/);
+          const linkedAttempt = root.querySelector('a[href*="/submissions/"]')?.getAttribute("href")
+            ?.match(/\/submissions\/(?:detail\/)?([^/]+)/)?.[1];
+          const currentAttemptKey = pathMatch?.[1]
+            ?? root.getAttribute("data-submission-id")
+            ?? linkedAttempt
+            ?? null;
+          if (currentAttemptKey !== expectedAttemptKey) return null;
           const text = root.textContent?.trim() ?? "";
-          const verdict = verdicts.find((candidate) => text.includes(candidate));
-          if (!verdict) return false;
+          const verdicts = [
+            "Accepted",
+            "Wrong Answer",
+            "Time Limit Exceeded",
+            "Memory Limit Exceeded",
+            "Runtime Error",
+            "Compile Error",
+            "Output Limit Exceeded",
+          ];
+          const verdict = verdicts.find((candidate) => text.includes(candidate)) ?? null;
           let failingInput = null;
           for (const selector of selectors.failingInput) {
             const element = root.querySelector(selector);
@@ -283,26 +324,20 @@ export function createPlaywrightPageAdapter(page) {
               break;
             }
           }
-          return { transitioned: true, attemptKey, verdict, failingInput };
-        },
-        {
-          kind: "verdict",
-          baselineAttemptKey: baseline?.attemptKey ?? null,
+          return { verdict, failingInput };
+        }, {
+          operation: "attempt-result",
           selectors: TARGET_SELECTORS,
-          verdicts: [
-            "Accepted",
-            "Wrong Answer",
-            "Time Limit Exceeded",
-            "Memory Limit Exceeded",
-            "Runtime Error",
-            "Compile Error",
-            "Output Limit Exceeded",
-          ],
-        },
-        { timeout: timeoutMs, polling: 100 },
-      );
-      try {
-        return await handle.jsonValue();
+          attemptKey,
+        });
+        if (!result?.verdict) {
+          throw new ControllerError(
+            "submission_verdict_missing",
+            "The new attempt appeared without a scoped terminal verdict.",
+            { attemptKey },
+          );
+        }
+        return { transitioned: true, attemptKey, ...result };
       } finally {
         await handle.dispose?.();
       }
@@ -405,13 +440,19 @@ export async function ensureBrowserController(dependencies, { allowLaunch = true
 }
 
 export class LeetCodeController {
-  constructor({ page, readFileUtf8, now = (() => performance.now()) }) {
+  constructor({ page, readFileUtf8, now = (() => performance.now()), signal = null }) {
     this.page = page;
     this.readFileUtf8 = readFileUtf8;
     this.now = now;
+    this.signal = signal;
+  }
+
+  assertActive() {
+    if (this.signal?.aborted) throw this.signal.reason;
   }
 
   async verifyEditableProblem(identity) {
+    this.assertActive();
     const currentUrl = new URL(this.page.url());
     if (currentUrl.pathname !== new URL(identity.url).pathname) {
       throw new ControllerError(
@@ -449,6 +490,7 @@ export class LeetCodeController {
         { javaModelCount: javaModels.length },
       );
     }
+    this.assertActive();
     return javaModels[0];
   }
 
@@ -464,18 +506,20 @@ export class LeetCodeController {
     return elapsedMs;
   }
 
-  async submit(identity, javaFile) {
+  async submitVerified(identity, javaFile) {
     const commandStartedAt = this.now();
     const progress = [];
-    await this.verifyEditableProblem(identity);
     progress.push({ stage: "identity_verified", atMs: this.now() - commandStartedAt });
 
     const localStartedAt = this.now();
+    this.assertActive();
     const source = await this.readFileUtf8(javaFile);
+    this.assertActive();
     this.ensureLocalBudget("source_read", localStartedAt);
     progress.push({ stage: "source_read", atMs: this.now() - commandStartedAt });
 
     const readBack = await this.page.replaceExactSource(source);
+    this.assertActive();
     this.ensureLocalBudget("source_replaced", localStartedAt);
     progress.push({ stage: "source_replaced", atMs: this.now() - commandStartedAt });
 
@@ -494,14 +538,20 @@ export class LeetCodeController {
     progress.push({ stage: "equality_verified", atMs: this.now() - commandStartedAt });
 
     const baseline = await this.page.submissionSnapshot();
+    this.assertActive();
     await this.page.focusEditor();
+    this.assertActive();
     this.ensureLocalBudget("editor_focused", localStartedAt);
     await this.page.pressSubmit();
     const localAutomationMs = this.now() - localStartedAt;
     progress.push({ stage: "submission_sent", atMs: this.now() - commandStartedAt });
 
     const verdictStartedAt = this.now();
-    const result = await this.page.waitForNewAttemptVerdict(baseline, FIXED_CONFIG.verdictTimeoutMs);
+    const result = await this.page.waitForNewAttemptVerdict(
+      baseline,
+      FIXED_CONFIG.verdictTimeoutMs,
+      this.signal,
+    );
     if (
       !result.transitioned
       || !result.attemptKey
@@ -526,6 +576,11 @@ export class LeetCodeController {
         totalUserVisibleMs: this.now() - commandStartedAt,
       },
     };
+  }
+
+  async submit(identity, javaFile) {
+    await this.verifyEditableProblem(identity);
+    return this.submitVerified(identity, javaFile);
   }
 
   async retry(identity, javaFile) {
@@ -557,7 +612,7 @@ export class LeetCodeController {
       await this.verifyEditableProblem(identity);
     }
 
-    const result = await this.submit(identity, javaFile);
+    const result = await this.submitVerified(identity, javaFile);
     return {
       ...result,
       progress: [
@@ -581,17 +636,24 @@ export async function runControllerCommand(request, dependencies) {
   }
 
   const lease = await dependencies.acquireController({ allowLaunch: request.command === "ensure" });
+  const abortController = new AbortController();
+  let cleanedUp = false;
+  let operation;
   try {
     let timer;
     const timeoutMs = dependencies.commandTimeoutMs ?? (FIXED_CONFIG.verdictTimeoutMs + 10_000);
+    const timeoutError = new ControllerError(
+      "controller_timeout",
+      "The controller command timed out and its connection was released.",
+      { timeoutMs },
+    );
     const timeout = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new ControllerError(
-        "controller_timeout",
-        "The controller command timed out and its connection was released.",
-        { timeoutMs },
-      )), timeoutMs);
+      timer = setTimeout(() => {
+        abortController.abort(timeoutError);
+        reject(timeoutError);
+      }, timeoutMs);
     });
-    const operation = (async () => {
+    operation = (async () => {
       if (request.command === "ensure") {
         return { status: "ready", pageUrl: lease.page.url() };
       }
@@ -599,6 +661,7 @@ export async function runControllerCommand(request, dependencies) {
         page: lease.page,
         readFileUtf8: dependencies.readFileUtf8,
         now: dependencies.now,
+        signal: abortController.signal,
       });
       if (request.command === "navigate") return controller.navigate(request.identity);
       if (request.command === "submit") return controller.submit(request.identity, request.javaFile);
@@ -607,11 +670,18 @@ export async function runControllerCommand(request, dependencies) {
     })();
     try {
       return await Promise.race([operation, timeout]);
+    } catch (error) {
+      if (error === timeoutError) {
+        await lease.cleanup();
+        cleanedUp = true;
+        await operation.catch(() => {});
+      }
+      throw error;
     } finally {
       clearTimeout(timer);
     }
   } finally {
-    await lease.cleanup();
+    if (!cleanedUp) await lease.cleanup();
   }
 }
 
@@ -743,6 +813,16 @@ async function writePreflightReceipt(receipt) {
   await rename(temporaryPath, preflightReceiptPath);
 }
 
+export function preflightReceiptForRequest(request, current, recordedAt = new Date().toISOString()) {
+  if (request.command !== "navigate") return null;
+  return {
+    version: 1,
+    browserId: current.browserId,
+    identity: request.identity,
+    recordedAt,
+  };
+}
+
 async function verifyPreflightReceipt(identity) {
   let receipt;
   try {
@@ -817,14 +897,9 @@ async function runCli(argv) {
       readFileUtf8: (javaFile) => readFile(javaFile, "utf8"),
       verifyPreflight: verifyPreflightReceipt,
     });
-    if (request.command === "ensure" || request.command === "navigate") {
+    if (request.command === "navigate") {
       const current = await probeFixedCdp();
-      await writePreflightReceipt({
-        version: 1,
-        browserId: current.browserId,
-        identity: request.identity,
-        recordedAt: new Date().toISOString(),
-      });
+      await writePreflightReceipt(preflightReceiptForRequest(request, current));
     }
     return {
       ...result,

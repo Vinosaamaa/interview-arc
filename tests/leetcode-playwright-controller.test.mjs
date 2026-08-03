@@ -11,6 +11,7 @@ import {
   ensureBrowserController,
   firstUtf8Difference,
   parseCli,
+  preflightReceiptForRequest,
   runControllerCommand,
 } from "../scripts/leetcode-playwright-controller.mjs";
 
@@ -291,8 +292,13 @@ test("an already visible verdict cannot satisfy the new attempt-specific verdict
 test("retry uses Back first, falls back to canonical same-tab navigation, and never submits failed recovery", async () => {
   for (const backWorks of [true, false]) {
     let currentUrl = "https://leetcode.com/submissions/detail/123456789/";
+    let languageChecks = 0;
     const adapter = pageAdapter({
       url: () => currentUrl,
+      visibleLanguage: async () => {
+        languageChecks += 1;
+        return "Java";
+      },
       goBack: async () => {
         adapter.calls.push(["back"]);
         if (backWorks) currentUrl = identity.url;
@@ -307,6 +313,7 @@ test("retry uses Back first, falls back to canonical same-tab navigation, and ne
     assert.deepEqual(adapter.calls[0], ["back"]);
     assert.equal(adapter.calls.some(([name]) => name === "navigate"), !backWorks);
     assert.equal(adapter.calls.filter(([name]) => name === "press").length, 1);
+    assert.equal(languageChecks, 1, "retry recovery should not repeat verified editor checks");
   }
 
   const failed = pageAdapter({
@@ -359,6 +366,9 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
       if (payload.operation === "submission-snapshot") {
         return { attemptKey: "old", text: "Accepted" };
       }
+      if (payload.operation === "attempt-result") {
+        return { verdict: "Accepted", failingInput: null };
+      }
       throw new Error(`unexpected operation ${payload.operation}`);
     },
     waitForFunction: async (_fn, payload, options) => {
@@ -366,12 +376,7 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
       return {
         jsonValue: async () => payload.kind === "editor"
           ? true
-          : {
-            transitioned: true,
-            attemptKey: "new",
-            verdict: "Accepted",
-            failingInput: null,
-          },
+          : "new",
       };
     },
     keyboard: { press: async (gesture) => { gestures.push(gesture); } },
@@ -392,6 +397,8 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
   assert.deepEqual(gestures, ["Meta+Enter"]);
   assert.equal(verdict.attemptKey, "new");
   assert.equal(operations.some(([, kind]) => kind === "editor"), true);
+  assert.equal(operations.some(([, kind]) => kind === "attempt-transition"), true);
+  assert.equal(operations.filter(([operation]) => operation === "attempt-result").length, 1);
   assert.equal(operations.some(([operation]) => operation === "body-text"), false);
   assert.equal(operations.filter(([operation]) => operation === "replace-exact").length, 1);
 });
@@ -449,8 +456,14 @@ test("command execution always disconnects the controller without closing Chrome
 
 test("a controller timeout clears its timer, disconnects promptly, and never auto-retries", async () => {
   let disconnects = 0;
+  let operationSettled = false;
   const adapter = pageAdapter({
-    waitForNewAttemptVerdict: async () => new Promise(() => {}),
+    waitForNewAttemptVerdict: async (_baseline, _timeoutMs, signal) => new Promise((_, reject) => {
+      signal.addEventListener("abort", () => {
+        operationSettled = true;
+        reject(signal.reason);
+      }, { once: true });
+    }),
   });
   const startedAt = performance.now();
 
@@ -472,7 +485,25 @@ test("a controller timeout clears its timer, disconnects promptly, and never aut
 
   assert.equal(performance.now() - startedAt < 500, true);
   assert.equal(disconnects, 1);
+  assert.equal(operationSettled, true, "cleanup must wait for the aborted operation to terminate");
   assert.equal(adapter.calls.filter(([name]) => name === "press").length, 1);
+});
+
+test("ensure preserves problem preflight while navigate records the verified identity", () => {
+  const current = { browserId: "browser-123" };
+  assert.equal(
+    preflightReceiptForRequest({ command: "ensure", identity: null }, current),
+    null,
+  );
+  assert.deepEqual(
+    preflightReceiptForRequest({ command: "navigate", identity }, current, "2026-08-03T00:00:00.000Z"),
+    {
+      version: 1,
+      browserId: "browser-123",
+      identity,
+      recordedAt: "2026-08-03T00:00:00.000Z",
+    },
+  );
 });
 
 test("the warm submit path fails closed instead of launching Chrome when preflight state is absent", async () => {
