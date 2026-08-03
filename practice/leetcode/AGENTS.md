@@ -156,8 +156,8 @@ Do not treat the second flow as a successful attempt. Choose the record kind fro
 
 ## Session Commands
 
-For coding catalog, planning, result, `control_practice_timer`, and
-`control_practice_session_timer` commands, follow
+For coding catalog, planning, result, `control_practice_timer`,
+`control_practice_session_timer`, and `control_practice_workbench` commands, follow
 `../../docs/contracts/specialist-today-controls.md`; preserve the exact
 requested coding filters and count rather than substituting another problem.
 

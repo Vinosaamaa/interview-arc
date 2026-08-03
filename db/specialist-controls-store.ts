@@ -2,7 +2,9 @@ import { and, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import {
   outcomes,
+  extraActivities,
   focusBlocks,
+  liveSessions,
   practiceFocus,
   practiceWorkbenches,
   reviewSchedules,
@@ -19,6 +21,31 @@ import { SpecialistControlError } from "./specialist-controls-policy";
 import { foldElapsed, nextTimerState } from "./timer-state";
 
 type StoredTimer = typeof timers.$inferSelect;
+
+function openWorkbenchGuard(ownerId: string, workbenchId: string) {
+  return getDb().update(practiceWorkbenches).set({
+    updatedAt: sql`CASE
+      WHEN ${practiceWorkbenches.status} = 'open' THEN ${practiceWorkbenches.updatedAt}
+      ELSE json('workbench_conflict')
+    END`,
+  }).where(and(
+    eq(practiceWorkbenches.ownerId, ownerId),
+    eq(practiceWorkbenches.id, workbenchId),
+  ));
+}
+
+function outcomePresenceGuard(ownerId: string, workbenchId: string, activityId: string) {
+  return getDb().update(practiceWorkbenches).set({
+    updatedAt: sql`CASE WHEN EXISTS (
+      SELECT 1 FROM ${outcomes}
+      WHERE ${outcomes.ownerId} = ${ownerId}
+        AND ${outcomes.activityId} = ${activityId}
+    ) THEN ${practiceWorkbenches.updatedAt} ELSE json('result_required') END`,
+  }).where(and(
+    eq(practiceWorkbenches.ownerId, ownerId),
+    eq(practiceWorkbenches.id, workbenchId),
+  ));
+}
 
 function addDays(date: string, days: number) {
   const value = new Date(`${date}T12:00:00Z`);
@@ -116,6 +143,121 @@ function finishStatements(ownerId: string, workbenchId: string, timer: StoredTim
       eq(timers.revision, timer.revision),
     )),
   ];
+}
+
+export async function startFreshPracticeWorkbench(input: {
+  ownerId: string;
+  workbenchId: string;
+  newWorkbenchId: string;
+  openedPacificDate: string;
+  mutationId: string;
+  requestHash: string;
+  receipt: Record<string, unknown>;
+  now: number;
+}) {
+  const db = getDb();
+  const [activityRows, focusRows, sessionRows, timerRows, outcomeRows] = await Promise.all([
+    db.select({ id: extraActivities.id }).from(extraActivities).where(and(
+      eq(extraActivities.ownerId, input.ownerId),
+      eq(extraActivities.workbenchId, input.workbenchId),
+    )),
+    db.select({ id: focusBlocks.id }).from(focusBlocks).where(and(
+      eq(focusBlocks.ownerId, input.ownerId),
+      eq(focusBlocks.workbenchId, input.workbenchId),
+    )),
+    db.select({ id: liveSessions.id }).from(liveSessions).where(and(
+      eq(liveSessions.ownerId, input.ownerId),
+      eq(liveSessions.workbenchId, input.workbenchId),
+    )),
+    db.select().from(timers).where(eq(timers.ownerId, input.ownerId)),
+    db.select({ activityId: outcomes.activityId }).from(outcomes).where(eq(outcomes.ownerId, input.ownerId)),
+  ]);
+  const practiceIds = new Set(activityRows.map((row) => row.id));
+  const focusIds = new Set(focusRows.map((row) => row.id));
+  const sessionIds = new Set(sessionRows.map((row) => row.id));
+  const resultIds = new Set(outcomeRows.map((row) => row.activityId));
+  const practiceTimers = timerRows.filter((timer) => timer.kind === "activity" && practiceIds.has(timer.subjectId));
+  const missingResults = practiceTimers.filter((timer) => timer.startedAt && !resultIds.has(timer.subjectId));
+  if (missingResults.length) {
+    throw new SpecialistControlError(
+      "result_required",
+      `Choose a result for ${missingResults.length === 1 ? "the started activity" : "every started activity"} before starting fresh.`,
+    );
+  }
+  for (const timer of practiceTimers) {
+    if (!timer.startedAt || timer.completed) continue;
+    const voiceGuard = await prepareVoiceCapturesForFinish(input.ownerId, timer.subjectId, input.now);
+    const voiceConflict = voiceFinishGuardMessage(voiceGuard);
+    if (voiceConflict) throw new SpecialistControlError("timer_state_conflict", voiceConflict);
+  }
+
+  const scopedTimers = timerRows.filter((timer) => (
+    (timer.kind === "activity" && (practiceIds.has(timer.subjectId) || focusIds.has(timer.subjectId)))
+    || (timer.kind === "session" && sessionIds.has(timer.subjectId))
+  ));
+  const statements: Parameters<typeof db.batch>[0][number][] = [
+    openWorkbenchGuard(input.ownerId, input.workbenchId),
+    ...practiceTimers.filter((timer) => timer.startedAt).map((timer) => (
+      outcomePresenceGuard(input.ownerId, input.workbenchId, timer.subjectId)
+    )),
+    ...scopedTimers.filter((timer) => timer.startedAt && !timer.completed).flatMap((timer) => (
+      finishStatements(input.ownerId, input.workbenchId, timer, input.now)
+    )),
+    db.insert(practiceFocus).values({
+      ownerId: input.ownerId,
+      activityId: null,
+      sessionId: null,
+      focusedAt: null,
+      updatedAt: input.now,
+    }).onConflictDoUpdate({
+      target: practiceFocus.ownerId,
+      set: { activityId: null, sessionId: null, focusedAt: null, updatedAt: input.now },
+    }),
+    db.update(practiceWorkbenches).set({
+      status: "archived",
+      closedAt: input.now,
+      updatedAt: input.now,
+    }).where(and(
+      eq(practiceWorkbenches.ownerId, input.ownerId),
+      eq(practiceWorkbenches.id, input.workbenchId),
+      eq(practiceWorkbenches.status, "open"),
+    )),
+    db.insert(practiceWorkbenches).values({
+      ownerId: input.ownerId,
+      id: input.newWorkbenchId,
+      status: "open",
+      openedPacificDate: input.openedPacificDate,
+      openedAt: input.now,
+      closedAt: null,
+      updatedAt: input.now,
+    }),
+    db.insert(todayPlanningMutations).values({
+      ownerId: input.ownerId,
+      mutationId: input.mutationId,
+      workbenchId: input.workbenchId,
+      requestHash: input.requestHash,
+      response: input.receipt,
+      createdAt: input.now,
+    }),
+  ];
+  try {
+    await db.batch(statements as [(typeof statements)[number], ...(typeof statements)[number][]]);
+  } catch (error) {
+    const message = String(error).toLowerCase();
+    if (message.includes("result_required")) {
+      throw new SpecialistControlError(
+        "result_required",
+        "A result changed while the workbench was closing. Read Today and choose a result before retrying.",
+      );
+    }
+    if (message.includes("workbench_conflict") || message.includes("malformed json")) {
+      throw new SpecialistControlError(
+        "stale_workbench",
+        "Today or one of its timers changed while the workbench was closing. Read Today again before retrying.",
+      );
+    }
+    throw error;
+  }
 }
 
 export async function controlSessionPracticeTimer(input: {

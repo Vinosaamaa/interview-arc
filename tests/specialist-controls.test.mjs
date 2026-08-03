@@ -5,6 +5,76 @@ import test from "node:test";
 import {
   selectNextPracticeActivity,
 } from "../db/specialist-controls-policy.ts";
+import {
+  controlPracticeWorkbench,
+} from "../db/specialist-controls-runtime.ts";
+
+test("workbench rollover is explicit, server-identified, and receipt-backed", async () => {
+  const calls = [];
+  const state = {
+    workbench: { id: "workbench-current" },
+  };
+  const response = await controlPracticeWorkbench(
+    state,
+    {
+      expectedWorkbenchId: "workbench-current",
+      mutationId: "mutation-start-fresh-1",
+      action: "start_fresh",
+      authorization: "explicit_user_instruction",
+    },
+    "request-hash",
+    "2026-08-03",
+    {
+      now: () => 1_754_240_000_000,
+      newWorkbenchId: () => "workbench-replacement",
+      startFreshPracticeWorkbench: async (input) => calls.push(input),
+    },
+  );
+
+  assert.deepEqual(response, {
+    result: {
+      mutationId: "mutation-start-fresh-1",
+      action: "start_fresh",
+      archivedWorkbenchId: "workbench-current",
+      workbenchId: "workbench-replacement",
+      applied: true,
+    },
+    receiptStored: true,
+  });
+  assert.deepEqual(calls, [{
+    workbenchId: "workbench-current",
+    newWorkbenchId: "workbench-replacement",
+    openedPacificDate: "2026-08-03",
+    mutationId: "mutation-start-fresh-1",
+    requestHash: "request-hash",
+    receipt: response.result,
+    now: 1_754_240_000_000,
+  }]);
+});
+
+test("workbench rollover rejects stale state before mutation", async () => {
+  let called = false;
+  await assert.rejects(
+    () => controlPracticeWorkbench(
+      { workbench: { id: "workbench-newer" } },
+      {
+        expectedWorkbenchId: "workbench-stale",
+        mutationId: "mutation-start-fresh-2",
+        action: "start_fresh",
+        authorization: "explicit_user_instruction",
+      },
+      "request-hash",
+      "2026-08-03",
+      {
+        now: () => 1_754_240_000_000,
+        newWorkbenchId: () => "workbench-replacement",
+        startFreshPracticeWorkbench: async () => { called = true; },
+      },
+    ),
+    (error) => error?.code === "stale_workbench",
+  );
+  assert.equal(called, false);
+});
 
 test("advance selects the next unfinished practice activity in canonical session order", () => {
   const next = selectNextPracticeActivity({
@@ -74,6 +144,7 @@ test("specialist Today controls are registered, allowlisted, and contract-bound"
     "plan_today_practice",
     "control_practice_timer",
     "control_practice_session_timer",
+    "control_practice_workbench",
     "set_practice_result",
   ]) {
     assert.match(worker, new RegExp(`server\\.registerTool\\(\\s*["']${tool}["']`));
@@ -93,6 +164,10 @@ test("specialist Today controls are registered, allowlisted, and contract-bound"
   assert.match(
     store,
     /controlSessionPracticeTimer[\s\S]*?pauseStatements[\s\S]*?finishStatements[\s\S]*?todayPlanningMutations/,
+  );
+  assert.match(
+    store,
+    /export async function startFreshPracticeWorkbench[\s\S]*?finishStatements[\s\S]*?practiceWorkbenches[\s\S]*?todayPlanningMutations[\s\S]*?await db\.batch\(statements/,
   );
   assert.match(worker, /controlSessionPracticeTimer\(\{ ownerId, \.\.\.control \}\)/);
   assert.doesNotMatch(
