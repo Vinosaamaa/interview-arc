@@ -405,6 +405,15 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
 
 test("the CLI exposes only ensure, navigate, submit, and retry with explicit verified identity", () => {
   assert.deepEqual(parseCli(["ensure"]), { command: "ensure", identity: null, javaFile: null });
+  assert.deepEqual(
+    parseCli(["--", "ensure"]),
+    { command: "ensure", identity: null, javaFile: null },
+    "pnpm forwards its documented separator to the script",
+  );
+  assert.deepEqual(
+    parseCli(["--", "navigate", identity.url, "--title", identity.title]),
+    { command: "navigate", identity, javaFile: null },
+  );
   assert.deepEqual(parseCli(["navigate", identity.url, "--title", identity.title]), {
     command: "navigate",
     identity,

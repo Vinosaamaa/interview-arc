@@ -84,11 +84,12 @@ export function canonicalProblemIdentity(url, title) {
 }
 
 export function parseCli(argv) {
-  const [command, url, possibleFile, possibleFlag, possibleTitle] = argv;
-  if (command === "ensure" && argv.length === 1) {
+  const normalizedArgv = argv[0] === "--" ? argv.slice(1) : argv;
+  const [command, url, possibleFile, possibleFlag, possibleTitle] = normalizedArgv;
+  if (command === "ensure" && normalizedArgv.length === 1) {
     return { command, identity: null, javaFile: null };
   }
-  if (command === "navigate" && argv.length === 4 && possibleFile === "--title") {
+  if (command === "navigate" && normalizedArgv.length === 4 && possibleFile === "--title") {
     return {
       command,
       identity: canonicalProblemIdentity(url, possibleFlag),
@@ -97,7 +98,7 @@ export function parseCli(argv) {
   }
   if (
     (command === "submit" || command === "retry")
-    && argv.length === 5
+    && normalizedArgv.length === 5
     && possibleFlag === "--title"
   ) {
     return {
@@ -106,7 +107,7 @@ export function parseCli(argv) {
       javaFile: possibleFile,
     };
   }
-  if (["navigate", "submit", "retry"].includes(command) && !argv.includes("--title")) {
+  if (["navigate", "submit", "retry"].includes(command) && !normalizedArgv.includes("--title")) {
     throw new ControllerError("cli_usage", `${command} requires --title with the verified problem title.`);
   }
   throw new ControllerError(
