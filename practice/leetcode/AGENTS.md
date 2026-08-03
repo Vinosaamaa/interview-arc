@@ -465,6 +465,48 @@ or tab for authentication.
   procedure above. Do not discard the profile, copy credentials, or create
   another authenticated browser.
 
+#### Fixed submission controller
+
+`scripts/leetcode-playwright-controller.mjs` is the **only supported** browser
+automation and submission path. Do not reconstruct the launch, connection,
+Monaco, submission, verdict, or retry mechanics in a prompt or temporary
+script. Do not use the incident prototype under `.cache/`, raw CDP submission,
+multiline typing, the Chrome Companion extension, Playwright's bundled
+Chromium, or another browser/profile/port/tab as a fallback. Follow
+`docs/contracts/leetcode-playwright-controller.md`.
+
+During activity startup or while the user is coding, preflight the fixed helper
+and navigate its one persistent tab:
+
+```bash
+pnpm leetcode:browser -- ensure
+pnpm leetcode:browser -- navigate \
+  https://leetcode.com/problems/<slug>/ \
+  --title "<exact visible problem title>"
+```
+
+After the user explicitly asks to submit or retry, pass the same verified
+canonical URL/title and the exact focused Java file:
+
+```bash
+pnpm leetcode:browser -- submit \
+  https://leetcode.com/problems/<slug>/ \
+  practice/leetcode/solutions/<problem-file>.java \
+  --title "<exact visible problem title>"
+
+pnpm leetcode:browser -- retry \
+  https://leetcode.com/problems/<slug>/ \
+  practice/leetcode/solutions/<problem-file>.java \
+  --title "<exact visible problem title>"
+```
+
+Never edit, install, discover, generate, or repair controller code after the
+user says submit. The warm local path has a five-second budget through its one
+`Meta+Enter`; the attempt-specific verdict wait is separately bounded at 60
+seconds. Report the helper's warm-submit and total user-visible timings
+separately. A controller error fails closed and must never cause an automatic
+retry or an alternate automation path.
+
 ### Interview Arc Control Boundary
 
 - Read current owner-scoped Today state only through the registered Interview
