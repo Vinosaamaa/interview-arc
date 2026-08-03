@@ -301,6 +301,10 @@ merged-main artifact is release evidence before installation. The user does not
 need to explicitly confirm every fix; if normal use later exposes the same
 failure, reopen the issue and preserve its history.
 
+The following dependency-readiness rule is an `interview-arc` repository-local
+extension, not part of the shared lifecycle copied to `interview-arc-voice`;
+Voice keeps its separate signed-artifact installation contract.
+
 For a repository-owned local controller or helper, a merge that changes
 `package.json` or `pnpm-lock.yaml` also requires synchronizing the canonical
 checkout with the pinned repository command:
