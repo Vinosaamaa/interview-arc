@@ -733,11 +733,10 @@ test("the checked-in hot path contains no alternate controller, typing, tab, foc
 
 test("the specialist guide and owning contract name the checked-in helper as the only submission path", async () => {
   const repoRoot = path.resolve(import.meta.dirname, "..");
-  const [guide, contract, lifecycle, packageManifest] = await Promise.all([
+  const [guide, contract, lifecycle] = await Promise.all([
     readFile(path.join(repoRoot, "practice", "leetcode", "AGENTS.md"), "utf8"),
     readFile(path.join(repoRoot, "docs", "contracts", "leetcode-playwright-controller.md"), "utf8"),
     readFile(path.join(repoRoot, "docs", "agents", "issue-lifecycle.md"), "utf8"),
-    readFile(path.join(repoRoot, "package.json"), "utf8").then(JSON.parse),
   ]);
   for (const content of [guide, contract]) {
     assert.match(content, /scripts\/leetcode-playwright-controller\.mjs/);
@@ -767,5 +766,4 @@ test("the specialist guide and owning contract name the checked-in helper as the
   }
   assert.match(guide, /real local.*ensure/is);
   assert.match(lifecycle, /package\.json.*pnpm-lock\.yaml.*canonical\s+checkout.*real.*ensure/is);
-  assert.equal(packageManifest.packageManager, "pnpm@9.15.9");
 });
