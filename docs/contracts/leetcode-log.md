@@ -14,6 +14,13 @@ LeetCode records distinguish a real attempt from a solution walkthrough. This pr
 
 Unknown values stay empty. Chat timestamps are not an elapsed-time measurement.
 
+For CLI-native Java work, a meaningful local harness conclusion discussed with
+the user may appear in Activity Exchanges or attempt evidence. Raw commands,
+preparation status, generated harness sources, compiler plumbing, and unrelated
+output do not. **Locally verified** remains separate from the user-owned
+LeetCode verdict and never implies Accepted or assigns an outcome. Follow
+`leetcode-java-harness.md`.
+
 ## Record Kinds
 
 ### Attempt

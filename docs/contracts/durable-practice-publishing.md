@@ -187,6 +187,15 @@ verdict. The specialist does not commit it; the coordinator includes the exact
 accepted source with the activity publication. An unfinished or unaccepted
 working file is not a publication artifact.
 
+The activity may also use the temporary self-test workflow in
+`leetcode-java-harness.md`. Harness reservation and generation state, raw
+runner commands, preparation status, generated support sources, compiler
+plumbing, and unrelated terminal output remain local and never become D1
+transcript turns or publication content. A meaningful local harness conclusion
+may enter an observed activity exchange only when the user discusses it. Local
+verification never supplies a platform verdict, outcome, timer mutation, Code
+Attempt boundary, or publishable solution by itself.
+
 For an owner-private LeetCode question created from a public problem URL, the
 LeetCode specialist also performs a metadata preflight during the first
 complete finalization. It supplies `questionMetadata` with every currently
