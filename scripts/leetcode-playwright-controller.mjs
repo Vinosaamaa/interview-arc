@@ -173,11 +173,12 @@ export function isAutomationOwnedLeetCodeUrl(value) {
 }
 
 export function createPlaywrightPageAdapter(page) {
-  const evaluate = (operation, source) => page.evaluate(({
+  const evaluate = (operation, source, expectedAttemptKey = null) => page.evaluate(({
     operation: selectedOperation,
     selectors,
     routes,
     source: exactSource,
+    expectedAttemptKey: selectedAttemptKey,
   }) => {
     if (selectedOperation === "visible-language") {
       for (const selector of selectors.language) {
@@ -216,7 +217,7 @@ export function createPlaywrightPageAdapter(page) {
       }
       return false;
     }
-    if (selectedOperation === "submission-snapshot") {
+    if (["submission-snapshot", "attempt-key", "attempt-result"].includes(selectedOperation)) {
       let root = null;
       for (const selector of selectors.resultRoot) {
         root = document.querySelector(selector);
@@ -225,16 +226,55 @@ export function createPlaywrightPageAdapter(page) {
       const pathMatch = location.pathname.match(new RegExp(routes.resultAttempt));
       const linkedAttempt = root?.querySelector?.('a[href*="/submissions/"]')?.getAttribute("href")
         ?.match(/\/submissions\/(?:detail\/)?([^/]+)/)?.[1];
-      return {
-        attemptKey: pathMatch?.[1]
-          ?? root?.getAttribute?.("data-submission-id")
-          ?? linkedAttempt
-          ?? null,
-        text: root?.textContent?.trim() ?? "",
-      };
+      const attemptKey = pathMatch?.[1]
+        ?? root?.getAttribute?.("data-submission-id")
+        ?? linkedAttempt
+        ?? null;
+      if (selectedOperation === "attempt-key") return attemptKey;
+      const text = root?.textContent?.trim() ?? "";
+      if (selectedOperation === "submission-snapshot") return { attemptKey, text };
+      if (!root || attemptKey !== selectedAttemptKey) return null;
+      const verdicts = [
+        "Accepted",
+        "Wrong Answer",
+        "Time Limit Exceeded",
+        "Memory Limit Exceeded",
+        "Runtime Error",
+        "Compile Error",
+        "Output Limit Exceeded",
+      ];
+      const verdict = verdicts.find((candidate) => text.includes(candidate)) ?? null;
+      let failingInput = null;
+      for (const selector of selectors.failingInput) {
+        const element = root.querySelector(selector);
+        if (element?.textContent?.trim()) {
+          failingInput = element.textContent.trim();
+          break;
+        }
+      }
+      return { verdict, failingInput };
     }
     throw new Error(`Unsupported page operation: ${selectedOperation}`);
-  }, { operation, selectors: TARGET_SELECTORS, routes: TARGET_ROUTES, source });
+  }, {
+    operation,
+    selectors: TARGET_SELECTORS,
+    routes: TARGET_ROUTES,
+    source,
+    expectedAttemptKey,
+  });
+
+  const abortableDelay = (delayMs, signal) => new Promise((resolve, reject) => {
+    let timer;
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+    timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, delayMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 
   return {
     url: () => page.url(),
@@ -282,100 +322,30 @@ export function createPlaywrightPageAdapter(page) {
     submissionSnapshot: () => evaluate("submission-snapshot"),
     pressSubmit: () => page.keyboard.press("Meta+Enter"),
     async waitForNewAttemptVerdict(baseline, timeoutMs, signal) {
-      const handle = await page.waitForFunction(
-        ({ baselineAttemptKey, selectors, routes }) => {
-          let root = null;
-          for (const selector of selectors.resultRoot) {
-            root = document.querySelector(selector);
-            if (root) break;
-          }
-          if (!root) return false;
-
-          const pathMatch = location.pathname.match(new RegExp(routes.resultAttempt));
-          const linkedAttempt = root.querySelector('a[href*="/submissions/"]')?.getAttribute("href")
-            ?.match(/\/submissions\/(?:detail\/)?([^/]+)/)?.[1];
-          const attemptKey = pathMatch?.[1]
-            ?? root.getAttribute("data-submission-id")
-            ?? linkedAttempt
-            ?? null;
-          if (!attemptKey || attemptKey === baselineAttemptKey) return false;
-          return attemptKey;
-        },
-        {
-          kind: "attempt-transition",
-          baselineAttemptKey: baseline?.attemptKey ?? null,
-          selectors: TARGET_SELECTORS,
-          routes: TARGET_ROUTES,
-        },
-        { timeout: timeoutMs, polling: 100 },
-      );
-      try {
-        const attemptKey = await Promise.race([
-          handle.jsonValue(),
-          new Promise((_, reject) => signal?.addEventListener(
-            "abort",
-            () => reject(signal.reason),
-            { once: true },
-          )),
-        ]);
-        const result = await page.evaluate(({
-          operation,
-          selectors,
-          routes,
-          attemptKey: expectedAttemptKey,
-        }) => {
-          if (operation !== "attempt-result") return null;
-          let root = null;
-          for (const selector of selectors.resultRoot) {
-            root = document.querySelector(selector);
-            if (root) break;
-          }
-          if (!root) return null;
-          const pathMatch = location.pathname.match(new RegExp(routes.resultAttempt));
-          const linkedAttempt = root.querySelector('a[href*="/submissions/"]')?.getAttribute("href")
-            ?.match(/\/submissions\/(?:detail\/)?([^/]+)/)?.[1];
-          const currentAttemptKey = pathMatch?.[1]
-            ?? root.getAttribute("data-submission-id")
-            ?? linkedAttempt
-            ?? null;
-          if (currentAttemptKey !== expectedAttemptKey) return null;
-          const text = root.textContent?.trim() ?? "";
-          const verdicts = [
-            "Accepted",
-            "Wrong Answer",
-            "Time Limit Exceeded",
-            "Memory Limit Exceeded",
-            "Runtime Error",
-            "Compile Error",
-            "Output Limit Exceeded",
-          ];
-          const verdict = verdicts.find((candidate) => text.includes(candidate)) ?? null;
-          let failingInput = null;
-          for (const selector of selectors.failingInput) {
-            const element = root.querySelector(selector);
-            if (element?.textContent?.trim()) {
-              failingInput = element.textContent.trim();
-              break;
-            }
-          }
-          return { verdict, failingInput };
-        }, {
-          operation: "attempt-result",
-          selectors: TARGET_SELECTORS,
-          routes: TARGET_ROUTES,
-          attemptKey,
-        });
-        if (!result?.verdict) {
-          throw new ControllerError(
-            "submission_verdict_missing",
-            "The new attempt appeared without a scoped terminal verdict.",
-            { attemptKey },
-          );
-        }
-        return { transitioned: true, attemptKey, ...result };
-      } finally {
-        await handle.dispose?.();
+      const deadline = Date.now() + timeoutMs;
+      let attemptKey = null;
+      while (Date.now() < deadline) {
+        if (signal?.aborted) throw signal.reason;
+        attemptKey = await evaluate("attempt-key");
+        if (attemptKey && attemptKey !== baseline?.attemptKey) break;
+        await abortableDelay(100, signal);
       }
+      if (!attemptKey || attemptKey === baseline?.attemptKey) {
+        throw new ControllerError(
+          "submission_transition_missing",
+          "No new attempt-specific submission transition appeared before timeout.",
+          { timeoutMs },
+        );
+      }
+      const result = await evaluate("attempt-result", undefined, attemptKey);
+      if (!result?.verdict) {
+        throw new ControllerError(
+          "submission_verdict_missing",
+          "The new attempt appeared without a scoped terminal verdict.",
+          { attemptKey },
+        );
+      }
+      return { transitioned: true, attemptKey, ...result };
     },
   };
 }

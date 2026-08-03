@@ -400,6 +400,7 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
       if (payload.operation === "submission-snapshot") {
         return { attemptKey: "old", text: "Accepted" };
       }
+      if (payload.operation === "attempt-key") return "new";
       if (payload.operation === "attempt-result") {
         return { verdict: "Accepted", failingInput: null };
       }
@@ -408,9 +409,7 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
     waitForFunction: async (_fn, payload, options) => {
       operations.push(["waitForFunction", payload.kind, options.timeout]);
       return {
-        jsonValue: async () => payload.kind === "editor"
-          ? true
-          : "new",
+        jsonValue: async () => payload.kind === "editor" ? true : null,
       };
     },
     keyboard: { press: async (gesture) => { gestures.push(gesture); } },
@@ -431,7 +430,7 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
   assert.deepEqual(gestures, ["Meta+Enter"]);
   assert.equal(verdict.attemptKey, "new");
   assert.equal(operations.some(([, kind]) => kind === "editor"), true);
-  assert.equal(operations.some(([, kind]) => kind === "attempt-transition"), true);
+  assert.equal(operations.some(([operation]) => operation === "attempt-key"), true);
   assert.equal(operations.filter(([operation]) => operation === "attempt-result").length, 1);
   assert.equal(operations.some(([operation]) => operation === "body-text"), false);
   assert.equal(operations.filter(([operation]) => operation === "replace-exact").length, 1);
@@ -589,6 +588,11 @@ test("the checked-in hot path contains no alternate controller, typing, tab, foc
   assert.doesNotMatch(source, /process\.env\.(?:PORT|CDP|CHROME|PROFILE)/);
   assert.doesNotMatch(source, /writeFile\([^,]*import\.meta\.url/);
   assert.equal(source.match(/"Meta\+Enter"/g)?.length, 1);
+  assert.equal(
+    source.match(/new RegExp\(routes\.resultAttempt\)/g)?.length,
+    1,
+    "browser-side attempt route parsing should have one implementation",
+  );
   assert.match(source, /chromium\.connectOverCDP\(endpoint/);
 });
 
