@@ -384,6 +384,7 @@ test("navigate reuses the existing page and verifies the editable Java problem",
 test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM focus, and one gesture", async () => {
   const operations = [];
   const gestures = [];
+  let resultReads = 0;
   const page = {
     url: () => identity.url,
     title: async () => `${identity.title} - LeetCode`,
@@ -402,6 +403,8 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
       }
       if (payload.operation === "attempt-key") return "new";
       if (payload.operation === "attempt-result") {
+        resultReads += 1;
+        if (resultReads === 1) return { verdict: null, failingInput: null };
         return { verdict: "Accepted", failingInput: null };
       }
       throw new Error(`unexpected operation ${payload.operation}`);
@@ -431,7 +434,7 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
   assert.equal(verdict.attemptKey, "new");
   assert.equal(operations.some(([, kind]) => kind === "editor"), true);
   assert.equal(operations.some(([operation]) => operation === "attempt-key"), true);
-  assert.equal(operations.filter(([operation]) => operation === "attempt-result").length, 1);
+  assert.equal(operations.filter(([operation]) => operation === "attempt-result").length, 2);
   assert.equal(operations.some(([operation]) => operation === "body-text"), false);
   assert.equal(operations.filter(([operation]) => operation === "replace-exact").length, 1);
 });

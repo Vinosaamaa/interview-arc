@@ -337,12 +337,18 @@ export function createPlaywrightPageAdapter(page) {
           { timeoutMs },
         );
       }
-      const result = await evaluate("attempt-result", undefined, attemptKey);
+      let result = null;
+      while (Date.now() < deadline) {
+        if (signal?.aborted) throw signal.reason;
+        result = await evaluate("attempt-result", undefined, attemptKey);
+        if (result?.verdict) break;
+        await abortableDelay(100, signal);
+      }
       if (!result?.verdict) {
         throw new ControllerError(
           "submission_verdict_missing",
-          "The new attempt appeared without a scoped terminal verdict.",
-          { attemptKey },
+          "The new attempt did not expose a scoped terminal verdict before timeout.",
+          { attemptKey, timeoutMs },
         );
       }
       return { transitioned: true, attemptKey, ...result };
