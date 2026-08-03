@@ -6,8 +6,11 @@ import test from "node:test";
 import {
   FIXED_CONFIG,
   LeetCodeController,
+  PLAYWRIGHT_BOOTSTRAP_COMMAND,
   canonicalProblemIdentity,
+  controllerStatePathsForProfile,
   createPlaywrightPageAdapter,
+  createRuntimeDependencies,
   ensureBrowserController,
   firstUtf8Difference,
   isAutomationOwnedLeetCodeUrl,
@@ -15,6 +18,7 @@ import {
   parseCli,
   preflightReceiptForRequest,
   runControllerCommand,
+  toControllerStateError,
 } from "../scripts/leetcode-playwright-controller.mjs";
 
 const identity = Object.freeze({
@@ -71,11 +75,19 @@ function controllerWith(adapter, source, now = (() => performance.now())) {
 }
 
 test("the controller exposes one immutable Chrome, profile, CDP, and Java identity", () => {
+  assert.equal(
+    PLAYWRIGHT_BOOTSTRAP_COMMAND,
+    "npm exec --yes pnpm@9.15.9 -- install --frozen-lockfile",
+  );
   assert.equal(FIXED_CONFIG.chromeApplication, "/Applications/Google Chrome.app");
   assert.equal(FIXED_CONFIG.cdpAddress, "127.0.0.1");
   assert.equal(FIXED_CONFIG.cdpPort, 9223);
   assert.equal(FIXED_CONFIG.cdpEndpoint, "http://127.0.0.1:9223");
   assert.match(FIXED_CONFIG.profilePath, /browser-profiles\/leetcode-submitter$/);
+  assert.equal(
+    FIXED_CONFIG.stateDirectory,
+    path.join(FIXED_CONFIG.profilePath, ".interview-arc-controller"),
+  );
   assert.equal(FIXED_CONFIG.defaultLanguage, "Java");
   assert.equal(FIXED_CONFIG.localBudgetMs, 5_000);
   assert.equal(FIXED_CONFIG.verdictTimeoutMs, 60_000);
@@ -102,6 +114,22 @@ test("the controller exposes one immutable Chrome, profile, CDP, and Java identi
   );
 });
 
+test("controller state stays under the authorized profile and reports permission denial precisely", () => {
+  assert.deepEqual(controllerStatePathsForProfile("/workspace/browser-profile"), {
+    stateDirectory: "/workspace/browser-profile/.interview-arc-controller",
+    preflightReceiptPath: "/workspace/browser-profile/.interview-arc-controller/preflight.json",
+    controllerLockPath: "/workspace/browser-profile/.interview-arc-controller/controller.lock",
+  });
+
+  const failure = toControllerStateError(
+    Object.assign(new Error("operation not permitted"), { code: "EPERM" }),
+    "/workspace/browser-profile/.interview-arc-controller",
+  );
+  assert.equal(failure.code, "controller_state_unwritable");
+  assert.equal(failure.details.stateDirectory, "/workspace/browser-profile/.interview-arc-controller");
+  assert.match(failure.message, /dedicated Chrome profile/i);
+});
+
 test("a live CDP endpoint never triggers Chrome launch when Playwright cannot attach", async () => {
   for (const failingStage of ["import", "connect"]) {
     let launches = 0;
@@ -121,10 +149,22 @@ test("a live CDP endpoint never triggers Chrome launch when Playwright cannot at
     await assert.rejects(
       () => ensureBrowserController(dependencies),
       (error) => error.code === `playwright_${failingStage}_failed`
-        && error.details.cdpLive === true,
+        && error.details.cdpLive === true
+        && (
+          failingStage !== "import"
+          || (
+            error.details.recoveryCommand === PLAYWRIGHT_BOOTSTRAP_COMMAND
+            && /local controller dependencies/i.test(error.message)
+          )
+        ),
     );
     assert.equal(launches, 0);
   }
+});
+
+test("the checked-in runtime dependency loader imports real Playwright", async () => {
+  const playwright = await createRuntimeDependencies().loadPlaywright();
+  assert.equal(typeof playwright.chromium?.connectOverCDP, "function");
 });
 
 test("an absent endpoint launches only the fixed Chrome after Playwright resolves", async () => {
@@ -154,6 +194,21 @@ test("an absent endpoint launches only the fixed Chrome after Playwright resolve
   assert.equal(events[1][0], "chrome-launched");
   assert.equal(events[1][1], FIXED_CONFIG);
   assert.equal(events[2], "cdp-ready");
+});
+
+test("a denied fixed-Chrome launch reports the required GUI and loopback authority", async () => {
+  await assert.rejects(
+    () => ensureBrowserController({
+      probeCdp: async () => ({ live: false, cause: "fetch failed" }),
+      loadPlaywright: async () => ({ chromium: {} }),
+      launchChrome: async () => {
+        throw new Error("LaunchServices denied");
+      },
+    }),
+    (error) => error.code === "chrome_launch_failed"
+      && error.details.requiredSandboxPermission === "require_escalated"
+      && error.details.cause === "LaunchServices denied",
+  );
 });
 
 test("ensure reacquires exactly one existing LeetCode problem tab and cleans up ambiguity", async () => {
@@ -665,6 +720,7 @@ test("the checked-in hot path contains no alternate controller, typing, tab, foc
   assert.doesNotMatch(source, /new WebSocket\s*\(/);
   assert.doesNotMatch(source, /document\.body/);
   assert.doesNotMatch(source, /process\.env\.(?:PORT|CDP|CHROME|PROFILE)/);
+  assert.doesNotMatch(source, /Library["',/\\\s]+Caches["',/\\\s]+InterviewArc/);
   assert.doesNotMatch(source, /writeFile\([^,]*import\.meta\.url/);
   assert.equal(source.match(/"Meta\+Enter"/g)?.length, 1);
   assert.equal(
@@ -677,9 +733,10 @@ test("the checked-in hot path contains no alternate controller, typing, tab, foc
 
 test("the specialist guide and owning contract name the checked-in helper as the only submission path", async () => {
   const repoRoot = path.resolve(import.meta.dirname, "..");
-  const [guide, contract] = await Promise.all([
+  const [guide, contract, lifecycle] = await Promise.all([
     readFile(path.join(repoRoot, "practice", "leetcode", "AGENTS.md"), "utf8"),
     readFile(path.join(repoRoot, "docs", "contracts", "leetcode-playwright-controller.md"), "utf8"),
+    readFile(path.join(repoRoot, "docs", "agents", "issue-lifecycle.md"), "utf8"),
   ]);
   for (const content of [guide, contract]) {
     assert.match(content, /scripts\/leetcode-playwright-controller\.mjs/);
@@ -697,9 +754,16 @@ test("the specialist guide and owning contract name the checked-in helper as the
     assert.match(content, /no side diagnostics/i);
     assert.match(content, /lost or ambiguous/i);
     assert.match(content, /never (?:re)?send .*submit.*retry/is);
+    assert.match(content, /GUI.*loopback/is);
+    assert.match(content, /require_escalated/);
   }
   assert.doesNotMatch(guide, /LEETCODE_REPO_ROOT=/);
   assert.doesNotMatch(guide, /curl .*127\.0\.0\.1:9223/is);
   assert.match(guide, /node scripts\/leetcode-playwright-controller\.mjs (?:ensure|navigate)/);
   assert.doesNotMatch(guide, /pnpm leetcode:browser/);
+  for (const content of [guide, contract, lifecycle]) {
+    assert.ok(content.includes(PLAYWRIGHT_BOOTSTRAP_COMMAND));
+  }
+  assert.match(guide, /real local.*ensure/is);
+  assert.match(lifecycle, /package\.json.*pnpm-lock\.yaml.*canonical\s+checkout.*real.*ensure/is);
 });

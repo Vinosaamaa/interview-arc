@@ -14,6 +14,7 @@ result controls and does not publish practice data.
 
 - Application: `/Applications/Google Chrome.app`
 - Profile: `browser-profiles/leetcode-submitter` beside the repository
+- Controller state: `.interview-arc-controller/` inside that dedicated profile
 - CDP endpoint: `http://127.0.0.1:9223`
 - Client: Playwright `chromium.connectOverCDP`
 - Browser state: exactly one persistent automation-owned LeetCode problem or
@@ -24,11 +25,39 @@ The controller does not require the Chrome Companion extension. Playwright's
 `chromium` API attaches to the fixed regular Google Chrome process; it does not
 launch Playwright's bundled Chromium.
 
+The profile-local state directory owns the controller lock and preflight
+receipt. Do not use `~/Library/Caches` or another home-directory path: the
+specialist sandbox may read those locations without permission to create the
+lock. If the fixed profile itself is unwritable, fail before browser action with
+`controller_state_unwritable` and report the profile-local directory.
+
 ## Mandatory specialist route
 
 Run only these commands from the repository root. This is the complete
 specialist route; controller implementation details are not an alternate
 runbook.
+
+The canonical checkout has one pinned coordinator-owned dependency bootstrap:
+
+```bash
+npm exec --yes pnpm@9.15.9 -- install --frozen-lockfile
+```
+
+Run it once after a merged `package.json` or `pnpm-lock.yaml` change, before
+assigning controller work, and then execute the real local `ensure`. Do not
+substitute mocked tests or fresh hosted CI for this long-lived-checkout
+readiness check. Dependency bootstrap is forbidden on the interactive
+`submit` and `retry` paths. If Playwright cannot load, the controller returns
+`playwright_import_failed` with this exact `recoveryCommand` and performs no
+browser navigation or submission.
+
+Controller commands require GUI and loopback-CDP authority. A Codex
+`exec_command` invocation uses `sandbox_permissions: "require_escalated"` from
+its first attempt, with the narrow reusable command prefix
+`["node", "scripts/leetcode-playwright-controller.mjs"]`. Do not probe the
+controller in a restricted shell first: sandbox denial can hide a live endpoint
+or block LaunchServices. A denied fixed-Chrome launch returns
+`chrome_launch_failed` with `requiredSandboxPermission: "require_escalated"`.
 
 ```bash
 node scripts/leetcode-playwright-controller.mjs ensure
