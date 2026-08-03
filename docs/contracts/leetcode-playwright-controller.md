@@ -24,20 +24,22 @@ The controller does not require the Chrome Companion extension. Playwright's
 `chromium` API attaches to the fixed regular Google Chrome process; it does not
 launch Playwright's bundled Chromium.
 
-## Stable commands
+## Mandatory specialist route
 
-Run commands from the repository root:
+Run only these commands from the repository root. This is the complete
+specialist route; controller implementation details are not an alternate
+runbook.
 
 ```bash
-pnpm leetcode:browser -- ensure
-pnpm leetcode:browser -- navigate \
+node scripts/leetcode-playwright-controller.mjs ensure
+node scripts/leetcode-playwright-controller.mjs navigate \
   https://leetcode.com/problems/two-sum/ \
   --title "Two Sum"
-pnpm leetcode:browser -- submit \
+node scripts/leetcode-playwright-controller.mjs submit \
   https://leetcode.com/problems/two-sum/ \
   practice/leetcode/solutions/0001-two-sum.java \
   --title "Two Sum"
-pnpm leetcode:browser -- retry \
+node scripts/leetcode-playwright-controller.mjs retry \
   https://leetcode.com/problems/two-sum/ \
   practice/leetcode/solutions/0001-two-sum.java \
   --title "Two Sum"
@@ -56,6 +58,22 @@ browser instance and problem. They fail closed when the receipt or endpoint is
 stale; they never install dependencies, discover executables, launch Chrome,
 create a tab, generate controller source, or repair controller code on the hot
 path.
+
+The structured controller result is authoritative. A successful result ends
+the operation. A structured failure is reported exactly and ends the operation;
+the specialist does not attempt repair or recovery in that submission turn.
+
+**No side diagnostics:** specialists must not run direct `curl`, `ps`, `pgrep`,
+process inspection, browser enumeration, extension control, manual
+Playwright/CDP code, or another automation tool around these commands. A shell
+sandbox's inability to reach loopback is not controller evidence and must not
+trigger `ensure`, navigation, browser launch, or process discovery.
+
+If `submit` output is lost or ambiguous, an attempt may already have been sent.
+Never resend `submit` or run `retry` automatically. Report the missing verdict
+receipt and wait for explicit user direction. Run `retry` only after revised
+source and a separate explicit user request; a non-Accepted verdict alone does
+not authorize it.
 
 ## Exact submission transaction
 

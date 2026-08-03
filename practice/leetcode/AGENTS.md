@@ -488,6 +488,58 @@ Do not substitute Chrome for Testing, the Codex in-app browser, the user's
 ordinary Chrome profile, coordinate-based computer control, or an ephemeral
 profile.
 
+#### Mandatory specialist route
+
+Run only the checked-in controller commands below, from the `interview-arc`
+repository root. This is the complete specialist browser runbook; all Chrome,
+CDP, Playwright, tab, Monaco, and verdict mechanics belong to the controller.
+
+At activity startup or while the user is coding, preflight once and navigate
+the existing single tab:
+
+```bash
+node scripts/leetcode-playwright-controller.mjs ensure
+node scripts/leetcode-playwright-controller.mjs navigate \
+  https://leetcode.com/problems/<slug>/ \
+  --title "<exact visible problem title>"
+```
+
+After the user explicitly asks to submit, run exactly one command:
+
+```bash
+node scripts/leetcode-playwright-controller.mjs submit \
+  https://leetcode.com/problems/<slug>/ \
+  practice/leetcode/solutions/<problem-file>.java \
+  --title "<exact visible problem title>"
+```
+
+After revised source and a separate explicit retry request, run exactly one
+retry command:
+
+```bash
+node scripts/leetcode-playwright-controller.mjs retry \
+  https://leetcode.com/problems/<slug>/ \
+  practice/leetcode/solutions/<problem-file>.java \
+  --title "<exact visible problem title>"
+```
+
+The controller's structured result is authoritative. On success, report the
+verdict and timings and stop. On a structured failure, report its exact code,
+stage, and message and stop. Do not diagnose around it or attempt recovery in
+the same submission turn.
+
+**No side diagnostics:** never surround these commands with direct `curl`,
+`ps`, `pgrep`, process inspection, browser enumeration, extension control,
+manual Playwright/CDP code, or another automation tool. Never repeat `ensure`
+or `navigate` merely because an unrelated shell sandbox cannot reach loopback.
+Never relaunch Chrome, create another tab, reconstruct the controller, or
+change the fixed host, port, profile, or browser.
+
+If a `submit` command's output is lost or ambiguous, the attempt may already
+have been sent. Never resend `submit` or run `retry` automatically. Report that
+the verdict receipt is unavailable and wait for explicit user direction. A
+non-Accepted verdict also never authorizes an automatic retry.
+
 #### Fixed controller configuration
 
 The following values are normative constants, not discovery suggestions or
@@ -561,83 +613,20 @@ Use a bounded targeted verdict wait of at most 60 seconds, after which report a
 verdict timeout without resubmitting. Exact speed is not a correctness claim:
 never skip the identity or equality gates merely to meet the budget.
 
-#### Idempotent launch and reconnect
+#### Controller-owned lifecycle
 
-Run the launch procedure from the `interview-arc` repository root. First test
-the loopback CDP endpoint. When it already responds, reuse that browser and do
-not launch another one. Otherwise launch the dedicated browser with exactly
-this profile and endpoint:
-
-```bash
-LEETCODE_REPO_ROOT="$(git rev-parse --show-toplevel)"
-LEETCODE_CHROME_PROFILE="$(dirname "$LEETCODE_REPO_ROOT")/browser-profiles/leetcode-submitter"
-
-if ! curl --fail --silent --show-error \
-  http://127.0.0.1:9223/json/version >/dev/null; then
-  LEETCODE_RETURN_BUNDLE_ID="$(osascript -e \
-    'tell application "System Events" to get bundle identifier of first application process whose frontmost is true')"
-
-  open -g -na "Google Chrome" --args \
-    --remote-debugging-address=127.0.0.1 \
-    --remote-debugging-port=9223 \
-    --user-data-dir="$LEETCODE_CHROME_PROFILE" \
-    --no-first-run \
-    --no-default-browser-check \
-    https://leetcode.com/problemset/
-
-  for LEETCODE_CDP_ATTEMPT in {1..50}; do
-    if curl --fail --silent \
-      http://127.0.0.1:9223/json/version >/dev/null; then
-      break
-    fi
-    sleep 0.2
-  done
-
-  open -b "$LEETCODE_RETURN_BUNDLE_ID"
-fi
-
-curl --fail --silent --show-error \
-  http://127.0.0.1:9223/json/version >/dev/null
-```
-
-The launch block remembers the frontmost application, uses `open -g` to avoid
-activation, waits at most ten seconds for the dedicated CDP endpoint, and then
-explicitly restores the original application because macOS or Chrome can still
-steal focus while a new instance initializes. If the final endpoint check
-fails, stop and report the launch failure instead of opening another browser.
-Then connect Playwright with
-`chromium.connectOverCDP("http://127.0.0.1:9223")`. Reacquire the existing
-browser context and its single LeetCode problem page. Do not launch Playwright's
-bundled Chromium and do not call `launchPersistentContext`; both create a
-different browser lifecycle from the approved CDP browser.
-
-Treat Chrome/CDP availability and Playwright-controller availability as two
-separate checks. A Playwright runtime import failure, sandbox denial, expired
-controller object, or failed `connectOverCDP` call does **not** prove that Chrome
-or port `9223` is unavailable. Recheck `/json/version` directly. If that endpoint
-still responds, do not run the launch block, open another tab, switch browsers,
-or improvise a raw-CDP/coordinate-based submission path. Reinitialize the
-approved Playwright controller and reconnect to the existing endpoint. If the
-approved controller cannot be restored, stop before editing or submitting and
-report that controller failure precisely while leaving Chrome and its profile
-untouched.
-
-Resolve and validate the Playwright runtime before the user reaches an explicit
-submission boundary, ideally while the user is coding. Submission time is not
-the moment to install dependencies, discover browser executables, build a new
-controller, or repeat profile setup. After connecting, enumerate the existing
-pages and require exactly one automation-owned LeetCode problem tab before any
-navigation or editor mutation. Never resolve ambiguity by guessing a target or
-creating another tab. If another controller owns the page, wait for it; if the
-single-tab identity cannot be established, stop without submitting.
+`ensure` alone owns endpoint checks, fixed-Chrome launch when genuinely absent,
+Playwright resolution, connection, single-tab acquisition, focus restoration,
+and preflight receipts. Specialists do not reproduce or inspect that lifecycle
+with shell commands. `navigate`, `submit`, and `retry` consume the controller's
+verified state and fail closed when it is absent or stale.
 
 The dedicated profile is durable authentication state. Never delete, replace,
-copy, or recreate it merely because Codex, cmux, Playwright, or the CDP
-connection restarted. If LeetCode authentication expires, keep the browser and
-profile intact, bring that existing dedicated tab to the foreground, and ask
-the user to sign in there. After authentication succeeds, restore the app that
-was active before the authentication flow. Never open another browser, profile,
-or tab for authentication.
+copy, or recreate it. If the controller reports expired authentication, keep
+the browser, profile, and tab intact, bring that existing tab forward only for
+the user to sign in, then rerun the mandatory startup preflight after the user
+confirms authentication. No other controller error permits foregrounding or
+manual recovery.
 
 #### Ordinary-Chrome safety boundary
 
@@ -724,38 +713,11 @@ script. Do not use the incident prototype under `.cache/`, raw CDP submission,
 multiline typing, the Chrome Companion extension, Playwright's bundled
 Chromium, or another browser/profile/port/tab as a fallback. Follow
 `docs/contracts/leetcode-playwright-controller.md`.
-
-During activity startup or while the user is coding, preflight the fixed helper
-and navigate its one persistent tab:
-
-```bash
-pnpm leetcode:browser -- ensure
-pnpm leetcode:browser -- navigate \
-  https://leetcode.com/problems/<slug>/ \
-  --title "<exact visible problem title>"
-```
-
-After the user explicitly asks to submit or retry, pass the same verified
-canonical URL/title and the exact focused Java file:
-
-```bash
-pnpm leetcode:browser -- submit \
-  https://leetcode.com/problems/<slug>/ \
-  practice/leetcode/solutions/<problem-file>.java \
-  --title "<exact visible problem title>"
-
-pnpm leetcode:browser -- retry \
-  https://leetcode.com/problems/<slug>/ \
-  practice/leetcode/solutions/<problem-file>.java \
-  --title "<exact visible problem title>"
-```
-
-Never edit, install, discover, generate, or repair controller code after the
-user says submit. The warm local path has a five-second budget through its one
-`Meta+Enter`; the attempt-specific verdict wait is separately bounded at 60
-seconds. Report the helper's warm-submit and total user-visible timings
-separately. A controller error fails closed and must never cause an automatic
-retry or an alternate automation path.
+Use the **Mandatory specialist route** above verbatim. Never edit, install,
+discover, generate, or repair controller code after the user says submit. The
+warm local path has a five-second budget through its one `Meta+Enter`; the
+attempt-specific verdict wait is separately bounded at 60 seconds. Report the
+helper's warm-submit and total user-visible timings separately.
 
 ### Interview Arc Control Boundary
 
