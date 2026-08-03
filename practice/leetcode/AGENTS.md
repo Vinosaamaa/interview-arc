@@ -488,6 +488,12 @@ Do not substitute Chrome for Testing, the Codex in-app browser, the user's
 ordinary Chrome profile, coordinate-based computer control, or an ephemeral
 profile.
 
+Controller lock and preflight state live under the already-authorized profile
+at `browser-profiles/leetcode-submitter/.interview-arc-controller/`. Never move
+that state to `~/Library/Caches` or another home-directory location that a
+sandboxed specialist may be unable to write. A structured
+`controller_state_unwritable` failure stops before navigation or submission.
+
 #### Mandatory specialist route
 
 Run only the checked-in controller commands below, from the `interview-arc`
@@ -509,6 +515,13 @@ coordinator readiness step, never part of the interactive submit or retry hot
 path. A specialist that receives `playwright_import_failed` stops and reports
 the structured `recoveryCommand`; it does not invent an installation command
 or continue to browser actions.
+
+Every controller command requires macOS GUI and loopback-CDP authority. When
+Codex invokes it through `exec_command`, set `sandbox_permissions` to
+`require_escalated` on the first attempt and request the narrow reusable prefix
+`["node", "scripts/leetcode-playwright-controller.mjs"]`. Never run the
+controller sandboxed first: a restricted shell can hide the live loopback
+endpoint or deny LaunchServices and produce a false Chrome-launch failure.
 
 At activity startup or while the user is coding, preflight once and navigate
 the existing single tab:

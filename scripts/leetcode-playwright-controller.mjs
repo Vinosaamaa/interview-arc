@@ -10,7 +10,6 @@ import {
   unlink,
   writeFile,
 } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -23,15 +22,21 @@ const repositoryParent = path.dirname(repositoryRoot);
 const outerWorkspace = path.basename(repositoryParent) === ".worktrees"
   ? path.dirname(repositoryParent)
   : repositoryParent;
-const localStateDirectory = path.join(
-  os.homedir(),
-  "Library",
-  "Caches",
-  "InterviewArc",
-  "leetcode-playwright-controller",
-);
-const preflightReceiptPath = path.join(localStateDirectory, "preflight.json");
-const controllerLockPath = path.join(localStateDirectory, "controller.lock");
+const fixedProfilePath = path.join(outerWorkspace, "browser-profiles", "leetcode-submitter");
+
+export function controllerStatePathsForProfile(profilePath) {
+  const stateDirectory = path.join(profilePath, ".interview-arc-controller");
+  return Object.freeze({
+    stateDirectory,
+    preflightReceiptPath: path.join(stateDirectory, "preflight.json"),
+    controllerLockPath: path.join(stateDirectory, "controller.lock"),
+  });
+}
+
+const controllerState = controllerStatePathsForProfile(fixedProfilePath);
+const localStateDirectory = controllerState.stateDirectory;
+const preflightReceiptPath = controllerState.preflightReceiptPath;
+const controllerLockPath = controllerState.controllerLockPath;
 
 export const PLAYWRIGHT_BOOTSTRAP_COMMAND =
   "npm exec --yes pnpm@9.15.9 -- install --frozen-lockfile";
@@ -45,9 +50,19 @@ export class ControllerError extends Error {
   }
 }
 
+export function toControllerStateError(error, stateDirectory = localStateDirectory) {
+  if (!["EACCES", "EPERM", "EROFS"].includes(error?.code)) return error;
+  return new ControllerError(
+    "controller_state_unwritable",
+    "The controller cannot write state inside the dedicated Chrome profile. Verify that the Interview Prep workspace is writable, then run ensure again.",
+    { stateDirectory, cause: error.message },
+  );
+}
+
 export const FIXED_CONFIG = Object.freeze({
   chromeApplication: "/Applications/Google Chrome.app",
-  profilePath: path.join(outerWorkspace, "browser-profiles", "leetcode-submitter"),
+  profilePath: fixedProfilePath,
+  stateDirectory: localStateDirectory,
   cdpAddress: "127.0.0.1",
   cdpPort: 9223,
   cdpEndpoint: "http://127.0.0.1:9223",
@@ -405,7 +420,19 @@ export async function ensureBrowserController(dependencies, { allowLaunch = true
 
   let endpoint = cdp;
   if (!cdp.live) {
-    const launchContext = await dependencies.launchChrome(FIXED_CONFIG);
+    let launchContext;
+    try {
+      launchContext = await dependencies.launchChrome(FIXED_CONFIG);
+    } catch (cause) {
+      throw new ControllerError(
+        "chrome_launch_failed",
+        "The fixed Chrome process could not be launched. Run the controller with macOS GUI and loopback permission, then run ensure once more.",
+        {
+          cause: cause.message,
+          requiredSandboxPermission: "require_escalated",
+        },
+      );
+    }
     try {
       endpoint = await dependencies.waitForCdp(FIXED_CONFIG.versionEndpoint);
       if (!endpoint.live || endpoint.valid === false) {
@@ -825,10 +852,14 @@ export function createRuntimeDependencies() {
 }
 
 async function writePreflightReceipt(receipt) {
-  await mkdir(localStateDirectory, { recursive: true });
-  const temporaryPath = `${preflightReceiptPath}.${process.pid}.tmp`;
-  await writeFile(temporaryPath, `${JSON.stringify(receipt, null, 2)}\n`, { mode: 0o600 });
-  await rename(temporaryPath, preflightReceiptPath);
+  try {
+    await mkdir(localStateDirectory, { recursive: true });
+    const temporaryPath = `${preflightReceiptPath}.${process.pid}.tmp`;
+    await writeFile(temporaryPath, `${JSON.stringify(receipt, null, 2)}\n`, { mode: 0o600 });
+    await rename(temporaryPath, preflightReceiptPath);
+  } catch (error) {
+    throw toControllerStateError(error);
+  }
 }
 
 export function preflightReceiptForRequest(request, current, recordedAt = new Date().toISOString()) {
@@ -845,7 +876,9 @@ async function verifyPreflightReceipt(identity) {
   let receipt;
   try {
     receipt = JSON.parse(await readFile(preflightReceiptPath, "utf8"));
-  } catch {
+  } catch (error) {
+    const stateFailure = toControllerStateError(error);
+    if (stateFailure !== error) throw stateFailure;
     throw new ControllerError(
       "preflight_required",
       "Run ensure and navigate before interactive submission.",
@@ -866,7 +899,11 @@ async function verifyPreflightReceipt(identity) {
 }
 
 async function withControllerLock(operation) {
-  await mkdir(localStateDirectory, { recursive: true });
+  try {
+    await mkdir(localStateDirectory, { recursive: true });
+  } catch (error) {
+    throw toControllerStateError(error);
+  }
   const deadline = Date.now() + 15_000;
   let lockHandle;
   while (!lockHandle) {
@@ -874,7 +911,7 @@ async function withControllerLock(operation) {
       lockHandle = await open(controllerLockPath, "wx", 0o600);
       await lockHandle.writeFile(`${JSON.stringify({ pid: process.pid, acquiredAt: new Date().toISOString() })}\n`);
     } catch (error) {
-      if (error.code !== "EEXIST") throw error;
+      if (error.code !== "EEXIST") throw toControllerStateError(error);
       try {
         const lockAgeMs = Date.now() - (await stat(controllerLockPath)).mtimeMs;
         if (lockAgeMs > 120_000) {
