@@ -15,6 +15,7 @@ import {
 import { d1TransactionalInvariantGuard } from "../db/d1-transactional-guard.ts";
 
 test("transactional invariant guards are executable D1 batch queries", async () => {
+  const sqlite = new DatabaseSync(":memory:");
   const client = {
     prepare(query) {
       return {
@@ -26,7 +27,11 @@ test("transactional invariant guards are executable D1 batch queries", async () 
     async batch(statements) {
       assert.equal(statements.length, 1);
       assert.match(statements[0].query, /select json_extract/i);
-      return [{ success: true, results: [{ allowed: 1 }], meta: {} }];
+      return statements.map((statement) => ({
+        success: true,
+        results: sqlite.prepare(statement.query).all(...statement.params),
+        meta: {},
+      }));
     },
   };
   const db = drizzle(client);
@@ -34,6 +39,7 @@ test("transactional invariant guards are executable D1 batch queries", async () 
 
   assert.equal(typeof guard._prepare, "function");
   assert.deepEqual(await db.batch([guard]), [[{ allowed: 1 }]]);
+  sqlite.close();
 });
 
 test("new code-attempt reviews accept only the versioned pending or complete contract", () => {
