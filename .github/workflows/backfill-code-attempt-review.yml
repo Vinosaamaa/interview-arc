@@ -1,0 +1,43 @@
+name: Backfill one Code Attempt review
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: code-attempt-review-backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CODE_ATTEMPT_REVIEW_BACKFILL_INPUT: ${{ secrets.CODE_ATTEMPT_REVIEW_BACKFILL_INPUT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate, apply, and verify idempotent retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CODE_ATTEMPT_REVIEW_BACKFILL_INPUT"
+          umask 077
+          input="$RUNNER_TEMP/code-attempt-review-backfill.json"
+          printf '%s' "$CODE_ATTEMPT_REVIEW_BACKFILL_INPUT" > "$input"
+          pnpm code-attempt-review:backfill --input "$input" --remote --confirm-remote
+          pnpm code-attempt-review:backfill --input "$input" --remote --confirm-remote --apply
+          pnpm code-attempt-review:backfill --input "$input" --remote --confirm-remote --apply

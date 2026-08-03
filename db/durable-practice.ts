@@ -1465,7 +1465,33 @@ export async function saveLeetCodeCodeAttempt(
     updatedAt: nowMs,
   };
   if (plan.kind === "insert") {
-    await db.insert(leetcodeCodeAttempts).values(values);
+    const noReadyFinalizationGuard = db.select({
+      allowed: sql<number>`json_extract(
+        CASE WHEN EXISTS (
+          SELECT 1 FROM ${activityFinalizations}
+          WHERE ${activityFinalizations.ownerId} = ${ownerId}
+            AND ${activityFinalizations.activityId} = ${incoming.activityId}
+            AND ${activityFinalizations.specialty} = 'leetcode'
+            AND ${activityFinalizations.status} IN ('ready', 'published')
+        ) THEN 'invalid' ELSE '{"allowed":1}' END,
+        '$.allowed'
+      )`,
+    });
+    try {
+      await db.batch([
+        noReadyFinalizationGuard,
+        db.insert(leetcodeCodeAttempts).values(values),
+      ]);
+    } catch (error) {
+      const message = String(error).toLowerCase();
+      if (message.includes("malformed json")) {
+        throw new Error("A Code Attempt cannot be added after its activity is ready or published.");
+      }
+      if (message.includes("unique constraint")) {
+        throw new Error(`Code Attempt ${incoming.sequence} already belongs to another code version.`);
+      }
+      throw error;
+    }
     return { status: "inserted" as const, reviewStatus: review.status };
   }
   if (plan.kind === "backfill_review") throw new Error("Historical review backfill requires the coordinator audit command.");
@@ -1644,7 +1670,7 @@ export async function saveSpecialistFinalization(
     await enrichPersonalLeetCodeQuestion(ownerId, questionId, profileTags, payload.questionMetadata, nowMs);
   }
   const status = payload.complete ? "ready" : "draft";
-  await db
+  const finalizationWrite = db
     .insert(activityFinalizations)
     .values({
       ownerId,
@@ -1667,6 +1693,30 @@ export async function saveSpecialistFinalization(
         updatedAt: nowMs,
       },
     });
+  if (payload.complete && specialty === "leetcode") {
+    const noPendingReviewGuard = db.select({
+      allowed: sql<number>`json_extract(
+        CASE WHEN EXISTS (
+          SELECT 1 FROM ${leetcodeCodeAttempts}
+          WHERE ${leetcodeCodeAttempts.ownerId} = ${ownerId}
+            AND ${leetcodeCodeAttempts.activityId} = ${activityId}
+            AND json_extract(${leetcodeCodeAttempts.review}, '$.schemaVersion') = 1
+            AND json_extract(${leetcodeCodeAttempts.review}, '$.status') = 'pending'
+        ) THEN 'invalid' ELSE '{"allowed":1}' END,
+        '$.allowed'
+      )`,
+    });
+    try {
+      await db.batch([noPendingReviewGuard, finalizationWrite]);
+    } catch (error) {
+      if (String(error).toLowerCase().includes("malformed json")) {
+        throw new Error("Complete every pending Code Attempt review before finalization.");
+      }
+      throw error;
+    }
+  } else {
+    await finalizationWrite;
+  }
 
   let linkedRevision: number | null = null;
   if (payload.complete && questionId && profileAction === "reuse_current" && currentProfile) {

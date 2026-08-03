@@ -150,14 +150,15 @@ const expectedAudit = {
 };
 
 function assertAuditReceipt(audit, expected) {
-  if (
-    !audit
-    || audit.review_response_turn_id !== expected.reviewResponseTurnId
-    || audit.review !== expected.review
-    || audit.evidence_hash !== expected.evidenceHash
-    || audit.reason !== expected.reason
-  ) {
-    fail("A conflicting review-backfill audit row already exists.");
+  if (!audit) fail("The review-backfill audit receipt was not returned.");
+  const mismatches = [
+    audit.review_response_turn_id === expected.reviewResponseTurnId ? null : "review turn",
+    audit.review === expected.review ? null : "review payload",
+    audit.evidence_hash === expected.evidenceHash ? null : "evidence hash",
+    audit.reason === expected.reason ? null : "reason",
+  ].filter(Boolean);
+  if (mismatches.length) {
+    fail(`A conflicting review-backfill audit row already exists (${mismatches.join(", ")}).`);
   }
 }
 
@@ -173,15 +174,71 @@ if (existingAudit) {
   process.exit(0);
 }
 
-const [, auditRows] = execute(`INSERT INTO leetcode_code_attempt_review_backfills
+const createdAt = Date.now();
+execute(`SELECT json_extract(
+  CASE WHEN
+    EXISTS (
+      SELECT 1 FROM leetcode_code_attempts
+      WHERE owner_id = ${sqlText(stored.owner_id)}
+        AND id = ${sqlText(input.attemptId)}
+        AND activity_id = ${sqlText(input.activityId)}
+        AND (review IS NULL OR json_extract(review, '$.schemaVersion') IS NOT 1)
+    )
+    AND EXISTS (
+      SELECT 1 FROM practice_transcript_turns
+      WHERE owner_id = ${sqlText(stored.owner_id)}
+        AND activity_id = ${sqlText(input.activityId)}
+        AND turn_id = ${sqlText(input.reviewResponseTurnId)}
+        AND speaker = 'specialist'
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM leetcode_code_attempt_review_backfills
+      WHERE owner_id = ${sqlText(stored.owner_id)}
+        AND attempt_id = ${sqlText(input.attemptId)}
+    )
+  THEN '{"allowed":1}' ELSE 'invalid' END,
+  '$.allowed'
+) AS allowed;
+INSERT INTO leetcode_code_attempt_review_backfills
   (owner_id, attempt_id, activity_id, review_response_turn_id, review, evidence_hash, reason, created_at)
 VALUES (
   ${sqlText(stored.owner_id)}, ${sqlText(input.attemptId)}, ${sqlText(input.activityId)},
-  ${sqlText(input.reviewResponseTurnId)}, ${sqlText(JSON.stringify(review))}, ${sqlText(evidenceHash)},
-  ${sqlText(input.reason.trim())}, ${Date.now()}
+  ${sqlText(input.reviewResponseTurnId)}, ${sqlText(expectedAudit.review)}, ${sqlText(evidenceHash)},
+  ${sqlText(input.reason.trim())}, ${createdAt}
 );
+UPDATE leetcode_code_attempts
+SET review = ${sqlText(expectedAudit.review)},
+  review_response_turn_id = ${sqlText(input.reviewResponseTurnId)},
+  updated_at = MAX(updated_at, ${createdAt})
+WHERE owner_id = ${sqlText(stored.owner_id)}
+  AND id = ${sqlText(input.attemptId)}
+  AND activity_id = ${sqlText(input.activityId)}
+  AND (review IS NULL OR json_extract(review, '$.schemaVersion') IS NOT 1)
+  AND EXISTS (
+    SELECT 1 FROM leetcode_code_attempt_review_backfills
+    WHERE owner_id = ${sqlText(stored.owner_id)}
+      AND attempt_id = ${sqlText(input.attemptId)}
+      AND activity_id = ${sqlText(input.activityId)}
+      AND review_response_turn_id = ${sqlText(input.reviewResponseTurnId)}
+      AND review = ${sqlText(expectedAudit.review)}
+      AND evidence_hash = ${sqlText(evidenceHash)}
+      AND reason = ${sqlText(input.reason.trim())}
+  );`);
+const [auditRows, attemptRows] = execute(`
 SELECT review_response_turn_id, review, evidence_hash, reason
 FROM leetcode_code_attempt_review_backfills
-WHERE owner_id = ${sqlText(stored.owner_id)} AND attempt_id = ${sqlText(input.attemptId)};`);
-assertAuditReceipt(auditRows[0], expectedAudit);
+WHERE owner_id = ${sqlText(stored.owner_id)} AND attempt_id = ${sqlText(input.attemptId)};
+SELECT review, review_response_turn_id
+FROM leetcode_code_attempts
+WHERE owner_id = ${sqlText(stored.owner_id)}
+  AND id = ${sqlText(input.attemptId)}
+  AND activity_id = ${sqlText(input.activityId)};`);
+assertAuditReceipt(auditRows?.[0], expectedAudit);
+if (
+  attemptRows?.length !== 1
+  || attemptRows[0].review !== expectedAudit.review
+  || attemptRows[0].review_response_turn_id !== input.reviewResponseTurnId
+) {
+  fail("The audited review was not applied to the exact historical Code Attempt.");
+}
 console.log(`Applied ${remote ? "remote" : "local"} review backfill with evidence hash ${evidenceHash}.`);
