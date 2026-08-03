@@ -73,6 +73,7 @@ test("specialist Today controls are registered, allowlisted, and contract-bound"
     "query_practice_catalog",
     "plan_today_practice",
     "control_practice_timer",
+    "control_practice_session_timer",
     "set_practice_result",
   ]) {
     assert.match(worker, new RegExp(`server\\.registerTool\\(\\s*["']${tool}["']`));
@@ -85,6 +86,19 @@ test("specialist Today controls are registered, allowlisted, and contract-bound"
   assert.match(store, /db\.batch/);
   assert.match(store, /revisionGuard/);
   assert.match(store, /todayPlanningMutations/);
+  assert.match(
+    store,
+    /export async function controlSessionPracticeTimer[\s\S]*?await db\.batch\(statements/,
+  );
+  assert.match(
+    store,
+    /controlSessionPracticeTimer[\s\S]*?pauseStatements[\s\S]*?finishStatements[\s\S]*?todayPlanningMutations/,
+  );
+  assert.match(worker, /controlSessionPracticeTimer\(\{ ownerId, \.\.\.control \}\)/);
+  assert.doesNotMatch(
+    worker,
+    /controlPracticeSessionTimer\([\s\S]{0,300}receiptStored:\s*false/,
+  );
   assert.match(contract, /explicit user instruction/i);
   assert.match(contract, /authoritative D1 read-back/i);
   assert.match(leetcodeGuide, /control_practice_timer/);

@@ -37,6 +37,14 @@ export type PracticeTimerControlInput = {
   expectedNextRevision?: number;
 };
 
+export type PracticeSessionTimerControlInput = {
+  expectedWorkbenchId: string;
+  mutationId: string;
+  sessionId: string;
+  expectedRevision: number;
+  action: "start" | "pause" | "resume" | "finish";
+};
+
 export type PracticeTimerControlDependencies = {
   now: () => number;
   applyTimerAction: (
@@ -69,6 +77,17 @@ export type PracticeTimerControlDependencies = {
     expectedActivityRevision: number;
     sessionId: string;
     sessionActivityIds: string[];
+    mutationId: string;
+    workbenchId: string;
+    requestHash: string;
+    receipt: Record<string, unknown>;
+    now: number;
+  }) => Promise<void>;
+  controlSessionPracticeTimer: (input: {
+    sessionId: string;
+    action: "start" | "pause" | "resume" | "finish";
+    expectedRevision: number;
+    activityIds: string[];
     mutationId: string;
     workbenchId: string;
     requestHash: string;
@@ -171,6 +190,70 @@ function requireTimerRevision(state: LiveState, activityId: string, expectedRevi
       `The activity timer changed from revision ${expectedRevision} to ${actualRevision}. Read Today again before retrying.`,
     );
   }
+}
+
+function requireSessionTimerRevision(state: LiveState, sessionId: string, expectedRevision: number) {
+  const actualRevision = state.sessionTimers[sessionId]?.revision ?? 0;
+  if (actualRevision !== expectedRevision) {
+    throw new SpecialistControlError(
+      "stale_timer_revision",
+      `The session timer changed from revision ${expectedRevision} to ${actualRevision}. Read Today again before retrying.`,
+    );
+  }
+}
+
+export async function controlPracticeSessionTimer(
+  state: LiveState,
+  input: PracticeSessionTimerControlInput,
+  requestHash: string,
+  dependencies: Pick<PracticeTimerControlDependencies, "now" | "controlSessionPracticeTimer">,
+) {
+  requireWorkbench(state, input.expectedWorkbenchId);
+  const session = specialistSession(state, input.sessionId);
+  requireSessionTimerRevision(state, input.sessionId, input.expectedRevision);
+  const timer = state.sessionTimers[input.sessionId];
+  if (timer?.completed) {
+    throw new SpecialistControlError(
+      "timer_completed",
+      "The session timer is already finished and cannot be changed.",
+    );
+  }
+  if (input.action === "pause" && !timer?.runningSince) {
+    throw new SpecialistControlError(
+      "timer_not_running",
+      "The session timer must be running before it can be paused.",
+    );
+  }
+  if (input.action === "resume" && (!timer?.startedAt || timer.runningSince)) {
+    throw new SpecialistControlError(
+      "timer_not_paused",
+      "The session timer must be started and paused before it can be resumed.",
+    );
+  }
+  if (input.action === "finish" && !timer?.startedAt) {
+    throw new SpecialistControlError(
+      "timer_not_finishable",
+      "The session timer must be started before it can be finished.",
+    );
+  }
+  const result = {
+    mutationId: input.mutationId,
+    sessionId: input.sessionId,
+    action: input.action,
+    applied: true,
+  };
+  await dependencies.controlSessionPracticeTimer({
+    sessionId: input.sessionId,
+    action: input.action,
+    expectedRevision: input.expectedRevision,
+    activityIds: session.activityIds,
+    mutationId: input.mutationId,
+    workbenchId: input.expectedWorkbenchId,
+    requestHash,
+    receipt: result,
+    now: dependencies.now(),
+  });
+  return { result, receiptStored: true };
 }
 
 async function finishAndAdvancePracticeTimer(

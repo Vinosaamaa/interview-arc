@@ -26,6 +26,7 @@ import {
   type OutcomeValue,
   type PublicationStatusValue,
   type TimerAction,
+  type LiveState,
 } from "../db/live-state";
 import { buildPracticeSnapshot, buildPublicationQueue, dateInPracticeTimeZone } from "../db/practice-snapshot";
 import { leetCodeQuestionMetadataSchema } from "../db/question-metadata";
@@ -92,11 +93,13 @@ import {
 } from "../db/today-planning-policy";
 import { SpecialistControlError } from "../db/specialist-controls-policy";
 import {
+  controlSessionPracticeTimer,
   finishAndAdvancePracticeActivity,
   setPracticeResultAtomic,
   startSessionPracticeActivity,
 } from "../db/specialist-controls-store";
 import {
+  controlPracticeSessionTimer,
   controlPracticeTimer,
   setPracticeResult,
   type PracticeResultControlDependencies,
@@ -1549,6 +1552,9 @@ function specialistControlDependencies(ownerId: string, date: string): {
       startSessionPracticeActivity: (control) => (
         startSessionPracticeActivity({ ownerId, ...control })
       ),
+      controlSessionPracticeTimer: (control) => (
+        controlSessionPracticeTimer({ ownerId, ...control })
+      ),
       scheduleCompletedActivity,
     },
     result: {
@@ -1577,6 +1583,43 @@ function specialistToolFailure(error: unknown) {
     };
   }
   throw error;
+}
+
+type SpecialistTimerMutationInput = {
+  expectedWorkbenchId: string;
+  mutationId: string;
+};
+
+async function runSpecialistTimerMutation<TInput extends SpecialistTimerMutationInput>(
+  ownerId: string,
+  env: Env,
+  operation: string,
+  input: TInput,
+  mutate: (
+    state: LiveState,
+    requestHash: string,
+    dependencies: PracticeTimerControlDependencies,
+  ) => Promise<{ result: Record<string, unknown>; receiptStored: boolean }>,
+) {
+  try {
+    const prepared = await prepareSpecialistMutation(ownerId, { operation, ...input });
+    if (prepared.duplicate) {
+      const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
+      const payload = { duplicate: true, result: prepared.priorResponse, authoritative };
+      return { content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
+    }
+    const dependencies = specialistControlDependencies(ownerId, prepared.date).timer;
+    const { result, receiptStored } = await mutate(prepared.state, prepared.requestHash, dependencies);
+    if (!receiptStored) {
+      await rememberSpecialistMutation(ownerId, input, prepared.requestHash, result);
+    }
+    await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "timer");
+    const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
+    const payload = { duplicate: false, result, authoritative };
+    return { content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
+  } catch (error) {
+    return specialistToolFailure(error);
+  }
 }
 
 const specialistCatalogSchema = z.object({
@@ -2416,35 +2459,46 @@ function createServer(ownerId: string, env: Env) {
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
-    async (input) => {
-      try {
-        const prepared = await prepareSpecialistMutation(ownerId, {
-          operation: "control_practice_timer",
-          ...input,
-        });
-        if (prepared.duplicate) {
-          const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
-          const payload = { duplicate: true, result: prepared.priorResponse, authoritative };
-          return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
-        }
-        const dependencies = specialistControlDependencies(ownerId, prepared.date);
-        const { result, receiptStored } = await controlPracticeTimer(
-          prepared.state,
-          input,
-          prepared.requestHash,
-          dependencies.timer,
-        );
-        if (!receiptStored) {
-          await rememberSpecialistMutation(ownerId, input, prepared.requestHash, result);
-        }
-        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "timer");
-        const authoritative = await authoritativeSpecialistState(ownerId, prepared.date);
-        const payload = { duplicate: false, result, authoritative };
-        return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], structuredContent: payload };
-      } catch (error) {
-        return specialistToolFailure(error);
-      }
+    async (input) => runSpecialistTimerMutation(
+      ownerId,
+      env,
+      "control_practice_timer",
+      input,
+      (state, requestHash, dependencies) => controlPracticeTimer(
+        state,
+        input,
+        requestHash,
+        dependencies,
+      ),
+    ),
+  );
+
+  server.registerTool(
+    "control_practice_session_timer",
+    {
+      description: "Execute an explicitly requested authoritative session-countdown command. Supports start, pause, resume, and finish. Requires the current workbench and session timer revisions plus a stable mutation ID; exact retries are idempotent.",
+      inputSchema: {
+        expectedWorkbenchId: z.string().min(1),
+        mutationId: z.string().min(1).max(120),
+        sessionId: z.string().min(1),
+        expectedRevision: z.number().int().nonnegative(),
+        action: z.enum(["start", "pause", "resume", "finish"]),
+        authorization: z.literal("explicit_user_instruction"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
+    async (input) => runSpecialistTimerMutation(
+      ownerId,
+      env,
+      "control_practice_session_timer",
+      input,
+      (state, requestHash, dependencies) => controlPracticeSessionTimer(
+        state,
+        input,
+        requestHash,
+        dependencies,
+      ),
+    ),
   );
 
   server.registerTool(
