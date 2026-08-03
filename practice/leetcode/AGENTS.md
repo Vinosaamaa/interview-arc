@@ -110,10 +110,13 @@ specialist-documentation boundary: read `../../docs/agents/issue-lifecycle.md`,
 reuse or create the owning issue, use an isolated worktree and feature branch,
 keep the active practice checkout untouched, and keep the diff documentation
 only. The specialist may prepare a documentation-only pull request when the
-user requests the durable change, but it never merges or deploys it. If the
-requested behavior needs executable changes, document the requirement and hand
-it to the coordinator instead of implementing it. This administrative work is
-never part of the focused practice transcript or D1 activity draft.
+user requests the durable change. It may also read relevant pull requests,
+diffs, review discussion, and check results through read-only inspection or an
+isolated worktree when source context is necessary. It never merges or deploys
+a pull request. If the requested behavior needs executable changes, document
+the requirement and hand it to the coordinator instead of implementing it.
+This administrative work is never part of the focused practice transcript or
+D1 activity draft.
 
 ## What This Task Is For
 
@@ -313,16 +316,21 @@ series of local attempt snapshots.
 - For local testing, compile the current source and exercise the provided
   examples, boundary cases, targeted adversarial cases, and a brute-force
   differential oracle when practical. Temporary generated harnesses must stay
-  outside the durable solution directory.
+  outside the durable solution directory. A harness may supply platform-owned
+  types or use a filename matching a public class, but it must not rewrite the
+  evolving working file or become the submitted source.
 - Report **Locally verified** separately from the authoritative platform
   verdict. Local compilation and generated tests never imply LeetCode
   acceptance.
 - Submit only after the user explicitly asks. Follow the persistent one-tab
-  Playwright contract below. Submit through the normal LeetCode UI and observe
-  only that submission's verdict and any failing input LeetCode returns. Never
-  inspect or export cookies, crawl the account, open submission history, access
-  editorials or official solutions, or call authenticated/private endpoints
-  directly.
+  Playwright contract below. After local verification, read the working file
+  again and replace the existing LeetCode Java editor with that exact complete
+  file content. Do not generate a second submission version, strip comments,
+  transform the class/API shape, or paste temporary harness code. Submit
+  through the normal LeetCode UI and observe only that submission's verdict and
+  any failing input LeetCode returns. Never inspect or export cookies, crawl
+  the account, open submission history, access editorials or official
+  solutions, or call authenticated/private endpoints directly.
 - Preserve the Java file as a durable local/Git solution only after LeetCode
   returns **Accepted**. If the activity ends without a correct solution, remove
   the unfinished solution artifact rather than publishing it.

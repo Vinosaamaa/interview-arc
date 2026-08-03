@@ -154,6 +154,11 @@ If the repository has its own `.venv/`, use `./.venv/bin/python` instead.
   remains untouched. Keep the diff documentation-only. The specialist may
   open a documentation-only pull request when the user requests the durable
   change; it must not merge, deploy, or broaden the PR into product code.
+- A specialist may read a relevant pull request, including its diff, review
+  discussion, and check results, when that context is needed to understand its
+  own behavior. Use read-only GitHub inspection or an isolated worktree when
+  source inspection is necessary. Reading a pull request never authorizes the
+  specialist to merge it, deploy it, or implement executable changes from it.
 - If an instruction correction requires executable code, schema, migration,
   or generated product artifacts, stop after documenting the requirement and
   hand it to the coordinator. Instruction-maintenance discussion and its
