@@ -440,6 +440,30 @@ Do not substitute Chrome for Testing, the Codex in-app browser, the user's
 ordinary Chrome profile, coordinate-based computer control, or an ephemeral
 profile.
 
+#### Fixed controller configuration
+
+The following values are normative constants, not discovery suggestions or
+defaults that an agent may replace:
+
+| Setting | Required value |
+| --- | --- |
+| Browser application | installed regular `/Applications/Google Chrome.app` |
+| Browser launch identity | `Google Chrome` through the background `open -g -na` command below |
+| Profile directory | `<outer-workspace>/browser-profiles/leetcode-submitter`, derived only as `$(dirname "$(git rev-parse --show-toplevel)")/browser-profiles/leetcode-submitter` |
+| Debug address | `127.0.0.1` |
+| Debug port | `9223` |
+| CDP endpoint | `http://127.0.0.1:9223` |
+| Browser controller | Playwright `chromium.connectOverCDP` |
+| Automation-owned problem tabs | exactly one reusable tab |
+| Practice language | Java unless the user explicitly changes the activity's language |
+| Submission source | the exact evolving Java file for the focused problem |
+
+Do not probe for alternative browser executables, choose another available
+port, honor an environment override for any value above, create another profile
+directory, or fall back to a different browser/controller. A mismatch is a
+hard preflight failure: leave the existing browser and user data untouched and
+report the exact mismatch.
+
 #### Idempotent launch and reconnect
 
 Run the launch procedure from the `interview-arc` repository root. First test
@@ -490,6 +514,26 @@ browser context and its single LeetCode problem page. Do not launch Playwright's
 bundled Chromium and do not call `launchPersistentContext`; both create a
 different browser lifecycle from the approved CDP browser.
 
+Treat Chrome/CDP availability and Playwright-controller availability as two
+separate checks. A Playwright runtime import failure, sandbox denial, expired
+controller object, or failed `connectOverCDP` call does **not** prove that Chrome
+or port `9223` is unavailable. Recheck `/json/version` directly. If that endpoint
+still responds, do not run the launch block, open another tab, switch browsers,
+or improvise a raw-CDP/coordinate-based submission path. Reinitialize the
+approved Playwright controller and reconnect to the existing endpoint. If the
+approved controller cannot be restored, stop before editing or submitting and
+report that controller failure precisely while leaving Chrome and its profile
+untouched.
+
+Resolve and validate the Playwright runtime before the user reaches an explicit
+submission boundary, ideally while the user is coding. Submission time is not
+the moment to install dependencies, discover browser executables, build a new
+controller, or repeat profile setup. After connecting, enumerate the existing
+pages and require exactly one automation-owned LeetCode problem tab before any
+navigation or editor mutation. Never resolve ambiguity by guessing a target or
+creating another tab. If another controller owns the page, wait for it; if the
+single-tab identity cannot be established, stop without submitting.
+
 The dedicated profile is durable authentication state. Never delete, replace,
 copy, or recreate it merely because Codex, cmux, Playwright, or the CDP
 connection restarted. If LeetCode authentication expires, keep the browser and
@@ -522,6 +566,11 @@ or tab for authentication.
   visual fallback defined in **Prepare The Problem** or when the user must
   authenticate. In both cases, restore the previously active app immediately
   after the user finishes interacting with Chrome.
+- Routine Playwright work must not call `bringToFront`, activate Chrome, hide
+  Chrome, or minimize its window. DOM focus inside the background page is
+  sufficient for editor interaction. If Chrome unexpectedly steals macOS
+  focus, restore the previously captured frontmost application; do not hide or
+  suspend the dedicated headed browser as a substitute for background use.
 - Keep the Chrome process independent from one Playwright connection and
   reconnect through its loopback-only CDP endpoint after Codex, cmux, or the
   Playwright controller restarts. Never expose that endpoint beyond localhost.
@@ -542,9 +591,17 @@ or tab for authentication.
   not, and wait for the editable problem page. Never close the prior activity's
   tab because the prior and next problems intentionally share one tab.
 - For each explicit submission, re-read the evolving Java file, reacquire the
-  same tab, verify the current problem, replace the editor contents, focus the
-  editor, and send `Meta+Enter` (Command-Enter). Wait for the resulting verdict
-  view and report only that attempt's visible verdict and failing input.
+  same tab, and verify the current problem and Java editor. Replace the Monaco
+  Java model with the file's exact complete contents in one operation; do not
+  send a multiline source file through character-by-character or `insertText`
+  typing because editor auto-indentation can alter it. Read the model back and
+  require exact string equality with the source file—including comments,
+  whitespace, delimiters, class/API shape, and trailing newline—before
+  submitting. A length-only check is insufficient. If equality fails, stop and
+  report the mismatch instead of compiling or submitting transformed code.
+  Once equality is proven, focus the editor and send `Meta+Enter`
+  (Command-Enter). Wait for the resulting verdict view and report only that
+  attempt's visible verdict and failing input.
 - LeetCode may navigate the same tab from the editable problem page to a
   submission/result page. Before retrying revised code for that problem, use
   Playwright's browser Back operation, then wait for the canonical problem URL
