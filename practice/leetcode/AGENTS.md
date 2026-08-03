@@ -494,6 +494,22 @@ Run only the checked-in controller commands below, from the `interview-arc`
 repository root. This is the complete specialist browser runbook; all Chrome,
 CDP, Playwright, tab, Monaco, and verdict mechanics belong to the controller.
 
+Before assigning controller work after a merge that changes `package.json` or
+`pnpm-lock.yaml`, the coordinator or release agent must synchronize the
+canonical checkout once from the repository root:
+
+```bash
+npm exec --yes pnpm@9.15.9 -- install --frozen-lockfile
+```
+
+It must then run the real local `ensure` command below and observe `status:
+ready`. Mocked tests, hosted CI, or a successful production deployment do not
+prove that a long-lived local checkout has current dependencies. This is a
+coordinator readiness step, never part of the interactive submit or retry hot
+path. A specialist that receives `playwright_import_failed` stops and reports
+the structured `recoveryCommand`; it does not invent an installation command
+or continue to browser actions.
+
 At activity startup or while the user is coding, preflight once and navigate
 the existing single tab:
 

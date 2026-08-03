@@ -33,6 +33,9 @@ const localStateDirectory = path.join(
 const preflightReceiptPath = path.join(localStateDirectory, "preflight.json");
 const controllerLockPath = path.join(localStateDirectory, "controller.lock");
 
+export const PLAYWRIGHT_BOOTSTRAP_COMMAND =
+  "npm exec --yes pnpm@9.15.9 -- install --frozen-lockfile";
+
 export class ControllerError extends Error {
   constructor(code, message, details = {}) {
     super(message);
@@ -390,8 +393,13 @@ export async function ensureBrowserController(dependencies, { allowLaunch = true
   } catch (cause) {
     throw new ControllerError(
       "playwright_import_failed",
-      "Playwright could not be loaded while checking the fixed controller.",
-      { cdpLive: cdp.live === true, cause: cause.message },
+      "The local controller dependencies could not be loaded. Synchronize the canonical checkout, then run ensure once more.",
+      {
+        cdpLive: cdp.live === true,
+        cause: cause.message,
+        recoveryCommand: PLAYWRIGHT_BOOTSTRAP_COMMAND,
+        recoveryWorkingDirectory: "<interview-arc-repository-root>",
+      },
     );
   }
 

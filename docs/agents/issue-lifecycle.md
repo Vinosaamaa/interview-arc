@@ -301,6 +301,21 @@ merged-main artifact is release evidence before installation. The user does not
 need to explicitly confirm every fix; if normal use later exposes the same
 failure, reopen the issue and preserve its history.
 
+For a repository-owned local controller or helper, a merge that changes
+`package.json` or `pnpm-lock.yaml` also requires synchronizing the canonical
+checkout with the pinned repository command:
+
+```bash
+npm exec --yes pnpm@9.15.9 -- install --frozen-lockfile
+```
+
+Then run the helper's real local readiness command, such as
+`node scripts/leetcode-playwright-controller.mjs ensure`, before reporting it
+ready to a specialist. Fresh hosted CI proves the lockfile is installable; it
+does not prove that a long-lived local checkout's ignored `node_modules` is
+current. Keep dependency synchronization outside interactive submit, retry,
+timer, or other latency-sensitive hot paths.
+
 Use this closing comment:
 
 ```markdown

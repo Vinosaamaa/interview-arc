@@ -6,8 +6,10 @@ import test from "node:test";
 import {
   FIXED_CONFIG,
   LeetCodeController,
+  PLAYWRIGHT_BOOTSTRAP_COMMAND,
   canonicalProblemIdentity,
   createPlaywrightPageAdapter,
+  createRuntimeDependencies,
   ensureBrowserController,
   firstUtf8Difference,
   isAutomationOwnedLeetCodeUrl,
@@ -71,6 +73,10 @@ function controllerWith(adapter, source, now = (() => performance.now())) {
 }
 
 test("the controller exposes one immutable Chrome, profile, CDP, and Java identity", () => {
+  assert.equal(
+    PLAYWRIGHT_BOOTSTRAP_COMMAND,
+    "npm exec --yes pnpm@9.15.9 -- install --frozen-lockfile",
+  );
   assert.equal(FIXED_CONFIG.chromeApplication, "/Applications/Google Chrome.app");
   assert.equal(FIXED_CONFIG.cdpAddress, "127.0.0.1");
   assert.equal(FIXED_CONFIG.cdpPort, 9223);
@@ -121,10 +127,22 @@ test("a live CDP endpoint never triggers Chrome launch when Playwright cannot at
     await assert.rejects(
       () => ensureBrowserController(dependencies),
       (error) => error.code === `playwright_${failingStage}_failed`
-        && error.details.cdpLive === true,
+        && error.details.cdpLive === true
+        && (
+          failingStage !== "import"
+          || (
+            error.details.recoveryCommand === PLAYWRIGHT_BOOTSTRAP_COMMAND
+            && /local controller dependencies/i.test(error.message)
+          )
+        ),
     );
     assert.equal(launches, 0);
   }
+});
+
+test("the checked-in runtime dependency loader imports real Playwright", async () => {
+  const playwright = await createRuntimeDependencies().loadPlaywright();
+  assert.equal(typeof playwright.chromium?.connectOverCDP, "function");
 });
 
 test("an absent endpoint launches only the fixed Chrome after Playwright resolves", async () => {
@@ -677,9 +695,11 @@ test("the checked-in hot path contains no alternate controller, typing, tab, foc
 
 test("the specialist guide and owning contract name the checked-in helper as the only submission path", async () => {
   const repoRoot = path.resolve(import.meta.dirname, "..");
-  const [guide, contract] = await Promise.all([
+  const [guide, contract, lifecycle, packageManifest] = await Promise.all([
     readFile(path.join(repoRoot, "practice", "leetcode", "AGENTS.md"), "utf8"),
     readFile(path.join(repoRoot, "docs", "contracts", "leetcode-playwright-controller.md"), "utf8"),
+    readFile(path.join(repoRoot, "docs", "agents", "issue-lifecycle.md"), "utf8"),
+    readFile(path.join(repoRoot, "package.json"), "utf8").then(JSON.parse),
   ]);
   for (const content of [guide, contract]) {
     assert.match(content, /scripts\/leetcode-playwright-controller\.mjs/);
@@ -702,4 +722,10 @@ test("the specialist guide and owning contract name the checked-in helper as the
   assert.doesNotMatch(guide, /curl .*127\.0\.0\.1:9223/is);
   assert.match(guide, /node scripts\/leetcode-playwright-controller\.mjs (?:ensure|navigate)/);
   assert.doesNotMatch(guide, /pnpm leetcode:browser/);
+  for (const content of [guide, contract, lifecycle]) {
+    assert.ok(content.includes(PLAYWRIGHT_BOOTSTRAP_COMMAND));
+  }
+  assert.match(guide, /real local.*ensure/is);
+  assert.match(lifecycle, /package\.json.*pnpm-lock\.yaml.*canonical\s+checkout.*real.*ensure/is);
+  assert.equal(packageManifest.packageManager, "pnpm@9.15.9");
 });

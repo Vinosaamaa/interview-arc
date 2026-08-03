@@ -30,6 +30,20 @@ Run only these commands from the repository root. This is the complete
 specialist route; controller implementation details are not an alternate
 runbook.
 
+The canonical checkout has one pinned coordinator-owned dependency bootstrap:
+
+```bash
+npm exec --yes pnpm@9.15.9 -- install --frozen-lockfile
+```
+
+Run it once after a merged `package.json` or `pnpm-lock.yaml` change, before
+assigning controller work, and then execute the real local `ensure`. Do not
+substitute mocked tests or fresh hosted CI for this long-lived-checkout
+readiness check. Dependency bootstrap is forbidden on the interactive
+`submit` and `retry` paths. If Playwright cannot load, the controller returns
+`playwright_import_failed` with this exact `recoveryCommand` and performs no
+browser navigation or submission.
+
 ```bash
 node scripts/leetcode-playwright-controller.mjs ensure
 node scripts/leetcode-playwright-controller.mjs navigate \
