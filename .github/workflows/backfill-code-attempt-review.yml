@@ -40,4 +40,5 @@ jobs:
           printf '%s' "$CODE_ATTEMPT_REVIEW_BACKFILL_INPUT" > "$input"
           pnpm code-attempt-review:backfill --input "$input" --remote --confirm-remote
           pnpm code-attempt-review:backfill --input "$input" --remote --confirm-remote --apply
+          # Required production idempotency check: this exact retry must be a no-op.
           pnpm code-attempt-review:backfill --input "$input" --remote --confirm-remote --apply

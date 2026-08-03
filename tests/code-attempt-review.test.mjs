@@ -300,9 +300,11 @@ test("the MCP write contract requires specialist-observed review data and leaves
   assert.match(durable, /eq\(practiceTranscriptTurns\.ownerId, ownerId\)/);
   assert.match(durable, /Complete every pending Code Attempt review before finalization/);
   assert.match(durable, /Historical review backfill is available only through the coordinator audit command/);
-  assert.match(durable, /const noReadyFinalizationGuard = db\.select/);
+  assert.match(durable, /function d1TransactionalInvariantGuard/);
+  assert.match(durable, /function isD1TransactionalInvariantFailure/);
+  assert.match(durable, /const noReadyFinalizationGuard = d1TransactionalInvariantGuard/);
   assert.match(durable, /db\.batch\(\[\s*noReadyFinalizationGuard,\s*db\.insert\(leetcodeCodeAttempts\)/);
-  assert.match(durable, /const noPendingReviewGuard = db\.select/);
+  assert.match(durable, /const noPendingReviewGuard = d1TransactionalInvariantGuard/);
   assert.match(durable, /db\.batch\(\[noPendingReviewGuard, finalizationWrite\]\)/);
   assert.match(coordinatorScript, /explicit_evidence_backfill/);
   assert.match(coordinatorScript, /--apply/);

@@ -78,8 +78,9 @@ The command first reads owner-scoped D1 evidence, rejects invented or hidden
 conclusions, verifies that immutable code and evaluation evidence are unchanged,
 and computes an evidence hash. Applying uses one transactional D1 batch to
 revalidate the legacy attempt and visible specialist response, insert one audit
-row, update only `review` and `review_response_turn_id`, and reread both rows.
-An exact rerun is idempotent; conflicting audit evidence fails.
+row, and update only `review` and `review_response_turn_id`. After that batch
+commits, a separate read verifies both exact persisted rows. An exact rerun is
+idempotent; conflicting audit evidence fails.
 
 Never commit a backfill input file, owner identifier, transcript body, exact
 user code, or other private activity evidence.
