@@ -53,6 +53,7 @@ import {
   readProblemSolutionProfile,
   readSpecialistTasks,
   readVoiceCaptureIntent,
+  readVoiceCaptureRemediationIntent,
   readVoiceCaptureIntents,
   readVoiceCaptureIntentsPage,
   registerVoiceCaptureIntent,
@@ -1947,7 +1948,7 @@ function createServer(ownerId: string, env: Env) {
     async (input) => {
       try {
         const result = await remediateRelatedVoiceCapture(input, {
-          readIntent: (captureId) => readVoiceCaptureIntent(ownerId, captureId),
+          readIntent: (captureId) => readVoiceCaptureRemediationIntent(ownerId, captureId),
           deleteCapture: async (captureId, reason) => {
             return await decodeInternalResponse(await deleteVoiceCaptureGraph(
               ownerId,

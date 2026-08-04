@@ -288,6 +288,25 @@ export const voiceSpecialistResponses = sqliteTable(
   ],
 );
 
+// Single- and multi-capture response flows share this owner-scoped identity
+// fence. Inserting every capture and response-turn identity in the same D1
+// batch makes competing cross-flow reservations mutually exclusive.
+export const voiceExchangeReservations = sqliteTable(
+  "voice_exchange_reservations",
+  {
+    ownerId,
+    identityType: text("identity_type", { enum: ["capture", "response_turn"] }).notNull(),
+    identity: text("identity").notNull(),
+    exchangeKind: text("exchange_kind", { enum: ["single", "group"] }).notNull(),
+    responseTurnId: text("response_turn_id").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.identityType, table.identity] }),
+    index("voice_exchange_reservations_response_idx").on(table.ownerId, table.responseTurnId),
+  ],
+);
+
 // Consecutive Voice-managed user turns can form one logical answer. The group
 // reserves one immutable specialist response while each ordered member keeps
 // its own capture, transcript, audio, and delivery-analysis identity.

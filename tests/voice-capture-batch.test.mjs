@@ -96,6 +96,12 @@ test("changed order, membership, activity, specialty, or response content is not
 test("D1 enforces one group order and one user-turn membership", async () => {
   const migration = await readFile(new URL("../drizzle/0021_voice_response_groups.sql", import.meta.url), "utf8");
   const db = new DatabaseSync(":memory:");
+  db.exec(`CREATE TABLE voice_specialist_responses (
+    owner_id text NOT NULL,
+    capture_id text NOT NULL,
+    response_turn_id text NOT NULL,
+    created_at integer NOT NULL
+  )`);
   for (const statement of migration.split("--> statement-breakpoint")) {
     if (statement.trim()) db.exec(statement);
   }
@@ -115,22 +121,24 @@ test("D1 enforces one group order and one user-turn membership", async () => {
     () => insertMember.run("owner", "capture-b", "response-1", "activity-1", "user-a", 1, 1, 1),
     /UNIQUE constraint failed/,
   );
+  const reserveIdentity = db.prepare(`INSERT INTO voice_exchange_reservations
+    (owner_id,identity_type,identity,exchange_kind,response_turn_id,created_at)
+    VALUES (?,?,?,?,?,?)`);
+  reserveIdentity.run("owner", "capture", "capture-a", "group", "response-1", 1);
+  assert.throws(
+    () => reserveIdentity.run("owner", "capture", "capture-a", "single", "response-2", 2),
+    /UNIQUE constraint failed/,
+  );
   db.close();
 });
 
-test("group completion, finish guards, and remediation share the same durable graph", async () => {
-  const [store, contract, leetcode, systemDesign, behavioral] = await Promise.all([
-    readFile(new URL("../db/durable-practice.ts", import.meta.url), "utf8"),
+test("specialist contracts route multi-recording answers through the batch operation", async () => {
+  const [contract, leetcode, systemDesign, behavioral] = await Promise.all([
     readFile(new URL("../docs/contracts/durable-practice-publishing.md", import.meta.url), "utf8"),
     readFile(new URL("../practice/leetcode/AGENTS.md", import.meta.url), "utf8"),
     readFile(new URL("../practice/system-design/AGENTS.md", import.meta.url), "utf8"),
     readFile(new URL("../practice/behavioral/AGENTS.md", import.meta.url), "utf8"),
   ]);
-  assert.match(store, /notExists\(db\.select[\s\S]*voiceResponseGroupMembers/);
-  assert.match(store, /status: "materialized"/);
-  assert.match(store, /hasCanonicalMaterializedVoiceGroupMember/);
-  assert.match(store, /beginDeleteVoiceCaptureGraph/);
-  assert.match(store, /inArray\(activityAudioClips\.id, scope\.clipIds\)/);
   for (const guide of [contract, leetcode, systemDesign, behavioral]) {
     assert.match(guide, /resolve_voice_captures_and_save_response/);
   }

@@ -125,7 +125,12 @@ transcript only when every member is durable: all ordered user turns followed
 by the one shared specialist turn. Exact retries must preserve order,
 membership, activity, specialty, response identity, and response body. A
 changed retry is quarantined rather than rewritten. The singular operation
-remains the compatible path for exactly one capture.
+remains the compatible path for exactly one capture. Both paths acquire the
+same owner-scoped capture and response-turn reservation fence in one D1
+transaction, so a concurrent singular and grouped request cannot both win.
+Voice still delivers each transcript and recording independently; each arrival
+buffers only its member, and the final arrival performs the one guarded group
+materialization after confirming every canonical turn exactly.
 After this MCP catalog change deploys, reconnect the coordinator and all three
 long-lived specialist tasks before relying on the batch operation.
 

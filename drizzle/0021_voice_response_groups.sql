@@ -35,3 +35,26 @@ ON `voice_response_group_members` (`owner_id`,`activity_id`,`user_turn_id`);
 --> statement-breakpoint
 CREATE INDEX `voice_response_group_members_response_idx`
 ON `voice_response_group_members` (`owner_id`,`response_turn_id`);
+--> statement-breakpoint
+CREATE TABLE `voice_exchange_reservations` (
+	`owner_id` text NOT NULL,
+	`identity_type` text NOT NULL,
+	`identity` text NOT NULL,
+	`exchange_kind` text NOT NULL,
+	`response_turn_id` text NOT NULL,
+	`created_at` integer NOT NULL,
+	PRIMARY KEY(`owner_id`, `identity_type`, `identity`)
+);
+--> statement-breakpoint
+CREATE INDEX `voice_exchange_reservations_response_idx`
+ON `voice_exchange_reservations` (`owner_id`,`response_turn_id`);
+--> statement-breakpoint
+INSERT INTO `voice_exchange_reservations`
+  (`owner_id`,`identity_type`,`identity`,`exchange_kind`,`response_turn_id`,`created_at`)
+SELECT `owner_id`,'capture',`capture_id`,'single',`response_turn_id`,`created_at`
+FROM `voice_specialist_responses`;
+--> statement-breakpoint
+INSERT INTO `voice_exchange_reservations`
+  (`owner_id`,`identity_type`,`identity`,`exchange_kind`,`response_turn_id`,`created_at`)
+SELECT `owner_id`,'response_turn',`response_turn_id`,'single',`response_turn_id`,`created_at`
+FROM `voice_specialist_responses`;
