@@ -92,6 +92,74 @@ export function voiceCaptureDeleteTurnIds(
   ])];
 }
 
+export type VoiceBatchMemberDelivery = {
+  captureId: string;
+  userTurnId: string;
+  memberOrder: number;
+  transcript: string | null;
+  occurredAt: number | null;
+};
+
+export type VoiceBatchReservationIdentity = {
+  activityId: string;
+  specialty: string;
+  responseTurnId: string;
+  responseBody: string;
+  responseOccurredAt: number;
+  captures: Array<{ captureId: string; userTurnId: string }>;
+};
+
+export function sameVoiceBatchReservation(
+  existing: VoiceBatchReservationIdentity,
+  incoming: VoiceBatchReservationIdentity,
+) {
+  return existing.activityId === incoming.activityId
+    && existing.specialty === incoming.specialty
+    && existing.responseTurnId === incoming.responseTurnId
+    && existing.responseBody === incoming.responseBody
+    && existing.responseOccurredAt === incoming.responseOccurredAt
+    && existing.captures.length === incoming.captures.length
+    && existing.captures.every((capture, index) =>
+      capture.captureId === incoming.captures[index]?.captureId
+      && capture.userTurnId === incoming.captures[index]?.userTurnId);
+}
+
+export function canonicalVoiceBatchTurns<TSpecialty extends string>(
+  members: VoiceBatchMemberDelivery[],
+  response: { turnId: string; body: string; occurredAt: number },
+  specialty: TSpecialty,
+  baseSequence: number,
+) {
+  const ordered = [...members].sort((left, right) => left.memberOrder - right.memberOrder);
+  if (ordered.length < 2 || ordered.length > 20
+      || new Set(ordered.map((member) => member.captureId)).size !== ordered.length
+      || new Set(ordered.map((member) => member.userTurnId)).size !== ordered.length
+      || ordered.some((member, index) => member.memberOrder !== index)
+      || ordered.some((member) => member.transcript === null || member.occurredAt === null)) {
+    throw new Error("A canonical Voice response group requires 2–20 complete, uniquely ordered members.");
+  }
+  return [
+    ...ordered.map((member) => ({
+      turnId: member.userTurnId,
+      specialty,
+      speaker: "user" as const,
+      body: member.transcript!,
+      source: "audio_transcript" as const,
+      sequence: baseSequence + member.memberOrder,
+      occurredAt: member.occurredAt!,
+    })),
+    {
+      turnId: response.turnId,
+      specialty,
+      speaker: "specialist" as const,
+      body: response.body,
+      source: "codex" as const,
+      sequence: baseSequence + ordered.length,
+      occurredAt: response.occurredAt,
+    },
+  ];
+}
+
 export type VoiceCaptureRemediationIdentity = {
   captureId: string;
   activityId: string;

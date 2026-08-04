@@ -37,7 +37,7 @@ import {
   acknowledgePublishWithoutDeliveryReview,
   appendTranscriptTurns,
   appendVoiceTranscriptTurn,
-  beginDeleteVoiceCapture,
+  beginDeleteVoiceCaptureGraph,
   clearActivityReviewSchedules,
   commitRelatedVoiceCapture,
   completeDeleteVoiceCapture,
@@ -47,11 +47,13 @@ import {
   prepareVoiceCapturesForFinish,
   prepareLegacyVoiceCaptureDeletion,
   readActivityAudioClip,
+  readActivityAudioClips,
   readActivityPracticeRecord,
   readLikelyLegacyVoiceOrphans,
   readProblemSolutionProfile,
   readSpecialistTasks,
   readVoiceCaptureIntent,
+  readVoiceCaptureRemediationIntent,
   readVoiceCaptureIntents,
   readVoiceCaptureIntentsPage,
   registerVoiceCaptureIntent,
@@ -59,6 +61,7 @@ import {
   registerSpecialistTask,
   reportActivityAudioLost,
   resolveVoiceCaptureAndSaveResponse,
+  resolveVoiceCaptureBatchAndSaveResponse,
   resolveVoiceCaptureIntent,
   saveActivityDeliveryAnalysis,
   saveLeetCodeCodeAttempt,
@@ -114,6 +117,10 @@ import {
   voiceCaptureRemediationAnnotations,
   voiceCaptureRemediationInputSchema,
 } from "./voice-capture-remediation";
+import {
+  resolveVoiceCaptureBatch,
+  voiceCaptureBatchInputSchema,
+} from "./voice-capture-batch";
 
 interface Env {
   DB: D1Database;
@@ -1220,15 +1227,20 @@ async function deleteVoiceCaptureGraph(
   captureId: string,
   deletion?: { source: string; reason: string },
 ) {
-  const intent = await beginDeleteVoiceCapture(ownerId, captureId, Date.now(), deletion);
+  const scope = await beginDeleteVoiceCaptureGraph(ownerId, captureId, Date.now(), deletion);
   try {
-    const clip = await readActivityAudioClip(ownerId, intent.clipId);
-    if (clip?.objectKey && !clip.objectKey.startsWith("local-only/")) {
-      await env.AUDIO.delete(clip.objectKey);
-    }
+    const clips = await readActivityAudioClips(ownerId, scope.intents.map((intent) => intent.clipId));
+    await Promise.all(clips
+      .filter((clip) => clip.objectKey && !clip.objectKey.startsWith("local-only/"))
+      .map((clip) => env.AUDIO.delete(clip.objectKey)));
     await completeDeleteVoiceCapture(ownerId, captureId, Date.now());
     await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_capture");
-    return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, captureId, status: "deleted" });
+    return json(request, {
+      protocolVersion: VOICE_PROTOCOL_VERSION,
+      captureId,
+      captureIds: scope.captureIds,
+      status: "deleted",
+    });
   } catch (error) {
     await failDeleteVoiceCapture(ownerId, captureId, error instanceof Error ? error.message : String(error), Date.now());
     throw error;
@@ -1844,6 +1856,30 @@ function createServer(ownerId: string, env: Env) {
   );
 
   server.registerTool(
+    "resolve_voice_captures_and_save_response",
+    {
+      description: "Atomically classify 2–20 ordered protocol-v2 Voice envelopes as one logical answer and reserve exactly one canonical specialist response. Each capture keeps its own transcript/audio identity; the response materializes once after every ordered transcript arrives.",
+      inputSchema: voiceCaptureBatchInputSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await resolveVoiceCaptureBatch(input, async (reservation) => {
+          const saved = await resolveVoiceCaptureBatchAndSaveResponse(ownerId, reservation, Date.now());
+          await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_intent");
+          return { duplicate: saved.duplicate, status: saved.group.status };
+        });
+        return {
+          content: [{ type: "text", text: result.receipt }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
     "append_practice_transcript",
     {
       description: "Append activity-scoped user/specialist transcript turns to the durable D1 draft. Exclude unrelated task, website, or administration conversation.",
@@ -1912,9 +1948,9 @@ function createServer(ownerId: string, env: Env) {
     async (input) => {
       try {
         const result = await remediateRelatedVoiceCapture(input, {
-          readIntent: (captureId) => readVoiceCaptureIntent(ownerId, captureId),
+          readIntent: (captureId) => readVoiceCaptureRemediationIntent(ownerId, captureId),
           deleteCapture: async (captureId, reason) => {
-            await decodeInternalResponse(await deleteVoiceCaptureGraph(
+            return await decodeInternalResponse(await deleteVoiceCaptureGraph(
               ownerId,
               new Request("https://interview-arc.local/voice/captures/" + encodeURIComponent(captureId), {
                 method: "DELETE",

@@ -113,10 +113,16 @@ Implemented safeguards:
 - `save_practice_exchange` stores a typed user/answer pair atomically.
 - `resolve_voice_capture_and_save_response` atomically records a related Voice
   decision and reserves one canonical specialist response.
+- `resolve_voice_captures_and_save_response` extends that invariant to 2–20
+  ordered captures: D1 buffers independent accepted transcripts and emits all
+  user turns followed by one shared response only after the group is complete.
 - D1 holds that response provisionally until Voice delivers the matching user
   transcript, then materializes the ordered pair in one batch.
 - Exact retries reuse stored results; changed stable identities or bodies are
   rejected and quarantined rather than overwritten.
+- Deleting any member of a grouped response removes the entire logical answer,
+  including every member clip/analysis and the shared response, rather than
+  preserving a misleading partial exchange.
 - Untouched pending captures become `discarded_unclassified` during Finish and
   do not block.
 - `uncertain`, confirmed-but-undelivered, deletion, and conflict states return
