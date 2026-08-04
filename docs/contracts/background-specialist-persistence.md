@@ -8,23 +8,31 @@ product-owned hook and D1 outbox remain future work under #93.
 The useful coaching answer is latency-critical. After resolving the activity
 and composing the complete visible answer plus its exact persistence sidecar:
 
-1. Spawn exactly one bounded persistence sub-agent for that visible response.
+1. Reuse the activity's one persistence sub-agent. Spawn it only when no live
+   child exists; otherwise send the exact work as an ordered follow-up task.
 2. Use a context-free fork when the runtime supports it. Give the child only
    the exact structured payload and stable identities it needs; do not copy the
    long specialist transcript into the child context.
 3. Prefer the fastest low-cost sub-agent model available for this mechanical
    tool work. Correct identity and MCP support are mandatory; cost preference
    never permits a model to infer missing evidence.
-4. Return the useful answer immediately after the spawn acknowledgement. Do
+4. Return the useful answer immediately after the spawn/message acknowledgement. Do
    not wait for MCP completion, reload D1, poll status, retry a failed write, or
    run Delivery Coach on the parent response path.
 5. Use one truthful interim line when persistence applies:
    `↻ Practice persistence delegated in background`
    This means only that a child received the work. It never means D1/R2 saved.
 
-Do not spawn a persistence child for a response that has no classification or
-practice write. One child may perform the related exchange and Code Attempt
-write for the same visible response; never spawn one child per MCP call.
+Do not contact a persistence child for a response that has no classification
+or practice write. One work item may contain the related exchange and Code
+Attempt write for the same visible response; never create one child per MCP
+call.
+
+Each activity may have at most one live persistence child and eight delegated
+work items not yet reported complete. Follow-up tasks preserve visible-response
+order. At the eight-item limit, join the child before delegating more work;
+never create another child, reorder evidence, or silently drop persistence.
+After Finish verification, stop reusing that activity's child.
 
 ## Exact child instruction
 
@@ -52,25 +60,19 @@ saved, duplicate, or failed, with the privacy-safe error. Do not ask the user.
 Authentication remains in the MCP connection. Never place credentials or
 private task/thread IDs in the child prompt, source, logs, or receipts.
 
-## Existing operation mapping
+## Durable operation authority
 
-- Related typed exchange: `save_practice_exchange`.
-- One related Voice envelope: `resolve_voice_capture_and_save_response`.
-- Two to twenty consecutive related Voice envelopes answered by one visible
-  response: one `resolve_voice_captures_and_save_response` call.
-- Unrelated or uncertain Voice envelope: `resolve_voice_capture`.
-- Explicit LeetCode attempt boundary: `save_leetcode_code_attempt`, after the
-  related visible exchange when its review turn must already exist.
-
-All existing atomicity, ordering, visible-parity, and conflict rules remain in
-force. A child may not split a multi-capture answer, invent a review, rewrite a
-canonical turn, or convert administrative discussion into practice evidence.
+`durable-practice-publishing.md` remains the single source for MCP operation
+selection, atomicity, ordering, visible parity, identity conflicts, and
+multi-capture behavior. Delegation changes only who executes those operations
+and when the parent returns. A child may not reinterpret that contract.
 
 ## Completion and failure
 
-The child reports to its parent task when it finishes. A parent may mention a
-successful background result on a later turn, but must surface any unresolved
-failure at the next natural interaction and always before Finish/finalization.
+The child reports each delegated work item to its parent task when it finishes.
+A parent may mention a successful background result on a later turn, but must
+surface any unresolved failure at the next natural interaction and always
+before Finish/finalization.
 
 Before activity, session, workbench, or publication Finish, the specialist
 must join every outstanding persistence child for the affected activity and

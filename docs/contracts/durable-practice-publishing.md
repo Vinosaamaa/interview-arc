@@ -103,11 +103,11 @@ create a new revision for punctuation or formatting alone.
 ## Exact-once Draft Capture
 
 During the interim #155 workflow, the specialist delegates the operations in
-this section to one persistence-only sub-agent after composing the visible
-answer. Follow `background-specialist-persistence.md`. The parent returns after
-spawn acknowledgement; the child calls the same existing atomic MCP tools and
-reports later. A spawn acknowledgement is not a saved receipt. The hook/D1
-outbox replacement remains tracked by #93.
+this section to the activity's reusable persistence-only sub-agent after
+composing the visible answer. Follow `background-specialist-persistence.md`
+for delegation, concurrency, and failure behavior. The operation mappings and
+durability rules below remain authoritative. A child acknowledgement is not a
+saved receipt. The hook/D1 outbox replacement remains tracked by #93.
 
 For a related typed exchange, the persistence child calls
 `save_practice_exchange` once

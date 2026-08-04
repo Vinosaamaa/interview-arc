@@ -36,8 +36,9 @@ later in this guide.
   repeat research or browser/runtime discovery when the required state already
   exists, and do not reveal the private answer before the user's fresh attempt.
 - Compose the useful coaching response first, then delegate all related
-  exchange/Code Attempt persistence for that visible response to exactly one
-  persistence-only sub-agent under the shared background contract. Return
+  exchange/Code Attempt persistence for that visible response to the
+  activity's one reusable persistence-only sub-agent under the shared
+  background contract. Return
   after spawn acknowledgement without waiting for MCP or reloading D1. Use
   stable identities; keep `append_practice_transcript` for recovery/import.
 - For a related `Interview Arc Voice capture` envelope, instruct that child to call

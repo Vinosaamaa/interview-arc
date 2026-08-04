@@ -34,7 +34,7 @@ procedure below.
   and call `save_provisional_solution_profile` before the mock. Reuse that
   prepared design on delayed or same-batch revisits.
 - Compose the useful design response first, then delegate its exact related
-  exchange/Voice sidecar to one persistence-only sub-agent under
+  exchange/Voice sidecar to the activity's one reusable persistence-only sub-agent under
   `../../docs/contracts/background-specialist-persistence.md`. Return after
   spawn acknowledgement without waiting for MCP or reloading D1. Keep
   `append_practice_transcript` only for recovery/import compatibility.
@@ -544,13 +544,10 @@ Main priority: help the user learn how to think, speak, and structure answers in
 
 ## Voice intent boundary
 
-For an `interview-arc-voice:v2` envelope, have the response's one persistence
-child use `resolve_voice_capture_and_save_response` for a focused-design answer
-or `resolve_voice_capture` for `unrelated` administration/an `uncertain` turn.
-Never append the enveloped user turn separately.
+Voice operation selection, delegation, and receipt handling follow the
+Authoritative Durable Publishing Workflow above and the shared background
+persistence contract. Never append an enveloped user turn separately.
 
-Return the useful answer plus the truthful background-delegation line. The
-child's eventual MCP receipt remains outside D1.
 For unrelated typed administration return exactly:
 `*Not attached to this practice activity · Not saved to the practice transcript or publication*`.
 Neither receipt belongs in D1 or the published artifact.

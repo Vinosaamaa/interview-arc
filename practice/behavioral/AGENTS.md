@@ -24,7 +24,7 @@ Read `../../docs/contracts/solution-profiles.md` before finalizing.
   preflight with `save_provisional_solution_profile`. The final preferred
   personal answer is still created only from the user's verified mock evidence.
 - Compose the useful interview response first, then delegate its exact related
-  exchange/Voice sidecar to one persistence-only sub-agent under
+  exchange/Voice sidecar to the activity's one reusable persistence-only sub-agent under
   `../../docs/contracts/background-specialist-persistence.md`. Return after
   spawn acknowledgement without waiting for MCP or reloading D1. Keep
   `append_practice_transcript` only for recovery/import compatibility.
@@ -184,14 +184,10 @@ Feedback should identify the interview signal, STAR gaps, vague or overly long p
 
 ## Voice intent boundary
 
-For an `interview-arc-voice:v2` envelope, have the response's one persistence
-child use `resolve_voice_capture_and_save_response` for a focused behavioral
-answer or `resolve_voice_capture` for `unrelated` administration/an `uncertain`
-turn.
-Never append the enveloped user turn separately.
+Voice operation selection, delegation, and receipt handling follow the
+Authoritative Durable Publishing Workflow above and the shared background
+persistence contract. Never append an enveloped user turn separately.
 
-Return the useful answer plus the truthful background-delegation line. The
-child's eventual MCP receipt remains outside D1.
 For unrelated typed administration return exactly:
 `*Not attached to this practice activity · Not saved to the practice transcript or publication*`.
 Neither receipt belongs in D1 or the published artifact.
