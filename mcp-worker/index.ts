@@ -73,7 +73,6 @@ import {
 } from "../db/durable-practice";
 import {
   typedExchangeReceipt,
-  voiceCaptureRemediationDisposition,
   voiceDecisionReceipt,
 } from "../db/practice-exchange-policy";
 import {
@@ -110,6 +109,11 @@ import {
   type PracticeWorkbenchControlDependencies,
   type SpecialistPracticeActivity,
 } from "../db/specialist-controls-runtime";
+import {
+  remediateRelatedVoiceCapture,
+  voiceCaptureRemediationAnnotations,
+  voiceCaptureRemediationInputSchema,
+} from "./voice-capture-remediation";
 
 interface Env {
   DB: D1Database;
@@ -1902,54 +1906,28 @@ function createServer(ownerId: string, env: Env) {
     "delete_related_voice_capture",
     {
       description: "Permanently delete one exact misclassified related Voice capture after explicit user instruction. Requires the registered capture/activity/turn identity and removes the fenced D1 transcript/response/audio/analysis graph. Pending captures must be classified as unrelated instead.",
-      inputSchema: {
-        captureId: z.string().min(1),
-        activityId: z.string().min(1),
-        turnId: z.string().min(1),
-        authorization: z.literal("explicit_user_instruction"),
-        reason: z.string().min(1).max(2_000),
-      },
-      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+      inputSchema: voiceCaptureRemediationInputSchema.shape,
+      annotations: voiceCaptureRemediationAnnotations,
     },
-    async ({ captureId, activityId, turnId, reason }) => {
+    async (input) => {
       try {
-        const intent = await readVoiceCaptureIntent(ownerId, captureId);
-        const disposition = voiceCaptureRemediationDisposition(
-          intent ? {
-            captureId: intent.captureId,
-            activityId: intent.activityId,
-            turnId: intent.turnId,
-            status: intent.status,
-          } : null,
-          { captureId, activityId, turnId },
-        );
-        if (disposition.action === "reject") {
-          throw new SpecialistControlError(disposition.code, disposition.message);
-        }
-        if (disposition.action === "delete") {
-          await decodeInternalResponse(await deleteVoiceCaptureGraph(
-            ownerId,
-            new Request("https://interview-arc.local/voice/captures/" + encodeURIComponent(captureId), {
-              method: "DELETE",
-            }),
-            env,
-            captureId,
-            { source: "specialist-mcp", reason },
-          ));
-        }
-        const receipt = disposition.action === "already_deleted"
-          ? "Voice capture already deleted · Exact remediation retry acknowledged"
-          : "Voice capture deleted · Transcript, response, recording, and delivery analysis removed";
-        return {
-          content: [{ type: "text", text: receipt }],
-          structuredContent: {
-            captureId,
-            activityId,
-            turnId,
-            status: "deleted",
-            idempotent: disposition.idempotent,
-            receipt,
+        const result = await remediateRelatedVoiceCapture(input, {
+          readIntent: (captureId) => readVoiceCaptureIntent(ownerId, captureId),
+          deleteCapture: async (captureId, reason) => {
+            await decodeInternalResponse(await deleteVoiceCaptureGraph(
+              ownerId,
+              new Request("https://interview-arc.local/voice/captures/" + encodeURIComponent(captureId), {
+                method: "DELETE",
+              }),
+              env,
+              captureId,
+              { source: "specialist-mcp", reason },
+            ));
           },
+        });
+        return {
+          content: [{ type: "text", text: result.receipt }],
+          structuredContent: result,
         };
       } catch (error) {
         return specialistToolFailure(error);

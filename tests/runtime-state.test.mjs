@@ -15,6 +15,11 @@ import {
   mergePersonalLeetCodeQuestionMetadata,
   validateLeetCodeQuestionMetadata,
 } from "../db/question-metadata.ts";
+import {
+  remediateRelatedVoiceCapture,
+  voiceCaptureRemediationAnnotations,
+  voiceCaptureRemediationInputSchema,
+} from "../mcp-worker/voice-capture-remediation.ts";
 import { mutationFailureDisposition } from "../app/mutation-queue.ts";
 import { applyTimerSync, timerSyncChanged } from "../app/timer-reconciliation.ts";
 import { isJournalPath, journalBranch, parsePorcelain } from "../scripts/journal-branch.mjs";
@@ -205,21 +210,36 @@ test("post-acceptance Voice remediation requires exact identity and an eligible 
   );
 });
 
-test("the MCP remediation tool is destructive, identity-bound, and reuses fenced deletion", async () => {
-  const bridge = await readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8");
-  const start = bridge.indexOf('"delete_related_voice_capture"');
-  const end = bridge.indexOf("server.registerTool(", start + 1);
-  const registration = bridge.slice(start, end);
+test("the MCP remediation workflow is destructive, identity-bound, and idempotent", async () => {
+  const input = {
+    captureId: "capture-1",
+    activityId: "activity-1",
+    turnId: "voice-user-1",
+    authorization: "explicit_user_instruction",
+    reason: "The user identified this accepted administrative turn as unrelated.",
+  };
+  assert.equal(voiceCaptureRemediationInputSchema.safeParse(input).success, true);
+  assert.equal(voiceCaptureRemediationInputSchema.safeParse({ ...input, authorization: undefined }).success, false);
+  assert.deepEqual(voiceCaptureRemediationAnnotations, {
+    readOnlyHint: false,
+    destructiveHint: true,
+    openWorldHint: false,
+  });
 
-  assert.ok(start >= 0);
-  assert.match(registration, /captureId: z\.string\(\)\.min\(1\)/);
-  assert.match(registration, /activityId: z\.string\(\)\.min\(1\)/);
-  assert.match(registration, /turnId: z\.string\(\)\.min\(1\)/);
-  assert.match(registration, /authorization: z\.literal\("explicit_user_instruction"\)/);
-  assert.match(registration, /reason: z\.string\(\)\.min\(1\)\.max\(2_000\)/);
-  assert.match(registration, /destructiveHint: true/);
-  assert.match(registration, /voiceCaptureRemediationDisposition/);
-  assert.match(registration, /deleteVoiceCaptureGraph/);
+  const deleted = [];
+  const result = await remediateRelatedVoiceCapture(input, {
+    readIntent: async () => ({ ...input, status: "accepted" }),
+    deleteCapture: async (captureId, reason) => deleted.push({ captureId, reason }),
+  });
+  assert.deepEqual(deleted, [{ captureId: input.captureId, reason: input.reason }]);
+  assert.equal(result.status, "deleted");
+  assert.equal(result.idempotent, false);
+
+  const replay = await remediateRelatedVoiceCapture(input, {
+    readIntent: async () => ({ ...input, status: "deleted" }),
+    deleteCapture: async () => assert.fail("a deleted tombstone must not replay graph deletion"),
+  });
+  assert.equal(replay.idempotent, true);
 });
 
 test("Voice commit and delete serialize on intent state and enforce response-turn ownership", async () => {
