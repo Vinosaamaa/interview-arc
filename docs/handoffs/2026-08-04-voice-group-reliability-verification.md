@@ -8,6 +8,8 @@ authorized the complete merge, deploy, signed-package installation, and
 production-verification loop. Deploy the backward-compatible server contract
 before releasing the dependent native client.
 
+Implementation PRs: `interview-arc#159` and `interview-arc-voice#171`.
+
 ## Server implementation
 
 - Canonical multi-capture receipts include stable owner-scoped SHA-256 digest,
