@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import {
+  CONTROLLER_RECEIPT_POLICY,
+  ControllerError,
   FIXED_CONFIG,
   LeetCodeController,
   PLAYWRIGHT_BOOTSTRAP_COMMAND,
@@ -12,11 +15,14 @@ import {
   createPlaywrightPageAdapter,
   createRuntimeDependencies,
   ensureBrowserController,
+  executeWithDurableReceipt,
   firstUtf8Difference,
   isAutomationOwnedLeetCodeUrl,
   leetcodeAttemptKeyFromPath,
   parseCli,
   preflightReceiptForRequest,
+  recoverControllerReceipt,
+  runCli,
   runControllerCommand,
   toControllerStateError,
 } from "../scripts/leetcode-playwright-controller.mjs";
@@ -119,6 +125,7 @@ test("controller state stays under the authorized profile and reports permission
     stateDirectory: "/workspace/browser-profile/.interview-arc-controller",
     preflightReceiptPath: "/workspace/browser-profile/.interview-arc-controller/preflight.json",
     controllerLockPath: "/workspace/browser-profile/.interview-arc-controller/controller.lock",
+    receiptDirectory: "/workspace/browser-profile/.interview-arc-controller/receipts",
   });
 
   const failure = toControllerStateError(
@@ -570,7 +577,7 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
   assert.equal(operations.filter(([operation]) => operation === "replace-exact").length, 1);
 });
 
-test("the CLI exposes only ensure, navigate, submit, and retry with explicit verified identity", () => {
+test("the CLI exposes controller commands and requires an invocation ID for submit or retry", () => {
   assert.deepEqual(parseCli(["ensure"]), { command: "ensure", identity: null, javaFile: null });
   assert.deepEqual(
     parseCli(["--", "ensure"]),
@@ -586,17 +593,204 @@ test("the CLI exposes only ensure, navigate, submit, and retry with explicit ver
     identity,
     javaFile: null,
   });
-  assert.deepEqual(parseCli(["submit", identity.url, "/tmp/0297.java", "--title", identity.title]), {
-    command: "submit",
-    identity,
-    javaFile: "/tmp/0297.java",
-  });
   assert.deepEqual(
-    parseCli(["retry", identity.url, "/tmp/0297.java", "--title", identity.title]).command,
+    parseCli([
+      "submit",
+      identity.url,
+      "/tmp/0297.java",
+      "--title",
+      identity.title,
+      "--invocation-id",
+      "submit-0297-20260804-01",
+    ]),
+    {
+      command: "submit",
+      identity,
+      javaFile: "/tmp/0297.java",
+      invocationId: "submit-0297-20260804-01",
+    },
+  );
+  assert.deepEqual(
+    parseCli([
+      "retry",
+      identity.url,
+      "/tmp/0297.java",
+      "--title",
+      identity.title,
+      "--invocation-id",
+      "retry-0297-20260804-01",
+    ]).command,
     "retry",
   );
+  assert.deepEqual(
+    parseCli(["receipt", "--invocation-id", "submit-0297-20260804-01"]),
+    {
+      command: "receipt",
+      identity: null,
+      javaFile: null,
+      invocationId: "submit-0297-20260804-01",
+    },
+  );
   assert.throws(() => parseCli(["submit", identity.url, "/tmp/0297.java"]), /--title/);
+  assert.throws(
+    () => parseCli(["submit", identity.url, "/tmp/0297.java", "--title", identity.title]),
+    /--invocation-id/,
+  );
+  assert.throws(
+    () => parseCli(["receipt", "--invocation-id", "../other-receipt"]),
+    /invocation ID/i,
+  );
   assert.throws(() => parseCli(["launch"]), /supported command/i);
+});
+
+test("a terminal receipt recovers a successful submit after stdout is lost without another gesture", async () => {
+  const profilePath = await mkdtemp(path.join(tmpdir(), "interview-arc-controller-receipt-"));
+  const statePaths = controllerStatePathsForProfile(profilePath);
+  const request = {
+    command: "submit",
+    invocationId: "submit-0297-20260804-stdout-loss",
+  };
+  let submitGestures = 0;
+  try {
+    const originalEnvelope = await executeWithDurableReceipt(
+      request,
+      async () => {
+        submitGestures += 1;
+        return { verdict: "Accepted", failingInput: null };
+      },
+      { statePaths, now: () => "2026-08-04T08:00:00.000Z" },
+    );
+    assert.equal(originalEnvelope.ok, true);
+
+    // Simulate the command transport dropping stdout by discarding the returned envelope.
+    const recovered = await recoverControllerReceipt(
+      request.invocationId,
+      statePaths,
+    );
+    assert.deepEqual(recovered, {
+      ...originalEnvelope,
+      receipt: {
+        invocationId: request.invocationId,
+        recovered: true,
+        recordedAt: "2026-08-04T08:00:00.000Z",
+      },
+    });
+    assert.equal(submitGestures, 1);
+
+    const duplicate = await executeWithDurableReceipt(
+      request,
+      async () => {
+        submitGestures += 1;
+        return { verdict: "Accepted" };
+      },
+      { statePaths, now: () => "2026-08-04T08:00:01.000Z" },
+    );
+    assert.equal(duplicate.ok, false);
+    assert.equal(duplicate.error.code, "invocation_id_reused");
+    assert.equal(submitGestures, 1, "a reused ID must fail before browser action");
+
+    const receiptFiles = await readdir(statePaths.receiptDirectory);
+    assert.deepEqual(receiptFiles, [`${request.invocationId}.json`]);
+  } finally {
+    await rm(profilePath, { recursive: true, force: true });
+  }
+});
+
+test("durable receipts preserve structured failures and isolate exact invocation IDs", async () => {
+  const profilePath = await mkdtemp(path.join(tmpdir(), "interview-arc-controller-receipt-"));
+  const statePaths = controllerStatePathsForProfile(profilePath);
+  const request = {
+    command: "retry",
+    invocationId: "retry-0297-20260804-failure",
+  };
+  try {
+    const originalEnvelope = await executeWithDurableReceipt(
+      request,
+      async () => {
+        throw new ControllerError("submission_verdict_missing", "No terminal verdict.", {
+          attemptKey: "attempt-123",
+        });
+      },
+      { statePaths, now: () => "2026-08-04T08:01:00.000Z" },
+    );
+    assert.equal(originalEnvelope.ok, false);
+    assert.equal(originalEnvelope.error.code, "submission_verdict_missing");
+
+    const recovered = await recoverControllerReceipt(request.invocationId, statePaths);
+    assert.equal(recovered.ok, false);
+    assert.equal(recovered.error.code, "submission_verdict_missing");
+    assert.equal(recovered.receipt.invocationId, request.invocationId);
+
+    await assert.rejects(
+      () => recoverControllerReceipt("retry-0297-20260804-other", statePaths),
+      (error) => error.code === "controller_receipt_missing",
+    );
+  } finally {
+    await rm(profilePath, { recursive: true, force: true });
+  }
+});
+
+test("terminal receipt retention is bounded while pending or malformed evidence is preserved", async () => {
+  const profilePath = await mkdtemp(path.join(tmpdir(), "interview-arc-controller-receipt-"));
+  const statePaths = controllerStatePathsForProfile(profilePath);
+  const receiptPolicy = { terminalRetentionMs: 60_000, maxTerminalReceipts: 2 };
+  try {
+    for (const [index, invocationId] of ["first", "second", "third"].entries()) {
+      const envelope = await executeWithDurableReceipt(
+        { command: "submit", invocationId: `submit-retention-${invocationId}` },
+        async () => ({ verdict: "Accepted" }),
+        {
+          statePaths,
+          receiptPolicy,
+          now: () => new Date(1785830400000 + index * 1_000).toISOString(),
+        },
+      );
+      assert.equal(envelope.ok, true);
+    }
+
+    const receiptFiles = (await readdir(statePaths.receiptDirectory)).sort();
+    assert.deepEqual(receiptFiles, [
+      "submit-retention-second.json",
+      "submit-retention-third.json",
+    ]);
+    await assert.rejects(
+      () => recoverControllerReceipt("submit-retention-first", statePaths),
+      (error) => error.code === "controller_receipt_missing",
+    );
+    assert.equal(CONTROLLER_RECEIPT_POLICY.maxTerminalReceipts, 200);
+    assert.equal(CONTROLLER_RECEIPT_POLICY.terminalRetentionMs, 30 * 24 * 60 * 60 * 1_000);
+  } finally {
+    await rm(profilePath, { recursive: true, force: true });
+  }
+});
+
+test("receipt CLI recovery reads durable state without acquiring or connecting to the browser", async () => {
+  const profilePath = await mkdtemp(path.join(tmpdir(), "interview-arc-controller-receipt-"));
+  const statePaths = controllerStatePathsForProfile(profilePath);
+  const request = {
+    command: "submit",
+    invocationId: "submit-0297-20260804-read-only",
+  };
+  try {
+    await executeWithDurableReceipt(
+      request,
+      async () => ({ verdict: "Wrong Answer", failingInput: "root = []" }),
+      { statePaths, now: () => "2026-08-04T08:02:00.000Z" },
+    );
+    const recovered = await runCli(
+      ["receipt", "--invocation-id", request.invocationId],
+      {
+        statePaths,
+        acquireController: async () => assert.fail("receipt must not acquire the browser"),
+        withLock: async () => assert.fail("receipt must not acquire the controller lock"),
+      },
+    );
+    assert.equal(recovered.ok, true);
+    assert.equal(recovered.result.verdict, "Wrong Answer");
+    assert.equal(recovered.receipt.recovered, true);
+  } finally {
+    await rm(profilePath, { recursive: true, force: true });
+  }
 });
 
 test("command execution always disconnects the controller without closing Chrome or its tab", async () => {
@@ -729,6 +923,7 @@ test("the checked-in hot path contains no alternate controller, typing, tab, foc
     "browser-side attempt route parsing should have one implementation",
   );
   assert.match(source, /chromium\.connectOverCDP\(endpoint/);
+  assert.match(source, /\.datasync\(\)/);
 });
 
 test("the specialist guide and owning contract name the checked-in helper as the only submission path", async () => {
@@ -745,6 +940,8 @@ test("the specialist guide and owning contract name the checked-in helper as the
     assert.match(content, /navigate/);
     assert.match(content, /submit/);
     assert.match(content, /retry/);
+    assert.match(content, /receipt/);
+    assert.match(content, /--invocation-id/);
   }
   assert.match(contract, /warm(?:-|\s+)submit/i);
   assert.match(contract, /five-second/i);
@@ -754,6 +951,7 @@ test("the specialist guide and owning contract name the checked-in helper as the
     assert.match(content, /no side diagnostics/i);
     assert.match(content, /lost or ambiguous/i);
     assert.match(content, /never (?:re)?send .*submit.*retry/is);
+    assert.match(content, /same invocation ID/i);
     assert.match(content, /GUI.*loopback/is);
     assert.match(content, /require_escalated/);
   }

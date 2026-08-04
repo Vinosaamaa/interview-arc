@@ -520,12 +520,15 @@ path. A specialist that receives `playwright_import_failed` stops and reports
 the structured `recoveryCommand`; it does not invent an installation command
 or continue to browser actions.
 
-Every controller command requires macOS GUI and loopback-CDP authority. When
-Codex invokes it through `exec_command`, set `sandbox_permissions` to
+The `ensure`, `navigate`, `submit`, and `retry` commands require macOS GUI and
+loopback-CDP authority. When Codex invokes one through `exec_command`, set
+`sandbox_permissions` to
 `require_escalated` on the first attempt and request the narrow reusable prefix
 `["node", "scripts/leetcode-playwright-controller.mjs"]`. Never run the
 controller sandboxed first: a restricted shell can hide the live loopback
 endpoint or deny LaunchServices and produce a false Chrome-launch failure.
+The read-only `receipt` command accesses only profile-local controller state;
+it never connects to Chrome, acquires the controller lock, or submits.
 
 At activity startup or while the user is coding, preflight once and navigate
 the existing single tab:
@@ -543,7 +546,8 @@ After the user explicitly asks to submit, run exactly one command:
 node scripts/leetcode-playwright-controller.mjs submit \
   https://leetcode.com/problems/<slug>/ \
   practice/leetcode/solutions/<problem-file>.java \
-  --title "<exact visible problem title>"
+  --title "<exact visible problem title>" \
+  --invocation-id "<unique-controller-invocation-id>"
 ```
 
 After revised source and a separate explicit retry request, run exactly one
@@ -553,8 +557,15 @@ retry command:
 node scripts/leetcode-playwright-controller.mjs retry \
   https://leetcode.com/problems/<slug>/ \
   practice/leetcode/solutions/<problem-file>.java \
-  --title "<exact visible problem title>"
+  --title "<exact visible problem title>" \
+  --invocation-id "<new-unique-controller-invocation-id>"
 ```
+
+Choose the invocation ID before running `submit` or `retry` and preserve it in
+the visible command. One ID represents exactly one possible submit gesture and
+can never be reused. The controller reserves it durably before browser action
+and stores that invocation's terminal success or structured failure before
+emitting stdout or stderr.
 
 The controller's structured result is authoritative. On success, report the
 verdict and timings and stop. On a structured failure, report its exact code,
@@ -568,10 +579,26 @@ or `navigate` merely because an unrelated shell sandbox cannot reach loopback.
 Never relaunch Chrome, create another tab, reconstruct the controller, or
 change the fixed host, port, profile, or browser.
 
-If a `submit` command's output is lost or ambiguous, the attempt may already
-have been sent. Never resend `submit` or run `retry` automatically. Report that
-the verdict receipt is unavailable and wait for explicit user direction. A
-non-Accepted verdict also never authorizes an automatic retry.
+If a `submit` or `retry` command's output is lost or ambiguous, do not rerun it.
+Recover exactly once with the same invocation ID from the original visible
+command:
+
+```bash
+node scripts/leetcode-playwright-controller.mjs receipt \
+  --invocation-id "<same-controller-invocation-id>"
+```
+
+The recovered terminal envelope is authoritative. A `controller_receipt_pending`,
+`controller_receipt_missing`, or `controller_receipt_corrupt` result remains
+ambiguous: report it and wait for explicit user direction. Never change the ID
+and resend `submit`; never run `retry` automatically. A non-Accepted verdict
+also never authorizes an automatic retry.
+
+Terminal receipts remain recoverable for 30 days, bounded to the newest 200.
+A missing receipt may therefore mean that the exact invocation was never
+recorded or that its terminal receipt was pruned. In both cases, keep the
+invocation ID globally unique and do not reuse it. Pending or malformed safety
+evidence is retained for manual investigation instead of being auto-deleted.
 
 #### Fixed controller configuration
 
@@ -607,38 +634,42 @@ performs only these ordered operations:
    Playwright is loaded, `connectOverCDP` succeeds, and exactly one
    automation-owned LeetCode problem page exists. Keep that preflight warm while
    the user codes; never postpone runtime discovery until the submit request.
-2. On explicit submit, read the evolving Java file once as UTF-8. This exact
+2. On explicit submit, atomically reserve the caller-supplied invocation ID in
+   profile-local controller state. A missing, invalid, or previously used ID
+   fails before browser action.
+3. Read the evolving Java file once as UTF-8. This exact
    string is the sole submission payload.
-3. Reacquire the already-known page without navigation when its URL pathname
+4. Reacquire the already-known page without navigation when its URL pathname
    contains the verified `/problems/<canonical-slug>/` identity. Inspect only
    that pathname, the matching problem title, the visible language selector,
    and Monaco's editor models. Do not traverse statement content, the console,
    account UI, prior results, or the whole document body.
-4. Require the visible language to be Java and require exactly one Monaco model
+5. Require the visible language to be Java and require exactly one Monaco model
    whose URI ends in `.java` and whose language ID is `java`. Other empty or
    console models are not submission targets. A zero-model or multiple-model
    result is a hard ambiguity failure.
-5. Call that Java model's `setValue(exactSource)` once. Never use
+6. Call that Java model's `setValue(exactSource)` once. Never use
    `Input.insertText`, keyboard typing, clipboard simulation, repeated line
    insertion, formatting commands, or generated replacement code.
-6. Immediately read `model.getValue()` and require exact string equality with
+7. Immediately read `model.getValue()` and require exact string equality with
    `exactSource`. Also report their UTF-8 byte counts and first differing offset
    on failure. Do not submit when any character, whitespace, comment, delimiter,
    class/API shape, or trailing newline differs.
-7. Capture the scoped submission-result region's current state, focus the
+8. Capture the scoped submission-result region's current state, focus the
    Monaco editor through DOM state without foregrounding Chrome, and send one
    `Meta+Enter`. Do not click by coordinate and do not send a second submit
    gesture automatically.
-8. Require an attempt-specific post-key transition in the scoped submission UI
+9. Require an attempt-specific post-key transition in the scoped submission UI
    before accepting a verdict—for example the submit control becoming busy or a
    new submitting/result state replacing the captured baseline. Then read the
    new verdict only from that scoped result region. Never scan all body text or
    reuse an already-visible verdict from an earlier attempt.
-9. Return the new verdict and its visible failing input, if any. Leave the same
-   browser and tab open in the background.
+10. Persist the terminal structured result atomically under that invocation ID,
+    then return the new verdict and its visible failing input, if any. Leave the
+    same browser and tab open in the background.
 
 The local automation budget after a warm preflight is five seconds total for
-steps 2 through 7. LeetCode's server-side execution and verdict latency is
+steps 3 through 8. LeetCode's server-side execution and verdict latency is
 measured separately and cannot be guaranteed. If a local stage exceeds its
 budget, stop further discovery, name the exact stalled stage, and fail closed;
 do not relaunch, open a tab, switch tools, or assemble an ad hoc controller.
