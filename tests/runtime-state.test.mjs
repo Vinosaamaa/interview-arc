@@ -15,6 +15,11 @@ import {
   mergePersonalLeetCodeQuestionMetadata,
   validateLeetCodeQuestionMetadata,
 } from "../db/question-metadata.ts";
+import {
+  remediateRelatedVoiceCapture,
+  voiceCaptureRemediationAnnotations,
+  voiceCaptureRemediationInputSchema,
+} from "../mcp-worker/voice-capture-remediation.ts";
 import { mutationFailureDisposition } from "../app/mutation-queue.ts";
 import { applyTimerSync, timerSyncChanged } from "../app/timer-reconciliation.ts";
 import { isJournalPath, journalBranch, parsePorcelain } from "../scripts/journal-branch.mjs";
@@ -24,6 +29,7 @@ import {
   sameVoiceCommitTurn,
   voiceCaptureAllowsCommit,
   voiceCaptureDeleteTurnIds,
+  voiceCaptureRemediationDisposition,
   voiceCommitStatusAllowsReplay,
   voiceDecisionReceipt,
   voiceFinishGuardMessage,
@@ -161,6 +167,81 @@ test("deleting a related Voice capture removes both canonical transcript turns",
   assert.deepEqual(voiceCaptureDeleteTurnIds("voice-user-1", null), ["voice-user-1"]);
 });
 
+test("post-acceptance Voice remediation requires exact identity and an eligible status", () => {
+  const accepted = {
+    captureId: "capture-1",
+    activityId: "activity-1",
+    turnId: "voice-user-1",
+    status: "accepted",
+  };
+  const expected = {
+    captureId: "capture-1",
+    activityId: "activity-1",
+    turnId: "voice-user-1",
+  };
+
+  assert.deepEqual(
+    voiceCaptureRemediationDisposition(accepted, expected),
+    { action: "delete", idempotent: false },
+  );
+  assert.deepEqual(
+    voiceCaptureRemediationDisposition({ ...accepted, status: "activity_related" }, expected),
+    { action: "delete", idempotent: false },
+  );
+  assert.deepEqual(
+    voiceCaptureRemediationDisposition({ ...accepted, status: "deleting" }, expected),
+    { action: "delete", idempotent: true },
+  );
+  assert.deepEqual(
+    voiceCaptureRemediationDisposition({ ...accepted, status: "deleted" }, expected),
+    { action: "already_deleted", idempotent: true },
+  );
+  assert.equal(
+    voiceCaptureRemediationDisposition({ ...accepted, activityId: "other" }, expected).code,
+    "voice_capture_identity_mismatch",
+  );
+  assert.equal(
+    voiceCaptureRemediationDisposition({ ...accepted, status: "pending" }, expected).code,
+    "voice_capture_not_remediable",
+  );
+  assert.equal(
+    voiceCaptureRemediationDisposition(null, expected).code,
+    "voice_capture_not_found",
+  );
+});
+
+test("the MCP remediation workflow is destructive, identity-bound, and idempotent", async () => {
+  const input = {
+    captureId: "capture-1",
+    activityId: "activity-1",
+    turnId: "voice-user-1",
+    authorization: "explicit_user_instruction",
+    reason: "The user identified this accepted administrative turn as unrelated.",
+  };
+  assert.equal(voiceCaptureRemediationInputSchema.safeParse(input).success, true);
+  assert.equal(voiceCaptureRemediationInputSchema.safeParse({ ...input, authorization: undefined }).success, false);
+  assert.deepEqual(voiceCaptureRemediationAnnotations, {
+    readOnlyHint: false,
+    destructiveHint: true,
+    openWorldHint: false,
+  });
+
+  const deleted = [];
+  const result = await remediateRelatedVoiceCapture(input, {
+    readIntent: async () => ({ ...input, status: "accepted" }),
+    deleteCapture: async (captureId, reason) => deleted.push({ captureId, reason }),
+  });
+  assert.deepEqual(deleted, [{ captureId: input.captureId, reason: input.reason }]);
+  assert.equal(result.status, "deleted");
+  assert.equal(result.idempotent, false);
+
+  const replay = await remediateRelatedVoiceCapture(input, {
+    readIntent: async () => ({ ...input, status: "deleted" }),
+    deleteCapture: async () => assert.fail("a deleted tombstone must not replay graph deletion"),
+  });
+  assert.equal(replay.idempotent, true);
+});
+
 test("Voice commit and delete serialize on intent state and enforce response-turn ownership", async () => {
   const durableStore = await readFile(new URL("../db/durable-practice.ts", import.meta.url), "utf8");
   const schema = await readFile(new URL("../db/schema.ts", import.meta.url), "utf8");
@@ -173,11 +254,18 @@ test("Voice commit and delete serialize on intent state and enforce response-tur
     durableStore.indexOf("export async function completeDeleteVoiceCapture"),
     durableStore.indexOf("export async function failDeleteVoiceCapture"),
   );
+  const beginDeleteBody = durableStore.slice(
+    durableStore.indexOf("export async function beginDeleteVoiceCapture"),
+    durableStore.indexOf("export async function completeDeleteVoiceCapture"),
+  );
 
   assert.match(commitBody, /const commitIntentPredicate/);
   assert.match(commitBody, /\.insert\(practiceTranscriptTurns\)\.select\(/);
   assert.match(commitBody, /const committedIntent = await readVoiceCaptureIntent/);
   assert.match(commitBody, /committedIntent\?\.status !== "accepted"/);
+  assert.match(beginDeleteBody, /WHEN \$\{voiceCaptureIntents\.status\} = 'deleting' THEN \$\{voiceCaptureIntents\.decisionSource\}/);
+  assert.match(beginDeleteBody, /WHEN \$\{voiceCaptureIntents\.status\} = 'deleting' THEN \$\{voiceCaptureIntents\.decisionReason\}/);
+  assert.match(beginDeleteBody, /WHEN \$\{voiceCaptureIntents\.status\} = 'deleting' THEN \$\{voiceCaptureIntents\.decidedAt\}/);
   assert.match(deleteBody, /select\(\{[\s\S]*userTurnId:[\s\S]*responseTurnId:/);
   assert.doesNotMatch(deleteBody, /readVoiceSpecialistResponse/);
   assert.match(schema, /uniqueIndex\("voice_specialist_responses_owner_response_unique"\)/);
