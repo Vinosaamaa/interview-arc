@@ -1151,9 +1151,18 @@ export async function beginDeleteVoiceCapture(
   await db.update(voiceCaptureIntents).set({
     status: "deleting",
     ...(deletion ? {
-      decisionSource: deletion.source.slice(0, 80),
-      decisionReason: deletion.reason.slice(0, 2_000),
-      decidedAt: nowMs,
+      decisionSource: sql<string | null>`CASE
+        WHEN ${voiceCaptureIntents.status} = 'deleting' THEN ${voiceCaptureIntents.decisionSource}
+        ELSE ${deletion.source.slice(0, 80)}
+      END`,
+      decisionReason: sql<string | null>`CASE
+        WHEN ${voiceCaptureIntents.status} = 'deleting' THEN ${voiceCaptureIntents.decisionReason}
+        ELSE ${deletion.reason.slice(0, 2_000)}
+      END`,
+      decidedAt: sql<number | null>`CASE
+        WHEN ${voiceCaptureIntents.status} = 'deleting' THEN ${voiceCaptureIntents.decidedAt}
+        ELSE ${nowMs}
+      END`,
     } : {}),
     updatedAt: nowMs,
     lastError: null,

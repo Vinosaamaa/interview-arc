@@ -254,11 +254,18 @@ test("Voice commit and delete serialize on intent state and enforce response-tur
     durableStore.indexOf("export async function completeDeleteVoiceCapture"),
     durableStore.indexOf("export async function failDeleteVoiceCapture"),
   );
+  const beginDeleteBody = durableStore.slice(
+    durableStore.indexOf("export async function beginDeleteVoiceCapture"),
+    durableStore.indexOf("export async function completeDeleteVoiceCapture"),
+  );
 
   assert.match(commitBody, /const commitIntentPredicate/);
   assert.match(commitBody, /\.insert\(practiceTranscriptTurns\)\.select\(/);
   assert.match(commitBody, /const committedIntent = await readVoiceCaptureIntent/);
   assert.match(commitBody, /committedIntent\?\.status !== "accepted"/);
+  assert.match(beginDeleteBody, /WHEN \$\{voiceCaptureIntents\.status\} = 'deleting' THEN \$\{voiceCaptureIntents\.decisionSource\}/);
+  assert.match(beginDeleteBody, /WHEN \$\{voiceCaptureIntents\.status\} = 'deleting' THEN \$\{voiceCaptureIntents\.decisionReason\}/);
+  assert.match(beginDeleteBody, /WHEN \$\{voiceCaptureIntents\.status\} = 'deleting' THEN \$\{voiceCaptureIntents\.decidedAt\}/);
   assert.match(deleteBody, /select\(\{[\s\S]*userTurnId:[\s\S]*responseTurnId:/);
   assert.doesNotMatch(deleteBody, /readVoiceSpecialistResponse/);
   assert.match(schema, /uniqueIndex\("voice_specialist_responses_owner_response_unique"\)/);
