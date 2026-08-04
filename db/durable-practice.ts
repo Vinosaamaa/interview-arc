@@ -20,6 +20,7 @@ import {
   voiceCaptureIntents,
   voiceExchangeReservations,
   voiceResponseGroupMembers,
+  voiceResponseGroupRepairEvents,
   voiceResponseGroups,
   voiceSpecialistResponses,
 } from "./schema";
@@ -28,6 +29,7 @@ import {
   finishDispositionForVoiceStatus,
   sameCanonicalExchange,
   sameVoiceBatchReservation,
+  voiceResponseGroupDigest,
   sameVoiceCommitTurn,
   type CanonicalExchangeIdentity,
   voiceCaptureAllowsCommit,
@@ -65,6 +67,18 @@ export type TranscriptSource = "codex" | "dictation" | "audio_transcript";
 export type VoiceCaptureDecision = "activity_related" | "unrelated" | "uncertain";
 export type { ReviewReason } from "./review-cadence";
 export type { CodeAttemptReviewV1 } from "./code-attempt-review";
+
+export class VoiceResponseGroupConflictError extends Error {
+  readonly code = "voice_response_group_conflict";
+  readonly retryable = false;
+  readonly details: Record<string, unknown>;
+
+  constructor(message: string, details: Record<string, unknown> = {}) {
+    super(message);
+    this.name = "VoiceResponseGroupConflictError";
+    this.details = details;
+  }
+}
 
 export type DeliveryAnalysisPayload = {
   schemaVersion: 1;
@@ -1028,6 +1042,38 @@ async function readVoiceResponseGroup(ownerId: string, responseTurnId: string) {
   return { group, members };
 }
 
+function storedVoiceResponseBatch(
+  stored: NonNullable<Awaited<ReturnType<typeof readVoiceResponseGroup>>>,
+): VoiceResponseBatchInput {
+  return {
+    activityId: stored.group.activityId,
+    specialty: stored.group.specialty,
+    responseTurnId: stored.group.responseTurnId,
+    responseBody: stored.group.responseBody,
+    responseOccurredAt: stored.group.responseOccurredAt,
+    captures: stored.members.map(({ captureId, userTurnId }) => ({ captureId, userTurnId })),
+    reason: "Stored canonical Voice response group.",
+  };
+}
+
+async function voiceResponseGroupReceipt(
+  stored: NonNullable<Awaited<ReturnType<typeof readVoiceResponseGroup>>>,
+) {
+  return {
+    responseTurnId: stored.group.responseTurnId,
+    activityId: stored.group.activityId,
+    specialty: stored.group.specialty,
+    status: stored.group.status,
+    memberCount: stored.group.memberCount,
+    members: stored.members.map(({ captureId, userTurnId, memberOrder }) => ({
+      captureId,
+      userTurnId,
+      memberOrder,
+    })),
+    digest: await voiceResponseGroupDigest(stored.group.ownerId, storedVoiceResponseBatch(stored)),
+  };
+}
+
 async function readVoiceResponseGroupByCapture(ownerId: string, captureId: string) {
   const db = getDb();
   const member = (await db.select().from(voiceResponseGroupMembers).where(and(
@@ -1096,7 +1142,6 @@ async function resolveExistingVoiceResponseBatch(
   ownerId: string,
   input: VoiceResponseBatchInput,
   captureIds: string[],
-  nowMs: number,
 ) {
   const db = getDb();
   const collidingMembers = await db.select().from(voiceResponseGroupMembers).where(and(
@@ -1109,19 +1154,27 @@ async function resolveExistingVoiceResponseBatch(
   const existing = await readVoiceResponseGroup(ownerId, input.responseTurnId);
   if (!existing && collidingMembers.length === 0) return null;
   if (existing
-      && ["provisional", "materialized"].includes(existing.group.status)
+      && existing.group.status !== "deleting"
       && sameVoiceResponseBatch(existing, input)
       && collidingMembers.every((member) => member.responseTurnId === input.responseTurnId)) {
-    return { group: existing.group, duplicate: true as const };
+    return {
+      group: existing.group,
+      receipt: await voiceResponseGroupReceipt(existing),
+      duplicate: true as const,
+    };
   }
-  await quarantineVoiceResponseGroups(
-    ownerId,
-    [...new Set([input.responseTurnId, ...collidingMembers.map((member) => member.responseTurnId)])],
-    [...new Set([...captureIds, ...collidingMembers.map((member) => member.captureId)])],
-    "A canonical Voice response group was retried with different order, membership, or content.",
-    nowMs,
+  const collidingResponseTurnIds = [...new Set(collidingMembers.map((member) => member.responseTurnId))];
+  const stored = existing ?? (collidingResponseTurnIds.length === 1
+    ? await readVoiceResponseGroup(ownerId, collidingResponseTurnIds[0])
+    : null);
+  throw new VoiceResponseGroupConflictError(
+    "The Voice envelopes already belong to a different canonical response group. The stored group was not changed.",
+    {
+      requestedResponseTurnId: input.responseTurnId,
+      existingReceipt: stored ? await voiceResponseGroupReceipt(stored) : null,
+      safeNextAction: "get_voice_delivery_blockers",
+    },
   );
-  throw new Error("The Voice envelopes already belong to a different canonical response group.");
 }
 
 async function prepareVoiceResponseBatchReservation(
@@ -1246,7 +1299,7 @@ export async function resolveVoiceCaptureBatchAndSaveResponse(
 ) {
   const db = getDb();
   const captureIds = validateVoiceResponseBatchInput(input);
-  const duplicate = await resolveExistingVoiceResponseBatch(ownerId, input, captureIds, nowMs);
+  const duplicate = await resolveExistingVoiceResponseBatch(ownerId, input, captureIds);
   if (duplicate) return duplicate;
   const statements = await prepareVoiceResponseBatchReservation(ownerId, input, captureIds, nowMs);
   try {
@@ -1254,7 +1307,11 @@ export async function resolveVoiceCaptureBatchAndSaveResponse(
   } catch (error) {
     const raced = await readVoiceResponseGroup(ownerId, input.responseTurnId);
     if (raced && sameVoiceResponseBatch(raced, input)) {
-      return { group: raced.group, duplicate: true };
+      return {
+        group: raced.group,
+        receipt: await voiceResponseGroupReceipt(raced),
+        duplicate: true,
+      };
     }
     const conflictingReservations = await db.select().from(voiceExchangeReservations).where(and(
       eq(voiceExchangeReservations.ownerId, ownerId),
@@ -1285,7 +1342,204 @@ export async function resolveVoiceCaptureBatchAndSaveResponse(
     );
     throw new Error("The canonical Voice response group could not be reserved safely.");
   }
-  return { group: stored.group, duplicate: false };
+  return {
+    group: stored.group,
+    receipt: await voiceResponseGroupReceipt(stored),
+    duplicate: false,
+  };
+}
+
+export async function readVoiceDeliveryBlockers(ownerId: string, activityId: string) {
+  const db = getDb();
+  const intents = await db.select().from(voiceCaptureIntents).where(and(
+    eq(voiceCaptureIntents.ownerId, ownerId),
+    eq(voiceCaptureIntents.activityId, activityId),
+    inArray(voiceCaptureIntents.status, [
+      "activity_related",
+      "accepted",
+      "uncertain",
+      "deleting",
+      "quarantined_conflict",
+    ]),
+  ));
+  const captureIds = intents.map((intent) => intent.captureId);
+  const members = captureIds.length
+    ? await db.select().from(voiceResponseGroupMembers).where(and(
+      eq(voiceResponseGroupMembers.ownerId, ownerId),
+      inArray(voiceResponseGroupMembers.captureId, captureIds),
+    ))
+    : [];
+  const responseTurnIds = [...new Set(members.map((member) => member.responseTurnId))];
+  const groups = await Promise.all(responseTurnIds.map((responseTurnId) =>
+    readVoiceResponseGroup(ownerId, responseTurnId)));
+  const groupByResponse = new Map(groups.filter(Boolean).map((stored) => [stored!.group.responseTurnId, stored!]));
+  const memberByCapture = new Map(members.map((member) => [member.captureId, member]));
+  const turnIds = [
+    ...intents.map((intent) => intent.turnId),
+    ...responseTurnIds,
+  ];
+  const turns = turnIds.length
+    ? await db.select({ turnId: practiceTranscriptTurns.turnId }).from(practiceTranscriptTurns).where(and(
+      eq(practiceTranscriptTurns.ownerId, ownerId),
+      eq(practiceTranscriptTurns.activityId, activityId),
+      inArray(practiceTranscriptTurns.turnId, turnIds),
+    ))
+    : [];
+  const presentTurnIds = new Set(turns.map((turn) => turn.turnId));
+  const clips = intents.length
+    ? await db.select().from(activityAudioClips).where(and(
+      eq(activityAudioClips.ownerId, ownerId),
+      inArray(activityAudioClips.id, intents.map((intent) => intent.clipId)),
+    ))
+    : [];
+  const clipById = new Map(clips.map((clip) => [clip.id, clip]));
+  const receipts = new Map<string, Awaited<ReturnType<typeof voiceResponseGroupReceipt>>>();
+  for (const [responseTurnId, stored] of groupByResponse) {
+    receipts.set(responseTurnId, await voiceResponseGroupReceipt(stored));
+  }
+  return {
+    activityId,
+    blockers: intents.map((intent) => {
+      const member = memberByCapture.get(intent.captureId);
+      const group = member ? groupByResponse.get(member.responseTurnId) : undefined;
+      const clip = clipById.get(intent.clipId);
+      const allowedActions = intent.status === "quarantined_conflict" && group
+        ? ["restore_exact_group", "delete_exact_group"]
+        : intent.status === "activity_related" || intent.status === "accepted"
+          ? ["retry_delivery", "delete_exact_group"]
+          : intent.status === "uncertain"
+            ? ["attach", "discard"]
+            : ["wait"];
+      return {
+        captureId: intent.captureId,
+        turnId: intent.turnId,
+        status: intent.status,
+        responseTurnId: member?.responseTurnId ?? null,
+        memberOrder: member?.memberOrder ?? null,
+        memberCount: group?.group.memberCount ?? null,
+        groupStatus: group?.group.status ?? null,
+        groupDigest: member ? receipts.get(member.responseTurnId)?.digest ?? null : null,
+        canonicalUserTurnPresent: presentTurnIds.has(intent.turnId),
+        canonicalResponseTurnPresent: member ? presentTurnIds.has(member.responseTurnId) : false,
+        transcriptDeliveryState: member?.transcript != null
+          ? "received"
+          : intent.status === "accepted"
+            ? "accepted_without_group_member"
+            : "awaiting_delivery",
+        audioState: clip?.status ?? "not_registered",
+        audioLossAcknowledged: Boolean(clip?.audioLostAcknowledgedAt),
+        deletionState: intent.status === "deleting" ? "in_progress" : "not_started",
+        lastError: intent.lastError,
+        retryable: intent.status === "activity_related" || intent.status === "accepted",
+        allowedActions,
+      };
+    }),
+  };
+}
+
+export async function repairVoiceResponseGroup(
+  ownerId: string,
+  input: {
+    activityId: string;
+    responseTurnId: string;
+    expectedDigest: string;
+    expectedStatus: "quarantined_conflict";
+    authorization: "explicit_user_instruction";
+    reason: string;
+  },
+  nowMs: number,
+) {
+  const db = getDb();
+  const stored = await readVoiceResponseGroup(ownerId, input.responseTurnId);
+  if (!stored || stored.group.activityId !== input.activityId) {
+    throw new VoiceResponseGroupConflictError("The owner-scoped Voice response group was not found for this activity.");
+  }
+  const receipt = await voiceResponseGroupReceipt(stored);
+  if (receipt.digest !== input.expectedDigest) {
+    throw new VoiceResponseGroupConflictError(
+      "The Voice response group changed after the repair receipt was issued.",
+      { existingReceipt: receipt },
+    );
+  }
+  if (stored.group.status !== input.expectedStatus) {
+    if (["provisional", "materialized"].includes(stored.group.status)) {
+      const priorRepairs = await db.select({ id: voiceResponseGroupRepairEvents.id })
+        .from(voiceResponseGroupRepairEvents).where(and(
+          eq(voiceResponseGroupRepairEvents.ownerId, ownerId),
+          eq(voiceResponseGroupRepairEvents.responseTurnId, input.responseTurnId),
+          eq(voiceResponseGroupRepairEvents.activityId, input.activityId),
+        )).limit(1);
+      if (priorRepairs.length) {
+        return { repaired: false, duplicate: true, receipt };
+      }
+    }
+    throw new VoiceResponseGroupConflictError(
+      `The Voice response group status is ${stored.group.status}, not ${input.expectedStatus}.`,
+      { existingReceipt: receipt },
+    );
+  }
+  const reservations = await db.select().from(voiceExchangeReservations).where(and(
+    eq(voiceExchangeReservations.ownerId, ownerId),
+    eq(voiceExchangeReservations.responseTurnId, input.responseTurnId),
+  ));
+  const expectedReservations = new Set([
+    `response_turn:${input.responseTurnId}`,
+    ...stored.members.map((member) => `capture:${member.captureId}`),
+  ]);
+  const actualReservations = new Set(reservations.map((reservation) => (
+    `${reservation.identityType}:${reservation.identity}`
+  )));
+  if (
+    stored.members.length !== stored.group.memberCount
+    || reservations.some((reservation) => reservation.exchangeKind !== "group")
+    || actualReservations.size !== expectedReservations.size
+    || [...expectedReservations].some((identity) => !actualReservations.has(identity))
+  ) {
+    throw new VoiceResponseGroupConflictError(
+      "The quarantined Voice response group does not have an intact canonical reservation graph.",
+      { existingReceipt: receipt },
+    );
+  }
+  const captureIds = stored.members.map((member) => member.captureId);
+  await db.batch([
+    db.update(voiceResponseGroups).set({ status: "provisional", updatedAt: nowMs }).where(and(
+      eq(voiceResponseGroups.ownerId, ownerId),
+      eq(voiceResponseGroups.responseTurnId, input.responseTurnId),
+      eq(voiceResponseGroups.activityId, input.activityId),
+      eq(voiceResponseGroups.status, "quarantined_conflict"),
+    )),
+    ...stored.members.map((member) => db.update(voiceCaptureIntents).set({
+      status: member.transcript === null ? "activity_related" as const : "accepted" as const,
+      lastError: null,
+      updatedAt: nowMs,
+    }).where(and(
+      eq(voiceCaptureIntents.ownerId, ownerId),
+      eq(voiceCaptureIntents.captureId, member.captureId),
+      eq(voiceCaptureIntents.activityId, input.activityId),
+      eq(voiceCaptureIntents.turnId, member.userTurnId),
+      eq(voiceCaptureIntents.status, "quarantined_conflict"),
+    ))),
+    db.insert(voiceResponseGroupRepairEvents).values({
+      ownerId,
+      id: `voice-repair-${crypto.randomUUID()}`,
+      responseTurnId: input.responseTurnId,
+      activityId: input.activityId,
+      priorStatus: "quarantined_conflict",
+      resultStatus: "provisional",
+      reason: input.reason.slice(0, 2_000),
+      createdAt: nowMs,
+    }),
+  ] as unknown as Parameters<typeof db.batch>[0]);
+  const repaired = await readVoiceResponseGroup(ownerId, input.responseTurnId);
+  if (!repaired || repaired.group.status !== "provisional") {
+    throw new VoiceResponseGroupConflictError("The Voice response group repair did not commit atomically.");
+  }
+  return {
+    repaired: true,
+    duplicate: false,
+    captureIds,
+    receipt: await voiceResponseGroupReceipt(repaired),
+  };
 }
 
 async function commitVoiceResponseGroup(

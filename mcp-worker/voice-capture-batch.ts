@@ -34,6 +34,7 @@ export type VoiceCaptureBatchInput = z.infer<typeof voiceCaptureBatchInputSchema
 type VoiceCaptureBatchReservation = {
   duplicate: boolean;
   status: string;
+  canonicalReceipt?: Record<string, unknown>;
 };
 
 export async function resolveVoiceCaptureBatch(
@@ -51,6 +52,7 @@ export async function resolveVoiceCaptureBatch(
     userTurnIds: input.captures.map((capture) => capture.userTurnId),
     responseTurnId: input.responseTurnId,
     status: saved.status,
+    canonicalReceipt: saved.canonicalReceipt ?? null,
     duplicate: saved.duplicate,
     receipt,
   };

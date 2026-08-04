@@ -132,7 +132,10 @@ and delivery analysis to arrive independently, and materializes the canonical
 transcript only when every member is durable: all ordered user turns followed
 by the one shared specialist turn. Exact retries must preserve order,
 membership, activity, specialty, response identity, and response body. A
-changed retry is quarantined rather than rewritten. The singular operation
+changed retry returns a structured non-retryable conflict without mutating the
+stored canonical group. The first accepted group defines one owner-scoped
+immutable digest over its ordered identities and response content; exact
+replays return that canonical receipt with `duplicate: true`. The singular operation
 remains the compatible path for exactly one capture. Both paths acquire the
 same owner-scoped capture and response-turn reservation fence in one D1
 transaction, so a concurrent singular and grouped request cannot both win.
@@ -141,6 +144,18 @@ buffers only its member, and the final arrival performs the one guarded group
 materialization after confirming every canonical turn exactly.
 After this MCP catalog change deploys, reconnect the coordinator and all three
 long-lived specialist tasks before relying on the batch operation.
+
+When delivery or Finish reports a group conflict, the coordinator first calls
+`get_voice_delivery_blockers`. It returns owner/activity-scoped identity,
+canonical-turn/audio/deletion state, retryability, permitted actions, and the
+group digest without transcript or audio content. An intact
+`quarantined_conflict` group may be restored only with
+`repair_voice_response_group`, the exact activity and response turn, current
+digest/status, explicit user authorization, and an audit reason. Repair checks
+every member and reservation, never rewrites immutable evidence, is
+idempotent, and leaves missing members awaiting delivery. Exact deletion is a
+separate explicitly authorized action. Reconnect Codex after deployment
+because MCP tool catalogs are loaded when the connection starts.
 
 An administrative capture that is still pending must be classified
 `unrelated`; it does not require deletion. If an explicit user correction says
