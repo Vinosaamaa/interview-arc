@@ -107,6 +107,31 @@ later in this guide.
   evidence-complete finalization solely because optional metadata could not be
   reached. Recheck later only for a missing/stale/disputed field or explicit
   request.
+
+### Imported LeetCode question metadata
+
+Every newly imported public LeetCode question must receive a metadata
+preflight before it is added to the durable owner-private bank. The import
+payload must preserve every field that permitted sources make available:
+
+- public problem number, title, canonical URL, and difficulty;
+- acceptance rate and official topic tags;
+- authorized company tags and company-frequency signals, including their
+  window, score, scale, and capture date;
+- the metadata capture timestamp and a source reference with access time for
+  every consulted source; and
+- the owner-facing target time, provenance/source label, and active state.
+
+Use the exact public question ID as the deduplication key. Merge additive topic
+and company data without overwriting newer verified scalar values. When a
+field cannot be verified because the permitted page is unavailable, record it
+as unknown/empty together with the attempted source and access time; never
+guess it and never bypass CAPTCHA, paywalls, anti-bot controls, account pages,
+or private endpoints. Do not silently create a metadata-incomplete import:
+route unsupported writes to the coordinator's metadata-enrichment issue
+(`#160`, related to `#69`) or use the dedicated metadata MCP operation when it
+exists. The current basic bank upsert is not sufficient for this contract.
+
 - Pass the stable `questionId` and a complete reusable `solutionProfile`. Put
   the canonical best approach, reference implementation, complexity, edge
   cases, and up to two meaningful alternatives in the profile. Keep the
