@@ -6,6 +6,7 @@ import {
   mkdir,
   open,
   readFile,
+  readdir,
   rename,
   stat,
   unlink,
@@ -42,6 +43,11 @@ const controllerLockPath = controllerState.controllerLockPath;
 
 export const PLAYWRIGHT_BOOTSTRAP_COMMAND =
   "npm exec --yes pnpm@9.15.9 -- install --frozen-lockfile";
+
+export const CONTROLLER_RECEIPT_POLICY = Object.freeze({
+  terminalRetentionMs: 30 * 24 * 60 * 60 * 1_000,
+  maxTerminalReceipts: 200,
+});
 
 export class ControllerError extends Error {
   constructor(code, message, details = {}) {
@@ -89,6 +95,71 @@ function receiptPathForInvocationId(invocationId, statePaths) {
   return path.join(statePaths.receiptDirectory, `${validateInvocationId(invocationId)}.json`);
 }
 
+export async function pruneTerminalControllerReceipts(
+  statePaths = controllerState,
+  {
+    nowMs = Date.now(),
+    terminalRetentionMs = CONTROLLER_RECEIPT_POLICY.terminalRetentionMs,
+    maxTerminalReceipts = CONTROLLER_RECEIPT_POLICY.maxTerminalReceipts,
+    protectedInvocationId = null,
+  } = {},
+) {
+  try {
+    await mkdir(statePaths.receiptDirectory, { recursive: true });
+    const entries = await readdir(statePaths.receiptDirectory, { withFileTypes: true });
+    const terminalReceipts = [];
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+      const receiptPath = path.join(statePaths.receiptDirectory, entry.name);
+      try {
+        const receipt = JSON.parse(await readFile(receiptPath, "utf8"));
+        const recordedAtMs = Date.parse(receipt?.recordedAt);
+        if (
+          receipt?.version === 1
+          && receipt?.status === "terminal"
+          && Number.isFinite(recordedAtMs)
+        ) {
+          terminalReceipts.push({
+            invocationId: receipt.invocationId,
+            receiptPath,
+            recordedAtMs,
+          });
+        }
+      } catch {
+        // Pending or malformed evidence is never removed automatically.
+      }
+    }
+
+    terminalReceipts.sort((left, right) => right.recordedAtMs - left.recordedAtMs);
+    const retained = new Set(
+      terminalReceipts
+        .filter((receipt) => (
+          receipt.invocationId === protectedInvocationId
+          || nowMs - receipt.recordedAtMs <= terminalRetentionMs
+        ))
+        .slice(0, Math.max(0, maxTerminalReceipts))
+        .map((receipt) => receipt.receiptPath),
+    );
+    let pruned = 0;
+    for (const receipt of terminalReceipts) {
+      if (receipt.invocationId === protectedInvocationId || retained.has(receipt.receiptPath)) {
+        continue;
+      }
+      await unlink(receipt.receiptPath);
+      pruned += 1;
+    }
+    return { pruned, retained: terminalReceipts.length - pruned };
+  } catch (error) {
+    const stateFailure = toControllerStateError(error, statePaths.stateDirectory);
+    if (stateFailure !== error) throw stateFailure;
+    throw new ControllerError(
+      "controller_receipt_cleanup_failed",
+      "The controller could not enforce its terminal receipt retention policy before browser action.",
+      { cause: error.message },
+    );
+  }
+}
+
 async function reserveControllerReceipt(request, statePaths, recordedAt) {
   const receiptPath = receiptPathForInvocationId(request.invocationId, statePaths);
   try {
@@ -102,7 +173,7 @@ async function reserveControllerReceipt(request, statePaths, recordedAt) {
         command: request.command,
         recordedAt,
       }, null, 2)}\n`);
-      await handle.sync();
+      await handle.datasync();
     } finally {
       await handle.close();
     }
@@ -138,7 +209,7 @@ async function writeTerminalControllerReceipt(request, envelope, statePaths, rec
         recordedAt,
         envelope,
       }, null, 2)}\n`);
-      await handle.sync();
+      await handle.datasync();
     } finally {
       await handle.close();
     }
@@ -219,12 +290,20 @@ export async function executeWithDurableReceipt(
   {
     statePaths = controllerState,
     now = () => new Date().toISOString(),
+    receiptPolicy = CONTROLLER_RECEIPT_POLICY,
   } = {},
 ) {
   const invocationId = request.invocationId ?? null;
   if (invocationId) {
     try {
-      await reserveControllerReceipt(request, statePaths, now());
+      const reservedAt = now();
+      await pruneTerminalControllerReceipts(statePaths, {
+        nowMs: Date.parse(reservedAt),
+        terminalRetentionMs: receiptPolicy.terminalRetentionMs,
+        maxTerminalReceipts: Math.max(0, receiptPolicy.maxTerminalReceipts - 1),
+        protectedInvocationId: invocationId,
+      });
+      await reserveControllerReceipt(request, statePaths, reservedAt);
     } catch (error) {
       return controllerFailureEnvelope(error, invocationId);
     }
@@ -1199,7 +1278,11 @@ export async function runCli(argv, dependencies = {}) {
           totalUserVisibleCommandMs: performance.now() - commandStartedAt,
         },
       };
-    }, { statePaths, now: dependencies.now }));
+    }, {
+      statePaths,
+      now: dependencies.now,
+      receiptPolicy: dependencies.receiptPolicy,
+    }));
   } catch (error) {
     return controllerFailureEnvelope(error, request.invocationId ?? null);
   }

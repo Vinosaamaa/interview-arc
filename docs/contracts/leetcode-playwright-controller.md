@@ -167,7 +167,12 @@ Terminal receipt files are private local controller state, not practice
 transcript data or Git artifacts. The invocation ID validation prevents path
 traversal. Atomic replacement ensures recovery sees either the complete pending
 reservation or the complete terminal envelope, never a partially replaced
-result. Pending state explicitly means the submit outcome remains ambiguous.
+result. Terminal receipts are retained for 30 days with a maximum of the newest
+200. Cleanup runs before a later receipt-backed browser action and fails closed
+if it cannot enforce the policy. Pending or malformed safety evidence is never
+deleted automatically. A pruned exact ID returns `controller_receipt_missing`;
+invocation IDs remain globally unique by contract and must not be reused after
+pruning. Pending state explicitly means the submit outcome remains ambiguous.
 
 ## Release verification
 

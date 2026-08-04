@@ -594,6 +594,12 @@ ambiguous: report it and wait for explicit user direction. Never change the ID
 and resend `submit`; never run `retry` automatically. A non-Accepted verdict
 also never authorizes an automatic retry.
 
+Terminal receipts remain recoverable for 30 days, bounded to the newest 200.
+A missing receipt may therefore mean that the exact invocation was never
+recorded or that its terminal receipt was pruned. In both cases, keep the
+invocation ID globally unique and do not reuse it. Pending or malformed safety
+evidence is retained for manual investigation instead of being auto-deleted.
+
 #### Fixed controller configuration
 
 The following values are normative constants, not discovery suggestions or

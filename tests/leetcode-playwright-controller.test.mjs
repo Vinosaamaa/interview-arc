@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  CONTROLLER_RECEIPT_POLICY,
   ControllerError,
   FIXED_CONFIG,
   LeetCodeController,
@@ -729,6 +730,40 @@ test("durable receipts preserve structured failures and isolate exact invocation
   }
 });
 
+test("terminal receipt retention is bounded while pending or malformed evidence is preserved", async () => {
+  const profilePath = await mkdtemp(path.join(tmpdir(), "interview-arc-controller-receipt-"));
+  const statePaths = controllerStatePathsForProfile(profilePath);
+  const receiptPolicy = { terminalRetentionMs: 60_000, maxTerminalReceipts: 2 };
+  try {
+    for (const [index, invocationId] of ["first", "second", "third"].entries()) {
+      const envelope = await executeWithDurableReceipt(
+        { command: "submit", invocationId: `submit-retention-${invocationId}` },
+        async () => ({ verdict: "Accepted" }),
+        {
+          statePaths,
+          receiptPolicy,
+          now: () => new Date(1785830400000 + index * 1_000).toISOString(),
+        },
+      );
+      assert.equal(envelope.ok, true);
+    }
+
+    const receiptFiles = (await readdir(statePaths.receiptDirectory)).sort();
+    assert.deepEqual(receiptFiles, [
+      "submit-retention-second.json",
+      "submit-retention-third.json",
+    ]);
+    await assert.rejects(
+      () => recoverControllerReceipt("submit-retention-first", statePaths),
+      (error) => error.code === "controller_receipt_missing",
+    );
+    assert.equal(CONTROLLER_RECEIPT_POLICY.maxTerminalReceipts, 200);
+    assert.equal(CONTROLLER_RECEIPT_POLICY.terminalRetentionMs, 30 * 24 * 60 * 60 * 1_000);
+  } finally {
+    await rm(profilePath, { recursive: true, force: true });
+  }
+});
+
 test("receipt CLI recovery reads durable state without acquiring or connecting to the browser", async () => {
   const profilePath = await mkdtemp(path.join(tmpdir(), "interview-arc-controller-receipt-"));
   const statePaths = controllerStatePathsForProfile(profilePath);
@@ -888,6 +923,7 @@ test("the checked-in hot path contains no alternate controller, typing, tab, foc
     "browser-side attempt route parsing should have one implementation",
   );
   assert.match(source, /chromium\.connectOverCDP\(endpoint/);
+  assert.match(source, /\.datasync\(\)/);
 });
 
 test("the specialist guide and owning contract name the checked-in helper as the only submission path", async () => {

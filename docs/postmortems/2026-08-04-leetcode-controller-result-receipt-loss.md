@@ -113,6 +113,12 @@ submit. Reusing an invocation ID fails before browser action. Pending, missing,
 or corrupt receipt state remains explicitly ambiguous and never authorizes an
 automatic retry.
 
+Terminal receipts use a bounded 30-day/newest-200 retention policy. Cleanup
+runs before a later receipt-backed action and fails closed before browser work
+when it cannot enforce the bound. Pending or malformed evidence is retained for
+manual investigation. Pruned invocation IDs remain contractually unique and
+must not be reused.
+
 ## Regression prevention
 
 - A mocked Accepted result is persisted, its returned stdout value is
