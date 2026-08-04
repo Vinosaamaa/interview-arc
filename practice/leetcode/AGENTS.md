@@ -402,10 +402,27 @@ series of local attempt snapshots.
    filename, copy the current source into a correctly named temporary harness
    outside the durable solution directory; do not alter the working scaffold
    merely to satisfy the local filesystem.
-6. Every time the file is prepared or resumed, give the user the complete
-   absolute editor command:
+6. Every time the file is prepared or resumed, give the user one complete,
+   copy/paste-safe editor command that resolves the absolute working file.
+   Tmux copy mode adds two leading spaces to each copied code line, so keep each
+   authored line at or below 57 characters and the copied line at or below 59.
+   Keep exactly one outer `nvim` command with no setup variables or preceding
+   `cd`. Join path fragments with the zsh `printf` builtin inside one command
+   substitution, so tmux-added indentation stays outside every fragment:
 
-   `nvim "<absolute-path-to-the-file>"`
+```bash
+nvim "$(
+printf %s \
+"<absolute-workspace-prefix>/" \
+"interview-arc/practice/leetcode/solutions/" \
+"<filename-part-one>" \
+"<filename-part-two>.java"
+)"
+```
+
+Never continue directly inside a quoted path literal: tmux's copied leading
+spaces would become filename data. In the `printf` form, each quoted fragment
+is a separate argument, so leading whitespace remains harmless syntax.
 
    The user opens `nvim`. Do not assume that Codex can safely create or target
    a Warp pane, and do not replace the running Codex process with the editor.
@@ -432,6 +449,14 @@ During the same start-problem turn, follow
    `nvim` command, the returned default Quick command, and the returned
    `--full` command. Finish the response normally without waiting for harness
    generation. Never send a proactive harness-ready message later.
+   Render all three as directly pasteable shell blocks whose physical lines are
+   at most 57 authored characters so tmux's two-space copy prefix remains within
+   the 59-character limit. Each block has one outer command: no variable
+   declarations, arrays, aliases, or preceding `cd`. Use command substitution
+   with `printf %s` to join separately quoted fragments for any long path or
+   opaque ID; never continue inside one quoted literal. Render this fixed,
+   prevalidated template immediately. Do not run `zsh -n`, open `nvim`, execute
+   the runner, or wait for the harness helper merely to validate formatting.
 5. The sub-agent writes only reserved temporary/local harness material. It
    publishes the whole validated directory atomically and changes status to
    `ready` only after publication. If delegation is unavailable or fails,

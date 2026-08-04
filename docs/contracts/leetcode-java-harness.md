@@ -43,6 +43,16 @@ user commands before harness generation finishes:
 2. the returned default Quick command; and
 3. the returned command ending in `--full`.
 
+Tmux copy mode prefixes each copied code line with two spaces. Keep every
+authored line at most 57 characters so the copied physical line stays within
+the 59-character limit. Each block has one outer command: no variables, arrays,
+aliases, or preceding `cd`. Join long path and opaque-ID fragments through
+`$(printf %s "fragment" ...)`; each fragment remains a separate quoted argument,
+so tmux-added leading spaces are harmless shell whitespace. Never continue
+directly inside one quoted literal, where copied indentation would become data.
+This is a fixed, prevalidated template: send it immediately without running
+`zsh -n`, opening the editor, executing the runner, or waiting for the helper.
+
 The primary specialist finishes that ordinary response immediately. It does
 not await the helper and never sends a proactive “harness ready” message. The
 user simply reruns the same previously supplied command.
