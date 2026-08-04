@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execFile as execFileCallback } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import {
   mkdir,
   open,
@@ -30,6 +31,7 @@ export function controllerStatePathsForProfile(profilePath) {
     stateDirectory,
     preflightReceiptPath: path.join(stateDirectory, "preflight.json"),
     controllerLockPath: path.join(stateDirectory, "controller.lock"),
+    receiptDirectory: path.join(stateDirectory, "receipts"),
   });
 }
 
@@ -57,6 +59,197 @@ export function toControllerStateError(error, stateDirectory = localStateDirecto
     "The controller cannot write state inside the dedicated Chrome profile. Verify that the Interview Prep workspace is writable, then run ensure again.",
     { stateDirectory, cause: error.message },
   );
+}
+
+export function validateInvocationId(invocationId) {
+  if (
+    typeof invocationId !== "string"
+    || !/^[a-z0-9][a-z0-9._-]{0,127}$/.test(invocationId)
+  ) {
+    throw new ControllerError(
+      "invalid_invocation_id",
+      "The invocation ID must use 1–128 lowercase letters, digits, dots, underscores, or hyphens.",
+    );
+  }
+  return invocationId;
+}
+
+function controllerFailureEnvelope(error, invocationId = null) {
+  const failure = error instanceof ControllerError
+    ? error
+    : new ControllerError("controller_failed", error?.message ?? String(error));
+  return {
+    ok: false,
+    ...(invocationId ? { invocationId } : {}),
+    error: { code: failure.code, message: failure.message, details: failure.details },
+  };
+}
+
+function receiptPathForInvocationId(invocationId, statePaths) {
+  return path.join(statePaths.receiptDirectory, `${validateInvocationId(invocationId)}.json`);
+}
+
+async function reserveControllerReceipt(request, statePaths, recordedAt) {
+  const receiptPath = receiptPathForInvocationId(request.invocationId, statePaths);
+  try {
+    await mkdir(statePaths.receiptDirectory, { recursive: true });
+    const handle = await open(receiptPath, "wx", 0o600);
+    try {
+      await handle.writeFile(`${JSON.stringify({
+        version: 1,
+        status: "pending",
+        invocationId: request.invocationId,
+        command: request.command,
+        recordedAt,
+      }, null, 2)}\n`);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+  } catch (error) {
+    if (error?.code === "EEXIST") {
+      throw new ControllerError(
+        "invocation_id_reused",
+        "This controller invocation ID has already been used. Recover its receipt instead of submitting again.",
+        { invocationId: request.invocationId },
+      );
+    }
+    const stateFailure = toControllerStateError(error, statePaths.stateDirectory);
+    if (stateFailure !== error) throw stateFailure;
+    throw new ControllerError(
+      "controller_receipt_write_failed",
+      "The controller could not reserve a durable receipt before browser action.",
+      { invocationId: request.invocationId, cause: error.message },
+    );
+  }
+}
+
+async function writeTerminalControllerReceipt(request, envelope, statePaths, recordedAt) {
+  const receiptPath = receiptPathForInvocationId(request.invocationId, statePaths);
+  const temporaryPath = `${receiptPath}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    const handle = await open(temporaryPath, "wx", 0o600);
+    try {
+      await handle.writeFile(`${JSON.stringify({
+        version: 1,
+        status: "terminal",
+        invocationId: request.invocationId,
+        command: request.command,
+        recordedAt,
+        envelope,
+      }, null, 2)}\n`);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await rename(temporaryPath, receiptPath);
+  } catch (error) {
+    await unlink(temporaryPath).catch(() => {});
+    const stateFailure = toControllerStateError(error, statePaths.stateDirectory);
+    if (stateFailure !== error) throw stateFailure;
+    throw new ControllerError(
+      "controller_receipt_write_failed",
+      "The controller completed but could not persist its terminal receipt.",
+      {
+        invocationId: request.invocationId,
+        cause: error.message,
+        originalEnvelope: envelope,
+      },
+    );
+  }
+}
+
+export async function recoverControllerReceipt(invocationId, statePaths = controllerState) {
+  const receiptPath = receiptPathForInvocationId(invocationId, statePaths);
+  let receipt;
+  try {
+    receipt = JSON.parse(await readFile(receiptPath, "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      throw new ControllerError(
+        "controller_receipt_missing",
+        "No controller receipt exists for this exact invocation ID.",
+        { invocationId },
+      );
+    }
+    throw new ControllerError(
+      "controller_receipt_corrupt",
+      "The controller receipt exists but cannot be read safely.",
+      { invocationId, cause: error.message },
+    );
+  }
+  if (
+    receipt?.version !== 1
+    || receipt?.invocationId !== invocationId
+    || !["pending", "terminal"].includes(receipt?.status)
+  ) {
+    throw new ControllerError(
+      "controller_receipt_corrupt",
+      "The controller receipt does not match the requested invocation.",
+      { invocationId },
+    );
+  }
+  if (receipt.status === "pending") {
+    throw new ControllerError(
+      "controller_receipt_pending",
+      "The invocation was reserved but no terminal receipt is available. Do not submit again.",
+      { invocationId, command: receipt.command, recordedAt: receipt.recordedAt },
+    );
+  }
+  if (!receipt.envelope || typeof receipt.envelope.ok !== "boolean") {
+    throw new ControllerError(
+      "controller_receipt_corrupt",
+      "The terminal controller receipt has no structured result envelope.",
+      { invocationId },
+    );
+  }
+  return {
+    ...receipt.envelope,
+    receipt: {
+      invocationId,
+      recovered: true,
+      recordedAt: receipt.recordedAt,
+    },
+  };
+}
+
+export async function executeWithDurableReceipt(
+  request,
+  operation,
+  {
+    statePaths = controllerState,
+    now = () => new Date().toISOString(),
+  } = {},
+) {
+  const invocationId = request.invocationId ?? null;
+  if (invocationId) {
+    try {
+      await reserveControllerReceipt(request, statePaths, now());
+    } catch (error) {
+      return controllerFailureEnvelope(error, invocationId);
+    }
+  }
+
+  let envelope;
+  try {
+    const result = await operation();
+    envelope = {
+      ok: true,
+      ...(invocationId ? { invocationId } : {}),
+      result,
+    };
+  } catch (error) {
+    envelope = controllerFailureEnvelope(error, invocationId);
+  }
+
+  if (invocationId) {
+    try {
+      await writeTerminalControllerReceipt(request, envelope, statePaths, now());
+    } catch (error) {
+      return controllerFailureEnvelope(error, invocationId);
+    }
+  }
+  return envelope;
 }
 
 export const FIXED_CONFIG = Object.freeze({
@@ -103,7 +296,15 @@ export function canonicalProblemIdentity(url, title) {
 
 export function parseCli(argv) {
   const normalizedArgv = argv[0] === "--" ? argv.slice(1) : argv;
-  const [command, url, possibleFile, possibleFlag, possibleTitle] = normalizedArgv;
+  const [
+    command,
+    url,
+    possibleFile,
+    possibleFlag,
+    possibleTitle,
+    invocationFlag,
+    possibleInvocationId,
+  ] = normalizedArgv;
   if (command === "ensure" && normalizedArgv.length === 1) {
     return { command, identity: null, javaFile: null };
   }
@@ -116,21 +317,37 @@ export function parseCli(argv) {
   }
   if (
     (command === "submit" || command === "retry")
-    && normalizedArgv.length === 5
+    && normalizedArgv.length === 7
     && possibleFlag === "--title"
+    && invocationFlag === "--invocation-id"
   ) {
     return {
       command,
       identity: canonicalProblemIdentity(url, possibleTitle),
       javaFile: possibleFile,
+      invocationId: validateInvocationId(possibleInvocationId),
+    };
+  }
+  if (command === "receipt" && normalizedArgv.length === 3 && url === "--invocation-id") {
+    return {
+      command,
+      identity: null,
+      javaFile: null,
+      invocationId: validateInvocationId(possibleFile),
     };
   }
   if (["navigate", "submit", "retry"].includes(command) && !normalizedArgv.includes("--title")) {
     throw new ControllerError("cli_usage", `${command} requires --title with the verified problem title.`);
   }
+  if (["submit", "retry"].includes(command) && !normalizedArgv.includes("--invocation-id")) {
+    throw new ControllerError(
+      "cli_usage",
+      `${command} requires --invocation-id with a unique controller invocation ID.`,
+    );
+  }
   throw new ControllerError(
     "cli_usage",
-    "Supported commands are ensure, navigate, submit, and retry.",
+    "Supported commands are ensure, navigate, submit, retry, and receipt.",
   );
 }
 
@@ -942,44 +1159,61 @@ async function withControllerLock(operation) {
   }
 }
 
-async function runCli(argv) {
+export async function runCli(argv, dependencies = {}) {
   const commandStartedAt = performance.now();
-  return withControllerLock(async () => {
-    const request = parseCli(argv);
-    const runtime = createRuntimeDependencies();
-    const result = await runControllerCommand(request, {
-      acquireController: (options) => ensureBrowserController(runtime, options),
-      readFileUtf8: (javaFile) => readFile(javaFile, "utf8"),
-      verifyPreflight: verifyPreflightReceipt,
-    });
-    if (request.command === "navigate") {
-      const current = await probeFixedCdp();
-      await writePreflightReceipt(preflightReceiptForRequest(request, current));
+  let request;
+  try {
+    request = parseCli(argv);
+  } catch (error) {
+    return controllerFailureEnvelope(error);
+  }
+  const statePaths = dependencies.statePaths ?? controllerState;
+  if (request.command === "receipt") {
+    try {
+      return await recoverControllerReceipt(request.invocationId, statePaths);
+    } catch (error) {
+      return controllerFailureEnvelope(error, request.invocationId);
     }
-    return {
-      ...result,
-      diagnostics: {
-        ...(result.diagnostics ?? {}),
-        totalUserVisibleCommandMs: performance.now() - commandStartedAt,
-      },
-    };
-  });
+  }
+
+  const withLock = dependencies.withLock ?? withControllerLock;
+  try {
+    return await withLock(() => executeWithDurableReceipt(request, async () => {
+      const runtime = dependencies.runtime ?? createRuntimeDependencies();
+      const result = await runControllerCommand(request, {
+        acquireController: dependencies.acquireController
+          ?? ((options) => ensureBrowserController(runtime, options)),
+        readFileUtf8: dependencies.readFileUtf8
+          ?? ((javaFile) => readFile(javaFile, "utf8")),
+        verifyPreflight: dependencies.verifyPreflight ?? verifyPreflightReceipt,
+        commandTimeoutMs: dependencies.commandTimeoutMs,
+      });
+      if (request.command === "navigate") {
+        const current = await probeFixedCdp();
+        await writePreflightReceipt(preflightReceiptForRequest(request, current));
+      }
+      return {
+        ...result,
+        diagnostics: {
+          ...(result.diagnostics ?? {}),
+          totalUserVisibleCommandMs: performance.now() - commandStartedAt,
+        },
+      };
+    }, { statePaths, now: dependencies.now }));
+  } catch (error) {
+    return controllerFailureEnvelope(error, request.invocationId ?? null);
+  }
 }
 
 const invokedAsScript = process.argv[1]
   && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (invokedAsScript) {
-  try {
-    const result = await runCli(process.argv.slice(2));
-    process.stdout.write(`${JSON.stringify({ ok: true, result }, null, 2)}\n`);
-  } catch (error) {
-    const failure = error instanceof ControllerError
-      ? error
-      : new ControllerError("controller_failed", error.message);
-    process.stderr.write(`${JSON.stringify({
-      ok: false,
-      error: { code: failure.code, message: failure.message, details: failure.details },
-    }, null, 2)}\n`);
+  const envelope = await runCli(process.argv.slice(2));
+  const output = `${JSON.stringify(envelope, null, 2)}\n`;
+  if (envelope.ok) {
+    process.stdout.write(output);
+  } else {
+    process.stderr.write(output);
     process.exitCode = 1;
   }
 }

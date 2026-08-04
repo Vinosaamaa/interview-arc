@@ -51,13 +51,15 @@ readiness check. Dependency bootstrap is forbidden on the interactive
 `playwright_import_failed` with this exact `recoveryCommand` and performs no
 browser navigation or submission.
 
-Controller commands require GUI and loopback-CDP authority. A Codex
-`exec_command` invocation uses `sandbox_permissions: "require_escalated"` from
-its first attempt, with the narrow reusable command prefix
+The `ensure`, `navigate`, `submit`, and `retry` commands require GUI and
+loopback-CDP authority. A Codex `exec_command` invocation uses
+`sandbox_permissions: "require_escalated"` from its first attempt, with the
+narrow reusable command prefix
 `["node", "scripts/leetcode-playwright-controller.mjs"]`. Do not probe the
 controller in a restricted shell first: sandbox denial can hide a live endpoint
 or block LaunchServices. A denied fixed-Chrome launch returns
 `chrome_launch_failed` with `requiredSandboxPermission: "require_escalated"`.
+The read-only `receipt` command needs no browser authority.
 
 ```bash
 node scripts/leetcode-playwright-controller.mjs ensure
@@ -67,11 +69,15 @@ node scripts/leetcode-playwright-controller.mjs navigate \
 node scripts/leetcode-playwright-controller.mjs submit \
   https://leetcode.com/problems/two-sum/ \
   practice/leetcode/solutions/0001-two-sum.java \
-  --title "Two Sum"
+  --title "Two Sum" \
+  --invocation-id "submit-two-sum-20260804-01"
 node scripts/leetcode-playwright-controller.mjs retry \
   https://leetcode.com/problems/two-sum/ \
   practice/leetcode/solutions/0001-two-sum.java \
-  --title "Two Sum"
+  --title "Two Sum" \
+  --invocation-id "retry-two-sum-20260804-01"
+node scripts/leetcode-playwright-controller.mjs receipt \
+  --invocation-id "submit-two-sum-20260804-01"
 ```
 
 `ensure` resolves Playwright, checks `/json/version`, launches the fixed Chrome
@@ -88,6 +94,13 @@ stale; they never install dependencies, discover executables, launch Chrome,
 create a tab, generate controller source, or repair controller code on the hot
 path.
 
+Each `submit` and `retry` also requires a caller-chosen unique invocation ID.
+Before any browser action, the controller reserves that ID under the existing
+profile-local state directory. A reused ID fails closed. The terminal success
+or structured failure envelope is written atomically before the CLI emits it.
+`receipt` reads only the exact named invocation; it does not acquire the
+controller lock, connect to Chrome, navigate, edit source, or submit.
+
 The structured controller result is authoritative. A successful result ends
 the operation. A structured failure is reported exactly and ends the operation;
 the specialist does not attempt repair or recovery in that submission turn.
@@ -98,26 +111,31 @@ Playwright/CDP code, or another automation tool around these commands. A shell
 sandbox's inability to reach loopback is not controller evidence and must not
 trigger `ensure`, navigation, browser launch, or process discovery.
 
-If `submit` output is lost or ambiguous, an attempt may already have been sent.
-Never resend `submit` or run `retry` automatically. Report the missing verdict
-receipt and wait for explicit user direction. Run `retry` only after revised
+If `submit` or `retry` output is lost or ambiguous, an attempt may already have
+been sent. Run `receipt` exactly once with the same invocation ID from the
+original command. A recovered terminal envelope is authoritative. Pending,
+missing, or corrupt receipt state remains ambiguous and never authorizes a new
+ID, a resent `submit`, or an automatic `retry`. Run `retry` only after revised
 source and a separate explicit user request; a non-Accepted verdict alone does
-not authorize it.
+not authorize it. Never resend `submit` or run `retry` automatically.
 
 ## Exact submission transaction
 
 For one explicit submit request, the controller:
 
-1. validates the canonical URL, matching title, visible Java state, and exactly
+1. exclusively reserves the supplied invocation ID in durable local state;
+2. validates the canonical URL, matching title, visible Java state, and exactly
    one Monaco model whose URI ends in `.java` and whose language is Java;
-2. reads the supplied UTF-8 file once immediately before editor mutation;
-3. invokes exactly one Monaco `model.setValue(exactSource)` operation;
-4. reads the model back and requires exact string equality, reporting UTF-8 byte
+3. reads the supplied UTF-8 file once immediately before editor mutation;
+4. invokes exactly one Monaco `model.setValue(exactSource)` operation;
+5. reads the model back and requires exact string equality, reporting UTF-8 byte
    counts and the first differing byte offset on mismatch;
-5. focuses the editor through DOM state without foregrounding Chrome;
-6. captures the scoped prior-attempt identity and sends one `Meta+Enter`;
-7. accepts only a new attempt-specific transition and a verdict from the scoped
-   current-submission result region.
+6. focuses the editor through DOM state without foregrounding Chrome;
+7. captures the scoped prior-attempt identity and sends one `Meta+Enter`;
+8. accepts only a new attempt-specific transition and a verdict from the scoped
+   current-submission result region; and
+9. atomically stores the terminal result envelope under the reserved invocation
+   ID before writing the same envelope to stdout or stderr.
 
 The controller never scans the whole document body, reuses an old visible
 verdict, inspects unrelated panels, submits transformed code, or automatically
@@ -132,7 +150,8 @@ and model checks before mutation. If recovery fails, no submit gesture is sent.
 
 ## Cleanup and timing
 
-Every command owns one Playwright CDP connection and releases it in `finally`.
+Every browser command owns one Playwright CDP connection and releases it in
+`finally`.
 For a browser attached with `connectOverCDP`, Playwright closes that controller
 transport without closing the independently launched Chrome process, persistent
 profile, or tab. Timeouts clear their timers and release the same connection;
@@ -143,6 +162,12 @@ the single `Meta+Enter`. The LeetCode attempt-specific verdict wait has a
 separate 60-second bound. Structured output reports local stage timings, warm
 submit duration through the verdict, and total user-visible command duration;
 none of those values may be substituted for another.
+
+Terminal receipt files are private local controller state, not practice
+transcript data or Git artifacts. The invocation ID validation prevents path
+traversal. Atomic replacement ensures recovery sees either the complete pending
+reservation or the complete terminal envelope, never a partially replaced
+result. Pending state explicitly means the submit outcome remains ambiguous.
 
 ## Release verification
 
