@@ -266,7 +266,9 @@ test("Voice commit and delete serialize on intent state and enforce response-tur
   assert.match(beginDeleteBody, /WHEN \$\{voiceCaptureIntents\.status\} = 'deleting' THEN \$\{voiceCaptureIntents\.decisionSource\}/);
   assert.match(beginDeleteBody, /WHEN \$\{voiceCaptureIntents\.status\} = 'deleting' THEN \$\{voiceCaptureIntents\.decisionReason\}/);
   assert.match(beginDeleteBody, /WHEN \$\{voiceCaptureIntents\.status\} = 'deleting' THEN \$\{voiceCaptureIntents\.decidedAt\}/);
-  assert.match(deleteBody, /select\(\{[\s\S]*userTurnId:[\s\S]*responseTurnId:/);
+  assert.match(deleteBody, /readVoiceCaptureDeleteScope/);
+  assert.match(deleteBody, /scope\.userTurnIds/);
+  assert.match(deleteBody, /scope\.responseTurnIds/);
   assert.doesNotMatch(deleteBody, /readVoiceSpecialistResponse/);
   assert.match(schema, /uniqueIndex\("voice_specialist_responses_owner_response_unique"\)/);
   assert.match(migration, /CREATE UNIQUE INDEX `voice_specialist_responses_owner_response_unique`/);

@@ -30,7 +30,7 @@ type RemediationIntent = {
 
 type RemediationDependencies = {
   readIntent: (captureId: string) => Promise<RemediationIntent | null | undefined>;
-  deleteCapture: (captureId: string, reason: string) => Promise<void>;
+  deleteCapture: (captureId: string, reason: string) => Promise<{ captureIds?: string[] } | void>;
 };
 
 export async function remediateRelatedVoiceCapture(
@@ -42,17 +42,21 @@ export async function remediateRelatedVoiceCapture(
   if (disposition.action === "reject") {
     throw new SpecialistControlError(disposition.code, disposition.message);
   }
-  if (disposition.action === "delete") {
-    await dependencies.deleteCapture(input.captureId, input.reason);
-  }
+  const deleted = disposition.action === "delete"
+    ? await dependencies.deleteCapture(input.captureId, input.reason)
+    : undefined;
+  const captureIds = deleted?.captureIds?.length ? deleted.captureIds : [input.captureId];
   const receipt = disposition.action === "already_deleted"
     ? "Voice capture already deleted · Exact remediation retry acknowledged"
-    : "Voice capture deleted · Transcript, response, recording, and delivery analysis removed";
+    : captureIds.length > 1
+      ? `Voice response group deleted · ${captureIds.length} transcripts, recordings, analyses, and the shared response removed`
+      : "Voice capture deleted · Transcript, response, recording, and delivery analysis removed";
   return {
     captureId: input.captureId,
     activityId: input.activityId,
     turnId: input.turnId,
     status: "deleted" as const,
+    captureIds,
     idempotent: disposition.idempotent,
     receipt,
   };

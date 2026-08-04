@@ -46,8 +46,12 @@ later in this guide.
   The separate background Delivery Coach owns audio inspection and saves its
   result to D1; do not rerun that work in the visible specialist task.
   One visible message may contain several envelopes after an accidental stop
-  and restart. Reuse every supplied turn in order and treat consecutive
-  Voice-managed turns as one logical answer until the next specialist turn.
+  and restart. For 2–20 related envelopes, call
+  `resolve_voice_captures_and_save_response` once with every supplied capture
+  and turn in visible order plus the one stable response. Never call the
+  singular operation once per envelope or duplicate/split the visible answer.
+  D1 materializes all ordered user turns and then the shared response only
+  after every member arrives.
 - Before finalization, read the activity practice record and incorporate all
   available delivery analyses into evidence-grounded `didWell` and `improve`
   feedback. Queued or failed analysis never blocks finalization.

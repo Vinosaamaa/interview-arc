@@ -6,6 +6,7 @@ bearer_token_env_var = "INTERVIEW_ARC_MCP_TOKEN"
 enabled_tools = [
   "save_practice_exchange",
   "resolve_voice_capture_and_save_response",
+  "resolve_voice_captures_and_save_response",
   "append_practice_transcript",
   "resolve_voice_capture",
   "delete_related_voice_capture",

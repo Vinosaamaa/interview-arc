@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, exists, gt, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, gt, inArray, isNotNull, isNull, lt, notExists, or, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import {
   activityDeliveryAnalyses,
@@ -18,15 +18,18 @@ import {
   reviewSchedules,
   specialistTasks,
   voiceCaptureIntents,
+  voiceResponseGroupMembers,
+  voiceResponseGroups,
   voiceSpecialistResponses,
 } from "./schema";
 import {
+  canonicalVoiceBatchTurns,
   finishDispositionForVoiceStatus,
   sameCanonicalExchange,
+  sameVoiceBatchReservation,
   sameVoiceCommitTurn,
   type CanonicalExchangeIdentity,
   voiceCaptureAllowsCommit,
-  voiceCaptureDeleteTurnIds,
   type VoiceFinishGuard,
   type VoiceIntentStatus,
   voiceFinishGuardMessage,
@@ -853,6 +856,11 @@ export async function resolveVoiceCaptureAndSaveResponse(
 ) {
   const db = getDb();
   const requested = canonicalExchangeFromRow(input);
+  const groupedCapture = await readVoiceResponseGroupByCapture(ownerId, input.captureId);
+  const groupedResponse = await readVoiceResponseGroup(ownerId, input.responseTurnId);
+  if (groupedCapture || groupedResponse) {
+    throw new Error("A capture or response turn is already reserved by a grouped Voice exchange.");
+  }
   const existingResponse = await readVoiceSpecialistResponse(ownerId, input.captureId);
   if (existingResponse) {
     if (!sameCanonicalExchange(canonicalExchangeFromRow(existingResponse), requested)) {
@@ -961,6 +969,434 @@ export async function resolveVoiceCaptureAndSaveResponse(
   };
 }
 
+export type VoiceResponseBatchInput = {
+  activityId: string;
+  specialty: Specialty;
+  captures: Array<{ captureId: string; userTurnId: string }>;
+  responseTurnId: string;
+  responseBody: string;
+  responseOccurredAt: number;
+  reason: string;
+};
+
+async function readVoiceResponseGroup(ownerId: string, responseTurnId: string) {
+  const db = getDb();
+  const group = (await db.select().from(voiceResponseGroups).where(and(
+    eq(voiceResponseGroups.ownerId, ownerId),
+    eq(voiceResponseGroups.responseTurnId, responseTurnId),
+  )).limit(1))[0] ?? null;
+  if (!group) return null;
+  const members = await db.select().from(voiceResponseGroupMembers).where(and(
+    eq(voiceResponseGroupMembers.ownerId, ownerId),
+    eq(voiceResponseGroupMembers.responseTurnId, responseTurnId),
+  )).orderBy(asc(voiceResponseGroupMembers.memberOrder));
+  return { group, members };
+}
+
+async function readVoiceResponseGroupByCapture(ownerId: string, captureId: string) {
+  const db = getDb();
+  const member = (await db.select().from(voiceResponseGroupMembers).where(and(
+    eq(voiceResponseGroupMembers.ownerId, ownerId),
+    eq(voiceResponseGroupMembers.captureId, captureId),
+  )).limit(1))[0] ?? null;
+  return member ? readVoiceResponseGroup(ownerId, member.responseTurnId) : null;
+}
+
+function sameVoiceResponseBatch(
+  stored: NonNullable<Awaited<ReturnType<typeof readVoiceResponseGroup>>>,
+  input: VoiceResponseBatchInput,
+) {
+  return stored.group.memberCount === input.captures.length
+    && stored.members.length === input.captures.length
+    && stored.members.every((member, index) => member.memberOrder === index && member.activityId === input.activityId)
+    && sameVoiceBatchReservation({
+      activityId: stored.group.activityId,
+      specialty: stored.group.specialty,
+      responseTurnId: stored.group.responseTurnId,
+      responseBody: stored.group.responseBody,
+      responseOccurredAt: stored.group.responseOccurredAt,
+      captures: stored.members.map((member) => ({
+        captureId: member.captureId,
+        userTurnId: member.userTurnId,
+      })),
+    }, input);
+}
+
+async function quarantineVoiceResponseGroups(
+  ownerId: string,
+  responseTurnIds: string[],
+  captureIds: string[],
+  message: string,
+  nowMs: number,
+) {
+  const db = getDb();
+  await db.batch([
+    db.update(voiceResponseGroups).set({ status: "quarantined_conflict", updatedAt: nowMs }).where(and(
+      eq(voiceResponseGroups.ownerId, ownerId),
+      inArray(voiceResponseGroups.responseTurnId, responseTurnIds),
+    )),
+    db.update(voiceCaptureIntents).set({
+      status: "quarantined_conflict",
+      lastError: message,
+      updatedAt: nowMs,
+    }).where(and(
+      eq(voiceCaptureIntents.ownerId, ownerId),
+      inArray(voiceCaptureIntents.captureId, captureIds),
+    )),
+  ]);
+}
+
+export async function resolveVoiceCaptureBatchAndSaveResponse(
+  ownerId: string,
+  input: VoiceResponseBatchInput,
+  nowMs: number,
+) {
+  const db = getDb();
+  const captureIds = input.captures.map((capture) => capture.captureId);
+  const userTurnIds = input.captures.map((capture) => capture.userTurnId);
+  if (captureIds.length < 2 || captureIds.length > 20
+      || new Set(captureIds).size !== captureIds.length
+      || new Set(userTurnIds).size !== userTurnIds.length) {
+    throw new Error("A Voice response group requires 2–20 unique capture and user-turn identities.");
+  }
+
+  const collidingMembers = await db.select().from(voiceResponseGroupMembers).where(and(
+    eq(voiceResponseGroupMembers.ownerId, ownerId),
+    or(
+      inArray(voiceResponseGroupMembers.captureId, captureIds),
+      eq(voiceResponseGroupMembers.responseTurnId, input.responseTurnId),
+    ),
+  ));
+  const existing = await readVoiceResponseGroup(ownerId, input.responseTurnId);
+  if (existing || collidingMembers.length) {
+    if (existing
+        && ["provisional", "materialized"].includes(existing.group.status)
+        && sameVoiceResponseBatch(existing, input)
+        && collidingMembers.every((member) => member.responseTurnId === input.responseTurnId)) {
+      return { group: existing.group, duplicate: true };
+    }
+    const responseTurnIds = [...new Set([
+      input.responseTurnId,
+      ...collidingMembers.map((member) => member.responseTurnId),
+    ])];
+    await quarantineVoiceResponseGroups(
+      ownerId,
+      responseTurnIds,
+      [...new Set([...captureIds, ...collidingMembers.map((member) => member.captureId)])],
+      "A canonical Voice response group was retried with different order, membership, or content.",
+      nowMs,
+    );
+    throw new Error("The Voice envelopes already belong to a different canonical response group.");
+  }
+
+  const singleResponseCollisions = await db.select().from(voiceSpecialistResponses).where(and(
+    eq(voiceSpecialistResponses.ownerId, ownerId),
+    or(
+      inArray(voiceSpecialistResponses.captureId, captureIds),
+      eq(voiceSpecialistResponses.responseTurnId, input.responseTurnId),
+    ),
+  ));
+  if (singleResponseCollisions.length) {
+    throw new Error("A capture or response turn is already reserved by a single-capture Voice exchange.");
+  }
+
+  const intents = await readVoiceCaptureIntents(ownerId, captureIds);
+  const intentByCapture = new Map(intents.map((intent) => [intent.captureId, intent]));
+  const deferred = await db.select().from(deferredVoiceCaptureDecisions).where(and(
+    eq(deferredVoiceCaptureDecisions.ownerId, ownerId),
+    inArray(deferredVoiceCaptureDecisions.captureId, captureIds),
+  ));
+  const deferredByCapture = new Map(deferred.map((decision) => [decision.captureId, decision]));
+  for (const capture of input.captures) {
+    const intent = intentByCapture.get(capture.captureId);
+    if (intent && (intent.activityId !== input.activityId
+        || intent.turnId !== capture.userTurnId
+        || intent.specialty !== input.specialty)) {
+      throw new Error("A Voice response group does not match a registered owner-scoped envelope.");
+    }
+    if (intent && !["pending", "uncertain", "activity_related"].includes(intent.status)) {
+      throw new Error("A Voice response group contains an unavailable or already resolved capture.");
+    }
+    const decision = deferredByCapture.get(capture.captureId);
+    if (decision && (decision.activityId !== input.activityId
+        || decision.turnId !== capture.userTurnId
+        || decision.decision !== "activity_related")) {
+      throw new Error("A deferred Voice decision conflicts with this response group.");
+    }
+  }
+
+  const statements = [
+    db.insert(voiceResponseGroups).values({
+      ownerId,
+      responseTurnId: input.responseTurnId,
+      activityId: input.activityId,
+      specialty: input.specialty,
+      responseBody: input.responseBody,
+      responseOccurredAt: input.responseOccurredAt,
+      memberCount: input.captures.length,
+      status: "provisional",
+      createdAt: nowMs,
+      updatedAt: nowMs,
+    }).onConflictDoNothing(),
+    ...input.captures.map((capture, memberOrder) => db.insert(voiceResponseGroupMembers).values({
+      ownerId,
+      captureId: capture.captureId,
+      responseTurnId: input.responseTurnId,
+      activityId: input.activityId,
+      userTurnId: capture.userTurnId,
+      memberOrder,
+      createdAt: nowMs,
+      updatedAt: nowMs,
+    }).onConflictDoNothing()),
+    ...input.captures.map((capture) => {
+      const intent = intentByCapture.get(capture.captureId);
+      if (intent) {
+        return db.update(voiceCaptureIntents).set({
+          status: "activity_related" as const,
+          decisionSource: "specialist",
+          decisionReason: input.reason.slice(0, 2_000),
+          decidedAt: nowMs,
+          lastError: null,
+          updatedAt: nowMs,
+        }).where(and(
+          eq(voiceCaptureIntents.ownerId, ownerId),
+          eq(voiceCaptureIntents.captureId, capture.captureId),
+        ));
+      }
+      return db.insert(deferredVoiceCaptureDecisions).values({
+        ownerId,
+        captureId: capture.captureId,
+        activityId: input.activityId,
+        turnId: capture.userTurnId,
+        decision: "activity_related" as const,
+        decisionSource: "specialist",
+        decisionReason: input.reason.slice(0, 2_000),
+        expiresAt: nowMs + 86_400_000,
+        createdAt: nowMs,
+        updatedAt: nowMs,
+      }).onConflictDoNothing();
+    }),
+  ];
+  await db.batch(statements as unknown as Parameters<typeof db.batch>[0]);
+  const stored = await readVoiceResponseGroup(ownerId, input.responseTurnId);
+  if (!stored || !sameVoiceResponseBatch(stored, input)) {
+    await quarantineVoiceResponseGroups(
+      ownerId,
+      [input.responseTurnId],
+      captureIds,
+      "A concurrent Voice response-group reservation stored different immutable identity.",
+      nowMs,
+    );
+    throw new Error("The canonical Voice response group could not be reserved safely.");
+  }
+  return { group: stored.group, duplicate: false };
+}
+
+async function commitVoiceResponseGroup(
+  ownerId: string,
+  input: {
+    captureId: string;
+    activityId: string;
+    specialty: Specialty;
+    turnId: string;
+    transcript: string;
+    checksum: string;
+    occurredAt: number;
+  },
+  intent: typeof voiceCaptureIntents.$inferSelect,
+  stored: NonNullable<Awaited<ReturnType<typeof readVoiceResponseGroup>>>,
+  nowMs: number,
+) {
+  const db = getDb();
+  const member = stored.members.find((candidate) => candidate.captureId === input.captureId);
+  if (!member
+      || stored.group.activityId !== input.activityId
+      || stored.group.specialty !== input.specialty
+      || member.activityId !== input.activityId
+      || member.userTurnId !== input.turnId
+      || stored.group.status === "quarantined_conflict"
+      || stored.group.status === "deleting") {
+    throw new Error("The grouped specialist response conflicts with the acknowledged Voice capture.");
+  }
+  if (member.transcript !== null && (
+    member.transcript !== input.transcript
+    || member.checksum !== input.checksum
+    || member.occurredAt !== input.occurredAt
+  )) {
+    await quarantineVoiceResponseGroups(
+      ownerId,
+      [stored.group.responseTurnId],
+      stored.members.map((candidate) => candidate.captureId),
+      "A grouped Voice transcript was retried with different immutable content.",
+      nowMs,
+    );
+    throw new Error("A grouped Voice transcript conflicts with its first accepted delivery.");
+  }
+
+  const commitIntentPredicate = and(
+    eq(voiceCaptureIntents.ownerId, ownerId),
+    eq(voiceCaptureIntents.captureId, input.captureId),
+    eq(voiceCaptureIntents.activityId, input.activityId),
+    eq(voiceCaptureIntents.specialty, input.specialty),
+    eq(voiceCaptureIntents.turnId, input.turnId),
+    eq(voiceCaptureIntents.checksum, input.checksum),
+    inArray(voiceCaptureIntents.status, ["activity_related", "accepted"]),
+  );
+  await db.batch([
+    db.update(voiceResponseGroupMembers).set({
+      transcript: input.transcript,
+      checksum: input.checksum,
+      occurredAt: input.occurredAt,
+      updatedAt: nowMs,
+    }).where(and(
+      eq(voiceResponseGroupMembers.ownerId, ownerId),
+      eq(voiceResponseGroupMembers.captureId, input.captureId),
+      or(
+        isNull(voiceResponseGroupMembers.transcript),
+        and(
+          eq(voiceResponseGroupMembers.transcript, input.transcript),
+          eq(voiceResponseGroupMembers.checksum, input.checksum),
+          eq(voiceResponseGroupMembers.occurredAt, input.occurredAt),
+        ),
+      ),
+    )),
+    db.update(voiceCaptureIntents).set({
+      status: "accepted",
+      updatedAt: nowMs,
+      lastError: null,
+    }).where(commitIntentPredicate),
+  ]);
+  const committedIntent = await readVoiceCaptureIntent(ownerId, input.captureId);
+  if (committedIntent?.status !== "accepted") {
+    throw new Error("The grouped Voice capture was deleted before its delivery could be committed.");
+  }
+
+  const refreshed = await readVoiceResponseGroup(ownerId, stored.group.responseTurnId);
+  if (!refreshed) throw new Error("The grouped Voice response reservation disappeared during delivery.");
+  const deliveredMember = refreshed.members.find((candidate) => candidate.captureId === input.captureId);
+  if (deliveredMember?.transcript !== input.transcript
+      || deliveredMember.checksum !== input.checksum
+      || deliveredMember.occurredAt !== input.occurredAt) {
+    await quarantineVoiceResponseGroups(
+      ownerId,
+      [stored.group.responseTurnId],
+      stored.members.map((candidate) => candidate.captureId),
+      "A concurrent grouped Voice delivery stored different immutable transcript content.",
+      nowMs,
+    );
+    throw new Error("The grouped Voice transcript could not be reserved safely.");
+  }
+  if (refreshed.members.some((candidate) =>
+    candidate.transcript === null || candidate.checksum === null || candidate.occurredAt === null)) {
+    return {
+      ...input,
+      speaker: "user" as const,
+      source: "audio_transcript" as const,
+      sequence: deliveredMember.memberOrder,
+      groupedPending: true as const,
+    };
+  }
+
+  const turnIds = [
+    ...refreshed.members.map((candidate) => candidate.userTurnId),
+    refreshed.group.responseTurnId,
+  ];
+  const existingTurns = await db.select().from(practiceTranscriptTurns).where(and(
+    eq(practiceTranscriptTurns.ownerId, ownerId),
+    eq(practiceTranscriptTurns.activityId, input.activityId),
+    inArray(practiceTranscriptTurns.turnId, turnIds),
+  ));
+  if (existingTurns.length > 0 && existingTurns.length !== turnIds.length) {
+    await quarantineVoiceResponseGroups(
+      ownerId,
+      [refreshed.group.responseTurnId],
+      refreshed.members.map((candidate) => candidate.captureId),
+      "A grouped Voice exchange only partially exists in the canonical transcript.",
+      nowMs,
+    );
+    throw new Error("A grouped Voice exchange conflicts with partial durable transcript content.");
+  }
+  const latest = existingTurns.length === 0
+    ? await db.select({ sequence: practiceTranscriptTurns.sequence })
+      .from(practiceTranscriptTurns)
+      .where(and(
+        eq(practiceTranscriptTurns.ownerId, ownerId),
+        eq(practiceTranscriptTurns.activityId, input.activityId),
+      ))
+      .orderBy(desc(practiceTranscriptTurns.sequence))
+      .limit(1)
+    : [];
+  const baseSequence = existingTurns.length
+    ? Math.min(...existingTurns.map((turn) => turn.sequence))
+    : (latest[0]?.sequence ?? -1) + 1;
+  const canonicalTurns = canonicalVoiceBatchTurns(
+    refreshed.members,
+    {
+      turnId: refreshed.group.responseTurnId,
+      body: refreshed.group.responseBody,
+      occurredAt: refreshed.group.responseOccurredAt,
+    },
+    input.specialty,
+    baseSequence,
+  ).map((turn) => ({ ownerId, activityId: input.activityId, ...turn, updatedAt: nowMs }));
+  const userValues = canonicalTurns.slice(0, -1);
+  const responseValue = canonicalTurns.at(-1)!;
+  for (const value of [...userValues, responseValue]) {
+    const existingTurn = existingTurns.find((turn) => turn.turnId === value.turnId);
+    if (existingTurn && !sameVoiceCommitTurn(existingTurn, value)) {
+      await quarantineVoiceResponseGroups(
+        ownerId,
+        [refreshed.group.responseTurnId],
+        refreshed.members.map((candidate) => candidate.captureId),
+        "A grouped Voice exchange conflicts with existing canonical transcript content.",
+        nowMs,
+      );
+      throw new Error("A grouped Voice exchange turn conflicts with existing durable transcript content.");
+    }
+  }
+
+  const groupReadyPredicate = and(
+    eq(voiceResponseGroups.ownerId, ownerId),
+    eq(voiceResponseGroups.responseTurnId, refreshed.group.responseTurnId),
+    inArray(voiceResponseGroups.status, ["provisional", "materialized"]),
+    notExists(db.select({ one: sql<number>`1` }).from(voiceResponseGroupMembers).where(and(
+      eq(voiceResponseGroupMembers.ownerId, ownerId),
+      eq(voiceResponseGroupMembers.responseTurnId, refreshed.group.responseTurnId),
+      or(
+        isNull(voiceResponseGroupMembers.transcript),
+        isNull(voiceResponseGroupMembers.checksum),
+        isNull(voiceResponseGroupMembers.occurredAt),
+      ),
+    ))),
+  );
+  const guardedTranscriptInsert = (value: typeof practiceTranscriptTurns.$inferInsert) => (
+    db.insert(practiceTranscriptTurns).select(
+      db.select({
+        ownerId: sql<string>`${value.ownerId}`.as("owner_id"),
+        activityId: sql<string>`${value.activityId}`.as("activity_id"),
+        turnId: sql<string>`${value.turnId}`.as("turn_id"),
+        specialty: sql<string>`${value.specialty}`.as("specialty"),
+        speaker: sql<string>`${value.speaker}`.as("speaker"),
+        body: sql<string>`${value.body}`.as("body"),
+        source: sql<string>`${value.source}`.as("source"),
+        sequence: sql<number>`${value.sequence}`.as("sequence"),
+        occurredAt: sql<number>`${value.occurredAt}`.as("occurred_at"),
+        updatedAt: sql<number>`${value.updatedAt}`.as("updated_at"),
+      }).from(voiceResponseGroups).where(groupReadyPredicate).limit(1),
+    ).onConflictDoNothing()
+  );
+  await db.batch([
+    ...userValues.map(guardedTranscriptInsert),
+    guardedTranscriptInsert(responseValue),
+    db.update(voiceResponseGroups).set({ status: "materialized", updatedAt: nowMs }).where(groupReadyPredicate),
+  ] as unknown as Parameters<typeof db.batch>[0]);
+  const materialized = await readVoiceResponseGroup(ownerId, refreshed.group.responseTurnId);
+  if (materialized?.group.status !== "materialized") {
+    throw new Error("The grouped Voice exchange was deleted before canonical materialization.");
+  }
+  return userValues.find((value) => value.turnId === input.turnId)!;
+}
+
 export async function commitRelatedVoiceCapture(
   ownerId: string,
   input: {
@@ -987,6 +1423,10 @@ export async function commitRelatedVoiceCapture(
     input,
   )) {
     throw new Error("Only an acknowledged activity-related capture can be committed.");
+  }
+  const responseGroup = await readVoiceResponseGroupByCapture(ownerId, input.captureId);
+  if (responseGroup) {
+    return commitVoiceResponseGroup(ownerId, input, intent!, responseGroup, nowMs);
   }
   const commitIntentPredicate = and(
     eq(voiceCaptureIntents.ownerId, ownerId),
@@ -1139,82 +1579,150 @@ export async function commitRelatedVoiceCapture(
   return userValue;
 }
 
-export async function beginDeleteVoiceCapture(
+export async function readVoiceCaptureDeleteScope(ownerId: string, captureId: string) {
+  const db = getDb();
+  const grouped = await readVoiceResponseGroupByCapture(ownerId, captureId);
+  const captureIds = grouped
+    ? grouped.members.map((member) => member.captureId)
+    : [captureId];
+  const intents = await readVoiceCaptureIntents(ownerId, captureIds);
+  const target = intents.find((intent) => intent.captureId === captureId);
+  if (!target) throw new Error("Voice capture not found.");
+  const singleResponses = grouped ? [] : await db.select().from(voiceSpecialistResponses).where(and(
+    eq(voiceSpecialistResponses.ownerId, ownerId),
+    inArray(voiceSpecialistResponses.captureId, captureIds),
+  ));
+  return {
+    target,
+    intents,
+    captureIds,
+    clipIds: intents.map((intent) => intent.clipId),
+    userTurnIds: grouped
+      ? grouped.members.map((member) => member.userTurnId)
+      : intents.map((intent) => intent.turnId),
+    responseTurnIds: grouped
+      ? [grouped.group.responseTurnId]
+      : singleResponses.map((response) => response.responseTurnId),
+    groupedResponseTurnId: grouped?.group.responseTurnId ?? null,
+  };
+}
+
+export async function beginDeleteVoiceCaptureGraph(
   ownerId: string,
   captureId: string,
   nowMs: number,
   deletion?: { source: string; reason: string },
 ) {
   const db = getDb();
-  const intent = await readVoiceCaptureIntent(ownerId, captureId);
-  if (!intent) throw new Error("Voice capture not found.");
-  await db.update(voiceCaptureIntents).set({
-    status: "deleting",
-    ...(deletion ? {
-      decisionSource: sql<string | null>`CASE
-        WHEN ${voiceCaptureIntents.status} = 'deleting' THEN ${voiceCaptureIntents.decisionSource}
-        ELSE ${deletion.source.slice(0, 80)}
-      END`,
-      decisionReason: sql<string | null>`CASE
-        WHEN ${voiceCaptureIntents.status} = 'deleting' THEN ${voiceCaptureIntents.decisionReason}
-        ELSE ${deletion.reason.slice(0, 2_000)}
-      END`,
-      decidedAt: sql<number | null>`CASE
-        WHEN ${voiceCaptureIntents.status} = 'deleting' THEN ${voiceCaptureIntents.decidedAt}
-        ELSE ${nowMs}
-      END`,
-    } : {}),
-    updatedAt: nowMs,
-    lastError: null,
-  }).where(and(eq(voiceCaptureIntents.ownerId, ownerId), eq(voiceCaptureIntents.captureId, captureId)));
-  return intent;
+  const scope = await readVoiceCaptureDeleteScope(ownerId, captureId);
+  const statements = [
+    db.update(voiceCaptureIntents).set({
+      status: "deleting" as const,
+      ...(deletion ? {
+        decisionSource: sql<string | null>`CASE
+          WHEN ${voiceCaptureIntents.status} = 'deleting' THEN ${voiceCaptureIntents.decisionSource}
+          ELSE ${deletion.source.slice(0, 80)}
+        END`,
+        decisionReason: sql<string | null>`CASE
+          WHEN ${voiceCaptureIntents.status} = 'deleting' THEN ${voiceCaptureIntents.decisionReason}
+          ELSE ${deletion.reason.slice(0, 2_000)}
+        END`,
+        decidedAt: sql<number | null>`CASE
+          WHEN ${voiceCaptureIntents.status} = 'deleting' THEN ${voiceCaptureIntents.decidedAt}
+          ELSE ${nowMs}
+        END`,
+      } : {}),
+      updatedAt: nowMs,
+      lastError: null,
+    }).where(and(
+      eq(voiceCaptureIntents.ownerId, ownerId),
+      inArray(voiceCaptureIntents.captureId, scope.captureIds),
+    )),
+    ...(scope.groupedResponseTurnId ? [
+      db.update(voiceResponseGroups).set({ status: "deleting" as const, updatedAt: nowMs }).where(and(
+        eq(voiceResponseGroups.ownerId, ownerId),
+        eq(voiceResponseGroups.responseTurnId, scope.groupedResponseTurnId),
+      )),
+    ] : []),
+  ];
+  await db.batch(statements as unknown as Parameters<typeof db.batch>[0]);
+  return scope;
+}
+
+export async function beginDeleteVoiceCapture(
+  ownerId: string,
+  captureId: string,
+  nowMs: number,
+  deletion?: { source: string; reason: string },
+) {
+  return (await beginDeleteVoiceCaptureGraph(ownerId, captureId, nowMs, deletion)).target;
 }
 
 export async function completeDeleteVoiceCapture(ownerId: string, captureId: string, nowMs: number) {
   const db = getDb();
-  const intent = await readVoiceCaptureIntent(ownerId, captureId);
-  if (!intent) return;
-  const response = (await db.select({
-    userTurnId: voiceSpecialistResponses.userTurnId,
-    responseTurnId: voiceSpecialistResponses.responseTurnId,
-  }).from(voiceSpecialistResponses).where(and(
-    eq(voiceSpecialistResponses.ownerId, ownerId),
-    eq(voiceSpecialistResponses.captureId, captureId),
-  )).limit(1))[0] ?? null;
-  const transcriptTurnIds = voiceCaptureDeleteTurnIds(intent.turnId, response);
+  let scope;
+  try {
+    scope = await readVoiceCaptureDeleteScope(ownerId, captureId);
+  } catch (error) {
+    if (error instanceof Error && error.message === "Voice capture not found.") return;
+    throw error;
+  }
+  const transcriptTurnIds = [...new Set([...scope.userTurnIds, ...scope.responseTurnIds])];
   await db.delete(activityDeliveryAnalyses).where(and(
     eq(activityDeliveryAnalyses.ownerId, ownerId),
-    eq(activityDeliveryAnalyses.transcriptTurnId, intent.turnId),
+    inArray(activityDeliveryAnalyses.transcriptTurnId, scope.userTurnIds),
   ));
   await db.delete(activityAudioClips).where(and(
     eq(activityAudioClips.ownerId, ownerId),
-    eq(activityAudioClips.id, intent.clipId),
+    inArray(activityAudioClips.id, scope.clipIds),
   ));
   await db.delete(practiceTranscriptTurns).where(and(
     eq(practiceTranscriptTurns.ownerId, ownerId),
-    eq(practiceTranscriptTurns.activityId, intent.activityId),
+    eq(practiceTranscriptTurns.activityId, scope.target.activityId),
     inArray(practiceTranscriptTurns.turnId, transcriptTurnIds),
   ));
-  await db.batch([
+  const statements = [
+    db.delete(deferredVoiceCaptureDecisions).where(and(
+      eq(deferredVoiceCaptureDecisions.ownerId, ownerId),
+      inArray(deferredVoiceCaptureDecisions.captureId, scope.captureIds),
+    )),
     db.delete(voiceSpecialistResponses).where(and(
       eq(voiceSpecialistResponses.ownerId, ownerId),
-      eq(voiceSpecialistResponses.captureId, captureId),
+      inArray(voiceSpecialistResponses.captureId, scope.captureIds),
     )),
+    db.delete(voiceResponseGroupMembers).where(and(
+      eq(voiceResponseGroupMembers.ownerId, ownerId),
+      inArray(voiceResponseGroupMembers.captureId, scope.captureIds),
+    )),
+    ...(scope.groupedResponseTurnId ? [
+      db.delete(voiceResponseGroups).where(and(
+        eq(voiceResponseGroups.ownerId, ownerId),
+        eq(voiceResponseGroups.responseTurnId, scope.groupedResponseTurnId),
+      )),
+    ] : []),
     db.update(voiceCaptureIntents).set({
-      status: "deleted",
+      status: "deleted" as const,
       updatedAt: nowMs,
       lastError: null,
-    }).where(and(eq(voiceCaptureIntents.ownerId, ownerId), eq(voiceCaptureIntents.captureId, captureId))),
-  ]);
+    }).where(and(
+      eq(voiceCaptureIntents.ownerId, ownerId),
+      inArray(voiceCaptureIntents.captureId, scope.captureIds),
+    )),
+  ];
+  await db.batch(statements as unknown as Parameters<typeof db.batch>[0]);
 }
 
 export async function failDeleteVoiceCapture(ownerId: string, captureId: string, message: string, nowMs: number) {
   const db = getDb();
+  const scope = await readVoiceCaptureDeleteScope(ownerId, captureId);
   await db.update(voiceCaptureIntents).set({
     status: "deleting",
     lastError: message.slice(0, 2_000),
     updatedAt: nowMs,
-  }).where(and(eq(voiceCaptureIntents.ownerId, ownerId), eq(voiceCaptureIntents.captureId, captureId)));
+  }).where(and(
+    eq(voiceCaptureIntents.ownerId, ownerId),
+    inArray(voiceCaptureIntents.captureId, scope.captureIds),
+  ));
 }
 
 export async function unresolvedVoiceCaptureCount(ownerId: string, activityId: string) {
@@ -1251,6 +1759,29 @@ function hasCanonicalMaterializedVoiceExchange(
     && specialistTurn.speaker === "specialist"
     && specialistTurn.source === "codex"
     && specialistTurn.body === response.responseBody;
+}
+
+function hasCanonicalMaterializedVoiceGroupMember(
+  intent: typeof voiceCaptureIntents.$inferSelect,
+  member: typeof voiceResponseGroupMembers.$inferSelect | undefined,
+  group: typeof voiceResponseGroups.$inferSelect | undefined,
+  userTurn: typeof practiceTranscriptTurns.$inferSelect | null | undefined,
+  specialistTurn: typeof practiceTranscriptTurns.$inferSelect | null | undefined,
+) {
+  return group?.status === "materialized"
+    && member?.activityId === intent.activityId
+    && member.userTurnId === intent.turnId
+    && group.activityId === intent.activityId
+    && group.specialty === intent.specialty
+    && userTurn?.activityId === intent.activityId
+    && userTurn.specialty === intent.specialty
+    && userTurn.speaker === "user"
+    && userTurn.source === "audio_transcript"
+    && specialistTurn?.activityId === intent.activityId
+    && specialistTurn.specialty === intent.specialty
+    && specialistTurn.speaker === "specialist"
+    && specialistTurn.source === "codex"
+    && specialistTurn.body === group.responseBody;
 }
 
 export async function prepareVoiceCapturesForFinish(
@@ -1324,7 +1855,26 @@ export async function prepareVoiceCapturesForFinish(
     ))
     : [];
   const responseByCaptureId = new Map(responses.map((response) => [response.captureId, response]));
-  const canonicalTurnIds = responses.flatMap((response) => [response.userTurnId, response.responseTurnId]);
+  const groupMembers = accepted.length
+    ? await db.select().from(voiceResponseGroupMembers).where(and(
+      eq(voiceResponseGroupMembers.ownerId, ownerId),
+      inArray(voiceResponseGroupMembers.captureId, accepted.map((intent) => intent.captureId)),
+    ))
+    : [];
+  const groupResponseTurnIds = [...new Set(groupMembers.map((member) => member.responseTurnId))];
+  const responseGroups = groupResponseTurnIds.length
+    ? await db.select().from(voiceResponseGroups).where(and(
+      eq(voiceResponseGroups.ownerId, ownerId),
+      inArray(voiceResponseGroups.responseTurnId, groupResponseTurnIds),
+    ))
+    : [];
+  const groupMemberByCaptureId = new Map(groupMembers.map((member) => [member.captureId, member]));
+  const groupByResponseTurnId = new Map(responseGroups.map((group) => [group.responseTurnId, group]));
+  const canonicalTurnIds = [
+    ...responses.flatMap((response) => [response.userTurnId, response.responseTurnId]),
+    ...groupMembers.map((member) => member.userTurnId),
+    ...groupResponseTurnIds,
+  ];
   const canonicalTurns = canonicalTurnIds.length
     ? await db.select().from(practiceTranscriptTurns).where(and(
       eq(practiceTranscriptTurns.ownerId, ownerId),
@@ -1341,14 +1891,15 @@ export async function prepareVoiceCapturesForFinish(
     if (intent.status === "quarantined_conflict") guard.conflicts.push(intent.captureId);
     if (intent.status === "accepted") {
       const response = responseByCaptureId.get(intent.captureId);
-      const userTurn = response ? turnById.get(response.userTurnId) : null;
-      const specialistTurn = response ? turnById.get(response.responseTurnId) : null;
-      const hasCanonicalExchange = hasCanonicalMaterializedVoiceExchange(
-        intent,
-        response,
-        userTurn,
-        specialistTurn,
-      );
+      const member = groupMemberByCaptureId.get(intent.captureId);
+      const group = member ? groupByResponseTurnId.get(member.responseTurnId) : undefined;
+      const userTurnId = response?.userTurnId ?? member?.userTurnId;
+      const responseTurnId = response?.responseTurnId ?? group?.responseTurnId;
+      const userTurn = userTurnId ? turnById.get(userTurnId) : null;
+      const specialistTurn = responseTurnId ? turnById.get(responseTurnId) : null;
+      const hasCanonicalExchange = response
+        ? hasCanonicalMaterializedVoiceExchange(intent, response, userTurn, specialistTurn)
+        : hasCanonicalMaterializedVoiceGroupMember(intent, member, group, userTurn, specialistTurn);
       if (!hasCanonicalExchange) guard.missingDurableExchange.push(intent.captureId);
       const clip = clipById.get(intent.clipId);
       if (clip?.status === "audio_lost") {

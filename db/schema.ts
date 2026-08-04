@@ -288,6 +288,59 @@ export const voiceSpecialistResponses = sqliteTable(
   ],
 );
 
+// Consecutive Voice-managed user turns can form one logical answer. The group
+// reserves one immutable specialist response while each ordered member keeps
+// its own capture, transcript, audio, and delivery-analysis identity.
+export const voiceResponseGroups = sqliteTable(
+  "voice_response_groups",
+  {
+    ownerId,
+    responseTurnId: text("response_turn_id").notNull(),
+    activityId: text("activity_id").notNull(),
+    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
+    responseBody: text("response_body").notNull(),
+    responseOccurredAt: integer("response_occurred_at").notNull(),
+    memberCount: integer("member_count").notNull(),
+    status: text("status", {
+      enum: ["provisional", "materialized", "deleting", "quarantined_conflict"],
+    }).notNull().default("provisional"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.responseTurnId] })],
+);
+
+export const voiceResponseGroupMembers = sqliteTable(
+  "voice_response_group_members",
+  {
+    ownerId,
+    captureId: text("capture_id").notNull(),
+    responseTurnId: text("response_turn_id").notNull(),
+    activityId: text("activity_id").notNull(),
+    userTurnId: text("user_turn_id").notNull(),
+    memberOrder: integer("member_order").notNull(),
+    transcript: text("transcript"),
+    checksum: text("checksum"),
+    occurredAt: integer("occurred_at"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.captureId] }),
+    uniqueIndex("voice_response_group_members_order_unique").on(
+      table.ownerId,
+      table.responseTurnId,
+      table.memberOrder,
+    ),
+    uniqueIndex("voice_response_group_members_turn_unique").on(
+      table.ownerId,
+      table.activityId,
+      table.userTurnId,
+    ),
+    index("voice_response_group_members_response_idx").on(table.ownerId, table.responseTurnId),
+  ],
+);
+
 // A specialist can classify the protocol-v2 envelope immediately after Voice
 // inserts it, before Voice's background metadata registration reaches the
 // Worker. This short-lived owner-scoped row closes that race without storing

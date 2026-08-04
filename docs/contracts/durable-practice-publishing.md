@@ -116,6 +116,19 @@ capture `activity_related` and reserves one canonical response linked through
 delivers the matching user transcript, then materializes the ordered pair once.
 Use `resolve_voice_capture` only for `unrelated` or `uncertain` decisions.
 
+When one visible user message contains 2–20 consecutive related Voice
+envelopes, call `resolve_voice_captures_and_save_response` once with every
+capture/user-turn identity in visible order and one stable specialist response.
+D1 buffers each accepted transcript independently, permits each private clip
+and delivery analysis to arrive independently, and materializes the canonical
+transcript only when every member is durable: all ordered user turns followed
+by the one shared specialist turn. Exact retries must preserve order,
+membership, activity, specialty, response identity, and response body. A
+changed retry is quarantined rather than rewritten. The singular operation
+remains the compatible path for exactly one capture.
+After this MCP catalog change deploys, reconnect the coordinator and all three
+long-lived specialist tasks before relying on the batch operation.
+
 An administrative capture that is still pending must be classified
 `unrelated`; it does not require deletion. If an explicit user correction says
 that a capture already classified related was misclassified, use
@@ -126,6 +139,9 @@ capture. The operation reuses the fenced owner-scoped deletion graph, removes
 the canonical user/response turns, response reservation, private recording
 metadata/object, and delivery analysis, and retains only the terminal intent
 tombstone needed for idempotence.
+If the capture belongs to a multi-capture response group, remediation deletes
+the entire logical answer—including every member transcript, clip, analysis,
+and the shared response—so it cannot leave a misleading partial answer.
 
 Visible receipts confirm every decision and write but are never persisted.
 Untouched `pending` captures are discarded as `discarded_unclassified` when an
