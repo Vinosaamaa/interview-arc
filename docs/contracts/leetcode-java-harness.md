@@ -50,9 +50,10 @@ aliases, helper commands, or preceding `cd`. Continue between ordinary
 arguments with a trailing backslash. Split an overlong path or opaque ID inside
 the same double-quoted token by placing a final backslash before the newline;
 the continuation begins at rendered column one so no whitespace enters the
-value. Never rely on visual wrapping. Before sending, verify the physical line
-lengths, parse with `zsh -n`, and execute safe equivalent editor and runner
-smokes.
+value. Never rely on visual wrapping. This is a fixed, prevalidated rendering
+template: the primary specialist sends it immediately and must not run
+`zsh -n`, open the editor, execute the runner, or wait for the harness helper
+merely to validate command formatting in the visible startup path.
 
 The primary specialist finishes that ordinary response immediately. It does
 not await the helper and never sends a proactive “harness ready” message. The

@@ -439,8 +439,10 @@ During the same start-problem turn, follow
    declarations, arrays, aliases, helper commands, or preceding `cd`. Use a
    trailing backslash between ordinary arguments. When a single quoted path or
    opaque ID exceeds the limit, continue inside that same double-quoted token,
-   with the next fragment beginning at column one. Verify line lengths, parse
-   with `zsh -n`, and execute a safe equivalent smoke before the handoff.
+   with the next fragment beginning at column one. Render this fixed,
+   prevalidated template immediately. Do not run `zsh -n`, open `nvim`, execute
+   the runner, or wait for the harness helper merely to validate command
+   formatting before replying; those checks must not delay the visible handoff.
 5. The sub-agent writes only reserved temporary/local harness material. It
    publishes the whole validated directory atomically and changes status to
    `ready` only after publication. If delegation is unavailable or fails,
