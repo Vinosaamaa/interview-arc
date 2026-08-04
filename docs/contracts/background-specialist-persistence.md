@@ -34,6 +34,36 @@ order. At the eight-item limit, join the child before delegating more work;
 never create another child, reorder evidence, or silently drop persistence.
 After Finish verification, stop reusing that activity's child.
 
+## MCP routing boundary
+
+These post-response persistence calls are dedicated to the activity child:
+
+- `save_practice_exchange`;
+- `resolve_voice_capture_and_save_response`;
+- `resolve_voice_captures_and_save_response`;
+- `resolve_voice_capture` for an unrelated or uncertain envelope;
+- `save_leetcode_code_attempt`;
+- `add_practice_note`;
+- `save_specialist_finalization` and its required
+  `schedule_practice_review` call when finalization is being committed.
+
+The parent keeps these calls because they are authoritative interactive state,
+required inputs to the answer, or coordinator/release actions:
+
+- `get_today_practice`, `get_problem_solution_profile`,
+  `get_activity_practice_record`, and other reads needed before composing the
+  answer;
+- timer, session, workbench, planning, result, and focus mutations;
+- LeetCode browser/controller commands and submission/verdict reads;
+- `save_provisional_solution_profile` when a missing profile is needed before
+  coaching;
+- publication queue reads, publication marking, specialist-task registry,
+  deployment, Git, and any coordinator-only operation.
+
+Delivery Coach audio analysis remains its own background workflow. It is not a
+reason for the visible specialist parent or this persistence child to inspect
+audio or perform R2 work.
+
 ## Exact child instruction
 
 The parent supplies, verbatim:

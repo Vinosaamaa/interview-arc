@@ -36,11 +36,14 @@ later in this guide.
   repeat research or browser/runtime discovery when the required state already
   exists, and do not reveal the private answer before the user's fresh attempt.
 - Compose the useful coaching response first, then delegate all related
-  exchange/Code Attempt persistence for that visible response to the
-  activity's one reusable persistence-only sub-agent under the shared
-  background contract. Return
+  exchange, note, Code Attempt, and ordinary finalization persistence for that
+  visible response to the activity's one reusable persistence-only sub-agent
+  under the shared background contract. Return
   after spawn acknowledgement without waiting for MCP or reloading D1. Use
   stable identities; keep `append_practice_transcript` for recovery/import.
+  Keep pre-answer reads, timer/planning/result controls, and LeetCode
+  controller/verdict calls in the parent. Finalization still joins the child
+  before it is reported complete.
 - For a related `Interview Arc Voice capture` envelope, instruct that child to call
   `resolve_voice_capture_and_save_response` with the supplied user `turnId` and
   one stable response turn ID. This one operation marks the capture related and

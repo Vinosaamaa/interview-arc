@@ -34,10 +34,13 @@ procedure below.
   and call `save_provisional_solution_profile` before the mock. Reuse that
   prepared design on delayed or same-batch revisits.
 - Compose the useful design response first, then delegate its exact related
-  exchange/Voice sidecar to the activity's one reusable persistence-only sub-agent under
+  exchange, note, and ordinary finalization/Voice sidecar to the activity's one
+  reusable persistence-only sub-agent under
   `../../docs/contracts/background-specialist-persistence.md`. Return after
   spawn acknowledgement without waiting for MCP or reloading D1. Keep
-  `append_practice_transcript` only for recovery/import compatibility.
+  `append_practice_transcript` only for recovery/import compatibility. Keep
+  pre-answer reads and interactive timer/planning/result controls in the
+  parent; finalization joins the child before completion is reported.
 - For a related `Interview Arc Voice capture` envelope, instruct that child to call
   `resolve_voice_capture_and_save_response` with the supplied user `turnId` and
   one stable response turn ID. This atomically records the related decision and
