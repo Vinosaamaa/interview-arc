@@ -43,17 +43,15 @@ user commands before harness generation finishes:
 2. the returned default Quick command; and
 3. the returned command ending in `--full`.
 
-Every physical line in these user-facing shell blocks must be at most 59
-characters and must remain directly pasteable as one valid shell operation.
-Each block contains exactly one command: no variable declarations, arrays,
-aliases, helper commands, or preceding `cd`. Continue between ordinary
-arguments with a trailing backslash. Split an overlong path or opaque ID inside
-the same double-quoted token by placing a final backslash before the newline;
-the continuation begins at rendered column one so no whitespace enters the
-value. Never rely on visual wrapping. This is a fixed, prevalidated rendering
-template: the primary specialist sends it immediately and must not run
-`zsh -n`, open the editor, execute the runner, or wait for the harness helper
-merely to validate command formatting in the visible startup path.
+Tmux copy mode prefixes each copied code line with two spaces. Keep every
+authored line at most 57 characters so the copied physical line stays within
+the 59-character limit. Each block has one outer command: no variables, arrays,
+aliases, or preceding `cd`. Join long path and opaque-ID fragments through
+`$(printf %s "fragment" ...)`; each fragment remains a separate quoted argument,
+so tmux-added leading spaces are harmless shell whitespace. Never continue
+directly inside one quoted literal, where copied indentation would become data.
+This is a fixed, prevalidated template: send it immediately without running
+`zsh -n`, opening the editor, executing the runner, or waiting for the helper.
 
 The primary specialist finishes that ordinary response immediately. It does
 not await the helper and never sends a proactive “harness ready” message. The
