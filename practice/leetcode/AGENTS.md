@@ -391,10 +391,27 @@ series of local attempt snapshots.
    filename, copy the current source into a correctly named temporary harness
    outside the durable solution directory; do not alter the working scaffold
    merely to satisfy the local filesystem.
-6. Every time the file is prepared or resumed, give the user the complete
-   absolute editor command:
+6. Every time the file is prepared or resumed, give the user one complete,
+   copy/paste-safe editor command that resolves the absolute working file.
+   Keep every physical line in its shell code block at or below 59 characters.
+   Prefer assembling the stable directory from short shell variables, changing
+   to it, and opening the relative filename when an absolute command exceeds
+   that limit:
 
-   `nvim "<absolute-path-to-the-file>"`
+   ```bash
+   root="<absolute-workspace-root>"
+   arc="$root/interview-arc"
+   solutions="$arc/practice/leetcode/solutions"
+   cd "$solutions" && \
+   nvim \
+   "<filename-part-one>"\
+   "<filename-part-two>.java"
+   ```
+
+   Use executable shell continuation and adjacent quoted fragments, not visual
+   wrapping. Continuation fragments that form one token must begin at column
+   one so indentation does not introduce an argument separator. Never split
+   one path into separate shell arguments.
 
    The user opens `nvim`. Do not assume that Codex can safely create or target
    a Warp pane, and do not replace the running Codex process with the editor.
@@ -421,6 +438,12 @@ During the same start-problem turn, follow
    `nvim` command, the returned default Quick command, and the returned
    `--full` command. Finish the response normally without waiting for harness
    generation. Never send a proactive harness-ready message later.
+   Render all three as directly pasteable shell blocks whose physical lines are
+   at most 59 characters. Prefer short directory variables, `cd`, and
+   repository-relative paths. When a filename or opaque argument such as an
+   activity ID is itself too long, assign or pass it by safely concatenating
+   adjacent quoted fragments, then reference the variable. Verify line lengths
+   and shell token identity before sending the handoff.
 5. The sub-agent writes only reserved temporary/local harness material. It
    publishes the whole validated directory atomically and changes status to
    `ready` only after publication. If delegation is unavailable or fails,

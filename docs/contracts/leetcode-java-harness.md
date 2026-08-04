@@ -43,6 +43,15 @@ user commands before harness generation finishes:
 2. the returned default Quick command; and
 3. the returned command ending in `--full`.
 
+Every physical line in these user-facing shell blocks must be at most 59
+characters and must remain directly pasteable as one valid shell operation.
+Prefer short variables for stable directory components, then `cd` and use
+relative paths. Split long filenames and opaque values through adjacent quoted
+fragments that remain one shell token; a continued fragment begins at column
+one so indentation cannot become an argument separator. Never rely on terminal
+visual wrapping. Before sending, verify both the physical line lengths and the
+shell token identity of the editor, Quick, and Full commands.
+
 The primary specialist finishes that ordinary response immediately. It does
 not await the helper and never sends a proactive “harness ready” message. The
 user simply reruns the same previously supplied command.
