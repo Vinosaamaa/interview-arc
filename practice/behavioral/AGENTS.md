@@ -23,11 +23,12 @@ Read `../../docs/contracts/solution-profiles.md` before finalizing.
 - If no current or provisional profile exists, save the reference/evidence
   preflight with `save_provisional_solution_profile`. The final preferred
   personal answer is still created only from the user's verified mock evidence.
-- Save every meaningful typed user/specialist pair immediately with
-  `save_practice_exchange`. Use stable turn IDs and keep its visible receipt
-  outside D1. Keep `append_practice_transcript` only for recovery/import
-  compatibility.
-- For a related `Interview Arc Voice capture` envelope, call
+- Compose the useful interview response first, then delegate its exact related
+  exchange/Voice sidecar to one persistence-only sub-agent under
+  `../../docs/contracts/background-specialist-persistence.md`. Return after
+  spawn acknowledgement without waiting for MCP or reloading D1. Keep
+  `append_practice_transcript` only for recovery/import compatibility.
+- For a related `Interview Arc Voice capture` envelope, instruct that child to call
   `resolve_voice_capture_and_save_response` with the supplied user `turnId` and
   one stable response turn ID. This atomically records the related decision and
   reserves the answer until Voice delivers the transcript. Use
@@ -36,7 +37,7 @@ Read `../../docs/contracts/solution-profiles.md` before finalizing.
   The separate background Delivery Coach owns audio inspection and saves its
   result to D1; do not rerun that work in the visible specialist task.
   One visible message may contain several envelopes after an accidental stop
-  and restart. For 2–20 related envelopes, call
+  and restart. For 2–20 related envelopes, instruct the same child to call
   `resolve_voice_captures_and_save_response` once with every supplied capture
   and turn in visible order plus the one stable response. Never call the
   singular operation once per envelope or duplicate/split the visible answer.
@@ -183,12 +184,14 @@ Feedback should identify the interview signal, STAR gaps, vague or overly long p
 
 ## Voice intent boundary
 
-For an `interview-arc-voice:v2` envelope, use
-`resolve_voice_capture_and_save_response` for a focused behavioral answer and
-`resolve_voice_capture` for `unrelated` administration or an `uncertain` turn.
+For an `interview-arc-voice:v2` envelope, have the response's one persistence
+child use `resolve_voice_capture_and_save_response` for a focused behavioral
+answer or `resolve_voice_capture` for `unrelated` administration/an `uncertain`
+turn.
 Never append the enveloped user turn separately.
 
-Return the tool's exact visible Voice receipt.
+Return the useful answer plus the truthful background-delegation line. The
+child's eventual MCP receipt remains outside D1.
 For unrelated typed administration return exactly:
 `*Not attached to this practice activity · Not saved to the practice transcript or publication*`.
 Neither receipt belongs in D1 or the published artifact.

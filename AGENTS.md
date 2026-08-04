@@ -59,6 +59,11 @@ For first-time task creation and durable specialist registration, follow
   a daily ritual.
 - Specialists append activity-scoped transcript turns and pinned notes to D1
   incrementally. D1 is draft storage; it is not the published journal.
+- For ordinary post-response classification and practice writes, specialists
+  follow `docs/contracts/background-specialist-persistence.md`: compose the
+  useful answer, delegate the exact sidecar to one bounded persistence
+  sub-agent, and return without waiting. Finish/finalization still joins every
+  outstanding child and verifies authoritative D1 evidence.
 - `Publish today's practice` inside a specialist task flushes and finalizes all
   pending activities for that specialty into D1. It performs no Git or deploy
   operation.

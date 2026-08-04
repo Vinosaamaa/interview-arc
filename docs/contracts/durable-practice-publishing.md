@@ -102,14 +102,22 @@ create a new revision for punctuation or formatting alone.
 
 ## Exact-once Draft Capture
 
-For a related typed exchange, specialists call `save_practice_exchange` once
+During the interim #155 workflow, the specialist delegates the operations in
+this section to one persistence-only sub-agent after composing the visible
+answer. Follow `background-specialist-persistence.md`. The parent returns after
+spawn acknowledgement; the child calls the same existing atomic MCP tools and
+reports later. A spawn acknowledgement is not a saved receipt. The hook/D1
+outbox replacement remains tracked by #93.
+
+For a related typed exchange, the persistence child calls
+`save_practice_exchange` once
 per user question and canonical specialist response. The write is atomic,
 ordered, and identity-idempotent. Exact retries reuse the saved pair; the same
 turn ID with changed identity or content is rejected rather than rewritten.
 `append_practice_transcript` remains available only for legacy recovery and
 imports.
 
-For a related protocol-v2 Voice envelope, specialists call
+For a related protocol-v2 Voice envelope, the persistence child calls
 `resolve_voice_capture_and_save_response`. That operation atomically marks the
 capture `activity_related` and reserves one canonical response linked through
 `replyToTurnId`. Interview Arc holds the response provisionally until Voice
@@ -148,7 +156,9 @@ If the capture belongs to a multi-capture response group, remediation deletes
 the entire logical answer—including every member transcript, clip, analysis,
 and the shared response—so it cannot leave a misleading partial answer.
 
-Visible receipts confirm every decision and write but are never persisted.
+Completed MCP receipts confirm every decision and write but are never
+persisted. The parent may instead show the interim background-delegation line;
+it must not translate that line into a saved claim.
 Untouched `pending` captures are discarded as `discarded_unclassified` when an
 activity finishes and do not block completion. An `uncertain` capture requires
 Attach or Discard. A confirmed related capture missing delivery requires Retry

@@ -8,11 +8,13 @@ Act as a coding-interview practice curator and coach. Before starting, read:
 4. `../../docs/contracts/question-bank.schema.json` before changing bank data.
 5. `../../docs/contracts/durable-practice-publishing.md` before saving notes,
    transcripts, reviews, or finalizations.
-6. `../../docs/contracts/solution-profiles.md` before finalizing reusable bank
+6. `../../docs/contracts/background-specialist-persistence.md` before
+   delegating post-response persistence.
+7. `../../docs/contracts/solution-profiles.md` before finalizing reusable bank
    knowledge.
-7. `../../docs/contracts/reader-rendering.md` before changing the reusable
+8. `../../docs/contracts/reader-rendering.md` before changing the reusable
    solution template or its code-block structure.
-8. `../../docs/contracts/leetcode-java-harness.md` before starting or testing a
+9. `../../docs/contracts/leetcode-java-harness.md` before starting or testing a
    CLI-native Java activity.
 
 ## Authoritative Durable Publishing Workflow
@@ -33,11 +35,12 @@ later in this guide.
   current or provisional profile once after resolving `questionId`; do not
   repeat research or browser/runtime discovery when the required state already
   exists, and do not reveal the private answer before the user's fresh attempt.
-- Save every related typed user/specialist pair immediately with
-  `save_practice_exchange`. Use stable user and response turn IDs. The visible
-  success receipt is not part of the durable transcript. Keep
-  `append_practice_transcript` only for recovery/import compatibility.
-- For a related `Interview Arc Voice capture` envelope, call
+- Compose the useful coaching response first, then delegate all related
+  exchange/Code Attempt persistence for that visible response to exactly one
+  persistence-only sub-agent under the shared background contract. Return
+  after spawn acknowledgement without waiting for MCP or reloading D1. Use
+  stable identities; keep `append_practice_transcript` for recovery/import.
+- For a related `Interview Arc Voice capture` envelope, instruct that child to call
   `resolve_voice_capture_and_save_response` with the supplied user `turnId` and
   one stable response turn ID. This one operation marks the capture related and
   reserves the canonical specialist answer; D1 exposes the pair after Voice
@@ -46,7 +49,7 @@ later in this guide.
   The separate background Delivery Coach owns audio inspection and saves its
   result to D1; do not rerun that work in the visible specialist task.
   One visible message may contain several envelopes after an accidental stop
-  and restart. For 2–20 related envelopes, call
+  and restart. For 2–20 related envelopes, instruct the same child to call
   `resolve_voice_captures_and_save_response` once with every supplied capture
   and turn in visible order plus the one stable response. Never call the
   singular operation once per envelope or duplicate/split the visible answer.
@@ -816,17 +819,18 @@ reference implementations are never user Code Attempts.
 
 ## Voice intent and exact code boundaries
 
-For an `interview-arc-voice:v2` envelope, classify and save the same model turn
-before treating it as durable practice evidence:
+For an `interview-arc-voice:v2` envelope, classify the same model turn and
+delegate its persistence before treating it as durable practice evidence:
 
 - use `resolve_voice_capture_and_save_response` only when it belongs to the
   focused LeetCode activity;
 - `unrelated` for website, tooling, or other administrative speech;
 - `uncertain` when the turn itself is insufficient to decide.
 
-Use `resolve_voice_capture` for the latter two decisions. Never append an
-enveloped user turn separately. Return the tool's exact visible receipt and do
-not persist it. For unrelated typed administration, return exactly
+The response's one persistence child uses `resolve_voice_capture` for the
+latter two decisions. Never append an enveloped user turn separately. Return
+the useful answer plus the shared truthful background-delegation line; do not
+persist that line. For unrelated typed administration, return exactly
 `*Not attached to this practice activity · Not saved to the practice transcript or publication*`.
 
 A pending administrative Voice capture must be resolved `unrelated`. If the
@@ -837,8 +841,9 @@ destructive remediation tool for a pending capture.
 
 An exact code block becomes a Code Attempt only when the user explicitly says
 it is an attempt/submission/final code or confirms the specialist's boundary
-question. Then call `save_leetcode_code_attempt` with the exact code and follow
-the lifecycle and visible-parity rules in
+question. Then have the same response's persistence child call
+`save_leetcode_code_attempt` with the exact code after its related exchange and
+follow the lifecycle and visible-parity rules in
 `docs/contracts/code-attempt-reviews.md`. Ordinary snippets, pseudocode,
 generated reference implementations, and Scratch Notes are not Code Attempts.
 Historical evidence backfill is coordinator-owned and must not be attempted
