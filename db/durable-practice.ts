@@ -1046,12 +1046,7 @@ async function quarantineVoiceResponseGroups(
   ]);
 }
 
-export async function resolveVoiceCaptureBatchAndSaveResponse(
-  ownerId: string,
-  input: VoiceResponseBatchInput,
-  nowMs: number,
-) {
-  const db = getDb();
+function validateVoiceResponseBatchInput(input: VoiceResponseBatchInput) {
   const captureIds = input.captures.map((capture) => capture.captureId);
   const userTurnIds = input.captures.map((capture) => capture.userTurnId);
   if (captureIds.length < 2 || captureIds.length > 20
@@ -1059,7 +1054,16 @@ export async function resolveVoiceCaptureBatchAndSaveResponse(
       || new Set(userTurnIds).size !== userTurnIds.length) {
     throw new Error("A Voice response group requires 2–20 unique capture and user-turn identities.");
   }
+  return captureIds;
+}
 
+async function resolveExistingVoiceResponseBatch(
+  ownerId: string,
+  input: VoiceResponseBatchInput,
+  captureIds: string[],
+  nowMs: number,
+) {
+  const db = getDb();
   const collidingMembers = await db.select().from(voiceResponseGroupMembers).where(and(
     eq(voiceResponseGroupMembers.ownerId, ownerId),
     or(
@@ -1068,27 +1072,30 @@ export async function resolveVoiceCaptureBatchAndSaveResponse(
     ),
   ));
   const existing = await readVoiceResponseGroup(ownerId, input.responseTurnId);
-  if (existing || collidingMembers.length) {
-    if (existing
-        && ["provisional", "materialized"].includes(existing.group.status)
-        && sameVoiceResponseBatch(existing, input)
-        && collidingMembers.every((member) => member.responseTurnId === input.responseTurnId)) {
-      return { group: existing.group, duplicate: true };
-    }
-    const responseTurnIds = [...new Set([
-      input.responseTurnId,
-      ...collidingMembers.map((member) => member.responseTurnId),
-    ])];
-    await quarantineVoiceResponseGroups(
-      ownerId,
-      responseTurnIds,
-      [...new Set([...captureIds, ...collidingMembers.map((member) => member.captureId)])],
-      "A canonical Voice response group was retried with different order, membership, or content.",
-      nowMs,
-    );
-    throw new Error("The Voice envelopes already belong to a different canonical response group.");
+  if (!existing && collidingMembers.length === 0) return null;
+  if (existing
+      && ["provisional", "materialized"].includes(existing.group.status)
+      && sameVoiceResponseBatch(existing, input)
+      && collidingMembers.every((member) => member.responseTurnId === input.responseTurnId)) {
+    return { group: existing.group, duplicate: true as const };
   }
+  await quarantineVoiceResponseGroups(
+    ownerId,
+    [...new Set([input.responseTurnId, ...collidingMembers.map((member) => member.responseTurnId)])],
+    [...new Set([...captureIds, ...collidingMembers.map((member) => member.captureId)])],
+    "A canonical Voice response group was retried with different order, membership, or content.",
+    nowMs,
+  );
+  throw new Error("The Voice envelopes already belong to a different canonical response group.");
+}
 
+async function prepareVoiceResponseBatchReservation(
+  ownerId: string,
+  input: VoiceResponseBatchInput,
+  captureIds: string[],
+  nowMs: number,
+) {
+  const db = getDb();
   const singleResponseCollisions = await db.select().from(voiceSpecialistResponses).where(and(
     eq(voiceSpecialistResponses.ownerId, ownerId),
     or(
@@ -1125,7 +1132,7 @@ export async function resolveVoiceCaptureBatchAndSaveResponse(
     }
   }
 
-  const statements = [
+  return [
     db.insert(voiceResponseGroups).values({
       ownerId,
       responseTurnId: input.responseTurnId,
@@ -1177,6 +1184,18 @@ export async function resolveVoiceCaptureBatchAndSaveResponse(
       }).onConflictDoNothing();
     }),
   ];
+}
+
+export async function resolveVoiceCaptureBatchAndSaveResponse(
+  ownerId: string,
+  input: VoiceResponseBatchInput,
+  nowMs: number,
+) {
+  const db = getDb();
+  const captureIds = validateVoiceResponseBatchInput(input);
+  const duplicate = await resolveExistingVoiceResponseBatch(ownerId, input, captureIds, nowMs);
+  if (duplicate) return duplicate;
+  const statements = await prepareVoiceResponseBatchReservation(ownerId, input, captureIds, nowMs);
   await db.batch(statements as unknown as Parameters<typeof db.batch>[0]);
   const stored = await readVoiceResponseGroup(ownerId, input.responseTurnId);
   if (!stored || !sameVoiceResponseBatch(stored, input)) {
@@ -2491,6 +2510,15 @@ export async function readActivityAudioClip(ownerId: string, id: string) {
   const db = getDb();
   const rows = await db.select().from(activityAudioClips).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.id, id)));
   return rows[0] ?? null;
+}
+
+export async function readActivityAudioClips(ownerId: string, ids: string[]) {
+  if (ids.length === 0) return [];
+  const db = getDb();
+  return db.select().from(activityAudioClips).where(and(
+    eq(activityAudioClips.ownerId, ownerId),
+    inArray(activityAudioClips.id, ids),
+  ));
 }
 
 export async function updateActivityAudioClipStatus(

@@ -47,6 +47,7 @@ import {
   prepareVoiceCapturesForFinish,
   prepareLegacyVoiceCaptureDeletion,
   readActivityAudioClip,
+  readActivityAudioClips,
   readActivityPracticeRecord,
   readLikelyLegacyVoiceOrphans,
   readProblemSolutionProfile,
@@ -1227,12 +1228,10 @@ async function deleteVoiceCaptureGraph(
 ) {
   const scope = await beginDeleteVoiceCaptureGraph(ownerId, captureId, Date.now(), deletion);
   try {
-    for (const intent of scope.intents) {
-      const clip = await readActivityAudioClip(ownerId, intent.clipId);
-      if (clip?.objectKey && !clip.objectKey.startsWith("local-only/")) {
-        await env.AUDIO.delete(clip.objectKey);
-      }
-    }
+    const clips = await readActivityAudioClips(ownerId, scope.intents.map((intent) => intent.clipId));
+    await Promise.all(clips
+      .filter((clip) => clip.objectKey && !clip.objectKey.startsWith("local-only/"))
+      .map((clip) => env.AUDIO.delete(clip.objectKey)));
     await completeDeleteVoiceCapture(ownerId, captureId, Date.now());
     await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_capture");
     return json(request, {
