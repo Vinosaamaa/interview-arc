@@ -1139,12 +1139,22 @@ export async function commitRelatedVoiceCapture(
   return userValue;
 }
 
-export async function beginDeleteVoiceCapture(ownerId: string, captureId: string, nowMs: number) {
+export async function beginDeleteVoiceCapture(
+  ownerId: string,
+  captureId: string,
+  nowMs: number,
+  deletion?: { source: string; reason: string },
+) {
   const db = getDb();
   const intent = await readVoiceCaptureIntent(ownerId, captureId);
   if (!intent) throw new Error("Voice capture not found.");
   await db.update(voiceCaptureIntents).set({
     status: "deleting",
+    ...(deletion ? {
+      decisionSource: deletion.source.slice(0, 80),
+      decisionReason: deletion.reason.slice(0, 2_000),
+      decidedAt: nowMs,
+    } : {}),
     updatedAt: nowMs,
     lastError: null,
   }).where(and(eq(voiceCaptureIntents.ownerId, ownerId), eq(voiceCaptureIntents.captureId, captureId)));

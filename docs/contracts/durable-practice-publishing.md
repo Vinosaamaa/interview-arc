@@ -116,6 +116,17 @@ capture `activity_related` and reserves one canonical response linked through
 delivers the matching user transcript, then materializes the ordered pair once.
 Use `resolve_voice_capture` only for `unrelated` or `uncertain` decisions.
 
+An administrative capture that is still pending must be classified
+`unrelated`; it does not require deletion. If an explicit user correction says
+that a capture already classified related was misclassified, use
+`delete_related_voice_capture` with the exact registered capture, activity,
+and turn IDs. This is destructive post-acceptance remediation: never infer
+authorization, delete by transcript text, or use it for a merely pending
+capture. The operation reuses the fenced owner-scoped deletion graph, removes
+the canonical user/response turns, response reservation, private recording
+metadata/object, and delivery analysis, and retains only the terminal intent
+tombstone needed for idempotence.
+
 Visible receipts confirm every decision and write but are never persisted.
 Untouched `pending` captures are discarded as `discarded_unclassified` when an
 activity finishes and do not block completion. An `uncertain` capture requires

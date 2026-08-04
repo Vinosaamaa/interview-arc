@@ -92,6 +92,57 @@ export function voiceCaptureDeleteTurnIds(
   ])];
 }
 
+export type VoiceCaptureRemediationIdentity = {
+  captureId: string;
+  activityId: string;
+  turnId: string;
+};
+
+export type VoiceCaptureRemediationDisposition =
+  | { action: "delete"; idempotent: boolean }
+  | { action: "already_deleted"; idempotent: true }
+  | { action: "reject"; code: string; message: string };
+
+export function voiceCaptureRemediationDisposition(
+  intent: (VoiceCaptureRemediationIdentity & { status: VoiceIntentStatus }) | null | undefined,
+  expected: VoiceCaptureRemediationIdentity,
+): VoiceCaptureRemediationDisposition {
+  if (!intent) {
+    return {
+      action: "reject",
+      code: "voice_capture_not_found",
+      message: "That owner-scoped Voice capture does not exist.",
+    };
+  }
+  if (
+    intent.captureId !== expected.captureId
+    || intent.activityId !== expected.activityId
+    || intent.turnId !== expected.turnId
+  ) {
+    return {
+      action: "reject",
+      code: "voice_capture_identity_mismatch",
+      message: "The remediation request does not match the registered Voice envelope identity.",
+    };
+  }
+  if (intent.status === "deleted") {
+    return { action: "already_deleted", idempotent: true };
+  }
+  if (intent.status === "activity_related" || intent.status === "accepted") {
+    return { action: "delete", idempotent: false };
+  }
+  if (intent.status === "deleting") {
+    return { action: "delete", idempotent: true };
+  }
+  return {
+    action: "reject",
+    code: "voice_capture_not_remediable",
+    message: intent.status === "pending"
+      ? "This Voice capture is still pending; classify it as unrelated instead of using destructive remediation."
+      : `A Voice capture in ${intent.status} state cannot use post-acceptance remediation.`,
+  };
+}
+
 export function voiceFinishGuardMessage(guard: VoiceFinishGuard) {
   if (guard.conflicts.length) {
     return `${guard.conflicts.length} voice capture ${guard.conflicts.length === 1 ? "has" : "have"} conflicting durable content. Review or discard before finishing.`;

@@ -190,6 +190,25 @@ accepted state before reporting success. Migration `0019` makes each
 specialist response turn ID unique per owner, proving that deletion of the
 canonical response cannot remove another capture's answer.
 
+### 2026-08-03 specialist-remediation follow-up
+
+**Follow-up issue:** [interview-arc#149](https://github.com/Vinosaamaa/interview-arc/issues/149)
+
+The complete accepted-capture deletion graph was deployed and verified through
+the Voice REST flow, but the specialist MCP catalog exposed only pending
+classification. A specialist could therefore identify an already-related
+administrative capture as contamination without having an owner-authorized,
+identity-bound way to invoke the proven deletion transaction. The gap did not
+require a second deletion implementation; it required a safe MCP boundary.
+
+The follow-up adds `delete_related_voice_capture`. It requires the exact
+capture, activity, and turn IDs plus explicit user authorization and a reason,
+is marked destructive in MCP metadata, rejects pending/unrelated/uncertain or
+mismatched identities before mutation, and reuses the existing fenced D1/R2
+graph deletion. Exact retries against the retained deleted tombstone are
+idempotent. Pending administrative captures continue through the
+non-destructive `unrelated` decision path.
+
 ## Prevention and follow-up
 
 | Action | Owner | Tracking | Status |

@@ -8,6 +8,7 @@ enabled_tools = [
   "resolve_voice_capture_and_save_response",
   "append_practice_transcript",
   "resolve_voice_capture",
+  "delete_related_voice_capture",
   "save_leetcode_code_attempt",
   "add_practice_note",
   "save_specialist_finalization",

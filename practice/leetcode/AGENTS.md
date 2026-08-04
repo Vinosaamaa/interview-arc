@@ -794,6 +794,12 @@ enveloped user turn separately. Return the tool's exact visible receipt and do
 not persist it. For unrelated typed administration, return exactly
 `*Not attached to this practice activity · Not saved to the practice transcript or publication*`.
 
+A pending administrative Voice capture must be resolved `unrelated`. If the
+user explicitly identifies an already-related capture as a misclassification,
+call `delete_related_voice_capture` with its exact capture, activity, and turn
+IDs plus that explicit authorization. Never infer deletion or use the
+destructive remediation tool for a pending capture.
+
 An exact code block becomes a Code Attempt only when the user explicitly says
 it is an attempt/submission/final code or confirms the specialist's boundary
 question. Then call `save_leetcode_code_attempt` with the exact code and follow

@@ -24,6 +24,7 @@ import {
   sameVoiceCommitTurn,
   voiceCaptureAllowsCommit,
   voiceCaptureDeleteTurnIds,
+  voiceCaptureRemediationDisposition,
   voiceCommitStatusAllowsReplay,
   voiceDecisionReceipt,
   voiceFinishGuardMessage,
@@ -159,6 +160,66 @@ test("deleting a related Voice capture removes both canonical transcript turns",
     ["voice-user-1", "specialist-1"],
   );
   assert.deepEqual(voiceCaptureDeleteTurnIds("voice-user-1", null), ["voice-user-1"]);
+});
+
+test("post-acceptance Voice remediation requires exact identity and an eligible status", () => {
+  const accepted = {
+    captureId: "capture-1",
+    activityId: "activity-1",
+    turnId: "voice-user-1",
+    status: "accepted",
+  };
+  const expected = {
+    captureId: "capture-1",
+    activityId: "activity-1",
+    turnId: "voice-user-1",
+  };
+
+  assert.deepEqual(
+    voiceCaptureRemediationDisposition(accepted, expected),
+    { action: "delete", idempotent: false },
+  );
+  assert.deepEqual(
+    voiceCaptureRemediationDisposition({ ...accepted, status: "activity_related" }, expected),
+    { action: "delete", idempotent: false },
+  );
+  assert.deepEqual(
+    voiceCaptureRemediationDisposition({ ...accepted, status: "deleting" }, expected),
+    { action: "delete", idempotent: true },
+  );
+  assert.deepEqual(
+    voiceCaptureRemediationDisposition({ ...accepted, status: "deleted" }, expected),
+    { action: "already_deleted", idempotent: true },
+  );
+  assert.equal(
+    voiceCaptureRemediationDisposition({ ...accepted, activityId: "other" }, expected).code,
+    "voice_capture_identity_mismatch",
+  );
+  assert.equal(
+    voiceCaptureRemediationDisposition({ ...accepted, status: "pending" }, expected).code,
+    "voice_capture_not_remediable",
+  );
+  assert.equal(
+    voiceCaptureRemediationDisposition(null, expected).code,
+    "voice_capture_not_found",
+  );
+});
+
+test("the MCP remediation tool is destructive, identity-bound, and reuses fenced deletion", async () => {
+  const bridge = await readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8");
+  const start = bridge.indexOf('"delete_related_voice_capture"');
+  const end = bridge.indexOf("server.registerTool(", start + 1);
+  const registration = bridge.slice(start, end);
+
+  assert.ok(start >= 0);
+  assert.match(registration, /captureId: z\.string\(\)\.min\(1\)/);
+  assert.match(registration, /activityId: z\.string\(\)\.min\(1\)/);
+  assert.match(registration, /turnId: z\.string\(\)\.min\(1\)/);
+  assert.match(registration, /authorization: z\.literal\("explicit_user_instruction"\)/);
+  assert.match(registration, /reason: z\.string\(\)\.min\(1\)\.max\(2_000\)/);
+  assert.match(registration, /destructiveHint: true/);
+  assert.match(registration, /voiceCaptureRemediationDisposition/);
+  assert.match(registration, /deleteVoiceCaptureGraph/);
 });
 
 test("Voice commit and delete serialize on intent state and enforce response-turn ownership", async () => {
