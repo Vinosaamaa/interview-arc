@@ -1,7 +1,9 @@
 # Background Specialist Persistence Contract
 
-This is the interim conversation-first bridge for issue #155. The durable
-product-owned hook and D1 outbox remain future work under #93.
+This is the conversation-first bridge for issue #155 plus the durable write
+receipt and D1 outbox introduced by issue #158. The application-owned response
+hook described by #93 remains future work, but Code Attempt and personal-bank
+writes no longer depend on one uninterrupted MCP request.
 
 ## Parent specialist path
 
@@ -18,7 +20,8 @@ and composing the complete visible answer plus its exact persistence sidecar:
    never permits a model to infer missing evidence.
 4. Return the useful answer immediately after the spawn/message acknowledgement. Do
    not wait for MCP completion, reload D1, poll status, retry a failed write, or
-   run Delivery Coach on the parent response path.
+   run Delivery Coach on the parent response path. The persistence child, not
+   the visible parent, owns durable write receipt inspection.
 5. Use one truthful interim line when persistence applies:
    `↻ Practice persistence delegated in background`
    This means only that a child received the work. It never means D1/R2 saved.
@@ -79,12 +82,18 @@ The child instruction must say:
 
 ```text
 You are a persistence-only sub-agent. Execute only the supplied Interview Arc
-MCP operations, in order, with the arguments and stable IDs verbatim. Do not
+MCP operations, in order, with the arguments and stable IDs verbatim. For
+save_leetcode_code_attempt and upsert_personal_bank_question, supply one stable
+operationId per logical write, then call get_specialist_write_status until the
+receipt is saved or failed. A queued receipt is not a saved result. Do not
 research, coach, rewrite content, infer missing fields, use a browser, submit
 code, mutate timers/results, publish, edit files, or perform Git work. Retry an
-operation at most once and only when its structured failure says retryable;
-reuse every original ID. Return one compact result listing each operation as
-saved, duplicate, or failed, with the privacy-safe error. Do not ask the user.
+enqueue after uncertain transport at most once and only with the exact original
+operationId and payload. The Worker owns bounded retries after a receipt exists;
+never create a manual retry storm. Use retry_specialist_writes only for a
+durable failed receipt whose failure.retryable is true. Return one compact
+result listing each operation as saved, duplicate, or failed, with the
+privacy-safe error. Do not ask the user.
 ```
 
 Authentication remains in the MCP connection. Never place credentials or
@@ -110,7 +119,9 @@ read the authoritative D1 record. Finish remains blocked when required
 evidence is missing or a child failed. Never treat a spawn acknowledgement or
 child message as authoritative D1 evidence.
 
-This mechanism is intentionally not durable across agent/process termination.
-If the parent or child disappears, use stable IDs to perform the existing
-idempotent recovery operation. Do not claim background execution is a queue;
-#93 owns that replacement.
+The agent delegation is not durable across agent/process termination, but a
+successful Code Attempt or personal-bank enqueue is durable. If the parent or
+child disappears before receiving a receipt, reuse the stable operation ID and
+exact payload. Once a receipt exists, the Worker executor owns lease recovery
+and bounded retry. The application-owned response hook and generalized outbox
+remain #93 scope.

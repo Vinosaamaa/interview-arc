@@ -13,6 +13,8 @@ enabled_tools = [
   "resolve_voice_capture",
   "delete_related_voice_capture",
   "save_leetcode_code_attempt",
+  "get_specialist_write_status",
+  "retry_specialist_writes",
   "add_practice_note",
   "save_specialist_finalization",
   "save_provisional_solution_profile",

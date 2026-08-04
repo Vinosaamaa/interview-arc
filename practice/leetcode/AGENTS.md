@@ -878,6 +878,15 @@ generated reference implementations, and Scratch Notes are not Code Attempts.
 Historical evidence backfill is coordinator-owned and must not be attempted
 through the specialist MCP write.
 
+Each Code Attempt write uses one stable `operationId` for that exact review
+state. Reuse the same operation ID and byte-for-byte logical payload only when
+transport fails before a durable receipt is known. A pending-review write and
+its later complete-review write are different logical operations and therefore
+use different operation IDs while preserving the same immutable attempt ID and
+code. The persistence child must inspect `get_specialist_write_status`; only
+`saved` proves the attempt exists in D1. It must not create a new attempt merely
+because a receipt is queued, retrying, or transport-uncertain.
+
 Every Code Attempt must carry its own non-null structured `review`; findings in
 the conversation transcript alone are insufficient. Inspect and test the exact
 code first, then save the attempt once with:

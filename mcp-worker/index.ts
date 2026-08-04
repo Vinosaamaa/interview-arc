@@ -99,6 +99,14 @@ import {
 } from "../db/today-planning-policy";
 import { SpecialistControlError } from "../db/specialist-controls-policy";
 import {
+  enqueueSpecialistWriteJob,
+  processSpecialistWriteJobs,
+  readSpecialistWriteJobs,
+  retrySpecialistWriteJobs,
+  SpecialistWriteJobError,
+} from "../db/specialist-write-jobs";
+import type { SpecialistWriteJobRow } from "../db/schema";
+import {
   controlSessionPracticeTimer,
   finishAndAdvancePracticeActivity,
   setPracticeResultAtomic,
@@ -1621,14 +1629,14 @@ function specialistToolFailure(error: unknown) {
     || error instanceof TodayPlanningConflictError
     || error instanceof TimerStateConflictError
     || error instanceof VoiceResponseGroupConflictError
+    || error instanceof SpecialistWriteJobError
   ) {
-    const code = "code" in error && typeof error.code === "string"
-      ? error.code
+    const candidateCode = (error as { code?: unknown }).code;
+    const code = typeof candidateCode === "string"
+      ? candidateCode
       : error instanceof TimerStateConflictError
         ? "timer_state_conflict"
-        : error instanceof VoiceResponseGroupConflictError
-          ? error.code
-          : "specialist_control_conflict";
+        : "specialist_control_conflict";
     return {
       isError: true,
       content: [{ type: "text" as const, text: error.message }],
@@ -1645,6 +1653,42 @@ function specialistToolFailure(error: unknown) {
     };
   }
   throw error;
+}
+
+async function executeSpecialistWriteJob(job: SpecialistWriteJobRow) {
+  if (job.operation === "leetcode_code_attempt") {
+    const input = job.payload as Parameters<typeof saveLeetCodeCodeAttempt>[1];
+    const saved = await saveLeetCodeCodeAttempt(job.ownerId, input, Date.now());
+    return {
+      id: input.id,
+      activityId: input.activityId,
+      sequence: input.sequence,
+      language: input.language,
+      lineCount: codeLineCount(input.code),
+      status: saved.status,
+      reviewStatus: saved.reviewStatus,
+    };
+  }
+  if (job.operation === "personal_bank_question") {
+    const input = job.payload as {
+      specialty: Parameters<typeof upsertOwnerBankQuestion>[1];
+      question: Parameters<typeof upsertOwnerBankQuestion>[2];
+    };
+    await upsertOwnerBankQuestion(job.ownerId, input.specialty, input.question, Date.now());
+    return {
+      specialty: input.specialty,
+      questionId: input.question.questionId,
+      status: "upserted",
+    };
+  }
+  throw new SpecialistWriteJobError(
+    "specialist_write_operation_unsupported",
+    "The queued specialist write operation is not supported by this Worker version.",
+  );
+}
+
+function scheduleSpecialistWriteProcessing(ctx: ExecutionContext) {
+  ctx.waitUntil(processSpecialistWriteJobs(executeSpecialistWriteJob));
 }
 
 type SpecialistTimerMutationInput = {
@@ -1785,7 +1829,7 @@ async function authoritativeSpecialistState(ownerId: string, date?: string) {
   return { snapshot, timerInstrument };
 }
 
-function createServer(ownerId: string, env: Env) {
+function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   const server = new McpServer({ name: "Interview Arc", version: "1.0.0" });
 
   server.registerTool(
@@ -2056,8 +2100,9 @@ function createServer(ownerId: string, env: Env) {
   server.registerTool(
     "save_leetcode_code_attempt",
     {
-      description: "Save an exact owner-provided LeetCode attempt after an explicit attempt boundary. Use a pending review while evaluation runs, then complete that same immutable attempt from the visible specialist review. Ordinary snippets and generated reference solutions must not use this tool.",
+      description: "Durably enqueue an exact owner-provided LeetCode attempt after an explicit attempt boundary. Reuse one stable operationId and identical payload after transport uncertainty, then inspect get_specialist_write_status until saved. Use a pending review while evaluation runs, then a new operationId to complete that same immutable attempt from the visible specialist review. Ordinary snippets and generated reference solutions must not use this tool.",
       inputSchema: {
+        operationId: z.string().min(1).max(200),
         id: z.string().min(1),
         activityId: z.string().min(1),
         originatingTurnId: z.string().min(1),
@@ -2076,20 +2121,68 @@ function createServer(ownerId: string, env: Env) {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async (input) => {
-      const saved = await saveLeetCodeCodeAttempt(ownerId, input, Date.now());
-      const lineCount = codeLineCount(input.code);
-      return {
-        content: [{ type: "text", text: `Saved Code Attempt ${input.sequence} · ${input.language} · ${lineCount} lines.` }],
-        structuredContent: {
-          id: input.id,
-          activityId: input.activityId,
-          sequence: input.sequence,
-          language: input.language,
-          lineCount,
-          status: saved.status,
-          reviewStatus: saved.reviewStatus,
-        },
-      };
+      try {
+        const { operationId, ...payload } = input;
+        const receipt = await enqueueSpecialistWriteJob(ownerId, {
+          jobId: operationId,
+          operation: "leetcode_code_attempt",
+          payload,
+        });
+        if (!["saved", "failed"].includes(receipt.status)) scheduleSpecialistWriteProcessing(ctx);
+        return {
+          content: [{ type: "text", text: receipt.status === "saved"
+            ? `Code Attempt ${input.sequence} is durably saved.`
+            : `Code Attempt ${input.sequence} is durably queued as ${operationId}; verify its receipt before finalization.` }],
+          structuredContent: receipt,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_specialist_write_status",
+    {
+      description: "Read durable status receipts for one or more specialist writes. A queued MCP response is not proof of persistence; only status=saved is authoritative.",
+      inputSchema: {
+        jobIds: z.array(z.string().min(1).max(200)).min(1).max(50),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ jobIds }) => {
+      try {
+        const jobs = await readSpecialistWriteJobs(ownerId, jobIds);
+        return {
+          content: [{ type: "text", text: JSON.stringify(jobs, null, 2) }],
+          structuredContent: { jobs },
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "retry_specialist_writes",
+    {
+      description: "Explicitly requeue exhausted specialist writes only when their durable receipt says failure.retryable=true. Never use this for validation, identity, or conflict failures.",
+      inputSchema: {
+        jobIds: z.array(z.string().min(1).max(200)).min(1).max(50),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ jobIds }) => {
+      try {
+        const jobs = await retrySpecialistWriteJobs(ownerId, jobIds);
+        scheduleSpecialistWriteProcessing(ctx);
+        return {
+          content: [{ type: "text", text: `Requeued ${jobs.length} retryable specialist write${jobs.length === 1 ? "" : "s"}.` }],
+          structuredContent: { jobs },
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
     },
   );
 
@@ -2296,8 +2389,9 @@ function createServer(ownerId: string, env: Env) {
   server.registerTool(
     "upsert_personal_bank_question",
     {
-      description: "Create or update an owner-private bank question. Behavioral specialists use this to build the resume-foundation curriculum without committing private resume details to Git.",
+      description: "Durably enqueue creation or update of one owner-private bank question. Supply one stable operationId per logical item, reuse the exact payload after transport uncertainty, and inspect get_specialist_write_status for per-item success. Behavioral specialists use this without committing private resume details to Git.",
       inputSchema: {
+        operationId: z.string().min(1).max(200),
         specialty: z.enum(["leetcode", "system_design", "behavioral"]),
         questionId: z.string().min(1),
         title: z.string().min(1),
@@ -2311,12 +2405,23 @@ function createServer(ownerId: string, env: Env) {
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
-    async ({ specialty, ...question }) => {
-      await upsertOwnerBankQuestion(ownerId, specialty, question, Date.now());
-      return {
-        content: [{ type: "text", text: `Saved ${question.title} to the private ${specialty} bank.` }],
-        structuredContent: { specialty, ...question },
-      };
+    async ({ operationId, specialty, ...question }) => {
+      try {
+        const receipt = await enqueueSpecialistWriteJob(ownerId, {
+          jobId: operationId,
+          operation: "personal_bank_question",
+          payload: { specialty, question },
+        });
+        if (!["saved", "failed"].includes(receipt.status)) scheduleSpecialistWriteProcessing(ctx);
+        return {
+          content: [{ type: "text", text: receipt.status === "saved"
+            ? `${question.title} is durably saved in the private ${specialty} bank.`
+            : `${question.title} is durably queued as ${operationId}; verify its receipt before reporting success.` }],
+          structuredContent: receipt,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
     },
   );
 
@@ -2896,8 +3001,11 @@ export default {
       return acknowledgeDeliveryReviewBypass(ownerId, request, decodeURIComponent(deliveryReviewBypass[1]));
     }
     if (url.pathname === "/mcp" || url.pathname.startsWith("/mcp/")) {
-      return createMcpHandler(createServer(ownerId, env))(request, env, ctx);
+      return createMcpHandler(createServer(ownerId, env, ctx))(request, env, ctx);
     }
     return json(request, { error: "Not found" }, { status: 404 });
+  },
+  async scheduled(_controller: ScheduledController, _env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(processSpecialistWriteJobs(executeSpecialistWriteJob, { maxJobs: 25 }));
   },
 } satisfies ExportedHandler<Env>;
