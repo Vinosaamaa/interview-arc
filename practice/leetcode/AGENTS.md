@@ -399,19 +399,19 @@ series of local attempt snapshots.
    `cd`. Join path fragments with the zsh `printf` builtin inside one command
    substitution, so tmux-added indentation stays outside every fragment:
 
-   ```bash
-   nvim "$(
-   printf %s \
-   "<absolute-workspace-prefix>/" \
-   "interview-arc/practice/leetcode/solutions/" \
-   "<filename-part-one>" \
-   "<filename-part-two>.java"
-   )"
-   ```
+```bash
+nvim "$(
+printf %s \
+"<absolute-workspace-prefix>/" \
+"interview-arc/practice/leetcode/solutions/" \
+"<filename-part-one>" \
+"<filename-part-two>.java"
+)"
+```
 
-   Never continue directly inside a quoted path literal: tmux's copied leading
-   spaces would become filename data. In the `printf` form, each quoted fragment
-   is a separate argument, so leading whitespace remains harmless syntax.
+Never continue directly inside a quoted path literal: tmux's copied leading
+spaces would become filename data. In the `printf` form, each quoted fragment
+is a separate argument, so leading whitespace remains harmless syntax.
 
    The user opens `nvim`. Do not assume that Codex can safely create or target
    a Warp pane, and do not replace the running Codex process with the editor.
