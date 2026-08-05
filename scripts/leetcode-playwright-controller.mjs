@@ -343,6 +343,7 @@ export const FIXED_CONFIG = Object.freeze({
   localBudgetMs: 5_000,
   verdictTimeoutMs: 60_000,
   editorialTimeoutMs: 30_000,
+  editorialCommandTimeoutMs: 65_000,
 });
 
 export function canonicalProblemIdentity(url, title) {
@@ -475,8 +476,6 @@ const TARGET_SELECTORS = Object.freeze({
     '[data-e2e-locator="editorial-content"]',
     '[data-testid="editorial-content"]',
     '[data-track-load="editorial_content"]',
-    "article",
-    '[role="main"]',
   ],
   editorialLock: [
     '[data-e2e-locator*="premium" i]',
@@ -521,6 +520,19 @@ export function isAutomationOwnedLeetCodeUrl(value) {
   } catch {
     return false;
   }
+}
+
+function abortablePageOperation(operation, signal) {
+  if (!signal) return operation;
+  if (signal.aborted) return Promise.reject(signal.reason);
+  let onAbort;
+  const aborted = new Promise((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  return Promise.race([operation, aborted]).finally(() => {
+    signal.removeEventListener("abort", onAbort);
+  });
 }
 
 export function createPlaywrightPageAdapter(page) {
@@ -636,8 +648,14 @@ export function createPlaywrightPageAdapter(page) {
   return {
     url: () => page.url(),
     title: () => page.title(),
-    navigate: (url) => page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 }),
-    goBack: () => page.goBack({ waitUntil: "domcontentloaded", timeout: 15_000 }),
+    navigate: (url, signal) => abortablePageOperation(
+      page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 }),
+      signal,
+    ),
+    goBack: (signal) => abortablePageOperation(
+      page.goBack({ waitUntil: "domcontentloaded", timeout: 15_000 }),
+      signal,
+    ),
     async waitForEditableProblem(identity) {
       const handle = await page.waitForFunction(
         ({ kind, expectedSlug, expectedTitle, routes }) => {
@@ -705,10 +723,10 @@ export function createPlaywrightPageAdapter(page) {
       }
       return { transitioned: true, attemptKey, ...result };
     },
-    async waitForEditorialContent(identity) {
+    async waitForEditorialContent(identity, signal) {
       let handle;
       try {
-        handle = await page.waitForFunction(
+        handle = await abortablePageOperation(page.waitForFunction(
           ({ expectedSlug, expectedTitle, routes, selectors }) => {
             const visible = (element) => element?.getClientRects?.().length > 0;
             const currentSlug = location.pathname.match(new RegExp(routes.editorial))?.[1] ?? null;
@@ -730,13 +748,12 @@ export function createPlaywrightPageAdapter(page) {
               };
             }
 
-            const roots = selectors.editorialContent
-              .flatMap((selector) => [...document.querySelectorAll(selector)])
+            const roots = [...document.querySelectorAll(selectors.editorialContent.join(","))]
               .filter(visible);
             const lockRoots = selectors.editorialLock
               .flatMap((selector) => [...document.querySelectorAll(selector)])
               .filter(visible);
-            const lockText = [...lockRoots, ...roots]
+            const lockText = lockRoots
               .map((root) => root.innerText?.trim() ?? "")
               .find((text) => /\b(?:premium|subscribe|unlock)\b/i.test(text));
             if (lockText) return { state: "premium_locked" };
@@ -756,8 +773,8 @@ export function createPlaywrightPageAdapter(page) {
             routes: TARGET_ROUTES,
             selectors: TARGET_SELECTORS,
           },
-          { timeout: FIXED_CONFIG.editorialTimeoutMs, polling: 100 },
-        );
+          { timeout: FIXED_CONFIG.editorialTimeoutMs, polling: 250 },
+        ), signal);
         if (typeof handle?.jsonValue === "function") return await handle.jsonValue();
         return handle;
       } catch (error) {
@@ -1014,18 +1031,31 @@ export class LeetCodeController {
   }
 
   async retry(identity, javaFile) {
+    await this.restoreVerifiedEditor(identity);
+
+    const result = await this.submitVerified(identity, javaFile);
+    return {
+      ...result,
+      progress: [
+        { stage: "retry_recovered", atMs: 0 },
+        ...result.progress,
+      ],
+    };
+  }
+
+  async restoreVerifiedEditor(identity) {
     const currentPath = new URL(this.page.url()).pathname;
     if (leetcodeAttemptKeyFromPath(currentPath) !== null) {
       let backFailure;
       try {
-        await this.page.goBack();
-        await this.page.waitForEditableProblem(identity);
+        await this.page.goBack(this.signal);
+        await this.page.waitForEditableProblem(identity, this.signal);
         await this.verifyEditableProblem(identity);
       } catch (error) {
         backFailure = error;
         try {
-          await this.page.navigate(identity.url);
-          await this.page.waitForEditableProblem(identity);
+          await this.page.navigate(identity.url, this.signal);
+          await this.page.waitForEditableProblem(identity, this.signal);
           await this.verifyEditableProblem(identity);
         } catch (navigationFailure) {
           throw new ControllerError(
@@ -1038,18 +1068,16 @@ export class LeetCodeController {
           );
         }
       }
+    } else if (
+      leetcodeProblemSlugFromPath(currentPath) === identity.slug
+      && leetcodeEditorSlugFromPath(currentPath) !== identity.slug
+    ) {
+      await this.page.navigate(identity.url, this.signal);
+      await this.page.waitForEditableProblem(identity, this.signal);
+      await this.verifyEditableProblem(identity);
     } else {
       await this.verifyEditableProblem(identity);
     }
-
-    const result = await this.submitVerified(identity, javaFile);
-    return {
-      ...result,
-      progress: [
-        { stage: "retry_recovered", atMs: 0 },
-        ...result.progress,
-      ],
-    };
   }
 
   async verifyEditorialOrigin(identity) {
@@ -1079,9 +1107,9 @@ export class LeetCodeController {
     const problemVerifiedAt = this.now();
     const editorialUrl = canonicalEditorialUrl(identity);
     const navigationStartedAt = this.now();
-    await this.page.navigate(editorialUrl);
+    await this.page.navigate(editorialUrl, this.signal);
     const navigationCompletedAt = this.now();
-    const state = await this.page.waitForEditorialContent(identity);
+    const state = await this.page.waitForEditorialContent(identity, this.signal);
     const contentVerifiedAt = this.now();
     if (state?.state === "identity_ambiguous") {
       throw new ControllerError(
@@ -1113,8 +1141,8 @@ export class LeetCodeController {
   }
 
   async navigate(identity) {
-    await this.page.navigate(identity.url);
-    await this.page.waitForEditableProblem(identity);
+    await this.page.navigate(identity.url, this.signal);
+    await this.page.waitForEditableProblem(identity, this.signal);
     await this.verifyEditableProblem(identity);
     return { url: identity.url, slug: identity.slug, language: FIXED_CONFIG.defaultLanguage };
   }
@@ -1131,7 +1159,11 @@ export async function runControllerCommand(request, dependencies) {
   let operation;
   try {
     let timer;
-    const timeoutMs = dependencies.commandTimeoutMs ?? (FIXED_CONFIG.verdictTimeoutMs + 10_000);
+    const timeoutMs = dependencies.commandTimeoutMs ?? (
+      request.command === "editorial"
+        ? FIXED_CONFIG.editorialCommandTimeoutMs
+        : FIXED_CONFIG.verdictTimeoutMs + 10_000
+    );
     const timeoutError = new ControllerError(
       "controller_timeout",
       "The controller command timed out and its connection was released.",

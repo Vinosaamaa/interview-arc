@@ -100,6 +100,7 @@ test("the controller exposes one immutable Chrome, profile, CDP, and Java identi
   assert.equal(FIXED_CONFIG.localBudgetMs, 5_000);
   assert.equal(FIXED_CONFIG.verdictTimeoutMs, 60_000);
   assert.equal(FIXED_CONFIG.editorialTimeoutMs, 30_000);
+  assert.equal(FIXED_CONFIG.editorialCommandTimeoutMs, 65_000);
   assert.equal(Object.isFrozen(FIXED_CONFIG), true);
   assert.equal(
     canonicalEditorialUrl(identity),
@@ -471,6 +472,21 @@ test("retry uses Back first, falls back to canonical same-tab navigation, and ne
   assert.equal(failed.calls.some(([name]) => name === "press"), false);
 });
 
+test("retry restores the editor when Editorial research left the persistent tab on Editorial", async () => {
+  let currentUrl = `${identity.url}editorial/`;
+  const adapter = pageAdapter({
+    url: () => currentUrl,
+    navigate: async (url) => {
+      adapter.calls.push(["navigate", url]);
+      currentUrl = url;
+    },
+  });
+
+  await controllerWith(adapter, "class Codec {}\n").retry(identity, "/tmp/0297.java");
+  assert.deepEqual(adapter.calls[0], ["navigate", identity.url]);
+  assert.equal(adapter.calls.filter(([name]) => name === "press").length, 1);
+});
+
 test("navigate reuses the existing page and verifies the editable Java problem", async () => {
   let currentUrl = "https://leetcode.com/problems/two-sum/";
   const adapter = pageAdapter({
@@ -676,7 +692,7 @@ test("the Playwright adapter verifies rendered Editorial structure without retur
       Object.defineProperties(globalThis, {
         document: { configurable: true, value: {
           title: `${identity.title} - LeetCode`,
-          querySelectorAll: (selector) => selector === "article" ? [root] : [],
+          querySelectorAll: (selector) => selector.includes('data-e2e-locator="editorial-content"') ? [root] : [],
         } },
         location: { configurable: true, value: {
           pathname: `/problems/${identity.slug}/editorial/`,

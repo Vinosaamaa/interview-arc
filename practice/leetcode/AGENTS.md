@@ -626,16 +626,13 @@ may be saved as an activity exchange or explicit Code Attempt evidence.
     --title "<verified visible title>"
   ```
 
-  The command reuses the fixed automation-owned tab from any current
-  same-problem description, Editorial, solutions, or submission-result route,
-  verifies the canonical Editorial identity and rendered article structure, and directly
-  navigates to Editorial in one visible-page step. It returns only the canonical URL,
-  availability state, and stage timings. Treat Editorial-derived
-  coaching and citations as consulted only when the result reports
-  `availability: "available"` and `contentAvailable: true`; report
-  `premium_locked` or `unavailable` honestly and do not cite protected or
-  unrendered content. Do not use a web connector, private endpoint, cookie,
-  second tab, or alternate browser path.
+  The canonical command, one-tab navigation, identity checks, timeout behavior,
+  and fail-closed availability states are defined in
+  `docs/contracts/leetcode-playwright-controller.md`. Specialist-specific
+  content-boundary rule: treat Editorial-derived coaching and citations as
+  consulted only when the result reports `availability: "available"` and
+  `contentAvailable: true`; report `premium_locked` or `unavailable` honestly
+  and do not cite protected or unrendered content.
 - Preserve the Java file as a durable local/Git solution only after LeetCode
   returns **Accepted**. If the activity ends without a correct solution, remove
   the unfinished solution artifact rather than publishing it.
