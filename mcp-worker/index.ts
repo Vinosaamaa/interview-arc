@@ -62,6 +62,7 @@ import {
   readVoiceCaptureIntents,
   readVoiceCaptureIntentsPage,
   readVoiceDeliveryBlockers,
+  repairVoiceSpecialistResponse,
   repairVoiceResponseGroup,
   registerVoiceCaptureIntent,
   registerActivityAudioClip,
@@ -1943,30 +1944,34 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
       responseOccurredAt,
       reason,
     }) => {
-      const saved = await resolveVoiceCaptureAndSaveResponse(ownerId, {
-        captureId,
-        activityId,
-        userTurnId,
-        responseTurnId,
-        specialty,
-        responseBody,
-        responseOccurredAt,
-        reason,
-      }, Date.now());
-      await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_intent");
-      const receipt = voiceDecisionReceipt(saved.duplicate ? "duplicate" : "activity_related", activityTitle);
-      return {
-        content: [{ type: "text", text: receipt }],
-        structuredContent: {
+      try {
+        const saved = await resolveVoiceCaptureAndSaveResponse(ownerId, {
           captureId,
           activityId,
           userTurnId,
           responseTurnId,
-          status: saved.intent?.status ?? "deferred",
-          duplicate: saved.duplicate,
-          receipt,
-        },
-      };
+          specialty,
+          responseBody,
+          responseOccurredAt,
+          reason,
+        }, Date.now());
+        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_intent");
+        const receipt = voiceDecisionReceipt(saved.duplicate ? "duplicate" : "activity_related", activityTitle);
+        return {
+          content: [{ type: "text", text: receipt }],
+          structuredContent: {
+            captureId,
+            activityId,
+            userTurnId,
+            responseTurnId,
+            status: saved.intent?.status ?? "deferred",
+            duplicate: saved.duplicate,
+            receipt,
+          },
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
     },
   );
 
@@ -2069,6 +2074,36 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
           : "Recording unavailable acknowledged; the canonical transcript was preserved. Re-read blockers before finishing." }],
         structuredContent: result,
       };
+    },
+  );
+
+  server.registerTool(
+    "repair_voice_response",
+    {
+      description: "Restore one exact intact singular Voice response that legacy retry handling quarantined. Requires exact capture/user/response identities, explicit user authorization, and an audit reason; canonical transcript evidence is verified and never rewritten.",
+      inputSchema: {
+        captureId: z.string().min(1),
+        activityId: z.string().min(1),
+        userTurnId: z.string().min(1),
+        responseTurnId: z.string().min(1),
+        authorization: z.literal("explicit_user_instruction"),
+        reason: z.string().min(1).max(2_000),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await repairVoiceSpecialistResponse(ownerId, input, Date.now());
+        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_intent");
+        return {
+          content: [{ type: "text", text: result.repaired
+            ? "Restored the exact canonical Voice response; Finish can re-check it."
+            : "The exact canonical Voice response was already restored." }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
     },
   );
 

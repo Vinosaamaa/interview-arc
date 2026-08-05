@@ -113,6 +113,10 @@ export function classifySpecialistWriteFailure(error: unknown): SpecialistWriteF
   const message = error instanceof Error ? error.message : String(error ?? "");
   const normalized = `${code} ${name} ${message}`.toLowerCase();
 
+  if (errorField(error, "retryable") === true) {
+    return { code: code || "specialist_write_retryable", message, retryable: true };
+  }
+
   if ([502, 503, 504].includes(status)
       || code === "1102"
       || normalized.includes("exceededcpu")
