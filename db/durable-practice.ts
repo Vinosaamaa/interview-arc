@@ -1028,18 +1028,49 @@ export type VoiceResponseBatchInput = {
   reason: string;
 };
 
-async function readVoiceResponseGroup(ownerId: string, responseTurnId: string) {
+export type VoiceResponseGroupReceipt = {
+  responseTurnId: string;
+  activityId: string;
+  specialty: Specialty;
+  status: "provisional" | "materialized" | "deleting" | "quarantined_conflict";
+  memberCount: number;
+  members: Array<{ captureId: string; userTurnId: string; memberOrder: number }>;
+  digest: string;
+};
+
+type StoredVoiceResponseGroup = {
+  group: typeof voiceResponseGroups.$inferSelect;
+  members: Array<typeof voiceResponseGroupMembers.$inferSelect>;
+};
+
+async function readVoiceResponseGroups(ownerId: string, responseTurnIds: string[]) {
   const db = getDb();
-  const group = (await db.select().from(voiceResponseGroups).where(and(
-    eq(voiceResponseGroups.ownerId, ownerId),
-    eq(voiceResponseGroups.responseTurnId, responseTurnId),
-  )).limit(1))[0] ?? null;
-  if (!group) return null;
-  const members = await db.select().from(voiceResponseGroupMembers).where(and(
-    eq(voiceResponseGroupMembers.ownerId, ownerId),
-    eq(voiceResponseGroupMembers.responseTurnId, responseTurnId),
-  )).orderBy(asc(voiceResponseGroupMembers.memberOrder));
-  return { group, members };
+  const ids = [...new Set(responseTurnIds)];
+  if (!ids.length) return new Map<string, StoredVoiceResponseGroup>();
+  const [groups, members] = await Promise.all([
+    db.select().from(voiceResponseGroups).where(and(
+      eq(voiceResponseGroups.ownerId, ownerId),
+      inArray(voiceResponseGroups.responseTurnId, ids),
+    )),
+    db.select().from(voiceResponseGroupMembers).where(and(
+      eq(voiceResponseGroupMembers.ownerId, ownerId),
+      inArray(voiceResponseGroupMembers.responseTurnId, ids),
+    )).orderBy(asc(voiceResponseGroupMembers.memberOrder)),
+  ]);
+  const membersByResponse = new Map<string, Array<typeof voiceResponseGroupMembers.$inferSelect>>();
+  for (const member of members) {
+    const responseMembers = membersByResponse.get(member.responseTurnId) ?? [];
+    responseMembers.push(member);
+    membersByResponse.set(member.responseTurnId, responseMembers);
+  }
+  return new Map(groups.map((group) => [group.responseTurnId, {
+    group,
+    members: membersByResponse.get(group.responseTurnId) ?? [],
+  }]));
+}
+
+async function readVoiceResponseGroup(ownerId: string, responseTurnId: string) {
+  return (await readVoiceResponseGroups(ownerId, [responseTurnId])).get(responseTurnId) ?? null;
 }
 
 function storedVoiceResponseBatch(
@@ -1057,8 +1088,8 @@ function storedVoiceResponseBatch(
 }
 
 async function voiceResponseGroupReceipt(
-  stored: NonNullable<Awaited<ReturnType<typeof readVoiceResponseGroup>>>,
-) {
+  stored: StoredVoiceResponseGroup,
+): Promise<VoiceResponseGroupReceipt> {
   return {
     responseTurnId: stored.group.responseTurnId,
     activityId: stored.group.activityId,
@@ -1370,9 +1401,7 @@ export async function readVoiceDeliveryBlockers(ownerId: string, activityId: str
     ))
     : [];
   const responseTurnIds = [...new Set(members.map((member) => member.responseTurnId))];
-  const groups = await Promise.all(responseTurnIds.map((responseTurnId) =>
-    readVoiceResponseGroup(ownerId, responseTurnId)));
-  const groupByResponse = new Map(groups.filter(Boolean).map((stored) => [stored!.group.responseTurnId, stored!]));
+  const groupByResponse = await readVoiceResponseGroups(ownerId, responseTurnIds);
   const memberByCapture = new Map(members.map((member) => [member.captureId, member]));
   const turnIds = [
     ...intents.map((intent) => intent.turnId),
@@ -1450,6 +1479,12 @@ export async function repairVoiceResponseGroup(
   nowMs: number,
 ) {
   const db = getDb();
+  if (input.authorization !== "explicit_user_instruction") {
+    throw new VoiceResponseGroupConflictError(
+      "Voice response-group repair requires explicit user authorization.",
+      { authorization: input.authorization },
+    );
+  }
   const stored = await readVoiceResponseGroup(ownerId, input.responseTurnId);
   if (!stored || stored.group.activityId !== input.activityId) {
     throw new VoiceResponseGroupConflictError("The owner-scoped Voice response group was not found for this activity.");
@@ -1501,7 +1536,18 @@ export async function repairVoiceResponseGroup(
     );
   }
   const captureIds = stored.members.map((member) => member.captureId);
-  await db.batch([
+  const repairEventId = `voice-repair-${input.responseTurnId}-${input.expectedDigest}`;
+  const repairResults = await db.batch([
+    db.insert(voiceResponseGroupRepairEvents).values({
+      ownerId,
+      id: repairEventId,
+      responseTurnId: input.responseTurnId,
+      activityId: input.activityId,
+      priorStatus: "quarantined_conflict",
+      resultStatus: "provisional",
+      reason: input.reason.slice(0, 2_000),
+      createdAt: nowMs,
+    }).onConflictDoNothing().returning({ id: voiceResponseGroupRepairEvents.id }),
     db.update(voiceResponseGroups).set({ status: "provisional", updatedAt: nowMs }).where(and(
       eq(voiceResponseGroups.ownerId, ownerId),
       eq(voiceResponseGroups.responseTurnId, input.responseTurnId),
@@ -1519,20 +1565,23 @@ export async function repairVoiceResponseGroup(
       eq(voiceCaptureIntents.turnId, member.userTurnId),
       eq(voiceCaptureIntents.status, "quarantined_conflict"),
     ))),
-    db.insert(voiceResponseGroupRepairEvents).values({
-      ownerId,
-      id: `voice-repair-${crypto.randomUUID()}`,
-      responseTurnId: input.responseTurnId,
-      activityId: input.activityId,
-      priorStatus: "quarantined_conflict",
-      resultStatus: "provisional",
-      reason: input.reason.slice(0, 2_000),
-      createdAt: nowMs,
-    }),
   ] as unknown as Parameters<typeof db.batch>[0]);
+  const insertedRepairEvents = (repairResults[0] ?? []) as Array<{ id: string }>;
   const repaired = await readVoiceResponseGroup(ownerId, input.responseTurnId);
   if (!repaired || repaired.group.status !== "provisional") {
+    await db.delete(voiceResponseGroupRepairEvents).where(and(
+      eq(voiceResponseGroupRepairEvents.ownerId, ownerId),
+      eq(voiceResponseGroupRepairEvents.id, repairEventId),
+    ));
     throw new VoiceResponseGroupConflictError("The Voice response group repair did not commit atomically.");
+  }
+  if (!insertedRepairEvents.length) {
+    return {
+      repaired: false,
+      duplicate: true,
+      captureIds,
+      receipt: await voiceResponseGroupReceipt(repaired),
+    };
   }
   return {
     repaired: true,
