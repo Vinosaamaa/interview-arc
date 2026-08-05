@@ -480,6 +480,10 @@ const TARGET_SELECTORS = Object.freeze({
     '[data-e2e-locator="editorial-content"]',
     '[data-testid="editorial-content"]',
     '[data-track-load="editorial_content"]',
+    '[class*="solution-markdown" i]',
+    'main [role="tabpanel"]',
+    'main article',
+    'main [class*="markdown" i]',
   ],
   editorialLock: [
     '[data-e2e-locator*="premium" i]',
@@ -787,6 +791,24 @@ export function createPlaywrightPageAdapter(page) {
       } catch (error) {
         if (error?.name !== "TimeoutError") throw error;
         const actualUrl = typeof page.url === "function" ? page.url() : null;
+        const recognitionDiagnostics = await page.evaluate(() => {
+          const visible = (element) => element?.getClientRects?.().length > 0;
+          return [...document.querySelectorAll(
+            'main,article,[role="tabpanel"],[data-track-load],[class*="markdown" i],[class*="content" i]',
+          )]
+            .filter(visible)
+            .map((element) => ({
+              tag: element.tagName.toLowerCase(),
+              id: element.id || null,
+              className: typeof element.className === "string" ? element.className.slice(0, 200) : null,
+              trackLoad: element.getAttribute("data-track-load"),
+              textLength: (element.innerText ?? "").trim().length,
+              blockCount: element.querySelectorAll("h1,h2,h3,p,pre,ul,ol").length,
+            }))
+            .filter((candidate) => candidate.textLength >= 120)
+            .sort((left, right) => right.textLength - left.textLength)
+            .slice(0, 12);
+        }).catch(() => []);
         let actualPathname = null;
         let actualSlug = null;
         try {
@@ -803,6 +825,7 @@ export function createPlaywrightPageAdapter(page) {
           reason: "editorial_content_not_rendered",
           actualUrl,
           actualPathname,
+          recognitionDiagnostics,
         };
       } finally {
         await handle?.dispose?.();
@@ -1161,6 +1184,9 @@ export class LeetCodeController {
         totalUserVisibleMs: contentVerifiedAt - commandStartedAt,
       },
       ...(state?.reason ? { reason: state.reason } : {}),
+      ...(state?.recognitionDiagnostics
+        ? { recognitionDiagnostics: state.recognitionDiagnostics }
+        : {}),
     };
   }
 
