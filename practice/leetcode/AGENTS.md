@@ -181,14 +181,17 @@ persist exploratory questions, unresolved options, or discussion the user says
 will be decided later. This standing authorization remains documentation-only;
 it never expands the specialist into executable product work.
 
-#### Related-file PR preflight
+#### Documentation revision and PR preflight
 
-Before revising an `AGENTS.md`, contract, `README.md`, or other file when an
-open pull request is related to that file, read the owning PR immediately:
-inspect its head and base, diff, review discussion, checks, and merge state.
-Apply documentation that belongs to that change in the PR's isolated worktree
-and do not infer that a PR was merged from local edits. If no related PR exists,
-record that fact and use the appropriate issue/PR path before editing.
+For every user-requested revision to an `AGENTS.md`, contract, `README.md`, or
+other related document, first look for its owning issue and pull request. If a
+related PR exists, read its head and base, diff, review discussion, checks, and
+merge state before editing. Then make the revision only in that PR's isolated
+worktree (or create a new isolated worktree and documentation-only PR when no
+related PR exists); keep the active practice checkout untouched. A local
+worktree commit or diff is not evidence that GitHub merged the PR—verify the
+actual GitHub state before treating the change as merged. Record when no
+related PR exists and use the appropriate issue/PR path before editing.
 
 ## What This Task Is For
 
