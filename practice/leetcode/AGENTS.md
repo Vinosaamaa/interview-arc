@@ -411,6 +411,18 @@ series of local attempt snapshots.
      trees, grids, and matrices, show their nodes/cells/edges or relationships
      in a faithful text form. Every example with material visual structure must
      have at least one such visual representation before coaching begins.
+     - Prefer a vivid, readable fixed-cell diagram when text can preserve the
+       visual: use equal-width cells with a small, consistent gap, semantic
+       glyphs appropriate to the subject (for example bars, nodes, edges,
+       boundaries, labels, or repeated fill glyphs), and explicit axes,
+       indices, or coordinates. Keep every source item aligned to exactly one
+       labeled position. Fill every cell that belongs to the depicted region;
+       do not leave misleading blanks between boundaries or collapse the
+       visual into an array-only shorthand. Validate the rendered positions,
+       levels, relationships, and labels against the source before showing it.
+       Apply this grammar to plots, histograms, line/container diagrams,
+       grids, matrices, trees, and graph layouts when it remains faithful; do
+       not force a bar-chart style onto a visual that needs another layout.
    - If ASCII/text would lose material information and the user needs to inspect
      that visual, bring the existing tab to the foreground. Material visual
      inspection and user authentication are the only flows that may foreground
