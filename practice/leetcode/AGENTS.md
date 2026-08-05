@@ -449,11 +449,16 @@ browser, or finalization mutation even when warm context is active.
 
 #### Visible warm-context and persistence annotations
 
-When any response in the active LeetCode thread reuses the warm context,
-including administrative or unrelated turns, append this small italic footer
-so the user can distinguish warm reuse from a fresh startup:
+When any response in the active LeetCode thread reuses the warm context, append
+this small italic footer exactly once, regardless of whether the current turn
+is related, unrelated, or uncertain, typed or Voice, administrative or
+problem-related. This lets the user distinguish warm reuse from a fresh
+startup:
 
 `*Warm activity context reused.*`
+
+If an unrelated/uncertain receipt or persistence-delegation line also applies,
+show that truthful line separately; it never replaces the warm-context footer.
 
 When a persistence-only child receives delegated work, also show the truthful
 line required by `background-specialist-persistence.md`:
@@ -613,6 +618,15 @@ printf %s \
 Never continue directly inside a quoted path literal: tmux's copied leading
 spaces would become filename data. In the `printf` form, each quoted fragment
 is a separate argument, so leading whitespace remains harmless syntax.
+
+This tmux-safe multiline rule applies to every command printed directly in the
+CLI or chat, including editor, harness, compiler, runner, and controller
+commands. Keep each authored line within the documented width and use the
+approved `printf` fragments; do not print a long one-line literal for the user
+to paste into tmux. Conversely, when commands are emitted to an external
+command sheet or text file, write exactly one complete physical line per
+command. The sheet's one-line format must not leak into the visible CLI block,
+and the visible block's line wrapping must not be written into the sheet.
 
    The user opens `nvim`. Do not assume that Codex can safely create or target
    a Warp pane, and do not replace the running Codex process with the editor.
@@ -1039,11 +1053,39 @@ helper's warm-submit and total user-visible timings separately.
 
 ### Transcript And Code Boundaries
 
-Save meaningful problem discussion, the user's reasoning, hints, feedback,
-relevant test conclusions, the authoritative submission verdict, and the final
-reflection as activity exchanges. Do not save terminal-control chatter, the
-`micro` command, browser-automation mechanics, ordinary file saves, or
-irrelevant raw compiler output as practice dialogue.
+Use a semantic inclusion test, not the activity ID alone. The following
+decision matrix is normative:
+
+| Turn content | Decision | Examples |
+| --- | --- | --- |
+| Problem statement, constraints, examples/diagrams, user reasoning or code, hints, coaching, solution/complexity discussion, relevant test conclusions, interview feedback, authoritative verdict, or final reflection | Include | “Why does this sliding-window invariant work?”, a user attempt, an observed Accepted/Failed verdict |
+| Navigation, Playwright/browser preflight, tab/page handling, terminal/file commands, MCP/API/D1/R2/tool calls, timers, sessions/workbench controls, retries/recovery, startup/handoff/status, issue/branch/PR/deploy discussion, or instructions about agent operation | Exclude | “Run ensure,” “open the tab,” “give me the nvim command,” “why is D1 slow?”, “create a PR” |
+| A single turn containing both categories | Include only a separately identified problem segment; otherwise exclude the whole turn | Do not retain a coaching sentence merely because it follows a browser command in the same unsegmented capture |
+| Insufficient evidence to classify the turn | Resolve `uncertain` and keep it out of the transcript until explicitly decided | Never silently treat an activity ID as evidence of relevance |
+
+Operational receipts, `↻ Practice persistence delegated in background`, warm
+context markers, Voice/audio/delivery status, and “not attached” footers are
+administrative metadata. They are visible UI annotations only and are never
+practice dialogue or publication content.
+
+The original problem statement may be included when it is actually presented
+or consulted for the activity; do not reconstruct missing prose from a title.
+Exact user code is preserved through the structured Code Attempt boundary, not
+by duplicating a large code block in ordinary transcript text. Generated model
+solutions and harness scaffolding are publication artifacts, not user attempts.
+
+Do not save administrative or process conversation as practice dialogue. A Voice
+envelope containing only this material must be resolved `unrelated` before it
+can wait for a specialist response; use `uncertain` only when the turn itself
+cannot be classified. Do not append an administrative turn just because it
+shares the focused activity ID.
+
+If a single capture mixes administrative and problem discussion, persist only a
+separately identified problem-related segment when one is explicitly
+available. Otherwise exclude the capture from the durable practice transcript.
+
+Do not save terminal-control chatter, the `micro` command, ordinary file saves,
+or irrelevant raw compiler output as practice dialogue.
 
 The structured Code Attempt contract remains the source of exact user code
 evidence when the user explicitly crosses an attempt boundary. This CLI policy
@@ -1073,14 +1115,11 @@ call `delete_related_voice_capture` with its exact capture, activity, and turn
 IDs plus that explicit authorization. Never infer deletion or use the
 destructive remediation tool for a pending capture.
 
-If delivery or Finish reports `voice_delivery_blocked`, follow the temporary
-serialized procedure in the root `AGENTS.md`. Have the persistence child call
-`get_voice_delivery_blockers` for the exact activity and discard
-`audioState: "available"` rows from its actionable set even if the current
-server response also labels them retryable. If no non-available capture
-remains, do not wake Voice. Otherwise call `retry_voice_delivery` once for that
-one activity; never overlap it with another activity's retry or immediately
-repeat it while native delivery coaching may own the single-flight lock.
+If delivery or Finish reports `voice_delivery_blocked`, follow
+**Authoritative Voice blocker dispatch** in the root `AGENTS.md`. Have the
+persistence child call `get_voice_delivery_blockers` for the exact activity.
+Read every row's `allowedActions` before choosing a tool. Do not treat all
+`quarantined_conflict` rows as groups.
 
 That operation signals the native Voice retry queue; it does not upload local
 bytes or prove completion. Re-read authoritative blockers for the same
@@ -1093,13 +1132,29 @@ serializes at most one additional activity-scoped wake. For
 retry the same scoped MCP operation once; do not claim the installed app has a
 **Retry now** button unless that control is actually visible.
 
-If blockers report a singular `quarantined_conflict` with
-`restore_exact_response`, do not retry the original save. Escalate its exact
-capture, user-turn, and response-turn IDs to the coordinator. After verifying
-that both canonical transcript turns are intact and the user explicitly
-authorizes recovery, the coordinator may call `repair_voice_response`; then
-re-read blockers before Finish. A changed retry never supersedes the first
-canonical response.
+For a singular `quarantined_conflict`, the decisive signature is:
+
+- `allowedActions` contains `restore_exact_response`;
+- `responseTurnId` is present;
+- `groupDigest`, `groupStatus`, `memberOrder`, and `memberCount` are null.
+
+That null group metadata is expected and is not a missing server receipt. Use
+`repair_voice_response` with the exact activity, capture, user-turn, and
+response-turn IDs after explicit user authorization. It requires no digest.
+Never call `repair_voice_response_group` for this row.
+
+For a grouped `quarantined_conflict`, `allowedActions` instead contains
+`restore_exact_group`, group/member metadata is present, and `groupDigest` is a
+server-issued 64-character digest. Only then use
+`repair_voice_response_group` with that exact digest and group response ID.
+Never fabricate the digest and never use singular repair for a group.
+
+After either repair, re-read blockers. Finish only after the conflict is gone
+and required transcript/audio evidence passes the server guard. If the exact
+tool named by `allowedActions` is missing from the loaded MCP catalog, report
+that exact tool name and require a full MCP/Codex reconnect; do not substitute
+the older similarly named tool. A changed resolver retry never supersedes the
+first canonical response.
 
 If the user explicitly confirms that the exact original cannot be recovered,
 call `acknowledge_voice_audio_loss` with the capture, activity, and turn IDs,

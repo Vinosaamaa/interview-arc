@@ -75,17 +75,36 @@ For first-time task creation and durable specialist registration, follow
   D1, groups it by Pacific completion date, uses the guarded journal workflow,
   and publishes the resulting pull request to production.
 
-### Temporary Voice retry routing
+### Authoritative Voice blocker dispatch
 
-Specialists and the coordinator follow the canonical bounded runbook under
-**Exact-once Draft Capture** in
-`docs/contracts/durable-practice-publishing.md`. Until
-`Vinosaamaa/interview-arc#175` and
-`Vinosaamaa/interview-arc-voice#178` are released, filter already-available
-audio and serialize activity-scoped wakes exactly as that runbook requires.
-The specialist stops and reports exact unresolved capture identities and
-states instead of looping; the coordinator owns the one-at-a-time recovery
-escalation. Neither role may infer loss acknowledgement or deletion authority.
+After `voice_delivery_blocked`, call `get_voice_delivery_blockers` for the exact
+activity before choosing any recovery tool. The server's `allowedActions` is
+the dispatch key. Never select a tool from `status: quarantined_conflict` alone,
+never invent a digest, and never substitute a group operation for a singular
+response operation.
+
+| Exact blocker evidence | Correct tool | Required identity/evidence | Never do |
+| --- | --- | --- | --- |
+| `allowedActions` contains `restore_exact_response`; `responseTurnId` is present; `groupDigest`, `groupStatus`, `memberOrder`, and `memberCount` are null | `repair_voice_response` | Exact `activityId`, `captureId`, `userTurnId` from blocker `turnId`, and `responseTurnId`; explicit user authorization and reason | Do not call `repair_voice_response_group`; a null digest is expected for a singular response |
+| `allowedActions` contains `restore_exact_group`; `groupDigest` is a server-issued 64-character digest; group/member metadata is present | `repair_voice_response_group` | Exact `activityId`, group `responseTurnId`, `expectedDigest`, `expectedStatus: quarantined_conflict`; explicit user authorization and reason | Do not fabricate a digest or downgrade to singular repair |
+| `allowedActions` contains `retry_delivery`; `retryable` is true; transcript or audio is not yet durably available | `retry_voice_delivery` | Exact `activityId`; one serialized wake, followed by a fresh blocker read | Do not use retry for a quarantined conflict, an already-available clip, or as proof of upload success |
+| Retry completed but the protected local original is confirmed missing or unreadable, and `acknowledge_audio_loss` is allowed | `acknowledge_voice_audio_loss` | Exact capture/activity/turn identity, supported loss reason, and explicit user authorization | Do not infer permanent loss merely because one retry failed |
+| The user explicitly says an accepted exchange is unrelated or must be removed, and `delete_exact_group` is allowed | `delete_related_voice_capture` | Exact capture/activity/turn identity, explicit destructive authorization, and reason | Do not delete merely to bypass Finish or repair otherwise intact evidence |
+| Pending capture is administrative | `resolve_voice_capture` with `unrelated` | Exact capture/activity/turn identity and reason | Do not use accepted-exchange deletion for a pending capture |
+| One related capture receives one specialist response | `resolve_voice_capture_and_save_response` | One stable capture/user/response identity and immutable body/timestamp | Do not change the response ID, body, or timestamp on retry |
+| Two or more ordered related captures receive one specialist response | `resolve_voice_captures_and_save_response` | Ordered captures plus one stable response identity/body/timestamp | Do not call the singular resolver repeatedly or duplicate the visible response |
+
+After every mutating recovery call, re-read
+`get_voice_delivery_blockers`. Continue to Finish only when the repaired row is
+no longer `quarantined_conflict`, every required canonical turn is present, and
+every required audio row is `available` or has an explicitly authorized loss
+acknowledgement. A tool receipt alone is not Finish authorization.
+
+If the required action named by `allowedActions` is not discoverable in the
+loaded MCP catalog, report the exact missing tool name and stop. Fully restart
+or reconnect Codex so the deployed catalog reloads; do not call a similarly
+named older tool. Specialists stop and report exact unresolved identities and
+states instead of looping; the coordinator owns serialized recovery escalation.
 
 Read `docs/contracts/durable-practice-publishing.md` for the complete task
 registry, transcript, finalization, review, and publication protocol. Maintain
@@ -133,6 +152,54 @@ Visual reader changes must update old artifacts without rewriting them.
   date.
 
 Leave unavailable fields empty or set their source to `unknown`. Never invent timer values, attempt results, code, personal experience, metrics, or transcript content.
+
+### Practice transcript inclusion boundary
+
+Durable practice transcripts contain only activity-related conversation. Apply
+this decision matrix to every visible user and specialist turn:
+
+| Content | Durable practice transcript |
+| --- | --- |
+| Problem statement, constraints, examples, diagrams, user reasoning/code, hints, coaching, solution reasoning, complexity, relevant tests, interview feedback, authoritative verdict, or final reflection | Include |
+| Navigation, browser/Playwright preflight, tab/page handling, terminal/file commands, MCP/API/D1/R2/tool operations, timer/session/workbench controls, retries/recovery, startup/handoff/status chatter, issue/branch/PR/deploy work, or instructions about operating the agent | Exclude |
+| A turn that mixes both categories | Include only a separately identified problem segment; otherwise exclude the whole turn |
+| An ambiguous turn whose category cannot be established from the supplied content | Resolve `uncertain`; never silently append it |
+
+Operational receipts, warm-context markers, persistence-delegation markers, and
+audio/delivery status text are administrative metadata, not practice dialogue.
+Exact user code still belongs in the structured Code Attempt record when the
+user explicitly crosses an attempt boundary; generated reference code does
+not become a user attempt.
+
+Whenever the response reuses warm activity context, append the exact italic
+footer `*Warm activity context reused.*` once, regardless of whether the
+current turn is related, unrelated, or uncertain, and regardless of whether it
+is typed or Voice. If another truthful classification or persistence footer
+also applies, show both on separate lines; never omit the warm-context footer.
+
+Command presentation has two distinct contracts. Commands printed directly in
+the CLI or chat must be tmux-safe: use the repository's approved fragment
+template, keep authored lines within the documented width, and never rely on a
+long quoted path that tmux indentation could turn into filename data. Commands
+written to an external command sheet or text file must instead remain exactly
+one complete physical line per command so the file is machine- and
+copy/paste-friendly. Never apply the external-file one-line rule to the
+visible CLI command block, and never wrap a command across multiple physical
+lines in the external sheet.
+
+Exclude administrative or process conversation even when it appears in the same
+activity or visible chat: navigation, Playwright or browser preflight, tab and
+page handling, MCP/API/tool calls, D1/R2 or private-audio operations, timers,
+sessions or workbench control, retries and recovery, startup/handoff/status
+chatter, issue/branch/PR work, deployment, and discussion of how the agent is
+being operated. Those turns must not wait for a specialist response and must
+be classified `unrelated` (or `uncertain` when the content cannot be decided
+from the turn alone) before persistence. Never append an administrative turn
+to a practice transcript merely because it carries the activity ID.
+
+If one captured turn mixes administrative and problem content, persist only a
+separately identified problem-related segment when the source provides one;
+otherwise keep the capture out of the durable practice transcript.
 
 ## LeetCode Boundary
 
