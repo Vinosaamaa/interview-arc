@@ -370,6 +370,15 @@ At a true attempt-ending boundary, give an honest review automatically without
 waiting for a separate request and regardless of the earlier mode. First review
 the visible official LeetCode editorial under the Content Boundary, then:
 
+After the controller returns a terminal submission verdict, the next visible
+response must continue directly into this post-attempt phase; never stop at a
+verdict-only reply or wait for the user to ask for the review. For **Accepted**,
+include the submitted-code review, the strongest approach, complexity and edge
+cases, and meaningful alternatives, with editorial-derived approaches clearly
+labelled when the Editorial was actually accessible. If the Editorial is
+unavailable or locked, state that plainly and provide independently reasoned
+alternatives without implying Editorial access.
+
 - state what the user did well, grounded only in observed reasoning and shared
   or submitted code;
 - identify the concrete correctness gap, blocker, implementation issue, or
