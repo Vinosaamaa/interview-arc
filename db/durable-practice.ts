@@ -1714,7 +1714,11 @@ async function commitVoiceResponseGroup(
   if (refreshed.members.some((candidate) =>
     candidate.transcript === null || candidate.checksum === null || candidate.occurredAt === null)) {
     return {
-      ...input,
+      activityId: input.activityId,
+      specialty: input.specialty,
+      turnId: input.turnId,
+      body: input.transcript,
+      occurredAt: input.occurredAt,
       speaker: "user" as const,
       source: "audio_transcript" as const,
       sequence: deliveredMember.memberOrder,
