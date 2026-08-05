@@ -179,6 +179,22 @@ test("local MCP persists exact specialist writes through durable receipts and re
     assert.equal(changedAttempt.structuredContent.code, "specialist_write_identity_conflict");
     assert.equal(changedAttempt.structuredContent.retryable, false);
 
+    // Compatibility callers may still send stale response-turn metadata on a
+    // pending review. The Worker must normalize that field and save the exact
+    // immutable code instead of failing the queued write.
+    const stalePendingAttempt = {
+      ...attempt,
+      operationId: "operation-attempt-write-pending-stale-turn",
+      id: "attempt-write-pending-stale-turn",
+      sequence: 2,
+      reviewResponseTurnId: "stale-specialist-turn",
+    };
+    const queuedStalePending = await call("save_leetcode_code_attempt", stalePendingAttempt);
+    const [savedStalePending] = await waitForJobs(call, [stalePendingAttempt.operationId]);
+    assert.equal(queuedStalePending.jobId, stalePendingAttempt.operationId);
+    assert.equal(savedStalePending.status, "saved");
+    assert.equal(savedStalePending.result.status, "inserted");
+
     const metadataFor = (problemNumber, difficulty, topics, companyTags, title, url, capturedAt = "2026-08-04T22:00:00.000Z") => ({
       problemNumber,
       difficulty,
@@ -343,8 +359,10 @@ test("local MCP persists exact specialist writes through durable receipts and re
     assert.equal(rejectedRetry.structuredContent.code, "specialist_write_not_retryable");
 
     const record = await call("get_activity_practice_record", { activityId: "activity-write" });
-    assert.equal(record.codeAttempts.length, 1);
+    assert.equal(record.codeAttempts.length, 2);
     assert.equal(record.codeAttempts[0].id, attempt.id);
+    assert.equal(record.codeAttempts[1].id, stalePendingAttempt.id);
+    assert.equal(record.codeAttempts[1].reviewResponseTurnId, null);
   } finally {
     await client?.close().catch(() => {});
     if (worker && worker.exitCode === null) {

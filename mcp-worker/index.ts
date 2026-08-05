@@ -2258,7 +2258,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "retry_specialist_writes",
     {
-      description: "Explicitly requeue exhausted specialist writes only when their durable receipt says failure.retryable=true. Never use this for validation, identity, or conflict failures.",
+      description: "Explicitly requeue exhausted specialist writes when their durable receipt is retryable or identifies the deterministic pending Code Attempt review-turn repair. Never use this for identity or other validation conflicts.",
       inputSchema: {
         jobIds: z.array(z.string().min(1).max(200)).min(1).max(50),
       },
@@ -2269,7 +2269,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
         const jobs = await retrySpecialistWriteJobs(ownerId, jobIds);
         scheduleSpecialistWriteProcessing(ctx);
         return {
-          content: [{ type: "text", text: `Requeued ${jobs.length} retryable specialist write${jobs.length === 1 ? "" : "s"}.` }],
+          content: [{ type: "text", text: `Requeued ${jobs.length} eligible specialist write${jobs.length === 1 ? "" : "s"}.` }],
           structuredContent: { jobs },
         };
       } catch (error) {

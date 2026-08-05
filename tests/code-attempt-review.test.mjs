@@ -337,6 +337,7 @@ test("the MCP write contract requires specialist-observed review data and leaves
   assert.match(durable, /db\.batch\(\[\s*noReadyFinalizationGuard,\s*db\.insert\(leetcodeCodeAttempts\)/);
   assert.match(durable, /const noPendingReviewGuard = d1TransactionalInvariantGuard/);
   assert.match(durable, /db\.batch\(\[noPendingReviewGuard, finalizationWrite\]\)/);
+  assert.match(durable, /review\.status === "pending" \? undefined : input\.reviewResponseTurnId/);
   assert.match(coordinatorScript, /explicit_evidence_backfill/);
   assert.match(coordinatorScript, /--apply/);
   assert.match(coordinatorScript, /--confirm-remote/);
