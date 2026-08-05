@@ -507,11 +507,14 @@ function mergePlanningQuestions(
       difficulty: ["easy", "medium", "hard"].includes(String(row.difficulty))
         ? row.difficulty as "easy" | "medium" | "hard"
         : undefined,
+      problemNumber: typeof row.problemNumber === "number" ? row.problemNumber : undefined,
       acceptanceRate: typeof row.acceptanceRate === "number" ? row.acceptanceRate : undefined,
       source: typeof row.source === "string" ? row.source : "personal",
       companyTags: Array.isArray(row.companyTags) ? row.companyTags.map(String) : [],
       companySignals: Array.isArray(row.companySignals) ? row.companySignals as never[] : [],
       topics: Array.isArray(row.topics) ? row.topics.map(String) : [],
+      metadataReferences: Array.isArray(row.metadataReferences) ? row.metadataReferences : [],
+      metadataCapturedAt: typeof row.metadataCapturedAt === "number" ? row.metadataCapturedAt : null,
       tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
       priority: typeof row.priority === "number" ? row.priority : 0,
       targetMinutes: typeof row.targetMinutes === "number"
@@ -524,7 +527,15 @@ function mergePlanningQuestions(
     ...personal.filter((question) => !canonical.some((item) => item.id === question.id)),
     ...canonical.map((question) => ({
       ...question,
-      ...(personalById.get(question.id) ?? {}),
+      ...(personalById.has(question.id) ? {
+        title: personalById.get(question.id)?.title ?? question.title,
+        prompt: personalById.get(question.id)?.prompt ?? question.prompt,
+        url: personalById.get(question.id)?.url ?? question.url,
+        source: personalById.get(question.id)?.source ?? question.source,
+        priority: personalById.get(question.id)?.priority ?? question.priority,
+        targetMinutes: personalById.get(question.id)?.targetMinutes ?? question.targetMinutes,
+        active: personalById.get(question.id)?.active ?? question.active,
+      } : {}),
       topics: [...new Set([
         ...question.topics,
         ...(personalById.get(question.id)?.topics ?? []),
@@ -533,6 +544,15 @@ function mergePlanningQuestions(
         ...(question.tags ?? []),
         ...(personalById.get(question.id)?.tags ?? []),
       ])],
+      ...(personalById.get(question.id)?.problemNumber !== undefined ? { problemNumber: personalById.get(question.id)?.problemNumber } : {}),
+      ...(personalById.get(question.id)?.difficulty !== undefined ? { difficulty: personalById.get(question.id)?.difficulty } : {}),
+      ...(personalById.get(question.id)?.acceptanceRate !== undefined ? { acceptanceRate: personalById.get(question.id)?.acceptanceRate } : {}),
+      ...(personalById.get(question.id)?.companyTags?.length ? { companyTags: [...new Set([...(question.companyTags ?? []), ...(personalById.get(question.id)?.companyTags ?? [])])] } : {}),
+      ...(personalById.get(question.id)?.companySignals?.length ? { companySignals: [...(question.companySignals ?? []), ...(personalById.get(question.id)?.companySignals ?? [])] } : {}),
+      ...(personalById.get(question.id)?.metadataReferences?.length ? { metadataReferences: [...(question.metadataReferences ?? []), ...(personalById.get(question.id)?.metadataReferences ?? [])] } : {}),
+      ...(personalById.get(question.id)?.metadataCapturedAt !== null && personalById.get(question.id)?.metadataCapturedAt !== undefined
+        ? { metadataCapturedAt: personalById.get(question.id)?.metadataCapturedAt }
+        : {}),
     })),
   ];
 }
@@ -1676,11 +1696,13 @@ async function executeSpecialistWriteJob(job: SpecialistWriteJobRow) {
       specialty: Parameters<typeof upsertOwnerBankQuestion>[1];
       question: Parameters<typeof upsertOwnerBankQuestion>[2];
     };
-    await upsertOwnerBankQuestion(job.ownerId, input.specialty, input.question, Date.now());
+    const saved = await upsertOwnerBankQuestion(job.ownerId, input.specialty, input.question, Date.now());
     return {
       specialty: input.specialty,
       questionId: input.question.questionId,
       status: "upserted",
+      tags: saved?.tags ?? [],
+      metadata: saved?.metadata ?? null,
     };
   }
   throw new SpecialistWriteJobError(
@@ -2391,7 +2413,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "upsert_personal_bank_question",
     {
-      description: "Durably enqueue creation or update of one owner-private bank question. Supply one stable operationId per logical item, reuse the exact payload after transport uncertainty, and inspect get_specialist_write_status for per-item success. Behavioral specialists use this without committing private resume details to Git.",
+      description: "Durably enqueue creation or update of one owner-private bank question. Supply one stable operationId per logical item, reuse the exact payload after transport uncertainty, and inspect get_specialist_write_status for per-item success. LeetCode imports may include validated metadata (problem number, difficulty, acceptance, official topics, company signals, capture time, and sources); the Worker merges it by freshness and projects namespaced search tags. Behavioral specialists use this without committing private resume details to Git.",
       inputSchema: {
         operationId: z.string().min(1).max(200),
         specialty: z.enum(["leetcode", "system_design", "behavioral"]),
@@ -2404,6 +2426,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
         priority: z.number().int().min(0).max(1000).optional(),
         targetMinutes: z.number().int().min(5).max(480).optional(),
         active: z.boolean().optional(),
+        metadata: leetCodeQuestionMetadataSchema.optional(),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },

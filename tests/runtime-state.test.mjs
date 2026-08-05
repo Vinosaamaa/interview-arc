@@ -12,6 +12,7 @@ import { derivePublicationStatus } from "../db/publication-state.ts";
 import { foldElapsed, nextTimerState } from "../db/timer-state.ts";
 import { reviewIntervalDays } from "../db/review-cadence.ts";
 import {
+  deriveQuestionMetadataTags,
   mergePersonalLeetCodeQuestionMetadata,
   validateLeetCodeQuestionMetadata,
 } from "../db/question-metadata.ts";
@@ -375,6 +376,42 @@ test("personal LeetCode metadata enrichment preserves prior values and merges pr
   assert.equal(stale.acceptanceRate, 50.2);
   assert.ok(stale.topics.includes("Breadth-First Search"));
   assert.equal(stale.metadataCapturedAt, Date.parse("2026-07-25T12:00:00.000Z"));
+
+  const newerReference = mergePersonalLeetCodeQuestionMetadata(merged, {
+    capturedAt: "2026-07-26T12:00:00.000Z",
+    sources: [{
+      title: "Fresh source",
+      url: "https://leetcode.com/problems/course-schedule/",
+      accessedAt: "2026-07-26T12:00:00.000Z",
+    }],
+  });
+  assert.equal(newerReference.metadataReferences.find((source) => source.url.endsWith("course-schedule/"))?.title, "Fresh source");
+
+  const projected = deriveQuestionMetadataTags({
+    difficulty: "hard",
+    topics: ["Heap (Priority Queue)", "Matrix"],
+    companyTags: ["Google"],
+    companySignals: [{
+      company: "Amazon",
+      window: "30 days",
+      frequencyScore: 4,
+      frequencyScale: 5,
+      capturedAt: "2026-07-25T12:00:00.000Z",
+    }],
+    capturedAt: "2026-07-25T12:00:00.000Z",
+    sources: [{
+      title: "LeetCode",
+      url: "https://leetcode.com/problems/course-schedule/",
+      accessedAt: "2026-07-25T12:00:00.000Z",
+    }],
+  });
+  assert.deepEqual(projected, [
+    "difficulty:hard",
+    "topic:heap-priority-queue",
+    "topic:matrix",
+    "company:google",
+    "company:amazon",
+  ]);
 });
 
 test("finished activities enter the journal queue without a second toggle", () => {
@@ -656,9 +693,13 @@ test("durable publishing keeps transcripts, review, notes, and four-day walkthro
     "personal-question enrichment must finish before the finalization becomes ready",
   );
   assert.match(durableStore, /SELECT value FROM json_each\(\$\{ownerBankQuestions\.tags\}\)/);
+  assert.match(durableStore, /deriveQuestionMetadataTags/);
+  assert.match(durableStore, /question\.metadata && specialty !== "leetcode"/);
+  assert.match(durableStore, /question\.metadata\) \{/);
   const metadataSchema = await readFile(new URL("../db/question-metadata.ts", import.meta.url), "utf8");
   assert.match(metadataSchema, /acceptanceRate: z\.number\(\)\.min\(0\)\.max\(100\)/);
   assert.match(metadataSchema, /incomingCapturedAt >= existing\.metadataCapturedAt/);
+  assert.match(metadataSchema, /topic:\$\{normalizedProjectionToken/);
   assert.match(contract, /owner-private LeetCode question created from a public problem URL/i);
   assert.match(contract, /Canonical Git-backed bank questions are never mutated/i);
   const client = await readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8");
