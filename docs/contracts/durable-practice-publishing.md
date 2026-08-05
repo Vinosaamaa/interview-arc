@@ -159,17 +159,38 @@ because MCP tool catalogs are loaded when the connection starts.
 
 For a retryable delivery blocker, a specialist now follows this bounded runbook:
 
-1. Call `get_voice_delivery_blockers` for the activity.
-2. Call `retry_voice_delivery` once when the result lists an accepted or related
-   capture with `retry_delivery` allowed. This publishes a
-   activity-scoped `voice_delivery_retry:<activityId>` live update that asks the
-   native Voice client for one forced, idempotent local-original retry for only
-   that activity. The MCP call does not upload bytes itself and does not claim
-   completion.
-3. Call `get_voice_delivery_blockers` again after the companion has had time to
-   retry. Finish only when each required capture reports `audioState: "available"`
-   and no other blocker remains. If the result is
-   `retry_signal_unavailable`, open the companion and press **Retry now**.
+1. Call `get_voice_delivery_blockers` for the exact activity and classify each
+   returned capture before taking action:
+
+   | Server state | Classification | Action |
+   | --- | --- | --- |
+   | `audioState: "available"` | Complete, even if the current server also labels it retryable | Exclude it from retry. |
+   | Non-available, accepted or related, with `retry_delivery` allowed | Eligible | Keep its exact capture identity in the actionable set. |
+   | Non-available without `retry_delivery` | Not retry-eligible | Follow only the listed permitted action; never wake it by inference. |
+
+   The temporary `available` exclusion remains required until
+   `Vinosaamaa/interview-arc#175` is released.
+2. If the actionable set is empty, do not wake Voice. Otherwise, keep
+   Interview Arc Voice running and call `retry_voice_delivery` once for this
+   activity. The call publishes
+   `voice_delivery_retry:<activityId>` and asks the native client for one
+   forced, idempotent local-original retry. It does not upload bytes itself or
+   prove completion.
+3. Never issue parallel or immediate back-to-back wakes. Complete this scoped
+   call and its authoritative read-back before signaling another activity.
+   This serialization is required until
+   `Vinosaamaa/interview-arc-voice#178` is released because an occupied native
+   single-flight lock may drop a later wake.
+4. Re-read `get_voice_delivery_blockers` for the same activity after the native
+   attempt. Finish only when every required capture is
+   `audioState: "available"` and no other blocker remains.
+5. When exact captures remain non-available, the specialist reports their IDs
+   and states to the coordinator instead of looping. After the native retry is
+   idle, the coordinator re-reads state and may serialize at most one later
+   wake for that still-blocked activity.
+6. For `retry_signal_unavailable`, ask the user to open Interview Arc Voice,
+   then retry the same scoped MCP operation once. Do not claim a native
+   **Retry now** button exists unless it is visible in the installed app.
 
 If the user explicitly confirms that a particular original cannot be recovered,
 call `acknowledge_voice_audio_loss` with that exact capture, activity, and turn

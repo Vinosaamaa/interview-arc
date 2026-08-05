@@ -75,6 +75,18 @@ For first-time task creation and durable specialist registration, follow
   D1, groups it by Pacific completion date, uses the guarded journal workflow,
   and publishes the resulting pull request to production.
 
+### Temporary Voice retry routing
+
+Specialists and the coordinator follow the canonical bounded runbook under
+**Exact-once Draft Capture** in
+`docs/contracts/durable-practice-publishing.md`. Until
+`Vinosaamaa/interview-arc#175` and
+`Vinosaamaa/interview-arc-voice#178` are released, filter already-available
+audio and serialize activity-scoped wakes exactly as that runbook requires.
+The specialist stops and reports exact unresolved capture identities and
+states instead of looping; the coordinator owns the one-at-a-time recovery
+escalation. Neither role may infer loss acknowledgement or deletion authority.
+
 Read `docs/contracts/durable-practice-publishing.md` for the complete task
 registry, transcript, finalization, review, and publication protocol. Maintain
 long system-design and behavioral drafts incrementally; never reconstruct an

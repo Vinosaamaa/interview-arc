@@ -1066,13 +1066,25 @@ call `delete_related_voice_capture` with its exact capture, activity, and turn
 IDs plus that explicit authorization. Never infer deletion or use the
 destructive remediation tool for a pending capture.
 
-If delivery or Finish reports `voice_delivery_blocked`, have the persistence
-child call `get_voice_delivery_blockers` for the activity, then call
-`retry_voice_delivery` when a blocker permits `retry_delivery`. That operation
-signals the native Voice retry queue; it does not upload local bytes or prove
-completion. Re-read the blockers before attempting Finish again, and report
-`retry_signal_unavailable` as an actionable request to open Voice and press
-**Retry now**, never as a successful repair.
+If delivery or Finish reports `voice_delivery_blocked`, follow the temporary
+serialized procedure in the root `AGENTS.md`. Have the persistence child call
+`get_voice_delivery_blockers` for the exact activity and discard
+`audioState: "available"` rows from its actionable set even if the current
+server response also labels them retryable. If no non-available capture
+remains, do not wake Voice. Otherwise call `retry_voice_delivery` once for that
+one activity; never overlap it with another activity's retry or immediately
+repeat it while native delivery coaching may own the single-flight lock.
+
+That operation signals the native Voice retry queue; it does not upload local
+bytes or prove completion. Re-read authoritative blockers for the same
+activity after the native attempt. A specialist may report success only when
+every required capture is `audioState: "available"`. If exact captures remain
+blocked, report their IDs and states to the coordinator instead of looping.
+The coordinator waits for the native retry to become idle, re-reads state, and
+serializes at most one additional activity-scoped wake. For
+`retry_signal_unavailable`, ask the user to open Interview Arc Voice, then
+retry the same scoped MCP operation once; do not claim the installed app has a
+**Retry now** button unless that control is actually visible.
 
 If the user explicitly confirms that the exact original cannot be recovered,
 call `acknowledge_voice_audio_loss` with the capture, activity, and turn IDs,
