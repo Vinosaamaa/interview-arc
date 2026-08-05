@@ -8,6 +8,8 @@ enabled_tools = [
   "resolve_voice_capture_and_save_response",
   "resolve_voice_captures_and_save_response",
   "get_voice_delivery_blockers",
+  "retry_voice_delivery",
+  "acknowledge_voice_audio_loss",
   "repair_voice_response_group",
   "append_practice_transcript",
   "resolve_voice_capture",

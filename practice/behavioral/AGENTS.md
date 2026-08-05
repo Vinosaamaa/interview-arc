@@ -194,3 +194,9 @@ persistence contract. Never append an enveloped user turn separately.
 For unrelated typed administration return exactly:
 `*Not attached to this practice activity · Not saved to the practice transcript or publication*`.
 Neither receipt belongs in D1 or the published artifact.
+
+For delivery recovery, follow the bounded runbook in
+`docs/contracts/durable-practice-publishing.md`. The behavioral specialty adds
+no deviation: preserve the canonical transcript, distinguish a retry signal
+from completed upload, and require explicit authorization before any audio-loss
+acknowledgement or whole-exchange deletion.

@@ -30,10 +30,15 @@ import {
 } from "../db/live-state";
 import { buildPracticeSnapshot, buildPublicationQueue, dateInPracticeTimeZone } from "../db/practice-snapshot";
 import { leetCodeQuestionMetadataSchema } from "../db/question-metadata";
-import { connectOwnerLiveUpdates, publishOwnerLiveUpdate } from "../worker/live-update-hub";
+import {
+  connectOwnerLiveUpdates,
+  publishOwnerLiveUpdate as publishOwnerLiveUpdateRequest,
+} from "../worker/live-update-hub";
+import type { LiveUpdateNamespace, LiveUpdateScope } from "../worker/live-update-hub";
 import {
   addPracticeNote,
   acknowledgeActivityAudioLost,
+  acknowledgeVoiceAudioLossForCapture,
   acknowledgePublishWithoutDeliveryReview,
   appendTranscriptTurns,
   appendVoiceTranscriptTurn,
@@ -132,12 +137,15 @@ import {
   resolveVoiceCaptureBatch,
   voiceCaptureBatchInputSchema,
 } from "./voice-capture-batch";
+import { requestVoiceDeliveryRetry } from "./voice-delivery-retry";
 
 interface Env {
   DB: D1Database;
   AUDIO: R2Bucket;
   LIVE_UPDATES: DurableObjectNamespace;
 }
+
+const publishOwnerLiveUpdate = publishOwnerLiveUpdateRequest;
 
 function safeAudioFilename(value: string) {
   return value.normalize("NFKC").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 120) || "practice-audio";
@@ -1854,6 +1862,15 @@ async function authoritativeSpecialistState(ownerId: string, date?: string) {
 }
 
 function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
+  const publishOwnerLiveUpdate = (
+    namespace: LiveUpdateNamespace | undefined,
+    updateOwnerId: string,
+    scope: LiveUpdateScope,
+    options: { awaitDelivery?: boolean } = {},
+  ) => publishOwnerLiveUpdateRequest(namespace, updateOwnerId, scope, {
+    ...options,
+    executionContext: ctx,
+  });
   const server = new McpServer({ name: "Interview Arc", version: "1.0.0" });
 
   server.registerTool(
@@ -1994,6 +2011,57 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
       const result = await readVoiceDeliveryBlockers(ownerId, activityId);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "retry_voice_delivery",
+    {
+      description: "Wake the authenticated owner's native Voice retry queue for one activity when accepted or related captures have a retryable private-audio/transcript delivery blocker. This signals the local companion; it does not access local audio bytes or claim that the asynchronous upload completed. Re-read get_voice_delivery_blockers before finishing.",
+      inputSchema: {
+        activityId: z.string().min(1),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ activityId }) => {
+      const result = await requestVoiceDeliveryRetry(
+        activityId,
+        () => readVoiceDeliveryBlockers(ownerId, activityId),
+        () => publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_capture", { awaitDelivery: true }),
+      );
+      return {
+        content: [{ type: "text", text: result.message }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "acknowledge_voice_audio_loss",
+    {
+      description: "Terminally acknowledge that one exact accepted Voice recording cannot be recovered after retry. Requires explicit user instruction and the capture/activity/turn identity; preserves the canonical transcript and specialist response, creates missing owner-scoped audio-loss metadata when necessary, and allows Finish to proceed while rendering the recording unavailable. Never use this to hide a retryable recording or delete a canonical exchange.",
+      inputSchema: {
+        captureId: z.string().min(1),
+        activityId: z.string().min(1),
+        turnId: z.string().min(1),
+        lossReason: z.enum(["local_source_missing", "local_source_unreadable"]),
+        reason: z.string().min(1).max(2_000),
+        authorization: z.literal("explicit_user_instruction"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+    },
+    async ({ authorization, ...input }) => {
+      if (authorization !== "explicit_user_instruction") {
+        throw new Error("Audio-loss acknowledgement requires explicit user instruction.");
+      }
+      const result = await acknowledgeVoiceAudioLossForCapture(ownerId, input, Date.now());
+      await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_capture");
+      return {
+        content: [{ type: "text", text: result.duplicate
+          ? "Recording-unavailable acknowledgement already exists; the canonical transcript was preserved. Re-read blockers before finishing."
+          : "Recording unavailable acknowledged; the canonical transcript was preserved. Re-read blockers before finishing." }],
         structuredContent: result,
       };
     },
