@@ -160,16 +160,29 @@ because MCP tool catalogs are loaded when the connection starts.
 For a retryable delivery blocker, a specialist now follows this bounded runbook:
 
 1. Call `get_voice_delivery_blockers` for the activity.
-2. Call `retry_voice_delivery` once when the result lists an accepted or related
-   capture with `retry_delivery` allowed. This publishes a
+2. Until `Vinosaamaa/interview-arc#175` is released, remove every
+   `audioState: "available"` row from the actionable set even when the current
+   response also labels it retryable. Call `retry_voice_delivery` once only
+   when an exact non-available accepted or related capture permits
+   `retry_delivery`. This publishes an
    activity-scoped `voice_delivery_retry:<activityId>` live update that asks the
    native Voice client for one forced, idempotent local-original retry for only
    that activity. The MCP call does not upload bytes itself and does not claim
    completion.
-3. Call `get_voice_delivery_blockers` again after the companion has had time to
+3. Because `Vinosaamaa/interview-arc-voice#178` tracks dropped wakes while the
+   native single-flight retry is occupied, never issue parallel or immediate
+   back-to-back wakes. Complete one activity's scoped call and authoritative
+   read-back before signaling another activity.
+4. Call `get_voice_delivery_blockers` again after the companion has had time to
    retry. Finish only when each required capture reports `audioState: "available"`
-   and no other blocker remains. If the result is
-   `retry_signal_unavailable`, open the companion and press **Retry now**.
+   and no other blocker remains. If exact captures remain non-available, the
+   specialist reports their IDs and states to the coordinator instead of
+   looping. The coordinator serializes at most one later wake after re-reading
+   state and allowing the native retry to become idle.
+5. If the result is `retry_signal_unavailable`, ask the user to open Interview
+   Arc Voice and retry the same scoped MCP operation once. Do not claim a
+   native **Retry now** button exists unless it is visible in the installed
+   app.
 
 If the user explicitly confirms that a particular original cannot be recovered,
 call `acknowledge_voice_audio_loss` with that exact capture, activity, and turn

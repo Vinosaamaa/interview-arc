@@ -75,6 +75,44 @@ For first-time task creation and durable specialist registration, follow
   D1, groups it by Pacific completion date, uses the guarded journal workflow,
   and publishes the resulting pull request to production.
 
+### Temporary Voice retry procedure
+
+Until `Vinosaamaa/interview-arc#175` and
+`Vinosaamaa/interview-arc-voice#178` are released, Voice delivery recovery has
+two known limitations: the server may include a capture whose
+`audioState` is already `available` in its retryable list, and the native app
+may drop a second activity-scoped wake while delivery coaching owns its
+single-flight lock. A **single-flight lock** permits only one native retry
+workflow at a time.
+
+Specialists and the coordinator must use this bounded workaround:
+
+1. Read `get_voice_delivery_blockers` for the exact activity. Treat
+   `audioState: "available"` as complete even when another field labels that
+   capture retryable. Record only exact non-available capture identities as
+   unresolved; never retry from the aggregate count alone.
+2. Keep Interview Arc Voice running. Call `retry_voice_delivery` once for one
+   activity only. Never issue parallel wakes or immediately signal a second
+   activity.
+3. Re-read the same activity's blockers after the native attempt. A signaled
+   receipt proves only that the wake was delivered, not that R2 upload
+   succeeded. Finish only when every required capture reports
+   `audioState: "available"` and no other blocker remains.
+4. If exact captures remain non-available, do not loop or tell the user the
+   retry succeeded. The specialist reports their exact IDs and state to the
+   coordinator. The coordinator waits until the native retry is idle, re-reads
+   authoritative state, and serializes at most one additional scoped wake for
+   the still-blocked activity.
+5. If the retry signal is unavailable, ask the user to open Interview Arc
+   Voice, then retry the same scoped MCP operation once. Do not claim there is
+   a native **Retry now** button unless the installed app actually exposes one.
+6. When the protected original is genuinely irrecoverable, require explicit
+   user authorization before `acknowledge_voice_audio_loss`; never use loss
+   acknowledgement merely to bypass a retryable upload.
+
+These are recovery instructions, not permission to inspect local recordings,
+duplicate transcripts, delete accepted evidence, or retry unrelated captures.
+
 Read `docs/contracts/durable-practice-publishing.md` for the complete task
 registry, transcript, finalization, review, and publication protocol. Maintain
 long system-design and behavioral drafts incrementally; never reconstruct an
