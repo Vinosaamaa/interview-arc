@@ -13,6 +13,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
@@ -476,6 +477,10 @@ const TARGET_SELECTORS = Object.freeze({
     '[data-e2e-locator="editorial-content"]',
     '[data-testid="editorial-content"]',
     '[data-track-load="editorial_content"]',
+    '[class*="solution-markdown" i]',
+    'main [role="tabpanel"]',
+    'main article',
+    'main [class*="markdown" i]',
   ],
   editorialLock: [
     '[data-e2e-locator*="premium" i]',
@@ -729,14 +734,17 @@ export function createPlaywrightPageAdapter(page) {
         handle = await abortablePageOperation(page.waitForFunction(
           ({ expectedSlug, expectedTitle, routes, selectors }) => {
             const visible = (element) => element?.getClientRects?.().length > 0;
-            const currentSlug = location.pathname.match(new RegExp(routes.editorial))?.[1] ?? null;
-            if (currentSlug !== expectedSlug) {
+            const editorialSlug = location.pathname.match(new RegExp(routes.editorial))?.[1] ?? null;
+            const problemSlug = location.pathname.match(new RegExp(routes.problemTab))?.[1] ?? null;
+            if (problemSlug && problemSlug !== expectedSlug) {
               return {
                 state: "identity_ambiguous",
                 reason: "editorial_slug_mismatch",
-                actualSlug: currentSlug,
+                actualSlug: problemSlug,
+                actualPathname: location.pathname,
               };
             }
+            if (editorialSlug !== expectedSlug) return false;
 
             const pageTitle = document.title.trim();
             if (!pageTitle || pageTitle === "LeetCode") return false;
@@ -779,7 +787,43 @@ export function createPlaywrightPageAdapter(page) {
         return handle;
       } catch (error) {
         if (error?.name !== "TimeoutError") throw error;
-        return { state: "unavailable", reason: "editorial_content_not_rendered" };
+        const actualUrl = typeof page.url === "function" ? page.url() : null;
+        const recognitionDiagnostics = await page.evaluate(() => {
+          const visible = (element) => element?.getClientRects?.().length > 0;
+          return [...document.querySelectorAll(
+            'main,article,[role="tabpanel"],[data-track-load],[class*="markdown" i],[class*="content" i]',
+          )]
+            .filter(visible)
+            .map((element) => ({
+              tag: element.tagName.toLowerCase(),
+              id: element.id || null,
+              className: typeof element.className === "string" ? element.className.slice(0, 200) : null,
+              trackLoad: element.getAttribute("data-track-load"),
+              textLength: (element.innerText ?? "").trim().length,
+              blockCount: element.querySelectorAll("h1,h2,h3,p,pre,ul,ol").length,
+            }))
+            .filter((candidate) => candidate.textLength >= 120)
+            .sort((left, right) => right.textLength - left.textLength)
+            .slice(0, 12);
+        }).catch(() => []);
+        let actualPathname = null;
+        let actualSlug = null;
+        try {
+          actualPathname = actualUrl ? new URL(actualUrl).pathname : null;
+          actualSlug = actualPathname
+            ? actualPathname.match(new RegExp(TARGET_ROUTES.problemTab))?.[1] ?? null
+            : null;
+        } catch {}
+        if (actualSlug && actualSlug !== identity.slug) {
+          return { state: "identity_ambiguous", reason: "editorial_slug_mismatch", actualSlug, actualPathname };
+        }
+        return {
+          state: "unavailable",
+          reason: "editorial_content_not_rendered",
+          actualUrl,
+          actualPathname,
+          recognitionDiagnostics,
+        };
       } finally {
         await handle?.dispose?.();
       }
@@ -1137,6 +1181,9 @@ export class LeetCodeController {
         totalUserVisibleMs: contentVerifiedAt - commandStartedAt,
       },
       ...(state?.reason ? { reason: state.reason } : {}),
+      ...(state?.recognitionDiagnostics
+        ? { recognitionDiagnostics: state.recognitionDiagnostics }
+        : {}),
     };
   }
 
@@ -1149,7 +1196,7 @@ export class LeetCodeController {
 }
 
 export async function runControllerCommand(request, dependencies) {
-  if (["submit", "retry", "editorial"].includes(request.command)) {
+  if (["submit", "retry"].includes(request.command)) {
     await dependencies.verifyPreflight(request.identity);
   }
 
@@ -1278,7 +1325,23 @@ async function restoreActiveApp(launchContext) {
 }
 
 async function loadFixedPlaywright() {
-  const playwright = await import("playwright-core");
+  let playwright;
+  try {
+    playwright = await import("playwright-core");
+  } catch (error) {
+    let sharedRoot;
+    try {
+      const { stdout } = await execFile(
+        "git",
+        ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+        { cwd: repositoryRoot },
+      );
+      sharedRoot = path.dirname(stdout.trim());
+    } catch {
+      throw error;
+    }
+    playwright = createRequire(path.join(sharedRoot, "package.json"))("playwright-core");
+  }
   if (typeof playwright.chromium?.connectOverCDP !== "function") {
     throw new Error("playwright-core does not expose chromium.connectOverCDP");
   }

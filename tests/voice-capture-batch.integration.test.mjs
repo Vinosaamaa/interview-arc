@@ -104,6 +104,7 @@ function fixtureSql(tokenHash) {
     ["capture-int-d1", "activity-int-quarantine-delete", "turn-int-d1", "clip-int-d1", checksum("Delete one."), 4100],
     ["capture-int-d2", "activity-int-quarantine-delete", "turn-int-d2", "clip-int-d2", checksum("Delete two."), 4200],
     ["capture-int-retry", "activity-int-retry", "turn-int-retry", "clip-int-retry", checksum("Retry me."), 5100],
+    ["capture-int-single-q", "activity-int-single-q", "turn-int-single-q", "clip-int-single-q", checksum("Legacy single."), 6100],
   ];
   return `
     INSERT INTO integration_tokens
@@ -120,12 +121,21 @@ function fixtureSql(tokenHash) {
     `).join("\n")}
     UPDATE voice_capture_intents
     SET status = 'quarantined_conflict', last_error = 'Seeded exact-repair fixture.'
-    WHERE capture_id IN ('capture-int-q1','capture-int-q2','capture-int-q3','capture-int-d1','capture-int-d2');
+    WHERE capture_id IN ('capture-int-q1','capture-int-q2','capture-int-q3','capture-int-d1','capture-int-d2','capture-int-single-q');
     INSERT INTO voice_response_groups
       (owner_id,response_turn_id,activity_id,specialty,response_body,response_occurred_at,member_count,status,created_at,updated_at)
     VALUES
       ('owner-integration-150','response-int-quarantine','activity-int-quarantine','leetcode','Recovered response.',3400,3,'quarantined_conflict',1,1),
       ('owner-integration-150','response-int-quarantine-delete','activity-int-quarantine-delete','leetcode','Delete response.',4300,2,'quarantined_conflict',1,1);
+    INSERT INTO voice_specialist_responses
+      (owner_id,capture_id,activity_id,user_turn_id,response_turn_id,specialty,response_body,response_occurred_at,status,created_at,updated_at)
+    VALUES
+      ('owner-integration-150','capture-int-single-q','activity-int-single-q','turn-int-single-q','response-int-single-q','leetcode','Legacy response.',6200,'quarantined_conflict',1,1);
+    INSERT INTO practice_transcript_turns
+      (owner_id,activity_id,turn_id,specialty,speaker,body,source,sequence,occurred_at,updated_at)
+    VALUES
+      ('owner-integration-150','activity-int-single-q','turn-int-single-q','leetcode','user','Legacy single.','audio_transcript',1,6100,1),
+      ('owner-integration-150','activity-int-single-q','response-int-single-q','leetcode','specialist','Legacy response.','codex',2,6200,1);
     INSERT INTO voice_response_group_members
       (owner_id,capture_id,response_turn_id,activity_id,user_turn_id,member_order,transcript,checksum,occurred_at,created_at,updated_at)
     VALUES
@@ -144,6 +154,11 @@ function fixtureSql(tokenHash) {
       ('owner-integration-150','capture','capture-int-d1','group','response-int-quarantine-delete',1),
       ('owner-integration-150','capture','capture-int-d2','group','response-int-quarantine-delete',1),
       ('owner-integration-150','response_turn','response-int-quarantine-delete','group','response-int-quarantine-delete',1);
+    INSERT INTO voice_exchange_reservations
+      (owner_id,identity_type,identity,exchange_kind,response_turn_id,created_at)
+    VALUES
+      ('owner-integration-150','capture','capture-int-single-q','single','response-int-single-q',1),
+      ('owner-integration-150','response_turn','response-int-single-q','single','response-int-single-q',1);
   `;
 }
 
@@ -265,6 +280,44 @@ test("local D1/R2 MCP preserves grouped order, concurrent completion, and whole-
     });
 
     await exerciseRetryDelivery(call, deliver);
+
+    const badReplay = await callRaw("resolve_voice_capture_and_save_response", {
+      captureId: "capture-int-retry",
+      activityId: "activity-int-retry",
+      activityTitle: "Retry delivery",
+      userTurnId: "turn-int-retry",
+      responseTurnId: "response-int-retry-changed",
+      specialty: "leetcode",
+      responseBody: "Changed retry.",
+      responseOccurredAt: 5201,
+      reason: "Prove a bad retry cannot poison canonical evidence.",
+    });
+    assert.equal(badReplay.isError, true);
+    assert.equal(badReplay.structuredContent.code, "voice_response_group_conflict");
+    assert.equal((await call("get_voice_delivery_blockers", {
+      activityId: "activity-int-retry",
+    })).blockers[0].status, "accepted");
+
+    const singleBlocker = (await call("get_voice_delivery_blockers", {
+      activityId: "activity-int-single-q",
+    })).blockers[0];
+    assert.equal(singleBlocker.responseTurnId, "response-int-single-q");
+    assert.equal(singleBlocker.canonicalResponseTurnPresent, true);
+    assert.deepEqual(singleBlocker.allowedActions, ["restore_exact_response", "delete_exact_group"]);
+    const singleRepair = await call("repair_voice_response", {
+      captureId: "capture-int-single-q",
+      activityId: "activity-int-single-q",
+      userTurnId: "turn-int-single-q",
+      responseTurnId: "response-int-single-q",
+      authorization: "explicit_user_instruction",
+      reason: "Restore intact singular fixture.",
+    });
+    assert.equal(singleRepair.repaired, true);
+    const repairedSingle = (await call("get_voice_delivery_blockers", {
+      activityId: "activity-int-single-q",
+    })).blockers[0];
+    assert.equal(repairedSingle.status, "accepted");
+    assert.equal(repairedSingle.transcriptDeliveryState, "received");
 
     const two = [
       { captureId: "capture-int-a", userTurnId: "turn-int-a", transcript: "First.", checksum: checksum("First."), occurredAt: 100 },

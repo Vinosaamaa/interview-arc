@@ -10,6 +10,7 @@ enabled_tools = [
   "get_voice_delivery_blockers",
   "retry_voice_delivery",
   "acknowledge_voice_audio_loss",
+  "repair_voice_response",
   "repair_voice_response_group",
   "append_practice_transcript",
   "resolve_voice_capture",

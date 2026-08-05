@@ -895,24 +895,15 @@ export async function resolveVoiceCaptureAndSaveResponse(
   const existingResponse = await readVoiceSpecialistResponse(ownerId, input.captureId);
   if (existingResponse) {
     if (!sameCanonicalExchange(canonicalExchangeFromRow(existingResponse), requested)) {
-      await db.batch([
-        db.update(voiceSpecialistResponses).set({
-          status: "quarantined_conflict",
-          updatedAt: nowMs,
-        }).where(and(
-          eq(voiceSpecialistResponses.ownerId, ownerId),
-          eq(voiceSpecialistResponses.captureId, input.captureId),
-        )),
-        db.update(voiceCaptureIntents).set({
-          status: "quarantined_conflict",
-          lastError: "A canonical specialist response was retried with different content or identity.",
-          updatedAt: nowMs,
-        }).where(and(
-          eq(voiceCaptureIntents.ownerId, ownerId),
-          eq(voiceCaptureIntents.captureId, input.captureId),
-        )),
-      ]);
-      throw new Error("The Voice envelope already has a different canonical specialist response.");
+      throw new VoiceResponseGroupConflictError(
+        "The Voice envelope already has a different canonical specialist response; the first response remains authoritative.",
+        {
+          conflictKind: "non_exact_replay",
+          captureId: input.captureId,
+          existingResponseTurnId: existingResponse.responseTurnId,
+          requestedResponseTurnId: input.responseTurnId,
+        },
+      );
     }
     return {
       intent: await readVoiceCaptureIntent(ownerId, input.captureId),
@@ -1416,7 +1407,20 @@ export async function readVoiceDeliveryBlockers(ownerId: string, activityId: str
       inArray(voiceResponseGroupMembers.captureId, captureIds),
     ))
     : [];
-  const responseTurnIds = [...new Set(members.map((member) => member.responseTurnId))];
+  const responses = captureIds.length
+    ? await db.select({
+      captureId: voiceSpecialistResponses.captureId,
+      responseTurnId: voiceSpecialistResponses.responseTurnId,
+    }).from(voiceSpecialistResponses).where(and(
+      eq(voiceSpecialistResponses.ownerId, ownerId),
+      inArray(voiceSpecialistResponses.captureId, captureIds),
+    ))
+    : [];
+  const responseByCapture = new Map(responses.map((response) => [response.captureId, response]));
+  const responseTurnIds = [...new Set([
+    ...members.map((member) => member.responseTurnId),
+    ...responses.map((response) => response.responseTurnId),
+  ])];
   const groupByResponse = await readVoiceResponseGroups(ownerId, responseTurnIds);
   const memberByCapture = new Map(members.map((member) => [member.captureId, member]));
   const turnIds = [
@@ -1447,39 +1451,40 @@ export async function readVoiceDeliveryBlockers(ownerId: string, activityId: str
     blockers: intents.map((intent) => {
       const member = memberByCapture.get(intent.captureId);
       const group = member ? groupByResponse.get(member.responseTurnId) : undefined;
+      const response = responseByCapture.get(intent.captureId);
+      const responseTurnId = member?.responseTurnId ?? response?.responseTurnId ?? null;
       const clip = clipById.get(intent.clipId);
       const retryable = (intent.status === "activity_related" || intent.status === "accepted")
+        && clip?.status !== "available"
         && clip?.status !== "audio_lost"
         && !clip?.audioLostAcknowledgedAt;
       const canAcknowledgeAudioLoss = (intent.status === "activity_related" || intent.status === "accepted")
         && clip?.status !== "available"
         && !clip?.audioLostAcknowledgedAt;
-      const allowedActions = intent.status === "quarantined_conflict" && group
-        ? ["restore_exact_group", "delete_exact_group"]
-        : intent.status === "activity_related" || intent.status === "accepted"
-          ? [
-            ...(retryable ? ["retry_delivery"] : []),
-            ...(canAcknowledgeAudioLoss ? ["acknowledge_audio_loss"] : []),
-            "delete_exact_group",
-          ]
-          : intent.status === "uncertain"
-            ? ["attach", "discard"]
-            : ["wait"];
+      const allowedActions = voiceBlockerAllowedActions({
+        status: intent.status,
+        hasGroup: Boolean(group),
+        hasResponse: Boolean(response),
+        retryable,
+        canAcknowledgeAudioLoss,
+      });
       return {
         captureId: intent.captureId,
         turnId: intent.turnId,
         status: intent.status,
-        responseTurnId: member?.responseTurnId ?? null,
+        responseTurnId,
         memberOrder: member?.memberOrder ?? null,
         memberCount: group?.group.memberCount ?? null,
         groupStatus: group?.group.status ?? null,
         groupDigest: member ? receipts.get(member.responseTurnId)?.digest ?? null : null,
         canonicalUserTurnPresent: presentTurnIds.has(intent.turnId),
-        canonicalResponseTurnPresent: member ? presentTurnIds.has(member.responseTurnId) : false,
+        canonicalResponseTurnPresent: responseTurnId ? presentTurnIds.has(responseTurnId) : false,
         transcriptDeliveryState: member?.transcript != null
           ? "received"
+          : response && presentTurnIds.has(intent.turnId) && presentTurnIds.has(response.responseTurnId)
+            ? "received"
           : intent.status === "accepted"
-            ? "accepted_without_group_member"
+            ? "accepted_without_response"
             : "awaiting_delivery",
         audioState: clip?.status ?? "not_registered",
         audioLossAcknowledged: Boolean(clip?.audioLostAcknowledgedAt),
@@ -1490,6 +1495,133 @@ export async function readVoiceDeliveryBlockers(ownerId: string, activityId: str
       };
     }),
   };
+}
+
+function voiceBlockerAllowedActions(input: {
+  status: VoiceIntentStatus;
+  hasGroup: boolean;
+  hasResponse: boolean;
+  retryable: boolean;
+  canAcknowledgeAudioLoss: boolean;
+}) {
+  if (input.status === "quarantined_conflict") {
+    if (input.hasGroup) return ["restore_exact_group", "delete_exact_group"];
+    if (input.hasResponse) return ["restore_exact_response", "delete_exact_group"];
+    return ["wait"];
+  }
+  if (input.status === "activity_related" || input.status === "accepted") {
+    return [
+      ...(input.retryable ? ["retry_delivery"] : []),
+      ...(input.canAcknowledgeAudioLoss ? ["acknowledge_audio_loss"] : []),
+      "delete_exact_group",
+    ];
+  }
+  if (input.status === "uncertain") return ["attach", "discard"];
+  return ["wait"];
+}
+
+export async function repairVoiceSpecialistResponse(
+  ownerId: string,
+  input: {
+    captureId: string;
+    activityId: string;
+    userTurnId: string;
+    responseTurnId: string;
+    authorization: "explicit_user_instruction";
+    reason: string;
+  },
+  nowMs: number,
+) {
+  const db = getDb();
+  if (input.authorization !== "explicit_user_instruction") {
+    throw new VoiceResponseGroupConflictError("Voice response repair requires explicit user authorization.");
+  }
+  const [intent, response] = await Promise.all([
+    readVoiceCaptureIntent(ownerId, input.captureId),
+    readVoiceSpecialistResponse(ownerId, input.captureId),
+  ]);
+  if (!intent || !response
+      || intent.activityId !== input.activityId
+      || intent.turnId !== input.userTurnId
+      || response.activityId !== input.activityId
+      || response.userTurnId !== input.userTurnId
+      || response.responseTurnId !== input.responseTurnId) {
+    throw new VoiceResponseGroupConflictError("The exact owner-scoped Voice response identity was not found.");
+  }
+  const turns = await db.select().from(practiceTranscriptTurns).where(and(
+    eq(practiceTranscriptTurns.ownerId, ownerId),
+    eq(practiceTranscriptTurns.activityId, input.activityId),
+    inArray(practiceTranscriptTurns.turnId, [input.userTurnId, input.responseTurnId]),
+  ));
+  const userTurn = turns.find((turn) => turn.turnId === input.userTurnId);
+  const responseTurn = turns.find((turn) => turn.turnId === input.responseTurnId);
+  if (userTurn?.speaker !== "user"
+      || userTurn.specialty !== intent.specialty
+      || responseTurn?.speaker !== "specialist"
+      || responseTurn.specialty !== response.specialty
+      || responseTurn.source !== "codex"
+      || responseTurn.body !== response.responseBody) {
+    throw new VoiceResponseGroupConflictError(
+      "The quarantined Voice response does not have an intact canonical transcript pair.",
+    );
+  }
+  const reservations = await db.select().from(voiceExchangeReservations).where(and(
+    eq(voiceExchangeReservations.ownerId, ownerId),
+    eq(voiceExchangeReservations.responseTurnId, input.responseTurnId),
+  ));
+  const reservationIdentities = new Set(reservations.map((reservation) => (
+    `${reservation.identityType}:${reservation.identity}`
+  )));
+  if (reservations.length !== 2
+      || reservations.some((reservation) => reservation.exchangeKind !== "single")
+      || !reservationIdentities.has(`capture:${input.captureId}`)
+      || !reservationIdentities.has(`response_turn:${input.responseTurnId}`)) {
+    throw new VoiceResponseGroupConflictError(
+      "The quarantined Voice response does not have an intact canonical reservation graph.",
+    );
+  }
+  const repairEventId = `voice-single-repair-${input.captureId}-${input.responseTurnId}`;
+  if (intent.status !== "quarantined_conflict" || response.status !== "quarantined_conflict") {
+    const prior = await db.select({ id: voiceResponseGroupRepairEvents.id })
+      .from(voiceResponseGroupRepairEvents).where(and(
+        eq(voiceResponseGroupRepairEvents.ownerId, ownerId),
+        eq(voiceResponseGroupRepairEvents.id, repairEventId),
+      )).limit(1);
+    if (prior.length && intent.status === "accepted" && response.status === "materialized") {
+      return { repaired: false, duplicate: true, captureId: input.captureId, responseTurnId: input.responseTurnId };
+    }
+    throw new VoiceResponseGroupConflictError("The Voice response is not an exact quarantined pair.");
+  }
+  await db.batch([
+    db.insert(voiceResponseGroupRepairEvents).values({
+      ownerId,
+      id: repairEventId,
+      responseTurnId: input.responseTurnId,
+      activityId: input.activityId,
+      priorStatus: "quarantined_conflict",
+      resultStatus: "materialized",
+      reason: input.reason.slice(0, 2_000),
+      createdAt: nowMs,
+    }).onConflictDoNothing(),
+    db.update(voiceSpecialistResponses).set({ status: "materialized", updatedAt: nowMs }).where(and(
+      eq(voiceSpecialistResponses.ownerId, ownerId),
+      eq(voiceSpecialistResponses.captureId, input.captureId),
+      eq(voiceSpecialistResponses.status, "quarantined_conflict"),
+    )),
+    db.update(voiceCaptureIntents).set({ status: "accepted", lastError: null, updatedAt: nowMs }).where(and(
+      eq(voiceCaptureIntents.ownerId, ownerId),
+      eq(voiceCaptureIntents.captureId, input.captureId),
+      eq(voiceCaptureIntents.status, "quarantined_conflict"),
+    )),
+  ]);
+  const [repairedIntent, repairedResponse] = await Promise.all([
+    readVoiceCaptureIntent(ownerId, input.captureId),
+    readVoiceSpecialistResponse(ownerId, input.captureId),
+  ]);
+  if (repairedIntent?.status !== "accepted" || repairedResponse?.status !== "materialized") {
+    throw new VoiceResponseGroupConflictError("The exact Voice response repair did not commit.");
+  }
+  return { repaired: true, duplicate: false, captureId: input.captureId, responseTurnId: input.responseTurnId };
 }
 
 export async function repairVoiceResponseGroup(
@@ -2508,7 +2640,30 @@ export async function saveLeetCodeCodeAttempt(
   if (sequenceConflict) throw new Error(`Code Attempt ${incoming.sequence} already belongs to another code version.`);
   const originatingTurn = originatingTurns[0];
   if (!originatingTurn || originatingTurn.speaker !== "user") {
-    throw new Error("The Code Attempt originating turn is not an owner-scoped user turn in this activity.");
+    const originSnapshots = await db.select({
+      status: voiceCaptureIntents.status,
+      transcriptSpeaker: practiceTranscriptTurns.speaker,
+    }).from(voiceCaptureIntents).leftJoin(practiceTranscriptTurns, and(
+      eq(practiceTranscriptTurns.ownerId, voiceCaptureIntents.ownerId),
+      eq(practiceTranscriptTurns.activityId, voiceCaptureIntents.activityId),
+      eq(practiceTranscriptTurns.turnId, voiceCaptureIntents.turnId),
+    )).where(and(
+        eq(voiceCaptureIntents.ownerId, ownerId),
+        eq(voiceCaptureIntents.activityId, incoming.activityId),
+        eq(voiceCaptureIntents.turnId, incoming.originatingTurnId),
+      )).limit(1);
+    const originSnapshot = originSnapshots[0];
+    if (originSnapshot?.transcriptSpeaker === "user") {
+      // The transcript materialized between the initial read and this joined
+      // snapshot; continue with the same immutable attempt write.
+    } else if (originSnapshot && ["activity_related", "accepted"].includes(originSnapshot.status)) {
+      throw Object.assign(
+        new Error("The related Voice Code Attempt origin is still materializing; retry the exact write after transcript delivery."),
+        { code: "code_attempt_origin_pending", retryable: true },
+      );
+    } else {
+      throw new Error("The Code Attempt originating turn is not an owner-scoped user turn in this activity.");
+    }
   }
   const reviewTurn = reviewTurns[0];
   if (review.status === "complete") {
