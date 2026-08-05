@@ -2995,6 +2995,7 @@ export async function acknowledgeVoiceAudioLossForCapture(
   if (clip?.status === "available") {
     throw new Error("The original recording is already durable in private storage.");
   }
+  const lossReason = `${input.lossReason}: ${input.reason.trim()}`.slice(0, 500);
   if (!clip) {
     await db.insert(activityAudioClips).values({
       ownerId,
@@ -3007,7 +3008,7 @@ export async function acknowledgeVoiceAudioLossForCapture(
       label: "Voice recording (unavailable)",
       durationSeconds: null,
       status: "audio_lost",
-      audioLostReason: input.lossReason,
+      audioLostReason: lossReason,
       audioLostDetectedAt: nowMs,
       audioLostAcknowledgedAt: nowMs,
       createdAt: nowMs,
@@ -3020,7 +3021,7 @@ export async function acknowledgeVoiceAudioLossForCapture(
   if (!duplicate) {
     await db.update(activityAudioClips).set({
       status: "audio_lost",
-      audioLostReason: input.lossReason,
+      audioLostReason: lossReason,
       audioLostDetectedAt: clip.audioLostDetectedAt ?? nowMs,
       audioLostAcknowledgedAt: clip.audioLostAcknowledgedAt ?? nowMs,
       updatedAt: nowMs,
@@ -3038,6 +3039,7 @@ export async function acknowledgeVoiceAudioLossForCapture(
     acknowledged: true,
     duplicate,
     transcriptPreserved: true,
+    lossReason,
   };
 }
 
