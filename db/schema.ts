@@ -256,7 +256,7 @@ export const voiceCaptureIntents = sqliteTable(
 // with the activity-related decision. It stays provisional until Voice
 // delivers the acknowledged user transcript, then both turns materialize in
 // sequence exactly once. Retrying the same immutable response is idempotent;
-// conflicting reuse is quarantined instead of overwriting durable evidence.
+// conflicting reuse is rejected without mutating the first canonical evidence.
 export const voiceSpecialistResponses = sqliteTable(
   "voice_specialist_responses",
   {
@@ -360,9 +360,9 @@ export const voiceResponseGroupMembers = sqliteTable(
   ],
 );
 
-// Every coordinator-authorized response-group recovery is recorded without
+// Every coordinator-authorized Voice response recovery is recorded without
 // transcript or audio content. The event makes a state repair reviewable while
-// keeping the immutable canonical group as the source of truth.
+// keeping the immutable canonical exchange as the source of truth.
 export const voiceResponseGroupRepairEvents = sqliteTable(
   "voice_response_group_repair_events",
   {

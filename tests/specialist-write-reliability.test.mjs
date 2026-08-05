@@ -47,6 +47,15 @@ test("specialist writes retry transport and resource failures but reject validat
   for (const failure of retryable) {
     assert.equal(classifySpecialistWriteFailure(failure).retryable, true);
   }
+  const pendingOrigin = classifySpecialistWriteFailure(Object.assign(
+    new Error("Voice origin is still materializing."),
+    { code: "code_attempt_origin_pending", retryable: true },
+  ));
+  assert.deepEqual(pendingOrigin, {
+    code: "code_attempt_origin_pending",
+    message: "Voice origin is still materializing.",
+    retryable: true,
+  });
 
   const rejected = classifySpecialistWriteFailure(
     Object.assign(new Error("Immutable code attempt identity changed."), {

@@ -689,16 +689,17 @@ test("the Playwright adapter verifies rendered Editorial structure without retur
         document: Object.getOwnPropertyDescriptor(globalThis, "document"),
         location: Object.getOwnPropertyDescriptor(globalThis, "location"),
       };
+      const testLocation = { pathname: `/problems/${identity.slug}/description/` };
       Object.defineProperties(globalThis, {
         document: { configurable: true, value: {
           title: `${identity.title} - LeetCode`,
           querySelectorAll: (selector) => selector.includes('data-e2e-locator="editorial-content"') ? [root] : [],
         } },
-        location: { configurable: true, value: {
-          pathname: `/problems/${identity.slug}/editorial/`,
-        } },
+        location: { configurable: true, value: testLocation },
       });
       try {
+        assert.equal(predicate(payload), false, "same-problem SPA transition must keep waiting");
+        testLocation.pathname = `/problems/${identity.slug}/editorial/`;
         const state = predicate(payload);
         assert.deepEqual(state, { state: "available" });
         return {

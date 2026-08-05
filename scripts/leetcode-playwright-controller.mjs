@@ -13,6 +13,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
@@ -24,6 +25,9 @@ const repositoryParent = path.dirname(repositoryRoot);
 const outerWorkspace = path.basename(repositoryParent) === ".worktrees"
   ? path.dirname(repositoryParent)
   : repositoryParent;
+const canonicalRepositoryRoot = path.basename(repositoryParent) === ".worktrees"
+  ? path.join(outerWorkspace, "interview-arc")
+  : repositoryRoot;
 const fixedProfilePath = path.join(outerWorkspace, "browser-profiles", "leetcode-submitter");
 
 export function controllerStatePathsForProfile(profilePath) {
@@ -729,14 +733,17 @@ export function createPlaywrightPageAdapter(page) {
         handle = await abortablePageOperation(page.waitForFunction(
           ({ expectedSlug, expectedTitle, routes, selectors }) => {
             const visible = (element) => element?.getClientRects?.().length > 0;
-            const currentSlug = location.pathname.match(new RegExp(routes.editorial))?.[1] ?? null;
-            if (currentSlug !== expectedSlug) {
+            const editorialSlug = location.pathname.match(new RegExp(routes.editorial))?.[1] ?? null;
+            const problemSlug = location.pathname.match(new RegExp(routes.problemTab))?.[1] ?? null;
+            if (problemSlug && problemSlug !== expectedSlug) {
               return {
                 state: "identity_ambiguous",
                 reason: "editorial_slug_mismatch",
-                actualSlug: currentSlug,
+                actualSlug: problemSlug,
+                actualPathname: location.pathname,
               };
             }
+            if (editorialSlug !== expectedSlug) return false;
 
             const pageTitle = document.title.trim();
             if (!pageTitle || pageTitle === "LeetCode") return false;
@@ -779,7 +786,24 @@ export function createPlaywrightPageAdapter(page) {
         return handle;
       } catch (error) {
         if (error?.name !== "TimeoutError") throw error;
-        return { state: "unavailable", reason: "editorial_content_not_rendered" };
+        const actualUrl = typeof page.url === "function" ? page.url() : null;
+        let actualPathname = null;
+        let actualSlug = null;
+        try {
+          actualPathname = actualUrl ? new URL(actualUrl).pathname : null;
+          actualSlug = actualPathname
+            ? actualPathname.match(new RegExp(TARGET_ROUTES.problemTab))?.[1] ?? null
+            : null;
+        } catch {}
+        if (actualSlug && actualSlug !== identity.slug) {
+          return { state: "identity_ambiguous", reason: "editorial_slug_mismatch", actualSlug, actualPathname };
+        }
+        return {
+          state: "unavailable",
+          reason: "editorial_content_not_rendered",
+          actualUrl,
+          actualPathname,
+        };
       } finally {
         await handle?.dispose?.();
       }
@@ -1278,7 +1302,25 @@ async function restoreActiveApp(launchContext) {
 }
 
 async function loadFixedPlaywright() {
-  const playwright = await import("playwright-core");
+  let playwright;
+  try {
+    playwright = await import("playwright-core");
+  } catch (error) {
+    let sharedRoot = canonicalRepositoryRoot;
+    if (sharedRoot === repositoryRoot) {
+      try {
+        const { stdout } = await execFile(
+          "git",
+          ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+          { cwd: repositoryRoot },
+        );
+        sharedRoot = path.dirname(stdout.trim());
+      } catch {
+        throw error;
+      }
+    }
+    playwright = createRequire(path.join(sharedRoot, "package.json"))("playwright-core");
+  }
   if (typeof playwright.chromium?.connectOverCDP !== "function") {
     throw new Error("playwright-core does not expose chromium.connectOverCDP");
   }

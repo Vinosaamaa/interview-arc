@@ -1086,6 +1086,14 @@ serializes at most one additional activity-scoped wake. For
 retry the same scoped MCP operation once; do not claim the installed app has a
 **Retry now** button unless that control is actually visible.
 
+If blockers report a singular `quarantined_conflict` with
+`restore_exact_response`, do not retry the original save. Escalate its exact
+capture, user-turn, and response-turn IDs to the coordinator. After verifying
+that both canonical transcript turns are intact and the user explicitly
+authorizes recovery, the coordinator may call `repair_voice_response`; then
+re-read blockers before Finish. A changed retry never supersedes the first
+canonical response.
+
 If the user explicitly confirms that the exact original cannot be recovered,
 call `acknowledge_voice_audio_loss` with the capture, activity, and turn IDs,
 the supported loss reason, and `authorization: "explicit_user_instruction"`.
@@ -1111,7 +1119,10 @@ its later complete-review write are different logical operations and therefore
 use different operation IDs while preserving the same immutable attempt ID and
 code. The persistence child must inspect `get_specialist_write_status`; only
 `saved` proves the attempt exists in D1. It must not create a new attempt merely
-because a receipt is queued, retrying, or transport-uncertain.
+because a receipt is queued, retrying, or transport-uncertain. When the related
+Voice user turn is still materializing, the write can report
+`code_attempt_origin_pending`; keep the exact operation ID and payload and wait
+for its durable receipt instead of inventing another turn identity.
 
 Every Code Attempt must carry its own non-null structured `review`; findings in
 the conversation transcript alone are insufficient. Inspect and test the exact
