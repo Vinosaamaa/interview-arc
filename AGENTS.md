@@ -136,10 +136,21 @@ Leave unavailable fields empty or set their source to `unknown`. Never invent ti
 
 ### Practice transcript inclusion boundary
 
-Durable practice transcripts contain only activity-related conversation. Include
-the problem statement, constraints, examples, the user's approach or code,
-coaching, hints, solution reasoning, complexity, test conclusions, feedback,
-mock-interview questions and answers, and the user's final reflection.
+Durable practice transcripts contain only activity-related conversation. Apply
+this decision matrix to every visible user and specialist turn:
+
+| Content | Durable practice transcript |
+| --- | --- |
+| Problem statement, constraints, examples, diagrams, user reasoning/code, hints, coaching, solution reasoning, complexity, relevant tests, interview feedback, authoritative verdict, or final reflection | Include |
+| Navigation, browser/Playwright preflight, tab/page handling, terminal/file commands, MCP/API/D1/R2/tool operations, timer/session/workbench controls, retries/recovery, startup/handoff/status chatter, issue/branch/PR/deploy work, or instructions about operating the agent | Exclude |
+| A turn that mixes both categories | Include only a separately identified problem segment; otherwise exclude the whole turn |
+| An ambiguous turn whose category cannot be established from the supplied content | Resolve `uncertain`; never silently append it |
+
+Operational receipts, warm-context markers, persistence-delegation markers, and
+audio/delivery status text are administrative metadata, not practice dialogue.
+Exact user code still belongs in the structured Code Attempt record when the
+user explicitly crosses an attempt boundary; generated reference code does
+not become a user attempt.
 
 Exclude administrative or process conversation even when it appears in the same
 activity or visible chat: navigation, Playwright or browser preflight, tab and

@@ -1032,21 +1032,32 @@ helper's warm-submit and total user-visible timings separately.
 
 ### Transcript And Code Boundaries
 
-Use a semantic inclusion test, not the activity ID alone. Save only the
-problem-related portion of the activity: the problem statement, constraints,
-examples, the user's reasoning or code, hints, coaching, solution and
-complexity discussion, relevant test conclusions, interview feedback, the
-authoritative submission verdict, and the final reflection.
+Use a semantic inclusion test, not the activity ID alone. The following
+decision matrix is normative:
 
-Do not save administrative or process conversation as practice dialogue. This
-includes navigation, Playwright or browser preflight, tab/page handling,
-terminal and file-operation chatter, MCP/API/D1/R2/tool calls, timers,
-sessions/workbench control, retry or audio-delivery recovery, startup or
-handoff status, issue/branch/PR/deploy discussion, and instructions about how
-the agent should operate. A Voice envelope containing this material must be
-resolved `unrelated` before it can wait for a specialist response; use
-`uncertain` only when the turn itself cannot be classified. Do not append an
-administrative turn just because it shares the focused activity ID.
+| Turn content | Decision | Examples |
+| --- | --- | --- |
+| Problem statement, constraints, examples/diagrams, user reasoning or code, hints, coaching, solution/complexity discussion, relevant test conclusions, interview feedback, authoritative verdict, or final reflection | Include | “Why does this sliding-window invariant work?”, a user attempt, an observed Accepted/Failed verdict |
+| Navigation, Playwright/browser preflight, tab/page handling, terminal/file commands, MCP/API/D1/R2/tool calls, timers, sessions/workbench controls, retries/recovery, startup/handoff/status, issue/branch/PR/deploy discussion, or instructions about agent operation | Exclude | “Run ensure,” “open the tab,” “give me the nvim command,” “why is D1 slow?”, “create a PR” |
+| A single turn containing both categories | Include only a separately identified problem segment; otherwise exclude the whole turn | Do not retain a coaching sentence merely because it follows a browser command in the same unsegmented capture |
+| Insufficient evidence to classify the turn | Resolve `uncertain` and keep it out of the transcript until explicitly decided | Never silently treat an activity ID as evidence of relevance |
+
+Operational receipts, `↻ Practice persistence delegated in background`, warm
+context markers, Voice/audio/delivery status, and “not attached” footers are
+administrative metadata. They are visible UI annotations only and are never
+practice dialogue or publication content.
+
+The original problem statement may be included when it is actually presented
+or consulted for the activity; do not reconstruct missing prose from a title.
+Exact user code is preserved through the structured Code Attempt boundary, not
+by duplicating a large code block in ordinary transcript text. Generated model
+solutions and harness scaffolding are publication artifacts, not user attempts.
+
+Do not save administrative or process conversation as practice dialogue. A Voice
+envelope containing only this material must be resolved `unrelated` before it
+can wait for a specialist response; use `uncertain` only when the turn itself
+cannot be classified. Do not append an administrative turn just because it
+shares the focused activity ID.
 
 If a single capture mixes administrative and problem discussion, persist only a
 separately identified problem-related segment when one is explicitly
