@@ -405,6 +405,12 @@ series of local attempt snapshots.
      incomplete until each material relationship has been accounted for.
      Reproduce every faithfully representable relationship as concise
      ASCII/text in both the conversation and the Java header comment.
+     Do not present only the backing array when the example depends on visual
+     geometry. For line or container problems, draw the indexed bars/segments
+     and label the relevant boundaries, widths, heights, and area; for graphs,
+     trees, grids, and matrices, show their nodes/cells/edges or relationships
+     in a faithful text form. Every example with material visual structure must
+     have at least one such visual representation before coaching begins.
    - If ASCII/text would lose material information and the user needs to inspect
      that visual, bring the existing tab to the foreground. Material visual
      inspection and user authentication are the only flows that may foreground
