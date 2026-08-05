@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -14,6 +15,50 @@ const wrangler = fileURLToPath(new URL("../node_modules/.bin/wrangler", import.m
 const config = fileURLToPath(new URL("../wrangler.mcp.jsonc", import.meta.url));
 const project = fileURLToPath(new URL("..", import.meta.url));
 const checksum = (text) => createHash("sha256").update(text).digest("hex");
+
+function availablePort() {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      server.close((error) => error
+        ? reject(error)
+        : resolve(typeof address === "object" && address ? address.port : 0));
+    });
+  });
+}
+
+async function acquireMcpIntegrationLock() {
+  const path = join(tmpdir(), "interview-arc-mcp-integration.lock");
+  for (let attempt = 0; attempt < 900; attempt += 1) {
+    try {
+      await writeFile(path, JSON.stringify({ pid: process.pid }), { flag: "wx" });
+      return () => unlink(path).catch(() => {});
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      const [contents, metadata] = await Promise.all([
+        readFile(path, "utf8").catch(() => ""),
+        stat(path).catch(() => undefined),
+      ]);
+      let ownerPid;
+      try { ownerPid = JSON.parse(contents).pid; } catch {}
+      let ownerAlive = false;
+      if (Number.isInteger(ownerPid)) {
+        try { process.kill(ownerPid, 0); ownerAlive = true; } catch (ownerError) {
+          if (ownerError?.code !== "ESRCH") ownerAlive = true;
+        }
+      }
+      const incompleteWrite = !ownerPid && metadata && Date.now() - metadata.mtimeMs < 1_000;
+      if (!ownerAlive && !incompleteWrite) {
+        await unlink(path).catch(() => {});
+        continue;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  throw new Error("Timed out waiting for the local MCP integration lock.");
+}
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -102,14 +147,17 @@ function fixtureSql(tokenHash) {
 }
 
 test("local D1/R2 MCP preserves grouped order, concurrent completion, and whole-group deletion", { timeout: 90_000 }, async () => {
-  const persistence = await mkdtemp(join(tmpdir(), "interview-arc-voice-batch-"));
   const token = "ia_voice_batch_integration_token_150";
   const tokenHash = createHash("sha256").update(token).digest("hex");
-  const port = 40_000 + (process.pid % 20_000);
-  const baseUrl = `http://127.0.0.1:${port}`;
+  let releaseIntegrationLock;
+  let persistence;
   let worker;
   let client;
   try {
+    releaseIntegrationLock = await acquireMcpIntegrationLock();
+    persistence = await mkdtemp(join(tmpdir(), "interview-arc-voice-batch-"));
+    const port = await availablePort();
+    const baseUrl = `http://127.0.0.1:${port}`;
     await run(wrangler, ["d1", "migrations", "apply", "DB", "--local", "--persist-to", persistence, "--config", config]);
     await run(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", fixtureSql(tokenHash)]);
     worker = spawn(wrangler, ["dev", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
@@ -436,6 +484,7 @@ test("local D1/R2 MCP preserves grouped order, concurrent completion, and whole-
       worker.kill("SIGTERM");
       await new Promise((resolve) => worker.once("exit", resolve));
     }
-    await rm(persistence, { recursive: true, force: true });
+    if (persistence) await rm(persistence, { recursive: true, force: true });
+    await releaseIntegrationLock?.();
   }
 });
