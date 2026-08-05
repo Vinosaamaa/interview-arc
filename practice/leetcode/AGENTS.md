@@ -1115,14 +1115,11 @@ call `delete_related_voice_capture` with its exact capture, activity, and turn
 IDs plus that explicit authorization. Never infer deletion or use the
 destructive remediation tool for a pending capture.
 
-If delivery or Finish reports `voice_delivery_blocked`, follow the temporary
-serialized procedure in the root `AGENTS.md`. Have the persistence child call
-`get_voice_delivery_blockers` for the exact activity and discard
-`audioState: "available"` rows from its actionable set even if the current
-server response also labels them retryable. If no non-available capture
-remains, do not wake Voice. Otherwise call `retry_voice_delivery` once for that
-one activity; never overlap it with another activity's retry or immediately
-repeat it while native delivery coaching may own the single-flight lock.
+If delivery or Finish reports `voice_delivery_blocked`, follow
+**Authoritative Voice blocker dispatch** in the root `AGENTS.md`. Have the
+persistence child call `get_voice_delivery_blockers` for the exact activity.
+Read every row's `allowedActions` before choosing a tool. Do not treat all
+`quarantined_conflict` rows as groups.
 
 That operation signals the native Voice retry queue; it does not upload local
 bytes or prove completion. Re-read authoritative blockers for the same
@@ -1135,13 +1132,29 @@ serializes at most one additional activity-scoped wake. For
 retry the same scoped MCP operation once; do not claim the installed app has a
 **Retry now** button unless that control is actually visible.
 
-If blockers report a singular `quarantined_conflict` with
-`restore_exact_response`, do not retry the original save. Escalate its exact
-capture, user-turn, and response-turn IDs to the coordinator. After verifying
-that both canonical transcript turns are intact and the user explicitly
-authorizes recovery, the coordinator may call `repair_voice_response`; then
-re-read blockers before Finish. A changed retry never supersedes the first
-canonical response.
+For a singular `quarantined_conflict`, the decisive signature is:
+
+- `allowedActions` contains `restore_exact_response`;
+- `responseTurnId` is present;
+- `groupDigest`, `groupStatus`, `memberOrder`, and `memberCount` are null.
+
+That null group metadata is expected and is not a missing server receipt. Use
+`repair_voice_response` with the exact activity, capture, user-turn, and
+response-turn IDs after explicit user authorization. It requires no digest.
+Never call `repair_voice_response_group` for this row.
+
+For a grouped `quarantined_conflict`, `allowedActions` instead contains
+`restore_exact_group`, group/member metadata is present, and `groupDigest` is a
+server-issued 64-character digest. Only then use
+`repair_voice_response_group` with that exact digest and group response ID.
+Never fabricate the digest and never use singular repair for a group.
+
+After either repair, re-read blockers. Finish only after the conflict is gone
+and required transcript/audio evidence passes the server guard. If the exact
+tool named by `allowedActions` is missing from the loaded MCP catalog, report
+that exact tool name and require a full MCP/Codex reconnect; do not substitute
+the older similarly named tool. A changed resolver retry never supersedes the
+first canonical response.
 
 If the user explicitly confirms that the exact original cannot be recovered,
 call `acknowledge_voice_audio_loss` with the capture, activity, and turn IDs,
