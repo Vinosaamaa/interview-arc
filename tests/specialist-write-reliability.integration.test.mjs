@@ -179,6 +179,22 @@ test("local MCP persists exact specialist writes through durable receipts and re
     assert.equal(changedAttempt.structuredContent.code, "specialist_write_identity_conflict");
     assert.equal(changedAttempt.structuredContent.retryable, false);
 
+    // Compatibility callers may still send stale response-turn metadata on a
+    // pending review. The Worker must normalize that field and save the exact
+    // immutable code instead of failing the queued write.
+    const stalePendingAttempt = {
+      ...attempt,
+      operationId: "operation-attempt-write-pending-stale-turn",
+      id: "attempt-write-pending-stale-turn",
+      sequence: 2,
+      reviewResponseTurnId: "stale-specialist-turn",
+    };
+    const queuedStalePending = await call("save_leetcode_code_attempt", stalePendingAttempt);
+    const [savedStalePending] = await waitForJobs(call, [stalePendingAttempt.operationId]);
+    assert.equal(queuedStalePending.jobId, stalePendingAttempt.operationId);
+    assert.equal(savedStalePending.status, "saved");
+    assert.equal(savedStalePending.result.status, "inserted");
+
     const metadataFor = (problemNumber, difficulty, topics, companyTags, title, url, capturedAt = "2026-08-04T22:00:00.000Z") => ({
       problemNumber,
       difficulty,
@@ -317,7 +333,7 @@ test("local MCP persists exact specialist writes through durable receipts and re
       operationId: "operation-attempt-invalid-origin",
       id: "attempt-invalid-origin",
       originatingTurnId: "missing-user-turn",
-      sequence: 2,
+      sequence: 3,
     });
     const independentBank = {
       operationId: "operation-bank-independent-success",
@@ -337,14 +353,17 @@ test("local MCP persists exact specialist writes through durable receipts and re
     assert.match(invalidMetadataJob[0].failure.message, /only valid for LeetCode/);
     assert.equal(partial[0].status, "failed");
     assert.equal(partial[0].failure.retryable, false);
+    assert.match(partial[0].failure.message, /originating turn is not an owner-scoped user turn/);
     assert.equal(partial[1].status, "saved");
     const rejectedRetry = await callRaw("retry_specialist_writes", { jobIds: [invalidAttempt.jobId] });
     assert.equal(rejectedRetry.isError, true);
     assert.equal(rejectedRetry.structuredContent.code, "specialist_write_not_retryable");
 
     const record = await call("get_activity_practice_record", { activityId: "activity-write" });
-    assert.equal(record.codeAttempts.length, 1);
+    assert.equal(record.codeAttempts.length, 2);
     assert.equal(record.codeAttempts[0].id, attempt.id);
+    assert.equal(record.codeAttempts[1].id, stalePendingAttempt.id);
+    assert.equal(record.codeAttempts[1].reviewResponseTurnId, null);
   } finally {
     await client?.close().catch(() => {});
     if (worker && worker.exitCode === null) {

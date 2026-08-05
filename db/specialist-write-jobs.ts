@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import { specialistWriteJobs, type SpecialistWriteJobRow } from "./schema";
 import {
+  deterministicSpecialistWriteRepairable,
   specialistWriteFailureTransition,
   specialistWritePayloadDigest,
 } from "../mcp-worker/specialist-write-policy";
@@ -135,10 +136,11 @@ export async function retrySpecialistWriteJobs(
 ) {
   const jobs = await readSpecialistWriteJobs(ownerId, jobIds);
   for (const job of jobs) {
-    if (job.status !== "failed" || job.failure?.retryable !== true) {
+    if (job.status !== "failed"
+        || (job.failure?.retryable !== true && !deterministicSpecialistWriteRepairable(job))) {
       throw new SpecialistWriteJobError(
         "specialist_write_not_retryable",
-        `Specialist write ${job.jobId} is not a retryable failed operation.`,
+        `Specialist write ${job.jobId} is not a retryable or deterministic-repairable failed operation.`,
       );
     }
   }

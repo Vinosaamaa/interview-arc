@@ -2462,7 +2462,15 @@ export async function saveLeetCodeCodeAttempt(
   if (review.status === "complete" && review.provenance === "explicit_evidence_backfill") {
     throw new Error("Historical review backfill is available only through the coordinator audit command.");
   }
-  const incoming = codeAttemptWrite({ ...input, review });
+  // Older specialists sent reviewResponseTurnId on both pending and complete
+  // writes. A pending review has no visible specialist turn yet; normalize the
+  // stale field before enqueue execution so the exact owner code is not lost
+  // merely because a caller used the broader legacy shape.
+  const incoming = codeAttemptWrite({
+    ...input,
+    review,
+    reviewResponseTurnId: review.status === "pending" ? undefined : input.reviewResponseTurnId,
+  });
   if (review.status === "pending" && incoming.reviewResponseTurnId) {
     throw new Error("A pending Code Attempt review cannot name a specialist review turn.");
   }

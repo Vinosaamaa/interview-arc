@@ -4,6 +4,17 @@ export type SpecialistWriteFailure = {
   retryable: boolean;
 };
 
+const pendingCodeAttemptReviewTurnError = "A pending Code Attempt review cannot name a specialist review turn.";
+
+export function deterministicSpecialistWriteRepairable(job: {
+  operation: string;
+  failure: SpecialistWriteFailure | null;
+}) {
+  return job.operation === "leetcode_code_attempt"
+    && job.failure?.code === "specialist_write_rejected"
+    && job.failure.message === pendingCodeAttemptReviewTurnError;
+}
+
 const SPECIALIST_WRITE_RETRY_DELAYS_MS = [1_000, 5_000, 15_000, 60_000, 300_000] as const;
 
 function canonicalJson(value: unknown): string {

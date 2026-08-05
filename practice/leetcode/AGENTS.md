@@ -44,6 +44,11 @@ later in this guide.
   Keep pre-answer reads, timer/planning/result controls, and LeetCode
   controller/verdict calls in the parent. Finalization still joins the child
   before it is reported complete.
+- When saving a Code Attempt, use `review: { schemaVersion: 1, status:
+  "pending" }` without `reviewResponseTurnId` while evaluation is pending.
+  Supply the exact visible specialist response turn only when completing that
+  same immutable attempt. Verify the durable write receipt reaches `saved`;
+  queued or failed is not persistence.
 - For a related `Interview Arc Voice capture` envelope, instruct that child to call
   `resolve_voice_capture_and_save_response` with the supplied user `turnId` and
   one stable response turn ID. This one operation marks the capture related and
