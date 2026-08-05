@@ -179,6 +179,14 @@ test("local MCP persists exact specialist writes through durable receipts and re
     assert.equal(changedAttempt.structuredContent.code, "specialist_write_identity_conflict");
     assert.equal(changedAttempt.structuredContent.retryable, false);
 
+    const metadataFor = (problemNumber, difficulty, topics, companyTags, title, url, capturedAt = "2026-08-04T22:00:00.000Z") => ({
+      problemNumber,
+      difficulty,
+      topics,
+      companyTags,
+      capturedAt,
+      sources: [{ title, url, accessedAt: capturedAt }],
+    });
     const bankJobs = [
       {
         operationId: "operation-bank-water-1",
@@ -186,9 +194,29 @@ test("local MCP persists exact specialist writes through durable receipts and re
         questionId: "trapping-rain-water-ii",
         title: "Trapping Rain Water II",
         url: "https://leetcode.com/problems/trapping-rain-water-ii/",
-        tags: ["heap", "matrix"],
-        targetMinutes: 45,
-        active: true,
+      tags: ["heap", "matrix"],
+      targetMinutes: 45,
+      active: true,
+      metadata: {
+        problemNumber: 407,
+        difficulty: "hard",
+        acceptanceRate: 42.5,
+        topics: ["Heap (Priority Queue)", "Matrix"],
+        companyTags: ["Google"],
+        companySignals: [{
+          company: "Amazon",
+          window: "30 days",
+          frequencyScore: 4,
+          frequencyScale: 5,
+          capturedAt: "2026-08-04T22:00:00.000Z",
+        }],
+        capturedAt: "2026-08-04T22:00:00.000Z",
+        sources: [{
+          title: "Trapping Rain Water II",
+          url: "https://leetcode.com/problems/trapping-rain-water-ii/",
+          accessedAt: "2026-08-04T22:00:00.000Z",
+        }],
+      },
       },
       {
         operationId: "operation-bank-flow-1",
@@ -199,13 +227,91 @@ test("local MCP persists exact specialist writes through durable receipts and re
         tags: ["graph", "matrix"],
         targetMinutes: 35,
         active: true,
+        metadata: metadataFor(
+          417,
+          "medium",
+          ["Depth-First Search", "Breadth-First Search", "Matrix"],
+          ["Google"],
+          "Pacific Atlantic Water Flow",
+          "https://leetcode.com/problems/pacific-atlantic-water-flow/",
+        ),
+      },
+      {
+        operationId: "operation-bank-pour-1",
+        specialty: "leetcode",
+        questionId: "pour-water",
+        title: "Pour Water",
+        url: "https://leetcode.com/problems/pour-water/",
+        tags: ["simulation"],
+        targetMinutes: 30,
+        active: true,
+        metadata: metadataFor(755, "medium", ["Array", "Simulation"], [], "Pour Water", "https://leetcode.com/problems/pour-water/"),
+      },
+      {
+        operationId: "operation-bank-swim-1",
+        specialty: "leetcode",
+        questionId: "swim-in-rising-water",
+        title: "Swim in Rising Water",
+        url: "https://leetcode.com/problems/swim-in-rising-water/",
+        tags: ["heap", "graph"],
+        targetMinutes: 40,
+        active: true,
+        metadata: metadataFor(778, "hard", ["Heap (Priority Queue)", "Binary Search", "Matrix"], ["Amazon"], "Swim in Rising Water", "https://leetcode.com/problems/swim-in-rising-water/"),
+      },
+      {
+        operationId: "operation-bank-grid-query-1",
+        specialty: "leetcode",
+        questionId: "maximum-number-of-points-from-grid-queries",
+        title: "Maximum Number of Points From Grid Queries",
+        url: "https://leetcode.com/problems/maximum-number-of-points-from-grid-queries/",
+        tags: ["heap", "bfs"],
+        targetMinutes: 40,
+        active: true,
+        metadata: metadataFor(2503, "hard", ["Array", "Binary Search", "Breadth-First Search", "Heap (Priority Queue)"], [], "Maximum Number of Points From Grid Queries", "https://leetcode.com/problems/maximum-number-of-points-from-grid-queries/"),
+      },
+      {
+        operationId: "operation-bank-container-1",
+        specialty: "leetcode",
+        questionId: "container-with-most-water",
+        title: "Container With Most Water",
+        url: "https://leetcode.com/problems/container-with-most-water/",
+        tags: ["two-pointers"],
+        targetMinutes: 30,
+        active: true,
+        metadata: metadataFor(11, "medium", ["Array", "Two Pointers", "Greedy"], ["Meta"], "Container With Most Water", "https://leetcode.com/problems/container-with-most-water/"),
       },
     ];
     for (const question of bankJobs) await call("upsert_personal_bank_question", question);
     const savedBankJobs = await waitForJobs(call, bankJobs.map((job) => job.operationId));
-    assert.deepEqual(savedBankJobs.map((job) => job.status), ["saved", "saved"]);
-    assert.deepEqual(savedBankJobs.map((job) => job.result.status), ["upserted", "upserted"]);
+    assert.deepEqual(savedBankJobs.map((job) => job.status), ["saved", "saved", "saved", "saved", "saved", "saved"]);
+    assert.deepEqual(savedBankJobs.map((job) => job.result.status), ["upserted", "upserted", "upserted", "upserted", "upserted", "upserted"]);
+    assert.equal(savedBankJobs[0].result.metadata.problemNumber, 407);
+    assert.equal(savedBankJobs[0].result.metadata.difficulty, "hard");
+    assert.deepEqual(savedBankJobs[0].result.metadata.topics, ["Heap (Priority Queue)", "Matrix"]);
+    assert.deepEqual(savedBankJobs[0].result.metadata.companyTags, ["Google"]);
+    assert.deepEqual(savedBankJobs[0].result.tags, [
+      "heap",
+      "matrix",
+      "difficulty:hard",
+      "topic:heap-priority-queue",
+      "topic:matrix",
+      "company:google",
+      "company:amazon",
+    ]);
+    assert.equal(new Set(savedBankJobs.map((job) => job.result.questionId)).size, 6);
+    const bankReplays = await Promise.all(bankJobs.map((question) => call("upsert_personal_bank_question", question)));
+    assert.ok(bankReplays.every((result) => result.status === "saved"));
+    const replayedBankJobs = await waitForJobs(call, bankJobs.map((job) => job.operationId));
+    assert.ok(replayedBankJobs.every((job) => job.status === "saved"));
+    assert.equal(replayedBankJobs[0].result.metadata.problemNumber, 407);
 
+    const invalidMetadata = await call("upsert_personal_bank_question", {
+      operationId: "operation-bank-invalid-specialty",
+      specialty: "behavioral",
+      questionId: "custom:behavioral:metadata-not-allowed",
+      title: "Metadata must stay LeetCode-specific",
+      metadata: bankJobs[0].metadata,
+    });
     const invalidAttempt = await call("save_leetcode_code_attempt", {
       ...attempt,
       operationId: "operation-attempt-invalid-origin",
@@ -225,6 +331,10 @@ test("local MCP persists exact specialist writes through durable receipts and re
     };
     await call("upsert_personal_bank_question", independentBank);
     const partial = await waitForJobs(call, [invalidAttempt.jobId, independentBank.operationId]);
+    const invalidMetadataJob = await waitForJobs(call, [invalidMetadata.jobId]);
+    assert.equal(invalidMetadataJob[0].status, "failed");
+    assert.equal(invalidMetadataJob[0].failure.retryable, false);
+    assert.match(invalidMetadataJob[0].failure.message, /only valid for LeetCode/);
     assert.equal(partial[0].status, "failed");
     assert.equal(partial[0].failure.retryable, false);
     assert.equal(partial[1].status, "saved");

@@ -38,6 +38,7 @@ import {
   voiceFinishGuardMessage,
 } from "./practice-exchange-policy";
 import {
+  deriveQuestionMetadataTags,
   mergePersonalLeetCodeQuestionMetadata,
   questionMetadataUpdateFields,
   readStoredQuestionMetadata,
@@ -147,8 +148,8 @@ export type SpecialistFinalization = {
 const TRANSCRIPT_SECTION = /transcript|conversation|raw exchange|verbatim/i;
 
 function normalizedTags(tags: string[]) {
-  return [...new Set(tags.map((tag) => tag.trim().toLowerCase().replace(/[^a-z0-9+#.]+/g, "-")).filter(Boolean))]
-    .slice(0, 32);
+  return [...new Set(tags.map((tag) => tag.trim().toLowerCase().replace(/[^a-z0-9+#.:]+/g, "-")).filter(Boolean))]
+    .slice(0, 256);
 }
 
 async function enrichPersonalLeetCodeQuestion(
@@ -172,7 +173,11 @@ async function enrichPersonalLeetCodeQuestion(
       ? mergePersonalLeetCodeQuestionMetadata(existingMetadata, metadata)
       : existingMetadata;
     const updated = await db.update(ownerBankQuestions).set({
-      tags: normalizedTags([...((question.tags ?? []) as string[]), ...tags]),
+      tags: normalizedTags([
+        ...((question.tags ?? []) as string[]),
+        ...tags,
+        ...(metadata ? deriveQuestionMetadataTags(metadata) : []),
+      ]),
       ...questionMetadataUpdateFields(mergedMetadata),
       updatedAt: nowMs,
     }).where(and(
@@ -3164,10 +3169,15 @@ export async function upsertOwnerBankQuestion(
     priority?: number;
     targetMinutes?: number;
     active?: boolean;
+    metadata?: LeetCodeQuestionMetadata;
   },
   nowMs: number,
 ) {
   const db = getDb();
+  if (question.metadata && specialty !== "leetcode") {
+    throw new Error("LeetCode metadata is only valid for LeetCode bank questions.");
+  }
+  if (question.metadata) validateLeetCodeQuestionMetadata(question.metadata);
   const tags = normalizedTags(question.tags ?? []);
   const values = {
     ownerId,
@@ -3218,6 +3228,29 @@ export async function upsertOwnerBankQuestion(
       updatedAt: values.updatedAt,
     },
   });
+  if (question.metadata) {
+    await enrichPersonalLeetCodeQuestion(ownerId, question.questionId, tags, question.metadata, nowMs);
+  }
+  const rows = await db.select({
+    tags: ownerBankQuestions.tags,
+    problemNumber: ownerBankQuestions.problemNumber,
+    difficulty: ownerBankQuestions.difficulty,
+    acceptanceRate: ownerBankQuestions.acceptanceRate,
+    topics: ownerBankQuestions.topics,
+    companyTags: ownerBankQuestions.companyTags,
+    companySignals: ownerBankQuestions.companySignals,
+    metadataReferences: ownerBankQuestions.metadataReferences,
+    metadataCapturedAt: ownerBankQuestions.metadataCapturedAt,
+  }).from(ownerBankQuestions).where(and(
+    eq(ownerBankQuestions.ownerId, ownerId),
+    eq(ownerBankQuestions.specialty, specialty),
+    eq(ownerBankQuestions.questionId, question.questionId),
+  ));
+  const saved = rows[0];
+  return saved ? {
+    tags: Array.isArray(saved.tags) ? saved.tags as string[] : [],
+    metadata: readStoredQuestionMetadata(saved),
+  } : null;
 }
 
 export async function readSpecialistTasks(ownerId: string) {

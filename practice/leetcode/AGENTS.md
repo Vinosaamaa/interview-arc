@@ -107,6 +107,14 @@ later in this guide.
   evidence-complete finalization solely because optional metadata could not be
   reached. Recheck later only for a missing/stale/disputed field or explicit
   request.
+- Persist that structured metadata through the typed
+  `upsert_personal_bank_question` MCP operation using the stable public
+  `questionId`, a stable `operationId`, and the exact metadata payload. The
+  Worker is the only D1 persistence boundary: wait for the durable receipt to
+  reach `status: saved`, and never write D1 directly or report a queued receipt
+  as saved. Preserve internal tags separately from official topics and company
+  signals; re-imports must be exact-ID idempotent and may only merge/add
+  metadata according to capture freshness.
 - Pass the stable `questionId` and a complete reusable `solutionProfile`. Put
   the canonical best approach, reference implementation, complexity, edge
   cases, and up to two meaningful alternatives in the profile. Keep the

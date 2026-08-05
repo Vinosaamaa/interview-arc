@@ -88,6 +88,28 @@ function trimmedUnique(values: string[], limit = 64) {
   }).slice(0, limit);
 }
 
+function normalizedProjectionToken(value: string) {
+  return value
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9+#.]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Canonical metadata remains structured; these namespaced labels are only the
+ * additive search projection used by the problem bank.
+ */
+export function deriveQuestionMetadataTags(metadata: LeetCodeQuestionMetadata) {
+  const tags = [
+    ...(metadata.difficulty ? [`difficulty:${metadata.difficulty}`] : []),
+    ...(metadata.topics ?? []).map((topic) => `topic:${normalizedProjectionToken(topic)}`),
+    ...(metadata.companyTags ?? []).map((company) => `company:${normalizedProjectionToken(company)}`),
+    ...(metadata.companySignals ?? []).map((signal) => `company:${normalizedProjectionToken(signal.company)}`),
+  ];
+  return trimmedUnique(tags, 256);
+}
+
 function mergeReferences(
   existing: QuestionMetadataReference[],
   incoming: QuestionMetadataReference[],
@@ -96,11 +118,15 @@ function mergeReferences(
   for (const reference of [...existing, ...incoming]) {
     const url = reference.url.trim();
     if (!url) continue;
-    byUrl.set(url, {
+    const candidate = {
       title: reference.title.trim(),
       url,
       accessedAt: reference.accessedAt,
-    });
+    };
+    const prior = byUrl.get(url);
+    if (!prior || Date.parse(candidate.accessedAt) >= Date.parse(prior.accessedAt)) {
+      byUrl.set(url, candidate);
+    }
   }
   return [...byUrl.values()].slice(0, 32);
 }
