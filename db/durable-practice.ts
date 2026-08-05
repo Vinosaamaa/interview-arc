@@ -1408,7 +1408,10 @@ export async function readVoiceDeliveryBlockers(ownerId: string, activityId: str
     ))
     : [];
   const responses = captureIds.length
-    ? await db.select().from(voiceSpecialistResponses).where(and(
+    ? await db.select({
+      captureId: voiceSpecialistResponses.captureId,
+      responseTurnId: voiceSpecialistResponses.responseTurnId,
+    }).from(voiceSpecialistResponses).where(and(
       eq(voiceSpecialistResponses.ownerId, ownerId),
       inArray(voiceSpecialistResponses.captureId, captureIds),
     ))
@@ -1458,21 +1461,13 @@ export async function readVoiceDeliveryBlockers(ownerId: string, activityId: str
       const canAcknowledgeAudioLoss = (intent.status === "activity_related" || intent.status === "accepted")
         && clip?.status !== "available"
         && !clip?.audioLostAcknowledgedAt;
-      const allowedActions = intent.status === "quarantined_conflict"
-        ? group
-          ? ["restore_exact_group", "delete_exact_group"]
-          : response
-            ? ["restore_exact_response", "delete_exact_group"]
-            : ["wait"]
-        : intent.status === "activity_related" || intent.status === "accepted"
-          ? [
-            ...(retryable ? ["retry_delivery"] : []),
-            ...(canAcknowledgeAudioLoss ? ["acknowledge_audio_loss"] : []),
-            "delete_exact_group",
-          ]
-          : intent.status === "uncertain"
-            ? ["attach", "discard"]
-            : ["wait"];
+      const allowedActions = voiceBlockerAllowedActions({
+        status: intent.status,
+        hasGroup: Boolean(group),
+        hasResponse: Boolean(response),
+        retryable,
+        canAcknowledgeAudioLoss,
+      });
       return {
         captureId: intent.captureId,
         turnId: intent.turnId,
@@ -1500,6 +1495,29 @@ export async function readVoiceDeliveryBlockers(ownerId: string, activityId: str
       };
     }),
   };
+}
+
+function voiceBlockerAllowedActions(input: {
+  status: VoiceIntentStatus;
+  hasGroup: boolean;
+  hasResponse: boolean;
+  retryable: boolean;
+  canAcknowledgeAudioLoss: boolean;
+}) {
+  if (input.status === "quarantined_conflict") {
+    if (input.hasGroup) return ["restore_exact_group", "delete_exact_group"];
+    if (input.hasResponse) return ["restore_exact_response", "delete_exact_group"];
+    return ["wait"];
+  }
+  if (input.status === "activity_related" || input.status === "accepted") {
+    return [
+      ...(input.retryable ? ["retry_delivery"] : []),
+      ...(input.canAcknowledgeAudioLoss ? ["acknowledge_audio_loss"] : []),
+      "delete_exact_group",
+    ];
+  }
+  if (input.status === "uncertain") return ["attach", "discard"];
+  return ["wait"];
 }
 
 export async function repairVoiceSpecialistResponse(
@@ -2622,19 +2640,30 @@ export async function saveLeetCodeCodeAttempt(
   if (sequenceConflict) throw new Error(`Code Attempt ${incoming.sequence} already belongs to another code version.`);
   const originatingTurn = originatingTurns[0];
   if (!originatingTurn || originatingTurn.speaker !== "user") {
-    const pendingVoiceOrigins = await db.select({ status: voiceCaptureIntents.status })
-      .from(voiceCaptureIntents).where(and(
+    const originSnapshots = await db.select({
+      status: voiceCaptureIntents.status,
+      transcriptSpeaker: practiceTranscriptTurns.speaker,
+    }).from(voiceCaptureIntents).leftJoin(practiceTranscriptTurns, and(
+      eq(practiceTranscriptTurns.ownerId, voiceCaptureIntents.ownerId),
+      eq(practiceTranscriptTurns.activityId, voiceCaptureIntents.activityId),
+      eq(practiceTranscriptTurns.turnId, voiceCaptureIntents.turnId),
+    )).where(and(
         eq(voiceCaptureIntents.ownerId, ownerId),
         eq(voiceCaptureIntents.activityId, incoming.activityId),
         eq(voiceCaptureIntents.turnId, incoming.originatingTurnId),
       )).limit(1);
-    if (pendingVoiceOrigins.some((origin) => ["activity_related", "accepted"].includes(origin.status))) {
+    const originSnapshot = originSnapshots[0];
+    if (originSnapshot?.transcriptSpeaker === "user") {
+      // The transcript materialized between the initial read and this joined
+      // snapshot; continue with the same immutable attempt write.
+    } else if (originSnapshot && ["activity_related", "accepted"].includes(originSnapshot.status)) {
       throw Object.assign(
         new Error("The related Voice Code Attempt origin is still materializing; retry the exact write after transcript delivery."),
         { code: "code_attempt_origin_pending", retryable: true },
       );
+    } else {
+      throw new Error("The Code Attempt originating turn is not an owner-scoped user turn in this activity.");
     }
-    throw new Error("The Code Attempt originating turn is not an owner-scoped user turn in this activity.");
   }
   const reviewTurn = reviewTurns[0];
   if (review.status === "complete") {

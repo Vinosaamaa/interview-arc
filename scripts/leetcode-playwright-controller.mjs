@@ -25,9 +25,6 @@ const repositoryParent = path.dirname(repositoryRoot);
 const outerWorkspace = path.basename(repositoryParent) === ".worktrees"
   ? path.dirname(repositoryParent)
   : repositoryParent;
-const canonicalRepositoryRoot = path.basename(repositoryParent) === ".worktrees"
-  ? path.join(outerWorkspace, "interview-arc")
-  : repositoryRoot;
 const fixedProfilePath = path.join(outerWorkspace, "browser-profiles", "leetcode-submitter");
 
 export function controllerStatePathsForProfile(profilePath) {
@@ -1332,18 +1329,16 @@ async function loadFixedPlaywright() {
   try {
     playwright = await import("playwright-core");
   } catch (error) {
-    let sharedRoot = canonicalRepositoryRoot;
-    if (sharedRoot === repositoryRoot) {
-      try {
-        const { stdout } = await execFile(
-          "git",
-          ["rev-parse", "--path-format=absolute", "--git-common-dir"],
-          { cwd: repositoryRoot },
-        );
-        sharedRoot = path.dirname(stdout.trim());
-      } catch {
-        throw error;
-      }
+    let sharedRoot;
+    try {
+      const { stdout } = await execFile(
+        "git",
+        ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+        { cwd: repositoryRoot },
+      );
+      sharedRoot = path.dirname(stdout.trim());
+    } catch {
+      throw error;
     }
     playwright = createRequire(path.join(sharedRoot, "package.json"))("playwright-core");
   }
