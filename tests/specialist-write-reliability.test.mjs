@@ -3,10 +3,39 @@ import test from "node:test";
 
 import {
   classifySpecialistWriteFailure,
+  deterministicSpecialistWriteRepairable,
   executeSpecialistWriteAttempt,
   specialistWritePayloadDigest,
   specialistWriteRetryDelayMs,
 } from "../mcp-worker/specialist-write-policy.ts";
+
+test("only the exact legacy pending-review rejection is deterministic-repairable", () => {
+  const repairable = deterministicSpecialistWriteRepairable({
+    operation: "leetcode_code_attempt",
+    failure: {
+      code: "specialist_write_rejected",
+      message: "A pending Code Attempt review cannot name a specialist review turn.",
+      retryable: false,
+    },
+  });
+  assert.equal(repairable, true);
+  assert.equal(deterministicSpecialistWriteRepairable({
+    operation: "leetcode_code_attempt",
+    failure: {
+      code: "specialist_write_rejected",
+      message: "The Code Attempt originating turn is missing.",
+      retryable: false,
+    },
+  }), false);
+  assert.equal(deterministicSpecialistWriteRepairable({
+    operation: "personal_bank_question",
+    failure: {
+      code: "specialist_write_rejected",
+      message: "A pending Code Attempt review cannot name a specialist review turn.",
+      retryable: false,
+    },
+  }), false);
+});
 
 test("specialist writes retry transport and resource failures but reject validation conflicts", () => {
   const retryable = [

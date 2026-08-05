@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import { specialistWriteJobs, type SpecialistWriteJobRow } from "./schema";
 import {
+  deterministicSpecialistWriteRepairable,
   specialistWriteFailureTransition,
   specialistWritePayloadDigest,
 } from "../mcp-worker/specialist-write-policy";
@@ -35,14 +36,6 @@ export type SpecialistWriteReceipt = {
   failure: null | { code: string; message: string; retryable: boolean };
   duplicate: boolean;
 };
-
-const pendingCodeAttemptReviewTurnError = "A pending Code Attempt review cannot name a specialist review turn.";
-
-function deterministicCodeAttemptRepairable(job: SpecialistWriteReceipt) {
-  return job.operation === "leetcode_code_attempt"
-    && job.failure?.code === "specialist_write_rejected"
-    && job.failure.message === pendingCodeAttemptReviewTurnError;
-}
 
 function receipt(row: SpecialistWriteJobRow, duplicate = false): SpecialistWriteReceipt {
   return {
@@ -144,7 +137,7 @@ export async function retrySpecialistWriteJobs(
   const jobs = await readSpecialistWriteJobs(ownerId, jobIds);
   for (const job of jobs) {
     if (job.status !== "failed"
-        || (job.failure?.retryable !== true && !deterministicCodeAttemptRepairable(job))) {
+        || (job.failure?.retryable !== true && !deterministicSpecialistWriteRepairable(job))) {
       throw new SpecialistWriteJobError(
         "specialist_write_not_retryable",
         `Specialist write ${job.jobId} is not a retryable or deterministic-repairable failed operation.`,
