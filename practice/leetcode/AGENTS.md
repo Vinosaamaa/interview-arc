@@ -366,27 +366,23 @@ itself an attempt-ending boundary when the user may still want to retry. Report
 that visible verdict without exposing the solution and remain in the selected
 attempt mode unless the user declared the submission final or ends the attempt.
 
-At a true attempt-ending boundary, give an honest review automatically without
-waiting for a separate request and regardless of the earlier mode. First review
+At a true attempt-ending boundary, the next visible response after a terminal
+submission verdict must continue directly into an honest post-attempt review;
+never stop at a verdict-only reply or wait for a separate request. First review
 the visible official LeetCode editorial under the Content Boundary, then:
-
-After the controller returns a terminal submission verdict, the next visible
-response must continue directly into this post-attempt phase; never stop at a
-verdict-only reply or wait for the user to ask for the review. For **Accepted**,
-include the submitted-code review, the strongest approach, complexity and edge
-cases, and meaningful alternatives, with editorial-derived approaches clearly
-labelled when the Editorial was actually accessible. If the Editorial is
-unavailable or locked, state that plainly and provide independently reasoned
-alternatives without implying Editorial access.
 
 - state what the user did well, grounded only in observed reasoning and shared
   or submitted code;
 - identify the concrete correctness gap, blocker, implementation issue, or
   communication weakness actually observed;
 - explain what to improve and present the strongest approach;
+- for **Accepted**, review the submitted code and label Editorial-derived
+  approaches only when the Editorial was actually accessible;
 - give optimal, independently written reference code when useful;
 - cover time/space complexity, edge cases, and meaningful editorial or added
   alternative approaches; and
+- if the Editorial is unavailable or locked, state that plainly and provide
+  independently reasoned alternatives without implying Editorial access; and
 - invite follow-up implementation and design questions.
 
 If code or reasoning was not shared, say which parts cannot be reviewed instead
