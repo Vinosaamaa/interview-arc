@@ -30,7 +30,11 @@ import {
 } from "../db/live-state";
 import { buildPracticeSnapshot, buildPublicationQueue, dateInPracticeTimeZone } from "../db/practice-snapshot";
 import { leetCodeQuestionMetadataSchema } from "../db/question-metadata";
-import { connectOwnerLiveUpdates, publishOwnerLiveUpdate } from "../worker/live-update-hub";
+import {
+  connectOwnerLiveUpdates,
+  publishOwnerLiveUpdate as publishOwnerLiveUpdateRequest,
+} from "../worker/live-update-hub";
+import type { LiveUpdateNamespace, LiveUpdateScope } from "../worker/live-update-hub";
 import {
   addPracticeNote,
   acknowledgeActivityAudioLost,
@@ -140,6 +144,8 @@ interface Env {
   AUDIO: R2Bucket;
   LIVE_UPDATES: DurableObjectNamespace;
 }
+
+const publishOwnerLiveUpdate = publishOwnerLiveUpdateRequest;
 
 function safeAudioFilename(value: string) {
   return value.normalize("NFKC").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 120) || "practice-audio";
@@ -1856,6 +1862,15 @@ async function authoritativeSpecialistState(ownerId: string, date?: string) {
 }
 
 function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
+  const publishOwnerLiveUpdate = (
+    namespace: LiveUpdateNamespace | undefined,
+    updateOwnerId: string,
+    scope: LiveUpdateScope,
+    options: { awaitDelivery?: boolean } = {},
+  ) => publishOwnerLiveUpdateRequest(namespace, updateOwnerId, scope, {
+    ...options,
+    executionContext: ctx,
+  });
   const server = new McpServer({ name: "Interview Arc", version: "1.0.0" });
 
   server.registerTool(
@@ -2014,7 +2029,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
       const result = await requestVoiceDeliveryRetry(
         activityId,
         () => readVoiceDeliveryBlockers(ownerId, activityId),
-        () => publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_capture"),
+        () => publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_capture", { awaitDelivery: true }),
       );
       return {
         content: [{ type: "text", text: result.message }],

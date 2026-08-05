@@ -41,14 +41,23 @@ export class OwnerLiveUpdateHub {
         scope: input.scope ?? "practice",
         occurredAt: Date.now(),
       });
+      let attempted = 0;
+      let delivered = 0;
       for (const socket of this.state.getWebSockets()) {
+        attempted += 1;
         try {
           socket.send(event);
+          delivered += 1;
         } catch {
           try { socket.close(1011, "delivery failed"); } catch {}
         }
       }
-      return Response.json({ revision });
+      return Response.json({
+        revision,
+        attempted,
+        delivered,
+        signalDelivered: delivered > 0,
+      }, { status: delivered > 0 ? 200 : 503 });
     }
     return new Response("Not found.", { status: 404 });
   }
@@ -77,19 +86,31 @@ export async function publishOwnerLiveUpdate(
   namespace: LiveUpdateNamespace | undefined,
   ownerId: string,
   scope: LiveUpdateScope,
+  options: { executionContext?: ExecutionContext; awaitDelivery?: boolean } = {},
 ) {
-  if (!namespace) return false;
-  try {
+  const publish = async () => {
+    if (!namespace) return false;
     const response = await ownerStub(namespace, ownerId).fetch("https://live-update.internal/publish", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ scope }),
     });
-    return response.ok;
-  } catch {
-    // D1/REST mutations are authoritative. A best-effort invalidation failure
-    // must never make an already-committed mutation look unsuccessful; clients
-    // recover through the bounded snapshot fallback.
-    return false;
+    if (!response.ok) return false;
+    const payload = await response.json() as { signalDelivered?: boolean };
+    return payload.signalDelivered === true;
+  };
+
+  if (options.awaitDelivery || !options.executionContext) {
+    try {
+      return await publish();
+    } catch {
+      // D1/REST mutations are authoritative. A best-effort invalidation failure
+      // must never make an already-committed mutation look unsuccessful; clients
+      // recover through the bounded snapshot fallback.
+      return false;
+    }
   }
+
+  options.executionContext.waitUntil(publish().catch(() => false));
+  return true;
 }
