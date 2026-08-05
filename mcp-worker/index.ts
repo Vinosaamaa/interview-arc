@@ -56,6 +56,8 @@ import {
   readVoiceCaptureRemediationIntent,
   readVoiceCaptureIntents,
   readVoiceCaptureIntentsPage,
+  readVoiceDeliveryBlockers,
+  repairVoiceResponseGroup,
   registerVoiceCaptureIntent,
   registerActivityAudioClip,
   registerSpecialistTask,
@@ -73,6 +75,7 @@ import {
   updateActivityAudioClipStatus,
   upsertOwnerBankQuestion,
   voiceFinishGuardMessage,
+  VoiceResponseGroupConflictError,
 } from "../db/durable-practice";
 import {
   typedExchangeReceipt,
@@ -95,6 +98,14 @@ import {
   type PlanningAttention,
 } from "../db/today-planning-policy";
 import { SpecialistControlError } from "../db/specialist-controls-policy";
+import {
+  enqueueSpecialistWriteJob,
+  processSpecialistWriteJobs,
+  readSpecialistWriteJobs,
+  retrySpecialistWriteJobs,
+  SpecialistWriteJobError,
+} from "../db/specialist-write-jobs";
+import type { SpecialistWriteJobRow } from "../db/schema";
 import {
   controlSessionPracticeTimer,
   finishAndAdvancePracticeActivity,
@@ -441,6 +452,9 @@ async function voiceTimerMutation(ownerId: string, request: Request, env: Env) {
       if (voiceConflict) {
         return json(request, {
           error: voiceConflict,
+          code: "voice_delivery_blocked",
+          retryable: false,
+          voiceGuard,
         }, { status: 409 });
       }
       await setOutcome(ownerId, activity.id, mutation.outcome, now);
@@ -493,11 +507,14 @@ function mergePlanningQuestions(
       difficulty: ["easy", "medium", "hard"].includes(String(row.difficulty))
         ? row.difficulty as "easy" | "medium" | "hard"
         : undefined,
+      problemNumber: typeof row.problemNumber === "number" ? row.problemNumber : undefined,
       acceptanceRate: typeof row.acceptanceRate === "number" ? row.acceptanceRate : undefined,
       source: typeof row.source === "string" ? row.source : "personal",
       companyTags: Array.isArray(row.companyTags) ? row.companyTags.map(String) : [],
       companySignals: Array.isArray(row.companySignals) ? row.companySignals as never[] : [],
       topics: Array.isArray(row.topics) ? row.topics.map(String) : [],
+      metadataReferences: Array.isArray(row.metadataReferences) ? row.metadataReferences : [],
+      metadataCapturedAt: typeof row.metadataCapturedAt === "number" ? row.metadataCapturedAt : null,
       tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
       priority: typeof row.priority === "number" ? row.priority : 0,
       targetMinutes: typeof row.targetMinutes === "number"
@@ -510,7 +527,15 @@ function mergePlanningQuestions(
     ...personal.filter((question) => !canonical.some((item) => item.id === question.id)),
     ...canonical.map((question) => ({
       ...question,
-      ...(personalById.get(question.id) ?? {}),
+      ...(personalById.has(question.id) ? {
+        title: personalById.get(question.id)?.title ?? question.title,
+        prompt: personalById.get(question.id)?.prompt ?? question.prompt,
+        url: personalById.get(question.id)?.url ?? question.url,
+        source: personalById.get(question.id)?.source ?? question.source,
+        priority: personalById.get(question.id)?.priority ?? question.priority,
+        targetMinutes: personalById.get(question.id)?.targetMinutes ?? question.targetMinutes,
+        active: personalById.get(question.id)?.active ?? question.active,
+      } : {}),
       topics: [...new Set([
         ...question.topics,
         ...(personalById.get(question.id)?.topics ?? []),
@@ -519,6 +544,15 @@ function mergePlanningQuestions(
         ...(question.tags ?? []),
         ...(personalById.get(question.id)?.tags ?? []),
       ])],
+      ...(personalById.get(question.id)?.problemNumber !== undefined ? { problemNumber: personalById.get(question.id)?.problemNumber } : {}),
+      ...(personalById.get(question.id)?.difficulty !== undefined ? { difficulty: personalById.get(question.id)?.difficulty } : {}),
+      ...(personalById.get(question.id)?.acceptanceRate !== undefined ? { acceptanceRate: personalById.get(question.id)?.acceptanceRate } : {}),
+      ...(personalById.get(question.id)?.companyTags?.length ? { companyTags: [...new Set([...(question.companyTags ?? []), ...(personalById.get(question.id)?.companyTags ?? [])])] } : {}),
+      ...(personalById.get(question.id)?.companySignals?.length ? { companySignals: [...(question.companySignals ?? []), ...(personalById.get(question.id)?.companySignals ?? [])] } : {}),
+      ...(personalById.get(question.id)?.metadataReferences?.length ? { metadataReferences: [...(question.metadataReferences ?? []), ...(personalById.get(question.id)?.metadataReferences ?? [])] } : {}),
+      ...(personalById.get(question.id)?.metadataCapturedAt !== null && personalById.get(question.id)?.metadataCapturedAt !== undefined
+        ? { metadataCapturedAt: personalById.get(question.id)?.metadataCapturedAt }
+        : {}),
     })),
   ];
 }
@@ -1177,6 +1211,15 @@ async function listVoiceIntents(ownerId: string, request: Request) {
   return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, intents, legacyOrphans, nextCursor });
 }
 
+async function listVoiceDeliveryBlockers(ownerId: string, request: Request) {
+  const activityId = new URL(request.url).searchParams.get("activityId")?.trim();
+  if (!activityId) {
+    return json(request, { error: "An activityId is required." }, { status: 400 });
+  }
+  const result = await readVoiceDeliveryBlockers(ownerId, activityId);
+  return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, ...result });
+}
+
 async function decideVoiceIntent(ownerId: string, request: Request, captureId: string, env: Env) {
   const body = (await request.json()) as {
     protocolVersion?: number;
@@ -1376,6 +1419,9 @@ async function companionMutation(ownerId: string, request: Request, env: Env) {
       if (voiceConflict) {
         return json(request, {
           error: voiceConflict,
+          code: "voice_delivery_blocked",
+          retryable: false,
+          voiceGuard,
         }, { status: 409 });
       }
     }
@@ -1602,19 +1648,71 @@ function specialistToolFailure(error: unknown) {
     || error instanceof PlanningSelectionError
     || error instanceof TodayPlanningConflictError
     || error instanceof TimerStateConflictError
+    || error instanceof VoiceResponseGroupConflictError
+    || error instanceof SpecialistWriteJobError
   ) {
-    const code = "code" in error && typeof error.code === "string"
-      ? error.code
+    const candidateCode = (error as { code?: unknown }).code;
+    const code = typeof candidateCode === "string"
+      ? candidateCode
       : error instanceof TimerStateConflictError
         ? "timer_state_conflict"
-        : "specialist_control_conflict";
+        : error instanceof VoiceResponseGroupConflictError
+          ? error.code
+          : "specialist_control_conflict";
     return {
       isError: true,
       content: [{ type: "text" as const, text: error.message }],
-      structuredContent: { error: error.message, code, retryable: false },
+      structuredContent: {
+        error: error.message,
+        code,
+        retryable: error instanceof SpecialistControlError
+          && typeof error.details.retryable === "boolean"
+          ? error.details.retryable
+          : false,
+        ...(error instanceof VoiceResponseGroupConflictError
+          || error instanceof SpecialistControlError ? error.details : {}),
+      },
     };
   }
   throw error;
+}
+
+async function executeSpecialistWriteJob(job: SpecialistWriteJobRow) {
+  if (job.operation === "leetcode_code_attempt") {
+    const input = job.payload as Parameters<typeof saveLeetCodeCodeAttempt>[1];
+    const saved = await saveLeetCodeCodeAttempt(job.ownerId, input, Date.now());
+    return {
+      id: input.id,
+      activityId: input.activityId,
+      sequence: input.sequence,
+      language: input.language,
+      lineCount: codeLineCount(input.code),
+      status: saved.status,
+      reviewStatus: saved.reviewStatus,
+    };
+  }
+  if (job.operation === "personal_bank_question") {
+    const input = job.payload as {
+      specialty: Parameters<typeof upsertOwnerBankQuestion>[1];
+      question: Parameters<typeof upsertOwnerBankQuestion>[2];
+    };
+    const saved = await upsertOwnerBankQuestion(job.ownerId, input.specialty, input.question, Date.now());
+    return {
+      specialty: input.specialty,
+      questionId: input.question.questionId,
+      status: "upserted",
+      tags: saved?.tags ?? [],
+      metadata: saved?.metadata ?? null,
+    };
+  }
+  throw new SpecialistWriteJobError(
+    "specialist_write_operation_unsupported",
+    "The queued specialist write operation is not supported by this Worker version.",
+  );
+}
+
+function scheduleSpecialistWriteProcessing(ctx: ExecutionContext) {
+  ctx.waitUntil(processSpecialistWriteJobs(executeSpecialistWriteJob));
 }
 
 type SpecialistTimerMutationInput = {
@@ -1755,7 +1853,7 @@ async function authoritativeSpecialistState(ownerId: string, date?: string) {
   return { snapshot, timerInstrument };
 }
 
-function createServer(ownerId: string, env: Env) {
+function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   const server = new McpServer({ name: "Interview Arc", version: "1.0.0" });
 
   server.registerTool(
@@ -1867,10 +1965,62 @@ function createServer(ownerId: string, env: Env) {
         const result = await resolveVoiceCaptureBatch(input, async (reservation) => {
           const saved = await resolveVoiceCaptureBatchAndSaveResponse(ownerId, reservation, Date.now());
           await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_intent");
-          return { duplicate: saved.duplicate, status: saved.group.status };
+          return {
+            duplicate: saved.duplicate,
+            status: saved.group.status,
+            canonicalReceipt: saved.receipt,
+          };
         });
         return {
           content: [{ type: "text", text: result.receipt }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_voice_delivery_blockers",
+    {
+      description: "Read exact owner-scoped Voice delivery blockers for one activity, including canonical response-group receipts and the safe actions currently allowed. This never returns transcript text or audio content.",
+      inputSchema: {
+        activityId: z.string().min(1),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ activityId }) => {
+      const result = await readVoiceDeliveryBlockers(ownerId, activityId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "repair_voice_response_group",
+    {
+      description: "Restore one exact intact quarantined Voice response group after coordinator review. Requires the server-issued canonical digest, expected status, explicit user authorization, and an audit reason; immutable evidence is never rewritten.",
+      inputSchema: {
+        activityId: z.string().min(1),
+        responseTurnId: z.string().min(1),
+        expectedDigest: z.string().regex(/^[a-f0-9]{64}$/),
+        expectedStatus: z.literal("quarantined_conflict"),
+        authorization: z.literal("explicit_user_instruction"),
+        reason: z.string().min(1).max(2_000),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await repairVoiceResponseGroup(ownerId, input, Date.now());
+        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_intent");
+        return {
+          content: [{ type: "text", text: result.repaired
+            ? "Restored the exact canonical Voice response group; delivery can resume."
+            : "The exact Voice response group is already in a recoverable state." }],
           structuredContent: result,
         };
       } catch (error) {
@@ -1974,8 +2124,9 @@ function createServer(ownerId: string, env: Env) {
   server.registerTool(
     "save_leetcode_code_attempt",
     {
-      description: "Save an exact owner-provided LeetCode attempt after an explicit attempt boundary. Use a pending review while evaluation runs, then complete that same immutable attempt from the visible specialist review. Ordinary snippets and generated reference solutions must not use this tool.",
+      description: "Durably enqueue an exact owner-provided LeetCode attempt after an explicit attempt boundary. Reuse one stable operationId and identical payload after transport uncertainty, then inspect get_specialist_write_status until saved. Use a pending review while evaluation runs, then a new operationId to complete that same immutable attempt from the visible specialist review. Ordinary snippets and generated reference solutions must not use this tool.",
       inputSchema: {
+        operationId: z.string().min(1).max(200),
         id: z.string().min(1),
         activityId: z.string().min(1),
         originatingTurnId: z.string().min(1),
@@ -1994,20 +2145,68 @@ function createServer(ownerId: string, env: Env) {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async (input) => {
-      const saved = await saveLeetCodeCodeAttempt(ownerId, input, Date.now());
-      const lineCount = codeLineCount(input.code);
-      return {
-        content: [{ type: "text", text: `Saved Code Attempt ${input.sequence} · ${input.language} · ${lineCount} lines.` }],
-        structuredContent: {
-          id: input.id,
-          activityId: input.activityId,
-          sequence: input.sequence,
-          language: input.language,
-          lineCount,
-          status: saved.status,
-          reviewStatus: saved.reviewStatus,
-        },
-      };
+      try {
+        const { operationId, ...payload } = input;
+        const receipt = await enqueueSpecialistWriteJob(ownerId, {
+          jobId: operationId,
+          operation: "leetcode_code_attempt",
+          payload,
+        });
+        if (!["saved", "failed"].includes(receipt.status)) scheduleSpecialistWriteProcessing(ctx);
+        return {
+          content: [{ type: "text", text: receipt.status === "saved"
+            ? `Code Attempt ${input.sequence} is durably saved.`
+            : `Code Attempt ${input.sequence} is durably queued as ${operationId}; verify its receipt before finalization.` }],
+          structuredContent: receipt,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_specialist_write_status",
+    {
+      description: "Read durable status receipts for one or more specialist writes. A queued MCP response is not proof of persistence; only status=saved is authoritative.",
+      inputSchema: {
+        jobIds: z.array(z.string().min(1).max(200)).min(1).max(50),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ jobIds }) => {
+      try {
+        const jobs = await readSpecialistWriteJobs(ownerId, jobIds);
+        return {
+          content: [{ type: "text", text: JSON.stringify(jobs, null, 2) }],
+          structuredContent: { jobs },
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "retry_specialist_writes",
+    {
+      description: "Explicitly requeue exhausted specialist writes only when their durable receipt says failure.retryable=true. Never use this for validation, identity, or conflict failures.",
+      inputSchema: {
+        jobIds: z.array(z.string().min(1).max(200)).min(1).max(50),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ jobIds }) => {
+      try {
+        const jobs = await retrySpecialistWriteJobs(ownerId, jobIds);
+        scheduleSpecialistWriteProcessing(ctx);
+        return {
+          content: [{ type: "text", text: `Requeued ${jobs.length} retryable specialist write${jobs.length === 1 ? "" : "s"}.` }],
+          structuredContent: { jobs },
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
     },
   );
 
@@ -2214,8 +2413,9 @@ function createServer(ownerId: string, env: Env) {
   server.registerTool(
     "upsert_personal_bank_question",
     {
-      description: "Create or update an owner-private bank question. Behavioral specialists use this to build the resume-foundation curriculum without committing private resume details to Git.",
+      description: "Durably enqueue creation or update of one owner-private bank question. Supply one stable operationId per logical item, reuse the exact payload after transport uncertainty, and inspect get_specialist_write_status for per-item success. LeetCode imports may include validated metadata (problem number, difficulty, acceptance, official topics, company signals, capture time, and sources); the Worker merges it by freshness and projects namespaced search tags. Behavioral specialists use this without committing private resume details to Git.",
       inputSchema: {
+        operationId: z.string().min(1).max(200),
         specialty: z.enum(["leetcode", "system_design", "behavioral"]),
         questionId: z.string().min(1),
         title: z.string().min(1),
@@ -2226,15 +2426,27 @@ function createServer(ownerId: string, env: Env) {
         priority: z.number().int().min(0).max(1000).optional(),
         targetMinutes: z.number().int().min(5).max(480).optional(),
         active: z.boolean().optional(),
+        metadata: leetCodeQuestionMetadataSchema.optional(),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
-    async ({ specialty, ...question }) => {
-      await upsertOwnerBankQuestion(ownerId, specialty, question, Date.now());
-      return {
-        content: [{ type: "text", text: `Saved ${question.title} to the private ${specialty} bank.` }],
-        structuredContent: { specialty, ...question },
-      };
+    async ({ operationId, specialty, ...question }) => {
+      try {
+        const receipt = await enqueueSpecialistWriteJob(ownerId, {
+          jobId: operationId,
+          operation: "personal_bank_question",
+          payload: { specialty, question },
+        });
+        if (!["saved", "failed"].includes(receipt.status)) scheduleSpecialistWriteProcessing(ctx);
+        return {
+          content: [{ type: "text", text: receipt.status === "saved"
+            ? `${question.title} is durably saved in the private ${specialty} bank.`
+            : `${question.title} is durably queued as ${operationId}; verify its receipt before reporting success.` }],
+          structuredContent: receipt,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
     },
   );
 
@@ -2776,6 +2988,9 @@ export default {
     if (url.pathname === "/voice/intents" && request.method === "GET") {
       return listVoiceIntents(ownerId, request);
     }
+    if (url.pathname === "/voice/delivery-blockers" && request.method === "GET") {
+      return listVoiceDeliveryBlockers(ownerId, request);
+    }
     const voiceIntentDecision = url.pathname.match(/^\/voice\/intents\/([^/]+)\/decision$/);
     if (voiceIntentDecision && request.method === "POST") {
       return decideVoiceIntent(ownerId, request, decodeURIComponent(voiceIntentDecision[1]), env);
@@ -2811,8 +3026,11 @@ export default {
       return acknowledgeDeliveryReviewBypass(ownerId, request, decodeURIComponent(deliveryReviewBypass[1]));
     }
     if (url.pathname === "/mcp" || url.pathname.startsWith("/mcp/")) {
-      return createMcpHandler(createServer(ownerId, env))(request, env, ctx);
+      return createMcpHandler(createServer(ownerId, env, ctx))(request, env, ctx);
     }
     return json(request, { error: "Not found" }, { status: 404 });
+  },
+  async scheduled(_controller: ScheduledController, _env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(processSpecialistWriteJobs(executeSpecialistWriteJob, { maxJobs: 25 }));
   },
 } satisfies ExportedHandler<Env>;

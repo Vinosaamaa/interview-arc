@@ -315,6 +315,37 @@ test("pause, resume, and finish preserve optimistic timer revisions", async () =
   assert.equal(state.timers["activity-1"].completed, true);
 });
 
+test("finish returns stable Voice blocker details before mutating the timer", async () => {
+  const state = liveState({ activities: [practiceActivity("activity-1")] });
+  const runtime = harness(state);
+  await controlPracticeTimer(state, timerInput(), "hash-1", runtime.dependencies);
+  const voiceGuard = {
+    awaitingDelivery: [],
+    missingDurableExchange: [],
+    awaitingAudio: [],
+    audioLostNeedsAcknowledgement: [],
+    needsDecision: [],
+    deleting: [],
+    conflicts: ["capture-conflict"],
+    discardedUnclassified: [],
+  };
+  runtime.dependencies.prepareVoiceCapturesForFinish = async () => voiceGuard;
+  runtime.dependencies.voiceFinishGuardMessage = () => "One Voice group needs repair.";
+
+  await assert.rejects(
+    controlPracticeTimer(state, timerInput({
+      mutationId: "mutation-2",
+      expectedRevision: 1,
+      action: "finish",
+    }), "hash-2", runtime.dependencies),
+    (error) => error?.code === "voice_delivery_blocked"
+      && error?.details?.retryable === false
+      && error?.details?.voiceGuard === voiceGuard,
+  );
+  assert.equal(state.timers["activity-1"].revision, 1);
+  assert.equal(state.timers["activity-1"].completed, false);
+});
+
 test("repairable review scheduling cannot turn a committed finish into failure", async () => {
   const state = liveState({ activities: [practiceActivity("activity-1")] });
   state.outcomes["activity-1"] = "failed";

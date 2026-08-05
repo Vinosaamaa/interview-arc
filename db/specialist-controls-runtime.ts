@@ -360,7 +360,10 @@ async function finishAndAdvancePracticeTimer(
   const voiceGuard = await dependencies.prepareVoiceCapturesForFinish(input.activityId, now);
   const voiceConflict = dependencies.voiceFinishGuardMessage(voiceGuard);
   if (voiceConflict) {
-    throw new SpecialistControlError("timer_state_conflict", voiceConflict);
+    throw new SpecialistControlError("voice_delivery_blocked", voiceConflict, {
+      retryable: false,
+      voiceGuard,
+    });
   }
   const receipt = {
     mutationId: input.mutationId,
@@ -399,6 +402,16 @@ async function applyOrdinaryPracticeTimerAction(
   requestHash: string,
 ) {
   const action: TimerAction = input.action === "resume" ? "start" : input.action as TimerAction;
+  if (action === "finish") {
+    const voiceGuard = await dependencies.prepareVoiceCapturesForFinish(input.activityId, now);
+    const voiceConflict = dependencies.voiceFinishGuardMessage(voiceGuard);
+    if (voiceConflict) {
+      throw new SpecialistControlError("voice_delivery_blocked", voiceConflict, {
+        retryable: false,
+        voiceGuard,
+      });
+    }
+  }
   if (action === "start" && activity.sessionId) {
     const session = specialistSession(state, activity.sessionId);
     const receipt = {

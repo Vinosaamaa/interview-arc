@@ -3,7 +3,11 @@ import { readFile } from "node:fs/promises";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
-import { canonicalVoiceBatchTurns, sameVoiceBatchReservation } from "../db/practice-exchange-policy.ts";
+import {
+  canonicalVoiceBatchTurns,
+  sameVoiceBatchReservation,
+  voiceResponseGroupDigest,
+} from "../db/practice-exchange-policy.ts";
 import {
   resolveVoiceCaptureBatch,
   voiceCaptureBatchInputSchema,
@@ -91,6 +95,24 @@ test("changed order, membership, activity, specialty, or response content is not
   assert.equal(sameVoiceBatchReservation(reservation, { ...reservation, activityId: "activity-2" }), false);
   assert.equal(sameVoiceBatchReservation(reservation, { ...reservation, specialty: "behavioral" }), false);
   assert.equal(sameVoiceBatchReservation(reservation, { ...reservation, responseBody: "Changed" }), false);
+});
+
+test("canonical response-group digests are stable and owner scoped", async () => {
+  const reservation = {
+    activityId: input.activityId,
+    specialty: input.specialty,
+    captures: input.captures,
+    responseTurnId: input.responseTurnId,
+    responseBody: input.responseBody,
+    responseOccurredAt: input.responseOccurredAt,
+  };
+  const first = await voiceResponseGroupDigest("owner-a", reservation);
+  assert.equal(first, await voiceResponseGroupDigest("owner-a", { ...reservation }));
+  assert.notEqual(first, await voiceResponseGroupDigest("owner-b", reservation));
+  assert.notEqual(first, await voiceResponseGroupDigest("owner-a", {
+    ...reservation,
+    captures: [...reservation.captures].reverse(),
+  }));
 });
 
 test("D1 enforces one group order and one user-turn membership", async () => {

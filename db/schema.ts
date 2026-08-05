@@ -360,6 +360,31 @@ export const voiceResponseGroupMembers = sqliteTable(
   ],
 );
 
+// Every coordinator-authorized response-group recovery is recorded without
+// transcript or audio content. The event makes a state repair reviewable while
+// keeping the immutable canonical group as the source of truth.
+export const voiceResponseGroupRepairEvents = sqliteTable(
+  "voice_response_group_repair_events",
+  {
+    ownerId,
+    id: text("id").notNull(),
+    responseTurnId: text("response_turn_id").notNull(),
+    activityId: text("activity_id").notNull(),
+    priorStatus: text("prior_status").notNull(),
+    resultStatus: text("result_status").notNull(),
+    reason: text("reason").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.id] }),
+    index("voice_response_group_repair_events_group_idx").on(
+      table.ownerId,
+      table.responseTurnId,
+      table.createdAt,
+    ),
+  ],
+);
+
 // A specialist can classify the protocol-v2 envelope immediately after Voice
 // inserts it, before Voice's background metadata registration reaches the
 // Worker. This short-lived owner-scoped row closes that race without storing
@@ -659,6 +684,45 @@ export const ownerBankQuestions = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.specialty, table.questionId] })],
 );
 
+// Specialist writes first reserve a stable, owner-scoped operation receipt.
+// The MCP request only performs this small enqueue; a scheduled executor owns
+// the potentially expensive durable write and can reclaim an expired lease if
+// a Worker invocation is terminated by a platform CPU limit.
+export const specialistWriteJobs = sqliteTable(
+  "specialist_write_jobs",
+  {
+    ownerId,
+    jobId: text("job_id").notNull(),
+    operation: text("operation", {
+      enum: ["leetcode_code_attempt", "personal_bank_question"],
+    }).notNull(),
+    payloadHash: text("payload_hash").notNull(),
+    payload: text("payload", { mode: "json" }).notNull(),
+    status: text("status", {
+      enum: ["queued", "processing", "retry_wait", "saved", "failed"],
+    }).notNull().default("queued"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    totalAttemptCount: integer("total_attempt_count").notNull().default(0),
+    nextAttemptAt: integer("next_attempt_at").notNull().default(0),
+    leaseExpiresAt: integer("lease_expires_at"),
+    result: text("result", { mode: "json" }),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    errorRetryable: integer("error_retryable", { mode: "boolean" }),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+    completedAt: integer("completed_at"),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.jobId] }),
+    index("specialist_write_jobs_due_idx").on(
+      table.status,
+      table.nextAttemptAt,
+      table.leaseExpiresAt,
+    ),
+  ],
+);
+
 // Personal integration tokens map a bearer credential to the same opaque
 // owner id used by the dashboard. Only the SHA-256 digest is persisted.
 export const integrationTokens = sqliteTable("integration_tokens", {
@@ -799,6 +863,7 @@ export type PracticeNoteRow = typeof practiceNotes.$inferSelect;
 export type PracticeTranscriptTurnRow = typeof practiceTranscriptTurns.$inferSelect;
 export type VoiceCaptureIntentRow = typeof voiceCaptureIntents.$inferSelect;
 export type VoiceSpecialistResponseRow = typeof voiceSpecialistResponses.$inferSelect;
+export type VoiceResponseGroupRepairEventRow = typeof voiceResponseGroupRepairEvents.$inferSelect;
 export type LeetCodeCodeAttemptRow = typeof leetcodeCodeAttempts.$inferSelect;
 export type LeetCodeCodeAttemptReviewBackfillRow = typeof leetcodeCodeAttemptReviewBackfills.$inferSelect;
 export type ActivityFinalizationRow = typeof activityFinalizations.$inferSelect;
@@ -812,6 +877,7 @@ export type ProvisionalSolutionProfileRow = typeof provisionalSolutionProfiles.$
 export type ProblemSolutionRevisionRow = typeof problemSolutionRevisions.$inferSelect;
 export type ActivitySolutionLinkRow = typeof activitySolutionLinks.$inferSelect;
 export type OwnerBankQuestionRow = typeof ownerBankQuestions.$inferSelect;
+export type SpecialistWriteJobRow = typeof specialistWriteJobs.$inferSelect;
 export type IntegrationTokenRow = typeof integrationTokens.$inferSelect;
 export type ExtraActivityRow = typeof extraActivities.$inferSelect;
 export type FocusBlockRow = typeof focusBlocks.$inferSelect;

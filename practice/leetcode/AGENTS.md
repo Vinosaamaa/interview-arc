@@ -107,7 +107,6 @@ later in this guide.
   evidence-complete finalization solely because optional metadata could not be
   reached. Recheck later only for a missing/stale/disputed field or explicit
   request.
-
 ### Imported LeetCode question metadata
 
 Every newly imported public LeetCode question must receive a metadata
@@ -132,6 +131,14 @@ route unsupported writes to the coordinator's metadata-enrichment issue
 (`#160`, related to `#69`) or use the dedicated metadata MCP operation when it
 exists. The current basic bank upsert is not sufficient for this contract.
 
+- Persist that structured metadata through the typed
+  `upsert_personal_bank_question` MCP operation using the stable public
+  `questionId`, a stable `operationId`, and the exact metadata payload. The
+  Worker is the only D1 persistence boundary: wait for the durable receipt to
+  reach `status: saved`, and never write D1 directly or report a queued receipt
+  as saved. Preserve internal tags separately from official topics and company
+  signals; re-imports must be exact-ID idempotent and may only merge/add
+  metadata according to capture freshness.
 - Pass the stable `questionId` and a complete reusable `solutionProfile`. Put
   the canonical best approach, reference implementation, complexity, edge
   cases, and up to two meaningful alternatives in the profile. Keep the
@@ -982,6 +989,15 @@ follow the lifecycle and visible-parity rules in
 generated reference implementations, and Scratch Notes are not Code Attempts.
 Historical evidence backfill is coordinator-owned and must not be attempted
 through the specialist MCP write.
+
+Each Code Attempt write uses one stable `operationId` for that exact review
+state. Reuse the same operation ID and byte-for-byte logical payload only when
+transport fails before a durable receipt is known. A pending-review write and
+its later complete-review write are different logical operations and therefore
+use different operation IDs while preserving the same immutable attempt ID and
+code. The persistence child must inspect `get_specialist_write_status`; only
+`saved` proves the attempt exists in D1. It must not create a new attempt merely
+because a receipt is queued, retrying, or transport-uncertain.
 
 Every Code Attempt must carry its own non-null structured `review`; findings in
 the conversation transcript alone are insufficient. Inspect and test the exact

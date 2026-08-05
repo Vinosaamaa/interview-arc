@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { VoiceResponseGroupReceipt } from "../db/durable-practice";
 
 const orderedCapturesSchema = z.array(z.object({
   captureId: z.string().min(1),
@@ -34,6 +35,7 @@ export type VoiceCaptureBatchInput = z.infer<typeof voiceCaptureBatchInputSchema
 type VoiceCaptureBatchReservation = {
   duplicate: boolean;
   status: string;
+  canonicalReceipt?: VoiceResponseGroupReceipt;
 };
 
 export async function resolveVoiceCaptureBatch(
@@ -51,6 +53,7 @@ export async function resolveVoiceCaptureBatch(
     userTurnIds: input.captures.map((capture) => capture.userTurnId),
     responseTurnId: input.responseTurnId,
     status: saved.status,
+    canonicalReceipt: saved.canonicalReceipt ?? null,
     duplicate: saved.duplicate,
     receipt,
   };
