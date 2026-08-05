@@ -97,6 +97,7 @@ later in this guide.
   prose or official code verbatim. If the editorial is unavailable or
   Premium-locked, say so and continue with original analysis instead of
   claiming it was reviewed.
+
 - When the resolved question is an owner-private entry created from a public
   LeetCode URL, perform the question-metadata preflight at its first complete
   finalization. Add `questionMetadata` containing every field actually
@@ -155,6 +156,19 @@ exists. The current basic bank upsert is not sufficient for this contract.
 
 The coordinator owns Git rendering and production publication through `Publish
 all pending practice`.
+
+#### Official Editorial content boundary
+
+Editorial review is post-attempt research, never part of submission. Follow the
+one-tab navigation and rendered-content checks in
+`docs/contracts/leetcode-playwright-controller.md`; this guide adds only the
+specialist boundary: cite the Editorial URL only after verified content is
+rendered, paraphrase its approaches, and rewrite code independently. If the
+Editorial is unavailable, locked, or only a shell is rendered, say so and use
+clearly labelled original analysis. Never substitute a web connector, private
+endpoint, cookie export, raw CDP, manual Playwright, second tab, or alternate
+browser. Do not edit the controller or delay the exact submit operation during
+practice.
 
 ## Administrative Instruction Maintenance
 
@@ -480,6 +494,53 @@ visible coaching handoff.
      incomplete until each material relationship has been accounted for.
      Reproduce every faithfully representable relationship as concise
      ASCII/text in both the conversation and the Java header comment.
+     Do not present only the backing array when the example depends on visual
+     geometry. For line or container problems, draw the indexed bars/segments
+     and label the relevant boundaries, widths, heights, and area; for graphs,
+     trees, grids, and matrices, show their nodes/cells/edges or relationships
+     in a faithful text form. Every example with material visual structure must
+     have at least one such visual representation before coaching begins.
+     - Prefer a vivid, readable fixed-cell diagram when text can preserve the
+       visual: use equal-width cells with a small, consistent gap, semantic
+       glyphs appropriate to the subject (for example bars, nodes, edges,
+       boundaries, labels, or repeated fill glyphs), and explicit axes,
+       indices, or coordinates. Keep every source item aligned to exactly one
+       labeled position. Fill every cell that belongs to the depicted region;
+       do not leave misleading blanks between boundaries or collapse the
+       visual into an array-only shorthand. Validate the rendered positions,
+       levels, relationships, and labels against the source before showing it.
+       Apply this grammar to plots, histograms, line/container diagrams,
+       grids, matrices, trees, and graph layouts when it remains faithful; do
+       not force a bar-chart style onto a visual that needs another layout.
+       Reference examples:
+
+       ```text
+       height
+         8 |  ·· ██ ·· ·· ·· ·· ██ ·· ··
+         7 |  ·· ██ ░░ ░░ ░░ ░░ ██ ░░ ██
+         6 |  ·· ██ ██ ░░ ░░ ░░ ██ ░░ ██
+         5 |  ·· ██ ██ ░░ ██ ░░ ██ ░░ ██
+         4 |  ·· ██ ██ ░░ ██ ██ ██ ░░ ██
+         3 |  ·· ██ ██ ░░ ██ ██ ██ ██ ██
+         2 |  ·· ██ ██ ██ ██ ██ ██ ██ ██
+         1 |  ██ ██ ██ ██ ██ ██ ██ ██ ██
+           +-----------------------------
+              0   1   2   3   4   5   6   7   8
+       ```
+
+       ```text
+                              ┌───────┐
+                              │  -10  │
+                              └───┬───┘
+                  ┌───────────────┴───────────────┐
+              ┌───▼───┐                       ┌───▼───┐
+              │   9   │                       │  20   │
+              └───────┘                       └───┬───┘
+                                          ┌────────┴────────┐
+                                      ┌───▼───┐        ┌───▼───┐
+                                      │  15   │        │   7   │
+                                      └───────┘        └───────┘
+       ```
    - If ASCII/text would lose material information and the user needs to inspect
      that visual, bring the existing tab to the foreground. Material visual
      inspection and user authentication are the only flows that may foreground
