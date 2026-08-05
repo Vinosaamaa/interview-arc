@@ -152,6 +152,12 @@ Exact user code still belongs in the structured Code Attempt record when the
 user explicitly crosses an attempt boundary; generated reference code does
 not become a user attempt.
 
+Whenever the response reuses warm activity context, append the exact italic
+footer `*Warm activity context reused.*` once, regardless of whether the
+current turn is related, unrelated, or uncertain, and regardless of whether it
+is typed or Voice. If another truthful classification or persistence footer
+also applies, show both on separate lines; never omit the warm-context footer.
+
 Exclude administrative or process conversation even when it appears in the same
 activity or visible chat: navigation, Playwright or browser preflight, tab and
 page handling, MCP/API/tool calls, D1/R2 or private-audio operations, timers,

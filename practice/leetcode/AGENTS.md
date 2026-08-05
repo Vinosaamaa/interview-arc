@@ -442,11 +442,16 @@ browser, or finalization mutation even when warm context is active.
 
 #### Visible warm-context and persistence annotations
 
-When any response in the active LeetCode thread reuses the warm context,
-including administrative or unrelated turns, append this small italic footer
-so the user can distinguish warm reuse from a fresh startup:
+When any response in the active LeetCode thread reuses the warm context, append
+this small italic footer exactly once, regardless of whether the current turn
+is related, unrelated, or uncertain, typed or Voice, administrative or
+problem-related. This lets the user distinguish warm reuse from a fresh
+startup:
 
 `*Warm activity context reused.*`
+
+If an unrelated/uncertain receipt or persistence-delegation line also applies,
+show that truthful line separately; it never replaces the warm-context footer.
 
 When a persistence-only child receives delegated work, also show the truthful
 line required by `background-specialist-persistence.md`:
