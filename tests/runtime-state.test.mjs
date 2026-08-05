@@ -189,6 +189,10 @@ test("post-acceptance Voice remediation requires exact identity and an eligible 
     { action: "delete", idempotent: false },
   );
   assert.deepEqual(
+    voiceCaptureRemediationDisposition({ ...accepted, status: "quarantined_conflict" }, expected),
+    { action: "delete", idempotent: false },
+  );
+  assert.deepEqual(
     voiceCaptureRemediationDisposition({ ...accepted, status: "deleting" }, expected),
     { action: "delete", idempotent: true },
   );

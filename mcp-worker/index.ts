@@ -56,6 +56,8 @@ import {
   readVoiceCaptureRemediationIntent,
   readVoiceCaptureIntents,
   readVoiceCaptureIntentsPage,
+  readVoiceDeliveryBlockers,
+  repairVoiceResponseGroup,
   registerVoiceCaptureIntent,
   registerActivityAudioClip,
   registerSpecialistTask,
@@ -73,6 +75,7 @@ import {
   updateActivityAudioClipStatus,
   upsertOwnerBankQuestion,
   voiceFinishGuardMessage,
+  VoiceResponseGroupConflictError,
 } from "../db/durable-practice";
 import {
   typedExchangeReceipt,
@@ -441,6 +444,9 @@ async function voiceTimerMutation(ownerId: string, request: Request, env: Env) {
       if (voiceConflict) {
         return json(request, {
           error: voiceConflict,
+          code: "voice_delivery_blocked",
+          retryable: false,
+          voiceGuard,
         }, { status: 409 });
       }
       await setOutcome(ownerId, activity.id, mutation.outcome, now);
@@ -1177,6 +1183,15 @@ async function listVoiceIntents(ownerId: string, request: Request) {
   return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, intents, legacyOrphans, nextCursor });
 }
 
+async function listVoiceDeliveryBlockers(ownerId: string, request: Request) {
+  const activityId = new URL(request.url).searchParams.get("activityId")?.trim();
+  if (!activityId) {
+    return json(request, { error: "An activityId is required." }, { status: 400 });
+  }
+  const result = await readVoiceDeliveryBlockers(ownerId, activityId);
+  return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, ...result });
+}
+
 async function decideVoiceIntent(ownerId: string, request: Request, captureId: string, env: Env) {
   const body = (await request.json()) as {
     protocolVersion?: number;
@@ -1376,6 +1391,9 @@ async function companionMutation(ownerId: string, request: Request, env: Env) {
       if (voiceConflict) {
         return json(request, {
           error: voiceConflict,
+          code: "voice_delivery_blocked",
+          retryable: false,
+          voiceGuard,
         }, { status: 409 });
       }
     }
@@ -1602,16 +1620,28 @@ function specialistToolFailure(error: unknown) {
     || error instanceof PlanningSelectionError
     || error instanceof TodayPlanningConflictError
     || error instanceof TimerStateConflictError
+    || error instanceof VoiceResponseGroupConflictError
   ) {
     const code = "code" in error && typeof error.code === "string"
       ? error.code
       : error instanceof TimerStateConflictError
         ? "timer_state_conflict"
-        : "specialist_control_conflict";
+        : error instanceof VoiceResponseGroupConflictError
+          ? error.code
+          : "specialist_control_conflict";
     return {
       isError: true,
       content: [{ type: "text" as const, text: error.message }],
-      structuredContent: { error: error.message, code, retryable: false },
+      structuredContent: {
+        error: error.message,
+        code,
+        retryable: error instanceof SpecialistControlError
+          && typeof error.details.retryable === "boolean"
+          ? error.details.retryable
+          : false,
+        ...(error instanceof VoiceResponseGroupConflictError
+          || error instanceof SpecialistControlError ? error.details : {}),
+      },
     };
   }
   throw error;
@@ -1867,10 +1897,62 @@ function createServer(ownerId: string, env: Env) {
         const result = await resolveVoiceCaptureBatch(input, async (reservation) => {
           const saved = await resolveVoiceCaptureBatchAndSaveResponse(ownerId, reservation, Date.now());
           await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_intent");
-          return { duplicate: saved.duplicate, status: saved.group.status };
+          return {
+            duplicate: saved.duplicate,
+            status: saved.group.status,
+            canonicalReceipt: saved.receipt,
+          };
         });
         return {
           content: [{ type: "text", text: result.receipt }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_voice_delivery_blockers",
+    {
+      description: "Read exact owner-scoped Voice delivery blockers for one activity, including canonical response-group receipts and the safe actions currently allowed. This never returns transcript text or audio content.",
+      inputSchema: {
+        activityId: z.string().min(1),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ activityId }) => {
+      const result = await readVoiceDeliveryBlockers(ownerId, activityId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "repair_voice_response_group",
+    {
+      description: "Restore one exact intact quarantined Voice response group after coordinator review. Requires the server-issued canonical digest, expected status, explicit user authorization, and an audit reason; immutable evidence is never rewritten.",
+      inputSchema: {
+        activityId: z.string().min(1),
+        responseTurnId: z.string().min(1),
+        expectedDigest: z.string().regex(/^[a-f0-9]{64}$/),
+        expectedStatus: z.literal("quarantined_conflict"),
+        authorization: z.literal("explicit_user_instruction"),
+        reason: z.string().min(1).max(2_000),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await repairVoiceResponseGroup(ownerId, input, Date.now());
+        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_intent");
+        return {
+          content: [{ type: "text", text: result.repaired
+            ? "Restored the exact canonical Voice response group; delivery can resume."
+            : "The exact Voice response group is already in a recoverable state." }],
           structuredContent: result,
         };
       } catch (error) {
@@ -2775,6 +2857,9 @@ export default {
     }
     if (url.pathname === "/voice/intents" && request.method === "GET") {
       return listVoiceIntents(ownerId, request);
+    }
+    if (url.pathname === "/voice/delivery-blockers" && request.method === "GET") {
+      return listVoiceDeliveryBlockers(ownerId, request);
     }
     const voiceIntentDecision = url.pathname.match(/^\/voice\/intents\/([^/]+)\/decision$/);
     if (voiceIntentDecision && request.method === "POST") {

@@ -360,6 +360,31 @@ export const voiceResponseGroupMembers = sqliteTable(
   ],
 );
 
+// Every coordinator-authorized response-group recovery is recorded without
+// transcript or audio content. The event makes a state repair reviewable while
+// keeping the immutable canonical group as the source of truth.
+export const voiceResponseGroupRepairEvents = sqliteTable(
+  "voice_response_group_repair_events",
+  {
+    ownerId,
+    id: text("id").notNull(),
+    responseTurnId: text("response_turn_id").notNull(),
+    activityId: text("activity_id").notNull(),
+    priorStatus: text("prior_status").notNull(),
+    resultStatus: text("result_status").notNull(),
+    reason: text("reason").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.id] }),
+    index("voice_response_group_repair_events_group_idx").on(
+      table.ownerId,
+      table.responseTurnId,
+      table.createdAt,
+    ),
+  ],
+);
+
 // A specialist can classify the protocol-v2 envelope immediately after Voice
 // inserts it, before Voice's background metadata registration reaches the
 // Worker. This short-lived owner-scoped row closes that race without storing
@@ -799,6 +824,7 @@ export type PracticeNoteRow = typeof practiceNotes.$inferSelect;
 export type PracticeTranscriptTurnRow = typeof practiceTranscriptTurns.$inferSelect;
 export type VoiceCaptureIntentRow = typeof voiceCaptureIntents.$inferSelect;
 export type VoiceSpecialistResponseRow = typeof voiceSpecialistResponses.$inferSelect;
+export type VoiceResponseGroupRepairEventRow = typeof voiceResponseGroupRepairEvents.$inferSelect;
 export type LeetCodeCodeAttemptRow = typeof leetcodeCodeAttempts.$inferSelect;
 export type LeetCodeCodeAttemptReviewBackfillRow = typeof leetcodeCodeAttemptReviewBackfills.$inferSelect;
 export type ActivityFinalizationRow = typeof activityFinalizations.$inferSelect;

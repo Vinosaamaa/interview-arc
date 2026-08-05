@@ -53,17 +53,51 @@ function fixtureSql(tokenHash) {
     ["capture-int-c3", "activity-int-three", "turn-int-c3", "clip-int-c3", checksum("Three."), 1300],
     ["capture-int-r1", "activity-int-race", "turn-int-r1", "clip-int-r1", checksum("Race one."), 2100],
     ["capture-int-r2", "activity-int-race", "turn-int-r2", "clip-int-r2", checksum("Race two."), 2200],
+    ["capture-int-q1", "activity-int-quarantine", "turn-int-q1", "clip-int-q1", checksum("Quarantine one."), 3100],
+    ["capture-int-q2", "activity-int-quarantine", "turn-int-q2", "clip-int-q2", checksum("Quarantine two."), 3200],
+    ["capture-int-q3", "activity-int-quarantine", "turn-int-q3", "clip-int-q3", checksum("Quarantine three."), 3300],
+    ["capture-int-d1", "activity-int-quarantine-delete", "turn-int-d1", "clip-int-d1", checksum("Delete one."), 4100],
+    ["capture-int-d2", "activity-int-quarantine-delete", "turn-int-d2", "clip-int-d2", checksum("Delete two."), 4200],
   ];
   return `
     INSERT INTO integration_tokens
       (token_hash,owner_id,label,created_at,last_used_at,revoked_at)
     VALUES ('${tokenHash}','owner-integration-150','Voice batch integration',1,NULL,NULL);
+    INSERT INTO integration_tokens
+      (token_hash,owner_id,label,created_at,last_used_at,revoked_at)
+    VALUES ('${checksum("ia_voice_batch_other_owner_token_150")}','owner-integration-other','Other owner',1,NULL,NULL);
     ${captures.map(([captureId, activityId, turnId, clipId, checksum, occurredAt]) => `
       INSERT INTO voice_capture_intents
         (owner_id,capture_id,activity_id,turn_id,clip_id,specialty,status,checksum,occurred_at,created_at,updated_at)
       VALUES
         ('owner-integration-150','${captureId}','${activityId}','${turnId}','${clipId}','leetcode','pending','${checksum}',${occurredAt},1,1);
     `).join("\n")}
+    UPDATE voice_capture_intents
+    SET status = 'quarantined_conflict', last_error = 'Seeded exact-repair fixture.'
+    WHERE capture_id IN ('capture-int-q1','capture-int-q2','capture-int-q3','capture-int-d1','capture-int-d2');
+    INSERT INTO voice_response_groups
+      (owner_id,response_turn_id,activity_id,specialty,response_body,response_occurred_at,member_count,status,created_at,updated_at)
+    VALUES
+      ('owner-integration-150','response-int-quarantine','activity-int-quarantine','leetcode','Recovered response.',3400,3,'quarantined_conflict',1,1),
+      ('owner-integration-150','response-int-quarantine-delete','activity-int-quarantine-delete','leetcode','Delete response.',4300,2,'quarantined_conflict',1,1);
+    INSERT INTO voice_response_group_members
+      (owner_id,capture_id,response_turn_id,activity_id,user_turn_id,member_order,transcript,checksum,occurred_at,created_at,updated_at)
+    VALUES
+      ('owner-integration-150','capture-int-q1','response-int-quarantine','activity-int-quarantine','turn-int-q1',0,NULL,NULL,NULL,1,1),
+      ('owner-integration-150','capture-int-q2','response-int-quarantine','activity-int-quarantine','turn-int-q2',1,NULL,NULL,NULL,1,1),
+      ('owner-integration-150','capture-int-q3','response-int-quarantine','activity-int-quarantine','turn-int-q3',2,NULL,NULL,NULL,1,1),
+      ('owner-integration-150','capture-int-d1','response-int-quarantine-delete','activity-int-quarantine-delete','turn-int-d1',0,NULL,NULL,NULL,1,1),
+      ('owner-integration-150','capture-int-d2','response-int-quarantine-delete','activity-int-quarantine-delete','turn-int-d2',1,NULL,NULL,NULL,1,1);
+    INSERT INTO voice_exchange_reservations
+      (owner_id,identity_type,identity,exchange_kind,response_turn_id,created_at)
+    VALUES
+      ('owner-integration-150','capture','capture-int-q1','group','response-int-quarantine',1),
+      ('owner-integration-150','capture','capture-int-q2','group','response-int-quarantine',1),
+      ('owner-integration-150','capture','capture-int-q3','group','response-int-quarantine',1),
+      ('owner-integration-150','response_turn','response-int-quarantine','group','response-int-quarantine',1),
+      ('owner-integration-150','capture','capture-int-d1','group','response-int-quarantine-delete',1),
+      ('owner-integration-150','capture','capture-int-d2','group','response-int-quarantine-delete',1),
+      ('owner-integration-150','response_turn','response-int-quarantine-delete','group','response-int-quarantine-delete',1);
   `;
 }
 
@@ -96,6 +130,7 @@ test("local D1/R2 MCP preserves grouped order, concurrent completion, and whole-
       if (result.isError) throw new Error(`${name}: ${JSON.stringify(result.content)}`);
       return result.structuredContent;
     };
+    const callRaw = (name, args) => client.callTool({ name, arguments: args });
     const rest = async (path, init = {}) => {
       const response = await fetch(`${baseUrl}${path}`, {
         ...init,
@@ -135,7 +170,21 @@ test("local D1/R2 MCP preserves grouped order, concurrent completion, and whole-
       reason: "One visible multi-recording answer.",
     };
     assert.equal((await call("resolve_voice_captures_and_save_response", twoReservation)).duplicate, false);
-    assert.equal((await call("resolve_voice_captures_and_save_response", twoReservation)).duplicate, true);
+    const twoReplay = await call("resolve_voice_captures_and_save_response", twoReservation);
+    assert.equal(twoReplay.duplicate, true);
+    assert.match(twoReplay.canonicalReceipt.digest, /^[a-f0-9]{64}$/);
+    const mismatch = await callRaw("resolve_voice_captures_and_save_response", {
+      ...twoReservation,
+      captures: [...twoReservation.captures].reverse(),
+      responseBody: "A caller supplied a conflicting nearby answer.",
+    });
+    assert.equal(mismatch.isError, true);
+    assert.equal(mismatch.structuredContent.code, "voice_response_group_conflict");
+    assert.equal(mismatch.structuredContent.retryable, false);
+    assert.equal(mismatch.structuredContent.existingReceipt.digest, twoReplay.canonicalReceipt.digest);
+    const afterMismatch = await call("resolve_voice_captures_and_save_response", twoReservation);
+    assert.equal(afterMismatch.duplicate, true);
+    assert.equal(afterMismatch.status, "provisional");
     await assert.rejects(() => call("resolve_voice_capture_and_save_response", {
       captureId: "capture-int-a",
       activityId: "activity-int-two",
@@ -240,6 +289,125 @@ test("local D1/R2 MCP preserves grouped order, concurrent completion, and whole-
       }),
     ]);
     assert.equal(race.filter((result) => result.status === "fulfilled").length, 1);
+
+    const blockers = await call("get_voice_delivery_blockers", { activityId: "activity-int-quarantine" });
+    assert.equal(blockers.blockers.length, 3);
+    assert.deepEqual(blockers.blockers.map((blocker) => blocker.memberOrder), [0, 1, 2]);
+    assert.ok(blockers.blockers.every((blocker) => blocker.groupStatus === "quarantined_conflict"));
+    const repairDigest = blockers.blockers[0].groupDigest;
+    assert.match(repairDigest, /^[a-f0-9]{64}$/);
+    const restBlockers = await rest("/voice/delivery-blockers?activityId=activity-int-quarantine");
+    assert.equal(restBlockers.protocolVersion, 2);
+    assert.deepEqual(restBlockers.blockers.map((blocker) => blocker.captureId), [
+      "capture-int-q1", "capture-int-q2", "capture-int-q3",
+    ]);
+
+    const otherOwner = new Client({ name: "voice-batch-other-owner", version: "1.0.0" });
+    await otherOwner.connect(new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), {
+      requestInit: { headers: { authorization: "Bearer ia_voice_batch_other_owner_token_150" } },
+    }));
+    try {
+      const hidden = await otherOwner.callTool({
+        name: "get_voice_delivery_blockers",
+        arguments: { activityId: "activity-int-quarantine" },
+      });
+      assert.deepEqual(hidden.structuredContent.blockers, []);
+      const rejected = await otherOwner.callTool({
+        name: "repair_voice_response_group",
+        arguments: {
+          activityId: "activity-int-quarantine",
+          responseTurnId: "response-int-quarantine",
+          expectedDigest: repairDigest,
+          expectedStatus: "quarantined_conflict",
+          authorization: "explicit_user_instruction",
+          reason: "Owner-scope negative fixture.",
+        },
+      });
+      assert.equal(rejected.isError, true);
+    } finally {
+      await otherOwner.close();
+    }
+
+    const staleRepair = await callRaw("repair_voice_response_group", {
+      activityId: "activity-int-quarantine",
+      responseTurnId: "response-int-quarantine",
+      expectedDigest: "0".repeat(64),
+      expectedStatus: "quarantined_conflict",
+      authorization: "explicit_user_instruction",
+      reason: "Reject a stale repair receipt.",
+    });
+    assert.equal(staleRepair.isError, true);
+    assert.equal(staleRepair.structuredContent.code, "voice_response_group_conflict");
+    assert.ok((await call("get_voice_delivery_blockers", {
+      activityId: "activity-int-quarantine",
+    })).blockers.every((blocker) => blocker.groupStatus === "quarantined_conflict"));
+
+    const repaired = await call("repair_voice_response_group", {
+      activityId: "activity-int-quarantine",
+      responseTurnId: "response-int-quarantine",
+      expectedDigest: repairDigest,
+      expectedStatus: "quarantined_conflict",
+      authorization: "explicit_user_instruction",
+      reason: "Restore the exact integration fixture.",
+    });
+    assert.equal(repaired.repaired, true);
+    assert.equal(repaired.receipt.status, "provisional");
+    const repairedReplay = await call("repair_voice_response_group", {
+      activityId: "activity-int-quarantine",
+      responseTurnId: "response-int-quarantine",
+      expectedDigest: repairDigest,
+      expectedStatus: "quarantined_conflict",
+      authorization: "explicit_user_instruction",
+      reason: "Idempotently replay the exact integration repair.",
+    });
+    assert.equal(repairedReplay.repaired, false);
+    assert.equal(repairedReplay.duplicate, true);
+    const quarantineCaptures = [
+      { captureId: "capture-int-q1", userTurnId: "turn-int-q1", transcript: "Quarantine one.", checksum: checksum("Quarantine one."), occurredAt: 3100 },
+      { captureId: "capture-int-q2", userTurnId: "turn-int-q2", transcript: "Quarantine two.", checksum: checksum("Quarantine two."), occurredAt: 3200 },
+      { captureId: "capture-int-q3", userTurnId: "turn-int-q3", transcript: "Quarantine three.", checksum: checksum("Quarantine three."), occurredAt: 3300 },
+    ];
+    await deliver("activity-int-quarantine", quarantineCaptures[2]);
+    await deliver("activity-int-quarantine", quarantineCaptures[0]);
+    await deliver("activity-int-quarantine", quarantineCaptures[1]);
+    assert.deepEqual(
+      (await call("get_activity_practice_record", { activityId: "activity-int-quarantine" })).turns.map((turn) => turn.turnId),
+      ["turn-int-q1", "turn-int-q2", "turn-int-q3", "response-int-quarantine"],
+    );
+
+    const concurrentRepairBlockers = await call("get_voice_delivery_blockers", {
+      activityId: "activity-int-quarantine-delete",
+    });
+    const concurrentRepairDigest = concurrentRepairBlockers.blockers[0].groupDigest;
+    const concurrentRepairs = await Promise.all([
+      call("repair_voice_response_group", {
+        activityId: "activity-int-quarantine-delete",
+        responseTurnId: "response-int-quarantine-delete",
+        expectedDigest: concurrentRepairDigest,
+        expectedStatus: "quarantined_conflict",
+        authorization: "explicit_user_instruction",
+        reason: "Concurrent repair winner fixture.",
+      }),
+      call("repair_voice_response_group", {
+        activityId: "activity-int-quarantine-delete",
+        responseTurnId: "response-int-quarantine-delete",
+        expectedDigest: concurrentRepairDigest,
+        expectedStatus: "quarantined_conflict",
+        authorization: "explicit_user_instruction",
+        reason: "Concurrent repair loser fixture.",
+      }),
+    ]);
+    assert.equal(concurrentRepairs.filter((result) => result.repaired).length, 1);
+    assert.equal(concurrentRepairs.filter((result) => result.duplicate).length, 1);
+
+    const deletedQuarantine = await call("delete_related_voice_capture", {
+      captureId: "capture-int-d1",
+      activityId: "activity-int-quarantine-delete",
+      turnId: "turn-int-d1",
+      authorization: "explicit_user_instruction",
+      reason: "Delete an exact quarantined group fixture.",
+    });
+    assert.deepEqual(deletedQuarantine.captureIds, ["capture-int-d1", "capture-int-d2"]);
 
     await call("resolve_voice_captures_and_save_response", {
       activityId: "activity-int-unregistered",

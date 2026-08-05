@@ -109,6 +109,20 @@ export type VoiceBatchReservationIdentity = {
   captures: Array<{ captureId: string; userTurnId: string }>;
 };
 
+export async function voiceResponseGroupDigest(ownerId: string, identity: VoiceBatchReservationIdentity) {
+  const canonical = JSON.stringify({
+    ownerId,
+    activityId: identity.activityId,
+    specialty: identity.specialty,
+    responseTurnId: identity.responseTurnId,
+    responseBody: identity.responseBody,
+    responseOccurredAt: identity.responseOccurredAt,
+    captures: identity.captures.map(({ captureId, userTurnId }) => ({ captureId, userTurnId })),
+  });
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
+  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+
 export function sameVoiceBatchReservation(
   existing: VoiceBatchReservationIdentity,
   incoming: VoiceBatchReservationIdentity,
@@ -196,7 +210,11 @@ export function voiceCaptureRemediationDisposition(
   if (intent.status === "deleted") {
     return { action: "already_deleted", idempotent: true };
   }
-  if (intent.status === "activity_related" || intent.status === "accepted") {
+  if (
+    intent.status === "activity_related"
+    || intent.status === "accepted"
+    || intent.status === "quarantined_conflict"
+  ) {
     return { action: "delete", idempotent: false };
   }
   if (intent.status === "deleting") {
