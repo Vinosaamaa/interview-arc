@@ -1639,7 +1639,9 @@ function specialistToolFailure(error: unknown) {
       ? candidateCode
       : error instanceof TimerStateConflictError
         ? "timer_state_conflict"
-        : "specialist_control_conflict";
+        : error instanceof VoiceResponseGroupConflictError
+          ? error.code
+          : "specialist_control_conflict";
     return {
       isError: true,
       content: [{ type: "text" as const, text: error.message }],
