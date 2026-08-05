@@ -4,7 +4,8 @@ export type LiveUpdateScope =
   | "practice"
   | "voice_intent"
   | "voice_capture"
-  | "publication";
+  | "publication"
+  | `voice_delivery_retry:${string}`;
 
 export type LiveUpdateNamespace = DurableObjectNamespace;
 
