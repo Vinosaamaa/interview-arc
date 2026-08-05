@@ -1448,10 +1448,20 @@ export async function readVoiceDeliveryBlockers(ownerId: string, activityId: str
       const member = memberByCapture.get(intent.captureId);
       const group = member ? groupByResponse.get(member.responseTurnId) : undefined;
       const clip = clipById.get(intent.clipId);
+      const retryable = (intent.status === "activity_related" || intent.status === "accepted")
+        && clip?.status !== "audio_lost"
+        && !clip?.audioLostAcknowledgedAt;
+      const canAcknowledgeAudioLoss = (intent.status === "activity_related" || intent.status === "accepted")
+        && clip?.status !== "available"
+        && !clip?.audioLostAcknowledgedAt;
       const allowedActions = intent.status === "quarantined_conflict" && group
         ? ["restore_exact_group", "delete_exact_group"]
         : intent.status === "activity_related" || intent.status === "accepted"
-          ? ["retry_delivery", "delete_exact_group"]
+          ? [
+            ...(retryable ? ["retry_delivery"] : []),
+            ...(canAcknowledgeAudioLoss ? ["acknowledge_audio_loss"] : []),
+            "delete_exact_group",
+          ]
           : intent.status === "uncertain"
             ? ["attach", "discard"]
             : ["wait"];
@@ -1475,7 +1485,7 @@ export async function readVoiceDeliveryBlockers(ownerId: string, activityId: str
         audioLossAcknowledged: Boolean(clip?.audioLostAcknowledgedAt),
         deletionState: intent.status === "deleting" ? "in_progress" : "not_started",
         lastError: intent.lastError,
-        retryable: intent.status === "activity_related" || intent.status === "accepted",
+        retryable,
         allowedActions,
       };
     }),
@@ -2956,7 +2966,79 @@ export async function registerActivityAudioClip(
         status,
         updatedAt: nowMs,
       },
-    });
+  });
+}
+
+export async function acknowledgeVoiceAudioLossForCapture(
+  ownerId: string,
+  input: {
+    captureId: string;
+    activityId: string;
+    turnId: string;
+    lossReason: "local_source_missing" | "local_source_unreadable";
+    reason: string;
+  },
+  nowMs: number,
+) {
+  const db = getDb();
+  const intents = await db.select().from(voiceCaptureIntents).where(and(
+    eq(voiceCaptureIntents.ownerId, ownerId),
+    eq(voiceCaptureIntents.captureId, input.captureId),
+  ));
+  const intent = intents[0];
+  if (!intent || intent.status !== "accepted"
+      || intent.activityId !== input.activityId || intent.turnId !== input.turnId) {
+    throw new Error("Audio loss acknowledgement requires the matching accepted Voice capture.");
+  }
+
+  let clip = await readActivityAudioClip(ownerId, intent.clipId);
+  if (clip?.status === "available") {
+    throw new Error("The original recording is already durable in private storage.");
+  }
+  if (!clip) {
+    await db.insert(activityAudioClips).values({
+      ownerId,
+      id: intent.clipId,
+      activityId: input.activityId,
+      transcriptTurnId: input.turnId,
+      objectKey: `audio-lost/${ownerId}/${intent.clipId}`,
+      filename: "voice-recording-unavailable",
+      mimeType: "application/x-interview-arc-audio-unavailable",
+      label: "Voice recording (unavailable)",
+      durationSeconds: null,
+      status: "audio_lost",
+      audioLostReason: input.lossReason,
+      audioLostDetectedAt: nowMs,
+      audioLostAcknowledgedAt: nowMs,
+      createdAt: nowMs,
+      updatedAt: nowMs,
+    }).onConflictDoNothing();
+    clip = await readActivityAudioClip(ownerId, intent.clipId);
+  }
+  if (!clip) throw new Error("The audio-loss record could not be created safely.");
+  const duplicate = clip.status === "audio_lost" && Boolean(clip.audioLostAcknowledgedAt);
+  if (!duplicate) {
+    await db.update(activityAudioClips).set({
+      status: "audio_lost",
+      audioLostReason: input.lossReason,
+      audioLostDetectedAt: clip.audioLostDetectedAt ?? nowMs,
+      audioLostAcknowledgedAt: clip.audioLostAcknowledgedAt ?? nowMs,
+      updatedAt: nowMs,
+    }).where(and(
+      eq(activityAudioClips.ownerId, ownerId),
+      eq(activityAudioClips.id, intent.clipId),
+    ));
+  }
+  return {
+    captureId: input.captureId,
+    activityId: input.activityId,
+    turnId: input.turnId,
+    clipId: intent.clipId,
+    status: "audio_lost" as const,
+    acknowledged: true,
+    duplicate,
+    transcriptPreserved: true,
+  };
 }
 
 export async function readActivityAudioClip(ownerId: string, id: string) {

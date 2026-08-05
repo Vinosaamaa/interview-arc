@@ -667,7 +667,7 @@ test("durable publishing keeps transcripts, review, notes, and four-day walkthro
   assert.match(contract, /complete standalone `modelAnswer`/i);
   assert.match(contract, /failed attempt or full walkthrough: first review in \*\*4 days\*\*/i);
   assert.match(contract, /Pinned Notes[\s\S]*What Went Well[\s\S]*What To Improve[\s\S]*References/);
-  for (const tool of ["append_practice_transcript", "add_practice_note", "save_provisional_solution_profile", "save_specialist_finalization", "get_activity_practice_record", "get_problem_solution_profile", "schedule_practice_review", "register_specialist_task", "register_activity_audio_clip", "save_delivery_analysis", "get_voice_delivery_blockers", "retry_voice_delivery"]) {
+  for (const tool of ["append_practice_transcript", "add_practice_note", "save_provisional_solution_profile", "save_specialist_finalization", "get_activity_practice_record", "get_problem_solution_profile", "schedule_practice_review", "register_specialist_task", "register_activity_audio_clip", "save_delivery_analysis", "get_voice_delivery_blockers", "retry_voice_delivery", "acknowledge_voice_audio_loss"]) {
     assert.match(bridge, new RegExp(`"${tool}"`));
     assert.match(codexConfig, new RegExp(`"${tool}"`));
   }
@@ -682,6 +682,7 @@ test("durable publishing keeps transcripts, review, notes, and four-day walkthro
   assert.match(bridge, /behavioralAnswer: z\.object/);
   assert.match(bridge, /"upsert_personal_bank_question"/);
   assert.match(contract, /`retry_voice_delivery`/);
+  assert.match(contract, /`acknowledge_voice_audio_loss`/);
   const durableStore = await readFile(new URL("../db/durable-practice.ts", import.meta.url), "utf8");
   assert.match(durableStore, /Behavioral Solution Profiles cannot contain a transcript/);
   assert.match(durableStore, /Behavioral Solution Profiles require .*preferred personal answer/);

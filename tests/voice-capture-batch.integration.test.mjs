@@ -218,7 +218,7 @@ test("local D1/R2 MCP preserves grouped order, concurrent completion, and whole-
     const retryBefore = await call("get_voice_delivery_blockers", { activityId: "activity-int-retry" });
     assert.deepEqual(retryBefore.blockers.map((blocker) => blocker.captureId), ["capture-int-retry"]);
     assert.equal(retryBefore.blockers[0].audioState, "not_registered");
-    assert.deepEqual(retryBefore.blockers[0].allowedActions, ["retry_delivery", "delete_exact_group"]);
+    assert.deepEqual(retryBefore.blockers[0].allowedActions, ["retry_delivery", "acknowledge_audio_loss", "delete_exact_group"]);
     const retry = await call("retry_voice_delivery", { activityId: "activity-int-retry" });
     assert.equal(retry.retryRequested, true);
     assert.ok(["retry_requested", "retry_signal_unavailable"].includes(retry.status));
@@ -228,6 +228,39 @@ test("local D1/R2 MCP preserves grouped order, concurrent completion, and whole-
     const retryNoop = await call("retry_voice_delivery", { activityId: "activity-int-quarantine" });
     assert.equal(retryNoop.status, "not_needed");
     assert.equal(retryNoop.retryRequested, false);
+    await deliver("activity-int-retry", {
+      captureId: "capture-int-retry",
+      userTurnId: "turn-int-retry",
+      transcript: "Retry me.",
+      checksum: checksum("Retry me."),
+      occurredAt: 5100,
+    });
+    const acknowledgedLoss = await call("acknowledge_voice_audio_loss", {
+      captureId: "capture-int-retry",
+      activityId: "activity-int-retry",
+      turnId: "turn-int-retry",
+      lossReason: "local_source_missing",
+      reason: "The local original is unavailable after the explicit retry attempt.",
+      authorization: "explicit_user_instruction",
+    });
+    assert.equal(acknowledgedLoss.status, "audio_lost");
+    assert.equal(acknowledgedLoss.acknowledged, true);
+    assert.equal(acknowledgedLoss.transcriptPreserved, true);
+    const acknowledgedBlocker = (await call("get_voice_delivery_blockers", {
+      activityId: "activity-int-retry",
+    })).blockers[0];
+    assert.equal(acknowledgedBlocker.audioState, "audio_lost");
+    assert.equal(acknowledgedBlocker.audioLossAcknowledged, true);
+    assert.deepEqual(acknowledgedBlocker.allowedActions, ["delete_exact_group"]);
+    const acknowledgedReplay = await call("acknowledge_voice_audio_loss", {
+      captureId: "capture-int-retry",
+      activityId: "activity-int-retry",
+      turnId: "turn-int-retry",
+      lossReason: "local_source_missing",
+      reason: "Idempotently replay the explicit loss acknowledgement.",
+      authorization: "explicit_user_instruction",
+    });
+    assert.equal(acknowledgedReplay.duplicate, true);
 
     const two = [
       { captureId: "capture-int-a", userTurnId: "turn-int-a", transcript: "First.", checksum: checksum("First."), occurredAt: 100 },

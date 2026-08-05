@@ -34,6 +34,7 @@ import { connectOwnerLiveUpdates, publishOwnerLiveUpdate } from "../worker/live-
 import {
   addPracticeNote,
   acknowledgeActivityAudioLost,
+  acknowledgeVoiceAudioLossForCapture,
   acknowledgePublishWithoutDeliveryReview,
   appendTranscriptTurns,
   appendVoiceTranscriptTurn,
@@ -2017,6 +2018,35 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
       );
       return {
         content: [{ type: "text", text: result.message }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "acknowledge_voice_audio_loss",
+    {
+      description: "Terminally acknowledge that one exact accepted Voice recording cannot be recovered after retry. Requires explicit user instruction and the capture/activity/turn identity; preserves the canonical transcript and specialist response, creates missing owner-scoped audio-loss metadata when necessary, and allows Finish to proceed while rendering the recording unavailable. Never use this to hide a retryable recording or delete a canonical exchange.",
+      inputSchema: {
+        captureId: z.string().min(1),
+        activityId: z.string().min(1),
+        turnId: z.string().min(1),
+        lossReason: z.enum(["local_source_missing", "local_source_unreadable"]),
+        reason: z.string().min(1).max(2_000),
+        authorization: z.literal("explicit_user_instruction"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+    },
+    async ({ authorization, ...input }) => {
+      if (authorization !== "explicit_user_instruction") {
+        throw new Error("Audio-loss acknowledgement requires explicit user instruction.");
+      }
+      const result = await acknowledgeVoiceAudioLossForCapture(ownerId, input, Date.now());
+      await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_capture");
+      return {
+        content: [{ type: "text", text: result.duplicate
+          ? "Recording-unavailable acknowledgement already exists; the canonical transcript was preserved. Re-read blockers before finishing."
+          : "Recording unavailable acknowledged; the canonical transcript was preserved. Re-read blockers before finishing." }],
         structuredContent: result,
       };
     },

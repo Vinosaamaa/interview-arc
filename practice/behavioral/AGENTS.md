@@ -201,3 +201,10 @@ blocker permits `retry_delivery`, and re-read the blockers before Finish. The
 retry operation only wakes the native Voice client's protected-local-original
 queue; it does not claim that audio upload completed. If it returns
 `retry_signal_unavailable`, tell the user to open Voice and press **Retry now**.
+
+If the user explicitly confirms that the original cannot be recovered, call
+`acknowledge_voice_audio_loss` with the exact capture/activity/turn identity,
+loss reason, and explicit authorization. It preserves the canonical transcript
+and allows Finish with **Recording unavailable**. It is not a silent delete;
+remove the entire accepted exchange only through the explicitly authorized
+`delete_related_voice_capture` operation.

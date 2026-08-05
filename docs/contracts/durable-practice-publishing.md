@@ -169,6 +169,16 @@ For a retryable delivery blocker, a specialist now follows this bounded runbook:
    and no other blocker remains. If the result is
    `retry_signal_unavailable`, open the companion and press **Retry now**.
 
+If the user explicitly confirms that a particular original cannot be recovered,
+call `acknowledge_voice_audio_loss` with that exact capture, activity, and turn
+identity. It preserves the canonical transcript and specialist response,
+creates the missing owner-scoped audio-loss metadata when necessary, and marks
+the recording `audio_lost` and acknowledged so Finish can proceed while
+rendering **Recording unavailable**. This is not a silent unregister or a
+shortcut for a retryable upload. To remove the entire accepted exchange,
+including its transcript and shared response, use the separately authorized
+`delete_related_voice_capture` operation instead.
+
 This gives specialists an actionable recovery operation while preserving the
 privacy boundary: protected local recordings never cross through the specialist
 conversation or become public URLs.
