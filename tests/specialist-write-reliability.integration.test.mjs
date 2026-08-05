@@ -333,7 +333,7 @@ test("local MCP persists exact specialist writes through durable receipts and re
       operationId: "operation-attempt-invalid-origin",
       id: "attempt-invalid-origin",
       originatingTurnId: "missing-user-turn",
-      sequence: 2,
+      sequence: 3,
     });
     const independentBank = {
       operationId: "operation-bank-independent-success",
@@ -353,6 +353,7 @@ test("local MCP persists exact specialist writes through durable receipts and re
     assert.match(invalidMetadataJob[0].failure.message, /only valid for LeetCode/);
     assert.equal(partial[0].status, "failed");
     assert.equal(partial[0].failure.retryable, false);
+    assert.match(partial[0].failure.message, /originating turn is not an owner-scoped user turn/);
     assert.equal(partial[1].status, "saved");
     const rejectedRetry = await callRaw("retry_specialist_writes", { jobIds: [invalidAttempt.jobId] });
     assert.equal(rejectedRetry.isError, true);
