@@ -678,7 +678,22 @@ may be saved as an activity exchange or explicit Code Attempt evidence.
   authenticated/private GraphQL, JSON, REST, or other account endpoints
   directly. Editorial review is a separate visible-UI step after the fresh
   attempt or when the user explicitly requests a solution, review, or
-  alternatives; it is not part of submitting code.
+  alternatives; it is not part of submitting code. Run the read-only review
+  only through the checked-in controller after the verified problem preflight:
+
+  ```bash
+  node scripts/leetcode-playwright-controller.mjs editorial \
+    https://leetcode.com/problems/<slug>/ \
+    --title "<verified visible title>"
+  ```
+
+  The canonical command, one-tab navigation, identity checks, timeout behavior,
+  and fail-closed availability states are defined in
+  `docs/contracts/leetcode-playwright-controller.md`. Specialist-specific
+  content-boundary rule: treat Editorial-derived coaching and citations as
+  consulted only when the result reports `availability: "available"` and
+  `contentAvailable: true`; report `premium_locked` or `unavailable` honestly
+  and do not cite protected or unrendered content.
 - Preserve the Java file as a durable local/Git solution only after LeetCode
   returns **Accepted**. If the activity ends without a correct solution, remove
   the unfinished solution artifact rather than publishing it.
@@ -725,7 +740,7 @@ path. A specialist that receives `playwright_import_failed` stops and reports
 the structured `recoveryCommand`; it does not invent an installation command
 or continue to browser actions.
 
-The `ensure`, `navigate`, `submit`, and `retry` commands require macOS GUI and
+The `ensure`, `navigate`, `editorial`, `submit`, and `retry` commands require macOS GUI and
 loopback-CDP authority. When Codex invokes one through `exec_command`, set
 `sandbox_permissions` to
 `require_escalated` on the first attempt and request the narrow reusable prefix
