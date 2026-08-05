@@ -1173,7 +1173,7 @@ export class LeetCodeController {
 }
 
 export async function runControllerCommand(request, dependencies) {
-  if (["submit", "retry", "editorial"].includes(request.command)) {
+  if (["submit", "retry"].includes(request.command)) {
     await dependencies.verifyPreflight(request.identity);
   }
 

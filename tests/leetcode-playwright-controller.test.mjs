@@ -1039,24 +1039,25 @@ test("the warm submit path fails closed instead of launching Chrome when preflig
   assert.equal(launches, 0);
 });
 
-test("Editorial research fails before browser acquisition when its preflight is stale", async () => {
-  let acquisitions = 0;
-  await assert.rejects(
-    () => runControllerCommand(
+test("Editorial research needs no stale preflight hop from problem or submission routes", async () => {
+  let preflightChecks = 0;
+  for (const currentUrl of [
+    canonicalEditorialUrl(identity),
+    "https://leetcode.com/submissions/detail/attempt-1/",
+  ]) {
+    const adapter = pageAdapter({ url: () => currentUrl });
+    adapter.navigate = async () => {};
+    adapter.waitForEditorialContent = async () => ({ state: "available" });
+    const result = await runControllerCommand(
       { command: "editorial", identity },
       {
-        verifyPreflight: async () => {
-          throw new ControllerError("preflight_stale", "The Editorial preflight is stale.");
-        },
-        acquireController: async () => {
-          acquisitions += 1;
-          return assert.fail("stale Editorial research must not acquire the browser");
-        },
+        verifyPreflight: async () => { preflightChecks += 1; },
+        acquireController: async () => ({ page: adapter, cleanup: async () => {} }),
       },
-    ),
-    (error) => error.code === "preflight_stale",
-  );
-  assert.equal(acquisitions, 0);
+    );
+    assert.equal(result.availability, "available");
+  }
+  assert.equal(preflightChecks, 0);
 });
 
 test("a warm local-stage budget overrun names the stalled stage and stops before mutation", async () => {

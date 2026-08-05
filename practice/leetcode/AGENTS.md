@@ -175,6 +175,13 @@ endpoint, cookie export, raw CDP, manual Playwright, second tab, or alternate
 browser. Do not edit the controller or delay the exact submit operation during
 practice.
 
+Do not summarize controller failures as a generic “stale connection.” Report
+the exact structured error code: `preflight_stale` applies only to guarded
+submit/retry state, `problem_tab_stale` means the dedicated tab is not on a
+recognized problem/submission route, and transport errors mean the controller
+could not attach. The one-step `editorial` command does not require a saved
+preflight receipt.
+
 ## Administrative Instruction Maintenance
 
 Executable product changes remain coordinator-only. This specialist must not
