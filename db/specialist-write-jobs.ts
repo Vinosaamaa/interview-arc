@@ -38,10 +38,10 @@ export type SpecialistWriteReceipt = {
 
 const pendingCodeAttemptReviewTurnError = "A pending Code Attempt review cannot name a specialist review turn.";
 
-function deterministicCodeAttemptRepairable(job: SpecialistWriteJobRow) {
+function deterministicCodeAttemptRepairable(job: SpecialistWriteReceipt) {
   return job.operation === "leetcode_code_attempt"
-    && job.errorCode === "specialist_write_rejected"
-    && job.errorMessage === pendingCodeAttemptReviewTurnError;
+    && job.failure?.code === "specialist_write_rejected"
+    && job.failure.message === pendingCodeAttemptReviewTurnError;
 }
 
 function receipt(row: SpecialistWriteJobRow, duplicate = false): SpecialistWriteReceipt {
@@ -144,7 +144,7 @@ export async function retrySpecialistWriteJobs(
   const jobs = await readSpecialistWriteJobs(ownerId, jobIds);
   for (const job of jobs) {
     if (job.status !== "failed"
-        || (job.failure?.retryable !== true && !deterministicCodeAttemptRepairable(job as SpecialistWriteJobRow))) {
+        || (job.failure?.retryable !== true && !deterministicCodeAttemptRepairable(job))) {
       throw new SpecialistWriteJobError(
         "specialist_write_not_retryable",
         `Specialist write ${job.jobId} is not a retryable or deterministic-repairable failed operation.`,
