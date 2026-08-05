@@ -1032,11 +1032,28 @@ helper's warm-submit and total user-visible timings separately.
 
 ### Transcript And Code Boundaries
 
-Save meaningful problem discussion, the user's reasoning, hints, feedback,
-relevant test conclusions, the authoritative submission verdict, and the final
-reflection as activity exchanges. Do not save terminal-control chatter, the
-`micro` command, browser-automation mechanics, ordinary file saves, or
-irrelevant raw compiler output as practice dialogue.
+Use a semantic inclusion test, not the activity ID alone. Save only the
+problem-related portion of the activity: the problem statement, constraints,
+examples, the user's reasoning or code, hints, coaching, solution and
+complexity discussion, relevant test conclusions, interview feedback, the
+authoritative submission verdict, and the final reflection.
+
+Do not save administrative or process conversation as practice dialogue. This
+includes navigation, Playwright or browser preflight, tab/page handling,
+terminal and file-operation chatter, MCP/API/D1/R2/tool calls, timers,
+sessions/workbench control, retry or audio-delivery recovery, startup or
+handoff status, issue/branch/PR/deploy discussion, and instructions about how
+the agent should operate. A Voice envelope containing this material must be
+resolved `unrelated` before it can wait for a specialist response; use
+`uncertain` only when the turn itself cannot be classified. Do not append an
+administrative turn just because it shares the focused activity ID.
+
+If a single capture mixes administrative and problem discussion, persist only a
+separately identified problem-related segment when one is explicitly
+available. Otherwise exclude the capture from the durable practice transcript.
+
+Do not save terminal-control chatter, the `micro` command, ordinary file saves,
+or irrelevant raw compiler output as practice dialogue.
 
 The structured Code Attempt contract remains the source of exact user code
 evidence when the user explicitly crosses an attempt boundary. This CLI policy

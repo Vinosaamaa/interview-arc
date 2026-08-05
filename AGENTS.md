@@ -134,6 +134,27 @@ Visual reader changes must update old artifacts without rewriting them.
 
 Leave unavailable fields empty or set their source to `unknown`. Never invent timer values, attempt results, code, personal experience, metrics, or transcript content.
 
+### Practice transcript inclusion boundary
+
+Durable practice transcripts contain only activity-related conversation. Include
+the problem statement, constraints, examples, the user's approach or code,
+coaching, hints, solution reasoning, complexity, test conclusions, feedback,
+mock-interview questions and answers, and the user's final reflection.
+
+Exclude administrative or process conversation even when it appears in the same
+activity or visible chat: navigation, Playwright or browser preflight, tab and
+page handling, MCP/API/tool calls, D1/R2 or private-audio operations, timers,
+sessions or workbench control, retries and recovery, startup/handoff/status
+chatter, issue/branch/PR work, deployment, and discussion of how the agent is
+being operated. Those turns must not wait for a specialist response and must
+be classified `unrelated` (or `uncertain` when the content cannot be decided
+from the turn alone) before persistence. Never append an administrative turn
+to a practice transcript merely because it carries the activity ID.
+
+If one captured turn mixes administrative and problem content, persist only a
+separately identified problem-related segment when the source provides one;
+otherwise keep the capture out of the durable practice transcript.
+
 ## LeetCode Boundary
 
 Do not bulk-crawl LeetCode, export or inspect cookies, or call undocumented
