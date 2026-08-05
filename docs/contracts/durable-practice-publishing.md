@@ -161,9 +161,10 @@ For a retryable delivery blocker, a specialist now follows this bounded runbook:
 
 1. Call `get_voice_delivery_blockers` for the activity.
 2. Call `retry_voice_delivery` once when the result lists an accepted or related
-   capture with `retry_delivery` allowed. This publishes a `voice_capture` live
-   update that wakes the native Voice client's existing local-original retry
-   queue. The MCP call does not upload bytes itself and does not claim completion.
+   capture with `retry_delivery` allowed. This publishes a
+   `voice_delivery_retry` live update that asks the native Voice client for one
+   forced, idempotent local-original retry. The MCP call does not upload bytes
+   itself and does not claim completion.
 3. Call `get_voice_delivery_blockers` again after the companion has had time to
    retry. Finish only when each required capture reports `audioState: "available"`
    and no other blocker remains. If the result is
