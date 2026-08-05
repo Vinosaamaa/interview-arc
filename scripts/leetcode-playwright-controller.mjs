@@ -342,6 +342,7 @@ export const FIXED_CONFIG = Object.freeze({
   defaultLanguage: "Java",
   localBudgetMs: 5_000,
   verdictTimeoutMs: 60_000,
+  editorialTimeoutMs: 30_000,
 });
 
 export function canonicalProblemIdentity(url, title) {
@@ -373,6 +374,10 @@ export function canonicalProblemIdentity(url, title) {
   });
 }
 
+export function canonicalEditorialUrl(identity) {
+  return `https://leetcode.com/problems/${identity.slug}/editorial/`;
+}
+
 export function parseCli(argv) {
   const normalizedArgv = argv[0] === "--" ? argv.slice(1) : argv;
   const [
@@ -387,7 +392,11 @@ export function parseCli(argv) {
   if (command === "ensure" && normalizedArgv.length === 1) {
     return { command, identity: null, javaFile: null };
   }
-  if (command === "navigate" && normalizedArgv.length === 4 && possibleFile === "--title") {
+  if (
+    (command === "navigate" || command === "editorial")
+    && normalizedArgv.length === 4
+    && possibleFile === "--title"
+  ) {
     return {
       command,
       identity: canonicalProblemIdentity(url, possibleFlag),
@@ -415,7 +424,7 @@ export function parseCli(argv) {
       invocationId: validateInvocationId(possibleFile),
     };
   }
-  if (["navigate", "submit", "retry"].includes(command) && !normalizedArgv.includes("--title")) {
+  if (["navigate", "editorial", "submit", "retry"].includes(command) && !normalizedArgv.includes("--title")) {
     throw new ControllerError("cli_usage", `${command} requires --title with the verified problem title.`);
   }
   if (["submit", "retry"].includes(command) && !normalizedArgv.includes("--invocation-id")) {
@@ -426,7 +435,7 @@ export function parseCli(argv) {
   }
   throw new ControllerError(
     "cli_usage",
-    "Supported commands are ensure, navigate, submit, retry, and receipt.",
+    "Supported commands are ensure, navigate, editorial, submit, retry, and receipt.",
   );
 }
 
@@ -462,12 +471,26 @@ const TARGET_SELECTORS = Object.freeze({
     '[data-cy="testcase-input"]',
     '[data-testid="testcase-input"]',
   ],
+  editorialContent: [
+    '[data-e2e-locator="editorial-content"]',
+    '[data-testid="editorial-content"]',
+    '[data-track-load="editorial_content"]',
+    "article",
+    '[role="main"]',
+  ],
+  editorialLock: [
+    '[data-e2e-locator*="premium" i]',
+    '[data-testid*="premium" i]',
+    '[data-e2e-locator*="subscribe" i]',
+    '[data-testid*="subscribe" i]',
+  ],
 });
 
 const TARGET_ROUTES = Object.freeze({
   problemEditor: "^/problems/([a-z0-9-]+)/(?:description/)?$",
   problemTab: "^/problems/([a-z0-9-]+)/(?:description/|editorial/|solutions/|submissions/)?$",
   resultAttempt: "^(?:/submissions/(?:detail/)?|/problems/[a-z0-9-]+/submissions/)([^/]+)/?$",
+  editorial: "^/problems/([a-z0-9-]+)/editorial/?$",
 });
 
 export function leetcodeAttemptKeyFromPath(pathname) {
@@ -480,6 +503,10 @@ export function leetcodeProblemSlugFromPath(pathname) {
 
 export function leetcodeEditorSlugFromPath(pathname) {
   return pathname.match(new RegExp(TARGET_ROUTES.problemEditor))?.[1] ?? null;
+}
+
+export function leetcodeEditorialSlugFromPath(pathname) {
+  return pathname.match(new RegExp(TARGET_ROUTES.editorial))?.[1] ?? null;
 }
 
 export function isAutomationOwnedLeetCodeUrl(value) {
@@ -677,6 +704,68 @@ export function createPlaywrightPageAdapter(page) {
         );
       }
       return { transitioned: true, attemptKey, ...result };
+    },
+    async waitForEditorialContent(identity) {
+      let handle;
+      try {
+        handle = await page.waitForFunction(
+          ({ expectedSlug, expectedTitle, routes, selectors }) => {
+            const visible = (element) => element?.getClientRects?.().length > 0;
+            const currentSlug = location.pathname.match(new RegExp(routes.editorial))?.[1] ?? null;
+            if (currentSlug !== expectedSlug) {
+              return {
+                state: "identity_ambiguous",
+                reason: "editorial_slug_mismatch",
+                actualSlug: currentSlug,
+              };
+            }
+
+            const pageTitle = document.title.trim();
+            if (!pageTitle || pageTitle === "LeetCode") return false;
+            if (!pageTitle.toLowerCase().includes(expectedTitle.toLowerCase())) {
+              return {
+                state: "identity_ambiguous",
+                reason: "editorial_title_mismatch",
+                actualTitle: pageTitle,
+              };
+            }
+
+            const roots = selectors.editorialContent
+              .flatMap((selector) => [...document.querySelectorAll(selector)])
+              .filter(visible);
+            const lockRoots = selectors.editorialLock
+              .flatMap((selector) => [...document.querySelectorAll(selector)])
+              .filter(visible);
+            const lockText = [...lockRoots, ...roots]
+              .map((root) => root.innerText?.trim() ?? "")
+              .find((text) => /\b(?:premium|subscribe|unlock)\b/i.test(text));
+            if (lockText) return { state: "premium_locked" };
+
+            for (const root of roots) {
+              const text = root.innerText?.trim() ?? "";
+              const blocks = root.querySelectorAll("h1,h2,h3,p,pre,ul,ol").length;
+              if (text.length >= 120 && blocks >= 2) {
+                return { state: "available" };
+              }
+            }
+            return false;
+          },
+          {
+            expectedSlug: identity.slug,
+            expectedTitle: identity.title,
+            routes: TARGET_ROUTES,
+            selectors: TARGET_SELECTORS,
+          },
+          { timeout: FIXED_CONFIG.editorialTimeoutMs, polling: 100 },
+        );
+        if (typeof handle?.jsonValue === "function") return await handle.jsonValue();
+        return handle;
+      } catch (error) {
+        if (error?.name !== "TimeoutError") throw error;
+        return { state: "unavailable", reason: "editorial_content_not_rendered" };
+      } finally {
+        await handle?.dispose?.();
+      }
     },
   };
 }
@@ -963,6 +1052,66 @@ export class LeetCodeController {
     };
   }
 
+  async verifyEditorialOrigin(identity) {
+    const currentUrl = new URL(this.page.url());
+    const currentSlug = leetcodeProblemSlugFromPath(currentUrl.pathname);
+    if (currentSlug && currentSlug !== identity.slug) {
+      throw new ControllerError(
+        "problem_slug_mismatch",
+        "The persistent tab does not show the requested problem.",
+        { expectedSlug: identity.slug, actualUrl: currentUrl.href },
+      );
+    }
+
+    const currentAttemptKey = leetcodeAttemptKeyFromPath(currentUrl.pathname);
+    if (currentSlug !== identity.slug && currentAttemptKey === null) {
+      throw new ControllerError(
+        "problem_tab_stale",
+        "The persistent tab is not on a verified problem route for Editorial research.",
+        { expectedSlug: identity.slug, actualUrl: currentUrl.href },
+      );
+    }
+  }
+
+  async editorial(identity) {
+    const commandStartedAt = this.now();
+    await this.verifyEditorialOrigin(identity);
+    const problemVerifiedAt = this.now();
+    const editorialUrl = canonicalEditorialUrl(identity);
+    const navigationStartedAt = this.now();
+    await this.page.navigate(editorialUrl);
+    const navigationCompletedAt = this.now();
+    const state = await this.page.waitForEditorialContent(identity);
+    const contentVerifiedAt = this.now();
+    if (state?.state === "identity_ambiguous") {
+      throw new ControllerError(
+        "editorial_identity_ambiguous",
+        "The visible Editorial page identity could not be verified.",
+        state,
+      );
+    }
+    const availability = ["available", "premium_locked", "unavailable"].includes(state?.state)
+      ? state.state
+      : "unavailable";
+    return {
+      editorialUrl,
+      availability,
+      contentAvailable: availability === "available",
+      progress: [
+        { stage: "problem_identity_verified", atMs: problemVerifiedAt - commandStartedAt },
+        { stage: "editorial_navigation_completed", atMs: navigationCompletedAt - commandStartedAt },
+        { stage: "editorial_content_verified", atMs: contentVerifiedAt - commandStartedAt },
+      ],
+      diagnostics: {
+        problemPreparationMs: problemVerifiedAt - commandStartedAt,
+        externalPageLatencyMs: navigationCompletedAt - navigationStartedAt,
+        localContentVerificationMs: contentVerifiedAt - navigationCompletedAt,
+        totalUserVisibleMs: contentVerifiedAt - commandStartedAt,
+      },
+      ...(state?.reason ? { reason: state.reason } : {}),
+    };
+  }
+
   async navigate(identity) {
     await this.page.navigate(identity.url);
     await this.page.waitForEditableProblem(identity);
@@ -972,7 +1121,7 @@ export class LeetCodeController {
 }
 
 export async function runControllerCommand(request, dependencies) {
-  if (["submit", "retry"].includes(request.command)) {
+  if (["submit", "retry", "editorial"].includes(request.command)) {
     await dependencies.verifyPreflight(request.identity);
   }
 
@@ -1005,6 +1154,7 @@ export async function runControllerCommand(request, dependencies) {
         signal: abortController.signal,
       });
       if (request.command === "navigate") return controller.navigate(request.identity);
+      if (request.command === "editorial") return controller.editorial(request.identity);
       if (request.command === "submit") return controller.submit(request.identity, request.javaFile);
       if (request.command === "retry") return controller.retry(request.identity, request.javaFile);
       throw new ControllerError("cli_usage", "Unsupported controller command.");

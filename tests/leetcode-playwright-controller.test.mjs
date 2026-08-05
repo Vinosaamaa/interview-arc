@@ -10,6 +10,7 @@ import {
   FIXED_CONFIG,
   LeetCodeController,
   PLAYWRIGHT_BOOTSTRAP_COMMAND,
+  canonicalEditorialUrl,
   canonicalProblemIdentity,
   controllerStatePathsForProfile,
   createPlaywrightPageAdapter,
@@ -68,6 +69,7 @@ function pageAdapter(overrides = {}) {
         failingInput: "root = [1,2,3]",
       };
     },
+    waitForEditorialContent: async () => ({ state: "available" }),
     ...overrides,
   };
 }
@@ -97,7 +99,12 @@ test("the controller exposes one immutable Chrome, profile, CDP, and Java identi
   assert.equal(FIXED_CONFIG.defaultLanguage, "Java");
   assert.equal(FIXED_CONFIG.localBudgetMs, 5_000);
   assert.equal(FIXED_CONFIG.verdictTimeoutMs, 60_000);
+  assert.equal(FIXED_CONFIG.editorialTimeoutMs, 30_000);
   assert.equal(Object.isFrozen(FIXED_CONFIG), true);
+  assert.equal(
+    canonicalEditorialUrl(identity),
+    "https://leetcode.com/problems/serialize-and-deserialize-binary-tree/editorial/",
+  );
 
   assert.deepEqual(
     canonicalProblemIdentity(
@@ -483,6 +490,81 @@ test("navigate reuses the existing page and verifies the editable Java problem",
   ]);
 });
 
+test("editorial research reuses the verified tab, navigates same-tab, and never submits", async () => {
+  let currentUrl = identity.url;
+  const adapter = pageAdapter({
+    url: () => currentUrl,
+    navigate: async (url) => {
+      adapter.calls.push(["navigate", url]);
+      currentUrl = url;
+    },
+    waitForEditorialContent: async () => {
+      adapter.calls.push(["editorial-content"]);
+      return { state: "available" };
+    },
+  });
+
+  const result = await controllerWith(adapter).editorial(identity);
+  assert.equal(result.editorialUrl, canonicalEditorialUrl(identity));
+  assert.equal(result.availability, "available");
+  assert.equal(result.contentAvailable, true);
+  assert.deepEqual(adapter.calls, [
+    ["navigate", canonicalEditorialUrl(identity)],
+    ["editorial-content"],
+  ]);
+  assert.equal(adapter.calls.some(([name]) => name === "press"), false);
+});
+
+test("editorial research reports locked and shell-only content without citing it", async () => {
+  for (const state of ["premium_locked", "unavailable"]) {
+    const adapter = pageAdapter({
+      waitForEditorialContent: async () => ({
+        state,
+        ...(state === "unavailable" ? { reason: "editorial_content_not_rendered" } : {}),
+      }),
+    });
+    const result = await controllerWith(adapter).editorial(identity);
+    assert.equal(result.availability, state);
+    assert.equal(result.contentAvailable, false);
+    assert.equal(result.editorialUrl, canonicalEditorialUrl(identity));
+    assert.equal(
+      result.reason,
+      state === "unavailable" ? "editorial_content_not_rendered" : undefined,
+    );
+  }
+});
+
+test("editorial research navigates directly from a submission result without an editor recovery hop", async () => {
+  let currentUrl = `${identity.url}submissions/123456789/`;
+  const adapter = pageAdapter({
+    url: () => currentUrl,
+    waitForEditorialContent: async () => ({ state: "available" }),
+  });
+  const result = await controllerWith(adapter).editorial(identity);
+  assert.equal(result.availability, "available");
+  assert.deepEqual(adapter.calls, [["navigate", canonicalEditorialUrl(identity)]]);
+  assert.equal(adapter.calls.some(([name]) => name === "press"), false);
+});
+
+test("editorial research navigates directly from every same-problem content route", async () => {
+  for (const suffix of ["description/", "editorial/", "solutions/"]) {
+    let currentUrl = `${identity.url}${suffix}`;
+    const adapter = pageAdapter({
+      url: () => currentUrl,
+      navigate: async (url) => {
+        adapter.calls.push(["navigate", url]);
+        currentUrl = url;
+      },
+      waitForEditorialContent: async () => ({ state: "available" }),
+    });
+
+    const result = await controllerWith(adapter).editorial(identity);
+    assert.equal(result.availability, "available");
+    assert.deepEqual(adapter.calls, [["navigate", canonicalEditorialUrl(identity)]], suffix);
+    assert.equal(adapter.calls.some(([name]) => name === "press"), false, suffix);
+  }
+});
+
 test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM focus, and one gesture", async () => {
   const operations = [];
   const gestures = [];
@@ -577,6 +659,51 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
   assert.equal(operations.filter(([operation]) => operation === "replace-exact").length, 1);
 });
 
+test("the Playwright adapter verifies rendered Editorial structure without returning prose", async () => {
+  const operations = [];
+  const root = {
+    getClientRects: () => [{}],
+    innerText: "Editorial explanation with multiple rendered blocks and enough visible text to prove that the article itself rendered instead of only the surrounding navigation shell.",
+    querySelectorAll: () => [{}, {}],
+  };
+  const page = {
+    waitForFunction: async (predicate, payload, options) => {
+      operations.push(["waitForFunction", options.timeout]);
+      const previous = {
+        document: Object.getOwnPropertyDescriptor(globalThis, "document"),
+        location: Object.getOwnPropertyDescriptor(globalThis, "location"),
+      };
+      Object.defineProperties(globalThis, {
+        document: { configurable: true, value: {
+          title: `${identity.title} - LeetCode`,
+          querySelectorAll: (selector) => selector === "article" ? [root] : [],
+        } },
+        location: { configurable: true, value: {
+          pathname: `/problems/${identity.slug}/editorial/`,
+        } },
+      });
+      try {
+        const state = predicate(payload);
+        assert.deepEqual(state, { state: "available" });
+        return {
+          jsonValue: async () => state,
+          dispose: async () => {},
+        };
+      } finally {
+        for (const [name, descriptor] of Object.entries(previous)) {
+          if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+          else delete globalThis[name];
+        }
+      }
+    },
+  };
+
+  const adapter = createPlaywrightPageAdapter(page);
+  const state = await adapter.waitForEditorialContent(identity);
+  assert.deepEqual(state, { state: "available" });
+  assert.deepEqual(operations, [["waitForFunction", FIXED_CONFIG.editorialTimeoutMs]]);
+});
+
 test("the CLI exposes controller commands and requires an invocation ID for submit or retry", () => {
   assert.deepEqual(parseCli(["ensure"]), { command: "ensure", identity: null, javaFile: null });
   assert.deepEqual(
@@ -590,6 +717,11 @@ test("the CLI exposes controller commands and requires an invocation ID for subm
   );
   assert.deepEqual(parseCli(["navigate", identity.url, "--title", identity.title]), {
     command: "navigate",
+    identity,
+    javaFile: null,
+  });
+  assert.deepEqual(parseCli(["editorial", identity.url, "--title", identity.title]), {
+    command: "editorial",
     identity,
     javaFile: null,
   });
@@ -890,6 +1022,26 @@ test("the warm submit path fails closed instead of launching Chrome when preflig
   assert.equal(launches, 0);
 });
 
+test("Editorial research fails before browser acquisition when its preflight is stale", async () => {
+  let acquisitions = 0;
+  await assert.rejects(
+    () => runControllerCommand(
+      { command: "editorial", identity },
+      {
+        verifyPreflight: async () => {
+          throw new ControllerError("preflight_stale", "The Editorial preflight is stale.");
+        },
+        acquireController: async () => {
+          acquisitions += 1;
+          return assert.fail("stale Editorial research must not acquire the browser");
+        },
+      },
+    ),
+    (error) => error.code === "preflight_stale",
+  );
+  assert.equal(acquisitions, 0);
+});
+
 test("a warm local-stage budget overrun names the stalled stage and stops before mutation", async () => {
   const ticks = [0, 0, 0, 5_001];
   const adapter = pageAdapter();
@@ -938,6 +1090,7 @@ test("the specialist guide and owning contract name the checked-in helper as the
     assert.match(content, /only\s+supported/i);
     assert.match(content, /ensure/);
     assert.match(content, /navigate/);
+    assert.match(content, /editorial/);
     assert.match(content, /submit/);
     assert.match(content, /retry/);
     assert.match(content, /receipt/);

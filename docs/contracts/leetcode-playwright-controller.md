@@ -51,7 +51,7 @@ readiness check. Dependency bootstrap is forbidden on the interactive
 `playwright_import_failed` with this exact `recoveryCommand` and performs no
 browser navigation or submission.
 
-The `ensure`, `navigate`, `submit`, and `retry` commands require GUI and
+The `ensure`, `navigate`, `editorial`, `submit`, and `retry` commands require GUI and
 loopback-CDP authority. A Codex `exec_command` invocation uses
 `sandbox_permissions: "require_escalated"` from its first attempt, with the
 narrow reusable command prefix
@@ -64,6 +64,9 @@ The read-only `receipt` command needs no browser authority.
 ```bash
 node scripts/leetcode-playwright-controller.mjs ensure
 node scripts/leetcode-playwright-controller.mjs navigate \
+  https://leetcode.com/problems/two-sum/ \
+  --title "Two Sum"
+node scripts/leetcode-playwright-controller.mjs editorial \
   https://leetcode.com/problems/two-sum/ \
   --title "Two Sum"
 node scripts/leetcode-playwright-controller.mjs submit \
@@ -87,6 +90,20 @@ hold the fixed problem-set staging page until `navigate` assigns its first
 canonical problem. `navigate` reuses that page
 and records a problem-specific preflight receipt. Run both while the user is
 reading or coding, before an interactive submit request.
+
+`editorial` is a read-only, post-attempt research command. It requires the same
+live browser and problem preflight as `submit` and `retry`, reuses the one
+automation-owned tab, verifies the current same-problem route (including
+description, Editorial, solutions, and submission result pages), then navigates
+that tab directly to the canonical Editorial URL in one visible-page navigation.
+It does not navigate through the problem editor first.
+It never launches Chrome, opens a tab, submits code, or writes practice state.
+The command verifies the visible Editorial page identity and rendered article
+structure without returning or persisting Editorial prose or official code.
+Its structured result includes `editorialUrl`, `availability`,
+`contentAvailable`, and stage timings. `availability` is `available` only when
+actual Editorial content is rendered; `premium_locked` and `unavailable` are
+honest fail-closed results that must not be cited as consulted research.
 
 `submit` and `retry` require a current preflight receipt for the same Chrome
 browser instance and problem. They fail closed when the receipt or endpoint is
@@ -159,8 +176,10 @@ they never trigger an automatic retry.
 
 The five-second budget covers the warm local path from exact file read through
 the single `Meta+Enter`. The LeetCode attempt-specific verdict wait has a
-separate 60-second bound. Structured output reports local stage timings, warm
-submit duration through the verdict, and total user-visible command duration;
+separate 60-second bound. Editorial content verification has a separate
+30-second bound. Structured output reports local stage timings, warm submit
+duration through the verdict, Editorial page latency/content-verification
+timings, and total user-visible command duration;
 none of those values may be substituted for another.
 
 Terminal receipt files are private local controller state, not practice
@@ -179,6 +198,8 @@ pruning. Pending state explicitly means the submit outcome remains ambiguous.
 Mocked integration tests own failure, ambiguity, equality, transition,
 recovery, cleanup, and timing cases. Release verification additionally uses the
 fixed headed Chrome/profile to reuse one authenticated tab across two canonical
-problems and one explicit retry. The smoke test must confirm that cleanup leaves
+problems, one explicit retry, and one non-submitting Editorial research command.
+The Editorial smoke must confirm that the same tab is reused, content
+availability is reported honestly, no submit gesture occurs, and cleanup leaves
 the Chrome process and tab running. It must not attach browser plumbing to a
 practice transcript.
