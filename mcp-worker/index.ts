@@ -2029,7 +2029,12 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
       const result = await requestVoiceDeliveryRetry(
         activityId,
         () => readVoiceDeliveryBlockers(ownerId, activityId),
-        () => publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "voice_delivery_retry", { awaitDelivery: true }),
+        () => publishOwnerLiveUpdate(
+          env.LIVE_UPDATES,
+          ownerId,
+          `voice_delivery_retry:${activityId}`,
+          { awaitDelivery: true },
+        ),
       );
       return {
         content: [{ type: "text", text: result.message }],
