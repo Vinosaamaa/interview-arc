@@ -980,6 +980,14 @@ call `delete_related_voice_capture` with its exact capture, activity, and turn
 IDs plus that explicit authorization. Never infer deletion or use the
 destructive remediation tool for a pending capture.
 
+If delivery or Finish reports `voice_delivery_blocked`, have the persistence
+child call `get_voice_delivery_blockers` for the activity, then call
+`retry_voice_delivery` when a blocker permits `retry_delivery`. That operation
+signals the native Voice retry queue; it does not upload local bytes or prove
+completion. Re-read the blockers before attempting Finish again, and report
+`retry_signal_unavailable` as an actionable request to open Voice and press
+**Retry now**, never as a successful repair.
+
 An exact code block becomes a Code Attempt only when the user explicitly says
 it is an attempt/submission/final code or confirms the specialist's boundary
 question. Then have the same response's persistence child call

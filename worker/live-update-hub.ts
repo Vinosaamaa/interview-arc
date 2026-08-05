@@ -78,16 +78,18 @@ export async function publishOwnerLiveUpdate(
   ownerId: string,
   scope: LiveUpdateScope,
 ) {
-  if (!namespace) return;
+  if (!namespace) return false;
   try {
-    await ownerStub(namespace, ownerId).fetch("https://live-update.internal/publish", {
+    const response = await ownerStub(namespace, ownerId).fetch("https://live-update.internal/publish", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ scope }),
     });
+    return response.ok;
   } catch {
     // D1/REST mutations are authoritative. A best-effort invalidation failure
     // must never make an already-committed mutation look unsuccessful; clients
     // recover through the bounded snapshot fallback.
+    return false;
   }
 }

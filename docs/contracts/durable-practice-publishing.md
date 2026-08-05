@@ -157,6 +157,22 @@ idempotent, and leaves missing members awaiting delivery. Exact deletion is a
 separate explicitly authorized action. Reconnect Codex after deployment
 because MCP tool catalogs are loaded when the connection starts.
 
+For a retryable delivery blocker, a specialist now follows this bounded runbook:
+
+1. Call `get_voice_delivery_blockers` for the activity.
+2. Call `retry_voice_delivery` once when the result lists an accepted or related
+   capture with `retry_delivery` allowed. This publishes a `voice_capture` live
+   update that wakes the native Voice client's existing local-original retry
+   queue. The MCP call does not upload bytes itself and does not claim completion.
+3. Call `get_voice_delivery_blockers` again after the companion has had time to
+   retry. Finish only when each required capture reports `audioState: "available"`
+   and no other blocker remains. If the result is
+   `retry_signal_unavailable`, open the companion and press **Retry now**.
+
+This gives specialists an actionable recovery operation while preserving the
+privacy boundary: protected local recordings never cross through the specialist
+conversation or become public URLs.
+
 An administrative capture that is still pending must be classified
 `unrelated`; it does not require deletion. If an explicit user correction says
 that a capture already classified related was misclassified, use

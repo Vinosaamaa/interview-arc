@@ -103,6 +103,7 @@ function fixtureSql(tokenHash) {
     ["capture-int-q3", "activity-int-quarantine", "turn-int-q3", "clip-int-q3", checksum("Quarantine three."), 3300],
     ["capture-int-d1", "activity-int-quarantine-delete", "turn-int-d1", "clip-int-d1", checksum("Delete one."), 4100],
     ["capture-int-d2", "activity-int-quarantine-delete", "turn-int-d2", "clip-int-d2", checksum("Delete two."), 4200],
+    ["capture-int-retry", "activity-int-retry", "turn-int-retry", "clip-int-retry", checksum("Retry me."), 5100],
   ];
   return `
     INSERT INTO integration_tokens
@@ -202,6 +203,31 @@ test("local D1/R2 MCP preserves grouped order, concurrent completion, and whole-
         occurredAt: capture.occurredAt,
       }),
     });
+
+    await call("resolve_voice_capture_and_save_response", {
+      captureId: "capture-int-retry",
+      activityId: "activity-int-retry",
+      activityTitle: "Retry delivery",
+      userTurnId: "turn-int-retry",
+      responseTurnId: "response-int-retry",
+      specialty: "leetcode",
+      responseBody: "Retry the protected local recording.",
+      responseOccurredAt: 5200,
+      reason: "Seed a retryable delivery blocker.",
+    });
+    const retryBefore = await call("get_voice_delivery_blockers", { activityId: "activity-int-retry" });
+    assert.deepEqual(retryBefore.blockers.map((blocker) => blocker.captureId), ["capture-int-retry"]);
+    assert.equal(retryBefore.blockers[0].audioState, "not_registered");
+    assert.deepEqual(retryBefore.blockers[0].allowedActions, ["retry_delivery", "delete_exact_group"]);
+    const retry = await call("retry_voice_delivery", { activityId: "activity-int-retry" });
+    assert.equal(retry.retryRequested, true);
+    assert.ok(["retry_requested", "retry_signal_unavailable"].includes(retry.status));
+    assert.equal(retry.signalPublished, retry.status === "retry_requested");
+    if (!retry.signalPublished) assert.match(retry.message, /Open the companion and press Retry now/);
+    assert.deepEqual(retry.retryableCaptureIds, ["capture-int-retry"]);
+    const retryNoop = await call("retry_voice_delivery", { activityId: "activity-int-quarantine" });
+    assert.equal(retryNoop.status, "not_needed");
+    assert.equal(retryNoop.retryRequested, false);
 
     const two = [
       { captureId: "capture-int-a", userTurnId: "turn-int-a", transcript: "First.", checksum: checksum("First."), occurredAt: 100 },

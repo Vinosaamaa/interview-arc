@@ -194,3 +194,10 @@ persistence contract. Never append an enveloped user turn separately.
 For unrelated typed administration return exactly:
 `*Not attached to this practice activity · Not saved to the practice transcript or publication*`.
 Neither receipt belongs in D1 or the published artifact.
+
+If delivery or Finish reports `voice_delivery_blocked`, have the persistence
+child call `get_voice_delivery_blockers`, then `retry_voice_delivery` when a
+blocker permits `retry_delivery`, and re-read the blockers before Finish. The
+retry operation only wakes the native Voice client's protected-local-original
+queue; it does not claim that audio upload completed. If it returns
+`retry_signal_unavailable`, tell the user to open Voice and press **Retry now**.

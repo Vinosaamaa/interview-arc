@@ -90,4 +90,6 @@ test("push publication is best effort after the authoritative mutation commits",
   const hub = await readFile(new URL("../worker/live-update-hub.ts", import.meta.url), "utf8");
   assert.match(hub, /D1\/REST mutations are authoritative/);
   assert.match(hub, /try \{[\s\S]*ownerStub[\s\S]*\} catch \{/);
+  assert.match(hub, /return response\.ok/);
+  assert.match(hub, /if \(!namespace\) return false/);
 });
