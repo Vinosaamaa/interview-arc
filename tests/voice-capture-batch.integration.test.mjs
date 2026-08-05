@@ -307,7 +307,18 @@ test("local D1/R2 MCP preserves grouped order, concurrent completion, and whole-
       responseOccurredAt: 301,
       reason: "Cross-flow collision fixture.",
     }), /grouped Voice exchange|another Voice exchange/);
-    await deliver("activity-int-two", two[1]);
+    const pendingGroupedDelivery = await deliver("activity-int-two", two[1]);
+    assert.deepEqual(pendingGroupedDelivery.turn, {
+      activityId: "activity-int-two",
+      specialty: "leetcode",
+      turnId: "turn-int-b",
+      body: "Second.",
+      occurredAt: 200,
+      speaker: "user",
+      source: "audio_transcript",
+      sequence: 1,
+      groupedPending: true,
+    });
     assert.deepEqual((await call("get_activity_practice_record", { activityId: "activity-int-two" })).turns, []);
     await deliver("activity-int-two", two[0]);
     const twoRecord = await call("get_activity_practice_record", { activityId: "activity-int-two" });

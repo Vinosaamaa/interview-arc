@@ -114,3 +114,21 @@ protected local records. Never destructively reverse the migration.
   catalog work.
 - `interview-arc-voice#64`: staged delivery, bounded retry, and recovery UI.
 - `interview-arc#158`: separate transient Worker/503 persistence work.
+
+## 2026-08-05 recurrence: grouped-pending response schema
+
+Five first members of two-capture groups committed their server-side intent
+transition but stopped locally at `transcript_pending`; each paired second
+member completed. All five protected originals remained non-empty. The server
+returned an incomplete grouped-member `turn` with `transcript`, while the
+published native response model requires `body`. The resulting successful-HTTP
+decode error was classified as terminal before audio upload, so a retry wake
+could not act and Finish reported missing private audio.
+
+This recurrence is tracked by
+[interview-arc#172](https://github.com/Vinosaamaa/interview-arc/issues/172) and
+[interview-arc-voice#174](https://github.com/Vinosaamaa/interview-arc-voice/issues/174).
+The corrective boundary is two-sided: every successful grouped capture response
+must satisfy the stable turn schema, and the native client must keep a viable
+protected original eligible for bounded recovery after response-decode failure.
+Production identities, transcripts, local paths, and audio remain excluded.
