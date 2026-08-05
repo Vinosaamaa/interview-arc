@@ -107,6 +107,30 @@ later in this guide.
   evidence-complete finalization solely because optional metadata could not be
   reached. Recheck later only for a missing/stale/disputed field or explicit
   request.
+### Imported LeetCode question metadata
+
+Every newly imported public LeetCode question must receive a metadata
+preflight before it is added to the durable owner-private bank. The import
+payload must preserve every field that permitted sources make available:
+
+- public problem number, title, canonical URL, and difficulty;
+- acceptance rate and official topic tags;
+- authorized company tags and company-frequency signals, including their
+  window, score, scale, and capture date;
+- the metadata capture timestamp and a source reference with access time for
+  every consulted source; and
+- the owner-facing target time, provenance/source label, and active state.
+
+Use the exact public question ID as the deduplication key. Merge additive topic
+and company data without overwriting newer verified scalar values. When a
+field cannot be verified because the permitted page is unavailable, record it
+as unknown/empty together with the attempted source and access time; never
+guess it and never bypass CAPTCHA, paywalls, anti-bot controls, account pages,
+or private endpoints. Do not silently create a metadata-incomplete import:
+route unsupported writes to the coordinator's metadata-enrichment issue
+(`#160`, related to `#69`) or use the dedicated metadata MCP operation when it
+exists. The current basic bank upsert is not sufficient for this contract.
+
 - Persist that structured metadata through the typed
   `upsert_personal_bank_question` MCP operation using the stable public
   `questionId`, a stable `operationId`, and the exact metadata payload. The
@@ -163,6 +187,18 @@ isolated worktree, branch, and PR when they already own the behavior. Do not
 persist exploratory questions, unresolved options, or discussion the user says
 will be decided later. This standing authorization remains documentation-only;
 it never expands the specialist into executable product work.
+
+#### Documentation revision and PR preflight
+
+For every user-requested revision to an `AGENTS.md`, contract, `README.md`, or
+other related document, first look for its owning issue and pull request. If a
+related PR exists, read its head and base, diff, review discussion, checks, and
+merge state before editing. Then make the revision only in that PR's isolated
+worktree (or create a new isolated worktree and documentation-only PR when no
+related PR exists); keep the active practice checkout untouched. A local
+worktree commit or diff is not evidence that GitHub merged the PR—verify the
+actual GitHub state before treating the change as merged. Record when no
+related PR exists and use the appropriate issue/PR path before editing.
 
 ## What This Task Is For
 
@@ -356,6 +392,74 @@ instead of creating a per-problem directory, a separate `problem.md`, or a
 series of local attempt snapshots.
 
 ### Prepare The Problem
+
+#### Startup fast path and latency budget
+
+The visible problem handoff is latency-sensitive. Once the current repository
+instructions, contracts, MCP connection, and persistent browser identity have
+been loaded for this task, do not repeat discovery or broad diagnostics on
+every problem. Use this bounded sequence:
+
+#### Warm active-thread context
+
+Warm context is the default for every prompt while the same activity and Codex
+thread remain active. Reuse the loaded instructions, contracts, MCP
+connection/tool catalog, workbench and activity identity, persistent browser
+state, and current Solution Profile. Each prompt still receives its own user
+`turnId` and specialist `responseTurnId`; warm context never merges turns or
+requires an infinite polling loop.
+
+Reload the repository guides, contracts, and broad tool discovery only when
+the user explicitly requests a reload, the Codex process/thread is restarted,
+the activity/session/workbench changes, the MCP or browser connection is lost,
+or a changed local file makes the loaded instructions stale. Perform the
+specific authoritative read required before a timer, planning, result,
+browser, or finalization mutation even when warm context is active.
+
+#### Visible warm-context and persistence annotations
+
+When any response in the active LeetCode thread reuses the warm context,
+including administrative or unrelated turns, append this small italic footer
+so the user can distinguish warm reuse from a fresh startup:
+
+`*Warm activity context reused.*`
+
+When a persistence-only child receives delegated work, also show the truthful
+line required by `background-specialist-persistence.md`:
+
+`↻ Practice persistence delegated in background`
+
+That line never means that D1/R2 already saved the work. After an authoritative
+receipt is available, show the receipt-specific wording instead. For an
+unrelated Voice capture, use:
+
+`*Not attached to this practice activity · Transcript not saved · Recording not uploaded.*`
+
+Do not use a saved/attached claim while persistence is merely delegated.
+
+1. Read Today once and select one already-planned activity from the current
+   workbench. Do not create a duplicate selection or session.
+2. Resolve its `questionId` and load the Solution Profile once before
+   preparing the attempt. Reuse the result for the rest of the turn.
+3. Run the checked-in controller `ensure` exactly once, then one `navigate` for
+   the selected problem. Do not relaunch Chrome, rediscover the profile/CDP
+   endpoint, enumerate tabs, or run unrelated shell/browser diagnostics.
+4. Prepare the source and reserve the harness exactly once. If the configured
+   harness root is not writable, retry once with the approved local temporary
+   root via `INTERVIEW_ARC_HARNESS_ROOT`; never repeat the failed preparation
+   in a loop.
+5. Start at most one harness helper and reuse the activity's one persistence
+   helper. Delegate them after composing the visible answer, then return the
+   problem statement, editor command, and Quick/Full commands immediately.
+   Never wait, poll, or perform a second discovery pass merely to make those
+   helpers ready.
+
+When the user says to start a problem, start that activity's authoritative
+timer as part of the startup sequence, using the current workbench/timer
+revision and a stable mutation ID. A request limited to preparation while the
+user is away does not start the timer; start it when the user explicitly begins
+the problem. Controller, harness, and persistence work must not block the
+visible coaching handoff.
 
 1. Resolve the focused activity and verify the official public LeetCode problem
    number, title, and URL from the bank, the exact user-supplied public URL, or
