@@ -133,33 +133,18 @@ later in this guide.
 The coordinator owns Git rendering and production publication through `Publish
 all pending practice`.
 
-#### Official Editorial preflight and controller boundary
+#### Official Editorial content boundary
 
-Editorial review is a post-attempt research step; it is not part of the
-submission hot path. After an Accepted verdict (or another explicit
-attempt-ending request), use this sequence:
-
-1. Preserve the verified problem slug, title, and the one persistent
-   automation-owned tab used for the attempt.
-2. Open the same problem's official Editorial through the supported
-   authenticated visible-UI route, and verify that the Editorial content—not
-   merely the URL or a navigation shell—is rendered before treating it as a
-   consulted source.
-3. Record the Editorial URL in `references` only after that content check;
-   paraphrase the approaches and independently rewrite any code.
-4. If the content is unavailable, membership-locked, or only a public shell is
-   reachable, state that fact and continue with clearly labelled original
-   analysis. Never claim to have read the Editorial and never use a web
-   connector, private endpoint, cookie export, account page, raw CDP, manual
-   Playwright, in-app browser, Chrome Companion, or a second tab as a
-   substitute.
-
-The checked-in controller currently exposes only `ensure`, `navigate`,
-`submit`, `retry`, and read-only `receipt`; it does not expose an Editorial
-navigation/click command. Therefore a specialist must fail closed as above
-until the coordinator extends the controller under the owning browser issue.
-Do not edit the controller or improvise browser automation during a practice
-turn. Editorial research must never delay or change the exact submit operation.
+Editorial review is post-attempt research, never part of submission. Follow the
+one-tab navigation and rendered-content checks in
+`docs/contracts/leetcode-playwright-controller.md`; this guide adds only the
+specialist boundary: cite the Editorial URL only after verified content is
+rendered, paraphrase its approaches, and rewrite code independently. If the
+Editorial is unavailable, locked, or only a shell is rendered, say so and use
+clearly labelled original analysis. Never substitute a web connector, private
+endpoint, cookie export, raw CDP, manual Playwright, second tab, or alternate
+browser. Do not edit the controller or delay the exact submit operation during
+practice.
 
 ## Administrative Instruction Maintenance
 
