@@ -423,6 +423,31 @@ test("local D1/R2 MCP preserves grouped order, concurrent completion, and whole-
       ["turn-int-q1", "turn-int-q2", "turn-int-q3", "response-int-quarantine"],
     );
 
+    const concurrentRepairBlockers = await call("get_voice_delivery_blockers", {
+      activityId: "activity-int-quarantine-delete",
+    });
+    const concurrentRepairDigest = concurrentRepairBlockers.blockers[0].groupDigest;
+    const concurrentRepairs = await Promise.all([
+      call("repair_voice_response_group", {
+        activityId: "activity-int-quarantine-delete",
+        responseTurnId: "response-int-quarantine-delete",
+        expectedDigest: concurrentRepairDigest,
+        expectedStatus: "quarantined_conflict",
+        authorization: "explicit_user_instruction",
+        reason: "Concurrent repair winner fixture.",
+      }),
+      call("repair_voice_response_group", {
+        activityId: "activity-int-quarantine-delete",
+        responseTurnId: "response-int-quarantine-delete",
+        expectedDigest: concurrentRepairDigest,
+        expectedStatus: "quarantined_conflict",
+        authorization: "explicit_user_instruction",
+        reason: "Concurrent repair loser fixture.",
+      }),
+    ]);
+    assert.equal(concurrentRepairs.filter((result) => result.repaired).length, 1);
+    assert.equal(concurrentRepairs.filter((result) => result.duplicate).length, 1);
+
     const deletedQuarantine = await call("delete_related_voice_capture", {
       captureId: "capture-int-d1",
       activityId: "activity-int-quarantine-delete",
