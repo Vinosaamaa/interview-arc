@@ -612,6 +612,15 @@ Never continue directly inside a quoted path literal: tmux's copied leading
 spaces would become filename data. In the `printf` form, each quoted fragment
 is a separate argument, so leading whitespace remains harmless syntax.
 
+This tmux-safe multiline rule applies to every command printed directly in the
+CLI or chat, including editor, harness, compiler, runner, and controller
+commands. Keep each authored line within the documented width and use the
+approved `printf` fragments; do not print a long one-line literal for the user
+to paste into tmux. Conversely, when commands are emitted to an external
+command sheet or text file, write exactly one complete physical line per
+command. The sheet's one-line format must not leak into the visible CLI block,
+and the visible block's line wrapping must not be written into the sheet.
+
    The user opens `nvim`. Do not assume that Codex can safely create or target
    a Warp pane, and do not replace the running Codex process with the editor.
 

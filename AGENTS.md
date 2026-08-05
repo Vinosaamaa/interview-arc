@@ -158,6 +158,16 @@ current turn is related, unrelated, or uncertain, and regardless of whether it
 is typed or Voice. If another truthful classification or persistence footer
 also applies, show both on separate lines; never omit the warm-context footer.
 
+Command presentation has two distinct contracts. Commands printed directly in
+the CLI or chat must be tmux-safe: use the repository's approved fragment
+template, keep authored lines within the documented width, and never rely on a
+long quoted path that tmux indentation could turn into filename data. Commands
+written to an external command sheet or text file must instead remain exactly
+one complete physical line per command so the file is machine- and
+copy/paste-friendly. Never apply the external-file one-line rule to the
+visible CLI command block, and never wrap a command across multiple physical
+lines in the external sheet.
+
 Exclude administrative or process conversation even when it appears in the same
 activity or visible chat: navigation, Playwright or browser preflight, tab and
 page handling, MCP/API/tool calls, D1/R2 or private-audio operations, timers,
