@@ -423,6 +423,35 @@ series of local attempt snapshots.
        Apply this grammar to plots, histograms, line/container diagrams,
        grids, matrices, trees, and graph layouts when it remains faithful; do
        not force a bar-chart style onto a visual that needs another layout.
+       Reference examples:
+
+       ```text
+       height
+         8 |  ·· ██ ·· ·· ·· ·· ██ ·· ··
+         7 |  ·· ██ ░░ ░░ ░░ ░░ ██ ░░ ██
+         6 |  ·· ██ ██ ░░ ░░ ░░ ██ ░░ ██
+         5 |  ·· ██ ██ ░░ ██ ░░ ██ ░░ ██
+         4 |  ·· ██ ██ ░░ ██ ██ ██ ░░ ██
+         3 |  ·· ██ ██ ░░ ██ ██ ██ ██ ██
+         2 |  ·· ██ ██ ██ ██ ██ ██ ██ ██
+         1 |  ██ ██ ██ ██ ██ ██ ██ ██ ██
+           +-----------------------------
+              0   1   2   3   4   5   6   7   8
+       ```
+
+       ```text
+                              ┌───────┐
+                              │  -10  │
+                              └───┬───┘
+                  ┌───────────────┴───────────────┐
+              ┌───▼───┐                       ┌───▼───┐
+              │   9   │                       │  20   │
+              └───────┘                       └───┬───┘
+                                          ┌────────┴────────┐
+                                      ┌───▼───┐        ┌───▼───┐
+                                      │  15   │        │   7   │
+                                      └───────┘        └───────┘
+       ```
    - If ASCII/text would lose material information and the user needs to inspect
      that visual, bring the existing tab to the foreground. Material visual
      inspection and user authentication are the only flows that may foreground
