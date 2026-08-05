@@ -527,7 +527,15 @@ function mergePlanningQuestions(
     ...personal.filter((question) => !canonical.some((item) => item.id === question.id)),
     ...canonical.map((question) => ({
       ...question,
-      ...(personalById.get(question.id) ?? {}),
+      ...(personalById.has(question.id) ? {
+        title: personalById.get(question.id)?.title ?? question.title,
+        prompt: personalById.get(question.id)?.prompt ?? question.prompt,
+        url: personalById.get(question.id)?.url ?? question.url,
+        source: personalById.get(question.id)?.source ?? question.source,
+        priority: personalById.get(question.id)?.priority ?? question.priority,
+        targetMinutes: personalById.get(question.id)?.targetMinutes ?? question.targetMinutes,
+        active: personalById.get(question.id)?.active ?? question.active,
+      } : {}),
       topics: [...new Set([
         ...question.topics,
         ...(personalById.get(question.id)?.topics ?? []),
@@ -536,6 +544,15 @@ function mergePlanningQuestions(
         ...(question.tags ?? []),
         ...(personalById.get(question.id)?.tags ?? []),
       ])],
+      ...(personalById.get(question.id)?.problemNumber !== undefined ? { problemNumber: personalById.get(question.id)?.problemNumber } : {}),
+      ...(personalById.get(question.id)?.difficulty !== undefined ? { difficulty: personalById.get(question.id)?.difficulty } : {}),
+      ...(personalById.get(question.id)?.acceptanceRate !== undefined ? { acceptanceRate: personalById.get(question.id)?.acceptanceRate } : {}),
+      ...(personalById.get(question.id)?.companyTags?.length ? { companyTags: [...new Set([...(question.companyTags ?? []), ...(personalById.get(question.id)?.companyTags ?? [])])] } : {}),
+      ...(personalById.get(question.id)?.companySignals?.length ? { companySignals: [...(question.companySignals ?? []), ...(personalById.get(question.id)?.companySignals ?? [])] } : {}),
+      ...(personalById.get(question.id)?.metadataReferences?.length ? { metadataReferences: [...(question.metadataReferences ?? []), ...(personalById.get(question.id)?.metadataReferences ?? [])] } : {}),
+      ...(personalById.get(question.id)?.metadataCapturedAt !== null && personalById.get(question.id)?.metadataCapturedAt !== undefined
+        ? { metadataCapturedAt: personalById.get(question.id)?.metadataCapturedAt }
+        : {}),
     })),
   ];
 }

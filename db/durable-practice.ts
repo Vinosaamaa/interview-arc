@@ -176,7 +176,18 @@ async function enrichPersonalLeetCodeQuestion(
       tags: normalizedTags([
         ...((question.tags ?? []) as string[]),
         ...tags,
-        ...(metadata ? deriveQuestionMetadataTags(metadata) : []),
+        ...deriveQuestionMetadataTags({
+          problemNumber: mergedMetadata.problemNumber ?? undefined,
+          difficulty: mergedMetadata.difficulty ?? undefined,
+          acceptanceRate: mergedMetadata.acceptanceRate ?? undefined,
+          topics: mergedMetadata.topics,
+          companyTags: mergedMetadata.companyTags,
+          companySignals: mergedMetadata.companySignals,
+          capturedAt: new Date(mergedMetadata.metadataCapturedAt ?? nowMs).toISOString(),
+          sources: mergedMetadata.metadataReferences.length
+            ? mergedMetadata.metadataReferences
+            : [{ title: questionId, url: `https://leetcode.com/problems/${questionId}/`, accessedAt: new Date(mergedMetadata.metadataCapturedAt ?? nowMs).toISOString() }],
+        }),
       ]),
       ...questionMetadataUpdateFields(mergedMetadata),
       updatedAt: nowMs,
