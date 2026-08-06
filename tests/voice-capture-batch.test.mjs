@@ -155,13 +155,17 @@ test("D1 enforces one group order and one user-turn membership", async () => {
 });
 
 test("specialist contracts route multi-recording answers through the batch operation", async () => {
-  const [contract, leetcode, systemDesign, behavioral] = await Promise.all([
+  const [contract, shared, leetcode, systemDesign, behavioral] = await Promise.all([
     readFile(new URL("../docs/contracts/durable-practice-publishing.md", import.meta.url), "utf8"),
+    readFile(new URL("../practice/AGENTS.md", import.meta.url), "utf8"),
     readFile(new URL("../practice/leetcode/AGENTS.md", import.meta.url), "utf8"),
     readFile(new URL("../practice/system-design/AGENTS.md", import.meta.url), "utf8"),
     readFile(new URL("../practice/behavioral/AGENTS.md", import.meta.url), "utf8"),
   ]);
-  for (const guide of [contract, leetcode, systemDesign, behavioral]) {
-    assert.match(guide, /resolve_voice_captures_and_save_response/);
+  assert.match(contract, /resolve_voice_captures_and_save_response/);
+  for (const guide of [leetcode, systemDesign, behavioral]) {
+    assert.match(guide, /\.\.\/AGENTS\.md/);
+    const effectiveGuide = `${shared}\n${guide}`;
+    assert.match(effectiveGuide, /resolve_voice_captures_and_save_response/);
   }
 });

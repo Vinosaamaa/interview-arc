@@ -753,6 +753,7 @@ test("future LeetCode specialists receive the complete nonblocking harness contr
   ]);
 
   assert.match(guide, /leetcode-java-harness\.md/);
+  const effectiveGuide = `${guide}\n${harnessContract}`;
   for (const statement of [
     /exactly one Codex\s+sub-agent per activity and verified problem signature/i,
     /nvim.*Quick.*--full/is,
@@ -762,7 +763,7 @@ test("future LeetCode specialists receive the complete nonblocking harness contr
     /never send a proactive.*ready/i,
     /raw.*harness.*D1.*transcript/is,
     /Locally verified.*Accepted.*verdict/is,
-  ]) assert.match(guide, statement);
+  ]) assert.match(effectiveGuide, statement);
 
   for (const phrase of [
     "Deterministic activity state",

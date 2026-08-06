@@ -846,6 +846,7 @@ test("Voice protocol v2 gates content behind an explicit per-capture decision", 
   const exchangePolicy = await readFile(new URL("../db/practice-exchange-policy.ts", import.meta.url), "utf8");
   const worker = await readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8");
   const migration = await readFile(new URL("../drizzle/0013_bizarre_the_hand.sql", import.meta.url), "utf8");
+  const specialistGuide = await readFile(new URL("../practice/AGENTS.md", import.meta.url), "utf8");
   const leetcodeGuide = await readFile(new URL("../practice/leetcode/AGENTS.md", import.meta.url), "utf8");
 
   assert.match(schema, /voice_capture_intents/);
@@ -882,7 +883,11 @@ test("Voice protocol v2 gates content behind an explicit per-capture decision", 
   );
   assert.match(resultControlSchema, /expectedRevision: z\.number\(\)\.int\(\)\.nonnegative\(\)/);
   assert.match(exchangePolicy, /Transcript not saved · Recording not uploaded/);
-  assert.match(leetcodeGuide, /ambiguous.*uncertain/is);
+  assert.match(specialistGuide, /ambiguous.*uncertain/is);
+  assert.match(specialistGuide, /must end with exactly one truthful\s+persistence-status line as its final non-empty line/i);
+  assert.match(specialistGuide, /Attachment pending · Practice persistence delegated in background/);
+  assert.match(specialistGuide, /Not attached to this practice activity · Not saved to the practice transcript or publication/);
+  assert.match(specialistGuide, /put `\*Warm activity context reused\.\*` immediately\s+above the mandatory status line/i);
   assert.match(leetcodeGuide, /Scratch Notes/);
 });
 
