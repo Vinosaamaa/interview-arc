@@ -71,9 +71,9 @@ function pageAdapter(overrides = {}) {
     },
     waitForEditorialContent: async () => ({ state: "available" }),
     readEditorialResearchMaterial: async () => ({
-      renderedText: "Editorial explanation.",
+      renderedText: "Approach 1\nA substantive rendered Editorial explanation with enough detail to satisfy the production content threshold and support an evidence-based specialist review of the algorithm.",
       headings: ["Approach 1"],
-      codeBlocks: [],
+      codeBlocks: [{ index: 0, language: "java", code: "class Solution { void solve() {} }" }],
     }),
     ...overrides,
   };

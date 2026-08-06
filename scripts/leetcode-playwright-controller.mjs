@@ -852,63 +852,65 @@ export function createPlaywrightPageAdapter(page) {
           scrollContainer = scrollContainer.parentElement;
         }
         const originalScrollTop = scrollContainer?.scrollTop ?? null;
-        if (scrollContainer) {
-          scrollContainer.scrollTop = scrollContainer.scrollHeight - scrollContainer.clientHeight;
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        } else {
-          const viewportHeight = Math.max(window.innerHeight ?? 800, 400);
-          const scrollHeight = document.scrollingElement?.scrollHeight
-            ?? document.documentElement?.scrollHeight
-            ?? viewportHeight;
-          const maximumScroll = Math.max(0, scrollHeight - viewportHeight);
-          if (maximumScroll > 0) {
-            window.scrollTo?.(0, maximumScroll);
+        try {
+          if (scrollContainer) {
+            scrollContainer.scrollTop = scrollContainer.scrollHeight - scrollContainer.clientHeight;
             await new Promise((resolve) => setTimeout(resolve, 100));
+          } else {
+            const viewportHeight = Math.max(window.innerHeight ?? 800, 400);
+            const scrollHeight = document.scrollingElement?.scrollHeight
+              ?? document.documentElement?.scrollHeight
+              ?? viewportHeight;
+            const maximumScroll = Math.max(0, scrollHeight - viewportHeight);
+            if (maximumScroll > 0) {
+              window.scrollTo?.(0, maximumScroll);
+              await new Promise((resolve) => setTimeout(resolve, 100));
+            }
           }
-        }
 
-        const renderedText = root.innerText?.trim() ?? "";
-        const headings = [...root.querySelectorAll("h1,h2,h3")]
-          .map((heading) => heading.innerText?.trim() ?? "")
-          .filter(Boolean);
-        const codeSelector = [
-          "pre",
-          "code",
-          '[data-track-load*="code" i]',
-          '[data-testid*="code" i]',
-          '[class*="codeblock" i]',
-          '[class*="code-block" i]',
-          ".view-lines",
-        ].join(",");
-        // LeetCode portals the visible implementation editor outside the
-        // markdown root. The route/title fence above scopes this document to
-        // the verified Editorial while still allowing that official code pane.
-        const editorialScope = document;
-        const rawCodeCandidates = [...editorialScope.querySelectorAll(codeSelector)]
-          .filter((block) => visible(block) && (block.innerText ?? "").trim().length >= 20);
-        const candidateSet = new Set(rawCodeCandidates);
-        const codeCandidates = rawCodeCandidates.filter((block) => {
-          for (let ancestor = block.parentElement; ancestor; ancestor = ancestor.parentElement) {
-            if (candidateSet.has(ancestor)) return false;
-          }
-          return true;
-        });
-        const codeBlocks = codeCandidates.map((block, index) => {
-          const code = block.matches?.("code") ? block : block.querySelector?.("code");
-          const className = typeof code?.className === "string" ? code.className : "";
-          const language = block.getAttribute?.("data-language")
-            ?? code?.getAttribute?.("data-language")
-            ?? className.match(/(?:^|\s)language-([^\s]+)/)?.[1]
-            ?? null;
-          return {
-            index,
-            language,
-            code: (block.innerText ?? "").trim(),
-          };
-        });
-        if (scrollContainer && originalScrollTop !== null) scrollContainer.scrollTop = originalScrollTop;
-        else window.scrollTo?.(originalX, originalY);
-        return { renderedText, headings, codeBlocks };
+          const renderedText = root.innerText?.trim() ?? "";
+          const headings = [...root.querySelectorAll("h1,h2,h3")]
+            .map((heading) => heading.innerText?.trim() ?? "")
+            .filter(Boolean);
+          const codeSelector = [
+            "pre",
+            "code",
+            '[data-track-load*="code" i]',
+            '[data-testid*="code" i]',
+            '[class*="codeblock" i]',
+            '[class*="code-block" i]',
+            ".view-lines",
+          ].join(",");
+          // LeetCode portals the visible implementation editor outside the
+          // markdown root. The route/title fence above scopes this document to
+          // the verified Editorial while still allowing that official code pane.
+          const rawCodeCandidates = [...document.querySelectorAll(codeSelector)]
+            .filter((block) => visible(block) && (block.innerText ?? "").trim().length >= 20);
+          const candidateSet = new Set(rawCodeCandidates);
+          const codeCandidates = rawCodeCandidates.filter((block) => {
+            for (let ancestor = block.parentElement; ancestor; ancestor = ancestor.parentElement) {
+              if (candidateSet.has(ancestor)) return false;
+            }
+            return true;
+          });
+          const codeBlocks = codeCandidates.map((block, index) => {
+            const code = block.matches?.("code") ? block : block.querySelector?.("code");
+            const className = typeof code?.className === "string" ? code.className : "";
+            const language = block.getAttribute?.("data-language")
+              ?? code?.getAttribute?.("data-language")
+              ?? className.match(/(?:^|\s)language-([^\s]+)/)?.[1]
+              ?? null;
+            return {
+              index,
+              language,
+              code: (block.innerText ?? "").trim(),
+            };
+          });
+          return { renderedText, headings, codeBlocks };
+        } finally {
+          if (scrollContainer && originalScrollTop !== null) scrollContainer.scrollTop = originalScrollTop;
+          else window.scrollTo?.(originalX, originalY);
+        }
       }, {
         expectedSlug: identity.slug,
         expectedTitle: identity.title,
