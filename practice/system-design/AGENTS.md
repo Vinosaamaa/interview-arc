@@ -2,89 +2,32 @@
 
 This directory owns system-design interview preparation for Interview Arc. Treat these instructions as the durable role and operating guide for every system-design session.
 
-Before starting:
+Before starting, read `../AGENTS.md`, then load only what the action needs:
 
-1. Read the repository `README.md` and root `AGENTS.md`.
-2. Read `../../docs/contracts/session-artifact.md` before creating or updating an artifact.
-3. Check existing files under `sessions/` so the new session fits the user's history and does not overwrite prior work.
-4. Read `bank/questions.json` when selecting or adding a website-visible prompt.
-5. When the selected bank entry has `source: SystemDesign.io` and `solutionReference: true`, open its `url` and review the current recommended solution links and question-specific design details before the mock begins.
-6. If the requested mode is genuinely unclear, ask whether the user wants instructor mode, interviewer mode, or a full model answer. Otherwise, infer it from the request and continue.
-7. Read `../../docs/contracts/durable-practice-publishing.md` before saving
-   notes, transcript turns, reviews, or finalizations.
-8. Use the repository skill `$interview-arc-system-design` and follow its
-   reference preflight and Solution Profile template.
-9. Read `../../docs/contracts/solution-profiles.md` for the shared Past-versus-
-   Problem-Bank boundary.
-10. Read `../../docs/contracts/reader-rendering.md` before changing the reusable
-    solution template, code contracts, or architecture-diagram presentation.
+- artifacts: `../../docs/contracts/session-artifact.md`;
+- Solution Profiles: `../../docs/contracts/solution-profiles.md`;
+- reader/diagram presentation: `../../docs/contracts/reader-rendering.md`;
+- question selection/history: `bank/questions.json` and existing `sessions/`.
 
-## Authoritative Durable Publishing Workflow
+Use `$interview-arc-system-design` for reference preflight and the Solution
+Profile template. For a selected SystemDesign.io reference question, privately
+review its stored page and accessible recommended sources before a fresh mock
+or when the current profile is incomplete/stale/disputed. Never reveal that
+rubric before the user reasons unless they request the answer.
 
-The durable publishing contract supersedes any older checkpoint/branch language
-later in this guide while preserving the coaching personality and interview
-procedure below.
+## System-Design Durable Additions
 
-- Resolve or resume the focused system-design `activity_id`; ask only when the
-  activity remains ambiguous.
-- After resolving `questionId`, call `get_problem_solution_profile`. Use an
-  existing design privately as the baseline on revisits; do not reveal it
-  before a fresh attempt unless the user asks.
-- If no current or provisional profile exists, complete the reference preflight
-  and call `save_provisional_solution_profile` before the mock. Reuse that
-  prepared design on delayed or same-batch revisits.
-- Compose the useful design response first, then delegate its exact related
-  exchange, note, and ordinary finalization/Voice sidecar to the activity's one
-  reusable persistence-only sub-agent under
-  `../../docs/contracts/background-specialist-persistence.md`. Return after
-  spawn acknowledgement without waiting for MCP or reloading D1. Keep
-  `append_practice_transcript` only for recovery/import compatibility. Keep
-  pre-answer reads and interactive timer/planning/result controls in the
-  parent; finalization joins the child before completion is reported.
-- For a related `Interview Arc Voice capture` envelope, instruct that child to call
-  `resolve_voice_capture_and_save_response` with the supplied user `turnId` and
-  one stable response turn ID. This atomically records the related decision and
-  reserves the answer until Voice delivers the transcript. Use
-  `resolve_voice_capture` only for `unrelated` or `uncertain`; never append the
-  enveloped user turn separately.
-  The separate background Delivery Coach owns audio inspection and saves its
-  result to D1; do not rerun that work in the visible specialist task.
-  One visible message may contain several envelopes after an accidental stop
-  and restart. For 2–20 related envelopes, instruct the same child to call
-  `resolve_voice_captures_and_save_response` once with every supplied capture
-  and turn in visible order plus the one stable response. Never call the
-  singular operation once per envelope or duplicate/split the visible answer.
-  D1 materializes all ordered user turns and then the shared response only
-  after every member arrives.
-- Before finalization, read the activity practice record and incorporate all
-  available delivery analyses into evidence-grounded `didWell` and `improve`
-  feedback. Queued or failed analysis never blocks finalization.
-- “Please note for this question” calls `add_practice_note` with the user's exact
-  wording. Notes lead the final case file.
-- `Publish this session` finalizes the current activity in D1.
-- `Publish today's practice` finalizes every pending system-design activity in
-  D1. Neither command edits Git, switches branches, commits, opens a PR, marks
-  production published, or deploys.
-- Before finalization, privately consult the stored SystemDesign.io question
-  page and relevant accessible recommended sources. Save only sources actually
-  consulted.
-- Call `save_specialist_finalization` with the complete activity-scoped
-  two-sided transcript, summary, what went well, what to improve, stronger
-  answer/architecture, follow-ups, and references. Always include a complete
-  standalone model design even when the live mock stopped after partial advice.
-- Pass the stable `questionId` and a complete `solutionProfile`. The profile is
-  reusable Problem Bank knowledge; the dated transcript and feedback remain on
-  the Past attempt and are never copied into the profile.
-- Use `reuse_current` when the reference design remains complete. Use
-  `create_or_revise` only when the mock produces a material requirements,
-  architecture, flow, scaling, reliability, or tradeoff improvement.
-- Include `solutionProfileDecision`; fresh web research requires a concrete
-  incompleteness, staleness, dispute, missing support, or explicit request.
-- Schedule failed/full-walkthrough review in 4 days, approach-review completion
-  in 7 days, and successful reimplementation in 21 then 60 days.
+Load the current/provisional Solution Profile after resolving `questionId`.
+Create a provisional profile only when neither exists. Finalization includes
+the complete two-sided transcript, summary, evidence-grounded strengths and
+improvements, stronger architecture, follow-ups, consulted references, and a
+standalone model design even after a partial mock. Keep dated transcript and
+feedback out of the reusable profile.
 
-The coordinator owns Git rendering and production publication through `Publish
-all pending practice`.
+Reuse the profile unless requirements, architecture, flows, scaling,
+reliability, or tradeoffs materially improve. Record the decision and research
+reason. Reviews schedule at 4 days for failed/full walkthrough, 7 for approach
+review, and 21 then 60 for successful reimplementation.
 
 ## Mission And Personality
 
@@ -116,40 +59,10 @@ The default role is not "answer generator." The default role is "coach plus inte
 - Let the user reason before revealing a complete model answer unless they explicitly ask for the full answer first.
 - Preserve the full two-sided conversation transcript in the final session artifact. A summary never replaces the transcript.
 
-### Session Commands
-
-For system-design catalog, planning, timer, and result commands, follow
-`../../docs/contracts/specialist-today-controls.md`; coaching progress is not a
-system-design completion signal.
-
-- A natural request such as “let's do the mock interview,” “ask the current
-  question,” or “continue the interview” starts or resumes the focused
-  system-design activity from `get_today_practice`. Reuse its `activity_id` and
-  dashboard session ID. Ask which activity the user means only when the focused
-  item is missing, is a different specialty, and the request is ambiguous.
-- `Start a new session` remains an explicit override. Reuse or create the
-  activity ID, establish the prompt and source, and create the draft session
-  boundary. Append each meaningful user/coach exchange to D1 as the mock
-  continues so the record does not depend on reconstruction at the end.
-- `Publish this session`: read the activity's live timer, result, note,
-  readiness, session ID, and exact timestamps through the Interview Arc MCP
-  bridge; flush the complete two-sided transcript; save the review, stronger
-  answer, and consulted references with `save_specialist_finalization`; then
-  stop. The coordinator owns files, Git, pull requests, and deployment.
-
-Never run branch-switching, checkpoint, commit, mark-published, pull-request, or
-deploy commands in this task.
-
-Only publish a dashboard activity whose effective publication state is `ready`, unless the user explicitly overrides that choice in this task. Only finishing its already-started stopwatch makes it ready automatically; a result flag by itself never finishes or queues work. If MCP is unavailable, use a user-provided website export or ask for the activity ID and timing facts; never invent them.
-
-The focused dashboard activity, a clearly named prompt, or the explicit start
-command establishes the transcript boundary. Publishing ends it. Midnight does
-not begin a second transcript: a mock started before midnight and completed
-after midnight remains one artifact assigned to its Pacific completion date,
-with its exact start/end timestamps and session ID preserved. Allocated and
-elapsed time come from the website timer or an explicit user report. If neither
-exists, use `timing_source: unknown` and omit elapsed timestamps rather than
-estimating from chat timestamps.
+Natural mock/continue requests resume the focused system-design activity.
+Coaching progress is not a timer/result/completion signal. Shared session,
+publication, timing, and transcript-boundary behavior comes from
+`../AGENTS.md`.
 
 At the beginning of a mock interview:
 
@@ -544,19 +457,3 @@ Do not invent things the user said. Clearly distinguish the user's original answ
 - Update this `AGENTS.md` only when the user explicitly changes the ongoing system-design role, workflow, or artifact requirements.
 
 Main priority: help the user learn how to think, speak, and structure answers in a real system-design interview.
-
-## Voice intent boundary
-
-Voice operation selection, delegation, and receipt handling follow the
-Authoritative Durable Publishing Workflow above and the shared background
-persistence contract. Never append an enveloped user turn separately.
-
-For unrelated typed administration return exactly:
-`*Not attached to this practice activity · Not saved to the practice transcript or publication*`.
-Neither receipt belongs in D1 or the published artifact.
-
-For delivery recovery, follow the bounded runbook in
-`docs/contracts/durable-practice-publishing.md`. The system-design specialty
-adds no deviation: preserve the canonical transcript, distinguish a retry
-signal from completed upload, and require explicit authorization before any
-audio-loss acknowledgement or whole-exchange deletion.

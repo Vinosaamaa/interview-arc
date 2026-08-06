@@ -22,9 +22,15 @@ and composing the complete visible answer plus its exact persistence sidecar:
    not wait for MCP completion, reload D1, poll status, retry a failed write, or
    run Delivery Coach on the parent response path. The persistence child, not
    the visible parent, owns durable write receipt inspection.
-5. Use one truthful interim line when persistence applies:
-   `↻ Practice persistence delegated in background`
-   This means only that a child received the work. It never means D1/R2 saved.
+5. End every visible parent response with exactly one truthful persistence
+   status line. When persistence was delegated but no authoritative receipt is
+   available, the final line is
+   `↻ Attachment pending · Practice persistence delegated in background`.
+   When persistence does not apply, use the owning specialist guide's exact
+   not-attached line. Replace the pending state with exact saved, duplicate,
+   uncertain, or failed receipt wording only when that state is authoritative.
+   The status line is always the final non-empty line and never enters the
+   durable transcript or publication.
 
 For Voice grouping, operation selection, membership, and reservation, follow
 [`durable-practice-publishing.md`](./durable-practice-publishing.md). Delegate

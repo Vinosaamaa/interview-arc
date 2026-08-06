@@ -132,11 +132,12 @@ test("advance rejects an unknown or completed explicit destination", () => {
 });
 
 test("specialist Today controls are registered, allowlisted, and contract-bound", async () => {
-  const [worker, store, config, contract, leetcodeGuide] = await Promise.all([
+  const [worker, store, config, contract, sharedGuide, leetcodeGuide] = await Promise.all([
     readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/specialist-controls-store.ts", import.meta.url), "utf8"),
     readFile(new URL("../.codex/config.toml", import.meta.url), "utf8"),
     readFile(new URL("../docs/contracts/specialist-today-controls.md", import.meta.url), "utf8"),
+    readFile(new URL("../practice/AGENTS.md", import.meta.url), "utf8"),
     readFile(new URL("../practice/leetcode/AGENTS.md", import.meta.url), "utf8"),
   ]);
   for (const tool of [
@@ -176,5 +177,5 @@ test("specialist Today controls are registered, allowlisted, and contract-bound"
   );
   assert.match(contract, /explicit user instruction/i);
   assert.match(contract, /authoritative D1 read-back/i);
-  assert.match(leetcodeGuide, /control_practice_timer/);
+  assert.match(`${sharedGuide}\n${leetcodeGuide}`, /control_practice_timer/);
 });
