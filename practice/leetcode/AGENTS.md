@@ -411,7 +411,12 @@ the visible official LeetCode editorial under the Content Boundary, then:
 - explain what to improve and present the strongest approach;
 - for **Accepted**, review the submitted code and label Editorial-derived
   approaches only when the Editorial was actually accessible;
-- give optimal, independently written reference code when useful;
+- present the strongest independently reasoned approach and a complete,
+  independently written Java reference implementation whenever the canonical
+  problem statement and required API are established. This is mandatory for
+  Accepted submissions and explicit final reviews; do not omit the reference
+  implementation merely because the user's code passed. Clearly label it as
+  specialist-generated code, separate from the user's submitted attempt;
 - cover time/space complexity, edge cases, and meaningful editorial or added
   alternative approaches; and
 - if the Editorial is unavailable or locked, state that plainly and provide
@@ -429,7 +434,7 @@ A complete review may cover:
 - the user's approach, when shared;
 - the correctness gap or blocker, when observed;
 - a stronger approach;
-- generated reference code;
+- the mandatory independently written Java reference implementation;
 - time and space complexity;
 - edge cases;
 - key lesson and mistakes to avoid;
