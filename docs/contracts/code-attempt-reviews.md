@@ -35,22 +35,6 @@ type CodeAttemptReviewV1 =
   turn in `reviewResponseTurnId`. Every substantive review statement must be
   visible there, and testing conclusions must be supported by the attempt's
   stored evaluation evidence.
-- Complete reviews use one parity-safe sidecar, prepared by the visible
-  specialist before it emits the response. Draft `summary`, every
-  `whatWentWell`, `whatToImprove`, and `testingEvidence` item, and `nextStep`
-  once; render each exact string in that same visible response; then pass the
-  unchanged sidecar and response-turn identity to persistence. Markdown labels
-  and list markers may surround a string, but the child must not summarize,
-  shorten, expand, or otherwise paraphrase it. Semantic equivalence is not
-  parity. Every `testingEvidence` item must also occur unchanged in the stored
-  evaluation evidence supplied with the attempt.
-- The persistence child performs mechanical transport only. It must not derive
-  structured review fields from the visible prose. If the server rejects
-  parity, the pending attempt remains authoritative: do not replay the rejected
-  payload or create another attempt. Re-read the referenced visible turn and
-  pending attempt, preserve immutable attempt identity and code, compose a
-  corrected completion from exact visible strings under a new operation ID,
-  and verify its receipt reaches `saved`.
 - Before completing that review, the specialist inspects the exact submitted
   source for the user's own time-complexity, space-complexity, and edge-case
   analysis (normally in comments or an explicitly supplied explanation). Each
@@ -69,6 +53,33 @@ type CodeAttemptReviewV1 =
   D1 batches to guard both race directions: a ready/published finalization
   rejects later attempts, and a finalization transition to ready rejects any
   existing pending V1 review. A failed guard rolls back its paired mutation.
+
+## Parity-safe completion
+
+1. **Compose:** Before emitting the response, the visible specialist drafts
+   `summary`, every `whatWentWell`, `whatToImprove`, and `testingEvidence` item,
+   and optional `nextStep` once in one structured sidecar.
+2. **Render:** Include every sidecar string unchanged in that same visible
+   response. Markdown labels and list markers may surround it, but semantic
+   equivalence is not parity. Every `testingEvidence` string must also occur
+   unchanged in the attempt's stored evaluation evidence.
+3. **Delegate:** Pass the unchanged sidecar, attempt evidence, and response-turn
+   identity to the persistence child. The child performs mechanical transport;
+   it never derives, summarizes, shortens, expands, or paraphrases review text.
+4. **Verify:** Read the completion job until its authoritative receipt is
+   `saved`. Queued is not saved.
+
+## Parity-rejection recovery
+
+1. **Stop:** Do not replay the rejected payload and do not create another
+   attempt. The pending attempt remains authoritative.
+2. **Re-read:** Load the exact referenced visible turn and authoritative pending
+   attempt.
+3. **Rebuild:** Preserve immutable attempt identity and code. Compose the
+   corrected completion only from exact visible strings and use a new operation
+   ID.
+4. **Verify:** Read the new receipt until it reaches `saved`; do not finalize
+   while the review remains pending.
 
 ## Reader behavior
 

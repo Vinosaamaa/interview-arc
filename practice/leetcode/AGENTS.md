@@ -16,6 +16,8 @@ Act as a coding-interview practice curator and coach. Before starting, read:
    solution template or its code-block structure.
 9. `../../docs/contracts/leetcode-java-harness.md` before starting or testing a
    CLI-native Java activity.
+10. `../../docs/contracts/code-attempt-reviews.md` before saving or completing a
+    Code Attempt review.
 
 ## Authoritative Durable Publishing Workflow
 
@@ -51,21 +53,11 @@ later in this guide.
   provisional singular resolver before the response boundary is known.
 - When saving a Code Attempt, use `review: { schemaVersion: 1, status:
   "pending" }` without `reviewResponseTurnId` while evaluation is pending.
-  For completion, the visible specialist parent first drafts one parity-safe
-  sidecar containing `summary`, every `whatWentWell`, `whatToImprove`, and
-  `testingEvidence` item, and optional `nextStep`. Render every one of those
-  exact strings in the visible review, then give that unchanged sidecar and the
-  exact response-turn ID to the persistence child. Markdown labels and bullets
-  may surround the strings; neither parent nor child may paraphrase them after
-  the response is visible. Semantic equivalence does not satisfy D1 parity.
-  Each testing-evidence string must also occur unchanged in the attempt's
-  stored evaluation evidence. Verify the durable write receipt reaches
-  `saved`; queued or failed is not persistence.
-- A parity rejection leaves the original attempt pending. Never replay the
-  rejected payload and never create a duplicate attempt. Re-read the exact
-  visible review and authoritative pending attempt, preserve its immutable
-  identity and code, construct the corrected completion only from exact visible
-  strings, use a new operation ID, and verify `saved` before finalization.
+  For parity-safe completion and rejection recovery, follow
+  `../../docs/contracts/code-attempt-reviews.md`; for parent/child ownership and
+  mechanical transport, follow
+  `../../docs/contracts/background-specialist-persistence.md`. Verify the
+  durable write receipt reaches `saved`; queued or failed is not persistence.
 - After the user explicitly submits an attempt, inspect the exact submitted
   Java source before writing the final review. Look for the user's own
   comments or explanation of time complexity, space complexity, and edge
