@@ -70,6 +70,11 @@ function pageAdapter(overrides = {}) {
       };
     },
     waitForEditorialContent: async () => ({ state: "available" }),
+    readEditorialResearchMaterial: async () => ({
+      renderedText: "Approach 1\nA substantive rendered Editorial explanation with enough detail to satisfy the production content threshold and support an evidence-based specialist review of the algorithm.",
+      headings: ["Approach 1"],
+      codeBlocks: [{ index: 0, language: "java", code: "class Solution { void solve() {} }" }],
+    }),
     ...overrides,
   };
 }
@@ -508,6 +513,11 @@ test("navigate reuses the existing page and verifies the editable Java problem",
 
 test("editorial research reuses the verified tab, navigates same-tab, and never submits", async () => {
   let currentUrl = identity.url;
+  const researchMaterial = {
+    renderedText: "Approach 1\nUse a recursive traversal.\nclass Solution {}",
+    headings: ["Approach 1"],
+    codeBlocks: [{ index: 0, language: "java", code: "class Solution {}" }],
+  };
   const adapter = pageAdapter({
     url: () => currentUrl,
     navigate: async (url) => {
@@ -518,12 +528,14 @@ test("editorial research reuses the verified tab, navigates same-tab, and never 
       adapter.calls.push(["editorial-content"]);
       return { state: "available" };
     },
+    readEditorialResearchMaterial: async () => researchMaterial,
   });
 
   const result = await controllerWith(adapter).editorial(identity);
   assert.equal(result.editorialUrl, canonicalEditorialUrl(identity));
   assert.equal(result.availability, "available");
   assert.equal(result.contentAvailable, true);
+  assert.deepEqual(result.researchMaterial, researchMaterial);
   assert.deepEqual(adapter.calls, [
     ["navigate", canonicalEditorialUrl(identity)],
     ["editorial-content"],
@@ -675,12 +687,46 @@ test("the Playwright adapter uses scoped inspection, one Monaco setValue, DOM fo
   assert.equal(operations.filter(([operation]) => operation === "replace-exact").length, 1);
 });
 
-test("the Playwright adapter verifies rendered Editorial structure without returning prose", async () => {
+test("the Playwright adapter returns rendered Editorial research material", async () => {
   const operations = [];
+  const heading = { innerText: "Approach 1" };
+  const code = {
+    className: "language-java",
+    getAttribute: () => null,
+  };
+  const pre = {
+    innerText: "class Solution { void solve() {} }",
+    getClientRects: () => [{}],
+    getAttribute: () => null,
+    querySelector: (selector) => selector === "code" ? code : null,
+    parentElement: null,
+  };
   const root = {
     getClientRects: () => [{}],
     innerText: "Editorial explanation with multiple rendered blocks and enough visible text to prove that the article itself rendered instead of only the surrounding navigation shell.",
-    querySelectorAll: () => [{}, {}],
+    querySelectorAll: (selector) => {
+      if (selector === "h1,h2,h3,p,pre,ul,ol") return [heading, pre];
+      if (selector === "h1,h2,h3") return [heading];
+      if (selector === "pre" || selector.startsWith("pre,")) return [pre];
+      return [];
+    },
+  };
+  const testLocation = { pathname: `/problems/${identity.slug}/description/` };
+  const testWindow = {
+    scrollX: 0,
+    scrollY: 0,
+    innerHeight: 800,
+    scrollTo: () => {},
+  };
+  const testDocument = {
+    title: `${identity.title} - LeetCode`,
+    scrollingElement: { scrollHeight: 800 },
+    documentElement: { scrollHeight: 800 },
+    querySelectorAll: (selector) => {
+      if (selector.includes('data-e2e-locator="editorial-content"')) return [root];
+      if (selector.startsWith("pre,")) return [pre];
+      return [];
+    },
   };
   const page = {
     waitForFunction: async (predicate, payload, options) => {
@@ -689,19 +735,18 @@ test("the Playwright adapter verifies rendered Editorial structure without retur
         document: Object.getOwnPropertyDescriptor(globalThis, "document"),
         location: Object.getOwnPropertyDescriptor(globalThis, "location"),
       };
-      const testLocation = { pathname: `/problems/${identity.slug}/description/` };
       Object.defineProperties(globalThis, {
-        document: { configurable: true, value: {
-          title: `${identity.title} - LeetCode`,
-          querySelectorAll: (selector) => selector.includes('data-e2e-locator="editorial-content"') ? [root] : [],
-        } },
+        document: { configurable: true, value: testDocument },
         location: { configurable: true, value: testLocation },
       });
       try {
         assert.equal(predicate(payload), false, "same-problem SPA transition must keep waiting");
         testLocation.pathname = `/problems/${identity.slug}/editorial/`;
         const state = predicate(payload);
-        assert.deepEqual(state, { state: "available" });
+        assert.deepEqual(state, {
+          state: "available",
+          rootLocator: { selectorIndex: 0, rootIndex: 0 },
+        });
         return {
           jsonValue: async () => state,
           dispose: async () => {},
@@ -713,11 +758,37 @@ test("the Playwright adapter verifies rendered Editorial structure without retur
         }
       }
     },
+    evaluate: async (browserOperation, payload) => {
+      const previous = {
+        document: Object.getOwnPropertyDescriptor(globalThis, "document"),
+        location: Object.getOwnPropertyDescriptor(globalThis, "location"),
+        window: Object.getOwnPropertyDescriptor(globalThis, "window"),
+      };
+      Object.defineProperties(globalThis, {
+        document: { configurable: true, value: testDocument },
+        location: { configurable: true, value: testLocation },
+        window: { configurable: true, value: testWindow },
+      });
+      try {
+        return await browserOperation(payload);
+      } finally {
+        for (const [name, descriptor] of Object.entries(previous)) {
+          if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+          else delete globalThis[name];
+        }
+      }
+    },
   };
 
   const adapter = createPlaywrightPageAdapter(page);
   const state = await adapter.waitForEditorialContent(identity);
-  assert.deepEqual(state, { state: "available" });
+  assert.equal(state.state, "available");
+  const researchMaterial = await adapter.readEditorialResearchMaterial(identity, state.rootLocator);
+  assert.equal(researchMaterial.renderedText, root.innerText);
+  assert.deepEqual(researchMaterial.headings, ["Approach 1"]);
+  assert.deepEqual(researchMaterial.codeBlocks, [
+    { index: 0, language: "java", code: "class Solution { void solve() {} }" },
+  ]);
   assert.deepEqual(operations, [["waitForFunction", FIXED_CONFIG.editorialTimeoutMs]]);
 });
 

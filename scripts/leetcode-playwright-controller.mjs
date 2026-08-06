@@ -756,8 +756,6 @@ export function createPlaywrightPageAdapter(page) {
               };
             }
 
-            const roots = [...document.querySelectorAll(selectors.editorialContent.join(","))]
-              .filter(visible);
             const lockRoots = selectors.editorialLock
               .flatMap((selector) => [...document.querySelectorAll(selector)])
               .filter(visible);
@@ -766,11 +764,16 @@ export function createPlaywrightPageAdapter(page) {
               .find((text) => /\b(?:premium|subscribe|unlock)\b/i.test(text));
             if (lockText) return { state: "premium_locked" };
 
-            for (const root of roots) {
-              const text = root.innerText?.trim() ?? "";
-              const blocks = root.querySelectorAll("h1,h2,h3,p,pre,ul,ol").length;
-              if (text.length >= 120 && blocks >= 2) {
-                return { state: "available" };
+            for (let selectorIndex = 0; selectorIndex < selectors.editorialContent.length; selectorIndex += 1) {
+              const roots = [...document.querySelectorAll(selectors.editorialContent[selectorIndex])]
+                .filter(visible);
+              for (let rootIndex = 0; rootIndex < roots.length; rootIndex += 1) {
+                const root = roots[rootIndex];
+                const text = root.innerText?.trim() ?? "";
+                const blocks = root.querySelectorAll("h1,h2,h3,p,pre,ul,ol").length;
+                if (text.length >= 120 && blocks >= 2) {
+                  return { state: "available", rootLocator: { selectorIndex, rootIndex } };
+                }
               }
             }
             return false;
@@ -827,6 +830,94 @@ export function createPlaywrightPageAdapter(page) {
       } finally {
         await handle?.dispose?.();
       }
+    },
+    async readEditorialResearchMaterial(identity, rootLocator, signal) {
+      return abortablePageOperation(page.evaluate(async ({ expectedSlug, expectedTitle, rootLocator, routes, selectors }) => {
+        const editorialSlug = location.pathname.match(new RegExp(routes.editorial))?.[1] ?? null;
+        if (editorialSlug !== expectedSlug || !rootLocator) return null;
+        const pageTitle = document.title.trim();
+        if (!pageTitle.toLowerCase().includes(expectedTitle.toLowerCase())) return null;
+
+        const visible = (element) => element?.getClientRects?.().length > 0;
+        const root = [...document.querySelectorAll(
+          selectors.editorialContent[rootLocator.selectorIndex],
+        )].filter(visible)[rootLocator.rootIndex] ?? null;
+        if (!root) return null;
+
+        const originalX = window.scrollX ?? 0;
+        const originalY = window.scrollY ?? 0;
+        let scrollContainer = root;
+        while (scrollContainer) {
+          if ((scrollContainer.scrollHeight ?? 0) > (scrollContainer.clientHeight ?? 0) + 1) break;
+          scrollContainer = scrollContainer.parentElement;
+        }
+        const originalScrollTop = scrollContainer?.scrollTop ?? null;
+        try {
+          if (scrollContainer) {
+            scrollContainer.scrollTop = scrollContainer.scrollHeight - scrollContainer.clientHeight;
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          } else {
+            const viewportHeight = Math.max(window.innerHeight ?? 800, 400);
+            const scrollHeight = document.scrollingElement?.scrollHeight
+              ?? document.documentElement?.scrollHeight
+              ?? viewportHeight;
+            const maximumScroll = Math.max(0, scrollHeight - viewportHeight);
+            if (maximumScroll > 0) {
+              window.scrollTo?.(0, maximumScroll);
+              await new Promise((resolve) => setTimeout(resolve, 100));
+            }
+          }
+
+          const renderedText = root.innerText?.trim() ?? "";
+          const headings = [...root.querySelectorAll("h1,h2,h3")]
+            .map((heading) => heading.innerText?.trim() ?? "")
+            .filter(Boolean);
+          const codeSelector = [
+            "pre",
+            "code",
+            '[data-track-load*="code" i]',
+            '[data-testid*="code" i]',
+            '[class*="codeblock" i]',
+            '[class*="code-block" i]',
+            ".view-lines",
+          ].join(",");
+          // LeetCode portals the visible implementation editor outside the
+          // markdown root. The route/title fence above scopes this document to
+          // the verified Editorial while still allowing that official code pane.
+          const rawCodeCandidates = [...document.querySelectorAll(codeSelector)]
+            .filter((block) => visible(block) && (block.innerText ?? "").trim().length >= 20);
+          const candidateSet = new Set(rawCodeCandidates);
+          const codeCandidates = rawCodeCandidates.filter((block) => {
+            for (let ancestor = block.parentElement; ancestor; ancestor = ancestor.parentElement) {
+              if (candidateSet.has(ancestor)) return false;
+            }
+            return true;
+          });
+          const codeBlocks = codeCandidates.map((block, index) => {
+            const code = block.matches?.("code") ? block : block.querySelector?.("code");
+            const className = typeof code?.className === "string" ? code.className : "";
+            const language = block.getAttribute?.("data-language")
+              ?? code?.getAttribute?.("data-language")
+              ?? className.match(/(?:^|\s)language-([^\s]+)/)?.[1]
+              ?? null;
+            return {
+              index,
+              language,
+              code: (block.innerText ?? "").trim(),
+            };
+          });
+          return { renderedText, headings, codeBlocks };
+        } finally {
+          if (scrollContainer && originalScrollTop !== null) scrollContainer.scrollTop = originalScrollTop;
+          else window.scrollTo?.(originalX, originalY);
+        }
+      }, {
+        expectedSlug: identity.slug,
+        expectedTitle: identity.title,
+        rootLocator,
+        routes: TARGET_ROUTES,
+        selectors: TARGET_SELECTORS,
+      }), signal);
     },
   };
 }
@@ -1165,6 +1256,16 @@ export class LeetCodeController {
     const availability = ["available", "premium_locked", "unavailable"].includes(state?.state)
       ? state.state
       : "unavailable";
+    const researchMaterial = availability === "available"
+      ? await this.page.readEditorialResearchMaterial(identity, state.rootLocator ?? null, this.signal)
+      : null;
+    if (availability === "available" && !researchMaterial) {
+      throw new ControllerError(
+        "editorial_research_material_missing",
+        "The Editorial rendered, but its research material could not be extracted.",
+      );
+    }
+    const researchExtractedAt = this.now();
     return {
       editorialUrl,
       availability,
@@ -1173,14 +1274,19 @@ export class LeetCodeController {
         { stage: "problem_identity_verified", atMs: problemVerifiedAt - commandStartedAt },
         { stage: "editorial_navigation_completed", atMs: navigationCompletedAt - commandStartedAt },
         { stage: "editorial_content_verified", atMs: contentVerifiedAt - commandStartedAt },
+        { stage: "editorial_research_extracted", atMs: researchExtractedAt - commandStartedAt },
       ],
       diagnostics: {
         problemPreparationMs: problemVerifiedAt - commandStartedAt,
         externalPageLatencyMs: navigationCompletedAt - navigationStartedAt,
         localContentVerificationMs: contentVerifiedAt - navigationCompletedAt,
-        totalUserVisibleMs: contentVerifiedAt - commandStartedAt,
+        localResearchExtractionMs: researchExtractedAt - contentVerifiedAt,
+        totalUserVisibleMs: researchExtractedAt - commandStartedAt,
       },
       ...(state?.reason ? { reason: state.reason } : {}),
+      ...(researchMaterial
+        ? { researchMaterial }
+        : {}),
       ...(state?.recognitionDiagnostics
         ? { recognitionDiagnostics: state.recognitionDiagnostics }
         : {}),

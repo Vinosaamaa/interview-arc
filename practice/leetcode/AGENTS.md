@@ -186,7 +186,10 @@ Editorial review is post-attempt research, never part of submission. Follow the
 one-tab navigation and rendered-content checks in
 `docs/contracts/leetcode-playwright-controller.md`; this guide adds only the
 specialist boundary: cite the Editorial URL only after verified content is
-rendered, paraphrase its approaches, and rewrite code independently. If the
+rendered and the controller returns `researchMaterial`. Actually inspect that
+material before claiming Editorial review, paraphrase its approaches, and
+rewrite code independently. Never save or reproduce its raw rendered text or
+official code in D1, Git, the practice transcript, or the visible response. If the
 Editorial is unavailable, locked, or only a shell is rendered, say so and use
 clearly labelled original analysis. Never substitute a web connector, private
 endpoint, cookie export, raw CDP, manual Playwright, second tab, or alternate
