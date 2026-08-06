@@ -99,11 +99,20 @@ that tab directly to the canonical Editorial URL in one visible-page navigation.
 It does not navigate through the problem editor first.
 It never launches Chrome, opens a tab, submits code, or writes practice state.
 The command verifies the visible Editorial page identity and rendered article
-structure without returning or persisting Editorial prose or official code.
+structure, then returns the authenticated article as controller-only
+`researchMaterial`: normalized rendered text, ordered headings, and visible code
+blocks with detected languages. This material exists so the specialist can
+actually inspect the official approaches and implementation before producing
+an independent explanation and rewrite. Do not copy it into Git, D1, practice
+transcripts, issue comments, or user-facing responses, and do not reproduce the
+protected prose or official code verbatim. The controller itself writes no
+Editorial research receipt or practice state.
+
 Its structured result includes `editorialUrl`, `availability`,
-`contentAvailable`, and stage timings. `availability` is `available` only when
-actual Editorial content is rendered; `premium_locked` and `unavailable` are
-honest fail-closed results that must not be cited as consulted research.
+`contentAvailable`, `researchMaterial` when available, and stage timings.
+`availability` is `available` only when actual Editorial content is rendered;
+`premium_locked` and `unavailable` are honest fail-closed results that must not
+be cited as consulted research and never include `researchMaterial`.
 
 `submit` and `retry` require a current preflight receipt for the same Chrome
 browser instance and problem. They fail closed when the receipt or endpoint is

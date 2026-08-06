@@ -756,8 +756,9 @@ export function createPlaywrightPageAdapter(page) {
               };
             }
 
-            const roots = [...document.querySelectorAll(selectors.editorialContent.join(","))]
-              .filter(visible);
+            const roots = selectors.editorialContent
+              .flatMap((selector) => [...document.querySelectorAll(selector)])
+              .filter((root, index, candidates) => visible(root) && candidates.indexOf(root) === index);
             const lockRoots = selectors.editorialLock
               .flatMap((selector) => [...document.querySelectorAll(selector)])
               .filter(visible);
@@ -827,6 +828,76 @@ export function createPlaywrightPageAdapter(page) {
       } finally {
         await handle?.dispose?.();
       }
+    },
+    async readEditorialResearchMaterial(identity, signal) {
+      return abortablePageOperation(page.evaluate(async ({ expectedSlug, expectedTitle, routes, selectors }) => {
+        const editorialSlug = location.pathname.match(new RegExp(routes.editorial))?.[1] ?? null;
+        if (editorialSlug !== expectedSlug) return null;
+        const pageTitle = document.title.trim();
+        if (!pageTitle.toLowerCase().includes(expectedTitle.toLowerCase())) return null;
+
+        const originalX = window.scrollX ?? 0;
+        const originalY = window.scrollY ?? 0;
+        const viewportHeight = Math.max(window.innerHeight ?? 800, 400);
+        const scrollHeight = document.scrollingElement?.scrollHeight
+          ?? document.documentElement?.scrollHeight
+          ?? viewportHeight;
+        const maximumScroll = Math.max(0, scrollHeight - viewportHeight);
+        const steps = Math.min(20, Math.ceil(maximumScroll / viewportHeight));
+        for (let step = 1; step <= steps; step += 1) {
+          window.scrollTo?.(0, Math.min(maximumScroll, step * viewportHeight));
+          await new Promise((resolve) => setTimeout(resolve, 75));
+        }
+
+        const visible = (element) => element?.getClientRects?.().length > 0;
+        const roots = selectors.editorialContent
+          .flatMap((selector) => [...document.querySelectorAll(selector)])
+          .filter((root, index, candidates) => visible(root) && candidates.indexOf(root) === index);
+        const root = roots.find((candidate) => {
+          const text = candidate.innerText?.trim() ?? "";
+          return text.length >= 120
+            && candidate.querySelectorAll("h1,h2,h3,p,pre,ul,ol").length >= 2;
+        });
+        window.scrollTo?.(originalX, originalY);
+        if (!root) return null;
+
+        const renderedText = root.innerText?.trim() ?? "";
+        const headings = [...root.querySelectorAll("h1,h2,h3")]
+          .map((heading) => heading.innerText?.trim() ?? "")
+          .filter(Boolean);
+        const codeCandidates = [...document.querySelectorAll([
+          "pre",
+          "code",
+          '[data-track-load*="code" i]',
+          '[data-testid*="code" i]',
+          '[class*="codeblock" i]',
+          '[class*="code-block" i]',
+          ".view-lines",
+        ].join(","))]
+          .filter((block) => visible(block) && (block.innerText ?? "").trim().length >= 20)
+          .filter((block, index, candidates) => !candidates.some((parent, parentIndex) => (
+            parentIndex !== index && parent.contains?.(block)
+          )));
+        const codeBlocks = codeCandidates.map((block, index) => {
+          const code = block.matches?.("code") ? block : block.querySelector?.("code");
+          const className = typeof code?.className === "string" ? code.className : "";
+          const language = block.getAttribute?.("data-language")
+            ?? code?.getAttribute?.("data-language")
+            ?? className.match(/(?:^|\s)language-([^\s]+)/)?.[1]
+            ?? null;
+          return {
+            index,
+            language,
+            code: (block.innerText ?? "").trim(),
+          };
+        });
+        return { renderedText, headings, codeBlocks };
+      }, {
+        expectedSlug: identity.slug,
+        expectedTitle: identity.title,
+        routes: TARGET_ROUTES,
+        selectors: TARGET_SELECTORS,
+      }), signal);
     },
   };
 }
@@ -1165,6 +1236,16 @@ export class LeetCodeController {
     const availability = ["available", "premium_locked", "unavailable"].includes(state?.state)
       ? state.state
       : "unavailable";
+    const researchMaterial = availability === "available"
+      ? await this.page.readEditorialResearchMaterial(identity, this.signal)
+      : null;
+    if (availability === "available" && !researchMaterial) {
+      throw new ControllerError(
+        "editorial_research_material_missing",
+        "The Editorial rendered, but its research material could not be extracted.",
+      );
+    }
+    const researchExtractedAt = this.now();
     return {
       editorialUrl,
       availability,
@@ -1173,14 +1254,19 @@ export class LeetCodeController {
         { stage: "problem_identity_verified", atMs: problemVerifiedAt - commandStartedAt },
         { stage: "editorial_navigation_completed", atMs: navigationCompletedAt - commandStartedAt },
         { stage: "editorial_content_verified", atMs: contentVerifiedAt - commandStartedAt },
+        { stage: "editorial_research_extracted", atMs: researchExtractedAt - commandStartedAt },
       ],
       diagnostics: {
         problemPreparationMs: problemVerifiedAt - commandStartedAt,
         externalPageLatencyMs: navigationCompletedAt - navigationStartedAt,
         localContentVerificationMs: contentVerifiedAt - navigationCompletedAt,
-        totalUserVisibleMs: contentVerifiedAt - commandStartedAt,
+        localResearchExtractionMs: researchExtractedAt - contentVerifiedAt,
+        totalUserVisibleMs: researchExtractedAt - commandStartedAt,
       },
       ...(state?.reason ? { reason: state.reason } : {}),
+      ...(researchMaterial
+        ? { researchMaterial }
+        : {}),
       ...(state?.recognitionDiagnostics
         ? { recognitionDiagnostics: state.recognitionDiagnostics }
         : {}),
