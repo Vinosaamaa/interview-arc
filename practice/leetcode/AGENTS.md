@@ -44,11 +44,26 @@ later in this guide.
   Keep pre-answer reads, timer/planning/result controls, and LeetCode
   controller/verdict calls in the parent. Finalization still joins the child
   before it is reported complete.
+- Determine Voice response-group membership only after composing that complete
+  visible response and before delegating persistence. Include every ordered
+  capture the response actually answers, including captures that arrived as
+  separate prompts while the same assistant turn remained active. Never send a
+  provisional singular resolver before the response boundary is known.
 - When saving a Code Attempt, use `review: { schemaVersion: 1, status:
   "pending" }` without `reviewResponseTurnId` while evaluation is pending.
   Supply the exact visible specialist response turn only when completing that
   same immutable attempt. Verify the durable write receipt reaches `saved`;
   queued or failed is not persistence.
+- After the user explicitly submits an attempt, inspect the exact submitted
+  Java source before writing the final review. Look for the user's own
+  comments or explanation of time complexity, space complexity, and edge
+  cases. Check each stated claim against the submitted algorithm and observed
+  evaluation evidence. If any item is missing, pause the final review and ask
+  the user to provide it; do not offer to skip it. If the user explicitly says
+  they do not know, explain and record the correct analysis as specialist
+  coaching while distinguishing it from the user's original explanation.
+  Platform submission may finish before this checklist, but the complete
+  attempt review and finalization must wait until the checklist is addressed.
 - For a related `Interview Arc Voice capture` envelope, instruct that child to call
   `resolve_voice_capture_and_save_response` with the supplied user `turnId` and
   one stable response turn ID. This one operation marks the capture related and
@@ -57,11 +72,14 @@ later in this guide.
   `unrelated` or `uncertain`. Never append the enveloped user turn separately.
   The separate background Delivery Coach owns audio inspection and saves its
   result to D1; do not rerun that work in the visible specialist task.
-  One visible message may contain several envelopes after an accidental stop
-  and restart. For 2–20 related envelopes, instruct the same child to call
-  `resolve_voice_captures_and_save_response` once with every supplied capture
-  and turn in visible order plus the one stable response. Never call the
-  singular operation once per envelope or duplicate/split the visible answer.
+  One visible response may answer several captures after an accidental stop,
+  restart, or a new prompt arriving while the assistant turn remains active.
+  For a 2–20-member response group containing any activity-related capture,
+  instruct the same child to call
+  `resolve_voice_captures_and_save_response` once with every capture and turn
+  actually answered, in visible order, plus the one stable response. Never
+  call the singular operation once per member, resolve a member before the
+  response is composed, or duplicate/split the visible answer.
   D1 materializes all ordered user turns and then the shared response only
   after every member arrives.
 - Before finalization, read the activity practice record and incorporate all
@@ -436,9 +454,14 @@ every problem. Use this bounded sequence:
 Warm context is the default for every prompt while the same activity and Codex
 thread remain active. Reuse the loaded instructions, contracts, MCP
 connection/tool catalog, workbench and activity identity, persistent browser
-state, and current Solution Profile. Each prompt still receives its own user
-`turnId` and specialist `responseTurnId`; warm context never merges turns or
-requires an infinite polling loop.
+state, and current Solution Profile. Each prompt or Voice capture keeps its own
+user `turnId`. A specialist `responseTurnId` belongs instead to the visible
+assistant response: if Codex steers a later prompt into the still-running
+assistant turn and one response answers both, those ordered user turns share
+one specialist response ID and form one response group. If Codex emits separate
+visible responses, each response keeps its own ID. Warm context alone never
+creates a group and never requires an infinite polling loop; the actual
+response boundary is authoritative.
 
 Reload the repository guides, contracts, and broad tool discovery only when
 the user explicitly requests a reload, the Codex process/thread is restarted,
@@ -1060,7 +1083,8 @@ decision matrix is normative:
 | --- | --- | --- |
 | Problem statement, constraints, examples/diagrams, user reasoning or code, hints, coaching, solution/complexity discussion, relevant test conclusions, interview feedback, authoritative verdict, or final reflection | Include | “Why does this sliding-window invariant work?”, a user attempt, an observed Accepted/Failed verdict |
 | Navigation, Playwright/browser preflight, tab/page handling, terminal/file commands, MCP/API/D1/R2/tool calls, timers, sessions/workbench controls, retries/recovery, startup/handoff/status, issue/branch/PR/deploy discussion, or instructions about agent operation | Exclude | “Run ensure,” “open the tab,” “give me the nvim command,” “why is D1 slow?”, “create a PR” |
-| A single turn containing both categories | Include only a separately identified problem segment; otherwise exclude the whole turn | Do not retain a coaching sentence merely because it follows a browser command in the same unsegmented capture |
+| A single ungrouped turn containing both categories | Include only a separately identified problem segment; otherwise exclude the whole turn | Do not retain a coaching sentence merely because it follows a browser command in the same unsegmented capture |
+| One visible specialist response answers multiple Voice captures and at least one capture is activity-related | Include every ordered capture and the one shared response | The response boundary creates one activity-related group; do not split it or fabricate per-capture responses |
 | Insufficient evidence to classify the turn | Resolve `uncertain` and keep it out of the transcript until explicitly decided | Never silently treat an activity ID as evidence of relevance |
 
 Operational receipts, `↻ Practice persistence delegated in background`, warm
@@ -1080,9 +1104,12 @@ can wait for a specialist response; use `uncertain` only when the turn itself
 cannot be classified. Do not append an administrative turn just because it
 shares the focused activity ID.
 
-If a single capture mixes administrative and problem discussion, persist only a
-separately identified problem-related segment when one is explicitly
-available. Otherwise exclude the capture from the durable practice transcript.
+If a single ungrouped capture mixes administrative and problem discussion,
+persist only a separately identified problem-related segment when one is
+explicitly available. Otherwise exclude the capture from the durable practice
+transcript. This does not split a multi-capture response group: if one visible
+response answers several captures and any member is activity-related, persist
+every ordered member with that shared response.
 
 Do not save terminal-control chatter, the `micro` command, ordinary file saves,
 or irrelevant raw compiler output as practice dialogue.
