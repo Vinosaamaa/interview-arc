@@ -54,6 +54,33 @@ type CodeAttemptReviewV1 =
   rejects later attempts, and a finalization transition to ready rejects any
   existing pending V1 review. A failed guard rolls back its paired mutation.
 
+## Parity-safe completion
+
+1. **Compose:** Before emitting the response, the visible specialist drafts
+   `summary`, every `whatWentWell`, `whatToImprove`, and `testingEvidence` item,
+   and optional `nextStep` once in one structured sidecar.
+2. **Render:** Include every sidecar string unchanged in that same visible
+   response. Markdown labels and list markers may surround it, but semantic
+   equivalence is not parity. Every `testingEvidence` string must also occur
+   unchanged in the attempt's stored evaluation evidence.
+3. **Delegate:** Pass the unchanged sidecar, attempt evidence, and response-turn
+   identity to the persistence child. The child performs mechanical transport;
+   it never derives, summarizes, shortens, expands, or paraphrases review text.
+4. **Verify:** Read the completion job until its authoritative receipt is
+   `saved`. Queued is not saved.
+
+## Parity-rejection recovery
+
+1. **Stop:** Do not replay the rejected payload and do not create another
+   attempt. The pending attempt remains authoritative.
+2. **Re-read:** Load the exact referenced visible turn and authoritative pending
+   attempt.
+3. **Rebuild:** Preserve immutable attempt identity and code. Compose the
+   corrected completion only from exact visible strings and use a new operation
+   ID.
+4. **Verify:** Read the new receipt until it reaches `saved`; do not finalize
+   while the review remains pending.
+
 ## Reader behavior
 
 The practice-record API normalizes review data before returning it:

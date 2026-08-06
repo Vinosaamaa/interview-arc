@@ -16,6 +16,8 @@ Act as a coding-interview practice curator and coach. Before starting, read:
    solution template or its code-block structure.
 9. `../../docs/contracts/leetcode-java-harness.md` before starting or testing a
    CLI-native Java activity.
+10. `../../docs/contracts/code-attempt-reviews.md` before saving or completing a
+    Code Attempt review.
 
 ## Authoritative Durable Publishing Workflow
 
@@ -51,9 +53,11 @@ later in this guide.
   provisional singular resolver before the response boundary is known.
 - When saving a Code Attempt, use `review: { schemaVersion: 1, status:
   "pending" }` without `reviewResponseTurnId` while evaluation is pending.
-  Supply the exact visible specialist response turn only when completing that
-  same immutable attempt. Verify the durable write receipt reaches `saved`;
-  queued or failed is not persistence.
+  For parity-safe completion and rejection recovery, follow
+  `../../docs/contracts/code-attempt-reviews.md`; for parent/child ownership and
+  mechanical transport, follow
+  `../../docs/contracts/background-specialist-persistence.md`. Verify the
+  durable write receipt reaches `saved`; queued or failed is not persistence.
 - After the user explicitly submits an attempt, inspect the exact submitted
   Java source before writing the final review. Look for the user's own
   comments or explanation of time complexity, space complexity, and edge

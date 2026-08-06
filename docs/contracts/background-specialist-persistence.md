@@ -83,6 +83,13 @@ The parent supplies, verbatim:
 - the exact visible specialist response body and occurrence time;
 - the required final report shape.
 
+For a complete Code Attempt review, the parent—not the child—also supplies the
+already-composed parity-safe review sidecar. Every structured review string is
+present unchanged in the visible response, and every testing-evidence string is
+present unchanged in the supplied attempt evidence. The child copies these
+fields mechanically; it never derives a summary or substitutes a semantic
+paraphrase.
+
 The child instruction must say:
 
 ```text
@@ -91,7 +98,8 @@ MCP operations, in order, with the arguments and stable IDs verbatim. For
 save_leetcode_code_attempt and upsert_personal_bank_question, supply one stable
 operationId per logical write, then call get_specialist_write_status until the
 receipt is saved or failed. A queued receipt is not a saved result. Do not
-research, coach, rewrite content, infer missing fields, use a browser, submit
+research, coach, rewrite content, infer missing fields, summarize or paraphrase
+a complete Code Attempt review, use a browser, submit
 code, mutate timers/results, publish, edit files, or perform Git work. Retry an
 enqueue after uncertain transport at most once and only with the exact original
 operationId and payload. The Worker owns bounded retries after a receipt exists;
