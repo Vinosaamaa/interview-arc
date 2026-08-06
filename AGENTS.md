@@ -92,7 +92,19 @@ response operation.
 | The user explicitly says an accepted exchange is unrelated or must be removed, and `delete_exact_group` is allowed | `delete_related_voice_capture` | Exact capture/activity/turn identity, explicit destructive authorization, and reason | Do not delete merely to bypass Finish or repair otherwise intact evidence |
 | Pending capture is administrative | `resolve_voice_capture` with `unrelated` | Exact capture/activity/turn identity and reason | Do not use accepted-exchange deletion for a pending capture |
 | One related capture receives one specialist response | `resolve_voice_capture_and_save_response` | One stable capture/user/response identity and immutable body/timestamp | Do not change the response ID, body, or timestamp on retry |
-| Two or more ordered related captures receive one specialist response | `resolve_voice_captures_and_save_response` | Ordered captures plus one stable response identity/body/timestamp | Do not call the singular resolver repeatedly or duplicate the visible response |
+| Two or more ordered captures receive one visible specialist response and the resulting response group is activity-related | `resolve_voice_captures_and_save_response` | Every ordered capture/user-turn identity plus one stable response identity/body/timestamp | Do not resolve a member before the response is finalized, call the singular resolver repeatedly, or fabricate separate responses |
+
+The visible specialist-response boundary defines Voice grouping. After
+composing the complete response, include every ordered capture that response
+actually answers, whether those captures appeared as several envelopes in one
+prompt or arrived as separate prompts while the same assistant turn remained
+active. One response answering one capture uses the singular resolver; one
+response answering 2–20 captures uses the batch resolver exactly once; separate
+visible responses remain separate exchanges. Arrival timing alone never groups
+captures. If any member of a response group is activity-related, classify and
+persist the entire group as activity-related with the one shared response. If
+no member is activity-related, do not save the response as practice dialogue;
+resolve the members using the supported `unrelated` or `uncertain` path.
 
 After every mutating recovery call, re-read
 `get_voice_delivery_blockers`. Continue to Finish only when the repaired row is
@@ -162,7 +174,8 @@ this decision matrix to every visible user and specialist turn:
 | --- | --- |
 | Problem statement, constraints, examples, diagrams, user reasoning/code, hints, coaching, solution reasoning, complexity, relevant tests, interview feedback, authoritative verdict, or final reflection | Include |
 | Navigation, browser/Playwright preflight, tab/page handling, terminal/file commands, MCP/API/D1/R2/tool operations, timer/session/workbench controls, retries/recovery, startup/handoff/status chatter, issue/branch/PR/deploy work, or instructions about operating the agent | Exclude |
-| A turn that mixes both categories | Include only a separately identified problem segment; otherwise exclude the whole turn |
+| A single ungrouped turn that mixes both categories | Include only a separately identified problem segment; otherwise exclude the whole turn |
+| One visible specialist response answers multiple Voice captures and at least one capture is activity-related | Include every ordered capture and the one shared response | The response boundary creates one activity-related group; do not split it or fabricate per-capture responses |
 | An ambiguous turn whose category cannot be established from the supplied content | Resolve `uncertain`; never silently append it |
 
 Operational receipts, warm-context markers, persistence-delegation markers, and
@@ -197,9 +210,13 @@ be classified `unrelated` (or `uncertain` when the content cannot be decided
 from the turn alone) before persistence. Never append an administrative turn
 to a practice transcript merely because it carries the activity ID.
 
-If one captured turn mixes administrative and problem content, persist only a
-separately identified problem-related segment when the source provides one;
-otherwise keep the capture out of the durable practice transcript.
+If one single, ungrouped captured turn mixes administrative and problem
+content, persist only a separately identified problem-related segment when the
+source provides one; otherwise keep the capture out of the durable practice
+transcript. This segmentation rule does not split a multi-capture response
+group: when one visible specialist response answers several captures and any
+member is activity-related, persist every ordered member with that one shared
+response.
 
 ## LeetCode Boundary
 

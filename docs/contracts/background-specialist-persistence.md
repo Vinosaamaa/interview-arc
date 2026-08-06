@@ -26,6 +26,15 @@ and composing the complete visible answer plus its exact persistence sidecar:
    `↻ Practice persistence delegated in background`
    This means only that a child received the work. It never means D1/R2 saved.
 
+The complete visible response is the grouping boundary. Before contacting the
+child, collect every ordered Voice capture that response actually answers. A
+response to one capture delegates the singular resolver; one response to 2–20
+captures delegates the batch resolver once, even when later captures arrived
+as separate prompts while the assistant turn was active. Separate visible
+responses delegate separate work items. Never group by arrival timing alone,
+delegate a placeholder response, or reserve a capture before the exact shared
+response identity and body exist.
+
 Do not contact a persistence child for a response that has no classification
 or practice write. One work item may contain the related exchange and Code
 Attempt write for the same visible response; never create one child per MCP

@@ -124,9 +124,17 @@ capture `activity_related` and reserves one canonical response linked through
 delivers the matching user transcript, then materializes the ordered pair once.
 Use `resolve_voice_capture` only for `unrelated` or `uncertain` decisions.
 
-When one visible user message contains 2–20 consecutive related Voice
-envelopes, call `resolve_voice_captures_and_save_response` once with every
-capture/user-turn identity in visible order and one stable specialist response.
+When one visible specialist response answers 2–20 ordered Voice captures and
+any member is activity-related, call
+`resolve_voice_captures_and_save_response` once with every capture/user-turn
+identity that response actually answers, in visible order, and one stable
+specialist response. This applies whether the captures appeared as several
+envelopes in one prompt or arrived as separate prompts while the assistant turn
+remained active. The response boundary, not arrival timing, defines membership.
+Never reserve a member with the singular resolver before the complete response
+and exact group are known. If no member is activity-related, do not save the
+response as practice dialogue; resolve each member through the supported
+`unrelated` or `uncertain` path.
 D1 buffers each accepted transcript independently, permits each private clip
 and delivery analysis to arrive independently, and materializes the canonical
 transcript only when every member is durable: all ordered user turns followed

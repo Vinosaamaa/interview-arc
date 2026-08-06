@@ -35,6 +35,17 @@ type CodeAttemptReviewV1 =
   turn in `reviewResponseTurnId`. Every substantive review statement must be
   visible there, and testing conclusions must be supported by the attempt's
   stored evaluation evidence.
+- Before completing that review, the specialist inspects the exact submitted
+  source for the user's own time-complexity, space-complexity, and edge-case
+  analysis (normally in comments or an explicitly supplied explanation). Each
+  present claim is checked against the algorithm and observed evaluation
+  evidence. If any item is absent, the specialist must pause the final review
+  and ask the user to provide it rather than silently filling it in or offering
+  a skip. If the user explicitly says they do not know, the specialist may
+  teach and record the correct analysis, clearly labeling it as specialist
+  coaching rather than user-provided reasoning. Submission itself may already
+  have completed; this checklist gates completion of the attempt review and
+  activity finalization, not the platform submission.
 - Complete LeetCode finalization is blocked while any new V1 review remains
   pending. Legacy null or unknown review objects do not retroactively block an
   already-readable historical activity.
