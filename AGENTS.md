@@ -175,7 +175,7 @@ this decision matrix to every visible user and specialist turn:
 | Problem statement, constraints, examples, diagrams, user reasoning/code, hints, coaching, solution reasoning, complexity, relevant tests, interview feedback, authoritative verdict, or final reflection | Include |
 | Navigation, browser/Playwright preflight, tab/page handling, terminal/file commands, MCP/API/D1/R2/tool operations, timer/session/workbench controls, retries/recovery, startup/handoff/status chatter, issue/branch/PR/deploy work, or instructions about operating the agent | Exclude |
 | A single ungrouped turn that mixes both categories | Include only a separately identified problem segment; otherwise exclude the whole turn |
-| One visible specialist response answers multiple Voice captures and at least one capture is activity-related | Include every ordered capture and the one shared response | The response boundary creates one activity-related group; do not split it or fabricate per-capture responses |
+| One visible specialist response answers multiple Voice captures and at least one capture is activity-related | Include every ordered capture and the one shared response. The response boundary creates one activity-related group; do not split it or fabricate per-capture responses |
 | An ambiguous turn whose category cannot be established from the supplied content | Resolve `uncertain`; never silently append it |
 
 Operational receipts, warm-context markers, persistence-delegation markers, and
