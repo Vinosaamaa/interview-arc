@@ -155,10 +155,23 @@ Re-read the same evolving file before every test or submission. Use only the
 prepared Quick/Full harness. A local harness may supply platform types but
 cannot rewrite the working source or become the submitted payload.
 
-The checked-in controller is the only browser path. Run it from repository root
-with required macOS GUI/loopback authority on the first attempt. Never replace
-it with browser plugins, raw CDP, manual Playwright, coordinate control,
-alternate profiles/ports/tabs, or direct private/account endpoints.
+### Mandatory specialist route
+
+The checked-in controller is the only supported browser and submission path.
+Run it from repository root with macOS GUI and loopback authority. For an
+agent-run controller command, request `require_escalated` on the first attempt;
+never run a misleading sandboxed preflight first. Never replace it with browser
+plugins, raw CDP, manual Playwright, coordinate control, alternate
+profiles/ports/tabs, or direct private/account endpoints.
+
+After a merge changes `package.json` or `pnpm-lock.yaml`, the coordinator first
+synchronizes the canonical checkout with:
+
+`npm exec --yes pnpm@9.15.9 -- install --frozen-lockfile`
+
+Then it runs a real local controller `ensure`. Specialists report the
+controller's recovery command rather than installing dependencies during the
+submission hot path.
 
 Warm startup:
 
@@ -181,10 +194,13 @@ node scripts/leetcode-playwright-controller.mjs submit \
   --invocation-id "<unique-id>"
 ```
 
-If output is ambiguous, never resend. Read exactly one stored receipt using the
-same ID. Pending/missing/corrupt remains ambiguous and requires user direction.
-Report exact structured codes/stages/messages; never reduce distinct failures
-to “stale connection” or run side diagnostics.
+If output is lost or ambiguous, never resend submit or retry. Read exactly one
+stored receipt with the same invocation ID. Pending/missing/corrupt remains
+ambiguous and requires user direction. Report exact structured
+codes/stages/messages; never reduce distinct failures to “stale connection.”
+
+**No side diagnostics:** do not probe processes, ports, tabs, CDP, or Chrome
+outside the controller and do not construct an alternate recovery path.
 
 The controller must use the exact file bytes, verified problem identity, Java
 Monaco model, exact read-back equality, and one submit gesture. It owns
