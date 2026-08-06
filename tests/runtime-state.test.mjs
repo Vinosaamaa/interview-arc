@@ -869,6 +869,8 @@ test("Voice protocol v2 gates content behind an explicit per-capture decision", 
   assert.match(worker, /resolve_voice_capture_and_save_response/);
   assert.match(worker, /save_practice_exchange/);
   assert.match(worker, /save_leetcode_code_attempt/);
+  assert.match(worker, /semantic paraphrases are rejected/i);
+  assert.match(worker, /persistence child must copy those supplied fields verbatim/i);
   const typedExchangeSchema = worker.slice(
     worker.indexOf('"save_practice_exchange"'),
     worker.indexOf('"resolve_voice_capture"'),

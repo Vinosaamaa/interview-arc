@@ -2232,7 +2232,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "save_leetcode_code_attempt",
     {
-      description: "Durably enqueue an exact owner-provided LeetCode attempt after an explicit attempt boundary. Reuse one stable operationId and identical payload after transport uncertainty, then inspect get_specialist_write_status until saved. Use a pending review while evaluation runs, then a new operationId to complete that same immutable attempt from the visible specialist review. Ordinary snippets and generated reference solutions must not use this tool.",
+      description: "Durably enqueue an exact owner-provided LeetCode attempt after an explicit attempt boundary. Reuse one stable operationId and identical payload after transport uncertainty, then inspect get_specialist_write_status until saved. Use a pending review while evaluation runs, then a new operationId to complete that same immutable attempt. For a complete review, draft the structured fields once and render every summary, finding, testing-evidence, and next-step string unchanged in the referenced visible specialist review; semantic paraphrases are rejected. A persistence child must copy those supplied fields verbatim and never synthesize review wording. Ordinary snippets and generated reference solutions must not use this tool.",
       inputSchema: {
         operationId: z.string().min(1).max(200),
         id: z.string().min(1),

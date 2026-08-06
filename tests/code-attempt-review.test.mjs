@@ -146,6 +146,47 @@ test("complete structured reviews cannot contain conclusions hidden from the vis
   );
 });
 
+test("semantic review paraphrases cannot replace the exact visible conclusion", () => {
+  const visibleSummary = "Verdict: Accepted, based on your explicit report.";
+  const visibleFinding = "You greedily packed the longest valid line from left to right.";
+  const visibleImprovement = "A one-pass formatter can reduce auxiliary storage.";
+  const visibleNextStep = "Reimplement the one-pass version once.";
+  const visibleResponse = [
+    visibleSummary,
+    visibleFinding,
+    visibleImprovement,
+    visibleNextStep,
+  ].join("\n\n");
+  const paritySafeReview = {
+    schemaVersion: 1,
+    status: "complete",
+    summary: visibleSummary,
+    whatWentWell: [visibleFinding],
+    whatToImprove: [visibleImprovement],
+    testingEvidence: [visibleSummary],
+    nextStep: visibleNextStep,
+    provenance: "specialist_observed",
+    reviewedAt: 200,
+  };
+
+  assert.doesNotThrow(() => assertCodeAttemptReviewParity(
+    paritySafeReview,
+    visibleResponse,
+    [visibleSummary],
+  ));
+  assert.throws(
+    () => assertCodeAttemptReviewParity(
+      {
+        ...paritySafeReview,
+        summary: "Accepted greedy solution with correct line packing and space distribution.",
+      },
+      visibleResponse,
+      [visibleSummary],
+    ),
+    /visible specialist review/i,
+  );
+});
+
 function attempt(overrides = {}) {
   return {
     id: "attempt-1",

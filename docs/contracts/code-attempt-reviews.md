@@ -35,6 +35,22 @@ type CodeAttemptReviewV1 =
   turn in `reviewResponseTurnId`. Every substantive review statement must be
   visible there, and testing conclusions must be supported by the attempt's
   stored evaluation evidence.
+- Complete reviews use one parity-safe sidecar, prepared by the visible
+  specialist before it emits the response. Draft `summary`, every
+  `whatWentWell`, `whatToImprove`, and `testingEvidence` item, and `nextStep`
+  once; render each exact string in that same visible response; then pass the
+  unchanged sidecar and response-turn identity to persistence. Markdown labels
+  and list markers may surround a string, but the child must not summarize,
+  shorten, expand, or otherwise paraphrase it. Semantic equivalence is not
+  parity. Every `testingEvidence` item must also occur unchanged in the stored
+  evaluation evidence supplied with the attempt.
+- The persistence child performs mechanical transport only. It must not derive
+  structured review fields from the visible prose. If the server rejects
+  parity, the pending attempt remains authoritative: do not replay the rejected
+  payload or create another attempt. Re-read the referenced visible turn and
+  pending attempt, preserve immutable attempt identity and code, compose a
+  corrected completion from exact visible strings under a new operation ID,
+  and verify its receipt reaches `saved`.
 - Before completing that review, the specialist inspects the exact submitted
   source for the user's own time-complexity, space-complexity, and edge-case
   analysis (normally in comments or an explicitly supplied explanation). Each
