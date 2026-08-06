@@ -44,21 +44,11 @@ above the mandatory status line.
 
 ## Conversation-First Persistence
 
-- Resolve the activity from an explicit URL/title, the focused activity, then
-  unambiguous recent context. Ask only when it remains ambiguous.
-- Compose the useful answer first. Then give the activity's one bounded,
-  reusable persistence-only child the exact immutable sidecar, turn identities,
-  and response body. Return after delegation acknowledgement; do not make the
-  user wait for D1/R2, polling, Delivery Coach, or profile reloads.
-- The parent retains interactive reads, timer/planning/result controls,
-  browser/controller work, and user-facing coaching. Finish/finalization joins
-  the child and verifies authoritative D1 evidence.
-- `append_practice_transcript` is recovery/import-only. Normal typed exchanges
-  use `save_practice_exchange`; related Voice uses its atomic resolver.
-- A queued receipt is not saved. The persistence child owns status inspection,
-  bounded exact-payload retry, and the compact saved/duplicate/failed result.
-- Operational footers and receipts are visible annotations only. Never persist
-  them as practice dialogue or publication content.
+Follow `background-specialist-persistence.md` exactly. It is authoritative for
+activity resolution, the one reusable persistence child, immutable sidecars,
+parent/child operation routing, queued receipts, retry limits, and Finish
+joining. Operational footers and receipts are visible annotations only; never
+persist them as practice dialogue or publication content.
 
 ## Voice Classification And Grouping
 

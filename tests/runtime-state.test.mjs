@@ -883,7 +883,7 @@ test("Voice protocol v2 gates content behind an explicit per-capture decision", 
   );
   assert.match(resultControlSchema, /expectedRevision: z\.number\(\)\.int\(\)\.nonnegative\(\)/);
   assert.match(exchangePolicy, /Transcript not saved · Recording not uploaded/);
-  assert.match(`${specialistGuide}\n${leetcodeGuide}`, /ambiguous.*uncertain/is);
+  assert.match(specialistGuide, /ambiguous.*uncertain/is);
   assert.match(specialistGuide, /must end with exactly one truthful\s+persistence-status line as its final non-empty line/i);
   assert.match(specialistGuide, /Attachment pending · Practice persistence delegated in background/);
   assert.match(specialistGuide, /Not attached to this practice activity · Not saved to the practice transcript or publication/);

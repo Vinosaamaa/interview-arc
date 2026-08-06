@@ -29,14 +29,9 @@ Never commit private sources or copy employer source code into D1/artifacts.
 
 ## Resume-First Curriculum
 
-Inspect only resume/private sources the user explicitly provides. Create
-owner-private behavioral activities in this order:
-
-1. Resume Inventory.
-2. One employer/project map per major experience.
-3. One verification activity per resume bullet.
-4. Career Walkthrough.
-5. STARL synthesis.
+Inspect only resume/private sources the user explicitly provides. Follow
+`profile/README.md` as the single source of truth for curriculum ordering;
+cover the career walkthrough inside its resume-overview evidence.
 
 Use `upsert_personal_bank_question`, stable identities, priority ordering, and
 `resume-foundation` plus employer/project/competency tags. Prefer the

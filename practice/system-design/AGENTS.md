@@ -9,12 +9,6 @@ Before starting, read `../AGENTS.md`, then load only what the action needs:
 - reader/diagram presentation: `../../docs/contracts/reader-rendering.md`;
 - question selection/history: `bank/questions.json` and existing `sessions/`.
 
-Use `$interview-arc-system-design` for reference preflight and the Solution
-Profile template. For a selected SystemDesign.io reference question, privately
-review its stored page and accessible recommended sources before a fresh mock
-or when the current profile is incomplete/stale/disputed. Never reveal that
-rubric before the user reasons unless they request the answer.
-
 ## System-Design Durable Additions
 
 Load the current/provisional Solution Profile after resolving `questionId`.
@@ -76,6 +70,9 @@ At the beginning of a mock interview:
 ## SystemDesign.io Reference Policy
 
 The canonical system-design bank contains the 55 questions from SystemDesign.io. The bank stores each canonical question page URL, its listed complexity, and `solutionReference: true`.
+
+Use `$interview-arc-system-design` for reference preflight and the Solution
+Profile template.
 
 For a first attempt, or when the stored profile is incomplete, outdated,
 disputed, or the user asks for fresh research:
