@@ -756,9 +756,6 @@ export function createPlaywrightPageAdapter(page) {
               };
             }
 
-            const roots = selectors.editorialContent
-              .flatMap((selector) => [...document.querySelectorAll(selector)])
-              .filter((root, index, candidates) => visible(root) && candidates.indexOf(root) === index);
             const lockRoots = selectors.editorialLock
               .flatMap((selector) => [...document.querySelectorAll(selector)])
               .filter(visible);
@@ -767,11 +764,16 @@ export function createPlaywrightPageAdapter(page) {
               .find((text) => /\b(?:premium|subscribe|unlock)\b/i.test(text));
             if (lockText) return { state: "premium_locked" };
 
-            for (const root of roots) {
-              const text = root.innerText?.trim() ?? "";
-              const blocks = root.querySelectorAll("h1,h2,h3,p,pre,ul,ol").length;
-              if (text.length >= 120 && blocks >= 2) {
-                return { state: "available" };
+            for (let selectorIndex = 0; selectorIndex < selectors.editorialContent.length; selectorIndex += 1) {
+              const roots = [...document.querySelectorAll(selectors.editorialContent[selectorIndex])]
+                .filter(visible);
+              for (let rootIndex = 0; rootIndex < roots.length; rootIndex += 1) {
+                const root = roots[rootIndex];
+                const text = root.innerText?.trim() ?? "";
+                const blocks = root.querySelectorAll("h1,h2,h3,p,pre,ul,ol").length;
+                if (text.length >= 120 && blocks >= 2) {
+                  return { state: "available", rootLocator: { selectorIndex, rootIndex } };
+                }
               }
             }
             return false;
@@ -829,43 +831,47 @@ export function createPlaywrightPageAdapter(page) {
         await handle?.dispose?.();
       }
     },
-    async readEditorialResearchMaterial(identity, signal) {
-      return abortablePageOperation(page.evaluate(async ({ expectedSlug, expectedTitle, routes, selectors }) => {
+    async readEditorialResearchMaterial(identity, rootLocator, signal) {
+      return abortablePageOperation(page.evaluate(async ({ expectedSlug, expectedTitle, rootLocator, routes, selectors }) => {
         const editorialSlug = location.pathname.match(new RegExp(routes.editorial))?.[1] ?? null;
-        if (editorialSlug !== expectedSlug) return null;
+        if (editorialSlug !== expectedSlug || !rootLocator) return null;
         const pageTitle = document.title.trim();
         if (!pageTitle.toLowerCase().includes(expectedTitle.toLowerCase())) return null;
 
+        const visible = (element) => element?.getClientRects?.().length > 0;
+        const root = [...document.querySelectorAll(
+          selectors.editorialContent[rootLocator.selectorIndex],
+        )].filter(visible)[rootLocator.rootIndex] ?? null;
+        if (!root) return null;
+
         const originalX = window.scrollX ?? 0;
         const originalY = window.scrollY ?? 0;
-        const viewportHeight = Math.max(window.innerHeight ?? 800, 400);
-        const scrollHeight = document.scrollingElement?.scrollHeight
-          ?? document.documentElement?.scrollHeight
-          ?? viewportHeight;
-        const maximumScroll = Math.max(0, scrollHeight - viewportHeight);
-        const steps = Math.min(20, Math.ceil(maximumScroll / viewportHeight));
-        for (let step = 1; step <= steps; step += 1) {
-          window.scrollTo?.(0, Math.min(maximumScroll, step * viewportHeight));
-          await new Promise((resolve) => setTimeout(resolve, 75));
+        let scrollContainer = root;
+        while (scrollContainer) {
+          if ((scrollContainer.scrollHeight ?? 0) > (scrollContainer.clientHeight ?? 0) + 1) break;
+          scrollContainer = scrollContainer.parentElement;
         }
-
-        const visible = (element) => element?.getClientRects?.().length > 0;
-        const roots = selectors.editorialContent
-          .flatMap((selector) => [...document.querySelectorAll(selector)])
-          .filter((root, index, candidates) => visible(root) && candidates.indexOf(root) === index);
-        const root = roots.find((candidate) => {
-          const text = candidate.innerText?.trim() ?? "";
-          return text.length >= 120
-            && candidate.querySelectorAll("h1,h2,h3,p,pre,ul,ol").length >= 2;
-        });
-        window.scrollTo?.(originalX, originalY);
-        if (!root) return null;
+        const originalScrollTop = scrollContainer?.scrollTop ?? null;
+        if (scrollContainer) {
+          scrollContainer.scrollTop = scrollContainer.scrollHeight - scrollContainer.clientHeight;
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        } else {
+          const viewportHeight = Math.max(window.innerHeight ?? 800, 400);
+          const scrollHeight = document.scrollingElement?.scrollHeight
+            ?? document.documentElement?.scrollHeight
+            ?? viewportHeight;
+          const maximumScroll = Math.max(0, scrollHeight - viewportHeight);
+          if (maximumScroll > 0) {
+            window.scrollTo?.(0, maximumScroll);
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+        }
 
         const renderedText = root.innerText?.trim() ?? "";
         const headings = [...root.querySelectorAll("h1,h2,h3")]
           .map((heading) => heading.innerText?.trim() ?? "")
           .filter(Boolean);
-        const codeCandidates = [...document.querySelectorAll([
+        const codeSelector = [
           "pre",
           "code",
           '[data-track-load*="code" i]',
@@ -873,11 +879,20 @@ export function createPlaywrightPageAdapter(page) {
           '[class*="codeblock" i]',
           '[class*="code-block" i]',
           ".view-lines",
-        ].join(","))]
-          .filter((block) => visible(block) && (block.innerText ?? "").trim().length >= 20)
-          .filter((block, index, candidates) => !candidates.some((parent, parentIndex) => (
-            parentIndex !== index && parent.contains?.(block)
-          )));
+        ].join(",");
+        // LeetCode portals the visible implementation editor outside the
+        // markdown root. The route/title fence above scopes this document to
+        // the verified Editorial while still allowing that official code pane.
+        const editorialScope = document;
+        const rawCodeCandidates = [...editorialScope.querySelectorAll(codeSelector)]
+          .filter((block) => visible(block) && (block.innerText ?? "").trim().length >= 20);
+        const candidateSet = new Set(rawCodeCandidates);
+        const codeCandidates = rawCodeCandidates.filter((block) => {
+          for (let ancestor = block.parentElement; ancestor; ancestor = ancestor.parentElement) {
+            if (candidateSet.has(ancestor)) return false;
+          }
+          return true;
+        });
         const codeBlocks = codeCandidates.map((block, index) => {
           const code = block.matches?.("code") ? block : block.querySelector?.("code");
           const className = typeof code?.className === "string" ? code.className : "";
@@ -891,10 +906,13 @@ export function createPlaywrightPageAdapter(page) {
             code: (block.innerText ?? "").trim(),
           };
         });
+        if (scrollContainer && originalScrollTop !== null) scrollContainer.scrollTop = originalScrollTop;
+        else window.scrollTo?.(originalX, originalY);
         return { renderedText, headings, codeBlocks };
       }, {
         expectedSlug: identity.slug,
         expectedTitle: identity.title,
+        rootLocator,
         routes: TARGET_ROUTES,
         selectors: TARGET_SELECTORS,
       }), signal);
@@ -1237,7 +1255,7 @@ export class LeetCodeController {
       ? state.state
       : "unavailable";
     const researchMaterial = availability === "available"
-      ? await this.page.readEditorialResearchMaterial(identity, this.signal)
+      ? await this.page.readEditorialResearchMaterial(identity, state.rootLocator ?? null, this.signal)
       : null;
     if (availability === "available" && !researchMaterial) {
       throw new ControllerError(

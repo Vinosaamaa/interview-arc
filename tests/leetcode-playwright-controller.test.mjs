@@ -699,6 +699,7 @@ test("the Playwright adapter returns rendered Editorial research material", asyn
     getClientRects: () => [{}],
     getAttribute: () => null,
     querySelector: (selector) => selector === "code" ? code : null,
+    parentElement: null,
   };
   const root = {
     getClientRects: () => [{}],
@@ -742,7 +743,10 @@ test("the Playwright adapter returns rendered Editorial research material", asyn
         assert.equal(predicate(payload), false, "same-problem SPA transition must keep waiting");
         testLocation.pathname = `/problems/${identity.slug}/editorial/`;
         const state = predicate(payload);
-        assert.deepEqual(state, { state: "available" });
+        assert.deepEqual(state, {
+          state: "available",
+          rootLocator: { selectorIndex: 0, rootIndex: 0 },
+        });
         return {
           jsonValue: async () => state,
           dispose: async () => {},
@@ -779,7 +783,7 @@ test("the Playwright adapter returns rendered Editorial research material", asyn
   const adapter = createPlaywrightPageAdapter(page);
   const state = await adapter.waitForEditorialContent(identity);
   assert.equal(state.state, "available");
-  const researchMaterial = await adapter.readEditorialResearchMaterial(identity);
+  const researchMaterial = await adapter.readEditorialResearchMaterial(identity, state.rootLocator);
   assert.equal(researchMaterial.renderedText, root.innerText);
   assert.deepEqual(researchMaterial.headings, ["Approach 1"]);
   assert.deepEqual(researchMaterial.codeBlocks, [
