@@ -63,19 +63,22 @@ more help. Ask which mode only when intent is genuinely ambiguous.
 
 ## Start Or Resume A Problem
 
-On an explicit start, start the authoritative activity timer with current
-revision/workbench identity and one stable mutation ID. Preparation while the
-user is away does not start it.
+On an explicit start, keep the authoritative activity timer stopped through
+problem, controller, and Java-source preflight. Preparation while the user is
+away does not start it.
 
 Use this bounded warm startup:
 
 1. Read Today once and reuse one planned/focused activity; never duplicate it.
 2. Resolve `questionId` and load its Solution Profile once.
-3. Run controller `ensure` once and `navigate` once for the verified problem.
-4. Read the live Java starter, prepare/resume one evolving source, and reserve
-   its harness once.
-5. Return the original prompt/restatement, tmux-safe editor command, and
-   Quick/Full harness commands without waiting for helpers or persistence.
+3. Run controller `ensure` once and `navigate` once; verify the problem and
+   read its exact live Java starter before authoring the detailed source.
+4. Prepare/resume the evolving source, then make its tmux-safe `nvim` command
+   the first visible handoff; do not precede it with setup or status chatter.
+5. Only after that command is visible, start the timer with current
+   revision/workbench identity and one stable mutation ID, then report state.
+6. Reserve the harness once and return the prompt/restatement plus Quick/Full
+   commands without waiting for helpers or persistence.
 
 Verify the public number, title, canonical URL, slug, and live Java API from the
 bank, user URL, or another permitted public source. Never invent them. Present
