@@ -80,6 +80,12 @@ Use this bounded warm startup:
 6. Reserve the harness once and return the prompt/restatement plus Quick/Full
    commands without waiting for helpers or persistence.
 
+This is a two-stage visible protocol, not merely ordering inside one hidden
+tool sequence. Deliver the `nvim` command to the user first. Only after that
+handoff has rendered may the specialist call the timer mutation and continue
+with the remaining preflight. If the command cannot be delivered, leave the
+timer stopped.
+
 Verify the public number, title, canonical URL, slug, and live Java API from the
 bank, user URL, or another permitted public source. Never invent them. Present
 an original concise restatement, constraints, examples, and required Java API;
