@@ -47,7 +47,18 @@ import { emptyJournal } from "./current-day";
 import { ArrivalRitual, PetalField } from "./arrival-ritual";
 import { useAmbientSound } from "./ambient-sound";
 import { MusicPlaylist } from "./music-playlist";
-import { averageEffortBreakdown, journeyHrefWithoutReader, journeyReaderHref, readJourneyReaderState, uniqueJourneyEntries } from "./journey-insights";
+import {
+  averageEffortBreakdown,
+  journeyHrefWithoutReader,
+  journeyReaderHref,
+  pastReaderHref,
+  readJourneyReaderState,
+  readPastReaderState,
+  readWorkspaceRouteView,
+  uniqueJourneyEntries,
+  workspaceViewHref,
+  type WorkspaceRouteView,
+} from "./journey-insights";
 import { readMasterPanePreference, writeMasterPanePreference } from "./ui-preferences";
 import { effectiveProfileTags, isReusableSolutionProfile } from "./solution-profile-policy";
 import {
@@ -1454,9 +1465,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [journeyDate, setJourneyDate] = useState("");
   const [journeyTopic, setJourneyTopic] = useState("");
   const [journeyReaderOrderIds, setJourneyReaderOrderIds] = useState<string[]>([]);
-  const [journeyReaderNotFound, setJourneyReaderNotFound] = useState("");
+  const [pastReaderOrderIds, setPastReaderOrderIds] = useState<string[]>([]);
+  const [readerNotFound, setReaderNotFound] = useState("");
   const [chartTooltip, setChartTooltip] = useState<ChartTooltipModel | null>(null);
-  const journeyUrlHydratedRef = useRef(false);
+  const workspaceUrlHydratedRef = useRef(false);
   const [careerWork, setCareerWork] = useState<CareerWorkPayload | null>(null);
   const [careerLoading, setCareerLoading] = useState(false);
   const [careerLoadingMore, setCareerLoadingMore] = useState(false);
@@ -1669,6 +1681,17 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
+      const routeView = readWorkspaceRouteView(window.location.href);
+      if (readJourneyReaderState(window.location.href) || readPastReaderState(window.location.href)) {
+        setView("library");
+        setViewMemoryReady(true);
+        return;
+      }
+      if (routeView) {
+        setView(routeView === "past" ? "library" : routeView);
+        setViewMemoryReady(true);
+        return;
+      }
       const stored = window.sessionStorage.getItem("interview-arc-active-view");
       if (stored === "journey" || stored === "library" || stored === "banks") setView(stored);
       setViewMemoryReady(true);
@@ -1679,6 +1702,33 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   useEffect(() => {
     if (viewMemoryReady) window.sessionStorage.setItem("interview-arc-active-view", view);
   }, [view, viewMemoryReady]);
+
+  useEffect(() => {
+    if (!viewMemoryReady || !workspaceUrlHydratedRef.current) return;
+    if (readJourneyReaderState(window.location.href) || readPastReaderState(window.location.href)) return;
+    if (view === "library" && selectedEntry) {
+      window.history.replaceState(
+        { interviewArcPastReader: true, interviewArcPastDepth: 0 },
+        "",
+        pastReaderHref(window.location.href, selectedEntry.id),
+      );
+      if (!pastReaderOrderIds.length) {
+        const frame = window.requestAnimationFrame(() => {
+          setPastReaderOrderIds(libraryEntries.map((entry) => entry.id));
+        });
+        return () => window.cancelAnimationFrame(frame);
+      }
+      return;
+    }
+    const routeView = routeViewFor(view);
+    if (readWorkspaceRouteView(window.location.href) !== routeView) {
+      window.history.replaceState(
+        { interviewArcWorkspaceView: routeView },
+        "",
+        workspaceViewHref(window.location.href, routeView),
+      );
+    }
+  }, [libraryEntries, pastReaderOrderIds.length, selectedEntry, view, viewMemoryReady]);
 
   useEffect(() => {
     const memory: WorkspaceUiMemory = {
@@ -2707,6 +2757,15 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return position;
   }
 
+  function restorePageScroll(scrollY: unknown) {
+    const top = typeof scrollY === "number" && Number.isFinite(scrollY)
+      ? Math.max(0, scrollY)
+      : 0;
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => window.scrollTo({ top, behavior: "instant" }));
+    });
+  }
+
   function openJournalEntry(entry: LibraryEntry) {
     if (readerCloseTimerRef.current !== null) {
       window.clearTimeout(readerCloseTimerRef.current);
@@ -2722,7 +2781,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         centerAnchor: true,
       });
     }
-    if (openingReader) pendingSelectedRevealRef.current = "library";
+    if (openingReader || (view === "library" && masterPaneState.library)) pendingSelectedRevealRef.current = "library";
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 1976px)").matches) setMasterPaneOpen(false, "library");
     setReaderClosing(false);
     setSelectedEntry(entry);
@@ -2732,12 +2791,25 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   function openJourneyEntry(entry: LibraryEntry, orderedEntries: LogEntry[] = journeyRangeEntries) {
     setChartTooltip(null);
     setJourneyReaderOrderIds(uniqueJourneyEntries(orderedEntries, journeyStartDate, journal.date).map((candidate) => candidate.id));
-    setJourneyReaderNotFound("");
+    setReaderNotFound("");
     const currentJourneyReader = readJourneyReaderState(window.location.href);
     const currentDepth = currentJourneyReader && Number.isInteger(window.history.state?.interviewArcJourneyDepth)
       ? window.history.state.interviewArcJourneyDepth as number
       : 0;
-    if (!currentJourneyReader) window.history.replaceState({ interviewArcJourneyDepth: 0 }, "", journeyHrefWithoutReader(window.location.href));
+    const originScrollY = currentJourneyReader && typeof window.history.state?.interviewArcJourneyScrollY === "number"
+      ? window.history.state.interviewArcJourneyScrollY as number
+      : window.scrollY;
+    if (!currentJourneyReader) {
+      window.history.replaceState(
+        {
+          interviewArcWorkspaceView: "journey",
+          interviewArcJourneyDepth: 0,
+          interviewArcJourneyScrollY: originScrollY,
+        },
+        "",
+        journeyHrefWithoutReader(window.location.href),
+      );
+    }
     const href = journeyReaderHref(window.location.href, {
       attemptId: entry.id,
       range: String(journeyRange) as "30" | "90" | "365" | "all",
@@ -2746,7 +2818,35 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       day: journeyDate,
       topic: journeyTopic,
     });
-    window.history.pushState({ interviewArcJourneyReader: true, interviewArcJourneyDepth: currentDepth + 1 }, "", href);
+    window.history.pushState(
+      {
+        interviewArcJourneyReader: true,
+        interviewArcJourneyDepth: currentDepth + 1,
+        interviewArcJourneyScrollY: originScrollY,
+      },
+      "",
+      href,
+    );
+    openJournalEntry(entry);
+  }
+
+  function openPastEntry(entry: LibraryEntry, orderedEntries: LogEntry[] = libraryEntries) {
+    setChartTooltip(null);
+    setPastReaderOrderIds([...new Set(orderedEntries.map((candidate) => candidate.id))]);
+    setJourneyReaderOrderIds([]);
+    setReaderNotFound("");
+    const currentPastReader = readPastReaderState(window.location.href);
+    const currentDepth = currentPastReader && Number.isInteger(window.history.state?.interviewArcPastDepth)
+      ? window.history.state.interviewArcPastDepth as number
+      : 0;
+    if (!currentPastReader) {
+      window.history.replaceState({ interviewArcPastDepth: 0 }, "", workspaceViewHref(window.location.href, "past"));
+    }
+    window.history.pushState(
+      { interviewArcPastReader: true, interviewArcPastDepth: currentDepth + 1 },
+      "",
+      pastReaderHref(window.location.href, entry.id),
+    );
     openJournalEntry(entry);
   }
 
@@ -3663,6 +3763,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     setView(nextView);
   }
 
+  function routeViewFor(nextView: View): WorkspaceRouteView {
+    return nextView === "library" ? "past" : nextView;
+  }
+
   function navigateToPrimaryView(nextView: View) {
     if (nextView === view) return;
     if (readerCloseTimerRef.current !== null) {
@@ -3681,6 +3785,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       setListRestoring(nextView);
     }
     setReaderClosing(false);
+    window.history.pushState(
+      { interviewArcWorkspaceView: routeViewFor(nextView) },
+      "",
+      workspaceViewHref(window.location.href, routeViewFor(nextView)),
+    );
     transitionToView(nextView);
   }
 
@@ -3756,6 +3865,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     }
     return [...groups.entries()].sort(([left], [right]) => right.localeCompare(left));
   }, [draft.problemPreferences, libraryAttentionFilters, libraryEntries, librarySearch, libraryStarFilter, libraryTypeFilters]);
+
+  const filteredPastEntries = useMemo(
+    () => groupedLog.flatMap(([, entries]) => entries),
+    [groupedLog],
+  );
 
   const completedEntries = useMemo(
     () => logEntries.filter((entry) => entry.status === "completed" || entry.status === "published"),
@@ -3904,54 +4018,90 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const selectedTopicEntries = topicStats.find((topic) => topic.topic === journeyTopic)?.entries ?? [];
 
   useEffect(() => {
-    const restoreJourneyLocation = () => {
-      const state = readJourneyReaderState(window.location.href);
-      if (!state) {
-        if (new URL(window.location.href).searchParams.get("view") === "journey") {
+    const restoreWorkspaceLocation = () => {
+      const journeyState = readJourneyReaderState(window.location.href);
+      if (journeyState) {
+        const range = journeyState.range === "all" ? "all" : Number(journeyState.range) as JourneyRange;
+        const start = range === "all"
+          ? libraryEntries.reduce((earliest, entry) => entry.date < earliest ? entry.date : earliest, journal.date)
+          : shiftDate(journal.date, -(range - 1));
+        const inRange = uniqueJourneyEntries(libraryEntries, start, journal.date);
+        const ordered = journeyState.day
+          ? inRange.filter((entry) => entry.date === journeyState.day && (journeyState.heatmap === "all" || journeyState.heatmap === "job_applications" || entry.type === journeyState.heatmap))
+          : journeyState.topic
+            ? inRange.filter((entry) => entry.type === "leetcode" && codingQuestionFor(entry)?.topics.includes(journeyState.topic))
+            : inRange;
+        const candidates = journeyState.day || journeyState.topic ? ordered : inRange;
+        const entry = candidates.find((candidate) => candidate.id === journeyState.attemptId);
+        setJourneyRange(range);
+        setJourneyMetric(journeyState.metric);
+        setJourneyHeatmapView(journeyState.heatmap);
+        setJourneyDate(journeyState.day);
+        setJourneyTopic(journeyState.topic);
+        setJourneyReaderOrderIds(candidates.map((candidate) => candidate.id));
+        setPastReaderOrderIds([]);
+        if (!entry) {
           window.sessionStorage.removeItem("interview-arc-selected-past");
           setSelectedEntry(null);
-          setJourneyReaderOrderIds([]);
+          setReaderNotFound(journeyState.attemptId);
           setView("journey");
+          return;
         }
+        setReaderNotFound("");
+        setReaderClosing(false);
+        pendingSelectedRevealRef.current = "library";
+        setSelectedEntry(entry);
+        setView("library");
         return;
       }
-      const range = state.range === "all" ? "all" : Number(state.range) as JourneyRange;
-      const start = range === "all"
-        ? libraryEntries.reduce((earliest, entry) => entry.date < earliest ? entry.date : earliest, journal.date)
-        : shiftDate(journal.date, -(range - 1));
-      const inRange = uniqueJourneyEntries(libraryEntries, start, journal.date);
-      const ordered = state.day
-        ? inRange.filter((entry) => entry.date === state.day && (state.heatmap === "all" || state.heatmap === "job_applications" || entry.type === state.heatmap))
-        : state.topic
-          ? inRange.filter((entry) => entry.type === "leetcode" && codingQuestionFor(entry)?.topics.includes(state.topic))
-          : inRange;
-      const candidates = state.day || state.topic ? ordered : inRange;
-      const entry = candidates.find((candidate) => candidate.id === state.attemptId);
-      setJourneyRange(range);
-      setJourneyMetric(state.metric);
-      setJourneyHeatmapView(state.heatmap);
-      setJourneyDate(state.day);
-      setJourneyTopic(state.topic);
-      setJourneyReaderOrderIds(candidates.map((candidate) => candidate.id));
-      if (!entry) {
+
+      const pastState = readPastReaderState(window.location.href);
+      if (pastState) {
+        const rememberedOrder = pastReaderOrderIds.length
+          ? pastReaderOrderIds.flatMap((id) => libraryEntries.find((entry) => entry.id === id) ?? [])
+          : filteredPastEntries;
+        const candidates = rememberedOrder.some((entry) => entry.id === pastState.attemptId)
+          ? rememberedOrder
+          : libraryEntries;
+        const entry = candidates.find((candidate) => candidate.id === pastState.attemptId);
+        setPastReaderOrderIds(candidates.map((candidate) => candidate.id));
+        setJourneyReaderOrderIds([]);
+        if (!entry) {
+          window.sessionStorage.removeItem("interview-arc-selected-past");
+          setSelectedEntry(null);
+          setReaderNotFound(pastState.attemptId);
+          setView("library");
+          return;
+        }
+        setReaderNotFound("");
+        setReaderClosing(false);
+        pendingSelectedRevealRef.current = "library";
+        setSelectedEntry(entry);
+        setView("library");
+        return;
+      }
+
+      const routeView = readWorkspaceRouteView(window.location.href);
+      if (!routeView) return;
+      if (routeView === "journey" || routeView === "past") {
         window.sessionStorage.removeItem("interview-arc-selected-past");
         setSelectedEntry(null);
-        setJourneyReaderNotFound(state.attemptId);
-        setView("journey");
-        return;
+        setJourneyReaderOrderIds([]);
+        setPastReaderOrderIds([]);
+        setReaderNotFound("");
       }
-      setJourneyReaderNotFound("");
-      setReaderClosing(false);
-      setSelectedEntry(entry);
-      setView("library");
+      setView(routeView === "past" ? "library" : routeView);
+      if (routeView === "journey") {
+        restorePageScroll(window.history.state?.interviewArcJourneyScrollY);
+      }
     };
-    if (!journeyUrlHydratedRef.current) {
-      journeyUrlHydratedRef.current = true;
-      restoreJourneyLocation();
+    if (!workspaceUrlHydratedRef.current) {
+      workspaceUrlHydratedRef.current = true;
+      restoreWorkspaceLocation();
     }
-    window.addEventListener("popstate", restoreJourneyLocation);
-    return () => window.removeEventListener("popstate", restoreJourneyLocation);
-  }, [codingQuestionFor, journal.date, libraryEntries]);
+    window.addEventListener("popstate", restoreWorkspaceLocation);
+    return () => window.removeEventListener("popstate", restoreWorkspaceLocation);
+  }, [codingQuestionFor, filteredPastEntries, journal.date, libraryEntries, pastReaderOrderIds]);
   const yesterdayEntries = logEntries.filter((entry) => entry.date === yesterdayDate);
   const yesterdayCompleted = yesterdayEntries.filter((entry) => entry.status === "completed" || entry.status === "published");
   const yesterdaySeconds = yesterdayCompleted.reduce((sum, entry) => sum + entry.elapsedSeconds, 0);
@@ -4158,7 +4308,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return (
       <section className="view-page journey-page">
         <header className="view-masthead journey-masthead"><span className="eyebrow">JOURNEY · PUBLISHED + TODAY&apos;S LIVE RECORD</span><h1>Your practice,<br /><em>mapped over time.</em></h1><p>This page counts only recorded work. Explore consistency, outcomes, topic coverage, effort, and the exact days behind every trend.</p></header>
-        {journeyReaderNotFound && <div className="journey-reader-not-found" role="alert"><strong>That practice record is unavailable.</strong><span>The saved Journey link points to <code>{journeyReaderNotFound}</code>, which is not present in the current authoritative record.</span></div>}
+        {readerNotFound && <div className="journey-reader-not-found" role="alert"><strong>That practice record is unavailable.</strong><span>The saved reader link points to <code>{readerNotFound}</code>, which is not present in the current authoritative record.</span></div>}
         <div className="stat-ledger">
           <article className="stat-block coding-stat"><span>Coding solved</span><strong>{codingSolved}</strong><small>{codingFailed} failed attempt{codingFailed === 1 ? "" : "s"}</small></article>
           <article className="stat-block system-stat"><span>System designs</span><strong>{systemCompleted}</strong><small>completed or published</small></article>
@@ -4348,6 +4498,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return (
       <section className={`view-page library-page ${selectedEntry ? "has-open-entry" : ""} ${listRestoring === "library" ? "list-restoring" : ""}`}>
         <header className="view-masthead"><span className="eyebrow">PAST · COMPLETED WORK</span><h1>Read the journey<br /><em>like a field journal.</em></h1><p>Past contains finished activity timers and published case files—never planned work or result flags by themselves.</p></header>
+        {readerNotFound && <div className="journey-reader-not-found" role="alert"><strong>That practice record is unavailable.</strong><span>The saved reader link points to <code>{readerNotFound}</code>, which is not present in the current authoritative record.</span></div>}
         <div className={`past-master-detail ${masterPaneOpen ? "master-pane-open" : ""} ${nestedReaderFocus ? "nested-reader-focus" : ""} ${readerClosing ? "reader-closing" : ""}`}>
           <div
             className="past-master-pane"
@@ -4385,7 +4536,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                 };
                 listPositionMemoryRef.current.library[selectedEntry ? "pane" : "main"] = position;
               }}>
-                {groupedLog.length ? groupedLog.map(([date, entries]) => <section className="log-day" id={`log-date-${date}`} key={date}><header><time>{readableDate(date)}</time><span>{entries.length} record{entries.length === 1 ? "" : "s"} · Pacific day</span></header><div className="log-day-entries">{entries.map((entry) => { const reusableQuestion = bankQuestionForEntry(entry); const reusableSolution = Boolean(reusableQuestion && hasReusableSolution(entry.type, reusableQuestion)); return <article className={`log-entry ${entry.type} ${selectedEntry?.id === entry.id ? "selected" : ""}`} data-list-item-id={`library:${entry.id}`} key={entry.id}><button className="log-entry-open" onClick={() => openJournalEntry(entry)} aria-label={`Read ${entry.title}`}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><div className="log-entry-copy"><small>{typeLabel(entry.type)} · {entry.status}{entry.sessionId ? " · session activity" : " · standalone"}</small><strong>{entry.title}</strong>{meaningfulSubtitle(entry.subtitle) && <span>{meaningfulSubtitle(entry.subtitle)}</span>}<div className="entry-badges">{entry.review?.status === "due" && <i className="review-badge due">Due now</i>}{entry.review?.status === "scheduled" && <i className="review-badge">Review {entry.review.dueDate}</i>}{Boolean(entry.personalNote?.trim() || entry.pinnedNotes?.length) && <i className="note-badge">Pinned note</i>}{entry.outcome === "solved" && <i className="independent-badge">Solved</i>}{entry.outcome === "solved_after_reviewing_approach" && <i className="help-badge">Solved with help</i>}{entry.outcome === "failed" && <i className="failure-badge">Failed attempt</i>}</div>{entry.startedAt && <span className="entry-time-range">{formatPracticeTimestamp(entry.startedAt, true)} → {entry.endedAt ? formatPracticeTimestamp(entry.endedAt, true) : "Paused"}</span>}</div><div className="log-entry-meta"><strong>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "—"}</strong><span>{entry.artifact ? "Published record" : entry.status}</span></div></button><div className="log-entry-actions"><StaticResultFlag outcome={entry.outcome} label={resultLabel(entry.outcome, entry.type)} /><button className={`star-control ${isStarred(entry.type, entry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(entry.type, entry.questionId)} disabled={!entry.questionId} aria-label={`${isStarred(entry.type, entry.questionId) ? "Unstar" : "Star"} ${entry.title}`} title="Star this problem"><Icon name="star" /></button><button className={`icon-action solution-control ${reusableSolution ? "solution-available" : ""}`} onClick={() => openEntrySolution(entry)} disabled={!reusableSolution} aria-label={reusableSolution ? `Open reusable solution for ${entry.title}` : `No reusable solution for ${entry.title}`} title={reusableSolution ? "Open reusable solution" : "No reusable solution yet"}><Icon name="book" /></button><button className="icon-action add-practice-control" onClick={() => addEntryToToday(entry)} disabled={!reusableQuestion || Boolean(reusableQuestion && isQuestionBlocked(reusableQuestion, todayBlockedQuestions()))} aria-label={`Add ${entry.title} to Today`} title="Add to Today"><Icon name="plus" /></button></div></article>; })}</div></section>) : <div className="quiet-empty library-empty"><strong>No completed work in this filter yet.</strong><span>Try another filter, or finish an activity to add it to the field journal.</span></div>}
+                {groupedLog.length ? groupedLog.map(([date, entries]) => <section className="log-day" id={`log-date-${date}`} key={date}><header><time>{readableDate(date)}</time><span>{entries.length} record{entries.length === 1 ? "" : "s"} · Pacific day</span></header><div className="log-day-entries">{entries.map((entry) => { const reusableQuestion = bankQuestionForEntry(entry); const reusableSolution = Boolean(reusableQuestion && hasReusableSolution(entry.type, reusableQuestion)); return <article className={`log-entry ${entry.type} ${selectedEntry?.id === entry.id ? "selected" : ""}`} data-list-item-id={`library:${entry.id}`} key={entry.id}><button className="log-entry-open" onClick={() => openPastEntry(entry, filteredPastEntries)} aria-label={`Read ${entry.title}`}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><div className="log-entry-copy"><small>{typeLabel(entry.type)} · {entry.status}{entry.sessionId ? " · session activity" : " · standalone"}</small><strong>{entry.title}</strong>{meaningfulSubtitle(entry.subtitle) && <span>{meaningfulSubtitle(entry.subtitle)}</span>}<div className="entry-badges">{entry.review?.status === "due" && <i className="review-badge due">Due now</i>}{entry.review?.status === "scheduled" && <i className="review-badge">Review {entry.review.dueDate}</i>}{Boolean(entry.personalNote?.trim() || entry.pinnedNotes?.length) && <i className="note-badge">Pinned note</i>}{entry.outcome === "solved" && <i className="independent-badge">Solved</i>}{entry.outcome === "solved_after_reviewing_approach" && <i className="help-badge">Solved with help</i>}{entry.outcome === "failed" && <i className="failure-badge">Failed attempt</i>}</div>{entry.startedAt && <span className="entry-time-range">{formatPracticeTimestamp(entry.startedAt, true)} → {entry.endedAt ? formatPracticeTimestamp(entry.endedAt, true) : "Paused"}</span>}</div><div className="log-entry-meta"><strong>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "—"}</strong><span>{entry.artifact ? "Published record" : entry.status}</span></div></button><div className="log-entry-actions"><StaticResultFlag outcome={entry.outcome} label={resultLabel(entry.outcome, entry.type)} /><button className={`star-control ${isStarred(entry.type, entry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(entry.type, entry.questionId)} disabled={!entry.questionId} aria-label={`${isStarred(entry.type, entry.questionId) ? "Unstar" : "Star"} ${entry.title}`} title="Star this problem"><Icon name="star" /></button><button className={`icon-action solution-control ${reusableSolution ? "solution-available" : ""}`} onClick={() => openEntrySolution(entry)} disabled={!reusableSolution} aria-label={reusableSolution ? `Open reusable solution for ${entry.title}` : `No reusable solution for ${entry.title}`} title={reusableSolution ? "Open reusable solution" : "No reusable solution yet"}><Icon name="book" /></button><button className="icon-action add-practice-control" onClick={() => addEntryToToday(entry)} disabled={!reusableQuestion || Boolean(reusableQuestion && isQuestionBlocked(reusableQuestion, todayBlockedQuestions()))} aria-label={`Add ${entry.title} to Today`} title="Add to Today"><Icon name="plus" /></button></div></article>; })}</div></section>) : <div className="quiet-empty library-empty"><strong>No completed work in this filter yet.</strong><span>Try another filter, or finish an activity to add it to the field journal.</span></div>}
               </div>
               <aside className="log-calendar"><span className="eyebrow">JUMP TO A DAY</span><h2>{new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${journal.date}T12:00:00Z`))}</h2><div className="calendar-week"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div><div className="calendar-mini">{calendarDays.map((day) => day.hasEntries ? <button key={day.key} onClick={() => scrollToLogDate(day.key)} title={`Jump to ${day.key}`}>{day.day}<i /></button> : <span key={day.key}>{day.day}</span>)}</div><div className="calendar-dates">{groupedLog.map(([date]) => <button key={date} onClick={() => scrollToLogDate(date)}>{readableDate(date, true)} <span>↘</span></button>)}</div></aside>
             </div>
@@ -4747,9 +4898,25 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const entry = libraryEntries.find((candidate) => candidate.id === id);
     return entry ? [entry] : [];
   });
-  const journeyReaderIndex = readerSelectedEntry && readJourneyReaderState(typeof window === "undefined" ? "https://interview-arc.invalid/" : window.location.href)
-    ? journeyReaderEntries.findIndex((entry) => entry.id === readerSelectedEntry.id)
+  const pastReaderEntries = pastReaderOrderIds.flatMap((id) => {
+    const entry = libraryEntries.find((candidate) => candidate.id === id);
+    return entry ? [entry] : [];
+  });
+  const currentReaderHref = typeof window === "undefined" ? "https://interview-arc.invalid/" : window.location.href;
+  const currentJourneyReaderState = readJourneyReaderState(currentReaderHref);
+  const currentPastReaderState = readPastReaderState(currentReaderHref);
+  const readerNavigationEntries = currentJourneyReaderState
+    ? journeyReaderEntries
+    : currentPastReaderState
+      ? pastReaderEntries
+      : [];
+  const readerNavigationIndex = readerSelectedEntry
+    ? readerNavigationEntries.findIndex((entry) => entry.id === readerSelectedEntry.id)
     : -1;
+  const navigateReaderEntry = (entry: LibraryEntry) => {
+    if (currentJourneyReaderState) openJourneyEntry(entry, readerNavigationEntries);
+    else openPastEntry(entry, readerNavigationEntries);
+  };
   const readerSelectedProblem = view === "banks"
     ? bankNestedEntry ? null : selectedProblem
     : view === "library"
@@ -5176,12 +5343,46 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (view === "library" && !libraryNestedProblem && readJourneyReaderState(window.location.href)) {
       window.sessionStorage.removeItem("interview-arc-selected-past");
       const depth = Number(window.history.state?.interviewArcJourneyDepth ?? 0);
+      const scrollY = window.history.state?.interviewArcJourneyScrollY;
+      setSelectedEntry(null);
+      setJourneyReaderOrderIds([]);
+      setPastReaderOrderIds([]);
+      setReaderNotFound("");
+      setReaderClosing(false);
+      setView("journey");
+      restorePageScroll(scrollY);
       if (window.history.state?.interviewArcJourneyReader && depth > 0) window.history.go(-depth);
       else {
-        window.history.replaceState({}, "", journeyHrefWithoutReader(window.location.href));
-        setSelectedEntry(null);
-        setJourneyReaderOrderIds([]);
-        setView("journey");
+        window.history.replaceState(
+          {
+            interviewArcWorkspaceView: "journey",
+            interviewArcJourneyDepth: 0,
+            interviewArcJourneyScrollY: scrollY,
+          },
+          "",
+          journeyHrefWithoutReader(window.location.href),
+        );
+      }
+      return;
+    }
+    if (view === "library" && !libraryNestedProblem && readPastReaderState(window.location.href)) {
+      window.sessionStorage.removeItem("interview-arc-selected-past");
+      const depth = Number(window.history.state?.interviewArcPastDepth ?? 0);
+      const position = listPositionMemoryRef.current.library.main;
+      pendingListRestoreRef.current = { surface: "library", ...position };
+      setListRestoring("library");
+      setSelectedEntry(null);
+      setPastReaderOrderIds([]);
+      setJourneyReaderOrderIds([]);
+      setReaderNotFound("");
+      setReaderClosing(false);
+      if (window.history.state?.interviewArcPastReader && depth > 0) window.history.go(-depth);
+      else {
+        window.history.replaceState(
+          { interviewArcWorkspaceView: "past", interviewArcPastDepth: 0 },
+          "",
+          workspaceViewHref(window.location.href, "past"),
+        );
       }
       return;
     }
@@ -5232,7 +5433,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       <article className={`workspace-reader journal-case-reader ${nestedReaderFocus ? "nested-reader" : ""}`} aria-labelledby="journal-reader-title" aria-label="Case file contents">
         <div className="reader-chrome">
           <div className="reader-chrome-leading">{!nestedReaderFocus && <button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button>}<ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</ReaderOutline></div>
-          <div className="reader-chrome-actions">{journeyReaderIndex >= 0 && <div className="reader-attempt-navigation" aria-label="Journey practice records"><button type="button" onClick={() => openJourneyEntry(journeyReaderEntries[journeyReaderIndex - 1], journeyReaderEntries)} disabled={journeyReaderIndex <= 0} aria-label="Previous Journey record" title={journeyReaderIndex <= 0 ? "First record in this Journey view" : "Previous Journey record"}>←</button><span>{journeyReaderIndex + 1} / {journeyReaderEntries.length}</span><button type="button" onClick={() => openJourneyEntry(journeyReaderEntries[journeyReaderIndex + 1], journeyReaderEntries)} disabled={journeyReaderIndex >= journeyReaderEntries.length - 1} aria-label="Next Journey record" title={journeyReaderIndex >= journeyReaderEntries.length - 1 ? "Last record in this Journey view" : "Next Journey record"}>→</button></div>}<button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close case file" title="Close"><Icon name="close" /></button></div>
+          <div className="reader-chrome-actions">{readerNavigationIndex >= 0 && <div className="reader-attempt-navigation" aria-label="Past practice records"><button type="button" onClick={() => navigateReaderEntry(readerNavigationEntries[readerNavigationIndex - 1])} disabled={readerNavigationIndex <= 0} aria-label="Previous practice record" title={readerNavigationIndex <= 0 ? "First record in this list" : "Previous practice record"}>←</button><span>{readerNavigationIndex + 1} / {readerNavigationEntries.length}</span><button type="button" onClick={() => navigateReaderEntry(readerNavigationEntries[readerNavigationIndex + 1])} disabled={readerNavigationIndex >= readerNavigationEntries.length - 1} aria-label="Next practice record" title={readerNavigationIndex >= readerNavigationEntries.length - 1 ? "Last record in this list" : "Next practice record"}>→</button></div>}<button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close case file" title="Close"><Icon name="close" /></button></div>
         </div>
         <div className="case-document workspace-reader-scroll" ref={readerDocumentRef} onScroll={rememberReaderPosition} onMouseUp={(event) => captureHighlightSelection(event.clientX, event.clientY)} onKeyUp={() => captureHighlightSelection()}>
           <header id="case-summary"><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time></div><div className="case-title-row"><h2 id="journal-reader-title">{selectedEntry.title}</h2><div className="case-title-actions"><button className={`star-control ${isStarred(selectedEntry.type, selectedEntry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedEntry.type, selectedEntry.questionId)} disabled={!selectedEntry.questionId} aria-label={`${isStarred(selectedEntry.type, selectedEntry.questionId) ? "Unstar" : "Star"} ${selectedEntry.title}`} title="Star this problem"><Icon name="star" /></button><button className="icon-action note-add" onClick={() => openNoteComposer()} disabled={!selectedEntryActivityId} aria-label="Add a note" title="Add a note"><Icon name="note" /><i><Icon name="plus" /></i></button></div></div>{meaningfulSubtitle(selectedEntry.subtitle) && <p>{meaningfulSubtitle(selectedEntry.subtitle)}</p>}{Boolean(bankQuestionForEntry(selectedEntry) && hasReusableSolution(selectedEntry.type, bankQuestionForEntry(selectedEntry)!)) && <button className="solution-link-button" onClick={() => openEntrySolution(selectedEntry)}>Open reusable solution →</button>}</header>
