@@ -1704,33 +1704,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }, [view, viewMemoryReady]);
 
   useEffect(() => {
-    if (!viewMemoryReady || !workspaceUrlHydratedRef.current) return;
-    if (readJourneyReaderState(window.location.href) || readPastReaderState(window.location.href)) return;
-    if (view === "library" && selectedEntry) {
-      window.history.replaceState(
-        { interviewArcPastReader: true, interviewArcPastDepth: 0 },
-        "",
-        pastReaderHref(window.location.href, selectedEntry.id),
-      );
-      if (!pastReaderOrderIds.length) {
-        const frame = window.requestAnimationFrame(() => {
-          setPastReaderOrderIds(libraryEntries.map((entry) => entry.id));
-        });
-        return () => window.cancelAnimationFrame(frame);
-      }
-      return;
-    }
-    const routeView = routeViewFor(view);
-    if (readWorkspaceRouteView(window.location.href) !== routeView) {
-      window.history.replaceState(
-        { interviewArcWorkspaceView: routeView },
-        "",
-        workspaceViewHref(window.location.href, routeView),
-      );
-    }
-  }, [libraryEntries, pastReaderOrderIds.length, selectedEntry, view, viewMemoryReady]);
-
-  useEffect(() => {
     const memory: WorkspaceUiMemory = {
       libraryTypeFilters,
       libraryAttentionFilters,
@@ -3720,6 +3693,33 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     () => logEntries.filter((entry) => entry.status === "completed" || entry.status === "published"),
     [logEntries],
   );
+
+  useEffect(() => {
+    if (!viewMemoryReady || !workspaceUrlHydratedRef.current) return;
+    if (readJourneyReaderState(window.location.href) || readPastReaderState(window.location.href)) return;
+    if (view === "library" && selectedEntry) {
+      window.history.replaceState(
+        { interviewArcPastReader: true, interviewArcPastDepth: 0 },
+        "",
+        pastReaderHref(window.location.href, selectedEntry.id),
+      );
+      if (!pastReaderOrderIds.length) {
+        const frame = window.requestAnimationFrame(() => {
+          setPastReaderOrderIds(libraryEntries.map((entry) => entry.id));
+        });
+        return () => window.cancelAnimationFrame(frame);
+      }
+      return;
+    }
+    const routeView = routeViewFor(view);
+    if (readWorkspaceRouteView(window.location.href) !== routeView) {
+      window.history.replaceState(
+        { interviewArcWorkspaceView: routeView },
+        "",
+        workspaceViewHref(window.location.href, routeView),
+      );
+    }
+  }, [libraryEntries, pastReaderOrderIds.length, selectedEntry, view, viewMemoryReady]);
 
   useEffect(() => {
     if (selectedEntry) {

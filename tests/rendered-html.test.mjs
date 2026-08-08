@@ -312,6 +312,11 @@ test("the shared practice reader closes deterministically and preserves its orig
   assert.match(client, /pastReaderHref\(window\.location\.href, entry\.id\)/);
   assert.match(client, /filteredPastEntries/);
   assert.match(client, /pendingSelectedRevealRef\.current = "library"/);
+  assert.ok(
+    client.indexOf("const libraryEntries = useMemo")
+      < client.indexOf("if (!viewMemoryReady || !workspaceUrlHydratedRef.current)"),
+    "URL synchronization must not read the Past projection before initialization",
+  );
   assert.match(closeReader, /setSelectedEntry\(null\)[\s\S]*setView\("journey"\)[\s\S]*window\.history\.go\(-depth\)/);
   assert.match(closeReader, /interviewArcJourneyScrollY/);
   assert.match(closeReader, /pendingListRestoreRef\.current = \{ surface: "library"/);
