@@ -23,7 +23,12 @@ Read only the guide chain that owns the request:
 | System design | `practice/system-design/AGENTS.md` |
 | Behavioral | `practice/behavioral/AGENTS.md` |
 
-Keep shared schemas/contracts in `docs/contracts/`. Do not duplicate
+Keep shared schemas/contracts in `docs/contracts/`. When changing any agent
+guide, preserve every required behavior while making the smallest clear edit:
+extend the existing related rule instead of restating it, remove duplicate
+narrative, and re-read the affected guide chain to catch omissions or
+contradictions. Put shared behavior at the narrowest shared scope and keep
+specialist-only behavior only in that specialist's guide; never duplicate
 specialist runtime instructions at the repository root.
 
 The user may keep every specialist as a long-lived Codex task inside the same
