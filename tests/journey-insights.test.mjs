@@ -1,6 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { averageEffortBreakdown, journeyHrefWithoutReader, journeyReaderHref, readJourneyReaderState, uniqueJourneyEntries } from "../app/journey-insights.ts";
+import {
+  averageEffortBreakdown,
+  journeyHrefWithoutReader,
+  journeyReaderHref,
+  pastReaderHref,
+  readerClosePlan,
+  readJourneyReaderState,
+  readPastReaderState,
+  readWorkspaceRouteView,
+  uniqueJourneyEntries,
+  workspaceViewHref,
+} from "../app/journey-insights.ts";
 
 const entries = [
   { id: "hard", questionId: "q-hard", date: "2026-08-07", type: "leetcode", title: "Hard", elapsedSeconds: 600 },
@@ -33,4 +44,38 @@ test("Journey attempt URLs round-trip state and can return to Journey", () => {
 test("Malformed Journey reader URLs fail closed", () => {
   assert.equal(readJourneyReaderState("https://example.test/?view=journey&attempt=x&range=garbage"), null);
   assert.equal(readJourneyReaderState("https://example.test/?view=journey&attempt=x&day=yesterday"), null);
+});
+
+test("Past attempt URLs round-trip stable selection without Journey-only state", () => {
+  const href = pastReaderHref("https://example.test/practice?keep=yes&range=30&topic=Graphs", "activity/one");
+  assert.deepEqual(readPastReaderState(`https://example.test${href}`), { attemptId: "activity/one" });
+  assert.equal(readJourneyReaderState(`https://example.test${href}`), null);
+  assert.match(href, /view=past/);
+  assert.match(href, /attempt=activity%2Fone/);
+  assert.match(href, /keep=yes/);
+  assert.doesNotMatch(href, /range=|topic=/);
+});
+
+test("Workspace routes keep every primary surface visible in the URL and clear stale reader state", () => {
+  const href = workspaceViewHref("https://example.test/practice?keep=yes&view=journey&attempt=old&range=30", "past");
+  assert.equal(readWorkspaceRouteView(`https://example.test${href}`), "past");
+  assert.match(href, /keep=yes/);
+  assert.doesNotMatch(href, /attempt=|range=/);
+  assert.equal(readPastReaderState("https://example.test/?view=past&attempt=%20"), null);
+  assert.equal(readWorkspaceRouteView("https://example.test/?view=unknown"), null);
+});
+
+test("reader close plans deterministically return Journey and Past readers to their origin routes", () => {
+  const journeyReader = "https://example.test/practice?keep=yes&view=journey&attempt=activity%2Fone&range=30&metric=time&heatmap=leetcode&day=2026-08-07&topic=Graphs#reader";
+  assert.deepEqual(readerClosePlan(journeyReader), {
+    view: "journey",
+    href: "/practice?keep=yes&view=journey#reader",
+  });
+
+  const pastReader = "https://example.test/practice?keep=yes&view=past&attempt=activity%2Fone&range=30#reader";
+  assert.deepEqual(readerClosePlan(pastReader), {
+    view: "past",
+    href: "/practice?keep=yes&view=past#reader",
+  });
+  assert.equal(readerClosePlan("https://example.test/practice?view=today"), null);
 });

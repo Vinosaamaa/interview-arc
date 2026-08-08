@@ -32,6 +32,23 @@ export type JourneyReaderState = {
   topic: string;
 };
 
+export type PastReaderState = {
+  attemptId: string;
+};
+
+export type WorkspaceRouteView = "today" | "journey" | "past" | "banks";
+
+export type ReaderClosePlan = {
+  view: "journey" | "past";
+  href: string;
+};
+
+const READER_QUERY_KEYS = ["attempt", "range", "metric", "heatmap", "day", "topic"] as const;
+
+function clearReaderQuery(url: URL) {
+  READER_QUERY_KEYS.forEach((key) => url.searchParams.delete(key));
+}
+
 function identity(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
@@ -119,7 +136,44 @@ export function readJourneyReaderState(currentHref: string): JourneyReaderState 
 
 export function journeyHrefWithoutReader(currentHref: string) {
   const url = new URL(currentHref);
-  ["attempt", "range", "metric", "heatmap", "day", "topic"].forEach((key) => url.searchParams.delete(key));
+  clearReaderQuery(url);
   url.searchParams.set("view", "journey");
   return `${url.pathname}${url.search}${url.hash}`;
+}
+
+export function pastReaderHref(currentHref: string, attemptId: string) {
+  const url = new URL(currentHref);
+  url.searchParams.set("view", "past");
+  url.searchParams.set("attempt", attemptId);
+  READER_QUERY_KEYS.filter((key) => key !== "attempt").forEach((key) => url.searchParams.delete(key));
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+export function readPastReaderState(currentHref: string): PastReaderState | null {
+  const url = new URL(currentHref);
+  if (url.searchParams.get("view") !== "past") return null;
+  const attemptId = url.searchParams.get("attempt")?.trim() ?? "";
+  return attemptId ? { attemptId } : null;
+}
+
+export function workspaceViewHref(currentHref: string, view: WorkspaceRouteView) {
+  const url = new URL(currentHref);
+  clearReaderQuery(url);
+  url.searchParams.set("view", view);
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+export function readerClosePlan(currentHref: string): ReaderClosePlan | null {
+  if (readJourneyReaderState(currentHref)) {
+    return { view: "journey", href: journeyHrefWithoutReader(currentHref) };
+  }
+  if (readPastReaderState(currentHref)) {
+    return { view: "past", href: workspaceViewHref(currentHref, "past") };
+  }
+  return null;
+}
+
+export function readWorkspaceRouteView(currentHref: string): WorkspaceRouteView | null {
+  const view = new URL(currentHref).searchParams.get("view");
+  return view === "today" || view === "journey" || view === "past" || view === "banks" ? view : null;
 }
