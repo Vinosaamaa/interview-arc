@@ -32,6 +32,12 @@ export type JourneyReaderState = {
   topic: string;
 };
 
+export type PastReaderState = {
+  attemptId: string;
+};
+
+export type WorkspaceRouteView = "today" | "journey" | "past" | "banks";
+
 function identity(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
@@ -122,4 +128,31 @@ export function journeyHrefWithoutReader(currentHref: string) {
   ["attempt", "range", "metric", "heatmap", "day", "topic"].forEach((key) => url.searchParams.delete(key));
   url.searchParams.set("view", "journey");
   return `${url.pathname}${url.search}${url.hash}`;
+}
+
+export function pastReaderHref(currentHref: string, attemptId: string) {
+  const url = new URL(currentHref);
+  url.searchParams.set("view", "past");
+  url.searchParams.set("attempt", attemptId);
+  ["range", "metric", "heatmap", "day", "topic"].forEach((key) => url.searchParams.delete(key));
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+export function readPastReaderState(currentHref: string): PastReaderState | null {
+  const url = new URL(currentHref);
+  if (url.searchParams.get("view") !== "past") return null;
+  const attemptId = url.searchParams.get("attempt")?.trim() ?? "";
+  return attemptId ? { attemptId } : null;
+}
+
+export function workspaceViewHref(currentHref: string, view: WorkspaceRouteView) {
+  const url = new URL(currentHref);
+  ["attempt", "range", "metric", "heatmap", "day", "topic"].forEach((key) => url.searchParams.delete(key));
+  url.searchParams.set("view", view);
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+export function readWorkspaceRouteView(currentHref: string): WorkspaceRouteView | null {
+  const view = new URL(currentHref).searchParams.get("view");
+  return view === "today" || view === "journey" || view === "past" || view === "banks" ? view : null;
 }

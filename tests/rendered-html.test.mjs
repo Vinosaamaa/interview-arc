@@ -302,6 +302,27 @@ test("activity selection motion stays localized to changed composer content", as
   assert.match(css, /@keyframes selectionConfirm/);
 });
 
+test("the shared practice reader closes deterministically and preserves its origin", async () => {
+  const client = await readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8");
+  const closeReader = client.slice(
+    client.indexOf("function closeReaderPanel()"),
+    client.indexOf("function renderCaseReader()"),
+  );
+
+  assert.match(client, /pastReaderHref\(window\.location\.href, entry\.id\)/);
+  assert.match(client, /filteredPastEntries/);
+  assert.match(client, /pendingSelectedRevealRef\.current = "library"/);
+  assert.ok(
+    client.indexOf("const libraryEntries = useMemo")
+      < client.indexOf("if (!viewMemoryReady || !workspaceUrlHydratedRef.current)"),
+    "URL synchronization must not read the Past projection before initialization",
+  );
+  assert.match(closeReader, /setSelectedEntry\(null\)[\s\S]*setView\("journey"\)[\s\S]*window\.history\.go\(-depth\)/);
+  assert.match(closeReader, /interviewArcJourneyScrollY/);
+  assert.match(closeReader, /pendingListRestoreRef\.current = \{ surface: "library"/);
+  assert.match(client, /restorePageScroll\(window\.history\.state\?\.interviewArcJourneyScrollY\)/);
+});
+
 test("activity composer keeps specialty controls independent and contains every footer and card label", async () => {
   const [client, css] = await Promise.all([
     readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8"),
