@@ -5,6 +5,7 @@ import {
   journeyHrefWithoutReader,
   journeyReaderHref,
   pastReaderHref,
+  readerClosePlan,
   readJourneyReaderState,
   readPastReaderState,
   readWorkspaceRouteView,
@@ -62,4 +63,19 @@ test("Workspace routes keep every primary surface visible in the URL and clear s
   assert.doesNotMatch(href, /attempt=|range=/);
   assert.equal(readPastReaderState("https://example.test/?view=past&attempt=%20"), null);
   assert.equal(readWorkspaceRouteView("https://example.test/?view=unknown"), null);
+});
+
+test("reader close plans deterministically return Journey and Past readers to their origin routes", () => {
+  const journeyReader = "https://example.test/practice?keep=yes&view=journey&attempt=activity%2Fone&range=30&metric=time&heatmap=leetcode&day=2026-08-07&topic=Graphs#reader";
+  assert.deepEqual(readerClosePlan(journeyReader), {
+    view: "journey",
+    href: "/practice?keep=yes&view=journey#reader",
+  });
+
+  const pastReader = "https://example.test/practice?keep=yes&view=past&attempt=activity%2Fone&range=30#reader";
+  assert.deepEqual(readerClosePlan(pastReader), {
+    view: "past",
+    href: "/practice?keep=yes&view=past#reader",
+  });
+  assert.equal(readerClosePlan("https://example.test/practice?view=today"), null);
 });

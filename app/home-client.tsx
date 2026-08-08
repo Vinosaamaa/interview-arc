@@ -52,6 +52,7 @@ import {
   journeyHrefWithoutReader,
   journeyReaderHref,
   pastReaderHref,
+  readerClosePlan,
   readJourneyReaderState,
   readPastReaderState,
   readWorkspaceRouteView,
@@ -5340,7 +5341,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function closeReaderPanel() {
-    if (view === "library" && !libraryNestedProblem && readJourneyReaderState(window.location.href)) {
+    const closePlan = readerClosePlan(window.location.href);
+    if (view === "library" && !libraryNestedProblem && closePlan?.view === "journey") {
       window.sessionStorage.removeItem("interview-arc-selected-past");
       const depth = Number(window.history.state?.interviewArcJourneyDepth ?? 0);
       const scrollY = window.history.state?.interviewArcJourneyScrollY;
@@ -5360,12 +5362,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             interviewArcJourneyScrollY: scrollY,
           },
           "",
-          journeyHrefWithoutReader(window.location.href),
+          closePlan.href,
         );
       }
       return;
     }
-    if (view === "library" && !libraryNestedProblem && readPastReaderState(window.location.href)) {
+    if (view === "library" && !libraryNestedProblem && closePlan?.view === "past") {
       window.sessionStorage.removeItem("interview-arc-selected-past");
       const depth = Number(window.history.state?.interviewArcPastDepth ?? 0);
       const position = listPositionMemoryRef.current.library.main;
@@ -5381,7 +5383,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         window.history.replaceState(
           { interviewArcWorkspaceView: "past", interviewArcPastDepth: 0 },
           "",
-          workspaceViewHref(window.location.href, "past"),
+          closePlan.href,
         );
       }
       return;
