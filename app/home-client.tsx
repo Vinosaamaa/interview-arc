@@ -47,6 +47,9 @@ import { emptyJournal } from "./current-day";
 import { ArrivalRitual, PetalField } from "./arrival-ritual";
 import { useAmbientSound } from "./ambient-sound";
 import { MusicPlaylist } from "./music-playlist";
+import { averageEffortBreakdown, journeyHrefWithoutReader, journeyReaderHref, readJourneyReaderState, uniqueJourneyEntries } from "./journey-insights";
+import { readMasterPanePreference, writeMasterPanePreference } from "./ui-preferences";
+import { effectiveProfileTags, isReusableSolutionProfile } from "./solution-profile-policy";
 import {
   formatPracticeTimerTimestamp,
   formatPracticeTimestamp,
@@ -88,6 +91,13 @@ type HighlightColor = "yellow" | "green" | "pink";
 type HighlightNote = { id: string; highlightId: string; body: string; createdAt: number; updatedAt: number };
 type ContentHighlight = { id: string; scopeType: "activity" | "solution"; scopeId: string; quote: string; prefix: string; suffix: string; color: HighlightColor; note: string; notes: HighlightNote[]; createdAt: number; updatedAt: number };
 type AnnotationPosition = { x: number; y: number; placement: "above" | "below" };
+type ChartTooltipModel = {
+  id: string;
+  title: string;
+  body: string;
+  foot?: string;
+  anchor: { left: number; right: number; top: number; bottom: number; width: number };
+};
 type PendingHighlight = { quote: string; prefix: string; suffix: string; position: AnnotationPosition };
 type ReaderMemory = {
   groups: Record<string, boolean>;
@@ -508,6 +518,40 @@ function Icon({ name }: { name: "close" | "star" | "book" | "sidebar" | "outline
     volume: <><path d="M5 10v4h3l4 4V6L8 10H5Z" /><path d="M16 9c1 1 1 5 0 6M19 7c2 3 2 7 0 10" /></>,
   };
   return <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
+}
+
+function ChartTooltip({ model, onDismiss }: { model: ChartTooltipModel; onDismiss: () => void }) {
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ left: model.anchor.left, top: model.anchor.bottom + 10 });
+  useLayoutEffect(() => {
+    const tooltip = tooltipRef.current;
+    if (!tooltip) return;
+    const margin = 12;
+    const width = tooltip.offsetWidth;
+    const height = tooltip.offsetHeight;
+    const left = Math.min(window.innerWidth - width - margin, Math.max(margin, model.anchor.left + model.anchor.width / 2 - width / 2));
+    const top = model.anchor.top - height - 10 >= margin
+      ? model.anchor.top - height - 10
+      : Math.min(window.innerHeight - height - margin, model.anchor.bottom + 10);
+    setPosition({ left, top });
+  }, [model]);
+  useEffect(() => {
+    const dismissOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onDismiss(); };
+    const dismissOnOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !tooltipRef.current?.contains(event.target)) onDismiss();
+    };
+    window.addEventListener("keydown", dismissOnEscape);
+    window.addEventListener("resize", onDismiss);
+    window.addEventListener("scroll", onDismiss, true);
+    document.addEventListener("pointerdown", dismissOnOutside);
+    return () => {
+      window.removeEventListener("keydown", dismissOnEscape);
+      window.removeEventListener("resize", onDismiss);
+      window.removeEventListener("scroll", onDismiss, true);
+      document.removeEventListener("pointerdown", dismissOnOutside);
+    };
+  }, [onDismiss]);
+  return createPortal(<div className="journey-chart-tooltip" id={model.id} role="tooltip" ref={tooltipRef} style={position}><strong>{model.title}</strong><span>{model.body}</span>{model.foot && <small>{model.foot}</small>}</div>, document.body);
 }
 
 function titleFromUrlPath(url: URL) {
@@ -1365,10 +1409,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [bankNestedEntry, setBankNestedEntry] = useState<LogEntry | null>(null);
   const nestedReaderFocus = (view === "library" && Boolean(libraryNestedProblem))
     || (view === "banks" && Boolean(bankNestedEntry));
-  const [masterPaneState, setMasterPaneState] = useState<MasterPaneState>(() => ({
-    library: typeof window !== "undefined" && window.sessionStorage.getItem("interview-arc-master-pane-library") === "open",
-    banks: typeof window !== "undefined" && window.sessionStorage.getItem("interview-arc-master-pane-banks") === "open",
-  }));
+  const [masterPaneState, setMasterPaneState] = useState<MasterPaneState>({ library: false, banks: false });
   const activeListSurface: ListSurface | null = view === "library" || view === "banks" ? view : null;
   const masterPaneOpen = activeListSurface ? masterPaneState[activeListSurface] : false;
   const setMasterPaneOpen = useCallback((next: boolean | ((current: boolean) => boolean), surface = activeListSurface) => {
@@ -1412,6 +1453,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [journeyHeatmapView, setJourneyHeatmapView] = useState<JourneyHeatmapView>("all");
   const [journeyDate, setJourneyDate] = useState("");
   const [journeyTopic, setJourneyTopic] = useState("");
+  const [journeyReaderOrderIds, setJourneyReaderOrderIds] = useState<string[]>([]);
+  const [journeyReaderNotFound, setJourneyReaderNotFound] = useState("");
+  const [chartTooltip, setChartTooltip] = useState<ChartTooltipModel | null>(null);
+  const journeyUrlHydratedRef = useRef(false);
   const [careerWork, setCareerWork] = useState<CareerWorkPayload | null>(null);
   const [careerLoading, setCareerLoading] = useState(false);
   const [careerLoadingMore, setCareerLoadingMore] = useState(false);
@@ -1534,14 +1579,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         setMasterPaneState({ library: false, banks: false });
         return;
       }
-      setMasterPaneState((current) => ({
-        library: window.sessionStorage.getItem("interview-arc-master-pane-library")
-          ? current.library
-          : !narrow,
-        banks: window.sessionStorage.getItem("interview-arc-master-pane-banks")
-          ? current.banks
-          : !narrow,
-      }));
+      setMasterPaneState({
+        library: readMasterPanePreference(window.localStorage, "library") ?? true,
+        banks: readMasterPanePreference(window.localStorage, "banks") ?? true,
+      });
     };
     const frame = window.requestAnimationFrame(() => synchronizePane());
     query.addEventListener("change", synchronizePane);
@@ -1638,11 +1679,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   useEffect(() => {
     if (viewMemoryReady) window.sessionStorage.setItem("interview-arc-active-view", view);
   }, [view, viewMemoryReady]);
-
-  useEffect(() => {
-    window.sessionStorage.setItem("interview-arc-master-pane-library", masterPaneState.library ? "open" : "closed");
-    window.sessionStorage.setItem("interview-arc-master-pane-banks", masterPaneState.banks ? "open" : "closed");
-  }, [masterPaneState]);
 
   useEffect(() => {
     const memory: WorkspaceUiMemory = {
@@ -2055,7 +2091,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function hasReusableSolution(type: ActivityType, question: QuestionBankItem) {
-    return Boolean(profileFor(type, question.id) || question.solutionProfile);
+    const owner = profileFor(type, question.id)?.payload;
+    const canonical = question.solutionProfile;
+    const effective = owner && canonical
+      ? { ...canonical, ...owner, tags: effectiveProfileTags(canonical, owner) }
+      : owner ?? canonical;
+    return isReusableSolutionProfile(type, effective);
   }
 
   function toggleTimer(activityId: string) {
@@ -2688,13 +2729,45 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     transitionToView("library");
   }
 
+  function openJourneyEntry(entry: LibraryEntry, orderedEntries: LogEntry[] = journeyRangeEntries) {
+    setChartTooltip(null);
+    setJourneyReaderOrderIds(uniqueJourneyEntries(orderedEntries, journeyStartDate, journal.date).map((candidate) => candidate.id));
+    setJourneyReaderNotFound("");
+    const currentJourneyReader = readJourneyReaderState(window.location.href);
+    const currentDepth = currentJourneyReader && Number.isInteger(window.history.state?.interviewArcJourneyDepth)
+      ? window.history.state.interviewArcJourneyDepth as number
+      : 0;
+    if (!currentJourneyReader) window.history.replaceState({ interviewArcJourneyDepth: 0 }, "", journeyHrefWithoutReader(window.location.href));
+    const href = journeyReaderHref(window.location.href, {
+      attemptId: entry.id,
+      range: String(journeyRange) as "30" | "90" | "365" | "all",
+      metric: journeyMetric,
+      heatmap: journeyHeatmapView,
+      day: journeyDate,
+      topic: journeyTopic,
+    });
+    window.history.pushState({ interviewArcJourneyReader: true, interviewArcJourneyDepth: currentDepth + 1 }, "", href);
+    openJournalEntry(entry);
+  }
+
+  function showChartTooltip(target: Element, model: Omit<ChartTooltipModel, "anchor">) {
+    const rect = target.getBoundingClientRect();
+    setChartTooltip({ ...model, anchor: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width } });
+  }
+
   function closeMasterAfterSelection() {
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 1976px)").matches) setMasterPaneOpen(false);
   }
 
   function toggleMasterPane() {
     if (!masterPaneOpen && (view === "library" || view === "banks")) pendingSelectedRevealRef.current = view;
-    setMasterPaneOpen((current) => !current);
+    const surface = activeListSurface;
+    if (!surface) return;
+    setMasterPaneState((current) => {
+      const open = !current[surface];
+      writeMasterPanePreference(window.localStorage, surface, open);
+      return { ...current, [surface]: open };
+    });
   }
 
   function todayBlockedQuestions(excludedActivityIds: string[] = []) {
@@ -3781,10 +3854,20 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   const codingQuestionFor = useCallback((entry: LogEntry) => {
     return content.questionBanks.leetcode.find((question) => (
+      Boolean(entry.questionId && question.id === entry.questionId) ||
       Boolean(question.url && entry.url && question.url.replace(/\/$/, "") === entry.url.replace(/\/$/, "")) ||
       normalizedIdentity(question.title) === normalizedIdentity(entry.title)
     ));
   }, [content.questionBanks.leetcode]);
+
+  const journeyRangeEntries = useMemo(
+    () => uniqueJourneyEntries(completedEntries, journeyStartDate, journal.date),
+    [completedEntries, journal.date, journeyStartDate],
+  );
+  const averageEffort = useMemo(
+    () => averageEffortBreakdown(journeyRangeEntries, content.questionBanks.leetcode, journeyStartDate, journal.date),
+    [content.questionBanks.leetcode, journeyRangeEntries, journal.date, journeyStartDate],
+  );
 
   const topicStats = useMemo(() => {
     const topics = new Map<string, { count: number; entries: LogEntry[] }>();
@@ -3819,6 +3902,56 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     ? draft.historyFocusBlocks.filter((block) => block.date === journeyDate)
     : [];
   const selectedTopicEntries = topicStats.find((topic) => topic.topic === journeyTopic)?.entries ?? [];
+
+  useEffect(() => {
+    const restoreJourneyLocation = () => {
+      const state = readJourneyReaderState(window.location.href);
+      if (!state) {
+        if (new URL(window.location.href).searchParams.get("view") === "journey") {
+          window.sessionStorage.removeItem("interview-arc-selected-past");
+          setSelectedEntry(null);
+          setJourneyReaderOrderIds([]);
+          setView("journey");
+        }
+        return;
+      }
+      const range = state.range === "all" ? "all" : Number(state.range) as JourneyRange;
+      const start = range === "all"
+        ? libraryEntries.reduce((earliest, entry) => entry.date < earliest ? entry.date : earliest, journal.date)
+        : shiftDate(journal.date, -(range - 1));
+      const inRange = uniqueJourneyEntries(libraryEntries, start, journal.date);
+      const ordered = state.day
+        ? inRange.filter((entry) => entry.date === state.day && (state.heatmap === "all" || state.heatmap === "job_applications" || entry.type === state.heatmap))
+        : state.topic
+          ? inRange.filter((entry) => entry.type === "leetcode" && codingQuestionFor(entry)?.topics.includes(state.topic))
+          : inRange;
+      const candidates = state.day || state.topic ? ordered : inRange;
+      const entry = candidates.find((candidate) => candidate.id === state.attemptId);
+      setJourneyRange(range);
+      setJourneyMetric(state.metric);
+      setJourneyHeatmapView(state.heatmap);
+      setJourneyDate(state.day);
+      setJourneyTopic(state.topic);
+      setJourneyReaderOrderIds(candidates.map((candidate) => candidate.id));
+      if (!entry) {
+        window.sessionStorage.removeItem("interview-arc-selected-past");
+        setSelectedEntry(null);
+        setJourneyReaderNotFound(state.attemptId);
+        setView("journey");
+        return;
+      }
+      setJourneyReaderNotFound("");
+      setReaderClosing(false);
+      setSelectedEntry(entry);
+      setView("library");
+    };
+    if (!journeyUrlHydratedRef.current) {
+      journeyUrlHydratedRef.current = true;
+      restoreJourneyLocation();
+    }
+    window.addEventListener("popstate", restoreJourneyLocation);
+    return () => window.removeEventListener("popstate", restoreJourneyLocation);
+  }, [codingQuestionFor, journal.date, libraryEntries]);
   const yesterdayEntries = logEntries.filter((entry) => entry.date === yesterdayDate);
   const yesterdayCompleted = yesterdayEntries.filter((entry) => entry.status === "completed" || entry.status === "published");
   const yesterdaySeconds = yesterdayCompleted.reduce((sum, entry) => sum + entry.elapsedSeconds, 0);
@@ -4020,11 +4153,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const activeDayAverage = activeDates.length ? completedEntries.length / activeDates.length : 0;
     const maxTopicCount = Math.max(1, ...topicStats.map((topic) => topic.count));
     const maxDifficulty = Math.max(1, difficultyStats.easy, difficultyStats.medium, difficultyStats.hard, difficultyStats.unknown);
-    const effortEntries = completedEntries.filter((entry) => entry.type === "leetcode" && entry.outcome && entry.elapsedSeconds > 0);
+    const effortEntries = journeyRangeEntries.filter((entry) => entry.type === "leetcode" && entry.outcome && entry.elapsedSeconds > 0);
     const maxEffortMinutes = Math.max(1, ...effortEntries.map((entry) => entry.elapsedSeconds / 60));
     return (
       <section className="view-page journey-page">
         <header className="view-masthead journey-masthead"><span className="eyebrow">JOURNEY · PUBLISHED + TODAY&apos;S LIVE RECORD</span><h1>Your practice,<br /><em>mapped over time.</em></h1><p>This page counts only recorded work. Explore consistency, outcomes, topic coverage, effort, and the exact days behind every trend.</p></header>
+        {journeyReaderNotFound && <div className="journey-reader-not-found" role="alert"><strong>That practice record is unavailable.</strong><span>The saved Journey link points to <code>{journeyReaderNotFound}</code>, which is not present in the current authoritative record.</span></div>}
         <div className="stat-ledger">
           <article className="stat-block coding-stat"><span>Coding solved</span><strong>{codingSolved}</strong><small>{codingFailed} failed attempt{codingFailed === 1 ? "" : "s"}</small></article>
           <article className="stat-block system-stat"><span>System designs</span><strong>{systemCompleted}</strong><small>completed or published</small></article>
@@ -4040,6 +4174,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           <article className={momentumDelta >= 0 ? "positive" : "negative"}><span>7-day momentum</span><strong>{momentumDelta > 0 ? "+" : ""}{momentumDelta}%</strong><small>{recentSeven} now · {priorSeven} prior</small></article>
         </div>
 
+        <section className="chart-sheet average-effort-sheet" aria-labelledby="average-effort-title">
+          <div className="chart-heading"><div><span className="eyebrow">AVERAGE EFFORT</span><h2 id="average-effort-title">Time per completed activity</h2><p>{readableDate(journeyStartDate, true)} through {readableDate(journal.date, true)} · positive authoritative timers only</p></div></div>
+          <div className="average-effort-grid">{averageEffort.map((bucket) => <article key={bucket.key}><span>{bucket.label}</span><strong>{bucket.averageSeconds === null ? "—" : formatDuration(bucket.averageSeconds)}</strong><small>{bucket.count ? `${bucket.count} activit${bucket.count === 1 ? "y" : "ies"} · ${formatDuration(bucket.totalSeconds)} total` : "No recorded activities"}</small></article>)}</div>
+        </section>
+
         <article className={`chart-sheet heatmap-sheet ${journeyHeatmapView === "job_applications" ? "career-map" : ""}`}>
           <div className="chart-heading"><div><span className="eyebrow">365-DAY JOURNEY MAP</span><h2>{journeyHeatmapView === "job_applications" ? "Career focus at a glance" : "Consistency at a glance"}</h2><p>{journeyHeatmapView === "job_applications" ? "Color measures elapsed job-application focus time, split correctly at Pacific midnight." : "Color measures finished coding and mock-interview work. Failed attempts remain visible without inflating the shade."}</p></div><div className="heatmap-legend"><span>Less</span>{Array.from({ length: journeyHeatmapView === "job_applications" ? 6 : 5 }, (_, level) => <i className={`level-${level}`} key={level} />)}<span>More</span></div></div>
           <div className="heatmap-view-selector" role="group" aria-label="Journey map category">{([
@@ -4054,19 +4193,26 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             <div className="practice-heatmap" role="grid" aria-label="Completed practice during the last 365 days">
               {displayedHeatmapDays.map((day) => {
                 const level = day.count === 0 ? 0 : Math.min(journeyHeatmapView === "job_applications" ? 5 : 4, day.count);
+                const tooltipId = `heatmap-tooltip-${day.date}`;
+                const tooltipBody = journeyHeatmapView === "job_applications" ? `${formatDuration(day.seconds)} career focus` : `${day.count} finished · ${day.coding} coding · ${day.system} system · ${day.behavioral} behavioral${day.failed ? ` · ${day.failed} failed` : ""}`;
                 return <button
                   key={day.date}
                   className={`heat-day level-${level} ${journeyDate === day.date ? "selected" : ""}`}
-                  onClick={() => setJourneyDate(day.date)}
+                  onPointerEnter={(event) => showChartTooltip(event.currentTarget, { id: tooltipId, title: readableDate(day.date, true), body: tooltipBody, foot: `${formatDuration(day.seconds)} recorded` })}
+                  onPointerLeave={() => setChartTooltip(null)}
+                  onFocus={(event) => showChartTooltip(event.currentTarget, { id: tooltipId, title: readableDate(day.date, true), body: tooltipBody, foot: `${formatDuration(day.seconds)} recorded` })}
+                  onBlur={() => setChartTooltip(null)}
+                  onClick={(event) => { setJourneyDate(day.date); showChartTooltip(event.currentTarget, { id: tooltipId, title: readableDate(day.date, true), body: tooltipBody, foot: `${formatDuration(day.seconds)} recorded` }); }}
+                  aria-describedby={chartTooltip?.id === tooltipId ? tooltipId : undefined}
                   aria-label={journeyHeatmapView === "job_applications" ? `${readableDate(day.date)}: ${formatDuration(day.seconds)} job application focus` : `${readableDate(day.date)}: ${day.count} finished activities`}
-                ><span role="tooltip"><strong>{readableDate(day.date, true)}</strong>{journeyHeatmapView === "job_applications" ? `${formatDuration(day.seconds)} career focus` : <>{day.count} finished · {day.coding} coding · {day.system} system · {day.behavioral} behavioral{day.failed ? ` · ${day.failed} failed` : ""}</>}<small>{formatDuration(day.seconds)} recorded</small></span></button>;
+                />;
               })}
             </div>
           </div>
           <div className="heatmap-foot"><span>{readableDate(displayedHeatmapDays[0].date, true)}</span><span>Select a square to inspect the day</span><span>{readableDate(journal.date, true)}</span></div>
           {journeyDate && <div className="journey-day-inspector">
             <div><span className="eyebrow">SELECTED DAY</span><h3>{readableDate(journeyDate)}</h3><p>{journeyHeatmapView === "job_applications" ? `${formatDuration(careerWork?.focus.byDate[journeyDate] ?? 0)} of job-application focus.` : selectedJourneyEntries.length ? `${selectedJourneyEntries.length} completed record${selectedJourneyEntries.length === 1 ? "" : "s"}.` : "No completed work was recorded on this day."}</p></div>
-            <div>{journeyHeatmapView === "job_applications" ? selectedFocusBlocks.map((block) => <article className="career-day-record" key={block.id}><span className="career-focus-mark">J</span><i><strong>{block.title}</strong><small>{Math.round(block.plannedSeconds / 60)} planned min{block.note ? ` · ${block.note}` : ""}</small></i></article>) : selectedJourneyEntries.map((entry) => <button key={entry.id} onClick={() => openJournalEntry(entry)}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><i><strong>{entry.title}</strong><small>{typeLabel(entry.type)} · {entry.elapsedSeconds ? formatDuration(entry.elapsedSeconds) : "time not recorded"}</small></i><b>Read →</b></button>)}</div>
+            <div>{journeyHeatmapView === "job_applications" ? selectedFocusBlocks.map((block) => <article className="career-day-record" key={block.id}><span className="career-focus-mark">J</span><i><strong>{block.title}</strong><small>{Math.round(block.plannedSeconds / 60)} planned min{block.note ? ` · ${block.note}` : ""}</small></i></article>) : selectedJourneyEntries.map((entry) => <button key={entry.id} onClick={() => openJourneyEntry(entry, selectedJourneyEntries)}><span className={`type-mark ${entry.type}`}>{typeMark(entry.type)}</span><i><strong>{entry.title}</strong><small>{typeLabel(entry.type)} · {entry.elapsedSeconds ? formatDuration(entry.elapsedSeconds) : "time not recorded"}</small></i><b>Read →</b></button>)}</div>
           </div>}
         </article>
 
@@ -4111,7 +4257,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                 {[50, 101.7, 153.3, 205].map((y) => <line key={y} x1="42" x2="758" y1={y} y2={y} className="plot-rule" />)}
                 <path d={areaPath} fill="url(#journey-area)" />
                 <polyline points={linePoints} className="trend-line" />
-                {plotPoints.filter((point) => point.value > 0).map((point) => <circle key={point.day.date} cx={point.x} cy={point.y} r={journeyDate === point.day.date ? 5.5 : 3.5} className={journeyDate === point.day.date ? "selected" : ""} tabIndex={0} role="button" onClick={() => setJourneyDate(point.day.date)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setJourneyDate(point.day.date); }} aria-label={`${readableDate(point.day.date)}: ${point.value} ${journeyMetric === "time" ? "minutes" : "activities"}`}><title>{readableDate(point.day.date, true)} · {point.value} {journeyMetric === "time" ? "min" : "finished"}</title></circle>)}
+                {plotPoints.filter((point) => point.value > 0).map((point) => { const tooltipId = `trend-tooltip-${point.day.date}`; const show = (target: Element) => showChartTooltip(target, { id: tooltipId, title: readableDate(point.day.date, true), body: `${point.value} ${journeyMetric === "time" ? "recorded minutes" : "finished activities"}` }); return <circle key={point.day.date} cx={point.x} cy={point.y} r={journeyDate === point.day.date ? 5.5 : 3.5} className={journeyDate === point.day.date ? "selected" : ""} tabIndex={0} role="button" onPointerEnter={(event) => show(event.currentTarget)} onPointerLeave={() => setChartTooltip(null)} onFocus={(event) => show(event.currentTarget)} onBlur={() => setChartTooltip(null)} onClick={(event) => { setJourneyDate(point.day.date); show(event.currentTarget); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setJourneyDate(point.day.date); }} aria-describedby={chartTooltip?.id === tooltipId ? tooltipId : undefined} aria-label={`${readableDate(point.day.date)}: ${point.value} ${journeyMetric === "time" ? "minutes" : "activities"}`} />; })}
                 <text x="42" y="228">{readableDate(journeyStartDate, true)}</text><text x="758" y="228" textAnchor="end">{readableDate(journal.date, true)}</text><text x="42" y="43">{metricMax} {journeyMetric === "time" ? "min" : "max"}</text>
               </svg>
             </div>
@@ -4127,7 +4273,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           <article className="chart-sheet topic-sheet">
             <div className="chart-heading"><div><span className="eyebrow">SKILL COVERAGE</span><h2>Topics practiced</h2><p>Select a topic to see the records behind it.</p></div></div>
             {topicStats.length ? <div className="topic-bars">{topicStats.map((topic) => <button key={topic.topic} className={journeyTopic === topic.topic ? "active" : ""} onClick={() => setJourneyTopic((current) => current === topic.topic ? "" : topic.topic)}><span>{topic.topic}</span><i><b style={{ width: `${(topic.count / maxTopicCount) * 100}%` }} /></i><strong>{topic.count}</strong></button>)}</div> : <div className="chart-empty rich-empty"><strong>No topic coverage yet.</strong><span>Finish bank-linked coding problems to build this map.</span></div>}
-            {journeyTopic && <div className="topic-records"><strong>{journeyTopic}</strong>{selectedTopicEntries.map((entry) => <button key={entry.id} onClick={() => openJournalEntry(entry)}>{entry.title}<span>{readableDate(entry.date, true)} →</span></button>)}</div>}
+            {journeyTopic && <div className="topic-records"><strong>{journeyTopic}</strong>{selectedTopicEntries.map((entry) => <button key={entry.id} onClick={() => openJourneyEntry(entry, selectedTopicEntries)}>{entry.title}<span>{readableDate(entry.date, true)} →</span></button>)}</div>}
           </article>
 
           <article className="chart-sheet effort-sheet">
@@ -4138,7 +4284,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
                 const minutes = entry.elapsedSeconds / 60;
                 const y = entry.outcome === "solved" ? 52 : entry.outcome === "solved_after_reviewing_approach" ? 122 : 192;
                 const x = 125 + (minutes / maxEffortMinutes) * 635;
-                return <circle key={entry.id} cx={x} cy={y} r="7" className={entry.outcome} tabIndex={0} role="button" onClick={() => openJournalEntry(entry)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") openJournalEntry(entry); }} aria-label={`${entry.title}, ${Math.round(minutes)} minutes, ${outcomeLabel(entry.outcome)}`}><title>{entry.title} · {Math.round(minutes)} min · {outcomeLabel(entry.outcome)}</title></circle>;
+                const tooltipId = `effort-tooltip-${entry.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+                const show = (target: Element) => showChartTooltip(target, { id: tooltipId, title: entry.title, body: `${Math.round(minutes)} min · ${outcomeLabel(entry.outcome)}`, foot: readableDate(entry.date, true) });
+                return <circle key={entry.id} cx={x} cy={y} r="7" className={entry.outcome} tabIndex={0} role="button" onPointerEnter={(event) => show(event.currentTarget)} onPointerLeave={() => setChartTooltip(null)} onFocus={(event) => show(event.currentTarget)} onBlur={() => setChartTooltip(null)} onClick={(event) => { show(event.currentTarget); openJourneyEntry(entry, effortEntries); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") openJourneyEntry(entry, effortEntries); }} aria-describedby={chartTooltip?.id === tooltipId ? tooltipId : undefined} aria-label={`${entry.title}, ${Math.round(minutes)} minutes, ${outcomeLabel(entry.outcome)}`} />;
               })}
               <text x="125" y="235">0 min</text><text x="760" y="235" textAnchor="end">{Math.ceil(maxEffortMinutes)} min</text>
             </svg> : <div className="chart-empty rich-empty"><strong>Your effort map starts with a finished coding timer.</strong><span>Elapsed time and an outcome are both required; Interview Arc will not infer either.</span></div>}
@@ -4595,6 +4743,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     : view === "banks"
       ? bankNestedEntry
       : null;
+  const journeyReaderEntries = journeyReaderOrderIds.flatMap((id) => {
+    const entry = libraryEntries.find((candidate) => candidate.id === id);
+    return entry ? [entry] : [];
+  });
+  const journeyReaderIndex = readerSelectedEntry && readJourneyReaderState(typeof window === "undefined" ? "https://interview-arc.invalid/" : window.location.href)
+    ? journeyReaderEntries.findIndex((entry) => entry.id === readerSelectedEntry.id)
+    : -1;
   const readerSelectedProblem = view === "banks"
     ? bankNestedEntry ? null : selectedProblem
     : view === "library"
@@ -4604,7 +4759,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const canonicalProblemProfile = readerSelectedProblem?.question.solutionProfile;
   const selectedProblemProfile = ownerProblemProfile && canonicalProblemProfile ? {
     ...ownerProblemProfile,
-    tags: [...new Set([...canonicalProblemProfile.tags, ...ownerProblemProfile.tags])],
+    tags: effectiveProfileTags(canonicalProblemProfile, ownerProblemProfile.payload),
     payload: {
       ...canonicalProblemProfile,
       ...ownerProblemProfile.payload,
@@ -4626,6 +4781,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     payload: canonicalProblemProfile,
     updatedAt: 0,
   } : undefined);
+  const selectedProblemProfileReusable = isReusableSolutionProfile(readerSelectedProblem?.type ?? "leetcode", selectedProblemProfile?.payload);
   const selectedProblemAttempts = readerSelectedProblem
     ? libraryEntries.filter((entry) => entry.type === readerSelectedProblem.type && entry.questionId === readerSelectedProblem.question.id)
     : [];
@@ -4639,7 +4795,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const selectedEntryCodeAttempts = readerSelectedEntry?.codeAttempts ?? [];
   const selectedCaseSections = dedupeReaderSections(readerSelectedEntry?.artifact?.sections.filter((section) => !(selectedEntryTurns.length && isTranscriptSection(section.title))) ?? []);
   const selectedCaseGroups = groupReaderSections(selectedCaseSections);
-  const selectedSolutionGroups = groupReaderSections(selectedProblemProfile?.payload.sections ?? []);
+  const selectedSolutionGroups = groupReaderSections(selectedProblemProfileReusable ? selectedProblemProfile?.payload.sections ?? [] : []);
   const highlightScope = readerSelectedEntry
     ? { scopeType: "activity" as const, scopeId: selectedEntryActivityId || readerSelectedEntry.id }
     : readerSelectedProblem
@@ -5017,6 +5173,18 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function closeReaderPanel() {
+    if (view === "library" && !libraryNestedProblem && readJourneyReaderState(window.location.href)) {
+      window.sessionStorage.removeItem("interview-arc-selected-past");
+      const depth = Number(window.history.state?.interviewArcJourneyDepth ?? 0);
+      if (window.history.state?.interviewArcJourneyReader && depth > 0) window.history.go(-depth);
+      else {
+        window.history.replaceState({}, "", journeyHrefWithoutReader(window.location.href));
+        setSelectedEntry(null);
+        setJourneyReaderOrderIds([]);
+        setView("journey");
+      }
+      return;
+    }
     if (readerCloseTimerRef.current !== null) window.clearTimeout(readerCloseTimerRef.current);
     const finishClose = () => {
       if (view === "library" && libraryNestedProblem) {
@@ -5064,7 +5232,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       <article className={`workspace-reader journal-case-reader ${nestedReaderFocus ? "nested-reader" : ""}`} aria-labelledby="journal-reader-title" aria-label="Case file contents">
         <div className="reader-chrome">
           <div className="reader-chrome-leading">{!nestedReaderFocus && <button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button>}<ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</ReaderOutline></div>
-          <div className="reader-chrome-actions"><button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close case file" title="Close"><Icon name="close" /></button></div>
+          <div className="reader-chrome-actions">{journeyReaderIndex >= 0 && <div className="reader-attempt-navigation" aria-label="Journey practice records"><button type="button" onClick={() => openJourneyEntry(journeyReaderEntries[journeyReaderIndex - 1], journeyReaderEntries)} disabled={journeyReaderIndex <= 0} aria-label="Previous Journey record" title={journeyReaderIndex <= 0 ? "First record in this Journey view" : "Previous Journey record"}>←</button><span>{journeyReaderIndex + 1} / {journeyReaderEntries.length}</span><button type="button" onClick={() => openJourneyEntry(journeyReaderEntries[journeyReaderIndex + 1], journeyReaderEntries)} disabled={journeyReaderIndex >= journeyReaderEntries.length - 1} aria-label="Next Journey record" title={journeyReaderIndex >= journeyReaderEntries.length - 1 ? "Last record in this Journey view" : "Next Journey record"}>→</button></div>}<button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close case file" title="Close"><Icon name="close" /></button></div>
         </div>
         <div className="case-document workspace-reader-scroll" ref={readerDocumentRef} onScroll={rememberReaderPosition} onMouseUp={(event) => captureHighlightSelection(event.clientX, event.clientY)} onKeyUp={() => captureHighlightSelection()}>
           <header id="case-summary"><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time></div><div className="case-title-row"><h2 id="journal-reader-title">{selectedEntry.title}</h2><div className="case-title-actions"><button className={`star-control ${isStarred(selectedEntry.type, selectedEntry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedEntry.type, selectedEntry.questionId)} disabled={!selectedEntry.questionId} aria-label={`${isStarred(selectedEntry.type, selectedEntry.questionId) ? "Unstar" : "Star"} ${selectedEntry.title}`} title="Star this problem"><Icon name="star" /></button><button className="icon-action note-add" onClick={() => openNoteComposer()} disabled={!selectedEntryActivityId} aria-label="Add a note" title="Add a note"><Icon name="note" /><i><Icon name="plus" /></i></button></div></div>{meaningfulSubtitle(selectedEntry.subtitle) && <p>{meaningfulSubtitle(selectedEntry.subtitle)}</p>}{Boolean(bankQuestionForEntry(selectedEntry) && hasReusableSolution(selectedEntry.type, bankQuestionForEntry(selectedEntry)!)) && <button className="solution-link-button" onClick={() => openEntrySolution(selectedEntry)}>Open reusable solution →</button>}</header>
@@ -5093,13 +5261,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       <article className={`workspace-reader knowledge-reader ${nestedReaderFocus ? "nested-reader" : ""}`} aria-labelledby="solution-profile-title">
         <div className="reader-chrome"><div className="reader-chrome-leading">{!nestedReaderFocus && <button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button>}<ReaderOutline><a href="#solution-profile-summary">Overview</a>{selectedSolutionGroups.map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#solution-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#solution-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}<a href="#solution-attempts">Past attempts</a></ReaderOutline></div><div className="reader-chrome-actions"><button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close solution profile" title="Close"><Icon name="close" /></button></div></div>
         <div className="case-document solution-profile-document workspace-reader-scroll" ref={readerDocumentRef} onScroll={rememberReaderPosition} onMouseUp={(event) => captureHighlightSelection(event.clientX, event.clientY)} onKeyUp={() => captureHighlightSelection()}>
-          <header id="solution-profile-summary"><div><span className={`type-chip ${selectedProblem.type}`}>{typeLabel(selectedProblem.type)}</span><span className="profile-revision">{selectedProblemProfile ? `Solution revision ${selectedProblemProfile.currentRevision}` : "No solution yet"}</span><button className={`star-control ${isStarred(selectedProblem.type, selectedProblem.question.id) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedProblem.type, selectedProblem.question.id)} aria-label={`${isStarred(selectedProblem.type, selectedProblem.question.id) ? "Unstar" : "Star"} ${selectedProblem.question.title}`}><Icon name="star" /></button></div><h2 id="solution-profile-title">{selectedProblem.question.title}</h2><p>{selectedProblemProfile?.payload.summary ?? selectedProblem.question.prompt ?? "Finish and finalize an attempt to build this reusable Solution Profile."}</p></header>
-          <div className="profile-tags">{[...new Set([...selectedProblem.question.topics, ...(selectedProblem.question.tags ?? []), ...(selectedProblemProfile?.tags ?? [])])].map((tag) => <span key={tag}>{tag}</span>)}</div>
-          {selectedProblemProfile?.payload.behavioralAnswer && <section className="canonical-answer-card"><span className="eyebrow">YOUR PREFERRED ANSWER</span><h3>{selectedProblemProfile.payload.behavioralAnswer.preferred.label}</h3><MarkdownBody source={selectedProblemProfile.payload.behavioralAnswer.preferred.answer} />{selectedProblemProfile.payload.behavioralAnswer.preferred.evidence.length > 0 && <div className="answer-evidence"><strong>Verified evidence</strong><ul>{selectedProblemProfile.payload.behavioralAnswer.preferred.evidence.map((item) => <li key={item}>{item}</li>)}</ul></div>}{selectedProblemProfile.payload.behavioralAnswer.preferred.evidenceGaps.length > 0 && <div className="answer-gaps"><strong>Evidence still needed</strong><ul>{selectedProblemProfile.payload.behavioralAnswer.preferred.evidenceGaps.map((item) => <li key={item}>{item}</li>)}</ul></div>}{selectedProblemProfile.payload.behavioralAnswer.alternatives.length > 0 && <details className="answer-alternatives"><summary>{selectedProblemProfile.payload.behavioralAnswer.alternatives.length} alternative story {selectedProblemProfile.payload.behavioralAnswer.alternatives.length === 1 ? "variant" : "variants"}</summary>{selectedProblemProfile.payload.behavioralAnswer.alternatives.map((variant) => <article key={variant.label}><h4>{variant.label}</h4>{variant.whenToUse && <small>Best when: {variant.whenToUse}</small>}<MarkdownBody source={variant.answer} /></article>)}</details>}</section>}
-          {selectedProblemProfile ? <div className="letter-sections solution-sections layered-reader">{selectedSolutionGroups.map((group) => { const groupId = `solution-group-${group.key}`; return <SolutionReaderGroup group={group} idPrefix="solution" coding={selectedProblem.type === "leetcode"} open={readerGroupOpen(groupId, group.key !== "conversation")} onToggle={(open) => rememberReaderGroup(groupId, open)} key={group.key} />; })}</div> : <div className="unpublished-letter"><span className="eyebrow">KNOWLEDGE PROFILE</span><h3>This problem has no finalized solution yet.</h3><p>The matching specialist creates it when a completed attempt is finalized. Past keeps the transcript; this reader keeps the reusable answer.</p></div>}
+          <header id="solution-profile-summary"><div><span className={`type-chip ${selectedProblem.type}`}>{typeLabel(selectedProblem.type)}</span><span className="profile-revision">{selectedProblemProfileReusable ? `Solution revision ${selectedProblemProfile!.currentRevision}` : selectedProblemProfile ? "Solution incomplete" : "No solution yet"}</span><button className={`star-control ${isStarred(selectedProblem.type, selectedProblem.question.id) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedProblem.type, selectedProblem.question.id)} aria-label={`${isStarred(selectedProblem.type, selectedProblem.question.id) ? "Unstar" : "Star"} ${selectedProblem.question.title}`}><Icon name="star" /></button></div><h2 id="solution-profile-title">{selectedProblem.question.title}</h2><p>{selectedProblemProfileReusable ? selectedProblemProfile!.payload.summary : selectedProblem.question.prompt ?? "Finish and finalize an attempt to build this reusable Solution Profile."}</p></header>
+          <div className="profile-tags">{[...new Set([...selectedProblem.question.topics, ...(selectedProblem.question.tags ?? []), ...(selectedProblemProfileReusable ? selectedProblemProfile?.tags ?? [] : [])])].map((tag) => <span key={tag}>{tag}</span>)}</div>
+          {selectedProblemProfileReusable && selectedProblemProfile?.payload.behavioralAnswer && <section className="canonical-answer-card"><span className="eyebrow">YOUR PREFERRED ANSWER</span><h3>{selectedProblemProfile.payload.behavioralAnswer.preferred.label}</h3><MarkdownBody source={selectedProblemProfile.payload.behavioralAnswer.preferred.answer} />{selectedProblemProfile.payload.behavioralAnswer.preferred.evidence.length > 0 && <div className="answer-evidence"><strong>Verified evidence</strong><ul>{selectedProblemProfile.payload.behavioralAnswer.preferred.evidence.map((item) => <li key={item}>{item}</li>)}</ul></div>}{selectedProblemProfile.payload.behavioralAnswer.preferred.evidenceGaps.length > 0 && <div className="answer-gaps"><strong>Evidence still needed</strong><ul>{selectedProblemProfile.payload.behavioralAnswer.preferred.evidenceGaps.map((item) => <li key={item}>{item}</li>)}</ul></div>}{selectedProblemProfile.payload.behavioralAnswer.alternatives.length > 0 && <details className="answer-alternatives"><summary>{selectedProblemProfile.payload.behavioralAnswer.alternatives.length} alternative story {selectedProblemProfile.payload.behavioralAnswer.alternatives.length === 1 ? "variant" : "variants"}</summary>{selectedProblemProfile.payload.behavioralAnswer.alternatives.map((variant) => <article key={variant.label}><h4>{variant.label}</h4>{variant.whenToUse && <small>Best when: {variant.whenToUse}</small>}<MarkdownBody source={variant.answer} /></article>)}</details>}</section>}
+          {selectedProblemProfileReusable ? <div className="letter-sections solution-sections layered-reader">{selectedSolutionGroups.map((group) => { const groupId = `solution-group-${group.key}`; return <SolutionReaderGroup group={group} idPrefix="solution" coding={selectedProblem.type === "leetcode"} open={readerGroupOpen(groupId, group.key !== "conversation")} onToggle={(open) => rememberReaderGroup(groupId, open)} key={group.key} />; })}</div> : <div className="unpublished-letter"><span className="eyebrow">KNOWLEDGE PROFILE</span><h3>{selectedProblemProfile ? "This saved solution is incomplete." : "This problem has no finalized solution yet."}</h3><p>{selectedProblemProfile ? "Interview Arc will not label or open it as reusable until a new validated revision contains the complete reference answer." : "The matching specialist creates it when a completed attempt is finalized. Past keeps the transcript; this reader keeps the reusable answer."}</p></div>}
           <section className="attempt-history" id="solution-attempts"><span className="eyebrow">PAST ATTEMPTS</span>{selectedProblemAttempts.length ? selectedProblemAttempts.map((entry) => <button key={entry.id} onClick={() => openAttemptFromSolution(entry)}><span>{readableDate(entry.date, true)}</span><strong>{resultLabel(entry.outcome, entry.type)}</strong><small>{entry.elapsedSeconds ? formatClock(entry.elapsedSeconds) : "No timer"} · Read case →</small></button>) : <p>No completed attempt is linked yet.</p>}</section>
           {selectedProblemRevisions.length > 1 && <section className="revision-history"><span className="eyebrow">SOLUTION HISTORY</span><p>{selectedProblemRevisions.length} immutable revisions are linked to past attempts. The profile above is the current revision.</p></section>}
-          {selectedProblemProfile?.payload.references.length ? <section className="profile-references"><span className="eyebrow">REFERENCES CONSULTED</span>{selectedProblemProfile.payload.references.map((reference) => <a key={`${reference.url}-${reference.accessedAt}`} href={reference.url} target="_blank" rel="noreferrer">{reference.title} ↗<small>{reference.accessedAt}</small></a>)}</section> : null}
+          {selectedProblemProfileReusable && selectedProblemProfile?.payload.references.length ? <section className="profile-references"><span className="eyebrow">REFERENCES CONSULTED</span>{selectedProblemProfile.payload.references.map((reference) => <a key={`${reference.url}-${reference.accessedAt}`} href={reference.url} target="_blank" rel="noreferrer">{reference.title} ↗<small>{reference.accessedAt}</small></a>)}</section> : null}
           <footer>Interview Arc · {selectedProblem.type}:{selectedProblem.question.id}</footer>
         </div>
         {renderAnnotationPopover()}
@@ -5157,6 +5325,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   return (
     <>
+    {chartTooltip && <ChartTooltip model={chartTooltip} onDismiss={() => setChartTooltip(null)} />}
     <main className="app-shell" aria-hidden={arrivalState !== "entered"}>
       <a className="skip-link" href="#practice-content">Skip to practice</a>
       <aside className="sidebar">

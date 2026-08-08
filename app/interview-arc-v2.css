@@ -881,7 +881,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   font: 500 .82rem/1.65 var(--font-geist-mono);
 }
 .code-attempt-complexity { display: flex; flex-wrap: wrap; gap: 8px 18px; color: #53625b; }
-.code-attempts-group > div { display: grid; gap: 14px; }
+.code-attempts-group > div { padding-top: 16px; display: grid; gap: 14px; }
 .attempt-review {
   margin-top: 18px;
   padding: 16px;
@@ -1268,6 +1268,11 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .reader-chrome-leading,
 .reader-chrome-actions { min-width: 0; display: flex; align-items: center; gap: 6px; }
 .reader-chrome-actions { flex: 0 0 auto; }
+.reader-attempt-navigation { height: 34px; padding: 0 4px; border: 1px solid #c9d7d3; border-radius: 17px; background: #fff; display: flex; align-items: center; gap: 2px; }
+.reader-attempt-navigation button { width: 27px; height: 27px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #315b54; cursor: pointer; }
+.reader-attempt-navigation button:hover:not(:disabled), .reader-attempt-navigation button:focus-visible { background: #e8f1ee; }
+.reader-attempt-navigation button:disabled { color: #aebbb7; cursor: not-allowed; }
+.reader-attempt-navigation span { min-width: 38px; color: #667a75; font: 700 .64rem/1 var(--font-geist-mono); text-align: center; }
 .reader-chrome-actions .icon-action,
 .master-pane-toggle { width: 34px; min-width: 34px; height: 34px; min-height: 34px; border-radius: 50%; }
 .master-pane-toggle { display: none; }

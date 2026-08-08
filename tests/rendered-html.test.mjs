@@ -100,7 +100,9 @@ test("the refined analytics and composer layouts keep their intended grouping", 
     readFile(new URL("../app/interview-arc-v2.css", import.meta.url), "utf8"),
   ]).then((stylesheets) => stylesheets.join("\n"));
   const client = await readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8");
+  const preferences = await readFile(new URL("../app/ui-preferences.ts", import.meta.url), "utf8");
   assert.match(css, /\.journey-detail-grid \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
+  assert.match(css, /@media \(max-width: 1180px\) \{ \.average-effort-grid \{ grid-template-columns: repeat\(4, minmax\(0, 1fr\)\); \} \}/);
   assert.match(css, /\.session-recipe \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(css, /\.minutes-field \{[^}]*display: flex;[^}]*justify-content: space-between/);
   assert.match(css, /\.activity-timer \{[^}]*height: 66px;[^}]*min-height: 66px;[^}]*max-height: 66px;[^}]*grid-template-rows: 34px 14px;/);
@@ -115,8 +117,8 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(css, /width: min\(525px, calc\(100vw - var\(--sidebar-size\) - 32px\)\)/);
   assert.match(client, /bank-master-detail \$\{masterPaneOpen \? "master-pane-open" : ""\}/);
   assert.match(client, /past-master-detail \$\{masterPaneOpen \? "master-pane-open" : ""\}/);
-  assert.match(client, /interview-arc-master-pane-library/);
-  assert.match(client, /interview-arc-master-pane-banks/);
+  assert.match(preferences, /interview-arc-master-pane-library-v1/);
+  assert.match(preferences, /interview-arc-master-pane-banks-v1/);
   assert.match(client, /function openEntrySolution\(entry: LogEntry\)/);
   assert.match(client, /setLibraryNestedProblem\(\{ type: entry\.type, question \}\)/);
   assert.match(client, /function openAttemptFromSolution\(entry: LibraryEntry\)/);

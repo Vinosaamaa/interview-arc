@@ -295,6 +295,9 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .heat-day:hover > span, .heat-day:focus-visible > span { display: block; }
 .heat-day:nth-child(-n+7) > span { left: 0; transform: none; }
 .heat-day:nth-last-child(-n+7) > span { right: 0; left: auto; transform: none; }
+.journey-chart-tooltip { width: min(248px, calc(100vw - 24px)); padding: 11px 12px; border: 1px solid rgba(255,255,255,.12); border-radius: 9px; background: #172019; color: white; display: grid; gap: 3px; position: fixed; z-index: 1000; font-size: .72rem; line-height: 1.45; text-align: left; box-shadow: 0 12px 30px rgba(15,24,17,.28); pointer-events: none; }
+.journey-chart-tooltip strong { color: var(--signal); font-size: .76rem; }
+.journey-chart-tooltip small { color: #bcc5bd; }
 .heatmap-foot { display: flex; justify-content: space-between; gap: 15px; color: var(--muted); font-size: .72rem; }
 .journey-day-inspector { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--line); display: grid; grid-template-columns: 220px 1fr; gap: 24px; }
 .journey-day-inspector h3 { margin: 7px 0 5px; font-family: var(--font-editorial); font-size: 1.55rem; font-weight: 540; }
@@ -314,6 +317,15 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .metric-ring-card p { margin: 0; color: #626d64; font-size: .84rem; line-height: 1.6; }
 .journey-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .trend-sheet, .effort-sheet { grid-column: 1 / -1; }
+.average-effort-sheet { margin-top: 18px; }
+.average-effort-grid { margin-top: 22px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; border: 1px solid var(--line); border-radius: 11px; background: var(--line); overflow: hidden; }
+.average-effort-grid article { min-width: 0; padding: 16px 14px; background: #fbfcf9; display: grid; gap: 6px; }
+.average-effort-grid span { color: #667268; font-size: .69rem; font-weight: 760; }
+.average-effort-grid strong { color: var(--ink); font: 680 1.1rem/1.1 var(--font-geist-mono); }
+.average-effort-grid small { color: var(--muted); font-size: .65rem; line-height: 1.45; }
+@media (max-width: 1180px) { .average-effort-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.journey-reader-not-found { margin: 0 0 18px; padding: 14px 16px; border: 1px solid #d8c9b3; border-radius: 10px; background: #fff9ef; display: grid; gap: 4px; color: #685842; }
+.journey-reader-not-found code { overflow-wrap: anywhere; }
 .outcome-chart, .topic-sheet { min-width: 0; }
 .journey-controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: end; }
 .journey-controls > div { padding: 3px; border-radius: 8px; background: #edf1eb; display: flex; gap: 2px; }
@@ -832,6 +844,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 }
 
 @media (max-width: 900px) {
+  .average-effort-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .app-shell { display: block; }
   .sidebar { position: sticky; width: 100%; height: 68px; padding: 10px 15px; border-right: 0; border-bottom: 1px solid var(--line); flex-direction: row; align-items: center; overflow-x: auto; }
   .brand > span:last-child, .sidebar-status, .profile { display: none; }
