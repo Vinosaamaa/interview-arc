@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, exists, gt, inArray, isNotNull, isNull, lt, notExists, or, sql } from "drizzle-orm";
 import { getDb } from "./index";
+import { solutionProfileMissingRequirements } from "../app/solution-profile-policy";
 import {
   activityDeliveryAnalyses,
   activityAudioClips,
@@ -203,9 +204,9 @@ async function enrichPersonalLeetCodeQuestion(
 }
 
 function validateSolutionProfile(specialty: Specialty, payload: SpecialistFinalization["solutionProfile"]) {
-  if (!payload?.summary.trim() || payload.sections.length === 0) {
-    throw new Error("A complete finalization needs a reusable Solution Profile.");
-  }
+  if (!payload) throw new Error("A complete finalization needs a reusable Solution Profile.");
+  const missing = solutionProfileMissingRequirements(specialty, payload);
+  if (missing.length) throw new Error(`A complete finalization needs a reusable Solution Profile; missing: ${missing.join(", ")}.`);
   if (specialty === "behavioral" && payload.sections.some((section) => TRANSCRIPT_SECTION.test(section.title))) {
     throw new Error("Behavioral Solution Profiles cannot contain a transcript; keep it on the dated Past attempt.");
   }
@@ -2834,6 +2835,7 @@ export async function saveSpecialistFinalization(
         eq(problemSolutionProfiles.questionId, questionId),
       ));
       currentProfile = rows[0];
+      if (currentProfile) validateSolutionProfile(specialty, currentProfile.payload as NonNullable<SpecialistFinalization["solutionProfile"]>);
       if (!currentProfile) {
         const category = specialty === "system_design" ? "systemDesign" : specialty;
         const canonicalRows = await db.select({ payload: contentBank.payload }).from(contentBank).where(and(
@@ -3634,8 +3636,12 @@ export async function readProblemSolutionProfile(ownerId: string, specialty: Spe
         updatedAt: 0,
       }
     : null;
+  const profile = profiles[0] ?? canonicalProfile;
+  const missingRequirements = solutionProfileMissingRequirements(specialty, profile?.payload as SpecialistFinalization["solutionProfile"]);
   return {
-    profile: profiles[0] ?? canonicalProfile,
+    profile,
+    reusable: missingRequirements.length === 0,
+    missingRequirements,
     provisionalProfile: provisionalProfiles[0] ?? null,
     revisions,
   };
