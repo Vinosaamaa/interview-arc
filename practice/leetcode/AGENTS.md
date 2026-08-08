@@ -73,18 +73,12 @@ Use this bounded warm startup:
 2. Resolve `questionId` and load its Solution Profile once.
 3. Run controller `ensure` once and `navigate` once; verify the problem and
    read its exact live Java starter before authoring the detailed source.
-4. Prepare/resume the evolving source, then make its tmux-safe `nvim` command
-   the first visible handoff; do not precede it with setup or status chatter.
-5. Only after that command is visible, start the timer with current
-   revision/workbench identity and one stable mutation ID, then report state.
+4. Prepare/resume the source and send its tmux-safe `nvim` command as the first
+   visible handoff; do not precede it with setup or status chatter.
+5. After that command renders, start the timer with current revision/workbench
+   identity and one stable mutation ID, then report state.
 6. Reserve the harness once and return the prompt/restatement plus Quick/Full
    commands without waiting for helpers or persistence.
-
-This is a two-stage visible protocol, not merely ordering inside one hidden
-tool sequence. Deliver the `nvim` command to the user first. Only after that
-handoff has rendered may the specialist call the timer mutation and continue
-with the remaining preflight. If the command cannot be delivered, leave the
-timer stopped.
 
 Verify the public number, title, canonical URL, slug, and live Java API from the
 bank, user URL, or another permitted public source. Never invent them. Present
