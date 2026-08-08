@@ -685,8 +685,9 @@ test("durable publishing keeps transcripts, review, notes, and four-day walkthro
   assert.match(contract, /`acknowledge_voice_audio_loss`/);
   assert.match(bridge, /voice_delivery_retry:\$\{activityId\}/);
   const durableStore = await readFile(new URL("../db/durable-practice.ts", import.meta.url), "utf8");
-  assert.match(durableStore, /Behavioral Solution Profiles cannot contain a transcript/);
-  assert.match(durableStore, /Behavioral Solution Profiles require .*preferred personal answer/);
+  const profilePolicy = await readFile(new URL("../app/solution-profile-policy.ts", import.meta.url), "utf8");
+  assert.match(profilePolicy, /transcript\|conversation\|raw exchange\|verbatim/);
+  assert.match(profilePolicy, /preferred personal answer/);
   assert.match(durableStore, /contentBank/);
   assert.match(durableStore, /canonicalQuestion\?\.solutionProfile/);
   assert.match(durableStore, /mergePersonalLeetCodeQuestionMetadata/);

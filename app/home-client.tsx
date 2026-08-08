@@ -3925,13 +3925,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         : state.topic
           ? inRange.filter((entry) => entry.type === "leetcode" && codingQuestionFor(entry)?.topics.includes(state.topic))
           : inRange;
-      const entry = libraryEntries.find((candidate) => candidate.id === state.attemptId);
+      const candidates = state.day || state.topic ? ordered : inRange;
+      const entry = candidates.find((candidate) => candidate.id === state.attemptId);
       setJourneyRange(range);
       setJourneyMetric(state.metric);
       setJourneyHeatmapView(state.heatmap);
       setJourneyDate(state.day);
       setJourneyTopic(state.topic);
-      setJourneyReaderOrderIds((ordered.length ? ordered : inRange).map((candidate) => candidate.id));
+      setJourneyReaderOrderIds(candidates.map((candidate) => candidate.id));
       if (!entry) {
         window.sessionStorage.removeItem("interview-arc-selected-past");
         setSelectedEntry(null);

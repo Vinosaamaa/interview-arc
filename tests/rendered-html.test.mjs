@@ -102,6 +102,7 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   const client = await readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8");
   const preferences = await readFile(new URL("../app/ui-preferences.ts", import.meta.url), "utf8");
   assert.match(css, /\.journey-detail-grid \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
+  assert.match(css, /@media \(max-width: 1180px\) \{ \.average-effort-grid \{ grid-template-columns: repeat\(4, minmax\(0, 1fr\)\); \} \}/);
   assert.match(css, /\.session-recipe \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(css, /\.minutes-field \{[^}]*display: flex;[^}]*justify-content: space-between/);
   assert.match(css, /\.activity-timer \{[^}]*height: 66px;[^}]*min-height: 66px;[^}]*max-height: 66px;[^}]*grid-template-rows: 34px 14px;/);

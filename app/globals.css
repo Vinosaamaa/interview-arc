@@ -323,6 +323,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .average-effort-grid span { color: #667268; font-size: .69rem; font-weight: 760; }
 .average-effort-grid strong { color: var(--ink); font: 680 1.1rem/1.1 var(--font-geist-mono); }
 .average-effort-grid small { color: var(--muted); font-size: .65rem; line-height: 1.45; }
+@media (max-width: 1180px) { .average-effort-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .journey-reader-not-found { margin: 0 0 18px; padding: 14px 16px; border: 1px solid #d8c9b3; border-radius: 10px; background: #fff9ef; display: grid; gap: 4px; color: #685842; }
 .journey-reader-not-found code { overflow-wrap: anywhere; }
 .outcome-chart, .topic-sheet { min-width: 0; }

@@ -207,12 +207,6 @@ function validateSolutionProfile(specialty: Specialty, payload: SpecialistFinali
   if (!payload) throw new Error("A complete finalization needs a reusable Solution Profile.");
   const missing = solutionProfileMissingRequirements(specialty, payload);
   if (missing.length) throw new Error(`A complete finalization needs a reusable Solution Profile; missing: ${missing.join(", ")}.`);
-  if (specialty === "behavioral" && payload.sections.some((section) => TRANSCRIPT_SECTION.test(section.title))) {
-    throw new Error("Behavioral Solution Profiles cannot contain a transcript; keep it on the dated Past attempt.");
-  }
-  if (specialty === "behavioral" && !payload.behavioralAnswer?.preferred.answer.trim()) {
-    throw new Error("Behavioral Solution Profiles require the user's polished, evidence-grounded preferred personal answer.");
-  }
 }
 
 function normalizedSolutionProfile(

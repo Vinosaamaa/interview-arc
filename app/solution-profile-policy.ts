@@ -10,13 +10,22 @@ export type SolutionProfileSpecialty = "leetcode" | "system_design" | "behaviora
 
 export function solutionProfileMissingRequirements(specialty: SolutionProfileSpecialty, profile?: SolutionProfileLike | null) {
   if (!profile?.summary.trim() || !profile.sections.length) return ["summary and sections"];
+  if (specialty === "behavioral") {
+    const missing: string[] = [];
+    if (profile.sections.some((section) => /transcript|conversation|raw exchange|verbatim/i.test(section.title))) missing.push("transcript-free sections");
+    if (!profile.behavioralAnswer?.preferred?.answer?.trim()) missing.push("preferred personal answer");
+    return missing;
+  }
   if (specialty !== "leetcode") return [];
   const text = profile.sections.map((section) => `${section.title}\n${section.body}`).join("\n").toLowerCase();
-  const hasCode = /```[a-z0-9_+#.-]*\n[^`]+```/i.test(text);
+  const hasReferenceImplementation = profile.sections.some((section) => (
+    /reference implementation|complete reference|implementation|solution/i.test(section.title)
+    && /```[^\n]*\n[\s\S]+?```/.test(section.body)
+  ));
   const requirements: Array<[string, RegExp, boolean?]> = [
     ["pattern recognition and constraints", /pattern|constraint|problem framing|problem summary/],
     ["best approach", /best approach|approach|algorithm/],
-    ["reference implementation", /reference implementation|complete reference|implementation|solution/, hasCode],
+    ["reference implementation", /reference implementation|complete reference|implementation|solution/, hasReferenceImplementation],
     ["correctness reasoning", /correctness|invariant|proof/],
     ["time and space complexity", /complexity|time[^\n]{0,80}space|space[^\n]{0,80}time/],
     ["edge cases", /edge case/],

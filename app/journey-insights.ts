@@ -56,6 +56,9 @@ export function averageEffortBreakdown(
   through: string,
 ): AverageEffortBucket[] {
   const inRange = uniqueJourneyEntries(entries, from, through).filter((entry) => entry.elapsedSeconds > 0);
+  const byId = new Map(questions.map((question) => [question.id, question]));
+  const byUrl = new Map(questions.flatMap((question) => normalizedUrl(question.url) ? [[normalizedUrl(question.url), question] as const] : []));
+  const byTitle = new Map(questions.map((question) => [identity(question.title), question]));
   const totals = new Map<AverageEffortBucket["key"], { count: number; totalSeconds: number }>();
   const add = (key: AverageEffortBucket["key"], seconds: number) => {
     const current = totals.get(key) ?? { count: 0, totalSeconds: 0 };
@@ -64,11 +67,9 @@ export function averageEffortBreakdown(
   inRange.forEach((entry) => {
     if (entry.type === "leetcode") {
       add("coding", entry.elapsedSeconds);
-      const question = questions.find((candidate) => (
-        Boolean(entry.questionId && candidate.id === entry.questionId)
-        || Boolean(normalizedUrl(entry.url) && normalizedUrl(candidate.url) === normalizedUrl(entry.url))
-        || identity(candidate.title) === identity(entry.title)
-      ));
+      const question = (entry.questionId ? byId.get(entry.questionId) : undefined)
+        ?? (normalizedUrl(entry.url) ? byUrl.get(normalizedUrl(entry.url)) : undefined)
+        ?? byTitle.get(identity(entry.title));
       add(question?.difficulty ?? "unknown", entry.elapsedSeconds);
       return;
     }
