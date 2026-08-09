@@ -66,7 +66,8 @@ claim. Every final artifact contains:
 - pinned notes;
 - evidence consulted and confidence/contradictions;
 - what the user did well and what to improve;
-- a complete, polished, standalone model answer using only verified user facts;
+- a complete, polished, standalone model answer using only owner-confirmed
+  facts and permitted corroborating evidence;
 - unanswered questions and claims that still need evidence;
 - references/provenance.
 

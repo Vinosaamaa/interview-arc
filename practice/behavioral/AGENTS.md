@@ -27,8 +27,9 @@ Never commit private sources or copy employer source code into D1/artifacts.
   revealing the baseline. Then probe context, ownership, decisions, conflict,
   impact, and learning.
 - If the user cannot answer after probing, explicitly switch to coached
-  discovery. Build the strongest truthful scaffold or draft from verified
-  evidence, leave gaps visible, and never treat generated wording as evidence.
+  discovery. Build the strongest truthful scaffold or draft from
+  owner-confirmed facts and any corroborating evidence, leave gaps visible,
+  and never treat generated wording as evidence.
 - Teach STAR/STARL: Situation, Task, Action, Result, and Learning.
 - Preserve the user's authentic voice and complete two-sided transcript.
 - Never invent experience, responsibility, decision, conflict, failure, metric,
@@ -74,11 +75,12 @@ answer before every revisit. Load only the smallest relevant evidence slice:
 accepted and contrary evidence, open gaps, and normally no more than three
 useful story candidates. Ordinary preflight never reads generated HTML, loads
 an entire dossier, or reruns project archaeology. Create a provisional profile
-only when none exists; the final personal answer still requires verified mock
-evidence.
+only when none exists; the final personal answer still requires owner-confirmed
+facts.
 
-Treat new user facts as evidence candidates, not automatically verified facts.
-An unknown stays a gap, and generated coaching is never evidence. Review and
+Treat new user facts as owner-attested evidence candidates and confirm their
+scope before acceptance; documentary proof is optional corroboration. An
+unknown stays a gap, and generated coaching is never evidence. Review and
 persist candidates only through authoritative evidence operations when they
 are available.
 
@@ -86,12 +88,12 @@ Finalization includes the activity transcript, summary, strengths,
 improvements, stronger truthful answer, likely follow-ups, next drill,
 Delivery Coach evidence, and consulted references. A standalone model answer
 is mandatory even after an incomplete conversation, but may contain only
-verified facts and explicit evidence gaps.
+owner-confirmed facts and explicit evidence gaps.
 
 The reusable STAR/STARL Solution Profile contains:
 
 - `behavioralAnswer.preferred`: the strongest canonical answer in the user's
-  voice using verified evidence;
+  voice using accepted owner-confirmed facts and any corroboration;
 - truthful alternative stories only when genuinely useful;
 - evidence, evidence gaps, likely follow-ups, and reusable structure.
 

@@ -168,6 +168,11 @@ claim may be verified only with accepted support and `A3` attribution. A project
 fact may be verified from accepted `E3` evidence without implying personal
 ownership. Visibility never upgrades automatically.
 
+Explicit owner confirmation can establish `A3` for a clearly scoped personal
+role without documentary corroboration; retain `E1` when that confirmation is
+the only support. A generated hypothesis or polished draft is never owner
+confirmation.
+
 New archaeology candidates retain investigation disposition `pending_review`;
 when normalized into the bundle, that corresponds to evidence review state
 `pending`, not automatic acceptance.

@@ -80,7 +80,7 @@ Attribution grade is separate:
 | `A0` | No personal attribution evidence |
 | `A1` | User assertion or unconfirmed identity candidate |
 | `A2` | Strong contribution signal such as consistent Git/PR history, still not conclusive ownership or rationale |
-| `A3` | Owner-confirmed personal role with corroborating evidence and an explicit scope |
+| `A3` | Explicit owner confirmation of a personal role and scope; separate evidence grades record documentary corroboration |
 
 Code and Git can establish project behavior or contribution signals. They do
 not by themselves establish decision authority, motivation, production use,
@@ -98,6 +98,12 @@ accepted supporting evidence item and attribution grade `A3`. Project facts
 may be verified from accepted `E3` evidence without implying personal
 ownership. Contradictions and missing proof stay explicit; they are never
 smoothed away by answer polishing.
+
+For owner-private rehearsal, `verified` means accepted as truthful at the
+stated scope; it does not imply external or documentary proof. An explicit,
+scoped owner confirmation may supply `A3` while remaining `E1` when it is the
+only evidence. Code, documents, and Git are optional corroboration. A generated
+hypothesis or polished answer never confirms its own facts.
 
 ## Visibility and remote-safe output
 

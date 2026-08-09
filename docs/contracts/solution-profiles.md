@@ -51,6 +51,11 @@ The structured behavioral answer contains:
 - up to five optional truthful alternative story variants, each with a label
   and guidance on when it is a better fit.
 
+An explicit, scoped owner confirmation is valid primary evidence for lived
+experience; code, tickets, logs, or documents are optional corroboration. An
+assistant-generated possibility or draft is never evidence, and an unconfirmed
+detail or metric remains a visible gap.
+
 The preferred answer is the user's canonical rehearsal answer for this
 question. A later mock may improve it or promote an alternative story, creating
 a new immutable revision. If nothing material improves, link the new attempt to
