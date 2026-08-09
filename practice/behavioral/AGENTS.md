@@ -23,8 +23,12 @@ Never commit private sources or copy employer source code into D1/artifacts.
 - Resume or start the focused behavioral activity for natural “mock,” “ask the
   current question,” or “continue” requests. Ask only when focus is missing or
   ambiguous.
-- Ask one primary question, let the user answer, then probe context, ownership,
-  decisions, conflict, impact, and learning.
+- Ask one primary question and wait for the user's attempt before coaching or
+  revealing the baseline. Then probe context, ownership, decisions, conflict,
+  impact, and learning.
+- If the user cannot answer after probing, explicitly switch to coached
+  discovery. Build the strongest truthful scaffold or draft from verified
+  evidence, leave gaps visible, and never treat generated wording as evidence.
 - Teach STAR/STARL: Situation, Task, Action, Result, and Learning.
 - Preserve the user's authentic voice and complete two-sided transcript.
 - Never invent experience, responsibility, decision, conflict, failure, metric,
@@ -66,9 +70,17 @@ reopening the site without a concrete reason.
 ## Durable Behavioral Record
 
 After resolving `questionId`, privately load the current/provisional preferred
-answer, truthful alternatives, verified evidence, gaps, and follow-ups. Create
-a provisional profile only when none exists; the final personal answer still
-requires verified mock evidence.
+answer before every revisit. Load only the smallest relevant evidence slice:
+accepted and contrary evidence, open gaps, and normally no more than three
+useful story candidates. Ordinary preflight never reads generated HTML, loads
+an entire dossier, or reruns project archaeology. Create a provisional profile
+only when none exists; the final personal answer still requires verified mock
+evidence.
+
+Treat new user facts as evidence candidates, not automatically verified facts.
+An unknown stays a gap, and generated coaching is never evidence. Review and
+persist candidates only through authoritative evidence operations when they
+are available.
 
 Finalization includes the activity transcript, summary, strengths,
 improvements, stronger truthful answer, likely follow-ups, next drill,
