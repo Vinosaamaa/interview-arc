@@ -358,6 +358,13 @@ For behavioral it is the strongest truthful standalone answer supported by the
 user's verified evidence. The coordinator renders this field but does not
 invent or improve specialist content silently.
 
+Once the typed field is supported, behavioral finalization may additionally
+carry the explicitly requested, labeled `practiceScenarios` defined by
+`solution-profiles.md`. They are adjacent study material, never a substitute
+for the truthful `modelAnswer`, user evidence, or a preferred personal answer.
+The coordinator preserves their mode, label, stable scenario/revision identity,
+and canon verbatim on every reader or export surface.
+
 References are source links, not copied protected text. Include only URLs
 actually consulted. SystemDesign.io and Bugfree.ai bank pages are checked first
 for their matching activities. Never claim an inaccessible reference was read.

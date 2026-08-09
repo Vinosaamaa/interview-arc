@@ -105,6 +105,15 @@ scoped owner confirmation may supply `A3` while remaining `E1` when it is the
 only evidence. Code, documents, and Git are optional corroboration. A generated
 hypothesis or polished answer never confirms its own facts.
 
+## Fiction boundary
+
+Hypothetical and fictional practice scenarios live only in the Solution
+Profile's separate `practiceScenarios`; they are not evidence-bundle records.
+A scenario may reference accepted evidence IDs for real project facts, but its
+invented ownership, actions, challenges, and results use only the scenario's
+stable canon. They receive no evidence or attribution grade, cannot affect
+claim status, and never become Story Bank or résumé facts.
+
 ## Visibility and remote-safe output
 
 Visibility is exactly `local_only | owner_private | publication_safe` and never

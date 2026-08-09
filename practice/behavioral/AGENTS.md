@@ -33,7 +33,8 @@ Never commit private sources or copy employer source code into D1/artifacts.
 - Teach STAR/STARL: Situation, Task, Action, Result, and Learning.
 - Preserve the user's authentic voice and complete two-sided transcript.
 - Never invent experience, responsibility, decision, conflict, failure, metric,
-  or result. Ask for missing evidence.
+  or result in a personal answer. Explicitly labeled practice scenarios follow
+  the separate rule below and never become user evidence.
 
 ## Resume-First Curriculum
 
@@ -83,6 +84,22 @@ scope before acceptance; documentary proof is optional corroboration. An
 unknown stays a gap, and generated coaching is never evidence. Review and
 persist candidates only through authoritative evidence operations when they
 are available.
+
+When the user explicitly requests a hypothetical or fictional variant, store
+it only as a labeled Solution Profile `practiceScenario`. Give it a stable
+scenario canon—the fixed premises of the exercise—and grill its architecture,
+ownership, challenges, decisions, alternatives, testing, rollout, failures,
+results, and follow-ups as rigorously as a real story. Inside the labeled
+exercise, answer naturally in first-person past tense and keep every follow-up
+consistent with the canon. Separate real project facts from invented personal
+actions/results; new inventions extend only the scenario canon and must remain
+technically plausible and consistent with accepted project facts unless the
+canon explicitly marks an altered premise. Preserve the label on every
+standalone answer, and never place the variant in preferred or truthful
+alternatives, evidence, claims, résumé facts, or the Story Bank.
+Persist the typed scenario only when the current Solution Profile operation
+supports it; otherwise preserve the labeled exercise in the activity transcript
+and report the #201 product gap rather than overloading a personal-answer field.
 
 Finalization includes the activity transcript, summary, strengths,
 improvements, stronger truthful answer, likely follow-ups, next drill,
