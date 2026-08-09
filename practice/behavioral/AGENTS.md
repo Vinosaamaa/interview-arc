@@ -13,7 +13,9 @@ Load only what the current action needs:
   `../../private-sources/sources.local.json` when available;
 - explicit project/experience addition or re-audit only:
   `prompts/project-evidence-archaeology.md` and
-  `../../docs/contracts/behavioral-evidence-bundle.md`.
+  `../../docs/contracts/behavioral-evidence-bundle.md`;
+- D1 evidence write, claim checkpoint, or ordinary evidence preflight:
+  `../../docs/contracts/behavioral-evidence-domain.md`.
 
 Never commit private sources or copy employer source code into D1/artifacts.
 
@@ -71,19 +73,21 @@ reopening the site without a concrete reason.
 
 ## Durable Behavioral Record
 
-After resolving `questionId`, privately load the current/provisional preferred
-answer before every revisit. Load only the smallest relevant evidence slice:
-accepted and contrary evidence, open gaps, and normally no more than three
-useful story candidates. Ordinary preflight never reads generated HTML, loads
-an entire dossier, or reruns project archaeology. Create a provisional profile
-only when none exists; the final personal answer still requires owner-confirmed
-facts.
+After resolving `questionId`, concurrently load the current/provisional
+preferred answer with `get_problem_solution_profile` and the bounded evidence
+slice with `query_behavioral_evidence`. Load only accepted/contrary evidence and
+claims/gaps; story candidates remain empty until their later domain slice.
+Ordinary preflight never reads generated HTML, loads an entire dossier, or
+reruns project archaeology. Create a provisional profile only when none exists;
+the final personal answer still requires owner-confirmed facts.
 
 Treat new user facts as owner-attested evidence candidates and confirm their
 scope before acceptance; documentary proof is optional corroboration. An
 unknown stays a gap, and generated coaching is never evidence. Review and
-persist candidates only through authoritative evidence operations when they
-are available.
+persist items and claim checkpoints only through the MCP workflow in
+`docs/contracts/behavioral-evidence-domain.md`; that contract is authoritative
+for revisions, receipts, bounded polling, retries, provenance, identity, and
+the current supersession boundary. A queued response is not saved evidence.
 
 When the user explicitly requests a hypothetical or fictional variant, store
 it only as a labeled Solution Profile `practiceScenario`. Give it a stable

@@ -3,6 +3,20 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { codeAttemptReviewInputSchema } from "./code-attempt-review-schema";
 import { codeLineCount } from "../db/code-attempt-review";
+import {
+  queryBehavioralEvidence,
+  setBehavioralClaimStatus,
+  upsertBehavioralEvidenceItem,
+} from "../db/behavioral-evidence";
+import {
+  behavioralClaimScopes,
+  behavioralClaimStrengths,
+  behavioralEvidenceOrigins,
+  behavioralEvidenceProvenanceKinds,
+  BehavioralEvidenceError,
+  validateBehavioralClaimWrite,
+  validateBehavioralEvidenceWrite,
+} from "../db/behavioral-evidence-policy";
 import { loadContentIndex } from "../db/content";
 import { resolveIntegrationOwner } from "../db/integrations";
 import {
@@ -145,6 +159,56 @@ interface Env {
   AUDIO: R2Bucket;
   LIVE_UPDATES: DurableObjectNamespace;
 }
+
+const behavioralStableIdSchema = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,199}$/);
+const behavioralStringListSchema = z.array(z.string().trim().min(1).max(2_000)).max(100);
+const behavioralEvidenceToolSchema = z.object({
+  operationId: behavioralStableIdSchema,
+  evidence: z.object({
+    evidenceId: behavioralStableIdSchema,
+    projectKey: behavioralStableIdSchema,
+    origin: z.enum(behavioralEvidenceOrigins),
+    statement: z.string().trim().min(1).max(10_000),
+    sourceRevision: z.string().trim().min(1).max(500).optional(),
+    evidenceGrade: z.enum(["E0", "E1", "E2", "E3"]),
+    attributionGrade: z.enum(["A0", "A1", "A2", "A3"]),
+    claimStrength: z.enum(behavioralClaimStrengths),
+    candidateState: z.enum(["pending", "accepted", "rejected", "superseded"]),
+    safeProvenance: z.array(z.object({
+      kind: z.enum(behavioralEvidenceProvenanceKinds),
+      reference: behavioralStableIdSchema,
+    })).min(1).max(20),
+    supports: behavioralStringListSchema,
+    limitations: behavioralStringListSchema,
+    tags: z.array(z.string().trim().min(1).max(100)).max(32),
+    ownerAttestation: z.object({
+      activityId: behavioralStableIdSchema,
+      userTurnId: behavioralStableIdSchema,
+      confirmedAt: z.number().int().positive(),
+    }).optional(),
+  }),
+  questionLink: z.object({
+    questionId: behavioralStableIdSchema,
+    relevance: z.enum(["supporting", "contrary"]),
+  }),
+});
+const behavioralClaimToolSchema = z.object({
+  operationId: behavioralStableIdSchema,
+  expectedRevision: z.number().int().nonnegative(),
+  claim: z.object({
+    claimId: behavioralStableIdSchema,
+    questionId: behavioralStableIdSchema,
+    text: z.string().trim().min(1).max(10_000),
+    scope: z.enum(behavioralClaimScopes),
+    status: z.enum(["unverified", "partial", "verified", "contradicted"]),
+    claimStrength: z.enum(behavioralClaimStrengths),
+    evidenceIds: z.array(behavioralStableIdSchema).max(100),
+    contraryEvidenceIds: z.array(behavioralStableIdSchema).max(100),
+    gaps: behavioralStringListSchema,
+    saferWording: z.string().trim().min(1).max(10_000).optional(),
+    tags: z.array(z.string().trim().min(1).max(100)).max(32),
+  }),
+});
 
 const publishOwnerLiveUpdate = publishOwnerLiveUpdateRequest;
 
@@ -1659,6 +1723,7 @@ function specialistToolFailure(error: unknown) {
     || error instanceof TimerStateConflictError
     || error instanceof VoiceResponseGroupConflictError
     || error instanceof SpecialistWriteJobError
+    || error instanceof BehavioralEvidenceError
   ) {
     const candidateCode = (error as { code?: unknown }).code;
     const code = typeof candidateCode === "string"
@@ -1713,6 +1778,14 @@ async function executeSpecialistWriteJob(job: SpecialistWriteJobRow) {
       tags: saved?.tags ?? [],
       metadata: saved?.metadata ?? null,
     };
+  }
+  if (job.operation === "behavioral_evidence_item") {
+    const input = job.payload as Parameters<typeof upsertBehavioralEvidenceItem>[1];
+    return upsertBehavioralEvidenceItem(job.ownerId, input, Date.now());
+  }
+  if (job.operation === "behavioral_claim_status") {
+    const input = job.payload as Parameters<typeof setBehavioralClaimStatus>[2];
+    return setBehavioralClaimStatus(job.ownerId, job.jobId, input, Date.now());
   }
   throw new SpecialistWriteJobError(
     "specialist_write_operation_unsupported",
@@ -2221,6 +2294,82 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
         });
         return {
           content: [{ type: "text", text: result.receipt }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "upsert_behavioral_evidence_item",
+    {
+      description: "Durably enqueue one already-sanitized owner-private behavioral evidence item and one question relevance link. Provenance references must be opaque stable IDs; non-conversation evidence requires a source revision and matching provenance kind. Reuse the exact stable operationId after transport uncertainty and inspect get_specialist_write_status until saved. Candidate supersession is not supported in this slice. This tool never reads a local source, publishes evidence, or verifies a claim.",
+      inputSchema: behavioralEvidenceToolSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ operationId, ...payload }) => {
+      try {
+        validateBehavioralEvidenceWrite(payload);
+        const receipt = await enqueueSpecialistWriteJob(ownerId, {
+          jobId: operationId,
+          operation: "behavioral_evidence_item",
+          payload,
+        });
+        if (!["saved", "failed"].includes(receipt.status)) scheduleSpecialistWriteProcessing(ctx);
+        return {
+          content: [{ type: "text", text: receipt.status === "saved"
+            ? `Behavioral evidence ${payload.evidence.evidenceId} is durably saved.`
+            : `Behavioral evidence ${payload.evidence.evidenceId} is durably queued as ${operationId}; verify its receipt before reuse.` }],
+          structuredContent: receipt,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "set_behavioral_claim_status",
+    {
+      description: "Durably enqueue one owner-private behavioral claim checkpoint linked to existing question-scoped evidence. Use expectedRevision=0 for creation or the exact current preflight revision for an update. Verified project facts require accepted E3 evidence; personal contribution, ownership, decision, and leadership require an exact same-owner A3 user-turn attestation. Reuse only the exact stable operationId and verify the durable receipt.",
+      inputSchema: behavioralClaimToolSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ operationId, ...payload }) => {
+      try {
+        validateBehavioralClaimWrite(payload);
+        const receipt = await enqueueSpecialistWriteJob(ownerId, {
+          jobId: operationId,
+          operation: "behavioral_claim_status",
+          payload,
+        });
+        if (!["saved", "failed"].includes(receipt.status)) scheduleSpecialistWriteProcessing(ctx);
+        return {
+          content: [{ type: "text", text: receipt.status === "saved"
+            ? `Behavioral claim ${payload.claim.claimId} is durably saved.`
+            : `Behavioral claim ${payload.claim.claimId} is durably queued as ${operationId}; verify its receipt before reuse.` }],
+          structuredContent: receipt,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_behavioral_evidence",
+    {
+      description: "Read the bounded owner-private evidence preflight for one behavioral question: accepted supporting and contrary evidence, claim state, gaps, deterministic limits, and truncation flags. Pending, rejected, and superseded evidence is excluded; story candidates remain empty until their later domain slice.",
+      inputSchema: { questionId: behavioralStableIdSchema },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ questionId }) => {
+      try {
+        const result = await queryBehavioralEvidence(ownerId, questionId);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           structuredContent: result,
         };
       } catch (error) {

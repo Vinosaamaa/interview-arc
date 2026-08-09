@@ -9,7 +9,9 @@ import {
 
 export type SpecialistWriteOperation =
   | "leetcode_code_attempt"
-  | "personal_bank_question";
+  | "personal_bank_question"
+  | "behavioral_evidence_item"
+  | "behavioral_claim_status";
 
 export type SpecialistWriteStatus = SpecialistWriteJobRow["status"];
 

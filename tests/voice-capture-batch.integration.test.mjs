@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { acquireMcpIntegrationLock } from "./helpers/mcp-integration-lock.mjs";
 
 const wrangler = fileURLToPath(new URL("../node_modules/.bin/wrangler", import.meta.url));
 const config = fileURLToPath(new URL("../wrangler.mcp.jsonc", import.meta.url));
@@ -27,37 +28,6 @@ function availablePort() {
         : resolve(typeof address === "object" && address ? address.port : 0));
     });
   });
-}
-
-async function acquireMcpIntegrationLock() {
-  const path = join(tmpdir(), "interview-arc-mcp-integration.lock");
-  for (let attempt = 0; attempt < 900; attempt += 1) {
-    try {
-      await writeFile(path, JSON.stringify({ pid: process.pid }), { flag: "wx" });
-      return () => unlink(path).catch(() => {});
-    } catch (error) {
-      if (error?.code !== "EEXIST") throw error;
-      const [contents, metadata] = await Promise.all([
-        readFile(path, "utf8").catch(() => ""),
-        stat(path).catch(() => undefined),
-      ]);
-      let ownerPid;
-      try { ownerPid = JSON.parse(contents).pid; } catch {}
-      let ownerAlive = false;
-      if (Number.isInteger(ownerPid)) {
-        try { process.kill(ownerPid, 0); ownerAlive = true; } catch (ownerError) {
-          if (ownerError?.code !== "ESRCH") ownerAlive = true;
-        }
-      }
-      const incompleteWrite = !ownerPid && metadata && Date.now() - metadata.mtimeMs < 1_000;
-      if (!ownerAlive && !incompleteWrite) {
-        await unlink(path).catch(() => {});
-        continue;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-  }
-  throw new Error("Timed out waiting for the local MCP integration lock.");
 }
 
 function run(command, args, options = {}) {
