@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { acquireMcpIntegrationLock } from "./helpers/mcp-integration-lock.mjs";
 
 const wrangler = fileURLToPath(new URL("../node_modules/.bin/wrangler", import.meta.url));
 const config = fileURLToPath(new URL("../wrangler.mcp.jsonc", import.meta.url));
@@ -28,37 +29,6 @@ function availablePort() {
         : resolve(typeof address === "object" && address ? address.port : 0));
     });
   });
-}
-
-async function acquireMcpIntegrationLock() {
-  const lockPath = join(tmpdir(), "interview-arc-mcp-integration.lock");
-  for (let attempt = 0; attempt < 900; attempt += 1) {
-    try {
-      await writeFile(lockPath, JSON.stringify({ pid: process.pid }), { flag: "wx" });
-      return () => unlink(lockPath).catch(() => {});
-    } catch (error) {
-      if (error?.code !== "EEXIST") throw error;
-      const [contents, metadata] = await Promise.all([
-        readFile(lockPath, "utf8").catch(() => ""),
-        stat(lockPath).catch(() => undefined),
-      ]);
-      let ownerPid;
-      try { ownerPid = JSON.parse(contents).pid; } catch {}
-      let ownerAlive = false;
-      if (Number.isInteger(ownerPid)) {
-        try { process.kill(ownerPid, 0); ownerAlive = true; } catch (ownerError) {
-          if (ownerError?.code !== "ESRCH") ownerAlive = true;
-        }
-      }
-      const incompleteWrite = !ownerPid && metadata && Date.now() - metadata.mtimeMs < 1_000;
-      if (!ownerAlive && !incompleteWrite) {
-        await unlink(lockPath).catch(() => {});
-        continue;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-  }
-  throw new Error("Timed out waiting for the local MCP integration lock.");
 }
 
 function run(command, args, options = {}) {
@@ -180,6 +150,43 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
     const [savedEvidence] = await waitForJobs(ownerClient, [evidenceInput.operationId]);
     assert.equal(queuedEvidence.jobId, evidenceInput.operationId);
     assert.equal(savedEvidence.status, "saved", workerLog);
+
+    const concurrentEvidence = {
+      ...evidenceInput,
+      evidence: {
+        ...evidenceInput.evidence,
+        evidenceId: "evidence-concurrent-identical",
+        attributionGrade: "A0",
+        ownerAttestation: undefined,
+        statement: "Two independent receipts may preserve one identical evidence identity.",
+      },
+      questionLink: { questionId: "question-concurrent-identical", relevance: "supporting" },
+    };
+    const concurrentOperations = [
+      { ...concurrentEvidence, operationId: "behavioral-evidence-concurrent-a" },
+      { ...concurrentEvidence, operationId: "behavioral-evidence-concurrent-b" },
+    ];
+    await Promise.all(concurrentOperations.map((input) => call(
+      ownerClient,
+      "upsert_behavioral_evidence_item",
+      input,
+    )));
+    const concurrentReceipts = await waitForJobs(
+      ownerClient,
+      concurrentOperations.map((input) => input.operationId),
+    );
+    assert.deepEqual(concurrentReceipts.map((receipt) => receipt.status), ["saved", "saved"]);
+    assert.deepEqual(
+      concurrentReceipts.map((receipt) => receipt.result.status).sort(),
+      ["inserted", "unchanged"],
+    );
+    const concurrentRead = await call(ownerClient, "query_behavioral_evidence", {
+      questionId: concurrentEvidence.questionLink.questionId,
+    });
+    assert.deepEqual(
+      concurrentRead.supportingEvidence.map((item) => item.evidenceId),
+      [concurrentEvidence.evidence.evidenceId],
+    );
 
     const claimInput = {
       operationId: "behavioral-claim-operation-1",
@@ -453,6 +460,38 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
     assert.equal(failedProjectClaim.status, "failed");
     assert.equal(failedProjectClaim.failure.code, "behavioral_claim_e3_required");
 
+    const otherProjectEvidenceInput = {
+      ...projectEvidenceInput,
+      operationId: "behavioral-evidence-operation-other-project-e3",
+      evidence: {
+        ...projectEvidenceInput.evidence,
+        evidenceId: "evidence-other-project-e3",
+        projectKey: "other-project",
+        statement: "A different project implements a retry boundary.",
+        sourceRevision: "other-project-revision-1",
+        evidenceGrade: "E3",
+        safeProvenance: [{ kind: "document_observation", reference: "other-architecture-note-1" }],
+      },
+    };
+    await call(ownerClient, "upsert_behavioral_evidence_item", otherProjectEvidenceInput);
+    await waitForJobs(ownerClient, [otherProjectEvidenceInput.operationId]);
+    const mixedProjectClaimInput = {
+      ...projectClaimInput,
+      operationId: "behavioral-claim-operation-mixed-projects",
+      claim: {
+        ...projectClaimInput.claim,
+        claimId: "claim-mixed-projects",
+        evidenceIds: [
+          projectEvidenceInput.evidence.evidenceId,
+          otherProjectEvidenceInput.evidence.evidenceId,
+        ],
+      },
+    };
+    await call(ownerClient, "set_behavioral_claim_status", mixedProjectClaimInput);
+    const [failedMixedProjectClaim] = await waitForJobs(ownerClient, [mixedProjectClaimInput.operationId]);
+    assert.equal(failedMixedProjectClaim.status, "failed");
+    assert.equal(failedMixedProjectClaim.failure.code, "behavioral_claim_project_mismatch");
+
     const generatedEvidenceInput = {
       ...projectEvidenceInput,
       operationId: "behavioral-evidence-operation-generated-secondary",
@@ -462,6 +501,7 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
         origin: "generated_secondary",
         statement: "A generated handout asserts that the retry boundary exists.",
         evidenceGrade: "E1",
+        safeProvenance: [{ kind: "generated_secondary", reference: "generated-handout-1" }],
       },
       questionLink: { questionId: "question-generated-claim", relevance: "supporting" },
     };

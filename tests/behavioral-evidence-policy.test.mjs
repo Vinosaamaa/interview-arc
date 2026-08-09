@@ -145,3 +145,31 @@ test("non-conversation evidence requires matching sanitized provenance and revis
     (error) => error.code === "behavioral_evidence_source_revision_required",
   );
 });
+
+test("generated and inferred evidence use explicit derivation provenance", () => {
+  const base = evidencePayload();
+  for (const origin of ["generated_secondary", "derived_inference"]) {
+    const payload = {
+      ...base,
+      evidence: {
+        ...base.evidence,
+        origin,
+        sourceRevision: `${origin}-revision-1`,
+        attributionGrade: "A0",
+        ownerAttestation: undefined,
+        safeProvenance: [{ kind: origin, reference: `${origin}-1` }],
+      },
+    };
+    assert.doesNotThrow(() => validateBehavioralEvidenceWrite(payload));
+    assert.throws(
+      () => validateBehavioralEvidenceWrite({
+        ...payload,
+        evidence: {
+          ...payload.evidence,
+          safeProvenance: [{ kind: "document_observation", reference: `${origin}-1` }],
+        },
+      }),
+      (error) => error.code === "behavioral_evidence_provenance_mismatch",
+    );
+  }
+});

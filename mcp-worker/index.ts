@@ -12,6 +12,7 @@ import {
   behavioralClaimScopes,
   behavioralClaimStrengths,
   behavioralEvidenceOrigins,
+  behavioralEvidenceProvenanceKinds,
   BehavioralEvidenceError,
   validateBehavioralClaimWrite,
   validateBehavioralEvidenceWrite,
@@ -174,7 +175,7 @@ const behavioralEvidenceToolSchema = z.object({
     claimStrength: z.enum(behavioralClaimStrengths),
     candidateState: z.enum(["pending", "accepted", "rejected", "superseded"]),
     safeProvenance: z.array(z.object({
-      kind: z.enum(["conversation", "resume_claim", "repository_observation", "document_observation", "production_evidence"]),
+      kind: z.enum(behavioralEvidenceProvenanceKinds),
       reference: behavioralStableIdSchema,
     })).min(1).max(20),
     supports: behavioralStringListSchema,

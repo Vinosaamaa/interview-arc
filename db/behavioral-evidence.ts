@@ -61,6 +61,23 @@ function claimCheckpointMatches(row: BehavioralClaimRow, input: BehavioralClaimI
     && jsonEqual(row.tags, input.tags);
 }
 
+async function readEvidenceItem(ownerId: string, evidenceId: string) {
+  const rows = await getDb().select().from(behavioralEvidenceItems).where(and(
+    eq(behavioralEvidenceItems.ownerId, ownerId),
+    eq(behavioralEvidenceItems.evidenceId, evidenceId),
+  ));
+  return rows[0] ?? null;
+}
+
+async function readEvidenceLink(ownerId: string, questionId: string, evidenceId: string) {
+  const rows = await getDb().select().from(behavioralEvidenceQuestionLinks).where(and(
+    eq(behavioralEvidenceQuestionLinks.ownerId, ownerId),
+    eq(behavioralEvidenceQuestionLinks.questionId, questionId),
+    eq(behavioralEvidenceQuestionLinks.evidenceId, evidenceId),
+  ));
+  return rows[0] ?? null;
+}
+
 export async function upsertBehavioralEvidenceItem(
   ownerId: string,
   payload: BehavioralEvidenceWritePayload,
@@ -69,11 +86,7 @@ export async function upsertBehavioralEvidenceItem(
   validateBehavioralEvidenceWrite(payload);
   const db = getDb();
   const { evidence, questionLink } = payload;
-  const existingRows = await db.select().from(behavioralEvidenceItems).where(and(
-    eq(behavioralEvidenceItems.ownerId, ownerId),
-    eq(behavioralEvidenceItems.evidenceId, evidence.evidenceId),
-  ));
-  const existing = existingRows[0] ?? null;
+  const existing = await readEvidenceItem(ownerId, evidence.evidenceId);
   if (existing && !evidenceIdentityMatches(existing, evidence)) {
     throw new BehavioralEvidenceError(
       "behavioral_evidence_identity_conflict",
@@ -102,12 +115,7 @@ export async function upsertBehavioralEvidenceItem(
       );
     }
   }
-  const existingLinks = await db.select().from(behavioralEvidenceQuestionLinks).where(and(
-    eq(behavioralEvidenceQuestionLinks.ownerId, ownerId),
-    eq(behavioralEvidenceQuestionLinks.questionId, questionLink.questionId),
-    eq(behavioralEvidenceQuestionLinks.evidenceId, evidence.evidenceId),
-  ));
-  const existingLink = existingLinks[0] ?? null;
+  const existingLink = await readEvidenceLink(ownerId, questionLink.questionId, evidence.evidenceId);
   if (existingLink && existingLink.relevance !== questionLink.relevance) {
     throw new BehavioralEvidenceError(
       "behavioral_evidence_link_conflict",
@@ -149,7 +157,43 @@ export async function upsertBehavioralEvidenceItem(
     }));
   }
   if (writes.length > 0) {
-    await db.batch(writes as unknown as Parameters<typeof db.batch>[0]);
+    try {
+      await db.batch(writes as unknown as Parameters<typeof db.batch>[0]);
+    } catch (error) {
+      const authoritativeEvidence = await readEvidenceItem(ownerId, evidence.evidenceId);
+      if (!authoritativeEvidence) throw error;
+      if (!evidenceIdentityMatches(authoritativeEvidence, evidence)) {
+        throw new BehavioralEvidenceError(
+          "behavioral_evidence_identity_conflict",
+          "That evidence ID already belongs to different immutable content; supersession belongs to the later candidate-review slice.",
+        );
+      }
+      let authoritativeLink = await readEvidenceLink(ownerId, questionLink.questionId, evidence.evidenceId);
+      if (!authoritativeLink) {
+        await db.insert(behavioralEvidenceQuestionLinks).values({
+          ownerId,
+          questionId: questionLink.questionId,
+          evidenceId: evidence.evidenceId,
+          relevance: questionLink.relevance,
+          createdAt: nowMs,
+          updatedAt: nowMs,
+        }).onConflictDoNothing();
+        authoritativeLink = await readEvidenceLink(ownerId, questionLink.questionId, evidence.evidenceId);
+      }
+      if (!authoritativeLink) throw error;
+      if (authoritativeLink.relevance !== questionLink.relevance) {
+        throw new BehavioralEvidenceError(
+          "behavioral_evidence_link_conflict",
+          "That evidence and question identity already has a different immutable relevance.",
+        );
+      }
+      return {
+        evidenceId: evidence.evidenceId,
+        questionId: questionLink.questionId,
+        relevance: questionLink.relevance,
+        status: existing ? "linked" : "unchanged",
+      };
+    }
   }
   return {
     evidenceId: evidence.evidenceId,
@@ -171,6 +215,12 @@ async function readClaimEvidence(ownerId: string, claim: BehavioralClaimInput) {
     throw new BehavioralEvidenceError(
       "behavioral_claim_evidence_missing",
       "Every claim evidence ID must already exist for the same owner.",
+    );
+  }
+  if (new Set(rows.map((item) => item.projectKey)).size > 1) {
+    throw new BehavioralEvidenceError(
+      "behavioral_claim_project_mismatch",
+      "Every evidence item linked to one behavioral claim must describe the same project.",
     );
   }
   const links = await db.select().from(behavioralEvidenceQuestionLinks).where(and(

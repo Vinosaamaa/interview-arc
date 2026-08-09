@@ -45,7 +45,10 @@ claim from being marked verified.
 
 Sanitized provenance uses opaque stable references, not labels or locators.
 Non-conversation evidence carries a source revision and a provenance kind that
-matches its origin. Candidate review and effective supersession remain later
+matches its origin. Generated and inferred records use their same-named
+sanitized derivation provenance; their underlying primary observations remain
+separate evidence items. All evidence linked to one atomic claim must share one
+`projectKey`. Candidate review and effective supersession remain later
 #201 slices; this mutation never rewrites an accepted item or silently hides
 its predecessor.
 

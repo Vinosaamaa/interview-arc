@@ -14,6 +14,16 @@ export const behavioralEvidenceOrigins = [
   "production_evidence",
 ] as const;
 
+export const behavioralEvidenceProvenanceKinds = [
+  "conversation",
+  "resume_claim",
+  "repository_observation",
+  "document_observation",
+  "production_evidence",
+  "generated_secondary",
+  "derived_inference",
+] as const;
+
 export const behavioralClaimStrengths = [
   "project_fact",
   "personal_contribution_candidate",
@@ -45,7 +55,7 @@ export type BehavioralEvidenceInput = {
   claimStrength: (typeof behavioralClaimStrengths)[number];
   candidateState: "pending" | "accepted" | "rejected" | "superseded";
   safeProvenance: Array<{
-    kind: "conversation" | "resume_claim" | "repository_observation" | "document_observation" | "production_evidence";
+    kind: (typeof behavioralEvidenceProvenanceKinds)[number];
     reference: string;
   }>;
   supports: string[];
@@ -147,18 +157,19 @@ export function validateBehavioralEvidenceWrite(payload: BehavioralEvidenceWrite
   assertStableId(payload.evidence.evidenceId, "evidenceId");
   assertStableId(payload.evidence.projectKey, "projectKey");
   assertStableId(payload.questionLink.questionId, "questionId");
-  const provenanceKindsByOrigin: Partial<Record<BehavioralEvidenceInput["origin"], BehavioralEvidenceInput["safeProvenance"][number]["kind"]>> = {
+  const provenanceKindsByOrigin: Record<BehavioralEvidenceInput["origin"], BehavioralEvidenceInput["safeProvenance"][number]["kind"]> = {
     user_statement: "conversation",
     resume: "resume_claim",
     document: "document_observation",
     code_observation: "repository_observation",
     test_config_observation: "repository_observation",
     git_metadata: "repository_observation",
+    generated_secondary: "generated_secondary",
+    derived_inference: "derived_inference",
     production_evidence: "production_evidence",
   };
   const requiredProvenanceKind = provenanceKindsByOrigin[payload.evidence.origin];
-  if (requiredProvenanceKind
-      && payload.evidence.safeProvenance.some((item) => item.kind !== requiredProvenanceKind)) {
+  if (payload.evidence.safeProvenance.some((item) => item.kind !== requiredProvenanceKind)) {
     throw new BehavioralEvidenceError(
       "behavioral_evidence_provenance_mismatch",
       "Evidence origin and sanitized provenance kind must agree.",
