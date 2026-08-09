@@ -311,49 +311,60 @@
         "reviewStatus": { "enum": ["pending", "approved", "rejected"] }
       }
     },
-    "remoteCandidate": {
+    "candidateCore": {
       "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "kind", "content", "sourceEvidenceIds", "visibility", "transformations", "limitations"],
+      "required": ["id", "content", "sourceEvidenceIds", "transformations", "limitations"],
       "properties": {
         "id": { "$ref": "#/$defs/stableId" },
-        "kind": { "enum": ["source_metadata", "evidence", "claim", "story", "implementation_note", "diagram"] },
         "content": { "type": "object" },
         "sourceEvidenceIds": { "$ref": "#/$defs/idList" },
-        "visibility": { "const": "owner_private" },
         "transformations": { "$ref": "#/$defs/stringList" },
         "limitations": { "$ref": "#/$defs/stringList" }
       }
     },
-    "publicationCandidate": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "kind", "content", "sourceEvidenceIds", "visibility", "transformations", "limitations", "approval"],
-      "properties": {
-        "id": { "$ref": "#/$defs/stableId" },
-        "kind": { "enum": ["claim", "story", "implementation_note", "diagram"] },
-        "content": { "type": "object" },
-        "sourceEvidenceIds": { "$ref": "#/$defs/idList" },
-        "visibility": { "const": "publication_safe" },
-        "transformations": { "$ref": "#/$defs/stringList" },
-        "limitations": { "$ref": "#/$defs/stringList" },
-        "approval": {
+    "remoteCandidate": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/candidateCore" },
+        {
           "type": "object",
-          "additionalProperties": false,
-          "required": ["status"],
+          "required": ["kind", "visibility"],
           "properties": {
-            "status": { "enum": ["pending", "approved", "rejected"] },
-            "approvedBy": { "const": "owner" },
-            "approvedAt": { "type": "string", "format": "date-time" }
-          },
-          "allOf": [
-            {
-              "if": { "properties": { "status": { "const": "approved" } }, "required": ["status"] },
-              "then": { "required": ["approvedBy", "approvedAt"] }
-            }
-          ]
+            "kind": { "enum": ["source_metadata", "evidence", "claim", "story", "implementation_note", "diagram"] },
+            "visibility": { "const": "owner_private" }
+          }
         }
-      }
+      ]
+    },
+    "publicationCandidate": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/candidateCore" },
+        {
+          "type": "object",
+          "required": ["kind", "visibility", "approval"],
+          "properties": {
+            "kind": { "enum": ["claim", "story", "implementation_note", "diagram"] },
+            "visibility": { "const": "publication_safe" },
+            "approval": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status"],
+              "properties": {
+                "status": { "enum": ["pending", "approved", "rejected"] },
+                "approvedBy": { "const": "owner" },
+                "approvedAt": { "type": "string", "format": "date-time" }
+              },
+              "allOf": [
+                {
+                  "if": { "properties": { "status": { "const": "approved" } }, "required": ["status"] },
+                  "then": { "required": ["approvedBy", "approvedAt"] }
+                }
+              ]
+            }
+          }
+        }
+      ]
     }
   }
 }

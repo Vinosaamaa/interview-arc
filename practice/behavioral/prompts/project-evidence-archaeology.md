@@ -5,6 +5,12 @@
 > not be loaded for routine practice. The canonical persistence, provenance,
 > review, visibility, and publication rules are governed by the
 > [Behavioral Evidence Bundle contract](../../../docs/contracts/behavioral-evidence-bundle.md).
+> The tracked
+> [project schema](../../../docs/contracts/behavioral-evidence-project.schema.json)
+> and
+> [manifest schema](../../../docs/contracts/behavioral-evidence-manifest.schema.json)
+> are the sole record definitions. This prompt coordinates their use; it does
+> not define a parallel evidence or candidate shape.
 
 Fill in and affirm the authorization block before running this prompt.
 
@@ -179,36 +185,38 @@ when normalized into the bundle, that corresponds to evidence review state
 
 ## Stable evidence records
 
-Assign stable IDs to material observations. Every record should carry:
-
-- `evidence_id`
-- `project_key`
-- `source_revision`
-- `evidence_class`
-- `evidence_grade`
-- `attribution_grade`
-- `claim_strength`
-- `claim_status`
-- `claim_text`
-- `claim_scope`
-- safe repository-relative `source_locator`
-- supporting evidence in transformed prose
-- confidence
-- limitations
-- counterevidence
-- ownership status
-- confidentiality classification
-- visibility
-- review state
-- candidate/disposition status
+Use the canonical project schema without inventing a combined evidence/claim
+record. `evidence` owns one transformed observation, provenance, grades,
+limitations, contrary-evidence links, visibility, and review state. `claims`
+owns claim text, scope, verification status, linked evidence, gaps, and safer
+wording. `d1Candidates` and `publicationCandidates` own derivative payloads and
+link back through `sourceEvidenceIds`. Assign stable IDs to every material
+record and retain the project source revision in its project/source context.
 
 Do not use absolute paths in evidence intended for remote storage or
 publication.
 
 ## Exhaustive-but-bounded coverage
 
-1. Inventory and classify every tracked file.
-2. Record tracked and untracked coverage separately.
+Unless the owner explicitly changes them, use these hard caps:
+
+- enumerated paths: 5,000;
+- deep-read files: 60;
+- detailed critical-module cards: 12;
+- representative end-to-end flows: 5;
+- diagrams: 6;
+- normalized evidence records: 120;
+- final handoff: 12,000 words.
+
+Always report the total tracked-file count. If the repository exceeds a cap,
+aggregate the remainder by directory, extension, responsibility, and risk;
+record representative safe locators plus the deferred surface. Never paste an
+unbounded path list, silently raise a cap, or describe sampled content as an
+exhaustive read.
+
+1. Inventory and classify tracked paths within the enumeration budget.
+2. Record tracked and untracked coverage separately without opening unrelated
+   untracked content.
 3. Create mutually understandable classes for runtime code, tests, migrations,
    configs, build metadata, CI/CD, infrastructure, scripts, documentation,
    assets, generated/binary files, secret-adjacent files, and placeholders.
@@ -224,7 +232,7 @@ publication.
    - flows traced;
    - remaining surface and limitations.
 6. Do not describe classification or sampling as exhaustive content review.
-7. Preserve an auditable deep-read source set or locator manifest.
+7. Preserve an auditable deep-read source set or bounded locator manifest.
 8. Do not inspect binary exports merely to inflate coverage.
 
 ## Repository and stack inventory
@@ -312,7 +320,15 @@ Trace 3–5 representative end-to-end flows. For each include:
 
 ## Module-by-module teaching reference
 
-Create a module card for every meaningful first-party module. Include:
+Create one compact indexed row for every meaningful first-party module:
+module ID/name, responsibility, entry point, dependencies/consumers, state
+ownership, representative tests, risk, and safe evidence locators. Select at
+most 12 critical modules for detailed cards based on central-flow ownership,
+data ownership, trust boundaries, reliability/security risk, or résumé
+relevance. Aggregate the remainder in the index rather than repeating empty or
+low-value prose.
+
+Use this shared template for each selected detailed card:
 
 - purpose;
 - public/internal interfaces;
@@ -452,30 +468,16 @@ Explicitly identify unsupported or contradicted:
 
 Do not write first-person resume/profile wording until ownership is confirmed.
 
-## Candidate evidence record schema
+## Candidate evidence records
 
-Every publication, resume, or story candidate must include:
-
-- `candidate_id`
-- `project_key`
-- `claim_text`
-- `claim_scope`
-- `evidence_class`
-- `source_revision`
-- safe `source_locator`
-- supporting evidence
-- plain-language explanation
-- sanitized pseudocode or transformed concept when useful
-- confidence
-- limitations
-- counterevidence
-- ownership status
-- confidentiality classification
-- transformations/redactions
-- publication-safe wording
-- confirmation questions
-- competency tags
-- `disposition: pending_review`
+Use only `d1Candidates` and `publicationCandidates` from the canonical project
+schema. Both carry the shared candidate core and link to accepted observations
+through `sourceEvidenceIds`; their variant-specific `kind`, `visibility`, and
+publication `approval` fields remain separate. Put claim text/scope/status in a
+linked `claims` record and provenance/grades/counterevidence in linked
+`evidence` records instead of duplicating those fields inside the candidate.
+New candidates remain pending review until the canonical review workflow
+changes their state.
 
 Never store verbatim implementation snippets.
 
@@ -575,7 +577,13 @@ Do not build or publish it in this assignment.
 ## Structured D1 handoff proposal
 
 Propose schema-first entities for possible future ingestion without writing
-anything. Include, as appropriate:
+anything. Map every content field to the canonical bundle records above rather
+than restating or renaming them. The proposal may add only storage concerns
+that the local bundle does not own: opaque owner scope, stable operation and
+revision IDs, timestamps, idempotent receipts, availability/fingerprint state,
+and normalized relationship keys.
+
+Include, as appropriate:
 
 - projects;
 - source snapshots;
@@ -594,10 +602,10 @@ anything. Include, as appropriate:
 - sanitization actions;
 - contradictions.
 
-Include primary keys, project/revision linkage, evidence class and grade, claim
-strength and status, attribution grade, confidence, confidentiality, visibility,
-ownership, counterevidence, approval state, review state, and pending-review
-disposition.
+For each entity, identify its primary key and map project/revision linkage,
+evidence/attribution grades, claim state, visibility, counterevidence, approval,
+and review state to the exact canonical field names. Do not create a third
+candidate schema in the handoff.
 
 Required invariants:
 

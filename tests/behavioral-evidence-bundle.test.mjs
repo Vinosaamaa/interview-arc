@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -132,8 +132,9 @@ function projectFixture() {
   };
 }
 
-async function createFixture() {
+async function createFixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "behavioral-evidence-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
   const projectRoot = path.join(root, "projects", "example-project");
   await mkdir(path.join(projectRoot, "diagrams"), { recursive: true });
   await writeJson(path.join(root, "manifest.json"), {
@@ -151,15 +152,15 @@ async function createFixture() {
   return { root, projectRoot };
 }
 
-test("validates a schema-first bundle and resolves every cross-record link", async () => {
-  const fixture = await createFixture();
+test("validates a schema-first bundle and resolves every cross-record link", async (t) => {
+  const fixture = await createFixture(t);
   const result = await validateBehavioralEvidenceBundle({ bundleRoot: fixture.root });
   assert.equal(result.projects.length, 1);
   assert.equal(result.projects[0].record.project.id, "example-project");
 });
 
-test("rejects dangling evidence references", async () => {
-  const fixture = await createFixture();
+test("rejects dangling evidence references", async (t) => {
+  const fixture = await createFixture(t);
   const recordPath = path.join(fixture.projectRoot, "project.json");
   const record = JSON.parse(await readFile(recordPath, "utf8"));
   record.claims[0].evidenceIds = ["EX-EV-MISSING"];
@@ -170,8 +171,8 @@ test("rejects dangling evidence references", async () => {
   );
 });
 
-test("rejects verified personal claims without accepted A3 evidence", async () => {
-  const fixture = await createFixture();
+test("rejects verified personal claims without accepted A3 evidence", async (t) => {
+  const fixture = await createFixture(t);
   const recordPath = path.join(fixture.projectRoot, "project.json");
   const record = JSON.parse(await readFile(recordPath, "utf8"));
   record.claims[0].scope = "personal_contribution";
@@ -184,6 +185,41 @@ test("rejects verified personal claims without accepted A3 evidence", async () =
   );
 });
 
+test("rejects verified project claims without accepted E3 evidence", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.claims[0].status = "verified";
+  record.evidence[0].candidateState = "accepted";
+  record.evidence[0].evidenceGrade = "E2";
+  await writeJson(recordPath, record);
+  await assert.rejects(
+    validateBehavioralEvidenceBundle({ bundleRoot: fixture.root }),
+    /verified project facts require accepted E3 evidence/,
+  );
+});
+
+test("accepts verified project claims backed by accepted E3 evidence", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.claims[0].status = "verified";
+  record.evidence[0].candidateState = "accepted";
+  await writeJson(recordPath, record);
+
+  await validateBehavioralEvidenceBundle({ bundleRoot: fixture.root });
+});
+
+test("rejects a declared diagram asset that is no longer readable", async (t) => {
+  const fixture = await createFixture(t);
+  await rm(path.join(fixture.projectRoot, "diagrams", "example.mmd"));
+
+  await assert.rejects(
+    validateBehavioralEvidenceBundle({ bundleRoot: fixture.root }),
+    /cannot access the declared asset/,
+  );
+});
+
 test("rejects private locators and identities in remote-safe candidates", () => {
   const privateLocator = ["", "Users", "example", "private", "repository"].join("/");
   assert.throws(
@@ -192,8 +228,8 @@ test("rejects private locators and identities in remote-safe candidates", () => 
   );
 });
 
-test("generates byte-identical local HTML from unchanged inputs", async () => {
-  const fixture = await createFixture();
+test("generates byte-identical local HTML from unchanged inputs", async (t) => {
+  const fixture = await createFixture(t);
   const first = await buildBehavioralEvidenceSite({ bundleRoot: fixture.root });
   const firstHtml = await readFile(first.indexPath, "utf8");
   const second = await buildBehavioralEvidenceSite({ bundleRoot: fixture.root });
@@ -201,4 +237,73 @@ test("generates byte-identical local HTML from unchanged inputs", async () => {
   assert.equal(secondHtml, firstHtml);
   assert.match(firstHtml, /LOCAL PRIVATE PROJECTION/);
   assert.match(firstHtml, /Not synced to D1\. Not published\./);
+});
+
+test("removes stale private assets when regenerating the disposable site", async (t) => {
+  const fixture = await createFixture(t);
+  const first = await buildBehavioralEvidenceSite({ bundleRoot: fixture.root });
+  const staleAsset = path.join(first.siteRoot, "assets", "removed-private-diagram.mmd");
+  await writeFile(staleAsset, "private stale projection", "utf8");
+
+  await buildBehavioralEvidenceSite({ bundleRoot: fixture.root });
+
+  await assert.rejects(access(staleAsset), { code: "ENOENT" });
+});
+
+test("copies more than one bounded asset batch before writing the review", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.diagrams = [];
+  for (let index = 0; index < 9; index += 1) {
+    const id = `EX-DIA-${index}`;
+    const sourcePath = `diagrams/example-${index}.mmd`;
+    await writeFile(path.join(fixture.projectRoot, sourcePath), `flowchart LR\n  A${index} --> B${index}\n`, "utf8");
+    record.diagrams.push({
+      id,
+      title: `Example evidence relationship ${index}`,
+      kind: "provenance",
+      sourceFormat: "mermaid",
+      sourcePath,
+      evidenceIds: ["EX-EV-001"],
+      relationshipBasis: "evidence_provenance_only",
+      limitations: ["Fixture only"],
+      visibility: "local_only",
+    });
+  }
+  await writeJson(recordPath, record);
+
+  const result = await buildBehavioralEvidenceSite({ bundleRoot: fixture.root });
+
+  await Promise.all(record.diagrams.map((diagram) => access(path.join(
+    result.siteRoot,
+    "assets",
+    `example-project-${diagram.id}.mmd`,
+  ))));
+});
+
+test("candidate variants share one closed canonical schema core", async () => {
+  const schema = JSON.parse(await readFile(new URL(
+    "../docs/contracts/behavioral-evidence-project.schema.json",
+    import.meta.url,
+  ), "utf8"));
+
+  assert.ok(schema.$defs.candidateCore);
+  for (const variant of ["remoteCandidate", "publicationCandidate"]) {
+    assert.equal(schema.$defs[variant].unevaluatedProperties, false);
+    assert.equal(schema.$defs[variant].allOf[0].$ref, "#/$defs/candidateCore");
+  }
+});
+
+test("the archaeology coordinator defines explicit coverage and output budgets", async () => {
+  const prompt = await readFile(new URL(
+    "../practice/behavioral/prompts/project-evidence-archaeology.md",
+    import.meta.url,
+  ), "utf8");
+
+  assert.match(prompt, /enumerated paths: 5,000/);
+  assert.match(prompt, /deep-read files: 60/);
+  assert.match(prompt, /detailed critical-module cards: 12/);
+  assert.match(prompt, /final handoff: 12,000 words/);
+  assert.match(prompt, /sole record definitions/);
 });

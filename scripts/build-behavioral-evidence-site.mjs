@@ -1,4 +1,5 @@
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import { access, copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -20,6 +21,7 @@ const EVIDENCE_GRADES = new Set(["E0", "E1", "E2", "E3"]);
 const ATTRIBUTION_GRADES = new Set(["A0", "A1", "A2", "A3"]);
 const CANDIDATE_STATES = new Set(["pending", "accepted", "rejected", "superseded"]);
 const VISIBILITIES = new Set(["local_only", "owner_private", "publication_safe"]);
+const MAX_ASSET_COPY_CONCURRENCY = 8;
 const REMOTE_UNSAFE_PATTERNS = [
   { label: "absolute macOS path", pattern: /(?:^|[\s"'(])\/Users\/[A-Za-z0-9._-]+\//m },
   { label: "absolute Linux home path", pattern: /(?:^|[\s"'(])\/home\/[A-Za-z0-9._-]+\//m },
@@ -114,7 +116,11 @@ export function assertRemoteSafe(value, location = "remote candidate") {
   }
 }
 
-async function validateProject(record, descriptor, recordPath, bundleRoot) {
+async function requireReadableAsset(filePath, location) {
+  await access(filePath, fsConstants.R_OK).catch(() => fail(location, "cannot access the declared asset"));
+}
+
+async function validateProjectMetadata(record, descriptor, recordPath, bundleRoot) {
   const location = `project ${descriptor.id}`;
   requireObject(record, location);
   if (record.schemaVersion !== 1) fail(`${location}.schemaVersion`, "expected 1");
@@ -136,10 +142,13 @@ async function validateProject(record, descriptor, recordPath, bundleRoot) {
   if (!dossierPath.startsWith(`${path.resolve(bundleRoot)}${path.sep}`)) {
     fail(`${location}.project.dossierPath`, "resolves outside the bundle");
   }
-  const dossier = await readFile(dossierPath, "utf8").catch((error) => {
-    fail(`${location}.project.dossierPath`, `cannot read dossier: ${error.message}`);
+  const dossier = await readFile(dossierPath, "utf8").catch(() => {
+    fail(`${location}.project.dossierPath`, "cannot read the declared dossier");
   });
+  return { location, recordDirectory, dossier };
+}
 
+function indexProjectRecords(record, location) {
   const globalIds = new Set();
   const sources = uniqueIndex(record.sources, `${location}.sources`, globalIds);
   const evidence = uniqueIndex(record.evidence, `${location}.evidence`, globalIds);
@@ -151,7 +160,10 @@ async function validateProject(record, descriptor, recordPath, bundleRoot) {
   uniqueIndex(record.sanitization, `${location}.sanitization`, globalIds);
   const d1Candidates = uniqueIndex(record.d1Candidates ?? [], `${location}.d1Candidates`, globalIds);
   const publicationCandidates = uniqueIndex(record.publicationCandidates, `${location}.publicationCandidates`, globalIds);
+  return { sources, evidence, claims, contradictions, storySeeds, curriculum, diagrams, d1Candidates, publicationCandidates };
+}
 
+function validateSources(sources, location) {
   for (const [id, source] of sources) {
     for (const key of ["kind", "label", "locator", "safeHint", "authorization", "sensitivity", "availability"]) {
       requireString(source[key], `${location}.sources.${id}.${key}`);
@@ -162,7 +174,9 @@ async function validateProject(record, descriptor, recordPath, bundleRoot) {
     requireArray(source.canSupport, `${location}.sources.${id}.canSupport`);
     requireArray(source.cannotSupport, `${location}.sources.${id}.cannotSupport`);
   }
+}
 
+function validateEvidence(evidence, sources, location) {
   for (const [id, item] of evidence) {
     requireString(item.origin, `${location}.evidence.${id}.origin`);
     requireString(item.statement, `${location}.evidence.${id}.statement`);
@@ -177,7 +191,9 @@ async function validateProject(record, descriptor, recordPath, bundleRoot) {
     requireArray(item.limitations, `${location}.evidence.${id}.limitations`);
     requireKnownIds(item.contraryEvidenceIds ?? [], evidence, `${location}.evidence.${id}.contraryEvidenceIds`);
   }
+}
 
+function validateClaims(claims, evidence, location) {
   for (const [id, claim] of claims) {
     requireString(claim.text, `${location}.claims.${id}.text`);
     requireEnum(claim.status, CLAIM_STATUSES, `${location}.claims.${id}.status`);
@@ -191,18 +207,25 @@ async function validateProject(record, descriptor, recordPath, bundleRoot) {
     if (claim.status === "verified") {
       const accepted = claim.evidenceIds.map((evidenceId) => evidence.get(evidenceId)).filter((item) => item.candidateState === "accepted");
       if (accepted.length === 0) fail(`${location}.claims.${id}`, "verified claims require accepted evidence");
+      if (claim.claimStrength === "project_fact" && !accepted.some((item) => item.evidenceGrade === "E3")) {
+        fail(`${location}.claims.${id}`, "verified project facts require accepted E3 evidence");
+      }
       if (claim.scope === "personal_contribution" && claim.attributionGrade !== "A3") {
         fail(`${location}.claims.${id}`, "verified personal contributions require A3 attribution");
       }
     }
   }
+}
 
+function validateContradictions(contradictions, evidence, location) {
   for (const [id, contradiction] of contradictions) {
     requireString(contradiction.summary, `${location}.contradictions.${id}.summary`);
     requireKnownIds(contradiction.evidenceIds, evidence, `${location}.contradictions.${id}.evidenceIds`);
     requireString(contradiction.resolutionQuestion, `${location}.contradictions.${id}.resolutionQuestion`);
   }
+}
 
+function validateStorySeeds(storySeeds, evidence, location) {
   for (const [id, story] of storySeeds) {
     requireString(story.title, `${location}.storySeeds.${id}.title`);
     requireKnownIds(story.evidenceIds, evidence, `${location}.storySeeds.${id}.evidenceIds`);
@@ -212,14 +235,18 @@ async function validateProject(record, descriptor, recordPath, bundleRoot) {
       requireArray(story[key], `${location}.storySeeds.${id}.${key}`);
     }
   }
+}
 
+function validateCurriculum(curriculum, evidence, location) {
   for (const [id, item] of curriculum) {
     requireString(item.title, `${location}.curriculum.${id}.title`);
     requireString(item.objective, `${location}.curriculum.${id}.objective`);
     requireKnownIds(item.evidenceIds, evidence, `${location}.curriculum.${id}.evidenceIds`);
     requireArray(item.questions, `${location}.curriculum.${id}.questions`);
   }
+}
 
+async function validateDiagramAssets(diagrams, evidence, recordDirectory, location) {
   const diagramAssets = [];
   for (const [id, diagram] of diagrams) {
     requireString(diagram.title, `${location}.diagrams.${id}.title`);
@@ -228,16 +255,19 @@ async function validateProject(record, descriptor, recordPath, bundleRoot) {
     requireArray(diagram.limitations, `${location}.diagrams.${id}.limitations`);
     requireEnum(diagram.visibility, VISIBILITIES, `${location}.diagrams.${id}.visibility`);
     const sourcePath = path.resolve(recordDirectory, diagram.sourcePath);
-    await readFile(sourcePath).catch((error) => fail(`${location}.diagrams.${id}.sourcePath`, `cannot read: ${error.message}`));
+    await requireReadableAsset(sourcePath, `${location}.diagrams.${id}.sourcePath`);
     let renderedPath = null;
     if (diagram.renderedPath) {
       requireRelativePath(diagram.renderedPath, `${location}.diagrams.${id}.renderedPath`);
       renderedPath = path.resolve(recordDirectory, diagram.renderedPath);
-      await readFile(renderedPath).catch((error) => fail(`${location}.diagrams.${id}.renderedPath`, `cannot read: ${error.message}`));
+      await requireReadableAsset(renderedPath, `${location}.diagrams.${id}.renderedPath`);
     }
     diagramAssets.push({ id, sourcePath, renderedPath });
   }
+  return diagramAssets;
+}
 
+function validateCandidates(d1Candidates, publicationCandidates, evidence, location) {
   for (const [id, candidate] of d1Candidates) {
     if (candidate.visibility !== "owner_private") fail(`${location}.d1Candidates.${id}.visibility`, "must be owner_private");
     requireKnownIds(candidate.sourceEvidenceIds, evidence, `${location}.d1Candidates.${id}.sourceEvidenceIds`);
@@ -251,6 +281,29 @@ async function validateProject(record, descriptor, recordPath, bundleRoot) {
     }
     assertRemoteSafe(candidate, `${location}.publicationCandidates.${id}`);
   }
+}
+
+async function validateProject(record, descriptor, recordPath, bundleRoot) {
+  const { location, recordDirectory, dossier } = await validateProjectMetadata(
+    record,
+    descriptor,
+    recordPath,
+    bundleRoot,
+  );
+  const indexes = indexProjectRecords(record, location);
+  validateSources(indexes.sources, location);
+  validateEvidence(indexes.evidence, indexes.sources, location);
+  validateClaims(indexes.claims, indexes.evidence, location);
+  validateContradictions(indexes.contradictions, indexes.evidence, location);
+  validateStorySeeds(indexes.storySeeds, indexes.evidence, location);
+  validateCurriculum(indexes.curriculum, indexes.evidence, location);
+  const diagramAssets = await validateDiagramAssets(
+    indexes.diagrams,
+    indexes.evidence,
+    recordDirectory,
+    location,
+  );
+  validateCandidates(indexes.d1Candidates, indexes.publicationCandidates, indexes.evidence, location);
 
   return {
     descriptor,
@@ -258,7 +311,15 @@ async function validateProject(record, descriptor, recordPath, bundleRoot) {
     recordPath,
     recordDirectory,
     dossier,
-    indexes: { sources, evidence, claims, contradictions, storySeeds, curriculum, diagrams },
+    indexes: {
+      sources: indexes.sources,
+      evidence: indexes.evidence,
+      claims: indexes.claims,
+      contradictions: indexes.contradictions,
+      storySeeds: indexes.storySeeds,
+      curriculum: indexes.curriculum,
+      diagrams: indexes.diagrams,
+    },
     diagramAssets,
   };
 }
@@ -508,21 +569,18 @@ function buildHtml(bundle, copiedAssets) {
 </html>`;
 }
 
-export async function buildBehavioralEvidenceSite({ bundleRoot, outputRoot = null }) {
-  const bundle = await validateBehavioralEvidenceBundle({ bundleRoot });
-  const siteRoot = outputRoot ? path.resolve(outputRoot) : path.join(bundle.bundleRoot, "site");
-  const assetsRoot = path.join(siteRoot, "assets");
-  await mkdir(assetsRoot, { recursive: true });
+async function copyDiagramAssets(bundle, assetsRoot) {
   const copiedAssets = new Map();
+  const copyPlans = [];
   for (const project of bundle.projects) {
     for (const asset of project.diagramAssets) {
       const prefix = `${project.record.project.id}-${asset.id}`;
       const sourceName = `${prefix}${path.extname(asset.sourcePath)}`;
-      await copyFile(asset.sourcePath, path.join(assetsRoot, sourceName));
+      copyPlans.push({ from: asset.sourcePath, to: path.join(assetsRoot, sourceName) });
       let renderedName = null;
       if (asset.renderedPath) {
         renderedName = `${prefix}${path.extname(asset.renderedPath)}`;
-        await copyFile(asset.renderedPath, path.join(assetsRoot, renderedName));
+        copyPlans.push({ from: asset.renderedPath, to: path.join(assetsRoot, renderedName) });
       }
       copiedAssets.set(`${project.record.project.id}:${asset.id}`, {
         source: `assets/${sourceName}`,
@@ -530,6 +588,20 @@ export async function buildBehavioralEvidenceSite({ bundleRoot, outputRoot = nul
       });
     }
   }
+  for (let start = 0; start < copyPlans.length; start += MAX_ASSET_COPY_CONCURRENCY) {
+    const batch = copyPlans.slice(start, start + MAX_ASSET_COPY_CONCURRENCY);
+    await Promise.all(batch.map((plan) => copyFile(plan.from, plan.to)));
+  }
+  return copiedAssets;
+}
+
+export async function buildBehavioralEvidenceSite({ bundleRoot, outputRoot = null }) {
+  const bundle = await validateBehavioralEvidenceBundle({ bundleRoot });
+  const siteRoot = outputRoot ? path.resolve(outputRoot) : path.join(bundle.bundleRoot, "site");
+  const assetsRoot = path.join(siteRoot, "assets");
+  await rm(assetsRoot, { recursive: true, force: true });
+  await mkdir(assetsRoot, { recursive: true });
+  const copiedAssets = await copyDiagramAssets(bundle, assetsRoot);
   const html = buildHtml(bundle, copiedAssets);
   await writeFile(path.join(siteRoot, "index.html"), html, "utf8");
   return { bundle, siteRoot, indexPath: path.join(siteRoot, "index.html"), html };
