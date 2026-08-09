@@ -36,21 +36,6 @@ outer project. Tasks share files, not unrecorded conversation. First-time task
 creation and durable specialist registration follow
 `docs/agents/task-startup-prompts.md`.
 
-## Historical Context Verification
-
-When the user asks what was previously said, decided, recommended, promised,
-or stored, distinguish currently loaded context from authoritative task
-history. Material exact content includes instructions or approvals, decisions,
-source or recommendation lists, quoted wording, commands or identifiers,
-evidence or ownership claims, and any saved or published state. For prior
-dialogue, use the current task's stored transcript or session history; for
-repository or product state, use its named system of record such as Git,
-GitHub, or D1. If material exact content is not visible, retrieve it from that
-source before answering. Never present a plausible reconstruction as the prior
-content, and never claim that content was absent, unsaved, or not durable
-without checking the relevant authoritative source. If retrieval is
-unavailable, state that limitation and label any reconstruction unverified.
-
 ## UI Design Skill Routing
 
 For new UI, visual redesigns, or material interface changes, use the installed

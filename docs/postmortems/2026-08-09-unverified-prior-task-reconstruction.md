@@ -1,7 +1,7 @@
 # Postmortem: Unverified reconstruction was reported as prior task content
 
 - **Date:** 2026-08-09
-- **Status:** Remediation in review
+- **Status:** Remediation applied; postmortem in review
 - **Verification lane:** Reliability
 - **Issue:** [interview-arc#203](https://github.com/Vinosaamaa/interview-arc/issues/203)
 - **PR:** [interview-arc#204](https://github.com/Vinosaamaa/interview-arc/pull/204)
@@ -19,6 +19,11 @@ The user detected the mismatch. A later transcript query recovered the exact
 original response and confirmed that it had been stored. No practice activity,
 D1 record, publication artifact, or source file was mutated by the incorrect
 answer.
+
+The first remediation draft placed a detailed rule in Interview Arc's root
+guide. Before merge, the user clarified that the behavior must apply to every
+local Codex project. The repository rule was removed and replaced by one
+concise rule in the machine-wide Codex guide.
 
 ## Impact
 
@@ -51,7 +56,10 @@ reported the correction.
    not durably recorded.
 6. The agent queried authoritative task history, recovered the exact response,
    and corrected the record.
-7. Issue #203 was opened to add a repository-wide retrieval gate.
+7. Issue #203 and PR #204 initially proposed a repository-wide retrieval gate.
+8. The user clarified that the rule must cover every local Codex project.
+9. The unmerged repository rule was removed and the machine-wide guide was
+   updated instead.
 
 ## Relevant context boundary
 
@@ -104,46 +112,38 @@ content or its storage status.
 
 ## Resolution
 
-The repository-root `AGENTS.md` now requires every Interview Arc agent to:
+The machine-wide `~/.codex/AGENTS.md` now contains one compact requirement:
 
-1. distinguish loaded context from authoritative task history;
-2. treat instructions, approvals, decisions, source lists, quoted wording,
-   commands, identifiers, evidence or ownership claims, and saved or published
-   state as material exact content;
-3. use stored task transcript or session history for prior dialogue and the
-   named system of record for repository or product state;
-4. retrieve available authoritative history when material exact prior content
-   is not visible;
-5. avoid presenting plausible reconstructions as the prior content;
-6. avoid claims that content was absent, unsaved, or not durable without first
-   checking the relevant source; and
-7. state the retrieval limitation and label any reconstruction unverified when
-   authoritative history cannot be accessed.
+> Before reporting material prior dialogue, decisions, identifiers, or saved
+> state, verify it against the stored task transcript or owning system of
+> record. Never present reconstruction as history or claim content is missing
+> or unsaved without checking; if verification is unavailable, say so.
 
-The shared rule is intentionally not duplicated in specialist guides. Codex
-loads repository instructions from the root toward the working directory, so
-the root scope reaches coordinator, coding, system-design, behavioral, and
-future nested agents. Already-running sessions still need an instruction
-reload or restart because the instruction chain is constructed at run or
-session start.
+There is no `~/.codex/AGENTS.override.md`, and `CODEX_HOME` is not customized,
+so this is the active global guide. Codex loads it before repository and nested
+project guidance. Interview Arc's root and specialist guides do not duplicate
+the rule. Already-running sessions still need an instruction reload or restart
+because the instruction chain is constructed at run or session start.
 
 ## Verification
 
-- Confirm the rule is present in the root guide and absent from nested
-  specialist guides.
+- Confirm the compact rule is present in the active global guide.
+- Confirm no global override or custom Codex home shadows that guide.
+- Confirm Interview Arc's root and specialist guides do not duplicate it.
 - Run Markdown and whitespace checks for the changed files.
 - Confirm the pull request is based only on current `origin/main` and contains
   no unrelated work.
-- After merge, have each long-lived task reload repository instructions before
-  relying on the new rule.
+- Have each existing long-lived task reload instructions or restart before
+  relying on the new global rule.
 
 ## Prevention and follow-up
 
 | Action | Owner | Tracking | Status |
 | --- | --- | --- | --- |
-| Add repository-wide authoritative-history retrieval gate | Interview Arc | #203 | Implemented in branch |
+| Add machine-wide authoritative-history retrieval gate | Local Codex configuration | #203 | Implemented |
+| Remove the unmerged repository-specific duplicate | Interview Arc | #204 | Implemented in branch |
 | Preserve private task identifiers and transcript paths outside public artifacts | Interview Arc | #203 | Implemented |
-| Reload existing long-lived tasks after merge | Task coordinator | #203 | Pending merge |
+| Reload existing long-lived tasks after the global edit | Task coordinator | #203 | Pending reload |
 | Consider automated transcript lookup only if instruction-level prevention proves insufficient | Interview Arc | Future evidence | Not currently planned |
 
 ## Known limitations
@@ -153,5 +153,7 @@ session start.
 - It does not add a transcript-search product feature or change D1/MCP.
 - It does not make every paraphrase require byte-for-byte lookup; the gate is
   for material exact claims about prior content, decisions, or storage state.
+- A project-level instruction can override global guidance if it explicitly
+  conflicts; no such Interview Arc override currently exists.
 - Existing sessions do not receive a live broadcast of changed instruction
   files and must reload or restart.
