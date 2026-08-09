@@ -73,10 +73,10 @@ reopening the site without a concrete reason.
 
 ## Durable Behavioral Record
 
-After resolving `questionId`, privately load the current/provisional preferred
-answer with `get_problem_solution_profile`, then call
-`query_behavioral_evidence`. Load only that bounded accepted/contrary evidence,
-claim/gap slice; story candidates remain empty until their later domain slice.
+After resolving `questionId`, concurrently load the current/provisional
+preferred answer with `get_problem_solution_profile` and the bounded evidence
+slice with `query_behavioral_evidence`. Load only accepted/contrary evidence and
+claims/gaps; story candidates remain empty until their later domain slice.
 Ordinary preflight never reads generated HTML, loads an entire dossier, or
 reruns project archaeology. Create a provisional profile only when none exists;
 the final personal answer still requires owner-confirmed facts.
@@ -84,17 +84,10 @@ the final personal answer still requires owner-confirmed facts.
 Treat new user facts as owner-attested evidence candidates and confirm their
 scope before acceptance; documentary proof is optional corroboration. An
 unknown stays a gap, and generated coaching is never evidence. Review and
-persist sanitized items with `upsert_behavioral_evidence_item`, checkpoint
-linked claims with `set_behavioral_claim_status`, and poll each stable
-operation through `get_specialist_write_status`. A queued response is not saved
-evidence. Claim creation uses `expectedRevision: 0`; later checkpoints must use
-the exact current revision returned by `query_behavioral_evidence`. On a
-revision conflict, reread preflight and decide again—never replay stale content
-with a new operation ID. Exact transport retries reuse the same ID and payload.
-Use opaque stable provenance references and exact source revisions, never local
-paths or descriptive locators. Never rewrite immutable evidence/claim identity,
-perform supersession before the candidate-review slice exists, or promote
-pending evidence through ordinary preflight.
+persist items and claim checkpoints only through the MCP workflow in
+`docs/contracts/behavioral-evidence-domain.md`; that contract is authoritative
+for revisions, receipts, bounded polling, retries, provenance, identity, and
+the current supersession boundary. A queued response is not saved evidence.
 
 When the user explicitly requests a hypothetical or fictional variant, store
 it only as a labeled Solution Profile `practiceScenario`. Give it a stable

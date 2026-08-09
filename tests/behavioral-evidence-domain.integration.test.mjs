@@ -15,6 +15,7 @@ const wrangler = fileURLToPath(new URL("../node_modules/.bin/wrangler", import.m
 const config = fileURLToPath(new URL("../wrangler.mcp.jsonc", import.meta.url));
 const project = fileURLToPath(new URL("..", import.meta.url));
 const sha256 = (text) => createHash("sha256").update(text).digest("hex");
+const MAX_WORKER_LOG_CHARS = 20_000;
 
 function availablePort() {
   return new Promise((resolve, reject) => {
@@ -144,8 +145,11 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
       stdio: ["ignore", "pipe", "pipe"],
     });
     let workerLog = "";
-    worker.stdout.on("data", (chunk) => { workerLog += chunk; });
-    worker.stderr.on("data", (chunk) => { workerLog += chunk; });
+    const appendWorkerLog = (chunk) => {
+      workerLog = `${workerLog}${chunk}`.slice(-MAX_WORKER_LOG_CHARS);
+    };
+    worker.stdout.on("data", appendWorkerLog);
+    worker.stderr.on("data", appendWorkerLog);
     await waitForWorker(baseUrl, worker);
     ownerClient = await connect(baseUrl, ownerToken, "behavioral-evidence-owner");
 
@@ -582,8 +586,7 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
     };
     await call(ownerClient, "upsert_behavioral_evidence_item", personalSourceInput);
     await waitForJobs(ownerClient, [personalSourceInput.operationId]);
-    for (const scope of ["ownership", "decision", "leadership"]) {
-      const personalClaim = {
+    const personalClaims = ["ownership", "decision", "leadership"].map((scope) => ({
         operationId: `behavioral-claim-operation-${scope}`,
         expectedRevision: 0,
         claim: {
@@ -598,9 +601,13 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
           gaps: [],
           tags: [scope],
         },
-      };
-      await call(ownerClient, "set_behavioral_claim_status", personalClaim);
-      const [failedPersonalClaim] = await waitForJobs(ownerClient, [personalClaim.operationId]);
+      }));
+    await Promise.all(personalClaims.map((input) => call(ownerClient, "set_behavioral_claim_status", input)));
+    const failedPersonalClaims = await waitForJobs(
+      ownerClient,
+      personalClaims.map((input) => input.operationId),
+    );
+    for (const failedPersonalClaim of failedPersonalClaims) {
       assert.equal(failedPersonalClaim.status, "failed");
       assert.equal(failedPersonalClaim.failure.code, "behavioral_claim_a3_required");
     }

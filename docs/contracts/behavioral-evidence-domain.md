@@ -21,7 +21,10 @@ only accepted or deliberately pending sanitized records needed across devices.
 2. Call `upsert_behavioral_evidence_item` with one stable `operationId`, stable
    evidence identity, and one question relevance link.
 3. Poll `get_specialist_write_status` until `saved` or `failed`; a queued MCP
-   response is not proof of persistence.
+   response is not proof of persistence. Use bounded backoff (250 ms, 500 ms,
+   1 s, 2 s, then 4 s) and stop the foreground wait after 10 seconds. If the
+   receipt is still nonterminal, report it as pending with its operation ID;
+   never invent failure, change the payload, or reserve a replacement ID.
 4. Call `set_behavioral_claim_status` only after every linked evidence item has
    a matching question/relevance link. Supply `expectedRevision: 0` when
    creating a claim or the exact revision returned by preflight when changing

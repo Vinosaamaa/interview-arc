@@ -189,23 +189,16 @@ async function readClaimEvidence(ownerId: string, claim: BehavioralClaimInput) {
   return rows;
 }
 
-function enforceVerifiedClaimEvidence(claim: BehavioralClaimInput, evidence: BehavioralEvidenceItemRow[]) {
-  const supporting = new Set(claim.evidenceIds);
-  const accepted = evidence.filter((item) => supporting.has(item.evidenceId) && item.candidateState === "accepted");
-  const contrary = new Set(claim.contraryEvidenceIds);
-  const acceptedContrary = evidence.filter((item) => contrary.has(item.evidenceId) && item.candidateState === "accepted");
+const personalClaimScopes = ["personal_contribution", "ownership", "decision", "leadership"];
+const isProbativeEvidence = (item: BehavioralEvidenceItemRow) => item.evidenceGrade !== "E0"
+  && !["generated_secondary", "derived_inference"].includes(item.origin);
+
+function enforceClaimStatusAndScope(claim: BehavioralClaimInput) {
   if (claim.status === "contradicted") {
     if (claim.claimStrength !== "contradicted") {
       throw new BehavioralEvidenceError(
         "behavioral_claim_status_strength_conflict",
         "A contradicted checkpoint must retain contradicted claim strength.",
-      );
-    }
-    if (!acceptedContrary.some((item) => item.evidenceGrade !== "E0"
-        && !["generated_secondary", "derived_inference"].includes(item.origin))) {
-      throw new BehavioralEvidenceError(
-        "behavioral_claim_contrary_evidence_required",
-        "A contradicted claim requires accepted probative contrary evidence.",
       );
     }
     return;
@@ -223,14 +216,30 @@ function enforceVerifiedClaimEvidence(claim: BehavioralClaimInput, evidence: Beh
       "Only a project fact or owner-confirmed personal contribution can be verified.",
     );
   }
-  const personalScopes = ["personal_contribution", "ownership", "decision", "leadership"];
-  if ((personalScopes.includes(claim.scope) && claim.claimStrength !== "personal_contribution_candidate")
-      || (!personalScopes.includes(claim.scope) && claim.claimStrength !== "project_fact")) {
+  if ((personalClaimScopes.includes(claim.scope) && claim.claimStrength !== "personal_contribution_candidate")
+      || (!personalClaimScopes.includes(claim.scope) && claim.claimStrength !== "project_fact")) {
     throw new BehavioralEvidenceError(
       "behavioral_claim_scope_strength_conflict",
       "Verified claim scope and claim strength must describe the same project or personal authority boundary.",
     );
   }
+}
+
+function enforceClaimEvidenceQuality(
+  claim: BehavioralClaimInput,
+  accepted: BehavioralEvidenceItemRow[],
+  acceptedContrary: BehavioralEvidenceItemRow[],
+) {
+  if (claim.status === "contradicted") {
+    if (!acceptedContrary.some(isProbativeEvidence)) {
+      throw new BehavioralEvidenceError(
+        "behavioral_claim_contrary_evidence_required",
+        "A contradicted claim requires accepted probative contrary evidence.",
+      );
+    }
+    return;
+  }
+  if (claim.status !== "verified") return;
   if (acceptedContrary.length > 0) {
     throw new BehavioralEvidenceError(
       "behavioral_claim_unresolved_contrary_evidence",
@@ -243,8 +252,7 @@ function enforceVerifiedClaimEvidence(claim: BehavioralClaimInput, evidence: Beh
       "A verified claim requires accepted supporting evidence.",
     );
   }
-  const probative = accepted.filter((item) => item.evidenceGrade !== "E0"
-    && !["generated_secondary", "derived_inference"].includes(item.origin));
+  const probative = accepted.filter(isProbativeEvidence);
   if (probative.length === 0) {
     throw new BehavioralEvidenceError(
       "behavioral_claim_primary_evidence_required",
@@ -257,7 +265,7 @@ function enforceVerifiedClaimEvidence(claim: BehavioralClaimInput, evidence: Beh
       "A verified project fact requires accepted E3 evidence.",
     );
   }
-  if ((personalScopes.includes(claim.scope)
+  if ((personalClaimScopes.includes(claim.scope)
         || claim.claimStrength === "personal_contribution_candidate")
       && !probative.some((item) => item.attributionGrade === "A3" && item.ownerAttestation)) {
     throw new BehavioralEvidenceError(
@@ -273,6 +281,15 @@ function enforceVerifiedClaimEvidence(claim: BehavioralClaimInput, evidence: Beh
       "Production, scale, metric, and result claims require production evidence or an exact A3 owner attestation.",
     );
   }
+}
+
+function enforceVerifiedClaimEvidence(claim: BehavioralClaimInput, evidence: BehavioralEvidenceItemRow[]) {
+  const supporting = new Set(claim.evidenceIds);
+  const contrary = new Set(claim.contraryEvidenceIds);
+  const accepted = evidence.filter((item) => supporting.has(item.evidenceId) && item.candidateState === "accepted");
+  const acceptedContrary = evidence.filter((item) => contrary.has(item.evidenceId) && item.candidateState === "accepted");
+  enforceClaimStatusAndScope(claim);
+  enforceClaimEvidenceQuality(claim, accepted, acceptedContrary);
 }
 
 export async function setBehavioralClaimStatus(
