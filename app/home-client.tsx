@@ -49,10 +49,13 @@ import { useAmbientSound } from "./ambient-sound";
 import { MusicPlaylist } from "./music-playlist";
 import {
   averageEffortBreakdown,
+  bankReaderHref,
   journeyHrefWithoutReader,
   journeyReaderHref,
   pastReaderHref,
+  pastSolutionReaderHref,
   readerClosePlan,
+  readBankReaderState,
   readJourneyReaderState,
   readPastReaderState,
   readWorkspaceRouteView,
@@ -1419,8 +1422,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [selectedProblem, setSelectedProblem] = useState<{ type: ActivityType; question: QuestionBankItem } | null>(null);
   const [libraryNestedProblem, setLibraryNestedProblem] = useState<{ type: ActivityType; question: QuestionBankItem } | null>(null);
   const [bankNestedEntry, setBankNestedEntry] = useState<LogEntry | null>(null);
+  const [journeyNestedEntry, setJourneyNestedEntry] = useState<LogEntry | null>(null);
+  const [journeyNestedProblem, setJourneyNestedProblem] = useState<{ type: ActivityType; question: QuestionBankItem } | null>(null);
   const nestedReaderFocus = (view === "library" && Boolean(libraryNestedProblem))
-    || (view === "banks" && Boolean(bankNestedEntry));
+    || (view === "banks" && Boolean(bankNestedEntry))
+    || (view === "journey" && Boolean(journeyNestedEntry || journeyNestedProblem));
   const [masterPaneState, setMasterPaneState] = useState<MasterPaneState>({ library: false, banks: false });
   const activeListSurface: ListSurface | null = view === "library" || view === "banks" ? view : null;
   const masterPaneOpen = activeListSurface ? masterPaneState[activeListSurface] : false;
@@ -1683,8 +1689,18 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       const routeView = readWorkspaceRouteView(window.location.href);
-      if (readJourneyReaderState(window.location.href) || readPastReaderState(window.location.href)) {
+      if (readJourneyReaderState(window.location.href)) {
+        setView("journey");
+        setViewMemoryReady(true);
+        return;
+      }
+      if (readPastReaderState(window.location.href)) {
         setView("library");
+        setViewMemoryReady(true);
+        return;
+      }
+      if (readBankReaderState(window.location.href)) {
+        setView("banks");
         setViewMemoryReady(true);
         return;
       }
@@ -1795,7 +1811,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }, [closeComposer, composer.open, integrationOpen]);
 
   useEffect(() => {
-    if (!selectedEntry && !selectedProblem) return;
+    if (!selectedEntry && !selectedProblem && !journeyNestedEntry && !journeyNestedProblem) return;
     const closeReader = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (!nestedReaderFocus && masterPaneOpen && window.matchMedia("(max-width: 1976px)").matches) {
@@ -1806,7 +1822,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     };
     window.addEventListener("keydown", closeReader);
     return () => window.removeEventListener("keydown", closeReader);
-  }, [bankNestedEntry, libraryNestedProblem, masterPaneOpen, nestedReaderFocus, selectedEntry, selectedProblem, setMasterPaneOpen]);
+  }, [bankNestedEntry, journeyNestedEntry, journeyNestedProblem, libraryNestedProblem, masterPaneOpen, nestedReaderFocus, selectedEntry, selectedProblem, setMasterPaneOpen]);
 
   useEffect(() => {
     if (!masterPaneOpen) return;
@@ -2801,7 +2817,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       "",
       href,
     );
-    openJournalEntry(entry);
+    setReaderClosing(false);
+    setJourneyNestedEntry(entry);
+    setJourneyNestedProblem(null);
+    transitionToView("journey");
   }
 
   function openPastEntry(entry: LibraryEntry, orderedEntries: LogEntry[] = libraryEntries) {
@@ -2992,19 +3011,49 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       });
     }
     if (openingReader) pendingSelectedRevealRef.current = "banks";
+    const currentBankReader = readBankReaderState(window.location.href);
+    const currentDepth = currentBankReader && Number.isInteger(window.history.state?.interviewArcBankDepth)
+      ? window.history.state.interviewArcBankDepth as number
+      : 0;
+    if (!currentBankReader) {
+      window.history.replaceState(
+        { interviewArcWorkspaceView: "banks", interviewArcBankDepth: 0 },
+        "",
+        workspaceViewHref(window.location.href, "banks"),
+      );
+    }
+    window.history.pushState(
+      { interviewArcBankReader: true, interviewArcBankDepth: currentDepth + 1 },
+      "",
+      bankReaderHref(window.location.href, type, question.id),
+    );
+    setReaderNotFound("");
     closeMasterAfterSelection();
     setReaderClosing(false);
+    setBankNestedEntry(null);
     setSelectedProblem({ type, question });
   }
 
   function openAttemptFromSolution(entry: LibraryEntry) {
     setReaderClosing(false);
-    if (view === "banks") {
+    if (view === "banks" && selectedProblem) {
+      const currentDepth = Number.isInteger(window.history.state?.interviewArcBankDepth)
+        ? window.history.state.interviewArcBankDepth as number
+        : 1;
+      window.history.pushState(
+        { interviewArcBankReader: true, interviewArcBankDepth: currentDepth + 1 },
+        "",
+        bankReaderHref(window.location.href, selectedProblem.type, selectedProblem.question.id, entry.id),
+      );
       setBankNestedEntry(entry);
       return;
     }
+    if (view === "journey") {
+      openJourneyEntry(entry, selectedProblemAttempts);
+      return;
+    }
     setLibraryNestedProblem(null);
-    setSelectedEntry(entry);
+    openPastEntry(entry, selectedProblemAttempts);
   }
 
   function bankQuestionForEntry(entry: LogEntry) {
@@ -3017,9 +3066,45 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   function openEntrySolution(entry: LogEntry) {
     const question = bankQuestionForEntry(entry);
     if (!question || !hasReusableSolution(entry.type, question)) return;
+    if (view === "journey" && journeyNestedEntry) {
+      const journeyState = readJourneyReaderState(window.location.href);
+      if (!journeyState) return;
+      const currentDepth = Number(window.history.state?.interviewArcJourneyDepth ?? 1);
+      window.history.pushState(
+        {
+          interviewArcJourneyReader: true,
+          interviewArcJourneyDepth: currentDepth + 1,
+          interviewArcJourneyScrollY: window.history.state?.interviewArcJourneyScrollY,
+        },
+        "",
+        journeyReaderHref(window.location.href, { ...journeyState, specialty: entry.type, problemId: question.id }),
+      );
+      setReaderClosing(false);
+      setJourneyNestedProblem({ type: entry.type, question });
+      return;
+    }
+    if (view === "banks" && bankNestedEntry && selectedProblem) {
+      const currentDepth = Number(window.history.state?.interviewArcBankDepth ?? 2);
+      window.history.pushState(
+        { interviewArcBankReader: true, interviewArcBankDepth: currentDepth + 1 },
+        "",
+        bankReaderHref(window.location.href, selectedProblem.type, selectedProblem.question.id),
+      );
+      setReaderClosing(false);
+      setBankNestedEntry(null);
+      return;
+    }
     if (view === "library" && !selectedEntry) {
       captureListPosition("library", "main");
       setSelectedEntry(entry);
+    }
+    if (view === "library") {
+      const currentDepth = Number(window.history.state?.interviewArcPastDepth ?? 1);
+      window.history.pushState(
+        { interviewArcPastReader: true, interviewArcPastDepth: currentDepth + 1 },
+        "",
+        pastSolutionReaderHref(window.location.href, entry.id, entry.type, question.id),
+      );
     }
     setReaderClosing(false);
     setLibraryNestedProblem({ type: entry.type, question });
@@ -3697,7 +3782,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   useEffect(() => {
     if (!viewMemoryReady || !workspaceUrlHydratedRef.current) return;
-    if (readJourneyReaderState(window.location.href) || readPastReaderState(window.location.href)) return;
+    if (readJourneyReaderState(window.location.href) || readPastReaderState(window.location.href) || readBankReaderState(window.location.href)) return;
     if (view === "library" && selectedEntry) {
       window.history.replaceState(
         { interviewArcPastReader: true, interviewArcPastDepth: 0 },
@@ -3712,6 +3797,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       }
       return;
     }
+    if (view === "banks" && selectedProblem) {
+      window.history.replaceState(
+        { interviewArcBankReader: true, interviewArcBankDepth: 0 },
+        "",
+        bankReaderHref(window.location.href, selectedProblem.type, selectedProblem.question.id),
+      );
+      return;
+    }
     const routeView = routeViewFor(view);
     if (readWorkspaceRouteView(window.location.href) !== routeView) {
       window.history.replaceState(
@@ -3720,7 +3813,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         workspaceViewHref(window.location.href, routeView),
       );
     }
-  }, [libraryEntries, pastReaderOrderIds.length, selectedEntry, view, viewMemoryReady]);
+  }, [libraryEntries, pastReaderOrderIds.length, selectedEntry, selectedProblem, view, viewMemoryReady]);
 
   useEffect(() => {
     if (selectedEntry) {
@@ -3776,6 +3869,15 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     }
     if (view === "library" || view === "banks") {
       captureListPosition(view, listModeFor(view));
+    }
+    if (view === "journey") {
+      setJourneyNestedEntry(null);
+      setJourneyNestedProblem(null);
+      setJourneyReaderOrderIds([]);
+    }
+    if (view === "banks") {
+      setSelectedProblem(null);
+      setBankNestedEntry(null);
     }
     if (nextView === "library" || nextView === "banks") {
       const nextMode: ListMode = nextView === "library"
@@ -4034,6 +4136,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             : inRange;
         const candidates = journeyState.day || journeyState.topic ? ordered : inRange;
         const entry = candidates.find((candidate) => candidate.id === journeyState.attemptId);
+        const nestedProblem = journeyState.specialty && journeyState.problemId
+          ? bankFor(journeyState.specialty).find((candidate) => candidate.id === journeyState.problemId)
+          : undefined;
         setJourneyRange(range);
         setJourneyMetric(journeyState.metric);
         setJourneyHeatmapView(journeyState.heatmap);
@@ -4041,18 +4146,19 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         setJourneyTopic(journeyState.topic);
         setJourneyReaderOrderIds(candidates.map((candidate) => candidate.id));
         setPastReaderOrderIds([]);
-        if (!entry) {
-          window.sessionStorage.removeItem("interview-arc-selected-past");
-          setSelectedEntry(null);
+        if (!entry || (journeyState.problemId && (!nestedProblem || entry.type !== journeyState.specialty
+          || (entry.questionId !== journeyState.problemId && normalizedIdentity(entry.title) !== normalizedIdentity(nestedProblem.title))))) {
+          setJourneyNestedEntry(null);
+          setJourneyNestedProblem(null);
           setReaderNotFound(journeyState.attemptId);
           setView("journey");
           return;
         }
         setReaderNotFound("");
         setReaderClosing(false);
-        pendingSelectedRevealRef.current = "library";
-        setSelectedEntry(entry);
-        setView("library");
+        setJourneyNestedEntry(entry);
+        setJourneyNestedProblem(nestedProblem && journeyState.specialty ? { type: journeyState.specialty, question: nestedProblem } : null);
+        setView("journey");
         return;
       }
 
@@ -4065,11 +4171,18 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           ? rememberedOrder
           : libraryEntries;
         const entry = candidates.find((candidate) => candidate.id === pastState.attemptId);
+        const nestedProblem = pastState.specialty && pastState.problemId
+          ? bankFor(pastState.specialty).find((candidate) => candidate.id === pastState.problemId)
+          : undefined;
         setPastReaderOrderIds(candidates.map((candidate) => candidate.id));
         setJourneyReaderOrderIds([]);
-        if (!entry) {
+        setJourneyNestedEntry(null);
+        setJourneyNestedProblem(null);
+        if (!entry || (pastState.problemId && (!nestedProblem || entry.type !== pastState.specialty
+          || (entry.questionId !== pastState.problemId && normalizedIdentity(entry.title) !== normalizedIdentity(nestedProblem.title))))) {
           window.sessionStorage.removeItem("interview-arc-selected-past");
           setSelectedEntry(null);
+          setLibraryNestedProblem(null);
           setReaderNotFound(pastState.attemptId);
           setView("library");
           return;
@@ -4078,17 +4191,49 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         setReaderClosing(false);
         pendingSelectedRevealRef.current = "library";
         setSelectedEntry(entry);
+        setLibraryNestedProblem(nestedProblem && pastState.specialty ? { type: pastState.specialty, question: nestedProblem } : null);
         setView("library");
+        return;
+      }
+
+      const bankState = readBankReaderState(window.location.href);
+      if (bankState) {
+        const question = bankFor(bankState.specialty).find((candidate) => candidate.id === bankState.problemId);
+        const attempt = bankState.attemptId
+          ? libraryEntries.find((candidate) => candidate.id === bankState.attemptId)
+          : undefined;
+        setJourneyNestedEntry(null);
+        setJourneyNestedProblem(null);
+        setReaderClosing(false);
+        setView("banks");
+        if (!question || (bankState.attemptId && (!attempt || attempt.type !== bankState.specialty || attempt.questionId !== bankState.problemId))) {
+          setSelectedProblem(question ? { type: bankState.specialty, question } : null);
+          setBankNestedEntry(null);
+          setReaderNotFound(bankState.attemptId || bankState.problemId);
+          return;
+        }
+        setReaderNotFound("");
+        setSelectedProblem({ type: bankState.specialty, question });
+        setBankNestedEntry(attempt ?? null);
         return;
       }
 
       const routeView = readWorkspaceRouteView(window.location.href);
       if (!routeView) return;
       if (routeView === "journey" || routeView === "past") {
-        window.sessionStorage.removeItem("interview-arc-selected-past");
-        setSelectedEntry(null);
+        if (routeView === "past") {
+          window.sessionStorage.removeItem("interview-arc-selected-past");
+          setSelectedEntry(null);
+        }
+        setJourneyNestedEntry(null);
+        setJourneyNestedProblem(null);
         setJourneyReaderOrderIds([]);
         setPastReaderOrderIds([]);
+        setReaderNotFound("");
+      }
+      if (routeView === "banks") {
+        setSelectedProblem(null);
+        setBankNestedEntry(null);
         setReaderNotFound("");
       }
       setView(routeView === "past" ? "library" : routeView);
@@ -4102,7 +4247,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     }
     window.addEventListener("popstate", restoreWorkspaceLocation);
     return () => window.removeEventListener("popstate", restoreWorkspaceLocation);
-  }, [codingQuestionFor, filteredPastEntries, journal.date, libraryEntries, pastReaderOrderIds]);
+  }, [bankFor, codingQuestionFor, filteredPastEntries, journal.date, libraryEntries, pastReaderOrderIds]);
   const yesterdayEntries = logEntries.filter((entry) => entry.date === yesterdayDate);
   const yesterdayCompleted = yesterdayEntries.filter((entry) => entry.status === "completed" || entry.status === "published");
   const yesterdaySeconds = yesterdayCompleted.reduce((sum, entry) => sum + entry.elapsedSeconds, 0);
@@ -4307,9 +4452,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const effortEntries = journeyRangeEntries.filter((entry) => entry.type === "leetcode" && entry.outcome && entry.elapsedSeconds > 0);
     const maxEffortMinutes = Math.max(1, ...effortEntries.map((entry) => entry.elapsedSeconds / 60));
     return (
-      <section className="view-page journey-page">
+      <section className={`view-page journey-page ${journeyNestedEntry || journeyNestedProblem ? "has-open-reader" : ""}`}>
         <header className="view-masthead journey-masthead"><span className="eyebrow">JOURNEY · PUBLISHED + TODAY&apos;S LIVE RECORD</span><h1>Your practice,<br /><em>mapped over time.</em></h1><p>This page counts only recorded work. Explore consistency, outcomes, topic coverage, effort, and the exact days behind every trend.</p></header>
         {readerNotFound && <div className="journey-reader-not-found" role="alert"><strong>That practice record is unavailable.</strong><span>The saved reader link points to <code>{readerNotFound}</code>, which is not present in the current authoritative record.</span></div>}
+        {(journeyNestedEntry || journeyNestedProblem) && <div className={`journey-reader-detail focused-attempt-workspace ${readerClosing ? "reader-closing" : ""}`}><aside className="journey-reader-pane focused-attempt-pane" aria-label="Selected Journey reader">{journeyNestedProblem ? renderSolutionReader() : renderCaseReader()}</aside></div>}
         <div className="stat-ledger">
           <article className="stat-block coding-stat"><span>Coding solved</span><strong>{codingSolved}</strong><small>{codingFailed} failed attempt{codingFailed === 1 ? "" : "s"}</small></article>
           <article className="stat-block system-stat"><span>System designs</span><strong>{systemCompleted}</strong><small>completed or published</small></article>
@@ -4674,6 +4820,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return (
       <section className={`view-page banks-page ${selectedProblem ? "has-open-solution" : ""} ${listRestoring === "banks" ? "list-restoring" : ""}`}>
         <header className="view-masthead banks-masthead"><span className="eyebrow">PROBLEM BANKS · ALL PRACTICE SOURCES</span><h1>Choose the next thing<br /><em>worth practicing.</em></h1><div className="banks-masthead-meta"><p>Browse every coding, system-design, and behavioral prompt in one place. “Practice today” adds the question to standalone practice and takes you directly to Today.</p><div className="bank-progress-meter" style={{ background: `conic-gradient(var(--signal-dark) ${finishedPercent}%, #e4e9e1 ${finishedPercent}% 100%)` }} aria-label={`${finishedCount} of ${bankEntries.length} problems finished`}><span><strong>{finishedCount}</strong><small>of {bankEntries.length}</small></span></div></div></header>
+        {readerNotFound && <div className="journey-reader-not-found" role="alert"><strong>That Bank reader is unavailable.</strong><span>The saved reader link points to <code>{readerNotFound}</code>, which is not present in the current authoritative record.</span></div>}
         <div className="bank-totals" aria-label="Question bank totals">
           <article className="leetcode"><strong>{bankFor("leetcode").length}</strong><span>Coding problems</span></article>
           <article className="system_design"><strong>{bankFor("system_design").length}</strong><span>System designs</span></article>
@@ -4894,7 +5041,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     ? libraryNestedProblem ? null : selectedEntry
     : view === "banks"
       ? bankNestedEntry
-      : null;
+      : view === "journey"
+        ? journeyNestedProblem ? null : journeyNestedEntry
+        : null;
   const journeyReaderEntries = journeyReaderOrderIds.flatMap((id) => {
     const entry = libraryEntries.find((candidate) => candidate.id === id);
     return entry ? [entry] : [];
@@ -4906,23 +5055,32 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const currentReaderHref = typeof window === "undefined" ? "https://interview-arc.invalid/" : window.location.href;
   const currentJourneyReaderState = readJourneyReaderState(currentReaderHref);
   const currentPastReaderState = readPastReaderState(currentReaderHref);
+  const currentBankReaderState = readBankReaderState(currentReaderHref);
+  const bankReaderEntries = selectedProblem
+    ? libraryEntries.filter((entry) => entry.type === selectedProblem.type && entry.questionId === selectedProblem.question.id)
+    : [];
   const readerNavigationEntries = currentJourneyReaderState
     ? journeyReaderEntries
     : currentPastReaderState
       ? pastReaderEntries
-      : [];
+      : currentBankReaderState?.attemptId
+        ? bankReaderEntries
+        : [];
   const readerNavigationIndex = readerSelectedEntry
     ? readerNavigationEntries.findIndex((entry) => entry.id === readerSelectedEntry.id)
     : -1;
   const navigateReaderEntry = (entry: LibraryEntry) => {
     if (currentJourneyReaderState) openJourneyEntry(entry, readerNavigationEntries);
+    else if (currentBankReaderState?.attemptId) openAttemptFromSolution(entry);
     else openPastEntry(entry, readerNavigationEntries);
   };
   const readerSelectedProblem = view === "banks"
     ? bankNestedEntry ? null : selectedProblem
     : view === "library"
       ? libraryNestedProblem
-      : null;
+      : view === "journey"
+        ? journeyNestedProblem
+        : null;
   const ownerProblemProfile = readerSelectedProblem ? profileFor(readerSelectedProblem.type, readerSelectedProblem.question.id) : undefined;
   const canonicalProblemProfile = readerSelectedProblem?.question.solutionProfile;
   const selectedProblemProfile = ownerProblemProfile && canonicalProblemProfile ? {
@@ -5315,6 +5473,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips, deliveryAnalyses: record.deliveryAnalyses, codeAttempts: record.codeAttempts }
           : current;
         if (view === "banks") setBankNestedEntry(enrich);
+        else if (view === "journey") setJourneyNestedEntry(enrich);
         else setSelectedEntry(enrich);
       })
       .catch((error: unknown) => {
@@ -5342,6 +5501,85 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function closeReaderPanel() {
     const closePlan = readerClosePlan(window.location.href);
+    if (view === "journey" && closePlan?.view === "journey") {
+      const journeyState = readJourneyReaderState(window.location.href);
+      const depth = Number(window.history.state?.interviewArcJourneyDepth ?? 0);
+      const scrollY = window.history.state?.interviewArcJourneyScrollY;
+      if (journeyState?.problemId) {
+        setJourneyNestedProblem(null);
+        setReaderNotFound("");
+        setReaderClosing(false);
+        if (window.history.state?.interviewArcJourneyReader && depth > 1) window.history.go(-1);
+        else window.history.replaceState(
+          {
+            interviewArcJourneyReader: true,
+            interviewArcJourneyDepth: Math.max(1, depth - 1),
+            interviewArcJourneyScrollY: scrollY,
+          },
+          "",
+          closePlan.href,
+        );
+        return;
+      }
+      setJourneyNestedEntry(null);
+      setJourneyNestedProblem(null);
+      setJourneyReaderOrderIds([]);
+      setReaderNotFound("");
+      setReaderClosing(false);
+      restorePageScroll(scrollY);
+      if (window.history.state?.interviewArcJourneyReader && depth > 0) window.history.go(-depth);
+      else window.history.replaceState(
+        {
+          interviewArcWorkspaceView: "journey",
+          interviewArcJourneyDepth: 0,
+          interviewArcJourneyScrollY: scrollY,
+        },
+        "",
+        closePlan.href,
+      );
+      return;
+    }
+    if (view === "library" && libraryNestedProblem && closePlan?.view === "past") {
+      const depth = Number(window.history.state?.interviewArcPastDepth ?? 0);
+      setLibraryNestedProblem(null);
+      setReaderNotFound("");
+      setReaderClosing(false);
+      if (window.history.state?.interviewArcPastReader && depth > 1) window.history.go(-1);
+      else window.history.replaceState(
+        { interviewArcPastReader: true, interviewArcPastDepth: Math.max(1, depth - 1) },
+        "",
+        closePlan.href,
+      );
+      return;
+    }
+    if (view === "banks" && closePlan?.view === "banks") {
+      const bankState = readBankReaderState(window.location.href);
+      const depth = Number(window.history.state?.interviewArcBankDepth ?? 0);
+      setReaderNotFound("");
+      setReaderClosing(false);
+      if (bankState?.attemptId) {
+        setBankNestedEntry(null);
+        if (window.history.state?.interviewArcBankReader && depth > 1) window.history.go(-(depth - 1));
+        else window.history.replaceState(
+          { interviewArcBankReader: true, interviewArcBankDepth: 1 },
+          "",
+          closePlan.href,
+        );
+        return;
+      }
+      const position = listPositionMemoryRef.current.banks.main;
+      pendingListRestoreRef.current = { surface: "banks", ...position };
+      setListRestoring("banks");
+      setSelectedProblem(null);
+      setBankNestedEntry(null);
+      if (window.history.state?.interviewArcBankReader && depth > 0) window.history.go(-depth);
+      else window.history.replaceState(
+        { interviewArcWorkspaceView: "banks", interviewArcBankDepth: 0 },
+        "",
+        closePlan.href,
+      );
+      return;
+    }
     if (view === "library" && !libraryNestedProblem && closePlan?.view === "journey") {
       window.sessionStorage.removeItem("interview-arc-selected-past");
       const depth = Number(window.history.state?.interviewArcJourneyDepth ?? 0);

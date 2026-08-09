@@ -1505,6 +1505,24 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   from { opacity: 1; }
   to { opacity: 0; }
 }
+.focused-attempt-workspace {
+  --reader-pane-width: 1200px;
+  width: min(var(--reader-pane-width), calc(100vw - var(--sidebar-size) - 32px));
+  height: calc(100dvh - 104px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  position: fixed;
+  top: 88px;
+  left: calc(var(--sidebar-size) + (100vw - var(--sidebar-size)) / 2);
+  transform: translateX(-50%);
+  z-index: 26;
+  animation: reader-workspace-enter .2s cubic-bezier(.2,.8,.2,1) both;
+}
+.focused-attempt-workspace.reader-closing {
+  pointer-events: none;
+  animation: reader-workspace-exit .18s cubic-bezier(.4,0,.2,1) both;
+}
+.focused-attempt-pane { display: block; width: 100%; height: 100%; min-width: 0; }
 .master-pane-toggle { display: inline-grid; place-items: center; }
 
 .library-page.has-open-entry .past-master-detail,
@@ -1678,6 +1696,11 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
     height: auto;
     inset: 156px auto 16px 50%;
   }
+  .focused-attempt-workspace {
+    width: calc(100vw - 32px);
+    height: auto;
+    inset: 156px auto 16px 50%;
+  }
 }
 
 @media (max-width: 760px) {
@@ -1686,6 +1709,12 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .banks-page.has-open-solution .bank-master-detail,
   .library-page.has-open-entry .past-master-detail.master-pane-open,
   .banks-page.has-open-solution .bank-master-detail.master-pane-open {
+    width: 100%;
+    height: auto;
+    inset: 66px 0 72px;
+    transform: none;
+  }
+  .focused-attempt-workspace {
     width: 100%;
     height: auto;
     inset: 66px 0 72px;
@@ -1805,6 +1834,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 
 @media (prefers-reduced-motion: reduce) {
   .page-enter-stage,
+  .focused-attempt-workspace,
   .library-page.has-open-entry .past-master-detail,
   .banks-page.has-open-solution .bank-master-detail { animation-duration: .01ms !important; }
 }
