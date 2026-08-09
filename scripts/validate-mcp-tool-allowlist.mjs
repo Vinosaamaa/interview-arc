@@ -7,6 +7,7 @@ const CONTRACT_FILES = [
   "practice/system-design/AGENTS.md",
   "practice/behavioral/AGENTS.md",
   "docs/contracts/durable-practice-publishing.md",
+  "docs/contracts/behavioral-evidence-domain.md",
 ];
 
 export function parseRegisteredTools(source) {
@@ -47,7 +48,7 @@ function replaceEnabledTools(source, tools) {
 
 export async function validateMcpToolAllowlists({
   repositoryRoot = new URL("../", import.meta.url),
-  outerConfigPath = new URL("../../.codex/config.toml", repositoryRoot),
+  outerConfigPath = new URL("../.codex/config.toml", repositoryRoot),
   syncOuter = false,
 } = {}) {
   const [workerSource, repositoryConfig, ...contracts] = await Promise.all([

@@ -169,6 +169,13 @@
       "when": 1785883134143,
       "tag": "0023_warm_living_tribunal",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1786285766430,
+      "tag": "0024_dazzling_blink",
+      "breakpoints": true
     }
   ]
 }

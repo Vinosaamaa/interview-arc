@@ -13,7 +13,9 @@ Load only what the current action needs:
   `../../private-sources/sources.local.json` when available;
 - explicit project/experience addition or re-audit only:
   `prompts/project-evidence-archaeology.md` and
-  `../../docs/contracts/behavioral-evidence-bundle.md`.
+  `../../docs/contracts/behavioral-evidence-bundle.md`;
+- D1 evidence write, claim checkpoint, or ordinary evidence preflight:
+  `../../docs/contracts/behavioral-evidence-domain.md`.
 
 Never commit private sources or copy employer source code into D1/artifacts.
 
@@ -72,18 +74,27 @@ reopening the site without a concrete reason.
 ## Durable Behavioral Record
 
 After resolving `questionId`, privately load the current/provisional preferred
-answer before every revisit. Load only the smallest relevant evidence slice:
-accepted and contrary evidence, open gaps, and normally no more than three
-useful story candidates. Ordinary preflight never reads generated HTML, loads
-an entire dossier, or reruns project archaeology. Create a provisional profile
-only when none exists; the final personal answer still requires owner-confirmed
-facts.
+answer with `get_problem_solution_profile`, then call
+`query_behavioral_evidence`. Load only that bounded accepted/contrary evidence,
+claim/gap slice; story candidates remain empty until their later domain slice.
+Ordinary preflight never reads generated HTML, loads an entire dossier, or
+reruns project archaeology. Create a provisional profile only when none exists;
+the final personal answer still requires owner-confirmed facts.
 
 Treat new user facts as owner-attested evidence candidates and confirm their
 scope before acceptance; documentary proof is optional corroboration. An
 unknown stays a gap, and generated coaching is never evidence. Review and
-persist candidates only through authoritative evidence operations when they
-are available.
+persist sanitized items with `upsert_behavioral_evidence_item`, checkpoint
+linked claims with `set_behavioral_claim_status`, and poll each stable
+operation through `get_specialist_write_status`. A queued response is not saved
+evidence. Claim creation uses `expectedRevision: 0`; later checkpoints must use
+the exact current revision returned by `query_behavioral_evidence`. On a
+revision conflict, reread preflight and decide again—never replay stale content
+with a new operation ID. Exact transport retries reuse the same ID and payload.
+Use opaque stable provenance references and exact source revisions, never local
+paths or descriptive locators. Never rewrite immutable evidence/claim identity,
+perform supersession before the candidate-review slice exists, or promote
+pending evidence through ordinary preflight.
 
 When the user explicitly requests a hypothetical or fictional variant, store
 it only as a labeled Solution Profile `practiceScenario`. Give it a stable

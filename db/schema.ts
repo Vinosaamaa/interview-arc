@@ -684,6 +684,103 @@ export const ownerBankQuestions = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.specialty, table.questionId] })],
 );
 
+// Behavioral evidence is sanitized before it reaches D1. These rows contain
+// no local source locator or raw source bytes; every relationship remains
+// owner-scoped so accepted evidence cannot cross account boundaries.
+export const behavioralEvidenceItems = sqliteTable(
+  "behavioral_evidence_items",
+  {
+    ownerId,
+    evidenceId: text("evidence_id").notNull(),
+    projectKey: text("project_key").notNull(),
+    origin: text("origin").notNull(),
+    statement: text("statement").notNull(),
+    sourceRevision: text("source_revision"),
+    evidenceGrade: text("evidence_grade", { enum: ["E0", "E1", "E2", "E3"] }).notNull(),
+    attributionGrade: text("attribution_grade", { enum: ["A0", "A1", "A2", "A3"] }).notNull(),
+    claimStrength: text("claim_strength", {
+      enum: ["project_fact", "personal_contribution_candidate", "user_confirmation_required", "unsupported", "contradicted"],
+    }).notNull(),
+    candidateState: text("candidate_state", { enum: ["pending", "accepted", "rejected", "superseded"] }).notNull(),
+    visibility: text("visibility", { enum: ["owner_private"] }).notNull().default("owner_private"),
+    safeProvenance: text("safe_provenance", { mode: "json" }).notNull(),
+    supports: text("supports", { mode: "json" }).notNull(),
+    limitations: text("limitations", { mode: "json" }).notNull(),
+    tags: text("tags", { mode: "json" }).notNull(),
+    ownerAttestation: text("owner_attestation", { mode: "json" }),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.evidenceId] }),
+    index("behavioral_evidence_owner_project_idx").on(table.ownerId, table.projectKey),
+    index("behavioral_evidence_owner_state_idx").on(table.ownerId, table.candidateState),
+  ],
+);
+
+export const behavioralEvidenceQuestionLinks = sqliteTable(
+  "behavioral_evidence_question_links",
+  {
+    ownerId,
+    questionId: text("question_id").notNull(),
+    evidenceId: text("evidence_id").notNull(),
+    relevance: text("relevance", { enum: ["supporting", "contrary"] }).notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.questionId, table.evidenceId] }),
+    index("behavioral_evidence_question_idx").on(table.ownerId, table.questionId, table.relevance),
+  ],
+);
+
+export const behavioralClaims = sqliteTable(
+  "behavioral_claims",
+  {
+    ownerId,
+    claimId: text("claim_id").notNull(),
+    questionId: text("question_id").notNull(),
+    text: text("text").notNull(),
+    scope: text("scope", {
+      enum: ["project", "personal_contribution", "ownership", "decision", "production", "scale", "metric", "result", "leadership"],
+    }).notNull(),
+    status: text("status", { enum: ["unverified", "partial", "verified", "contradicted"] }).notNull(),
+    claimStrength: text("claim_strength", {
+      enum: ["project_fact", "personal_contribution_candidate", "user_confirmation_required", "unsupported", "contradicted"],
+    }).notNull(),
+    evidenceIds: text("evidence_ids", { mode: "json" }).notNull(),
+    contraryEvidenceIds: text("contrary_evidence_ids", { mode: "json" }).notNull(),
+    gaps: text("gaps", { mode: "json" }).notNull(),
+    saferWording: text("safer_wording"),
+    tags: text("tags", { mode: "json" }).notNull(),
+    visibility: text("visibility", { enum: ["owner_private"] }).notNull().default("owner_private"),
+    revision: integer("revision").notNull().default(1),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.claimId] }),
+    index("behavioral_claims_question_idx").on(table.ownerId, table.questionId, table.status),
+  ],
+);
+
+export const behavioralClaimStatusEvents = sqliteTable(
+  "behavioral_claim_status_events",
+  {
+    ownerId,
+    claimId: text("claim_id").notNull(),
+    revision: integer("revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    status: text("status", { enum: ["unverified", "partial", "verified", "contradicted"] }).notNull(),
+    snapshot: text("snapshot", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.claimId, table.revision] }),
+    uniqueIndex("behavioral_claim_events_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
 // Specialist writes first reserve a stable, owner-scoped operation receipt.
 // The MCP request only performs this small enqueue; a scheduled executor owns
 // the potentially expensive durable write and can reclaim an expired lease if
@@ -694,7 +791,12 @@ export const specialistWriteJobs = sqliteTable(
     ownerId,
     jobId: text("job_id").notNull(),
     operation: text("operation", {
-      enum: ["leetcode_code_attempt", "personal_bank_question"],
+      enum: [
+        "leetcode_code_attempt",
+        "personal_bank_question",
+        "behavioral_evidence_item",
+        "behavioral_claim_status",
+      ],
     }).notNull(),
     payloadHash: text("payload_hash").notNull(),
     payload: text("payload", { mode: "json" }).notNull(),
@@ -877,6 +979,10 @@ export type ProvisionalSolutionProfileRow = typeof provisionalSolutionProfiles.$
 export type ProblemSolutionRevisionRow = typeof problemSolutionRevisions.$inferSelect;
 export type ActivitySolutionLinkRow = typeof activitySolutionLinks.$inferSelect;
 export type OwnerBankQuestionRow = typeof ownerBankQuestions.$inferSelect;
+export type BehavioralEvidenceItemRow = typeof behavioralEvidenceItems.$inferSelect;
+export type BehavioralEvidenceQuestionLinkRow = typeof behavioralEvidenceQuestionLinks.$inferSelect;
+export type BehavioralClaimRow = typeof behavioralClaims.$inferSelect;
+export type BehavioralClaimStatusEventRow = typeof behavioralClaimStatusEvents.$inferSelect;
 export type SpecialistWriteJobRow = typeof specialistWriteJobs.$inferSelect;
 export type IntegrationTokenRow = typeof integrationTokens.$inferSelect;
 export type ExtraActivityRow = typeof extraActivities.$inferSelect;
