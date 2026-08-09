@@ -107,12 +107,17 @@ content or its storage status.
 The repository-root `AGENTS.md` now requires every Interview Arc agent to:
 
 1. distinguish loaded context from authoritative task history;
-2. retrieve available authoritative history when material exact prior content
+2. treat instructions, approvals, decisions, source lists, quoted wording,
+   commands, identifiers, evidence or ownership claims, and saved or published
+   state as material exact content;
+3. use stored task transcript or session history for prior dialogue and the
+   named system of record for repository or product state;
+4. retrieve available authoritative history when material exact prior content
    is not visible;
-3. avoid presenting plausible reconstructions as the prior content;
-4. avoid claims that content was absent, unsaved, or not durable without first
+5. avoid presenting plausible reconstructions as the prior content;
+6. avoid claims that content was absent, unsaved, or not durable without first
    checking the relevant source; and
-5. state the retrieval limitation and label any reconstruction unverified when
+7. state the retrieval limitation and label any reconstruction unverified when
    authoritative history cannot be accessed.
 
 The shared rule is intentionally not duplicated in specialist guides. Codex
