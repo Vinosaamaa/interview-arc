@@ -1,0 +1,370 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://interview-arc.local/schemas/behavioral-evidence-project.schema.json",
+  "title": "Behavioral Evidence Project Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "project",
+    "sources",
+    "evidence",
+    "claims",
+    "contradictions",
+    "storySeeds",
+    "curriculum",
+    "diagrams",
+    "sanitization",
+    "publicationCandidates"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "project": { "$ref": "#/$defs/project" },
+    "sources": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/source" }
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/evidence" }
+    },
+    "claims": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/claim" }
+    },
+    "contradictions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/contradiction" }
+    },
+    "storySeeds": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/storySeed" }
+    },
+    "curriculum": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/curriculumItem" }
+    },
+    "diagrams": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/diagram" }
+    },
+    "sanitization": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/sanitization" }
+    },
+    "d1Candidates": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/remoteCandidate" }
+    },
+    "publicationCandidates": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/publicationCandidate" }
+    }
+  },
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
+    "stringList": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "idList": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/stableId" },
+      "uniqueItems": true
+    },
+    "visibility": {
+      "enum": ["local_only", "owner_private", "publication_safe"]
+    },
+    "evidenceGrade": {
+      "enum": ["E0", "E1", "E2", "E3"]
+    },
+    "attributionGrade": {
+      "enum": ["A0", "A1", "A2", "A3"]
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "organization",
+        "relationship",
+        "summary",
+        "reviewState",
+        "visibility",
+        "dossierPath",
+        "evidenceBoundary",
+        "inspectedAt"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "title": { "type": "string", "minLength": 1 },
+        "organization": { "type": "string", "minLength": 1 },
+        "relationship": {
+          "enum": ["employment", "contract", "company_project", "personal_project", "unknown"]
+        },
+        "summary": { "type": "string", "minLength": 1 },
+        "reviewState": {
+          "enum": ["pending_owner_review", "in_review", "reviewed", "superseded"]
+        },
+        "visibility": { "const": "local_only" },
+        "dossierPath": { "$ref": "#/$defs/relativePath" },
+        "sourceRevision": { "type": "string" },
+        "evidenceBoundary": { "type": "string", "minLength": 1 },
+        "inspectedAt": { "type": "string", "format": "date-time" },
+        "tags": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "label",
+        "locator",
+        "safeHint",
+        "authorization",
+        "sensitivity",
+        "availability",
+        "visibility",
+        "canSupport",
+        "cannotSupport"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "kind": {
+          "enum": ["resume", "repository", "document", "chat_export", "architecture", "git_history", "user_statement", "other"]
+        },
+        "label": { "type": "string", "minLength": 1 },
+        "locator": { "type": "string", "minLength": 1 },
+        "safeHint": { "type": "string", "minLength": 1 },
+        "authorization": {
+          "enum": ["user_authorized", "user_owned", "authorization_required", "unknown"]
+        },
+        "sensitivity": {
+          "enum": ["public", "private", "employer_confidential", "secret_adjacent", "unknown"]
+        },
+        "availability": { "enum": ["available", "missing", "not_checked", "blocked"] },
+        "visibility": { "const": "local_only" },
+        "revision": { "type": "string" },
+        "fingerprint": { "type": "string" },
+        "inspectedAt": { "type": "string", "format": "date-time" },
+        "canSupport": { "$ref": "#/$defs/stringList" },
+        "cannotSupport": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "origin",
+        "statement",
+        "sourceIds",
+        "safeLocators",
+        "evidenceGrade",
+        "attributionGrade",
+        "claimStrength",
+        "candidateState",
+        "visibility",
+        "supports",
+        "limitations"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "origin": {
+          "enum": ["user_statement", "resume", "document", "code_observation", "test_config_observation", "git_metadata", "generated_secondary", "derived_inference", "production_evidence"]
+        },
+        "statement": { "type": "string", "minLength": 1 },
+        "sourceIds": { "$ref": "#/$defs/idList" },
+        "safeLocators": { "$ref": "#/$defs/stringList" },
+        "evidenceGrade": { "$ref": "#/$defs/evidenceGrade" },
+        "attributionGrade": { "$ref": "#/$defs/attributionGrade" },
+        "claimStrength": {
+          "enum": ["project_fact", "personal_contribution_candidate", "user_confirmation_required", "unsupported", "contradicted"]
+        },
+        "candidateState": { "enum": ["pending", "accepted", "rejected", "superseded"] },
+        "visibility": { "$ref": "#/$defs/visibility" },
+        "supports": { "$ref": "#/$defs/stringList" },
+        "limitations": { "$ref": "#/$defs/stringList" },
+        "contraryEvidenceIds": { "$ref": "#/$defs/idList" },
+        "tags": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "text",
+        "scope",
+        "status",
+        "claimStrength",
+        "evidenceGrade",
+        "attributionGrade",
+        "evidenceIds",
+        "contraryEvidenceIds",
+        "gaps",
+        "visibility"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "text": { "type": "string", "minLength": 1 },
+        "scope": { "enum": ["project", "personal_contribution", "ownership", "decision", "production", "scale", "metric", "result", "leadership"] },
+        "status": { "enum": ["unverified", "partial", "verified", "contradicted"] },
+        "claimStrength": {
+          "enum": ["project_fact", "personal_contribution_candidate", "user_confirmation_required", "unsupported", "contradicted"]
+        },
+        "evidenceGrade": { "$ref": "#/$defs/evidenceGrade" },
+        "attributionGrade": { "$ref": "#/$defs/attributionGrade" },
+        "evidenceIds": { "$ref": "#/$defs/idList" },
+        "contraryEvidenceIds": { "$ref": "#/$defs/idList" },
+        "gaps": { "$ref": "#/$defs/stringList" },
+        "visibility": { "$ref": "#/$defs/visibility" },
+        "saferWording": { "type": "string" },
+        "tags": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "contradiction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "priority", "summary", "evidenceIds", "resolutionQuestion", "status"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "priority": { "enum": ["P0", "P1", "P2"] },
+        "summary": { "type": "string", "minLength": 1 },
+        "evidenceIds": { "$ref": "#/$defs/idList" },
+        "resolutionQuestion": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["open", "resolved", "accepted_unknown", "superseded"] }
+      }
+    },
+    "storySeed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "situationFacts", "taskFacts", "actionFacts", "resultFacts", "learningFacts", "missingFields", "evidenceIds", "evidenceGrade", "attributionGrade", "status", "tags"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "title": { "type": "string", "minLength": 1 },
+        "situationFacts": { "$ref": "#/$defs/stringList" },
+        "taskFacts": { "$ref": "#/$defs/stringList" },
+        "actionFacts": { "$ref": "#/$defs/stringList" },
+        "resultFacts": { "$ref": "#/$defs/stringList" },
+        "learningFacts": { "$ref": "#/$defs/stringList" },
+        "missingFields": { "$ref": "#/$defs/stringList" },
+        "evidenceIds": { "$ref": "#/$defs/idList" },
+        "evidenceGrade": { "$ref": "#/$defs/evidenceGrade" },
+        "attributionGrade": { "$ref": "#/$defs/attributionGrade" },
+        "status": { "enum": ["seed", "needs_confirmation", "ready_for_synthesis", "retired"] },
+        "tags": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "curriculumItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "objective", "priority", "status", "evidenceIds", "questions"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "title": { "type": "string", "minLength": 1 },
+        "objective": { "type": "string", "minLength": 1 },
+        "priority": { "type": "integer", "minimum": 1 },
+        "status": { "enum": ["not_started", "in_progress", "blocked", "complete"] },
+        "evidenceIds": { "$ref": "#/$defs/idList" },
+        "questions": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "diagram": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "kind", "sourceFormat", "sourcePath", "evidenceIds", "relationshipBasis", "limitations", "visibility"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "title": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["architecture", "sequence", "data_model", "state", "flow", "provenance", "contradiction", "story_map"] },
+        "sourceFormat": { "enum": ["drawio", "mermaid"] },
+        "sourcePath": { "$ref": "#/$defs/relativePath" },
+        "renderedPath": { "$ref": "#/$defs/relativePath" },
+        "evidenceIds": { "$ref": "#/$defs/idList" },
+        "relationshipBasis": { "enum": ["observed", "mixed_observed_inferred", "aspirational", "evidence_provenance_only"] },
+        "limitations": { "$ref": "#/$defs/stringList" },
+        "visibility": { "$ref": "#/$defs/visibility" }
+      }
+    },
+    "sanitization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "sensitivity", "privatePattern", "transformation", "publicDisposition", "reviewStatus"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "sensitivity": { "enum": ["path", "identity", "internal_name", "source_code", "secret", "customer_data", "metric", "other"] },
+        "privatePattern": { "type": "string", "minLength": 1 },
+        "transformation": { "type": "string", "minLength": 1 },
+        "publicDisposition": { "enum": ["omit", "generalize", "redact", "retain_if_approved"] },
+        "reviewStatus": { "enum": ["pending", "approved", "rejected"] }
+      }
+    },
+    "candidateCore": {
+      "type": "object",
+      "required": ["id", "content", "sourceEvidenceIds", "transformations", "limitations"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "content": { "type": "object" },
+        "sourceEvidenceIds": { "$ref": "#/$defs/idList" },
+        "transformations": { "$ref": "#/$defs/stringList" },
+        "limitations": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "remoteCandidate": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/candidateCore" },
+        {
+          "type": "object",
+          "required": ["kind", "visibility"],
+          "properties": {
+            "kind": { "enum": ["source_metadata", "evidence", "claim", "story", "implementation_note", "diagram"] },
+            "visibility": { "const": "owner_private" }
+          }
+        }
+      ]
+    },
+    "publicationCandidate": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        { "$ref": "#/$defs/candidateCore" },
+        {
+          "type": "object",
+          "required": ["kind", "visibility", "approval"],
+          "properties": {
+            "kind": { "enum": ["claim", "story", "implementation_note", "diagram"] },
+            "visibility": { "const": "publication_safe" },
+            "approval": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status"],
+              "properties": {
+                "status": { "enum": ["pending", "approved", "rejected"] },
+                "approvedBy": { "const": "owner" },
+                "approvedAt": { "type": "string", "format": "date-time" }
+              },
+              "allOf": [
+                {
+                  "if": { "properties": { "status": { "const": "approved" } }, "required": ["status"] },
+                  "then": { "required": ["approvedBy", "approvedAt"] }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

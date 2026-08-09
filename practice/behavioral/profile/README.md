@@ -66,9 +66,16 @@ claim. Every final artifact contains:
 - pinned notes;
 - evidence consulted and confidence/contradictions;
 - what the user did well and what to improve;
-- a complete, polished, standalone model answer using only verified user facts;
+- a complete, polished, standalone model answer using only owner-confirmed
+  facts and permitted corroborating evidence;
 - unanswered questions and claims that still need evidence;
 - references/provenance.
 
 When evidence is insufficient, the “model answer” must visibly retain the gap
 or provide a truthful framing; it must not invent the missing achievement.
+
+An explicitly requested hypothetical or fictional exercise may accompany that
+answer only as a separately labeled Solution Profile `practiceScenario`. Give
+its stable scenario canon the same hard technical and behavioral grilling as a
+real story, but never use it to fill an evidence gap or create a résumé, claim,
+or Story Bank fact.

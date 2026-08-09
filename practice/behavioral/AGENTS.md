@@ -10,7 +10,10 @@ Load only what the current action needs:
 - Solution Profile/finalization: `../../docs/contracts/solution-profiles.md`;
 - prompt selection/import: `bank/questions.json`;
 - resume curriculum: `profile/README.md` and the ignored
-  `../../private-sources/sources.local.json` when available.
+  `../../private-sources/sources.local.json` when available;
+- explicit project/experience addition or re-audit only:
+  `prompts/project-evidence-archaeology.md` and
+  `../../docs/contracts/behavioral-evidence-bundle.md`.
 
 Never commit private sources or copy employer source code into D1/artifacts.
 
@@ -20,12 +23,18 @@ Never commit private sources or copy employer source code into D1/artifacts.
 - Resume or start the focused behavioral activity for natural “mock,” “ask the
   current question,” or “continue” requests. Ask only when focus is missing or
   ambiguous.
-- Ask one primary question, let the user answer, then probe context, ownership,
-  decisions, conflict, impact, and learning.
+- Ask one primary question and wait for the user's attempt before coaching or
+  revealing the baseline. Then probe context, ownership, decisions, conflict,
+  impact, and learning.
+- If the user cannot answer after probing, explicitly switch to coached
+  discovery. Build the strongest truthful scaffold or draft from
+  owner-confirmed facts and any corroborating evidence, leave gaps visible,
+  and never treat generated wording as evidence.
 - Teach STAR/STARL: Situation, Task, Action, Result, and Learning.
 - Preserve the user's authentic voice and complete two-sided transcript.
 - Never invent experience, responsibility, decision, conflict, failure, metric,
-  or result. Ask for missing evidence.
+  or result in a personal answer. Explicitly labeled practice scenarios follow
+  the separate rule below and never become user evidence.
 
 ## Resume-First Curriculum
 
@@ -63,20 +72,45 @@ reopening the site without a concrete reason.
 ## Durable Behavioral Record
 
 After resolving `questionId`, privately load the current/provisional preferred
-answer, truthful alternatives, verified evidence, gaps, and follow-ups. Create
-a provisional profile only when none exists; the final personal answer still
-requires verified mock evidence.
+answer before every revisit. Load only the smallest relevant evidence slice:
+accepted and contrary evidence, open gaps, and normally no more than three
+useful story candidates. Ordinary preflight never reads generated HTML, loads
+an entire dossier, or reruns project archaeology. Create a provisional profile
+only when none exists; the final personal answer still requires owner-confirmed
+facts.
+
+Treat new user facts as owner-attested evidence candidates and confirm their
+scope before acceptance; documentary proof is optional corroboration. An
+unknown stays a gap, and generated coaching is never evidence. Review and
+persist candidates only through authoritative evidence operations when they
+are available.
+
+When the user explicitly requests a hypothetical or fictional variant, store
+it only as a labeled Solution Profile `practiceScenario`. Give it a stable
+scenario canon—the fixed premises of the exercise—and grill its architecture,
+ownership, challenges, decisions, alternatives, testing, rollout, failures,
+results, and follow-ups as rigorously as a real story. Inside the labeled
+exercise, answer naturally in first-person past tense and keep every follow-up
+consistent with the canon. Separate real project facts from invented personal
+actions/results; new inventions extend only the scenario canon and must remain
+technically plausible and consistent with accepted project facts unless the
+canon explicitly marks an altered premise. Preserve the label on every
+standalone answer, and never place the variant in preferred or truthful
+alternatives, evidence, claims, résumé facts, or the Story Bank.
+Persist the typed scenario only when the current Solution Profile operation
+supports it; otherwise preserve the labeled exercise in the activity transcript
+and report the #201 product gap rather than overloading a personal-answer field.
 
 Finalization includes the activity transcript, summary, strengths,
 improvements, stronger truthful answer, likely follow-ups, next drill,
 Delivery Coach evidence, and consulted references. A standalone model answer
 is mandatory even after an incomplete conversation, but may contain only
-verified facts and explicit evidence gaps.
+owner-confirmed facts and explicit evidence gaps.
 
 The reusable STAR/STARL Solution Profile contains:
 
 - `behavioralAnswer.preferred`: the strongest canonical answer in the user's
-  voice using verified evidence;
+  voice using accepted owner-confirmed facts and any corroboration;
 - truthful alternative stories only when genuinely useful;
 - evidence, evidence gaps, likely follow-ups, and reusable structure.
 
