@@ -1,10 +1,10 @@
 # Postmortem: Unverified reconstruction was reported as prior task content
 
 - **Date:** 2026-08-09
-- **Status:** Remediation in progress
+- **Status:** Remediation in review
 - **Verification lane:** Reliability
 - **Issue:** [interview-arc#203](https://github.com/Vinosaamaa/interview-arc/issues/203)
-- **PR:** Pending
+- **PR:** [interview-arc#204](https://github.com/Vinosaamaa/interview-arc/pull/204)
 
 ## Summary
 
