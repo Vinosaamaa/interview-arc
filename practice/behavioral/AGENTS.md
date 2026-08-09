@@ -10,7 +10,10 @@ Load only what the current action needs:
 - Solution Profile/finalization: `../../docs/contracts/solution-profiles.md`;
 - prompt selection/import: `bank/questions.json`;
 - resume curriculum: `profile/README.md` and the ignored
-  `../../private-sources/sources.local.json` when available.
+  `../../private-sources/sources.local.json` when available;
+- explicit project/experience addition or re-audit only:
+  `prompts/project-evidence-archaeology.md` and
+  `../../docs/contracts/behavioral-evidence-bundle.md`.
 
 Never commit private sources or copy employer source code into D1/artifacts.
 

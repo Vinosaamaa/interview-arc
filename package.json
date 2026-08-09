@@ -16,6 +16,8 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "mcp:config:check": "node scripts/validate-mcp-tool-allowlist.mjs",
     "mcp:config:sync-outer": "node scripts/validate-mcp-tool-allowlist.mjs --sync-outer",
+    "behavioral:evidence:validate": "node scripts/build-behavioral-evidence-site.mjs --validate-only",
+    "behavioral:evidence:build": "node scripts/build-behavioral-evidence-site.mjs",
     "code-attempt-review:backfill": "node --experimental-strip-types scripts/backfill-code-attempt-review.mjs",
     "leetcode:browser": "node scripts/leetcode-playwright-controller.mjs",
     "journal:checkpoint": "node scripts/journal-branch.mjs checkpoint",
