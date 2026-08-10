@@ -67,6 +67,7 @@ import {
 import { readMasterPanePreference, writeMasterPanePreference } from "./ui-preferences";
 import { effectiveProfileTags, isReusableSolutionProfile } from "./solution-profile-policy";
 import BehavioralFoundation from "./behavioral-foundation";
+import BankDomainOverview from "./bank-domain-overview";
 import { activityLifecycleState } from "./activity-state";
 import {
   formatPracticeTimerTimestamp,
@@ -1490,6 +1491,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [bankTagFilters, setBankTagFilters] = useState<string[]>(workspaceUiMemory.bankTagFilters ?? []);
   const [bankStarFilter, setBankStarFilter] = useState<"all" | "starred">(workspaceUiMemory.bankStarFilter ?? "all");
   const [bankTopicsExpanded, setBankTopicsExpanded] = useState(workspaceUiMemory.bankTopicsExpanded ?? false);
+  const [expandedBankDesk, setExpandedBankDesk] = useState<ActivityType | null>(null);
   const composerSpecialtyViewsRef = useRef<ComposerSpecialtyViews>(createComposerSpecialtyViews());
   const [composerAttentionFilters, setComposerAttentionFilters] = useState<ComposerAttentionFilter[]>([]);
   const [composerLevelFilters, setComposerLevelFilters] = useState<Array<"easy" | "medium" | "hard">>([]);
@@ -4345,6 +4347,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         setReaderClosing(false);
         setView("banks");
         if (!question || (bankState.attemptId && (!attempt || attempt.type !== bankState.specialty || attempt.questionId !== bankState.problemId))) {
+          if (!question) window.sessionStorage.removeItem("interview-arc-selected-bank");
           setSelectedProblem(question ? { type: bankState.specialty, question } : null);
           setBankNestedEntry(null);
           setReaderNotFound(bankState.attemptId || bankState.problemId);
@@ -4370,6 +4373,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         setReaderNotFound("");
       }
       if (routeView === "banks") {
+        window.sessionStorage.removeItem("interview-arc-selected-bank");
         setSelectedProblem(null);
         setBankNestedEntry(null);
         setReaderNotFound("");
@@ -4615,7 +4619,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         </section>
 
         <article className={`chart-sheet heatmap-sheet ${journeyHeatmapView === "job_applications" ? "career-map" : ""}`}>
-          <div className="chart-heading"><div><span className="eyebrow">365-DAY JOURNEY MAP</span><h2>{journeyHeatmapView === "job_applications" ? "Career focus at a glance" : "Consistency at a glance"}</h2><p>{journeyHeatmapView === "job_applications" ? "Color measures elapsed job-application focus time, split correctly at Pacific midnight." : "Color measures finished coding and mock-interview work. Failed attempts remain visible without inflating the shade."}</p></div><div className="heatmap-legend"><span>Less</span>{Array.from({ length: journeyHeatmapView === "job_applications" ? 6 : 5 }, (_, level) => <i className={`level-${level}`} key={level} />)}<span>More</span></div></div>
+          <div className="chart-heading"><div><span className="eyebrow">365-DAY JOURNEY MAP</span><h2>{journeyHeatmapView === "job_applications" ? "Career focus at a glance" : "Consistency at a glance"}</h2><p>{journeyHeatmapView === "job_applications" ? "Color measures elapsed job-application focus time, split correctly at Pacific midnight." : "Color measures finished coding and mock-interview work. Failed attempts remain visible without inflating the shade."}</p></div></div>
+          <div className="heatmap-command-bar">
           <div className="heatmap-view-selector" role="group" aria-label="Journey map category">{([
             ["all", "All practice"],
             ["leetcode", "Coding"],
@@ -4623,6 +4628,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             ["behavioral", "Behavioral"],
             ["job_applications", "Job applications"],
           ] as Array<[JourneyHeatmapView, string]>).map(([value, label]) => <button key={value} className={journeyHeatmapView === value ? "active" : ""} onClick={() => setJourneyHeatmapView(value)}>{label}</button>)}</div>
+          <div className="heatmap-legend" aria-label="Activity intensity"><span>Less</span>{Array.from({ length: journeyHeatmapView === "job_applications" ? 6 : 5 }, (_, level) => <i className={`level-${level}`} key={level} />)}<span>More</span></div>
+          </div>
           <div className="heatmap-scroll">
             <div className="heatmap-days"><span>M</span><span>W</span><span>F</span></div>
             <div className="practice-heatmap" role="grid" aria-label="Completed practice during the last 365 days">
@@ -4947,6 +4954,18 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const completedBehavioralCurriculum = behavioralCurriculum
       .filter((question) => Boolean(latestFinishedAttempt(libraryEntries, "behavioral", question)))
       .map((question) => question.id);
+    const bankOverviewFor = (type: Extract<ActivityType, "leetcode" | "system_design">) => {
+      const entries = bankEntries.filter((entry) => entry.type === type);
+      return {
+        total: entries.length,
+        finished: entries.filter((entry) => entry.finished).length,
+        dueNow: entries.filter((entry) => entry.dueNow).length,
+        needsReview: entries.filter((entry) => entry.needsReview).length,
+        reusableSolutions: entries.filter((entry) => hasReusableSolution(type, entry.question)).length,
+        starred: entries.filter((entry) => isStarred(type, entry.question.id)).length,
+        topicCount: new Set(entries.flatMap((entry) => tagsForEntry(type, entry.question))).size,
+      };
+    };
     const activeBankFilterCount = bankLevelFilters.length + bankAttentionFilters.length;
     const hasBankFilters = bankTypeFilters.length > 0
       || bankAttentionFilters.length > 0
@@ -4986,14 +5005,31 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         <header className="view-masthead banks-masthead"><span className="eyebrow">PROBLEM BANKS · ALL PRACTICE SOURCES</span><h1>Choose the next thing<br /><em>worth practicing.</em></h1><div className="banks-masthead-meta"><p>Browse every coding, system-design, and behavioral prompt in one place. “Practice today” adds the question to standalone practice and takes you directly to Today.</p><div className="bank-progress-meter" style={{ background: `conic-gradient(var(--signal-dark) ${finishedPercent}%, #e4e9e1 ${finishedPercent}% 100%)` }} aria-label={`${finishedCount} of ${bankEntries.length} problems finished`}><span><strong>{finishedCount}</strong><small>of {bankEntries.length}</small></span></div></div></header>
         {readerNotFound && <div className="journey-reader-not-found" role="alert"><strong>That Bank reader is unavailable.</strong><span>The saved reader link points to <code>{readerNotFound}</code>, which is not present in the current authoritative record.</span></div>}
         <div className="bank-totals" aria-label="Question bank totals">
-          <article className="leetcode"><strong>{bankFor("leetcode").length}</strong><span>Coding problems</span></article>
-          <article className="system_design"><strong>{bankFor("system_design").length}</strong><span>System designs</span></article>
-          <article className="behavioral"><strong>{bankFor("behavioral").length}</strong><span>Behavioral prompts</span></article>
+          {([[
+            "leetcode", bankFor("leetcode").length, "Coding problems"],
+            ["system_design", bankFor("system_design").length, "System designs"],
+            ["behavioral", bankFor("behavioral").length, "Behavioral prompts"],
+          ] as const).map(([type, total, label]) => <button
+            type="button"
+            className={`${type} ${expandedBankDesk === type ? "active" : ""}`}
+            aria-expanded={expandedBankDesk === type}
+            aria-controls={`bank-domain-desk-${type}`}
+            onClick={() => setExpandedBankDesk((current) => current === type ? null : type)}
+            key={type}
+          ><strong>{total}</strong><span>{label}</span><i aria-hidden="true">{expandedBankDesk === type ? "−" : "+"}</i></button>)}
         </div>
-        <BehavioralFoundation
-          curriculumQuestionIds={behavioralCurriculum.map((question) => question.id)}
-          completedCurriculumQuestionIds={completedBehavioralCurriculum}
-        />
+        <div className="bank-domain-desks">
+          {(["leetcode", "system_design", "behavioral"] as const).map((type) => {
+            const open = expandedBankDesk === type;
+            return <div className={`bank-domain-desk-shell ${open ? "open" : ""}`} id={`bank-domain-desk-${type}`} aria-hidden={!open} inert={open ? undefined : true} key={type}><div>
+              {type === "behavioral" ? <BehavioralFoundation
+                enabled={open}
+                curriculumQuestionIds={behavioralCurriculum.map((question) => question.id)}
+                completedCurriculumQuestionIds={completedBehavioralCurriculum}
+              /> : <BankDomainOverview type={type} {...bankOverviewFor(type)} />}
+            </div></div>;
+          })}
+        </div>
         <div className={`bank-master-detail ${masterPaneOpen ? "master-pane-open" : ""} ${selectedProblem ? "reader-workspace" : ""} ${nestedReaderFocus ? "nested-reader-focus" : ""} ${readerClosing ? "reader-closing" : ""}`}>
         <div
           className="bank-master-pane"
@@ -5738,6 +5774,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       const position = listPositionMemoryRef.current.banks.main;
       pendingListRestoreRef.current = { surface: "banks", ...position };
       setListRestoring("banks");
+      window.sessionStorage.removeItem("interview-arc-selected-bank");
       setSelectedProblem(null);
       setBankNestedEntry(null);
       if (window.history.state?.interviewArcBankReader && depth > 0) window.history.go(-depth);
@@ -5938,7 +5975,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     <main className="app-shell" aria-hidden={arrivalState !== "entered"}>
       <a className="skip-link" href="#practice-content">Skip to practice</a>
       <aside className="sidebar">
-        <button className="brand" onClick={() => navigateToPrimaryView("today")}><span className="brand-mark">IA</span><span>Interview Arc</span></button>
+        <button className="brand" onClick={() => navigateToPrimaryView("today")}><span className="brand-mark" aria-hidden="true" /><span>Interview Arc</span></button>
         <nav className="primary-nav" aria-label="Primary navigation">{([[
           "today", "Today"], ["journey", "Journey"], ["reviews", "Reviews"], ["library", "Past"], ["banks", "Problem banks"]] as [View, string][]).map(([id, label], index) => <button key={id} className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
         <div className="sidebar-status"><span className={[...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "live" : ""} /><div><strong>{[...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "Timer running" : hydrated ? "Draft saved locally" : "Loading draft"}</strong><small>Session countdown + one activity stopwatch</small></div></div>
@@ -5947,7 +5984,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
       <section className="main-column">
         <header className="topbar">
-          <div><span>{readableDate(journal.date)}</span><strong>{view === "today" ? "Today’s work" : view === "journey" ? "Statistics" : view === "reviews" ? "Recall schedule" : view === "library" ? "Dated practice log" : "Question sources"}</strong></div>
+          <div><span>{readableDate(journal.date)}</span></div>
           <div>
             <div className={`music-dock ${ambientPlaying ? "active" : ""}`}>
               <button onClick={toggleAmbientSound} aria-pressed={ambientPlaying} title={ambientPlaying ? "Pause music" : "Play music"}><span aria-hidden="true">{ambientPlaying ? "Ⅱ" : "▶"}</span><i><small>{ambientPlaying ? "PLAYING" : "PAUSED"}</small><strong>{trackName}</strong></i></button>
