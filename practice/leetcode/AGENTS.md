@@ -238,6 +238,8 @@ review. After the permitted Editorial check:
 - ground strengths and gaps only in observed reasoning/submitted code;
 - explain the concrete correctness, implementation, or communication issue;
 - present the strongest approach;
+- for every Editorial approach mentioned, explain its core state, transition,
+  and tradeoff; names alone are insufficient;
 - provide a complete independently written Java reference implementation for
   Accepted and every explicit final review;
 - cover correctness invariant, time/space complexity, edge cases, meaningful
