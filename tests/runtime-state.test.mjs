@@ -36,6 +36,15 @@ import {
   voiceFinishGuardMessage,
 } from "../db/practice-exchange-policy.ts";
 
+function registeredToolBlock(workerSource, toolName) {
+  const marker = `server.registerTool(\n    "${toolName}",`;
+  const start = workerSource.indexOf(marker);
+  assert.notEqual(start, -1, `Missing MCP tool registration: ${toolName}`);
+  const next = workerSource.indexOf("\n  server.registerTool(", start + marker.length);
+  assert.notEqual(next, -1, `Unterminated MCP tool registration: ${toolName}`);
+  return workerSource.slice(start, next);
+}
+
 test("today follows the practice timezone instead of the Worker UTC date", () => {
   assert.equal(dateInTimeZone(new Date("2026-07-20T05:30:00Z")), "2026-07-19");
   assert.equal(dateInTimeZone(new Date("2026-07-20T08:00:00Z")), "2026-07-20");
@@ -898,11 +907,13 @@ test("Voice protocol v2 gates content behind an explicit per-capture decision", 
   assert.match(worker, /save_leetcode_code_attempt/);
   assert.match(worker, /semantic paraphrases are rejected/i);
   assert.match(worker, /persistence child must copy those supplied fields verbatim/i);
-  const typedExchangeSchema = worker.slice(
-    worker.indexOf('"save_practice_exchange"'),
-    worker.indexOf('"resolve_voice_capture"'),
-  );
+  const typedExchangeSchema = registeredToolBlock(worker, "save_practice_exchange");
   assert.doesNotMatch(typedExchangeSchema, /expectedRevision/);
+  const typedExchangeDeletionSchema = registeredToolBlock(worker, "delete_typed_practice_exchange");
+  assert.match(typedExchangeDeletionSchema, /expectedRevision: z\.number\(\)\.int\(\)\.nonnegative\(\)/);
+  assert.match(typedExchangeDeletionSchema, /authorization: z\.literal\("explicit_user_instruction"\)/);
+  assert.match(typedExchangeDeletionSchema, /authorization: input\.authorization/);
+  assert.match(typedExchangeDeletionSchema, /destructiveHint: true/);
   const resultControlSchema = worker.slice(
     worker.indexOf('"set_practice_result"'),
     worker.indexOf('"get_today_practice"'),

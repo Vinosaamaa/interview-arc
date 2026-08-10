@@ -50,6 +50,13 @@ parent/child operation routing, queued receipts, retry limits, and Finish
 joining. Operational footers and receipts are visible annotations only; never
 persist them as practice dialogue or publication content.
 
+## Typed Exchange Remediation
+
+Follow the typed-exchange deletion procedure and guards in
+`../docs/contracts/durable-practice-publishing.md`. Specialists use it only for
+an already-saved typed administrative exchange after explicit user
+authorization; never substitute a Voice or whole-transcript deletion.
+
 ## Voice Classification And Grouping
 
 - For one related `interview-arc-voice:v2` capture, call

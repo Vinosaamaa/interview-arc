@@ -206,6 +206,39 @@ export const practiceTranscriptTurns = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.activityId, table.turnId] })],
 );
 
+// Destructive transcript remediation keeps an immutable owner-scoped
+// tombstone. It proves which exact typed pair was removed, makes transport
+// retries idempotent, and prevents deleted stable turn IDs from being reused.
+export const typedPracticeExchangeDeletions = sqliteTable(
+  "typed_practice_exchange_deletions",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    activityId: text("activity_id").notNull(),
+    userTurnId: text("user_turn_id").notNull(),
+    responseTurnId: text("response_turn_id").notNull(),
+    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
+    expectedRevision: integer("expected_revision").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    reason: text("reason").notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    deletedAt: integer("deleted_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.operationId] }),
+    uniqueIndex("typed_exchange_deletions_user_turn_unique").on(
+      table.ownerId,
+      table.activityId,
+      table.userTurnId,
+    ),
+    uniqueIndex("typed_exchange_deletions_response_turn_unique").on(
+      table.ownerId,
+      table.activityId,
+      table.responseTurnId,
+    ),
+  ],
+);
+
 // Voice protocol v2 registers only stable identity and checksum until the
 // specialist decides whether the Codex turn belongs to the focused activity.
 // Transcript text and audio remain local while this row is unresolved.

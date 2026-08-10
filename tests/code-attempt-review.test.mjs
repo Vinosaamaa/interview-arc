@@ -375,9 +375,13 @@ test("the MCP write contract requires specialist-observed review data and leaves
   assert.match(durable, /d1TransactionalInvariantGuard/);
   assert.match(durable, /isD1TransactionalInvariantFailure/);
   assert.match(durable, /const noReadyFinalizationGuard = d1TransactionalInvariantGuard/);
-  assert.match(durable, /db\.batch\(\[\s*noReadyFinalizationGuard,\s*db\.insert\(leetcodeCodeAttempts\)/);
-  assert.match(durable, /const noPendingReviewGuard = d1TransactionalInvariantGuard/);
-  assert.match(durable, /db\.batch\(\[noPendingReviewGuard, finalizationWrite\]\)/);
+  assert.match(durable, /const exactTranscriptEvidenceGuard = d1TransactionalInvariantGuard/);
+  assert.match(durable, /db\.batch\(\[\s*noReadyFinalizationGuard,\s*exactTranscriptEvidenceGuard,\s*db\.insert\(leetcodeCodeAttempts\)/);
+  assert.match(durable, /exactCodeAttemptTranscriptEvidenceCondition\(db, ownerId, incoming, review\.status === "complete"\)/);
+  assert.match(durable, /db\.batch\(\[\s*exactTranscriptEvidenceGuard,\s*db\.update\(leetcodeCodeAttempts\)/);
+  assert.match(durable, /const transcriptState = payload\.complete/);
+  assert.match(durable, /exactActivityTranscriptStateCondition\(ownerId, activityId, transcriptState\)/);
+  assert.match(durable, /\.\.\.finalizationGuards,\s*finalizationWrite/);
   assert.match(durable, /review\.status === "pending" \? undefined : input\.reviewResponseTurnId/);
   assert.match(coordinatorScript, /explicit_evidence_backfill/);
   assert.match(coordinatorScript, /--apply/);

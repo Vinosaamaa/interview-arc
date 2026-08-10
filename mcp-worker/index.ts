@@ -61,6 +61,7 @@ import {
   clearActivityReviewSchedules,
   commitRelatedVoiceCapture,
   completeDeleteVoiceCapture,
+  deleteTypedPracticeExchange,
   expireUnclassifiedVoiceCapture,
   failDeleteVoiceCapture,
   markFinalizationPublished,
@@ -98,6 +99,7 @@ import {
   voiceFinishGuardMessage,
   VoiceResponseGroupConflictError,
 } from "../db/durable-practice";
+import { TypedExchangeDeletionError } from "../db/typed-exchange-deletion";
 import {
   typedExchangeReceipt,
   voiceDecisionReceipt,
@@ -1726,6 +1728,7 @@ function specialistToolFailure(error: unknown) {
     || error instanceof VoiceResponseGroupConflictError
     || error instanceof SpecialistWriteJobError
     || error instanceof BehavioralEvidenceError
+    || error instanceof TypedExchangeDeletionError
   ) {
     const candidateCode = (error as { code?: unknown }).code;
     const code = typeof candidateCode === "string"
@@ -1746,7 +1749,8 @@ function specialistToolFailure(error: unknown) {
           ? error.details.retryable
           : false,
         ...(error instanceof VoiceResponseGroupConflictError
-          || error instanceof SpecialistControlError ? error.details : {}),
+          || error instanceof SpecialistControlError
+          || error instanceof TypedExchangeDeletionError ? error.details : {}),
       },
     };
   }
@@ -1971,23 +1975,67 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async ({ activityId, activityTitle, specialty, userTurn, specialistTurn }) => {
-      const saved = await saveTypedPracticeExchange(ownerId, {
-        activityId,
-        specialty,
-        userTurn,
-        specialistTurn,
-      }, Date.now());
-      const receipt = typedExchangeReceipt(activityTitle);
-      return {
-        content: [{ type: "text", text: receipt }],
-        structuredContent: {
+      try {
+        const saved = await saveTypedPracticeExchange(ownerId, {
           activityId,
-          userTurnId: saved.userTurn.turnId,
-          responseTurnId: saved.specialistTurn.turnId,
-          duplicate: saved.duplicate,
-          receipt,
-        },
-      };
+          specialty,
+          userTurn,
+          specialistTurn,
+        }, Date.now());
+        const receipt = typedExchangeReceipt(activityTitle);
+        return {
+          content: [{ type: "text", text: receipt }],
+          structuredContent: {
+            activityId,
+            userTurnId: saved.userTurn.turnId,
+            responseTurnId: saved.specialistTurn.turnId,
+            duplicate: saved.duplicate,
+            receipt,
+          },
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "delete_typed_practice_exchange",
+    {
+      description: "Permanently delete one exact typed user/specialist practice exchange after explicit user instruction. Read get_activity_practice_record first, then supply its exact typed-exchange revision and stable operation ID. The D1 transaction removes both turns or neither, preserves all other activity state, and stores an immutable idempotent tombstone.",
+      inputSchema: {
+        operationId: z.string().min(1).max(200),
+        activityId: z.string().min(1),
+        userTurnId: z.string().min(1),
+        responseTurnId: z.string().min(1).optional(),
+        expectedRevision: z.number().int().nonnegative(),
+        authorization: z.literal("explicit_user_instruction"),
+        reason: z.string().trim().min(1).max(2_000),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await deleteTypedPracticeExchange(ownerId, {
+          operationId: input.operationId,
+          activityId: input.activityId,
+          userTurnId: input.userTurnId,
+          responseTurnId: input.responseTurnId,
+          expectedRevision: input.expectedRevision,
+          authorization: input.authorization,
+          reason: input.reason,
+        }, Date.now());
+        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "practice");
+        const receipt = result.duplicate
+          ? "Typed practice exchange already deleted · Exact remediation retry acknowledged"
+          : "Typed practice exchange deleted · User turn and specialist reply removed together";
+        return {
+          content: [{ type: "text", text: receipt }],
+          structuredContent: { ...result, receipt },
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
     },
   );
 
@@ -2231,11 +2279,15 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async ({ activityId, specialty, turns }) => {
-      await appendTranscriptTurns(ownerId, activityId, specialty, turns, Date.now());
-      return {
-        content: [{ type: "text", text: `Saved ${turns.length} transcript turn${turns.length === 1 ? "" : "s"} for ${activityId}.` }],
-        structuredContent: { activityId, saved: turns.length },
-      };
+      try {
+        await appendTranscriptTurns(ownerId, activityId, specialty, turns, Date.now());
+        return {
+          content: [{ type: "text", text: `Saved ${turns.length} transcript turn${turns.length === 1 ? "" : "s"} for ${activityId}.` }],
+          structuredContent: { activityId, saved: turns.length },
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
     },
   );
 
@@ -2807,11 +2859,15 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async ({ clipId, ...input }) => {
-      await registerActivityAudioClip(ownerId, { id: clipId, ...input }, Date.now());
-      return {
-        content: [{ type: "text", text: `Registered audio metadata for ${input.activityId}.` }],
-        structuredContent: { clipId, ...input, status: input.status ?? "local_only" },
-      };
+      try {
+        await registerActivityAudioClip(ownerId, { id: clipId, ...input }, Date.now());
+        return {
+          content: [{ type: "text", text: `Registered audio metadata for ${input.activityId}.` }],
+          structuredContent: { clipId, ...input, status: input.status ?? "local_only" },
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
     },
   );
 
