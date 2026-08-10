@@ -73,6 +73,7 @@ import BehavioralTargetBindings from "./behavioral-target-bindings";
 import BehavioralTargetDesk from "./behavioral-target-desk";
 import BankDomainOverview from "./bank-domain-overview";
 import { activityLifecycleState } from "./activity-state";
+import { selectableInteractionModes } from "./interaction-mode-view";
 import {
   formatPracticeTimerTimestamp,
   formatPracticeTimestamp,
@@ -4697,11 +4698,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             <small>{interactionModeDefinition(railActivity.id)?.description ?? "Choose explicitly. Legacy activities stay unclassified until you do."}</small>
           </div>
           <div className="interaction-mode-options" role="group" aria-label={`Interaction mode for ${railActivity.title}`}>
-            {draft.interactionModeRegistry.modes.filter((mode) => (
-              !mode.deprecated
-              && mode.supportedSpecialties.includes(railActivity.type)
-              && mode.selectableWhen.includes(interactionModePhase(railActivity.id))
-            )).map((mode) => {
+            {selectableInteractionModes(
+              draft.interactionModeRegistry,
+              railActivity.type,
+              interactionModePhase(railActivity.id),
+            ).map((mode) => {
               const summary = draft.interactionModes[railActivity.id];
               const selected = summary?.current?.interactionModeId === mode.id;
               const pending = summary?.current?.lastMutationId.startsWith("pending:");

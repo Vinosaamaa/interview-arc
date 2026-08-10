@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import type { JournalActivity } from "../app/content-types";
-import { loadContentIndex } from "./content";
+import { readPublishedJournalActivity } from "./content";
 import { getDb } from "./index";
 import { extraActivities } from "./schema";
 
@@ -28,10 +28,7 @@ export async function readPracticeActivityIdentity(ownerId: string, activityId: 
   if (ownerActivity?.id === activityId) return activityIdentity(ownerActivity);
 
   // Daily/versioned activities are shared content rather than owner rows.
-  // Only this bounded fallback needs the content projection.
-  const content = await loadContentIndex();
-  const published = content.journals
-    .flatMap((journal) => journal.activities)
-    .find((activity) => activity.id === activityId);
+  // Resolve only the matching journal instead of rebuilding the full index.
+  const published = await readPublishedJournalActivity(activityId);
   return published ? activityIdentity(published) : null;
 }

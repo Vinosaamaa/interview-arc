@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { selectableInteractionModes } from "../app/interaction-mode-view.ts";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
@@ -39,8 +40,43 @@ test("Today mode changes use the shared atomic command and truthful recovery UI"
   assert.match(styles, /prefers-reduced-motion/);
 });
 
-test("the Today selector is generated from the registry instead of three hardcoded modes", async () => {
-  const client = await read("../app/home-client.tsx");
-  assert.match(client, /interactionModeRegistry\.modes/);
-  assert.doesNotMatch(client, /\[\s*["']interviewer["']\s*,\s*["']mentor["']\s*,\s*["']grill["']\s*\]/);
+test("the Today selector automatically includes newly registered compatible modes", () => {
+  const registry = {
+    schemaVersion: 1,
+    registryVersion: "test-v1",
+    compatibility: {
+      unknownHistoricalMode: "preserve_as_unknown",
+      deprecatedNewSelection: "reject",
+      aliases: "normalize_without_persisting_alias",
+    },
+    modes: [
+      { id: "interviewer", supportedSpecialties: ["leetcode"], selectableWhen: ["fresh_attempt"], deprecated: false },
+      { id: "mentor", supportedSpecialties: ["leetcode"], selectableWhen: ["fresh_attempt"], deprecated: false },
+      { id: "grill", supportedSpecialties: ["leetcode"], selectableWhen: ["fresh_attempt"], deprecated: false },
+      { id: "pairing", supportedSpecialties: ["leetcode"], selectableWhen: ["fresh_attempt"], deprecated: false },
+      { id: "retired", supportedSpecialties: ["leetcode"], selectableWhen: ["fresh_attempt"], deprecated: true },
+    ].map((mode) => ({
+      label: mode.id,
+      description: `${mode.id} description`,
+      helpPolicy: `${mode.id} help`,
+      aliases: [],
+      defaultFor: [],
+      ...mode,
+    })),
+  };
+
+  assert.deepEqual(
+    selectableInteractionModes(registry, "leetcode", "fresh_attempt").map((mode) => mode.id),
+    ["interviewer", "mentor", "grill", "pairing"],
+  );
+});
+
+test("published activity identity uses a targeted journal lookup", async () => {
+  const [identity, content] = await Promise.all([
+    read("../db/practice-activity-identity.ts"),
+    read("../db/content.ts"),
+  ]);
+  assert.match(identity, /readPublishedJournalActivity/);
+  assert.doesNotMatch(identity, /loadContentIndex/);
+  assert.match(content, /FROM json_each\(\$\{contentJournals\.payload\}, '\$\.activities'\)/);
 });
