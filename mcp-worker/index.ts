@@ -515,7 +515,7 @@ async function voiceTimerMutation(ownerId: string, request: Request, env: Env) {
       ) {
         return json(request, { error: "A result and star choice are required to finish this activity." }, { status: 400 });
       }
-      const activity = instrument.activities.find((candidate) => candidate.id === mutation.activityId);
+      const activity = instrument.workbenchActivities.find((candidate) => candidate.id === mutation.activityId);
       if (!activity || !activity.timer?.startedAt) {
         return json(request, { error: "Start the activity stopwatch before finishing it." }, { status: 409 });
       }
@@ -537,7 +537,7 @@ async function voiceTimerMutation(ownerId: string, request: Request, env: Env) {
         await setProblemStar(ownerId, activity.type, activity.questionId, mutation.starred, now);
       }
       await applyTimerAction(ownerId, activity.id, "activity", "finish", now, {
-        sessionId: instrument.session?.id,
+        sessionId: activity.sessionId,
       });
       await scheduleCompletedVoiceActivity(ownerId, activity, mutation.outcome, date, now);
     } else {

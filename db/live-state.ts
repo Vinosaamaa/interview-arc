@@ -31,6 +31,10 @@ import {
   voiceFinishGuardMessage,
 } from "./durable-practice";
 import { voiceWorkbenchActivityProjection } from "./voice-timer-policy";
+import {
+  d1TransactionalInvariantGuard,
+  isD1TransactionalInvariantFailure,
+} from "./d1-transactional-guard";
 
 export type TimerKind = "activity" | "session";
 export type TimerAction = "start" | "pause" | "finish";
@@ -593,6 +597,29 @@ function advanceWorkbenchRevision(
     eq(practiceWorkbenches.id, workbenchId),
     eq(practiceWorkbenches.status, "open"),
   ));
+}
+
+function openWorkbenchInvariant(
+  db: Db,
+  ownerId: string,
+  workbench: WorkbenchState,
+) {
+  return d1TransactionalInvariantGuard(db, sql`EXISTS (
+    SELECT 1 FROM ${practiceWorkbenches}
+    WHERE ${practiceWorkbenches.ownerId} = ${ownerId}
+      AND ${practiceWorkbenches.id} = ${workbench.id}
+      AND ${practiceWorkbenches.status} = 'open'
+      AND ${practiceWorkbenches.updatedAt} = ${workbench.revision}
+  )`);
+}
+
+function throwWorkbenchMutationConflict(error: unknown): never {
+  if (isD1TransactionalInvariantFailure(error)) {
+    throw new TimerStateConflictError(
+      "Today changed in another surface. Refresh before retrying.",
+    );
+  }
+  throw error;
 }
 
 export async function ensureOpenWorkbench(ownerId: string, date: string, nowMs = Date.now()) {
@@ -1281,7 +1308,15 @@ export async function upsertExtraActivity(
       target: [extraActivities.ownerId, extraActivities.id],
       set: { date: activity.date, workbenchId: workbench.id, payload, updatedAt: nowMs },
     });
-  await db.batch([upsert, advanceWorkbenchRevision(db, ownerId, workbench.id, nowMs)]);
+  try {
+    await db.batch([
+      openWorkbenchInvariant(db, ownerId, workbench),
+      upsert,
+      advanceWorkbenchRevision(db, ownerId, workbench.id, nowMs),
+    ]);
+  } catch (error) {
+    throwWorkbenchMutationConflict(error);
+  }
 }
 
 export async function upsertFocusBlock(
@@ -1329,7 +1364,15 @@ export async function upsertFocusBlock(
       updatedAt: nowMs,
     },
   });
-  await db.batch([upsert, advanceWorkbenchRevision(db, ownerId, workbench.id, nowMs)]);
+  try {
+    await db.batch([
+      openWorkbenchInvariant(db, ownerId, workbench),
+      upsert,
+      advanceWorkbenchRevision(db, ownerId, workbench.id, nowMs),
+    ]);
+  } catch (error) {
+    throwWorkbenchMutationConflict(error);
+  }
 }
 
 export async function removeFocusBlock(ownerId: string, id: string) {
@@ -1443,7 +1486,15 @@ export async function upsertLiveSession(
         updatedAt: nowMs,
       },
     });
-  await db.batch([upsert, advanceWorkbenchRevision(db, ownerId, workbench.id, nowMs)]);
+  try {
+    await db.batch([
+      openWorkbenchInvariant(db, ownerId, workbench),
+      upsert,
+      advanceWorkbenchRevision(db, ownerId, workbench.id, nowMs),
+    ]);
+  } catch (error) {
+    throwWorkbenchMutationConflict(error);
+  }
 }
 
 export async function startFreshWorkbench(

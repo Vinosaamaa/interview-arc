@@ -736,6 +736,13 @@ test("workbenches separate Today from the undated publication queue", async () =
     liveState.indexOf("export async function startFreshWorkbench"),
   );
   assert.match(sessionUpsert, /revision: sql`\$\{liveSessions\.revision\} \+ 1`/);
+  for (const functionName of ["upsertExtraActivity", "upsertFocusBlock", "upsertLiveSession"]) {
+    const start = liveState.indexOf(`export async function ${functionName}`);
+    const end = liveState.indexOf("\nexport async function ", start + 1);
+    const body = liveState.slice(start, end === -1 ? undefined : end);
+    assert.match(body, /openWorkbenchInvariant/);
+    assert.match(body, /throwWorkbenchMutationConflict/);
+  }
   assert.match(liveState, /extraRows[\s\S]*row\.workbenchId === workbench\.id/);
   assert.match(liveState, /includeAll/);
   assert.match(liveSync, /"workbench-start-fresh"/);
@@ -835,6 +842,8 @@ test("Voice timer instrument preserves paused focus and finishes only through an
   assert.match(liveState, /requiresOutcome: false/);
   assert.match(liveState, /requiresOutcome: !focusBlockIds\.has\(activityId\)/);
   assert.match(bridge, /mutation\.type === "finish-activity"/);
+  assert.match(bridge, /instrument\.workbenchActivities\.find/);
+  assert.match(bridge, /sessionId: activity\.sessionId/);
   assert.match(bridge, /Choose a result in the Finish drawer/);
   assert.match(bridge, /activity\.activityClass === "focus_block"/);
   assert.match(bridge, /applyFocusTimerAction/);
