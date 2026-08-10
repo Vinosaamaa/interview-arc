@@ -569,7 +569,7 @@ const BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT = 50;
 
 export async function getBehavioralFoundationStatus(ownerId: string) {
   const db = getDb();
-  const [evidenceSummaryRows, claimSummaryRows, claimDetailRows] = await Promise.all([
+  const [evidenceSummaryRows, claimSummaryRows, questionCoverageRows, claimDetailRows] = await Promise.all([
     db.select({
       total: sql<number>`count(*)`,
       accepted: sql<number>`sum(case when ${behavioralEvidenceItems.candidateState} = 'accepted' then 1 else 0 end)`,
@@ -589,6 +589,16 @@ export async function getBehavioralFoundationStatus(ownerId: string) {
       questions: sql<number>`count(distinct ${behavioralClaims.questionId})`,
       latestUpdatedAt: sql<number | null>`max(${behavioralClaims.updatedAt})`,
     }).from(behavioralClaims).where(eq(behavioralClaims.ownerId, ownerId)),
+    db.select({
+      questionId: behavioralClaims.questionId,
+      claims: sql<number>`count(*)`,
+      verified: sql<number>`sum(case when ${behavioralClaims.status} = 'verified' then 1 else 0 end)`,
+      contradicted: sql<number>`sum(case when ${behavioralClaims.status} = 'contradicted' then 1 else 0 end)`,
+      gaps: sql<number>`sum(json_array_length(${behavioralClaims.gaps}))`,
+    }).from(behavioralClaims)
+      .where(eq(behavioralClaims.ownerId, ownerId))
+      .groupBy(behavioralClaims.questionId)
+      .orderBy(asc(behavioralClaims.questionId)),
     db.select({
       claimId: behavioralClaims.claimId,
       questionId: behavioralClaims.questionId,
@@ -622,13 +632,6 @@ export async function getBehavioralFoundationStatus(ownerId: string) {
   };
   const visibleClaimRows = claimDetailRows.slice(0, BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT);
   const allGaps: Array<{ claimId: string; questionId: string; text: string }> = [];
-  const questionCoverage = new Map<string, {
-    questionId: string;
-    claims: number;
-    verified: number;
-    contradicted: number;
-    gaps: number;
-  }>();
   for (const claim of visibleClaimRows) {
     const claimGaps = claim.gaps as string[];
     const gapSlots = Math.max(0, BEHAVIORAL_GAP_LIMIT + 1 - allGaps.length);
@@ -637,18 +640,6 @@ export async function getBehavioralFoundationStatus(ownerId: string) {
       questionId: claim.questionId,
       text,
     })));
-    const current = questionCoverage.get(claim.questionId) ?? {
-      questionId: claim.questionId,
-      claims: 0,
-      verified: 0,
-      contradicted: 0,
-      gaps: 0,
-    };
-    current.claims += 1;
-    current.verified += claim.status === "verified" ? 1 : 0;
-    current.contradicted += claim.status === "contradicted" ? 1 : 0;
-    current.gaps += claimGaps.length;
-    questionCoverage.set(claim.questionId, current);
   }
 
   return {
@@ -670,7 +661,13 @@ export async function getBehavioralFoundationStatus(ownerId: string) {
       contradicted: Number(claimSummary.contradicted ?? 0),
       questions: Number(claimSummary.questions),
     },
-    questionCoverage: [...questionCoverage.values()].sort((left, right) => left.questionId.localeCompare(right.questionId)),
+    questionCoverage: questionCoverageRows.map((row) => ({
+      questionId: row.questionId,
+      claims: Number(row.claims),
+      verified: Number(row.verified ?? 0),
+      contradicted: Number(row.contradicted ?? 0),
+      gaps: Number(row.gaps ?? 0),
+    })),
     gaps: allGaps.slice(0, BEHAVIORAL_GAP_LIMIT),
     capabilities: {
       evidenceRead: "available" as const,

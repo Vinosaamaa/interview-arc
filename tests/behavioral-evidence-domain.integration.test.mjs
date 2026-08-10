@@ -256,6 +256,32 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
       resumeLibrary: "not_available",
     });
 
+    const overflowClaimValues = Array.from({ length: 50 }, (_, index) => `
+      ('owner-behavioral-evidence','claim-overflow-${index}','question-overflow-${index}',
+       'Synthetic read-model coverage claim ${index}.','project','unverified','unsupported',
+       '[]','[]','[]',NULL,'[]','owner_private',1,1900000000000,1900000000000)
+    `).join(",");
+    await run(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", `
+      INSERT INTO behavioral_claims
+        (owner_id,claim_id,question_id,text,scope,status,claim_strength,evidence_ids,
+         contrary_evidence_ids,gaps,safer_wording,tags,visibility,revision,created_at,updated_at)
+      VALUES ${overflowClaimValues};
+    `]);
+    const overLimitFoundation = await call(ownerClient, "get_behavioral_foundation_status", {});
+    assert.equal(overLimitFoundation.claims.questions, 51);
+    assert.equal(overLimitFoundation.questionCoverage.length, 51);
+    assert.deepEqual(
+      overLimitFoundation.questionCoverage.find(({ questionId }) => questionId === claimInput.claim.questionId),
+      {
+        questionId: claimInput.claim.questionId,
+        claims: 1,
+        verified: 1,
+        contradicted: 0,
+        gaps: 1,
+      },
+    );
+    assert.equal(overLimitFoundation.truncated.claimDetails, true);
+
     const revisedClaimInput = {
       ...claimInput,
       operationId: "behavioral-claim-operation-2",
