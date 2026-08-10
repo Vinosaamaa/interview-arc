@@ -116,6 +116,28 @@ review attention filters.
 
 Published LeetCode letters show original agent-generated solution material. Published system-design and behavioral letters show the complete formatted conversation transcript and review. Markdown is rendered as a preview with headings, lists, tables, links, quotations, and fenced code blocks; raw Markdown source is not the default reading surface.
 
+## Review Queue
+
+Review Queue joins active owner-scoped D1 review schedules to their completed
+practice attempts. It never includes unfinished work or Career Focus blocks.
+The Recall Spine groups records into **Review now**, **Review soon**, and
+**Later** from the persisted due date; every reason names only the stored
+schedule reason, prior result, interval, and completed attempt evidence.
+
+Single and bulk **Add to Today** actions reuse the durable Today planning
+mutation, including stable operation identity, workbench validation, canonical
+duplicate prevention, review-source lineage, and authoritative read-back.
+**Review next week** moves the schedule to the exact Pacific date seven days
+from the current practice date. An exact retry is idempotent; a stale expected
+due date fails closed and reconciles from D1. Browser storage may retain the
+mutation retry and interface selections, but it never owns a competing review
+schedule.
+
+The selection folio keeps a fixed geometry in both empty and populated states.
+Its bookmarks support touch/trackpad scrolling, pointer drag, keyboard arrows,
+and explicit arrow controls without relocating the source rows. Opening the
+prior attempt routes through the shared Past reader.
+
 ## Problem Banks
 
 Problem Banks is the reusable catalog for all three sources: LeetCode, system design, and behavioral. It provides independent question-type, review (`Due now`, `Needs review`), result (`Solved`, `Solved with help`, `Failed`, `To do`), notes, difficulty, tag, and starred filters. Every question shows the most recent finished-attempt flag and has a `Practice today` action that adds it as standalone practice and returns to Today. Past instead shows the flag belonging to each specific attempt.

@@ -243,6 +243,8 @@ export type PlanningSelection =
       prompt?: string;
       minutes: number;
       topics?: string[];
+      reviewOfActivityId?: string;
+      reviewReason?: "failed" | "full_walkthrough" | "approach_review" | "manual" | "successful_recall";
     }
   | {
       kind: "focus";
@@ -313,6 +315,8 @@ export function buildPlanningBatch(input: BuildPlanningBatchInput) {
       timerGroupId: sessionId ?? id,
       timingSource: "website",
       status: "planned",
+      ...(selection.reviewOfActivityId ? { reviewOfActivityId: selection.reviewOfActivityId } : {}),
+      ...(selection.reviewReason ? { reviewReason: selection.reviewReason } : {}),
       ...((selection.topics?.length ?? 0) > 0
         ? { notes: selection.topics!.join(", ") }
         : {}),

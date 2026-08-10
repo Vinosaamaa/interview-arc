@@ -107,6 +107,8 @@ export type Mutation =
   | { type: "focus-block-remove"; id: string }
   | { type: "session-upsert"; session: LocalSession }
   | { type: "session-remove"; id: string; activityIds: string[] }
+  | { type: "review-defer"; reviewKey: string; expectedDueDate: string }
+  | { type: "review-add-today"; mutationId: string; expectedWorkbenchId: string; reviewKeys: string[] }
   | { type: "workbench-start-fresh"; workbenchId: string };
 
 const RETRY_INTERVAL_MS = 15000;

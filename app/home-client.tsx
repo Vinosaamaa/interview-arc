@@ -75,8 +75,15 @@ import {
   practicePeriodAt,
   PRACTICE_TIME_ZONE,
 } from "./practice-time";
+import ReviewQueueView from "./review-queue-view";
+import {
+  buildReviewQueue,
+  reviewStreakDays,
+  type ReviewQueueAttempt,
+  type ReviewQueueItem,
+} from "../db/review-queue-policy";
 
-type View = "today" | "journey" | "library" | "banks";
+type View = "today" | "journey" | "reviews" | "library" | "banks";
 type ComposerMode = "session" | "activity";
 type JourneyRange = 30 | 90 | 365 | "all";
 type JourneyMetric = "activities" | "time";
@@ -205,6 +212,8 @@ type LogEntry = {
   elapsedSeconds: number;
   allocatedSeconds: number;
   reviewDates?: string[];
+  reviewOfActivityId?: string;
+  reviewReason?: ReviewSchedule["reason"];
   url?: string;
   artifact?: ContentArtifact;
   startedAt?: string;
@@ -1424,7 +1433,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   // user enters without forcing React to discard a mismatched server tree.
   const [view, setView] = useState<View>("today");
   const [viewMemoryReady, setViewMemoryReady] = useState(false);
-  const { draft, setDraft, now, setNow, hydrated, enqueue } = useLiveState(journal.date);
+  const { draft, setDraft, now, setNow, hydrated, synced, enqueue } = useLiveState(journal.date);
   const yesterdayDate = shiftDate(journal.date, -1);
   const yesterdayDraft = useReadOnlyLiveState(yesterdayDate);
   const [composer, setComposer] = useState<ComposerState>(EMPTY_COMPOSER);
@@ -1455,6 +1464,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [listRestoring, setListRestoring] = useState<ListSurface | null>(null);
   const [lifecycleDialog, setLifecycleDialog] = useState<LifecycleDialog>(null);
   const [uiToast, setUiToast] = useState<UiToast>(null);
+  const [pendingReviewKeys, setPendingReviewKeys] = useState<string[]>([]);
   const [freshDayConfirmOpen, setFreshDayConfirmOpen] = useState(false);
   const [requiredResultIds, setRequiredResultIds] = useState<string[]>([]);
   const [libraryTypeFilters, setLibraryTypeFilters] = useState<ActivityType[]>(workspaceUiMemory.libraryTypeFilters ?? []);
@@ -1721,7 +1731,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         return;
       }
       const stored = window.sessionStorage.getItem("interview-arc-active-view");
-      if (stored === "journey" || stored === "library" || stored === "banks") setView(stored);
+      if (stored === "journey" || stored === "reviews" || stored === "library" || stored === "banks") setView(stored);
       setViewMemoryReady(true);
     });
     return () => window.cancelAnimationFrame(frame);
@@ -3705,6 +3715,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           elapsedSeconds: localTimer ? elapsed(localTimer, now) : activity.elapsedSeconds ?? 0,
           allocatedSeconds: activity.allocatedSeconds,
           reviewDates: activity.reviewDates,
+          reviewOfActivityId: activity.reviewOfActivityId,
+          reviewReason: activity.reviewReason,
           url: activity.url,
           artifact,
           startedAt,
@@ -3741,6 +3753,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         elapsedSeconds: elapsed(timer, now),
         allocatedSeconds: activity.allocatedSeconds,
         reviewDates: activity.reviewDates,
+        reviewOfActivityId: activity.reviewOfActivityId,
+        reviewReason: activity.reviewReason,
         url: activity.url,
         startedAt,
         endedAt,
@@ -3771,6 +3785,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         elapsedSeconds: elapsed(timer, now),
         allocatedSeconds: activity.allocatedSeconds,
         reviewDates: activity.reviewDates,
+        reviewOfActivityId: activity.reviewOfActivityId,
+        reviewReason: activity.reviewReason,
         url: activity.url,
         startedAt,
         endedAt,
@@ -3799,6 +3815,89 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     () => logEntries.filter((entry) => entry.status === "completed" || entry.status === "published"),
     [logEntries],
   );
+
+  const reviewQueueAttempts = useMemo<ReviewQueueAttempt[]>(() => libraryEntries.map((entry) => ({
+    id: entry.id,
+    questionId: entry.questionId,
+    date: entry.date,
+    type: entry.type,
+    title: entry.title,
+    status: entry.status,
+    outcome: entry.outcome,
+    allocatedSeconds: entry.allocatedSeconds,
+    url: entry.url,
+    reviewOfActivityId: entry.reviewOfActivityId,
+  })), [libraryEntries]);
+  const reviewQueueItems = useMemo(() => buildReviewQueue(
+    reviewQueueAttempts,
+    Object.values(draft.reviews),
+    journal.date,
+  ), [draft.reviews, journal.date, reviewQueueAttempts]);
+  const reviewQueueStreak = useMemo(
+    () => reviewStreakDays(reviewQueueAttempts, journal.date),
+    [journal.date, reviewQueueAttempts],
+  );
+  const reviewBlockedQuestionIds = useMemo(() => new Set(draft.extraActivities.flatMap((activity) => (
+    activity.questionId ? [activity.questionId] : []
+  ))), [draft.extraActivities]);
+  const reviewBlockedTitles = useMemo(() => new Set(draft.extraActivities.map((activity) => (
+    normalizedIdentity(activity.title)
+  ))), [draft.extraActivities]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setPendingReviewKeys((current) => current.filter((reviewKey) => {
+        const item = reviewQueueItems.find((candidate) => candidate.reviewKey === reviewKey);
+        if (!item) return false;
+        return !(Boolean(item.questionId && reviewBlockedQuestionIds.has(item.questionId))
+          || reviewBlockedTitles.has(normalizedIdentity(item.title)));
+      })));
+    return () => window.cancelAnimationFrame(frame);
+  }, [reviewBlockedQuestionIds, reviewBlockedTitles, reviewQueueItems]);
+
+  function addReviewsToToday(items: ReviewQueueItem[]) {
+    const workbenchId = draft.workbench?.id;
+    if (!workbenchId || items.length === 0) {
+      showUiToast("Today is still loading. Try again when the workbench is ready.");
+      return;
+    }
+    const reviewKeys = [...new Set(items.map((item) => item.reviewKey))];
+    setPendingReviewKeys((current) => [...new Set([...current, ...reviewKeys])]);
+    enqueue({
+      type: "review-add-today",
+      mutationId: `review-queue-${crypto.randomUUID()}`,
+      expectedWorkbenchId: workbenchId,
+      reviewKeys,
+    });
+    showUiToast(`${reviewKeys.length} review${reviewKeys.length === 1 ? "" : "s"} queued for Today.`);
+  }
+
+  function deferReview(item: ReviewQueueItem) {
+    const targetDueDate = shiftDate(journal.date, 7);
+    setDraft((current) => {
+      const review = current.reviews[item.activityId];
+      if (!review || review.reviewKey !== item.reviewKey) return current;
+      return {
+        ...current,
+        reviews: {
+          ...current.reviews,
+          [item.activityId]: { ...review, status: "scheduled", dueDate: targetDueDate },
+        },
+      };
+    });
+    enqueue({ type: "review-defer", reviewKey: item.reviewKey, expectedDueDate: item.dueDate });
+    showUiToast(`${item.title} moved to next week.`);
+  }
+
+  function openReviewAttempt(item: ReviewQueueItem) {
+    const entry = libraryEntries.find((candidate) => candidate.id === item.activityId);
+    if (!entry) {
+      showUiToast("That completed attempt is no longer available. Refresh the queue.");
+      return;
+    }
+    openPastEntry(entry, reviewQueueItems.flatMap((candidate) => (
+      libraryEntries.find((entryCandidate) => entryCandidate.id === candidate.activityId) ?? []
+    )));
+  }
 
   useEffect(() => {
     if (!viewMemoryReady || !workspaceUrlHydratedRef.current) return;
@@ -4624,6 +4723,22 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function scrollToLogDate(date: string) {
     document.getElementById(`log-date-${date}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function renderReviewQueue() {
+    return <ReviewQueueView
+      items={reviewQueueItems}
+      loading={!hydrated}
+      stale={hydrated && !synced}
+      reviewStreak={reviewQueueStreak}
+      blockedQuestionIds={reviewBlockedQuestionIds}
+      blockedTitles={reviewBlockedTitles}
+      pendingReviewKeys={new Set(pendingReviewKeys)}
+      canAddToToday={Boolean(draft.workbench)}
+      onAddToToday={addReviewsToToday}
+      onDefer={deferReview}
+      onOpenAttempt={openReviewAttempt}
+    />;
   }
 
   function renderLibrary() {
@@ -5798,14 +5913,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       <aside className="sidebar">
         <button className="brand" onClick={() => navigateToPrimaryView("today")}><span className="brand-mark">IA</span><span>Interview Arc</span></button>
         <nav className="primary-nav" aria-label="Primary navigation">{([[
-          "today", "Today"], ["journey", "Journey"], ["library", "Past"], ["banks", "Problem banks"]] as [View, string][]).map(([id, label], index) => <button key={id} className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
+          "today", "Today"], ["journey", "Journey"], ["reviews", "Reviews"], ["library", "Past"], ["banks", "Problem banks"]] as [View, string][]).map(([id, label], index) => <button key={id} className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
         <div className="sidebar-status"><span className={[...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "live" : ""} /><div><strong>{[...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "Timer running" : hydrated ? "Draft saved locally" : "Loading draft"}</strong><small>Session countdown + one activity stopwatch</small></div></div>
         <div className="profile"><span>WX</span><div><strong>Wenk Xu</strong><small>Interview journey · 2026</small></div></div>
       </aside>
 
       <section className="main-column">
         <header className="topbar">
-          <div><span>{readableDate(journal.date)}</span><strong>{view === "today" ? "Today’s work" : view === "journey" ? "Statistics" : view === "library" ? "Dated practice log" : "Question sources"}</strong></div>
+          <div><span>{readableDate(journal.date)}</span><strong>{view === "today" ? "Today’s work" : view === "journey" ? "Statistics" : view === "reviews" ? "Recall schedule" : view === "library" ? "Dated practice log" : "Question sources"}</strong></div>
           <div>
             <div className={`music-dock ${ambientPlaying ? "active" : ""}`}>
               <button onClick={toggleAmbientSound} aria-pressed={ambientPlaying} title={ambientPlaying ? "Pause music" : "Play music"}><span aria-hidden="true">{ambientPlaying ? "Ⅱ" : "▶"}</span><i><small>{ambientPlaying ? "PLAYING" : "PAUSED"}</small><strong>{trackName}</strong></i></button>
@@ -5820,7 +5935,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             <button className="secondary-action" onClick={exportDraft}>Export today</button>
           </div>
         </header>
-        <div className="page-content" id="practice-content">{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
+        <div className="page-content" id="practice-content">{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
       </section>
 
       {composer.open && <div className={`modal-backdrop ${composerClosing ? "closing" : ""}`} role="presentation" onMouseDown={closeComposer} onAnimationEnd={finishComposerClose}>
