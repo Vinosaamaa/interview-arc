@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "eb7d17e6-761b-4a7a-9a2f-2a9accd64040",
+  "id": "e2a4dd15-96fc-49db-b377-6ea202016ce4",
   "prevId": "ae4dfd52-2df2-468d-935a-07017fc6ac05",
   "tables": {
     "activity_audio_clips": {
@@ -2782,6 +2782,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "lease_token": {
+          "name": "lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "lease_expires_at": {
           "name": "lease_expires_at",
           "type": "integer",
@@ -3057,6 +3064,13 @@
         },
         "import_operation_id": {
           "name": "import_operation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "storage_generation": {
+          "name": "storage_generation",
           "type": "text",
           "primaryKey": false,
           "notNull": true,

@@ -1,4 +1,4 @@
-import { and, asc, eq, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, lte, sql } from "drizzle-orm";
 
 import { d1TransactionalInvariantGuard, isD1TransactionalInvariantFailure } from "./d1-transactional-guard";
 import { getDb } from "./index";
@@ -55,6 +55,7 @@ interface ReserveResumeImportInput {
 interface CompleteResumeImportInput extends ReserveResumeImportInput {
   sourceLabel: string;
   sourceFingerprint: string;
+  storageGeneration: string;
   files: [ResumeFileIntegrity, ResumeFileIntegrity];
 }
 
@@ -62,6 +63,26 @@ const LOCK_LEASE_MS = 5 * 60 * 1_000;
 
 function sameNullable(left: string | null | undefined, right: string | null | undefined) {
   return (left ?? null) === (right ?? null);
+}
+
+function immutableFileCompatibility(
+  ownerId: string,
+  resumeId: string,
+  revisionId: string,
+  file: ResumeFileIntegrity,
+) {
+  return sql`NOT EXISTS (
+    SELECT 1 FROM ${resumeRevisionFiles}
+    WHERE ${resumeRevisionFiles.ownerId} = ${ownerId}
+      AND ${resumeRevisionFiles.resumeId} = ${resumeId}
+      AND ${resumeRevisionFiles.revisionId} = ${revisionId}
+      AND ${resumeRevisionFiles.format} = ${file.format}
+      AND (
+        ${resumeRevisionFiles.sha256} <> ${file.sha256}
+        OR ${resumeRevisionFiles.byteSize} <> ${file.byteSize}
+        OR ${resumeRevisionFiles.mimeType} <> ${file.mimeType}
+      )
+  )`;
 }
 
 async function readOperation(ownerId: string, operationId: string) {
@@ -129,6 +150,7 @@ export async function reserveResumeImport(
 
   const source = await readSource(ownerId, input.resumeId);
   const baseCurrentRevisionId = existing?.baseCurrentRevisionId ?? source?.currentRevisionId ?? null;
+  const leaseToken = crypto.randomUUID();
   const leaseExpiresAt = nowMs + LOCK_LEASE_MS;
   const statements = [
     db.insert(resumeImportOperations).values({
@@ -149,6 +171,7 @@ export async function reserveResumeImport(
       ownerId,
       resumeId: input.resumeId,
       operationId: input.operationId,
+      leaseToken,
       leaseExpiresAt,
       createdAt: nowMs,
       updatedAt: nowMs,
@@ -156,13 +179,11 @@ export async function reserveResumeImport(
       target: [resumeImportLocks.ownerId, resumeImportLocks.resumeId],
       set: {
         operationId: input.operationId,
+        leaseToken,
         leaseExpiresAt,
         updatedAt: nowMs,
       },
-      where: or(
-        eq(resumeImportLocks.operationId, input.operationId),
-        lte(resumeImportLocks.leaseExpiresAt, nowMs),
-      ),
+      where: lte(resumeImportLocks.leaseExpiresAt, nowMs),
     }),
   ];
   await db.batch(statements as unknown as Parameters<typeof db.batch>[0]);
@@ -175,7 +196,7 @@ export async function reserveResumeImport(
   assertOperationIdentity(operation, input);
   const replay = savedReceipt(operation);
   if (replay) return { duplicate: true as const, receipt: replay };
-  if (lock?.operationId !== input.operationId) {
+  if (lock?.operationId !== input.operationId || lock.leaseToken !== leaseToken) {
     throw new ResumeImportError(
       "resume_import_busy",
       "Another immutable revision is currently being staged for this resume.",
@@ -186,7 +207,7 @@ export async function reserveResumeImport(
 
   const authoritativeSource = await readSource(ownerId, input.resumeId);
   if (!sameNullable(authoritativeSource?.currentRevisionId, operation.baseCurrentRevisionId)) {
-    await failResumeImport(ownerId, input, "resume_import_stale_current", false, nowMs);
+    await failResumeImport(ownerId, input, leaseToken, "resume_import_stale_current", false, nowMs);
     throw new ResumeImportError(
       "resume_import_stale_current",
       "The current resume revision changed after this operation was reserved.",
@@ -206,12 +227,14 @@ export async function reserveResumeImport(
   return {
     duplicate: false as const,
     baseCurrentRevisionId: operation.baseCurrentRevisionId,
+    leaseToken,
   };
 }
 
 export async function failResumeImport(
   ownerId: string,
   input: ReserveResumeImportInput,
+  leaseToken: string,
   errorCode: string,
   retryable: boolean,
   nowMs = Date.now(),
@@ -228,11 +251,19 @@ export async function failResumeImport(
       eq(resumeImportOperations.operationId, input.operationId),
       eq(resumeImportOperations.requestHash, input.requestHash),
       sql`${resumeImportOperations.status} <> 'saved'`,
+      sql`EXISTS (
+        SELECT 1 FROM ${resumeImportLocks}
+        WHERE ${resumeImportLocks.ownerId} = ${ownerId}
+          AND ${resumeImportLocks.resumeId} = ${input.resumeId}
+          AND ${resumeImportLocks.operationId} = ${input.operationId}
+          AND ${resumeImportLocks.leaseToken} = ${leaseToken}
+      )`,
     )),
     db.delete(resumeImportLocks).where(and(
       eq(resumeImportLocks.ownerId, ownerId),
       eq(resumeImportLocks.resumeId, input.resumeId),
       eq(resumeImportLocks.operationId, input.operationId),
+      eq(resumeImportLocks.leaseToken, leaseToken),
     )),
   ]);
 }
@@ -278,6 +309,7 @@ export async function findResumeRevision(
 export async function completeUnchangedResumeImport(
   ownerId: string,
   input: ReserveResumeImportInput,
+  leaseToken: string,
   canonical: {
     revisionId: string;
     parentRevisionId: string | null;
@@ -321,6 +353,7 @@ export async function completeUnchangedResumeImport(
       WHERE ${resumeImportLocks.ownerId} = ${ownerId}
         AND ${resumeImportLocks.resumeId} = ${input.resumeId}
         AND ${resumeImportLocks.operationId} = ${input.operationId}
+        AND ${resumeImportLocks.leaseToken} = ${leaseToken}
     )
     AND EXISTS (
       SELECT 1 FROM ${resumeImportOperations}
@@ -365,6 +398,7 @@ export async function completeUnchangedResumeImport(
         eq(resumeImportLocks.ownerId, ownerId),
         eq(resumeImportLocks.resumeId, input.resumeId),
         eq(resumeImportLocks.operationId, input.operationId),
+        eq(resumeImportLocks.leaseToken, leaseToken),
       )),
     ]);
   } catch (error) {
@@ -375,7 +409,7 @@ export async function completeUnchangedResumeImport(
       if (authoritativeReceipt) return { duplicate: true, receipt: authoritativeReceipt };
     }
     if (isD1TransactionalInvariantFailure(error)) {
-      await failResumeImport(ownerId, input, "resume_import_commit_conflict", false, nowMs);
+      await failResumeImport(ownerId, input, leaseToken, "resume_import_commit_conflict", false, nowMs);
       throw new ResumeImportError(
         "resume_import_commit_conflict",
         "The current resume revision changed before the no-op receipt committed.",
@@ -391,6 +425,7 @@ export async function completeUnchangedResumeImport(
 export async function completeResumeImport(
   ownerId: string,
   input: CompleteResumeImportInput,
+  leaseToken: string,
   nowMs = Date.now(),
 ) {
   const db = getDb();
@@ -398,7 +433,14 @@ export async function completeResumeImport(
   if (!operation) throw new Error("Resume import operation was not reserved.");
   assertOperationIdentity(operation, input);
   const replay = savedReceipt(operation);
-  if (replay) return { duplicate: true, receipt: replay };
+  if (replay) {
+    const canonical = await findResumeRevision(ownerId, input.resumeId, replay.revisionId);
+    return {
+      duplicate: true,
+      receipt: replay,
+      cleanupStaging: canonical?.storageGeneration !== input.storageGeneration,
+    };
+  }
 
   const files = Object.fromEntries(input.files.map(({ format, ...file }) => [format, file])) as ResumeImportReceipt["files"];
   const baseCurrentRevisionId = operation.baseCurrentRevisionId;
@@ -414,12 +456,22 @@ export async function completeResumeImport(
     currentRevisionId: input.revisionId,
     files,
   };
+  const fileIntegrityInvariant = sql.join(
+    input.files.map((file) => immutableFileCompatibility(
+      ownerId,
+      input.resumeId,
+      input.revisionId,
+      file,
+    )),
+    sql` AND `,
+  );
   const invariant = sql`
     EXISTS (
       SELECT 1 FROM ${resumeImportLocks}
       WHERE ${resumeImportLocks.ownerId} = ${ownerId}
         AND ${resumeImportLocks.resumeId} = ${input.resumeId}
         AND ${resumeImportLocks.operationId} = ${input.operationId}
+        AND ${resumeImportLocks.leaseToken} = ${leaseToken}
     )
     AND EXISTS (
       SELECT 1 FROM ${resumeImportOperations}
@@ -441,6 +493,7 @@ export async function completeResumeImport(
         AND (
           ${resumeRevisions.sourceFingerprint} <> ${input.sourceFingerprint}
           OR ${resumeRevisions.importOperationId} <> ${input.operationId}
+          OR ${resumeRevisions.storageGeneration} <> ${input.storageGeneration}
           OR COALESCE(${resumeRevisions.parentRevisionId}, '') <> COALESCE(${baseCurrentRevisionId}, '')
         )
     )
@@ -451,30 +504,7 @@ export async function completeResumeImport(
         AND ${resumeRevisions.sourceFingerprint} = ${input.sourceFingerprint}
         AND ${resumeRevisions.revisionId} <> ${input.revisionId}
     )
-    AND NOT EXISTS (
-      SELECT 1 FROM ${resumeRevisionFiles}
-      WHERE ${resumeRevisionFiles.ownerId} = ${ownerId}
-        AND ${resumeRevisionFiles.resumeId} = ${input.resumeId}
-        AND ${resumeRevisionFiles.revisionId} = ${input.revisionId}
-        AND ${resumeRevisionFiles.format} = ${input.files[0].format}
-        AND (
-          ${resumeRevisionFiles.sha256} <> ${input.files[0].sha256}
-          OR ${resumeRevisionFiles.byteSize} <> ${input.files[0].byteSize}
-          OR ${resumeRevisionFiles.mimeType} <> ${input.files[0].mimeType}
-        )
-    )
-    AND NOT EXISTS (
-      SELECT 1 FROM ${resumeRevisionFiles}
-      WHERE ${resumeRevisionFiles.ownerId} = ${ownerId}
-        AND ${resumeRevisionFiles.resumeId} = ${input.resumeId}
-        AND ${resumeRevisionFiles.revisionId} = ${input.revisionId}
-        AND ${resumeRevisionFiles.format} = ${input.files[1].format}
-        AND (
-          ${resumeRevisionFiles.sha256} <> ${input.files[1].sha256}
-          OR ${resumeRevisionFiles.byteSize} <> ${input.files[1].byteSize}
-          OR ${resumeRevisionFiles.mimeType} <> ${input.files[1].mimeType}
-        )
-    )
+    AND ${fileIntegrityInvariant}
   `;
   const guard = d1TransactionalInvariantGuard(db, invariant);
   const statements = [
@@ -494,6 +524,7 @@ export async function completeResumeImport(
       parentRevisionId: baseCurrentRevisionId,
       sourceFingerprint: input.sourceFingerprint,
       importOperationId: input.operationId,
+      storageGeneration: input.storageGeneration,
       visibility: "owner_private",
       importedAt: nowMs,
     }).onConflictDoNothing(),
@@ -531,6 +562,7 @@ export async function completeResumeImport(
       eq(resumeImportLocks.ownerId, ownerId),
       eq(resumeImportLocks.resumeId, input.resumeId),
       eq(resumeImportLocks.operationId, input.operationId),
+      eq(resumeImportLocks.leaseToken, leaseToken),
     )),
   ];
   try {
@@ -540,10 +572,21 @@ export async function completeResumeImport(
     if (authoritative) {
       assertOperationIdentity(authoritative, input);
       const authoritativeReceipt = savedReceipt(authoritative);
-      if (authoritativeReceipt) return { duplicate: true, receipt: authoritativeReceipt };
+      if (authoritativeReceipt) {
+        const canonical = await findResumeRevision(
+          ownerId,
+          input.resumeId,
+          authoritativeReceipt.revisionId,
+        );
+        return {
+          duplicate: true,
+          receipt: authoritativeReceipt,
+          cleanupStaging: canonical?.storageGeneration !== input.storageGeneration,
+        };
+      }
     }
     if (isD1TransactionalInvariantFailure(error)) {
-      await failResumeImport(ownerId, input, "resume_import_commit_conflict", false, nowMs);
+      await failResumeImport(ownerId, input, leaseToken, "resume_import_commit_conflict", false, nowMs);
       throw new ResumeImportError(
         "resume_import_commit_conflict",
         "The immutable resume revision or current pointer changed before commit.",
@@ -553,7 +596,7 @@ export async function completeResumeImport(
     }
     throw error;
   }
-  return { duplicate: false, receipt };
+  return { duplicate: false, receipt, cleanupStaging: false };
 }
 
 export async function getResumeImportStatus(ownerId: string, operationId: string) {

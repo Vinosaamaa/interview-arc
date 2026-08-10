@@ -13,8 +13,8 @@ import { stagePrivateResumePair } from "./private-resume-storage";
 
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const PDF_MIME = "application/pdf";
-const MAX_FILE_BYTES = 20 * 1024 * 1024;
-const MAX_MULTIPART_BYTES = 42 * 1024 * 1024;
+const MAX_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_MULTIPART_BYTES = 18 * 1024 * 1024;
 const STABLE_ID = /^[a-z0-9][a-z0-9._-]{0,199}$/;
 const SHA_256 = /^[a-f0-9]{64}$/;
 
@@ -78,7 +78,7 @@ async function parsePrivateFile(
       || file.size > MAX_FILE_BYTES) {
     throw new ResumeImportError(
       "resume_import_invalid_file",
-      `A non-empty ${field.toUpperCase()} file no larger than 20 MB is required.`,
+      `A non-empty ${field.toUpperCase()} file no larger than 8 MB is required.`,
       400,
       false,
     );
@@ -107,20 +107,64 @@ async function parsePrivateFile(
   };
 }
 
-async function parseResumeImport(request: Request): Promise<ParsedResumeImport> {
-  const declaredLength = Number(request.headers.get("content-length") ?? "0");
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_MULTIPART_BYTES) {
+async function boundedMultipartRequest(request: Request) {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (!/^multipart\/form-data\s*;/i.test(contentType) || !request.body) {
+    throw new ResumeImportError(
+      "resume_import_invalid_request",
+      "A multipart private resume import is required.",
+      400,
+      false,
+    );
+  }
+  const declaredHeader = request.headers.get("content-length");
+  if (declaredHeader && (!/^\d+$/.test(declaredHeader) || Number(declaredHeader) > MAX_MULTIPART_BYTES)) {
     throw new ResumeImportError(
       "resume_import_request_too_large",
-      "The private resume import exceeds the 42 MB request limit.",
+      "The private resume import exceeds the 18 MB request limit.",
       413,
       false,
     );
   }
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    byteLength += value.byteLength;
+    if (byteLength > MAX_MULTIPART_BYTES) {
+      await reader.cancel();
+      throw new ResumeImportError(
+        "resume_import_request_too_large",
+        "The private resume import exceeds the 18 MB request limit.",
+        413,
+        false,
+      );
+    }
+    chunks.push(value);
+  }
+  const boundedBody = new Uint8Array(byteLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    boundedBody.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const headers = new Headers(request.headers);
+  headers.delete("content-length");
+  return new Request(request.url, {
+    method: request.method,
+    headers,
+    body: boundedBody,
+  });
+}
+
+async function parseResumeImport(request: Request): Promise<ParsedResumeImport> {
   let form: FormData;
   try {
-    form = await request.formData();
-  } catch {
+    form = await (await boundedMultipartRequest(request)).formData();
+  } catch (error) {
+    if (error instanceof ResumeImportError) throw error;
     throw new ResumeImportError(
       "resume_import_invalid_request",
       "A multipart private resume import is required.",
@@ -144,10 +188,8 @@ async function parseResumeImport(request: Request): Promise<ParsedResumeImport> 
       false,
     );
   }
-  const [docx, pdf] = await Promise.all([
-    parsePrivateFile(form, "docx", DOCX_MIME),
-    parsePrivateFile(form, "pdf", PDF_MIME),
-  ]);
+  const docx = await parsePrivateFile(form, "docx", DOCX_MIME);
+  const pdf = await parsePrivateFile(form, "pdf", PDF_MIME);
   const requestHash = await sha256Hex(JSON.stringify({
     operationId,
     resumeId,
@@ -169,11 +211,11 @@ async function parseResumeImport(request: Request): Promise<ParsedResumeImport> 
   };
 }
 
-async function privateObjectKeys(ownerId: string, input: ParsedResumeImport) {
+async function privateObjectKeys(ownerId: string, input: ParsedResumeImport, storageGeneration: string) {
   const privateRoot = await sha256Hex(`${ownerId}\u0000${input.resumeId}\u0000${input.revisionId}`);
   return {
-    docx: `resume-private/${privateRoot}/source.docx`,
-    pdf: `resume-private/${privateRoot}/source.pdf`,
+    docx: `resume-private/${privateRoot}/${storageGeneration}/source.docx`,
+    pdf: `resume-private/${privateRoot}/${storageGeneration}/source.pdf`,
   };
 }
 
@@ -196,7 +238,13 @@ export async function ingestResumeRevision(
 
   const existingRevision = await findResumeRevision(ownerId, input.resumeId, input.revisionId);
   if (existingRevision && existingRevision.sourceFingerprint !== input.sourceFingerprint) {
-    await failResumeImport(ownerId, identity, "resume_import_revision_identity_conflict", false);
+    await failResumeImport(
+      ownerId,
+      identity,
+      reservation.leaseToken,
+      "resume_import_revision_identity_conflict",
+      false,
+    );
     throw new ResumeImportError(
       "resume_import_revision_identity_conflict",
       "That immutable resume revision ID already belongs to a different source fingerprint.",
@@ -222,7 +270,13 @@ export async function ingestResumeRevision(
         && requested.mimeType === file.mimeType;
     });
     if (!matches) {
-      await failResumeImport(ownerId, identity, "resume_import_source_fingerprint_conflict", false);
+      await failResumeImport(
+        ownerId,
+        identity,
+        reservation.leaseToken,
+        "resume_import_source_fingerprint_conflict",
+        false,
+      );
       throw new ResumeImportError(
         "resume_import_source_fingerprint_conflict",
         "That source fingerprint already belongs to different private file integrity metadata.",
@@ -230,7 +284,7 @@ export async function ingestResumeRevision(
         false,
       );
     }
-    const unchanged = await completeUnchangedResumeImport(ownerId, identity, {
+    const unchanged = await completeUnchangedResumeImport(ownerId, identity, reservation.leaseToken, {
       revisionId: canonical.revision.revisionId,
       parentRevisionId: canonical.revision.parentRevisionId,
       sourceFingerprint: canonical.revision.sourceFingerprint,
@@ -240,13 +294,19 @@ export async function ingestResumeRevision(
     return { status: 200, body: unchanged.receipt };
   }
 
-  const keys = await privateObjectKeys(ownerId, input);
+  const keys = await privateObjectKeys(ownerId, input, reservation.leaseToken);
   const staged = await stagePrivateResumePair(bucket, [
-    { key: keys.docx, ...input.docx },
-    { key: keys.pdf, ...input.pdf },
+    { key: keys.docx, stagingGeneration: reservation.leaseToken, ...input.docx },
+    { key: keys.pdf, stagingGeneration: reservation.leaseToken, ...input.pdf },
   ]);
   if (!staged.complete) {
-    await failResumeImport(ownerId, identity, "resume_import_storage_unavailable", true);
+    await failResumeImport(
+      ownerId,
+      identity,
+      reservation.leaseToken,
+      "resume_import_storage_unavailable",
+      true,
+    );
     throw new ResumeImportError(
       "resume_import_storage_unavailable",
       "The private DOCX/PDF pair was not fully staged. Retry the exact operation.",
@@ -260,8 +320,12 @@ export async function ingestResumeRevision(
       ...identity,
       sourceLabel: input.sourceLabel,
       sourceFingerprint: input.sourceFingerprint,
+      storageGeneration: reservation.leaseToken,
       files: [input.docx.integrity, input.pdf.integrity],
-    });
+    }, reservation.leaseToken);
+    if (completed.cleanupStaging) {
+      await Promise.allSettled([bucket.delete(keys.docx), bucket.delete(keys.pdf)]);
+    }
     return { status: completed.duplicate ? 200 : 201, body: completed.receipt };
   } catch (error) {
     if (error instanceof ResumeImportError && !error.retryable) {

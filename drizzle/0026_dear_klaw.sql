@@ -2,6 +2,7 @@ CREATE TABLE `resume_import_locks` (
 	`owner_id` text NOT NULL,
 	`resume_id` text NOT NULL,
 	`operation_id` text NOT NULL,
+	`lease_token` text NOT NULL,
 	`lease_expires_at` integer NOT NULL,
 	`created_at` integer NOT NULL,
 	`updated_at` integer DEFAULT 0 NOT NULL,
@@ -45,6 +46,7 @@ CREATE TABLE `resume_revisions` (
 	`parent_revision_id` text,
 	`source_fingerprint` text NOT NULL,
 	`import_operation_id` text NOT NULL,
+	`storage_generation` text NOT NULL,
 	`visibility` text DEFAULT 'owner_private' NOT NULL,
 	`imported_at` integer NOT NULL,
 	PRIMARY KEY(`owner_id`, `resume_id`, `revision_id`)

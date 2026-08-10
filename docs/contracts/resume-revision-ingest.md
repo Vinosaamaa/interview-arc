@@ -19,8 +19,9 @@ Drive exporter can call; it is not yet the user-facing Resume Library.
 
 ## Durable ingest sequence
 
-1. Validate bounded files, MIME types, format signatures, IDs, and SHA-256
-   source fingerprint; compute both file hashes server-side.
+1. Read the multipart body through an enforced 18 MB stream bound, then
+   validate the two 8 MB-or-smaller files, MIME types, format signatures, IDs,
+   and SHA-256 source fingerprint; compute both file hashes server-side.
 2. Reserve one owner-scoped `operationId` and a short per-resume D1 lease. The
    request hash binds that operation to one exact payload.
 3. If the source fingerprint and both file hashes already match an immutable
@@ -29,6 +30,8 @@ Drive exporter can call; it is not yet the user-facing Resume Library.
 4. Otherwise stage both files under deterministic private R2 identities and
    verify both with R2 `HEAD`. A partial pair is best-effort removed, records a
    retryable failure, and leaves the previous current revision unchanged.
+   Staging keys include the invocation-specific lease generation, so an expired
+   invocation cannot delete or overwrite a recovery retry's objects.
 5. In one D1 batch, guard the lease, request identity, previous current pointer,
    immutable revision identity, and file integrity; then insert the source,
    revision, both file rows, advance the current pointer, save the receipt, and

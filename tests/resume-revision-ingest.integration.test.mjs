@@ -87,6 +87,15 @@ function resumeImportForm(overrides = {}) {
   return { form, docxBytes, pdfBytes };
 }
 
+async function postResumeImport(baseUrl, token, overrides = {}) {
+  const response = await fetch(`${baseUrl}/resume/imports`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+    body: resumeImportForm(overrides).form,
+  });
+  return { response, body: await response.json() };
+}
+
 test("an authenticated staged DOCX/PDF pair becomes one immutable current resume revision", { timeout: 90_000 }, async () => {
   const ownerToken = "ia_resume_revision_owner_integration_token";
   let releaseIntegrationLock;
@@ -120,13 +129,8 @@ test("an authenticated staged DOCX/PDF pair becomes one immutable current resume
     worker.stderr.on("data", appendWorkerLog);
     await waitForWorker(baseUrl, worker);
 
-    const { form, docxBytes, pdfBytes } = resumeImportForm();
-    const response = await fetch(`${baseUrl}/resume/imports`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${ownerToken}` },
-      body: form,
-    });
-    const imported = await response.json();
+    const { docxBytes, pdfBytes } = resumeImportForm();
+    const { response, body: imported } = await postResumeImport(baseUrl, ownerToken);
     assert.equal(response.status, 201, `${JSON.stringify(imported)}\n${workerLog}`);
     assert.equal(imported.status, "saved");
     assert.equal(imported.resumeId, "primary-resume");
@@ -150,21 +154,13 @@ test("an authenticated staged DOCX/PDF pair becomes one immutable current resume
     assert.equal(JSON.stringify(status).includes("objectKey"), false);
     assert.equal(JSON.stringify(status).includes("owner-resume-ingest"), false);
 
-    const exactRetry = await fetch(`${baseUrl}/resume/imports`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${ownerToken}` },
-      body: resumeImportForm().form,
-    });
-    assert.equal(exactRetry.status, 200);
-    assert.deepEqual(await exactRetry.json(), imported);
+    const exactRetry = await postResumeImport(baseUrl, ownerToken);
+    assert.equal(exactRetry.response.status, 200);
+    assert.deepEqual(exactRetry.body, imported);
 
-    const changedRetry = await fetch(`${baseUrl}/resume/imports`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${ownerToken}` },
-      body: resumeImportForm({ sourceLabel: "Changed label" }).form,
-    });
-    assert.equal(changedRetry.status, 409);
-    assert.equal((await changedRetry.json()).code, "resume_import_operation_conflict");
+    const changedRetry = await postResumeImport(baseUrl, ownerToken, { sourceLabel: "Changed label" });
+    assert.equal(changedRetry.response.status, 409);
+    assert.equal(changedRetry.body.code, "resume_import_operation_conflict");
 
     otherClient = await connect(baseUrl, otherToken, "resume-ingest-other-owner");
     const isolated = await call(otherClient, "get_resume_import_status", {
@@ -172,15 +168,14 @@ test("an authenticated staged DOCX/PDF pair becomes one immutable current resume
     });
     assert.deepEqual(isolated, { found: false });
 
-    const unchangedResponse = await fetch(`${baseUrl}/resume/imports`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${ownerToken}` },
-      body: resumeImportForm({
+    const { response: unchangedResponse, body: unchanged } = await postResumeImport(
+      baseUrl,
+      ownerToken,
+      {
         operationId: "resume-import-operation-2",
         revisionId: "resume-revision-2",
-      }).form,
-    });
-    const unchanged = await unchangedResponse.json();
+      },
+    );
     assert.equal(unchangedResponse.status, 200, JSON.stringify(unchanged));
     assert.equal(unchanged.status, "saved");
     assert.equal(unchanged.unchanged, true);
@@ -196,18 +191,17 @@ test("an authenticated staged DOCX/PDF pair becomes one immutable current resume
 
     const newDocxBytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x01]);
     const newPdfBytes = new TextEncoder().encode("%PDF-1.7\n% second private fixture\n%%EOF");
-    const nextResponse = await fetch(`${baseUrl}/resume/imports`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${ownerToken}` },
-      body: resumeImportForm({
+    const { response: nextResponse, body: next } = await postResumeImport(
+      baseUrl,
+      ownerToken,
+      {
         operationId: "resume-import-operation-3",
         revisionId: "resume-revision-3",
         sourceFingerprint: sha256("opaque-source-revision-3"),
         docxBytes: newDocxBytes,
         pdfBytes: newPdfBytes,
-      }).form,
-    });
-    const next = await nextResponse.json();
+      },
+    );
     assert.equal(nextResponse.status, 201, JSON.stringify(next));
     assert.equal(next.revisionId, "resume-revision-3");
     assert.equal(next.parentRevisionId, "resume-revision-1");
