@@ -569,30 +569,26 @@ const BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT = 50;
 
 export async function getBehavioralFoundationStatus(ownerId: string) {
   const db = getDb();
-  const [evidenceSummaryRows, evidenceStateRows, claimSummaryRows, claimStateRows, claimDetailRows] = await Promise.all([
+  const [evidenceSummaryRows, claimSummaryRows, claimDetailRows] = await Promise.all([
     db.select({
       total: sql<number>`count(*)`,
+      accepted: sql<number>`sum(case when ${behavioralEvidenceItems.candidateState} = 'accepted' then 1 else 0 end)`,
+      pending: sql<number>`sum(case when ${behavioralEvidenceItems.candidateState} = 'pending' then 1 else 0 end)`,
+      rejected: sql<number>`sum(case when ${behavioralEvidenceItems.candidateState} = 'rejected' then 1 else 0 end)`,
+      superseded: sql<number>`sum(case when ${behavioralEvidenceItems.candidateState} = 'superseded' then 1 else 0 end)`,
       projects: sql<number>`count(distinct ${behavioralEvidenceItems.projectKey})`,
       sourceRevisions: sql<number>`count(distinct ${behavioralEvidenceItems.sourceRevision})`,
       latestUpdatedAt: sql<number | null>`max(${behavioralEvidenceItems.updatedAt})`,
     }).from(behavioralEvidenceItems).where(eq(behavioralEvidenceItems.ownerId, ownerId)),
     db.select({
-      state: behavioralEvidenceItems.candidateState,
-      count: sql<number>`count(*)`,
-    }).from(behavioralEvidenceItems)
-      .where(eq(behavioralEvidenceItems.ownerId, ownerId))
-      .groupBy(behavioralEvidenceItems.candidateState),
-    db.select({
       total: sql<number>`count(*)`,
+      unverified: sql<number>`sum(case when ${behavioralClaims.status} = 'unverified' then 1 else 0 end)`,
+      partial: sql<number>`sum(case when ${behavioralClaims.status} = 'partial' then 1 else 0 end)`,
+      verified: sql<number>`sum(case when ${behavioralClaims.status} = 'verified' then 1 else 0 end)`,
+      contradicted: sql<number>`sum(case when ${behavioralClaims.status} = 'contradicted' then 1 else 0 end)`,
       questions: sql<number>`count(distinct ${behavioralClaims.questionId})`,
       latestUpdatedAt: sql<number | null>`max(${behavioralClaims.updatedAt})`,
     }).from(behavioralClaims).where(eq(behavioralClaims.ownerId, ownerId)),
-    db.select({
-      status: behavioralClaims.status,
-      count: sql<number>`count(*)`,
-    }).from(behavioralClaims)
-      .where(eq(behavioralClaims.ownerId, ownerId))
-      .groupBy(behavioralClaims.status),
     db.select({
       claimId: behavioralClaims.claimId,
       questionId: behavioralClaims.questionId,
@@ -607,19 +603,25 @@ export async function getBehavioralFoundationStatus(ownerId: string) {
 
   const evidenceSummary = evidenceSummaryRows[0] ?? {
     total: 0,
+    accepted: 0,
+    pending: 0,
+    rejected: 0,
+    superseded: 0,
     projects: 0,
     sourceRevisions: 0,
     latestUpdatedAt: null,
   };
-  const claimSummary = claimSummaryRows[0] ?? { total: 0, questions: 0, latestUpdatedAt: null };
-  const evidenceCounts = new Map(evidenceStateRows.map((row) => [row.state, Number(row.count)]));
-  const claimCounts = new Map(claimStateRows.map((row) => [row.status, Number(row.count)]));
+  const claimSummary = claimSummaryRows[0] ?? {
+    total: 0,
+    unverified: 0,
+    partial: 0,
+    verified: 0,
+    contradicted: 0,
+    questions: 0,
+    latestUpdatedAt: null,
+  };
   const visibleClaimRows = claimDetailRows.slice(0, BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT);
-  const allGaps = visibleClaimRows.flatMap((claim) => (claim.gaps as string[]).map((text) => ({
-    claimId: claim.claimId,
-    questionId: claim.questionId,
-    text,
-  })));
+  const allGaps: Array<{ claimId: string; questionId: string; text: string }> = [];
   const questionCoverage = new Map<string, {
     questionId: string;
     claims: number;
@@ -628,6 +630,13 @@ export async function getBehavioralFoundationStatus(ownerId: string) {
     gaps: number;
   }>();
   for (const claim of visibleClaimRows) {
+    const claimGaps = claim.gaps as string[];
+    const gapSlots = Math.max(0, BEHAVIORAL_GAP_LIMIT + 1 - allGaps.length);
+    allGaps.push(...claimGaps.slice(0, gapSlots).map((text) => ({
+      claimId: claim.claimId,
+      questionId: claim.questionId,
+      text,
+    })));
     const current = questionCoverage.get(claim.questionId) ?? {
       questionId: claim.questionId,
       claims: 0,
@@ -638,7 +647,7 @@ export async function getBehavioralFoundationStatus(ownerId: string) {
     current.claims += 1;
     current.verified += claim.status === "verified" ? 1 : 0;
     current.contradicted += claim.status === "contradicted" ? 1 : 0;
-    current.gaps += (claim.gaps as string[]).length;
+    current.gaps += claimGaps.length;
     questionCoverage.set(claim.questionId, current);
   }
 
@@ -646,19 +655,19 @@ export async function getBehavioralFoundationStatus(ownerId: string) {
     schemaVersion: 1 as const,
     evidence: {
       total: Number(evidenceSummary.total),
-      accepted: evidenceCounts.get("accepted") ?? 0,
-      pending: evidenceCounts.get("pending") ?? 0,
-      rejected: evidenceCounts.get("rejected") ?? 0,
-      superseded: evidenceCounts.get("superseded") ?? 0,
+      accepted: Number(evidenceSummary.accepted ?? 0),
+      pending: Number(evidenceSummary.pending ?? 0),
+      rejected: Number(evidenceSummary.rejected ?? 0),
+      superseded: Number(evidenceSummary.superseded ?? 0),
       projects: Number(evidenceSummary.projects),
       sourceRevisions: Number(evidenceSummary.sourceRevisions),
     },
     claims: {
       total: Number(claimSummary.total),
-      unverified: claimCounts.get("unverified") ?? 0,
-      partial: claimCounts.get("partial") ?? 0,
-      verified: claimCounts.get("verified") ?? 0,
-      contradicted: claimCounts.get("contradicted") ?? 0,
+      unverified: Number(claimSummary.unverified ?? 0),
+      partial: Number(claimSummary.partial ?? 0),
+      verified: Number(claimSummary.verified ?? 0),
+      contradicted: Number(claimSummary.contradicted ?? 0),
       questions: Number(claimSummary.questions),
     },
     questionCoverage: [...questionCoverage.values()].sort((left, right) => left.questionId.localeCompare(right.questionId)),

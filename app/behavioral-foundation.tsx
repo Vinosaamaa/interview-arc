@@ -1,43 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-
-export type BehavioralFoundationStatus = {
-  schemaVersion: 1;
-  evidence: {
-    total: number;
-    accepted: number;
-    pending: number;
-    rejected: number;
-    superseded: number;
-    projects: number;
-    sourceRevisions: number;
-  };
-  claims: {
-    total: number;
-    unverified: number;
-    partial: number;
-    verified: number;
-    contradicted: number;
-    questions: number;
-  };
-  questionCoverage: Array<{
-    questionId: string;
-    claims: number;
-    verified: number;
-    contradicted: number;
-    gaps: number;
-  }>;
-  gaps: Array<{ claimId: string; questionId: string; text: string }>;
-  capabilities: {
-    evidenceRead: "available";
-    sourceRegistry: "not_available";
-    storyBank: "not_available";
-    resumeLibrary: "not_available";
-  };
-  lastUpdatedAt: number | null;
-  truncated: { claimDetails: boolean; gaps: boolean };
-};
+import {
+  behavioralFoundationStatusSchema,
+  type BehavioralFoundationStatus,
+} from "./behavioral-foundation-contract";
 
 type Props = {
   curriculumQuestionIds: string[];
@@ -68,7 +35,7 @@ export default function BehavioralFoundation({
     void fetch("/api/behavioral-foundation", { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error("Behavioral Foundation could not load.");
-        return response.json() as Promise<BehavioralFoundationStatus>;
+        return behavioralFoundationStatusSchema.parse(await response.json());
       })
       .then(setStatus)
       .catch((error: unknown) => {
