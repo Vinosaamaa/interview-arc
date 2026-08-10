@@ -200,6 +200,30 @@ test("Today deletion and all-session projection remain owner-scoped and revision
       "solved_after_reviewing_approach",
     );
 
+    const invalidOutcomeResponse = await fetch(`${baseUrl}/companion/mutations`, {
+      method: "POST",
+      headers: companionHeaders,
+      body: JSON.stringify({
+        date: "2026-08-09",
+        mutation: {
+          type: "outcome",
+          activityId: "session-three",
+          outcome: "mostly_solved",
+        },
+      }),
+    });
+    assert.equal(invalidOutcomeResponse.status, 400);
+    assert.deepEqual(await invalidOutcomeResponse.json(), { error: "Invalid outcome mutation." });
+    const outcomeAfterInvalidResponse = await fetch(`${baseUrl}/companion/state?date=2026-08-09`, {
+      headers: { authorization: `Bearer ${ownerToken}` },
+    });
+    assert.equal(outcomeAfterInvalidResponse.status, 200);
+    const outcomeAfterInvalid = await outcomeAfterInvalidResponse.json();
+    assert.equal(
+      outcomeAfterInvalid.activities.find((activity) => activity.id === "session-three")?.outcome,
+      "solved_after_reviewing_approach",
+    );
+
     const noteResponse = await fetch(`${baseUrl}/companion/mutations`, {
       method: "POST",
       headers: companionHeaders,

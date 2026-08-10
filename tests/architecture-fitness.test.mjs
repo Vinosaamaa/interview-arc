@@ -68,4 +68,16 @@ test("website command imports remain acyclic and the HTTP adapter stays behind t
   for (const forbidden of ["durable-practice", "practice-snapshot", "today-planning-policy"]) {
     assert.doesNotMatch(route, new RegExp(`from ["'][^"']*${forbidden}`));
   }
+
+  const browser = await readFile(join(project, "app/home-client.tsx"), "utf8");
+  assert.match(
+    browser,
+    /type: "session-remove" as const, id: nextSession\.id, activityIds: \[\]/,
+    "new browser removals must enqueue the canonical session id field",
+  );
+  assert.doesNotMatch(
+    browser,
+    /type: "session-remove" as const, sessionId:/,
+    "sessionId is accepted only as a legacy persisted-queue alias",
+  );
 });

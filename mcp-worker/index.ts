@@ -44,7 +44,11 @@ import {
   type LiveState,
 } from "../db/live-state";
 import { buildPracticeSnapshot, buildPublicationQueue, dateInPracticeTimeZone } from "../db/practice-snapshot";
-import { executePracticeStateCommand } from "../db/practice-state-commands";
+import {
+  executePracticeStateCommand,
+  PracticeStateCommandInputError,
+  type PracticeStateCommand,
+} from "../db/practice-state-commands";
 import { leetCodeQuestionMetadataSchema } from "../db/question-metadata";
 import {
   connectOwnerLiveUpdates,
@@ -1481,6 +1485,27 @@ async function companionState(ownerId: string, request: Request) {
   return json(request, { ...snapshot, currentActivity });
 }
 
+async function executeCompanionPracticeStateCommand(
+  ownerId: string,
+  request: Request,
+  date: string,
+  command: PracticeStateCommand,
+  now: number,
+) {
+  try {
+    await executePracticeStateCommand(ownerId, date, command, now);
+    return null;
+  } catch (error) {
+    if (error instanceof PracticeStateCommandInputError) {
+      return json(request, {
+        error: error.message,
+        ...(error.retryable !== undefined ? { retryable: error.retryable } : {}),
+      }, { status: error.status });
+    }
+    throw error;
+  }
+}
+
 async function companionMutation(ownerId: string, request: Request, env: Env) {
   const body = (await request.json()) as {
     date?: string;
@@ -1552,20 +1577,24 @@ async function companionMutation(ownerId: string, request: Request, env: Env) {
       }
     }
   } else if (mutation.type === "outcome") {
-    await executePracticeStateCommand(ownerId, date, mutation, now);
+    const errorResponse = await executeCompanionPracticeStateCommand(ownerId, request, date, mutation, now);
+    if (errorResponse) return errorResponse;
   } else if (mutation.type === "publication-status") {
     if (!["draft", "ready", "published"].includes(mutation.status)) {
       return json(request, { error: "Invalid publication status." }, { status: 400 });
     }
-    await executePracticeStateCommand(ownerId, date, mutation, now);
+    const errorResponse = await executeCompanionPracticeStateCommand(ownerId, request, date, mutation, now);
+    if (errorResponse) return errorResponse;
   } else if (mutation.type === "activity-note") {
     if (mutation.note.length > 20_000) return json(request, { error: "Note is too long." }, { status: 400 });
-    await executePracticeStateCommand(ownerId, date, mutation, now);
+    const errorResponse = await executeCompanionPracticeStateCommand(ownerId, request, date, mutation, now);
+    if (errorResponse) return errorResponse;
   } else if (mutation.type === "problem-star") {
     if (!mutation.questionId || !["leetcode", "system_design", "behavioral"].includes(mutation.specialty) || typeof mutation.starred !== "boolean") {
       return json(request, { error: "Invalid problem-star mutation." }, { status: 400 });
     }
-    await executePracticeStateCommand(ownerId, date, mutation, now);
+    const errorResponse = await executeCompanionPracticeStateCommand(ownerId, request, date, mutation, now);
+    if (errorResponse) return errorResponse;
   } else if (mutation.type === "add-leetcode") {
     const normalizedUrl = normalizeLeetCodeUrl(mutation.url);
     if (!normalizedUrl) return json(request, { error: "A public LeetCode problem URL is required." }, { status: 400 });

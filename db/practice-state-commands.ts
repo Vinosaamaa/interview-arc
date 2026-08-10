@@ -79,7 +79,14 @@ export type PracticeStateCommand =
     }
   | { type: "focus-block-remove"; id: string }
   | { type: "session-upsert"; session: PracticeStateSession }
-  | { type: "session-remove"; id: string; activityIds?: string[] }
+  | ({
+      type: "session-remove";
+      activityIds?: string[];
+    } & (
+      | { id: string; sessionId?: string }
+      /** Legacy browser-queue field retained for persisted offline mutations. */
+      | { id?: never; sessionId: string }
+    ))
   | { type: "review-defer"; reviewKey: string; expectedDueDate: string }
   | {
       type: "review-add-today";
@@ -110,6 +117,7 @@ export class PracticeStateCommandInputError extends Error {
 
 const TIMER_ACTIONS: TimerAction[] = ["start", "pause", "finish"];
 const TIMER_KINDS: TimerKind[] = ["activity", "session"];
+const OUTCOMES: OutcomeValue[] = ["solved", "solved_after_reviewing_approach", "failed"];
 const PUBLICATION_STATUSES: PublicationStatusValue[] = ["draft", "ready", "published"];
 const SPECIALTIES: Specialty[] = ["leetcode", "system_design", "behavioral"];
 
@@ -216,10 +224,14 @@ export async function executePracticeStateCommand(
       return { updateScope: "timer" };
     }
     case "outcome": {
-      if (!command.activityId) {
+      if (
+        !command.activityId
+        || command.outcome === undefined
+        || (command.outcome !== null && !OUTCOMES.includes(command.outcome))
+      ) {
         throw new PracticeStateCommandInputError("Invalid outcome mutation.");
       }
-      await setOutcome(ownerId, command.activityId, command.outcome ?? null, now);
+      await setOutcome(ownerId, command.activityId, command.outcome, now);
       await syncCompletedReview(ownerId, date, command.activityId, now);
       break;
     }
@@ -309,8 +321,12 @@ export async function executePracticeStateCommand(
       break;
     }
     case "session-remove": {
-      if (!command.id) throw new PracticeStateCommandInputError("Missing session id.");
-      await removeLiveSession(ownerId, command.id);
+      if (command.id && command.sessionId && command.id !== command.sessionId) {
+        throw new PracticeStateCommandInputError("Conflicting session ids.");
+      }
+      const sessionId = command.id ?? command.sessionId;
+      if (!sessionId) throw new PracticeStateCommandInputError("Missing session id.");
+      await removeLiveSession(ownerId, sessionId);
       break;
     }
     case "review-defer": {

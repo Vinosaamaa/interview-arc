@@ -2493,7 +2493,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       { type: "focus-block-remove", id: blockId },
       ...(nextSession
         ? removesEmptySession
-          ? [{ type: "session-remove" as const, sessionId: nextSession.id, activityIds: [] }]
+          ? [{ type: "session-remove" as const, id: nextSession.id, activityIds: [] }]
           : [{ type: "session-upsert" as const, session: nextSession as LocalSession }]
         : []),
     );

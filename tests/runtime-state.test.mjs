@@ -992,7 +992,8 @@ test("the Chrome companion follows live Interview Arc focus and public LeetCode 
   assert.match(sidePanel, /type: "problem-star", specialty, questionId, starred/);
   assert.match(sidePanel, /currentActivityStarred\(\)/);
   assert.match(mcpWorker, /mutation\.type === "problem-star"/);
-  assert.match(mcpWorker, /executePracticeStateCommand\(ownerId, date, mutation, now\)/);
+  assert.match(mcpWorker, /executeCompanionPracticeStateCommand\(ownerId, request, date, mutation, now\)/);
+  assert.match(mcpWorker, /await executePracticeStateCommand\(ownerId, date, command, now\)/);
   assert.match(commandModule, /setProblemStar\(ownerId, command\.specialty, command\.questionId, command\.starred, now\)/);
   assert.match(mcpWorker, /responseUrl\.searchParams\.set\("url", problemUrl\)/);
   assert.match(mcpWorker, /activeCodingActivity \?\? focusedCodingActivity/);

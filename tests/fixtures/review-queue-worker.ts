@@ -6,9 +6,18 @@ import {
 } from "../../db/review-queue";
 import {
   executePracticeStateCommand,
+  PracticeStateCommandInputError,
   type PracticeStateCommand,
 } from "../../db/practice-state-commands";
-import { extraActivities, liveSessions, todayPlanningMutations } from "../../db/schema";
+import {
+  extraActivities,
+  focusBlocks,
+  liveSessions,
+  outcomes,
+  reviewSchedules,
+  timers,
+  todayPlanningMutations,
+} from "../../db/schema";
 import { TodayPlanningConflictError } from "../../db/today-planning";
 
 const worker = {
@@ -19,18 +28,33 @@ const worker = {
       const workbenchId = url.searchParams.get("workbenchId");
       if (!ownerId || !workbenchId) return Response.json({ error: "Missing inspection scope." }, { status: 400 });
       const db = getDb();
-      const [activities, sessions, receipts] = await Promise.all([
+      const [activities, focus, sessions, resultRows, reviewRows, timerRows, receipts] = await Promise.all([
         db.select().from(extraActivities).where(and(
           eq(extraActivities.ownerId, ownerId),
           eq(extraActivities.workbenchId, workbenchId),
+        )),
+        db.select().from(focusBlocks).where(and(
+          eq(focusBlocks.ownerId, ownerId),
+          eq(focusBlocks.workbenchId, workbenchId),
         )),
         db.select().from(liveSessions).where(and(
           eq(liveSessions.ownerId, ownerId),
           eq(liveSessions.workbenchId, workbenchId),
         )),
+        db.select().from(outcomes).where(eq(outcomes.ownerId, ownerId)),
+        db.select().from(reviewSchedules).where(eq(reviewSchedules.ownerId, ownerId)),
+        db.select().from(timers).where(eq(timers.ownerId, ownerId)),
         db.select().from(todayPlanningMutations).where(eq(todayPlanningMutations.ownerId, ownerId)),
       ]);
-      return Response.json({ activities, sessions, receipts });
+      return Response.json({
+        activities,
+        focusBlocks: focus,
+        outcomes: resultRows,
+        reviewSchedules: reviewRows,
+        sessions,
+        timers: timerRows,
+        receipts,
+      });
     }
     if (request.method !== "POST") {
       return new Response(null, { status: 404 });
@@ -68,6 +92,9 @@ const worker = {
         body.now ?? Date.now(),
       ));
     } catch (error) {
+      if (error instanceof PracticeStateCommandInputError) {
+        return Response.json({ error: error.message }, { status: error.status });
+      }
       if (error instanceof ReviewQueueConflictError || error instanceof TodayPlanningConflictError) {
         return Response.json({ error: error.message, code: error.code }, { status: 409 });
       }

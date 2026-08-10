@@ -67,8 +67,14 @@ folding it into this behavior-preserving slice.
 
 - Browser queue wire values, discard/retry behavior, and response payloads do
   not change.
+- Persisted legacy `session-remove.sessionId` queue entries remain accepted;
+  new and existing `id` entries share the same guarded removal path.
 - Extra-activity and session commands retain their exact persisted payload
   types; the Module Interface cannot narrow them to identity fields.
+- Runtime input validation rejects unsupported outcomes. Date-bearing entities
+  retain their original dates while the open Today workbench crosses Pacific
+  midnight; the command date selects the current response context, not a new
+  workbench boundary.
 - Every D1 read and write remains owner-scoped.
 - Stable mutation identities and receipts for Today removal remain unchanged.
 - Workbench and timer revision conflicts still fail closed.
