@@ -6,7 +6,7 @@ const MCP_INTEGRATION_LOCK_PORT = 41731;
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 export async function acquireMcpIntegrationLock() {
-  for (let attempt = 0; attempt < 900; attempt += 1) {
+  for (let attempt = 0; attempt < 1_800; attempt += 1) {
     const server = createServer();
     const acquired = await new Promise((resolve, reject) => {
       server.once("error", (error) => {

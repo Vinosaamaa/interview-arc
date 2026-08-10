@@ -18,6 +18,8 @@ Load only what the current action needs:
   `../../docs/contracts/behavioral-evidence-bundle.md`;
 - D1 evidence write, claim checkpoint, or ordinary evidence preflight:
   `../../docs/contracts/behavioral-evidence-domain.md`.
+- explicit Target Profile write, binding, or authoritative target resolution:
+  `../../docs/contracts/behavioral-target-profiles.md`.
 
 Never commit private sources or copy employer source code into D1/artifacts.
 
@@ -120,9 +122,9 @@ Every new completed behavioral finalization also saves the typed snapshot in
 byte-for-byte as `modelAnswer` and `finalAnswerSnapshot.answer`, bind the exact
 response turn/evidence/Profile revision, and reuse the same operation ID only
 for an exact retry. Never silently replace a saved attempt: use the explicit
-correction fields. Until #209 ships authoritative Target Profile revisions,
-report the structured target dependency rather than guessing, stripping, or
-mislabeling a target-tailored answer.
+correction fields. For a target-tailored answer, resolve the authoritative
+activity/session binding and use its exact Target Profile revision; fail closed
+rather than guessing, stripping, or relabeling the target scope.
 
 The reusable STAR/STARL Solution Profile contains:
 

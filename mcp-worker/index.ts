@@ -23,6 +23,15 @@ import {
   behavioralFinalAnswerCorrectionSchema,
   behavioralFinalAnswerSnapshotInputSchema,
 } from "../db/behavioral-final-answer";
+import {
+  BehavioralTargetProfileError,
+  behavioralTargetBindingWriteSchema,
+  behavioralTargetProfileWriteSchema,
+  queryBehavioralTargetProfiles,
+  resolveBehavioralTarget,
+  setBehavioralTargetBinding,
+  upsertBehavioralTargetProfile,
+} from "../db/behavioral-target-profile";
 import { loadContentIndex } from "../db/content";
 import { resolveIntegrationOwner } from "../db/integrations";
 import { getResumeImportStatus } from "../db/resume-revisions";
@@ -1782,6 +1791,7 @@ function specialistToolFailure(error: unknown) {
     || error instanceof SpecialistWriteJobError
     || error instanceof BehavioralEvidenceError
     || error instanceof BehavioralFinalAnswerError
+    || error instanceof BehavioralTargetProfileError
     || error instanceof TypedExchangeDeletionError
     || error instanceof InteractionModeError
   ) {
@@ -2606,6 +2616,93 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
     async () => {
       try {
         const result = await getBehavioralFoundationStatus(ownerId);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "upsert_behavioral_target_profile",
+    {
+      description: "Create or revise one owner-private pasted-JD Target Profile. Use expectedRevision=0 for creation and the exact current revision for every update, including archive/reactivate. Reuse an identical stable operationId after transport uncertainty. The raw JD remains private and is never returned, logged, published, or treated as candidate evidence.",
+      inputSchema: behavioralTargetProfileWriteSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await upsertBehavioralTargetProfile(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Target Profile ${result.targetId} revision ${result.revision} is saved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_behavioral_target_profiles",
+    {
+      description: "Read bounded owner-private display-safe Target Profile revisions. Omit targetId to list current active targets, provide targetId for its current revision, or provide targetId plus revision for one immutable historical revision. Raw JD text and private analysis are never returned.",
+      inputSchema: {
+        targetId: behavioralStableIdSchema.optional(),
+        revision: z.number().int().positive().optional(),
+        includeArchived: z.boolean().optional(),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryBehavioralTargetProfiles(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "set_behavioral_target_binding",
+    {
+      description: "Set or clear one explicit owner-private session or behavioral-activity Target Profile binding. The exact active target revision is retained historically. Use the current binding revision, one stable mutationId, and the explicit authorization literal; merely mentioning a company must never call this tool.",
+      inputSchema: behavioralTargetBindingWriteSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await setBehavioralTargetBinding(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Behavioral target binding ${result.status} at revision ${result.binding.revision}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "resolve_behavioral_target",
+    {
+      description: "Resolve the authoritative owner-private Behavioral Target Profile at a deterministic boundary. Activity binding wins over its parent session binding; a cleared or absent binding resolves to none. Turn-only conversational overrides are intentionally not persisted here.",
+      inputSchema: {
+        activityId: behavioralStableIdSchema.optional(),
+        sessionId: behavioralStableIdSchema.optional(),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await resolveBehavioralTarget(ownerId, input);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           structuredContent: result,

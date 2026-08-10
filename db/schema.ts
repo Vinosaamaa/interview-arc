@@ -838,6 +838,88 @@ export const behavioralClaimStatusEvents = sqliteTable(
   ],
 );
 
+// Target Profiles are owner-private hiring-context inputs, never candidate
+// evidence. The stable row is only a current pointer; every revision remains
+// append-only so completed attempts can retain the exact target they used.
+export const behavioralTargetProfiles = sqliteTable(
+  "behavioral_target_profiles",
+  {
+    ownerId,
+    targetId: text("target_id").notNull(),
+    currentRevision: integer("current_revision").notNull(),
+    state: text("state", { enum: ["active", "archived"] }).notNull(),
+    label: text("label").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.targetId] }),
+    index("behavioral_target_profiles_owner_state_idx").on(table.ownerId, table.state, table.updatedAt),
+  ],
+);
+
+export const behavioralTargetProfileRevisions = sqliteTable(
+  "behavioral_target_profile_revisions",
+  {
+    ownerId,
+    targetId: text("target_id").notNull(),
+    revision: integer("revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    sourceFingerprint: text("source_fingerprint").notNull(),
+    displaySnapshot: text("display_snapshot", { mode: "json" }).notNull(),
+    privateSnapshot: text("private_snapshot", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.targetId, table.revision] }),
+    uniqueIndex("behavioral_target_revisions_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
+export const behavioralTargetProfileOperations = sqliteTable(
+  "behavioral_target_profile_operations",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    targetId: text("target_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    targetRevision: integer("target_revision").notNull(),
+    status: text("status", { enum: ["created", "revised", "unchanged"] }).notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.operationId] })],
+);
+
+export const behavioralTargetBindings = sqliteTable(
+  "behavioral_target_bindings",
+  {
+    ownerId,
+    scopeType: text("scope_type", { enum: ["session", "activity"] }).notNull(),
+    scopeId: text("scope_id").notNull(),
+    targetId: text("target_id"),
+    targetRevision: integer("target_revision"),
+    revision: integer("revision").notNull(),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.scopeType, table.scopeId] })],
+);
+
+export const behavioralTargetBindingMutations = sqliteTable(
+  "behavioral_target_binding_mutations",
+  {
+    ownerId,
+    mutationId: text("mutation_id").notNull(),
+    scopeType: text("scope_type", { enum: ["session", "activity"] }).notNull(),
+    scopeId: text("scope_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.mutationId] })],
+);
+
 // Resume source bytes stay owner-private in R2. D1 records only immutable
 // revision identity, integrity metadata, and the current pointer; object keys,
 // provider locators, local paths, and document content are deliberately absent.

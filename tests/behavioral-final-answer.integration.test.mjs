@@ -130,7 +130,7 @@ function finalization({
   };
 }
 
-test("behavioral finalization stores immutable exact snapshots through MCP", { timeout: 90_000 }, async () => {
+test("behavioral finalization stores immutable exact snapshots through MCP", { timeout: 180_000 }, async () => {
   const token = "ia_behavioral_final_answer_owner";
   const otherToken = "ia_behavioral_final_answer_other";
   const activityId = "activity-behavioral-final-answer";
@@ -181,6 +181,12 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
       VALUES
         ('owner-final-answer','activity-behavioral-legacy','behavioral','ready',
          '{"modelAnswer":"A historical answer saved before snapshot v1."}',1786363100000,NULL,1,1786363100000);
+      INSERT INTO extra_activities (owner_id,id,date,workbench_id,payload,revision,updated_at)
+      VALUES ('owner-final-answer','${activityId}','2026-08-10',NULL,
+        '{"schemaVersion":2,"id":"${activityId}","questionId":"${questionId}","date":"2026-08-10","source":"extra","type":"behavioral","title":"Reliability improvement","allocatedSeconds":3600,"sessionId":"session-final-answer","timingSource":"website","status":"running"}',1,1);
+      INSERT INTO live_sessions (owner_id,id,date,workbench_id,payload,revision,updated_at)
+      VALUES ('owner-final-answer','session-final-answer','2026-08-10',NULL,
+        '{"schemaVersion":1,"id":"session-final-answer","date":"2026-08-10","source":"extra","label":"Behavioral final answer","allocatedSeconds":3600,"activityIds":["${activityId}"]}',0,1);
     `]);
     worker = spawn(wrangler, ["dev", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
       cwd: project,
@@ -296,7 +302,81 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     assert.equal(correctedRecord.finalAnswerSnapshots[0].snapshot.answer, answer);
     assert.equal(correctedRecord.finalAnswerSnapshots[1].snapshot.answer, correctedAnswer);
 
-    const targetBlocked = await callRaw(client, "save_specialist_finalization", finalization({
+    const targetCreated = await call(client, "upsert_behavioral_target_profile", {
+      operationId: "target-final-answer-create-1",
+      expectedRevision: 0,
+      target: {
+        targetId: "target-example",
+        label: "Example target",
+        state: "active",
+        company: "Example Company",
+        roleTitle: "Senior Backend Engineer",
+        source: {
+          kind: "pasted_jd",
+          displayLocator: "Owner-provided job description",
+          capturedAt: 1_786_363_203_000,
+          jdText: "Own reliable distributed services.",
+        },
+        responsibilities: ["Own reliable distributed services"],
+        requiredQualifications: ["Distributed systems"],
+        preferredQualifications: [],
+        competencySignals: ["reliability"],
+        seniorityIndicators: ["owns ambiguous systems"],
+        domainVocabulary: ["distributed systems"],
+        verifiedCompanySignals: [],
+        unresolvedAmbiguities: [],
+        ownerNotes: [],
+      },
+    });
+    assert.equal(targetCreated.revision, 1);
+    const targetReference = {
+      targetId: "target-example",
+      revision: 1,
+      label: "Example target",
+      competencyEmphasis: ["reliability"],
+    };
+    const unboundTarget = await callRaw(client, "save_specialist_finalization", finalization({
+      activityId,
+      questionId,
+      operationId: "final-answer-operation-target-unbound",
+      answer: correctedAnswer,
+      responseTurnId: "behavioral-response-2",
+      solutionRevision: 2,
+      scope: "target_tailored",
+      target: targetReference,
+      correction: { replacesSnapshotRevision: 2, reason: "Tailor for an approved target." },
+    }));
+    assert.equal(unboundTarget.isError, true);
+    assert.equal(unboundTarget.structuredContent.code, "behavioral_target_binding_mismatch");
+    const activityBinding = await call(client, "set_behavioral_target_binding", {
+      mutationId: "target-final-answer-bind-1",
+      scope: { type: "activity", id: activityId },
+      action: "set",
+      targetId: "target-example",
+      targetRevision: 1,
+      expectedRevision: 0,
+      authorization: "explicit_user_instruction",
+    });
+    assert.equal(activityBinding.binding.revision, 1);
+
+    const targetMismatch = await callRaw(client, "save_specialist_finalization", finalization({
+      activityId,
+      questionId,
+      operationId: "final-answer-operation-target-mismatch",
+      answer: correctedAnswer,
+      responseTurnId: "behavioral-response-2",
+      solutionRevision: 2,
+      scope: "target_tailored",
+      target: {
+        ...targetReference,
+        label: "Wrong target label",
+      },
+      correction: { replacesSnapshotRevision: 2, reason: "Tailor for an approved target." },
+    }));
+    assert.equal(targetMismatch.isError, true);
+    assert.equal(targetMismatch.structuredContent.code, "behavioral_target_profile_mismatch");
+
+    const targetFinalization = finalization({
       activityId,
       questionId,
       operationId: "final-answer-operation-target",
@@ -304,16 +384,36 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
       responseTurnId: "behavioral-response-2",
       solutionRevision: 2,
       scope: "target_tailored",
-      target: {
-        targetId: "target-example",
-        revision: 1,
-        label: "Example target",
-        competencyEmphasis: ["reliability"],
-      },
+      target: targetReference,
       correction: { replacesSnapshotRevision: 2, reason: "Tailor for an approved target." },
-    }));
-    assert.equal(targetBlocked.isError, true);
-    assert.equal(targetBlocked.structuredContent.code, "behavioral_target_profile_unavailable");
+    });
+    const targetSaved = await call(client, "save_specialist_finalization", targetFinalization);
+    assert.equal(targetSaved.finalAnswer.status, "corrected");
+    assert.equal(targetSaved.finalAnswer.snapshotRevision, 3);
+    const targetRecord = await call(client, "get_activity_practice_record", { activityId });
+    assert.equal(targetRecord.finalAnswer.scope, "target_tailored");
+    assert.deepEqual(targetRecord.finalAnswer.target, {
+      targetId: "target-example",
+      revision: 1,
+      label: "Example target",
+      competencyEmphasis: ["reliability"],
+    });
+    await call(client, "set_behavioral_target_binding", {
+      mutationId: "target-final-answer-clear-2",
+      scope: { type: "activity", id: activityId },
+      action: "clear",
+      expectedRevision: 1,
+      authorization: "explicit_user_instruction",
+    });
+    const targetRetryAfterClear = await call(
+      client,
+      "save_specialist_finalization",
+      targetFinalization,
+    );
+    assert.deepEqual(targetRetryAfterClear.finalAnswer, {
+      status: "unchanged",
+      snapshotRevision: 3,
+    });
 
     const voiceSaved = await call(client, "save_specialist_finalization", finalization({
       activityId: "activity-behavioral-voice",

@@ -9,8 +9,10 @@ import {
   behavioralEvidenceItems,
   behavioralEvidenceQuestionLinks,
   behavioralFinalAnswerSnapshots,
+  behavioralTargetBindings,
   contentBank,
   deferredVoiceCaptureDecisions,
+  extraActivities,
   leetcodeCodeAttempts,
   leetcodeCodeAttemptReviewBackfills,
   liveTurnReservations,
@@ -86,6 +88,9 @@ import {
   type BehavioralFinalAnswerSnapshotInput,
   type StoredBehavioralFinalAnswerSnapshot,
 } from "./behavioral-final-answer";
+import {
+  resolveBehavioralTarget,
+} from "./behavioral-target-profile";
 
 export type Specialty = "leetcode" | "system_design" | "behavioral";
 export type NoteKind = "remember" | "insight" | "mistake" | "pattern" | "question";
@@ -3448,6 +3453,14 @@ type BehavioralFinalAnswerWritePlan = {
   correction?: BehavioralFinalAnswerCorrection;
   result: ReturnType<typeof validateBehavioralFinalAnswerCorrection>;
   replay: boolean;
+  targetBinding?: {
+    source: "activity" | "session";
+    scopeId: string;
+    bindingRevision: number;
+    bindingUpdatedAt: number;
+    targetId: string;
+    targetRevision: number;
+  };
 };
 
 async function prepareBehavioralFinalAnswerWrite(
@@ -3494,12 +3507,6 @@ async function prepareBehavioralFinalAnswerWrite(
     );
   }
   const snapshot = behavioralFinalAnswerSnapshotInputSchema.parse(payload.finalAnswerSnapshot);
-  if (snapshot.scope === "target_tailored") {
-    throw new BehavioralFinalAnswerError(
-      "behavioral_target_profile_unavailable",
-      "Target-tailored final answers require the authoritative Target Profile revision domain tracked by issue #209; no target snapshot was saved.",
-    );
-  }
   if (snapshot.question.questionId !== questionId) {
     throw new BehavioralFinalAnswerError(
       "behavioral_final_answer_question_mismatch",
@@ -3536,6 +3543,42 @@ async function prepareBehavioralFinalAnswerWrite(
       correction: payload.finalAnswerCorrection,
       result: { status: "unchanged", snapshotRevision: existingOperation[0].snapshotRevision },
       replay: true,
+    };
+  }
+  let targetBinding: BehavioralFinalAnswerWritePlan["targetBinding"];
+  if (snapshot.scope === "target_tailored") {
+    const target = snapshot.target!;
+    const resolvedTarget = await resolveBehavioralTarget(ownerId, { activityId });
+    if (
+      !resolvedTarget.target
+      || !resolvedTarget.binding
+      || resolvedTarget.source === "none"
+      || resolvedTarget.target.targetId !== target.targetId
+      || resolvedTarget.target.revision !== target.revision
+    ) {
+      throw new BehavioralFinalAnswerError(
+        "behavioral_target_binding_mismatch",
+        "The target-tailored answer does not match the activity's authoritative target binding.",
+      );
+    }
+    if (
+      resolvedTarget.target.label !== target.label
+      || target.competencyEmphasis.some(
+        (signal) => !resolvedTarget.target!.competencySignals.includes(signal),
+      )
+    ) {
+      throw new BehavioralFinalAnswerError(
+        "behavioral_target_profile_mismatch",
+        "The display-safe target snapshot does not match its authoritative Target Profile revision.",
+      );
+    }
+    targetBinding = {
+      source: resolvedTarget.source,
+      scopeId: resolvedTarget.binding.scopeId,
+      bindingRevision: resolvedTarget.binding.revision,
+      bindingUpdatedAt: resolvedTarget.binding.updatedAt,
+      targetId: target.targetId,
+      targetRevision: target.revision,
     };
   }
   const responseTurns = await db.select({
@@ -3608,6 +3651,7 @@ async function prepareBehavioralFinalAnswerWrite(
     correction: payload.finalAnswerCorrection,
     result,
     replay: false,
+    targetBinding,
   };
 }
 
@@ -3865,6 +3909,29 @@ export async function saveSpecialistFinalization(
           AND ${behavioralEvidenceQuestionLinks.relevance} = 'supporting'
           AND ${inArray(behavioralEvidenceItems.evidenceId, behavioralFinalAnswer.snapshot.acceptedEvidenceIds)}
       ) = ${behavioralFinalAnswer.snapshot.acceptedEvidenceIds.length}`));
+    }
+    if (behavioralFinalAnswer.targetBinding) {
+      const targetBinding = behavioralFinalAnswer.targetBinding;
+      finalizationGuards.push(d1TransactionalInvariantGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${behavioralTargetBindings}
+        WHERE ${behavioralTargetBindings.ownerId} = ${ownerId}
+          AND ${behavioralTargetBindings.scopeType} = ${targetBinding.source}
+          AND ${behavioralTargetBindings.scopeId} = ${targetBinding.scopeId}
+          AND ${behavioralTargetBindings.revision} = ${targetBinding.bindingRevision}
+          AND ${behavioralTargetBindings.updatedAt} = ${targetBinding.bindingUpdatedAt}
+          AND ${behavioralTargetBindings.targetId} = ${targetBinding.targetId}
+          AND ${behavioralTargetBindings.targetRevision} = ${targetBinding.targetRevision}
+      )`));
+      finalizationGuards.push(d1TransactionalInvariantGuard(db, sql`EXISTS (
+          SELECT 1 FROM ${extraActivities}
+          WHERE ${extraActivities.ownerId} = ${ownerId}
+            AND ${extraActivities.id} = ${activityId}
+            AND json_extract(${extraActivities.payload}, '$.type') = 'behavioral'
+            AND json_extract(${extraActivities.payload}, '$.questionId') = ${questionId}
+            ${targetBinding.source === "session"
+              ? sql`AND json_extract(${extraActivities.payload}, '$.sessionId') = ${targetBinding.scopeId}`
+              : sql``}
+        )`));
     }
   }
   const finalizationStatements = [...finalizationGuards];
