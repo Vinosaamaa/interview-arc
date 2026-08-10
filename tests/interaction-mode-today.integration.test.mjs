@@ -89,6 +89,20 @@ test("Today reads and mutates owner-scoped interaction modes through the authori
     assert.deepEqual(initial.interactionModeRegistry.modes.map((mode) => mode.id), ["interviewer", "mentor", "grill"]);
     assert.deepEqual(initial.interactionModes["activity-mode"], { state: "needs_selection", current: null });
 
+    const malformed = await command(baseUrl, "owner-mode", {
+      type: "interaction-mode-set",
+      activityId: "activity-mode",
+      interactionModeId: "mentor",
+      expectedRevision: 0,
+      mutationId: "website-mode-malformed",
+      source: "explicit_user_instruction",
+      reason: { unexpected: true },
+      occurredAt: 1_400,
+      authorization: "explicit_user_instruction",
+    });
+    assert.equal(malformed.status, 400);
+    assert.equal(malformed.body.error, "Invalid interaction-mode mutation.");
+
     const mutation = {
       type: "interaction-mode-set",
       activityId: "activity-mode",

@@ -1,7 +1,11 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { classifyD1TransactionalFailure, d1TransactionalInvariantGuard } from "./d1-transactional-guard";
 import { getDb } from "./index";
-import { classifyInteractionModeAtomicFailure, InteractionModeError } from "./interaction-mode-policy";
+import {
+  classifyInteractionModeAtomicFailure,
+  InteractionModeError,
+  interactionModeActivityIdBatches,
+} from "./interaction-mode-policy";
 import {
   practiceInteractionModeMutations,
   practiceInteractionModeStates,
@@ -59,12 +63,16 @@ export async function readPracticeInteractionModeSummaries(
   ownerId: string,
   activityIds: readonly string[],
 ): Promise<Record<string, InteractionModeSummary>> {
-  const ids = [...new Set(activityIds.filter(Boolean))];
+  const batches = interactionModeActivityIdBatches(activityIds);
+  const ids = batches.flat();
   if (ids.length === 0) return {};
-  const rows = await getDb().select().from(practiceInteractionModeStates).where(and(
-    eq(practiceInteractionModeStates.ownerId, ownerId),
-    inArray(practiceInteractionModeStates.activityId, ids),
-  ));
+  const rows: Array<typeof practiceInteractionModeStates.$inferSelect> = [];
+  for (const batch of batches) {
+    rows.push(...await getDb().select().from(practiceInteractionModeStates).where(and(
+      eq(practiceInteractionModeStates.ownerId, ownerId),
+      inArray(practiceInteractionModeStates.activityId, batch),
+    )));
+  }
   const currentByActivity = new Map(rows.map((row) => [row.activityId, interactionModeCurrent(row)]));
   return Object.fromEntries(ids.map((activityId) => {
     const current = currentByActivity.get(activityId) ?? null;

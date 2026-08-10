@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { selectableInteractionModes } from "../app/interaction-mode-view.ts";
+import {
+  mergePendingInteractionModes,
+  selectableInteractionModes,
+} from "../app/interaction-mode-view.ts";
+import {
+  interactionModeActivityIdBatches,
+  interactionModeReadBatchSize,
+} from "../db/interaction-mode-policy.ts";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
@@ -79,4 +86,28 @@ test("published activity identity uses a targeted journal lookup", async () => {
   assert.match(identity, /readPublishedJournalActivity/);
   assert.doesNotMatch(identity, /loadContentIndex/);
   assert.match(content, /FROM json_each\(\$\{contentJournals\.payload\}, '\$\.activities'\)/);
+});
+
+test("hydration preserves only queued optimistic interaction-mode summaries", () => {
+  const server = {
+    stable: { state: "needs_selection", current: null },
+    pending: { state: "needs_selection", current: null },
+  };
+  const local = {
+    stale: { state: "recorded", current: { lastMutationId: "old" } },
+    pending: { state: "recorded", current: { lastMutationId: "pending:mutation-1" } },
+  };
+  const merged = mergePendingInteractionModes(server, local, [
+    { type: "interaction-mode-set", activityId: "pending", mutationId: "mutation-1" },
+  ]);
+  assert.equal(merged.pending, local.pending);
+  assert.equal(merged.stale, undefined);
+  assert.equal(merged.stable, server.stable);
+});
+
+test("interaction-mode state reads partition large workbenches into bounded batches", () => {
+  const ids = Array.from({ length: interactionModeReadBatchSize * 2 + 1 }, (_, index) => `activity-${index}`);
+  const batches = interactionModeActivityIdBatches([...ids, ids[0]]);
+  assert.deepEqual(batches.map((batch) => batch.length), [interactionModeReadBatchSize, interactionModeReadBatchSize, 1]);
+  assert.equal(batches.flat().length, ids.length);
 });

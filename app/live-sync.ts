@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { mutationFailureDisposition } from "./mutation-queue";
 import { applyTimerSync, type TimerSyncState } from "./timer-reconciliation";
 import { requireLiveUpdateReconciliation, subscribeToLiveUpdates } from "./live-event-policy";
+import { mergePendingInteractionModes } from "./interaction-mode-view";
 import type { PracticeStateCommand } from "../db/practice-state-commands";
 import {
   EMPTY_DRAFT,
@@ -145,7 +146,7 @@ function serverToDraft(state: ServerLiveState, offset: number, date = ""): Local
 
 // Server state wins on conflict; anything created only on this device is kept and
 // reported back so it can be pushed up, so a first sync never drops local work.
-function mergeDrafts(server: LocalDraft, local: LocalDraft) {
+function mergeDrafts(server: LocalDraft, local: LocalDraft, queued: readonly Mutation[] = []) {
   const serverExtraIds = new Set(server.extraActivities.map((activity) => activity.id));
   const serverFocusBlockIds = new Set(server.focusBlocks.map((block) => block.id));
   const serverSessionIds = new Set(server.sessions.map((session) => session.id));
@@ -196,7 +197,7 @@ function mergeDrafts(server: LocalDraft, local: LocalDraft) {
     historyFocusBlocks: server.historyFocusBlocks,
     historySessions: server.historySessions,
     interactionModeRegistry: server.interactionModeRegistry ?? local.interactionModeRegistry,
-    interactionModes: server.interactionModes,
+    interactionModes: mergePendingInteractionModes(server.interactionModes, local.interactionModes, queued),
     focusedActivityId: server.focusedActivityId ?? local.focusedActivityId,
     focusedSessionId: server.focusedSessionId ?? local.focusedSessionId,
     focusedAt: server.focusedAt ?? local.focusedAt,
@@ -463,7 +464,7 @@ export function useLiveState(date: string): LiveStateController {
         if (cancelled) return;
         offsetRef.current = state.serverNow - Date.now();
         const serverDraft = serverToDraft(state, offsetRef.current, date);
-        const { merged, localOnly } = mergeDrafts(serverDraft, localDraft);
+        const { merged, localOnly } = mergeDrafts(serverDraft, localDraft, queueRef.current);
         serverApplied = true;
         setDraft(() => merged);
         setHydrated(true);

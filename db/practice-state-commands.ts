@@ -159,14 +159,18 @@ async function setInteractionModeFromWebsite(
   now: number,
 ) {
   if (
-    !command.activityId
-    || !command.interactionModeId?.trim()
+    typeof command.activityId !== "string"
+    || !command.activityId.trim()
+    || typeof command.interactionModeId !== "string"
+    || !command.interactionModeId.trim()
     || !Number.isInteger(command.expectedRevision)
     || command.expectedRevision < 0
-    || !command.mutationId
+    || typeof command.mutationId !== "string"
+    || !command.mutationId.trim()
     || command.mutationId.length > 160
     || command.source !== "explicit_user_instruction"
-    || !command.reason?.trim()
+    || typeof command.reason !== "string"
+    || !command.reason.trim()
     || command.reason.length > 2_000
     || !Number.isInteger(command.occurredAt)
     || command.occurredAt <= 0
