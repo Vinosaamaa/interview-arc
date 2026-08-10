@@ -16,3 +16,26 @@ export function d1TransactionalInvariantGuard(
 export function isD1TransactionalInvariantFailure(error: unknown) {
   return String(error).toLowerCase().includes("malformed json");
 }
+
+export type D1TransactionalFailureKind =
+  | "invariant_conflict"
+  | "constraint_conflict"
+  | "unknown";
+
+// Keep platform-specific error adaptation at the D1 boundary. Domain modules
+// consume this stable classification and never parse or expose raw SQL errors.
+export function classifyD1TransactionalFailure(error: unknown): D1TransactionalFailureKind {
+  if (isD1TransactionalInvariantFailure(error)) return "invariant_conflict";
+  const code = typeof error === "object" && error
+    ? (error as { code?: unknown }).code
+    : null;
+  if (code === "SQLITE_CONSTRAINT" || code === "D1_CONSTRAINT_ERROR") {
+    return "constraint_conflict";
+  }
+  // Miniflare currently omits SQLite's stable code from this exception. Keep
+  // the compatibility fallback centralized here until its typed code ships.
+  if (String(error).toLowerCase().includes("constraint failed")) {
+    return "constraint_conflict";
+  }
+  return "unknown";
+}

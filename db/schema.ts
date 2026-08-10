@@ -990,6 +990,81 @@ export const todayPlanningMutations = sqliteTable(
   ],
 );
 
+// Interaction-mode IDs are validated against the Git-backed registry rather
+// than a database enum, so a future approved mode does not require a schema
+// migration. Current state, immutable transitions, and exact-retry receipts
+// are written in one D1 batch by the interaction-mode store.
+export const practiceInteractionModeStates = sqliteTable(
+  "practice_interaction_mode_states",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    interactionModeId: text("interaction_mode_id").notNull(),
+    registryVersion: text("registry_version").notNull(),
+    revision: integer("revision").notNull(),
+    source: text("source", {
+      enum: ["explicit_user_instruction", "workflow_transition"],
+    }).notNull(),
+    lastMutationId: text("last_mutation_id").notNull(),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.activityId] })],
+);
+
+export const practiceInteractionModeTransitions = sqliteTable(
+  "practice_interaction_mode_transitions",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    transitionId: text("transition_id").notNull(),
+    mutationId: text("mutation_id").notNull(),
+    fromInteractionModeId: text("from_interaction_mode_id"),
+    toInteractionModeId: text("to_interaction_mode_id").notNull(),
+    fromRevision: integer("from_revision").notNull(),
+    toRevision: integer("to_revision").notNull(),
+    registryVersion: text("registry_version").notNull(),
+    triggerTurnId: text("trigger_turn_id"),
+    source: text("source", {
+      enum: ["explicit_user_instruction", "workflow_transition"],
+    }).notNull(),
+    reason: text("reason").notNull(),
+    occurredAt: integer("occurred_at").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.transitionId] }),
+    uniqueIndex("practice_interaction_mode_transition_revision_idx").on(
+      table.ownerId,
+      table.activityId,
+      table.toRevision,
+    ),
+  ],
+);
+
+export const practiceInteractionModeMutations = sqliteTable(
+  "practice_interaction_mode_mutations",
+  {
+    ownerId,
+    mutationId: text("mutation_id").notNull(),
+    activityId: text("activity_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    transitionId: text("transition_id").notNull(),
+    toRevision: integer("to_revision").notNull(),
+    interactionModeId: text("interaction_mode_id").notNull(),
+    registryVersion: text("registry_version").notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.mutationId] }),
+    index("practice_interaction_mode_mutation_activity_idx").on(
+      table.ownerId,
+      table.activityId,
+      table.createdAt,
+    ),
+  ],
+);
+
 // Website-created activities (extras and full-session problems). Stored as a
 // JSON payload matching the client draft shape so the schema stays stable while
 // the UI model evolves; the columns that need indexing are lifted out.

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "registryVersion": "2026-08-10.1",
+  "compatibility": {
+    "unknownHistoricalMode": "preserve_as_unknown",
+    "deprecatedNewSelection": "reject",
+    "aliases": "normalize_without_persisting_alias"
+  },
+  "modes": [
+    {
+      "id": "interviewer",
+      "label": "Interviewer",
+      "description": "Realistic assessment in which the candidate leads.",
+      "helpPolicy": "Do not hint, teach, complete an answer, disclose a reference, or coach mid-answer.",
+      "supportedSpecialties": ["leetcode", "system_design", "behavioral"],
+      "selectableWhen": ["fresh_attempt", "active_attempt", "review"],
+      "aliases": ["mock"],
+      "defaultFor": ["fresh_attempt", "ambiguous_attempt"],
+      "deprecated": false
+    },
+    {
+      "id": "mentor",
+      "label": "Mentor",
+      "description": "Teaching, guided work, review, debugging, demonstration, or rewriting.",
+      "helpPolicy": "Use the hint ladder and record assistance rather than presenting guided work as unaided.",
+      "supportedSpecialties": ["leetcode", "system_design", "behavioral"],
+      "selectableWhen": ["fresh_attempt", "active_attempt", "review"],
+      "aliases": ["coach", "guided", "teach", "demo", "review", "rewrite", "debrief", "instructor"],
+      "defaultFor": ["direct_review", "rewrite", "walkthrough", "debugging"],
+      "deprecated": false
+    },
+    {
+      "id": "grill",
+      "label": "Grill",
+      "description": "Relentless-but-fair depth on one high-value branch.",
+      "helpPolicy": "Probe deeply without rescue or answer generation until an explicit switch to Mentor.",
+      "supportedSpecialties": ["leetcode", "system_design", "behavioral"],
+      "selectableWhen": ["fresh_attempt", "active_attempt", "review"],
+      "aliases": ["grill me"],
+      "defaultFor": ["explicit_grill"],
+      "deprecated": false
+    }
+  ]
+}

@@ -49,6 +49,7 @@ import {
   PracticeStateCommandInputError,
   type PracticeStateCommand,
 } from "../db/practice-state-commands";
+import { readPracticeActivityIdentity } from "../db/practice-activity-identity";
 import { leetCodeQuestionMetadataSchema } from "../db/question-metadata";
 import {
   connectOwnerLiveUpdates,
@@ -135,6 +136,18 @@ import {
   SpecialistWriteJobError,
 } from "../db/specialist-write-jobs";
 import type { SpecialistWriteJobRow } from "../db/schema";
+import {
+  InteractionModeError,
+  interactionModeMutationFingerprint,
+  interactionModeRegistry,
+  resolveInteractionMode,
+  type InteractionModePhase,
+  type PracticeSpecialty,
+} from "../db/interaction-mode-policy";
+import {
+  readPracticeInteractionMode,
+  setPracticeInteractionModeAtomic,
+} from "../db/interaction-mode-store";
 import {
   controlSessionPracticeTimer,
   finishAndAdvancePracticeActivity,
@@ -1757,6 +1770,7 @@ function specialistToolFailure(error: unknown) {
     || error instanceof SpecialistWriteJobError
     || error instanceof BehavioralEvidenceError
     || error instanceof TypedExchangeDeletionError
+    || error instanceof InteractionModeError
   ) {
     const candidateCode = (error as { code?: unknown }).code;
     const code = typeof candidateCode === "string"
@@ -1772,13 +1786,15 @@ function specialistToolFailure(error: unknown) {
       structuredContent: {
         error: error.message,
         code,
-        retryable: error instanceof SpecialistControlError
+        retryable: (error instanceof SpecialistControlError
+          || error instanceof InteractionModeError)
           && typeof error.details.retryable === "boolean"
           ? error.details.retryable
           : false,
         ...(error instanceof VoiceResponseGroupConflictError
           || error instanceof SpecialistControlError
-          || error instanceof TypedExchangeDeletionError ? error.details : {}),
+          || error instanceof TypedExchangeDeletionError
+          || error instanceof InteractionModeError ? error.details : {}),
       },
     };
   }
@@ -1969,6 +1985,31 @@ async function authoritativeSpecialistState(ownerId: string, date?: string) {
   return { snapshot, timerInstrument };
 }
 
+async function resolveInteractionModeActivity(ownerId: string, activityId: string) {
+  const activity = await readPracticeActivityIdentity(ownerId, activityId);
+  if (!activity) {
+    throw new InteractionModeError(
+      "interaction_mode_activity_not_found",
+      "That owner-scoped practice activity does not exist.",
+      { activityId, retryable: false },
+    );
+  }
+  return {
+    activityId,
+    specialty: activity.specialty as PracticeSpecialty,
+    phase: activity.phase as InteractionModePhase,
+  };
+}
+
+async function interactionModeProjection(ownerId: string, activityId: string) {
+  const activity = await resolveInteractionModeActivity(ownerId, activityId);
+  return {
+    activity,
+    registry: interactionModeRegistry,
+    ...(await readPracticeInteractionMode(ownerId, activityId)),
+  };
+}
+
 function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   const publishOwnerLiveUpdate = (
     namespace: LiveUpdateNamespace | undefined,
@@ -1980,6 +2021,86 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
     executionContext: ctx,
   });
   const server = new McpServer({ name: "Interview Arc", version: "1.0.0" });
+
+  server.registerTool(
+    "get_practice_interaction_mode",
+    {
+      description: "Read the versioned interaction-mode registry plus one owner-scoped activity's authoritative current mode, revision, and immutable transition history. An absent legacy state is returned as needs_selection; it is never fabricated as Interviewer.",
+      inputSchema: { activityId: z.string().min(1) },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ activityId }) => {
+      try {
+        const payload = await interactionModeProjection(ownerId, activityId);
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }],
+          structuredContent: payload,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "set_practice_interaction_mode",
+    {
+      description: "Persist one explicit activity-scoped Interviewer, Mentor, or Grill transition with a stable mutation ID and expected mode revision. Canonical IDs and documented aliases are registry-normalized. Exact retries return the original receipt; changed retries and stale revisions do not mutate D1.",
+      inputSchema: {
+        activityId: z.string().min(1),
+        interactionModeId: z.string().trim().min(1).max(100),
+        expectedRevision: z.number().int().nonnegative(),
+        mutationId: z.string().min(1).max(160),
+        triggerTurnId: z.string().min(1).max(300).optional(),
+        source: z.enum(["explicit_user_instruction", "workflow_transition"]),
+        reason: z.string().trim().min(1).max(2_000),
+        occurredAt: z.number().int().positive(),
+        authorization: z.literal("explicit_user_instruction"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const activity = await resolveInteractionModeActivity(ownerId, input.activityId);
+        const resolved = resolveInteractionMode(
+          input.interactionModeId,
+          activity.specialty,
+          activity.phase,
+        );
+        const requestFingerprint = await interactionModeMutationFingerprint({
+          ...input,
+          interactionModeId: resolved.mode.id,
+        });
+        const result = await setPracticeInteractionModeAtomic({
+          ownerId,
+          activityId: input.activityId,
+          interactionModeId: resolved.mode.id,
+          registryVersion: resolved.registryVersion,
+          expectedRevision: input.expectedRevision,
+          mutationId: input.mutationId,
+          requestFingerprint,
+          triggerTurnId: input.triggerTurnId,
+          source: input.source,
+          reason: input.reason,
+          occurredAt: input.occurredAt,
+          now: Date.now(),
+        });
+        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "practice");
+        const payload = {
+          activity,
+          registry: interactionModeRegistry,
+          normalizedFrom: resolved.normalizedFrom,
+          ...result,
+        };
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }],
+          structuredContent: payload,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
 
   server.registerTool(
     "save_practice_exchange",

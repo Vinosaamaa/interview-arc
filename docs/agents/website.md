@@ -63,6 +63,10 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
 
 ## Data Sources
 
+- Follow `../contracts/practice-interaction-modes.md` for the versioned mode
+  registry and owner-scoped D1/MCP transition boundary. Do not fabricate a mode
+  for legacy activities without recorded state.
+
 - Follow `../contracts/specialist-today-controls.md` for specialist catalog,
   Today planning, timer, result, guarded advance, idempotency, and
   authoritative read-back behavior. These MCP tools must reuse the same D1
