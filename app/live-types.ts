@@ -8,6 +8,7 @@ import type { CodeAttemptReviewDisplay } from "../db/code-attempt-review";
 import type { InteractionModeRegistry } from "../db/interaction-mode-policy";
 import type { InteractionModeSummary } from "../db/interaction-mode-store";
 import type { InteractionModeClassification } from "../db/interaction-mode-classification";
+import type { BehavioralPracticeScenario } from "../db/behavioral-practice-scenario";
 export type { FocusBlock } from "./career-work";
 export type { InteractionModeSummary } from "../db/interaction-mode-store";
 
@@ -145,6 +146,7 @@ export type SolutionProfilePayload = {
       evidenceGaps: string[];
     }>;
   };
+  practiceScenarios?: BehavioralPracticeScenario[];
 };
 export type SolutionProfile = {
   specialty: ActivityType;

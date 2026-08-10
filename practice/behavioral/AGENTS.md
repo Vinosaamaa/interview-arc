@@ -110,9 +110,10 @@ technically plausible and consistent with accepted project facts unless the
 canon explicitly marks an altered premise. Preserve the label on every
 standalone answer, and never place the variant in preferred or truthful
 alternatives, evidence, claims, résumé facts, or the Story Bank.
-Persist the typed scenario only when the current Solution Profile operation
-supports it; otherwise preserve the labeled exercise in the activity transcript
-and report the #201 product gap rather than overloading a personal-answer field.
+Persist the typed scenario through the current provisional-profile or completed-
+finalization operation. Reuse its stable scenario ID, increment its revision for
+a material canon change, and verify the exact scenario projection on readback.
+Never overload a personal-answer field or promote scenario content to evidence.
 
 Finalization includes the activity transcript, summary, strengths,
 improvements, stronger truthful answer, likely follow-ups, next drill,

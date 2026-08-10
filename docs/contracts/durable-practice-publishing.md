@@ -385,8 +385,8 @@ canonical Solution Profile. A changed saved answer is an explicit append-only
 correction, not a finalization overwrite. Legacy `modelAnswer` remains an
 explicit fallback without fabricated backfill.
 
-Once the typed field is supported, behavioral finalization may additionally
-carry the explicitly requested, labeled `practiceScenarios` defined by
+Behavioral finalization may additionally carry the explicitly requested,
+labeled `practiceScenarios` defined by
 `solution-profiles.md`. They are adjacent study material, never a substitute
 for the truthful `modelAnswer`, user evidence, or a preferred personal answer.
 The coordinator preserves their mode, label, stable scenario/revision identity,

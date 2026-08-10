@@ -23,6 +23,7 @@ import {
   behavioralFinalAnswerCorrectionSchema,
   behavioralFinalAnswerSnapshotInputSchema,
 } from "../db/behavioral-final-answer";
+import { behavioralPracticeScenariosSchema } from "../db/behavioral-practice-scenario";
 import {
   BehavioralTargetProfileError,
   behavioralTargetBindingWriteSchema,
@@ -2974,6 +2975,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
                 evidenceGaps: z.array(z.string()),
               })).max(5),
             }).optional(),
+            practiceScenarios: behavioralPracticeScenariosSchema.optional(),
           }).optional(),
         }),
       }).superRefine((input, context) => {
@@ -3049,6 +3051,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
               evidenceGaps: z.array(z.string()),
             })).max(5),
           }).optional(),
+          practiceScenarios: behavioralPracticeScenariosSchema.optional(),
         }),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },

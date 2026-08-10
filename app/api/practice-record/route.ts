@@ -14,6 +14,9 @@ export async function GET(request: Request) {
       finalAnswer: record.finalAnswer,
       finalAnswerMarkdown: record.finalAnswerMarkdown,
       finalAnswerHtml: record.finalAnswerHtml,
+      practiceScenarios: record.practiceScenarios,
+      practiceScenariosMarkdown: record.practiceScenariosMarkdown,
+      practiceScenariosHtml: record.practiceScenariosHtml,
       turns: record.turns.map((turn) => ({
         activityId: turn.activityId,
         turnId: turn.turnId,

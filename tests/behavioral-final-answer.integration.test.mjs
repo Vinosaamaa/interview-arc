@@ -79,6 +79,25 @@ function finalization({
   solutionRevision = 1,
   scope = "universal",
   target,
+  practiceScenarios = [{
+    schemaVersion: 1,
+    scenarioId: "retry-recovery-scenario",
+    revision: 1,
+    mode: "hypothetical",
+    label: "Hypothetical practice scenario — not the owner's experience",
+    purpose: "Practice a constrained recovery incident.",
+    canon: {
+      realSourceFacts: [{ statement: "Stable operation identities exist.", acceptedEvidenceIds: ["evidence-retry-boundary"] }],
+      inventedPremises: ["A regional queue is delayed."],
+      inventedActions: ["I introduce a bounded replay worker."],
+      inventedResults: ["Recovery falls below ten minutes."],
+    },
+    answer: "I bounded replay and verified exact recovery receipts.",
+    challengeMap: [{ challenge: "Why not retry inline?", response: "It extends visible latency." }],
+    likelyFollowUps: ["How did you test ambiguous commits?"],
+    limitations: ["The incident and result are invented for practice."],
+    visibility: "owner_private",
+  }],
 }) {
   return {
     activityId,
@@ -126,6 +145,7 @@ function finalization({
           },
           alternatives: [],
         },
+        practiceScenarios,
       },
       finalAnswerOperationId: operationId,
       interactionModeClassificationOperationId: `mode-${operationId.toLowerCase()}`,
@@ -280,6 +300,10 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     assert.equal(record.turns.find((turn) => turn.turnId === responseTurnId).interactionMode.interactionModeId, "interviewer");
     assert.match(record.finalAnswerMarkdown, new RegExp(answer));
     assert.match(record.finalAnswerHtml, new RegExp(answer));
+    assert.equal(record.practiceScenarios.solutionProfile.revision, 1);
+    assert.equal(record.practiceScenarios.scenarios[0].scenarioId, "retry-recovery-scenario");
+    assert.match(record.practiceScenariosMarkdown, /Hypothetical practice scenario — not the owner's experience/);
+    assert.match(record.practiceScenariosHtml, /I bounded replay and verified exact recovery receipts\./);
 
     const missingSnapshotPayload = finalization({
       activityId,
@@ -354,6 +378,8 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     assert.equal(correctedRecord.finalAnswer.answer, correctedAnswer);
     assert.equal(correctedRecord.finalAnswer.correctionOfRevision, 1);
     assert.equal(correctedRecord.finalAnswerSnapshots.length, 2);
+    assert.equal(correctedRecord.practiceScenarios.solutionProfile.revision, 2);
+    assert.equal(correctedRecord.practiceScenarios.scenarios[0].scenarioId, "retry-recovery-scenario");
     assert.equal(correctedRecord.finalAnswerSnapshots[0].snapshot.answer, answer);
     assert.equal(correctedRecord.finalAnswerSnapshots[1].snapshot.answer, correctedAnswer);
     assert.equal(correctedRecord.interactionModeClassification.snapshotRevision, 2);
@@ -541,6 +567,7 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     });
     assert.equal(voiceRecord.turns[0].source, "audio_transcript");
     assert.equal(voiceRecord.finalAnswer.answer, answer);
+    assert.equal(voiceRecord.practiceScenarios.scenarios[0].scenarioId, "retry-recovery-scenario");
     assert.equal(voiceRecord.interactionModeClassification.classification.primaryPracticeModeId, "unrecorded");
 
     const legacyRecord = await call(client, "get_activity_practice_record", {
@@ -549,6 +576,9 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     assert.equal(legacyRecord.finalAnswer.source, "legacy_model_answer");
     assert.equal(legacyRecord.finalAnswer.snapshotRevision, null);
     assert.deepEqual(legacyRecord.finalAnswerSnapshots, []);
+    assert.equal(legacyRecord.practiceScenarios, null);
+    assert.equal(legacyRecord.practiceScenariosMarkdown, "");
+    assert.equal(legacyRecord.practiceScenariosHtml, "");
 
     otherClient = new Client({ name: "final-answer-other", version: "1.0.0" });
     await otherClient.connect(new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), {

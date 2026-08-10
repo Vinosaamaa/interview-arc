@@ -93,6 +93,14 @@ import {
   type StoredBehavioralFinalAnswerSnapshot,
 } from "./behavioral-final-answer";
 import {
+  behavioralPracticeScenariosSchema,
+  behavioralPracticeScenariosFingerprint,
+  projectBehavioralPracticeScenarios,
+  renderBehavioralPracticeScenariosHtml,
+  renderBehavioralPracticeScenariosMarkdown,
+  type BehavioralPracticeScenario,
+} from "./behavioral-practice-scenario";
+import {
   resolveBehavioralTarget,
 } from "./behavioral-target-profile";
 import {
@@ -199,6 +207,7 @@ export type SpecialistFinalization = {
         evidenceGaps: string[];
       }>;
     };
+    practiceScenarios?: BehavioralPracticeScenario[];
   };
 };
 
@@ -261,8 +270,20 @@ async function enrichPersonalLeetCodeQuestion(
 
 function validateSolutionProfile(specialty: Specialty, payload: SpecialistFinalization["solutionProfile"]) {
   if (!payload) throw new Error("A complete finalization needs a reusable Solution Profile.");
+  validatePracticeScenariosForSpecialty(specialty, payload.practiceScenarios);
   const missing = solutionProfileMissingRequirements(specialty, payload);
   if (missing.length) throw new Error(`A complete finalization needs a reusable Solution Profile; missing: ${missing.join(", ")}.`);
+}
+
+function validatePracticeScenariosForSpecialty(
+  specialty: Specialty,
+  scenarios: BehavioralPracticeScenario[] | undefined,
+) {
+  if (!scenarios) return;
+  if (specialty !== "behavioral") {
+    throw new Error("Practice scenarios are supported only for behavioral Solution Profiles.");
+  }
+  behavioralPracticeScenariosSchema.parse(scenarios);
 }
 
 function normalizedSolutionProfile(
@@ -276,7 +297,7 @@ function normalizedSolutionProfile(
   };
 }
 
-function profileFingerprint(payload: NonNullable<SpecialistFinalization["solutionProfile"]>) {
+export function profileFingerprint(payload: NonNullable<SpecialistFinalization["solutionProfile"]>) {
   return JSON.stringify({
     summary: payload.summary.trim(),
     sections: payload.sections.map((section) => ({ title: section.title.trim(), body: section.body.trim() })),
@@ -284,6 +305,7 @@ function profileFingerprint(payload: NonNullable<SpecialistFinalization["solutio
     references: payload.references.map((reference) => ({ title: reference.title.trim(), url: reference.url.trim() }))
       .sort((left, right) => left.url.localeCompare(right.url)),
     behavioralAnswer: payload.behavioralAnswer,
+    practiceScenarios: behavioralPracticeScenariosFingerprint(payload.practiceScenarios),
   });
 }
 
@@ -306,6 +328,7 @@ export async function saveProvisionalSolutionProfile(
   if (specialty === "behavioral" && payload.sections.some((section) => TRANSCRIPT_SECTION.test(section.title))) {
     throw new Error("Behavioral provisional profiles cannot contain a transcript.");
   }
+  validatePracticeScenariosForSpecialty(specialty, payload.practiceScenarios);
   const db = getDb();
   const profile = normalizedSolutionProfile(payload, input.references ?? []);
   const [current, existing] = await Promise.all([
@@ -4776,7 +4799,7 @@ export async function readSpecialistTasks(ownerId: string) {
 
 export async function readActivityPracticeRecord(ownerId: string, activityId: string) {
   const db = getDb();
-  const [turns, notes, finalizations, classificationRows, modeTransitions, modeTurnOverrides, finalAnswerRows, reviews, clips, deliveryAnalyses, codeAttempts, typedExchangeDeletions] = await Promise.all([
+  const [turns, notes, finalizations, classificationRows, modeTransitions, modeTurnOverrides, finalAnswerRows, reviews, clips, deliveryAnalyses, codeAttempts, typedExchangeDeletions, solutionLinks] = await Promise.all([
     db
       .select()
       .from(practiceTranscriptTurns)
@@ -4811,6 +4834,10 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
       eq(typedPracticeExchangeDeletions.ownerId, ownerId),
       eq(typedPracticeExchangeDeletions.activityId, activityId),
     )).orderBy(asc(typedPracticeExchangeDeletions.deletedAt)),
+    db.select().from(activitySolutionLinks).where(and(
+      eq(activitySolutionLinks.ownerId, ownerId),
+      eq(activitySolutionLinks.activityId, activityId),
+    )).limit(1),
   ]);
   const finalAnswerSnapshots: StoredBehavioralFinalAnswerSnapshot[] = finalAnswerRows.slice(0, 100).reverse().map((row) => ({
     snapshotRevision: row.snapshotRevision,
@@ -4820,6 +4847,24 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
     snapshot: behavioralFinalAnswerSnapshotInputSchema.parse(row.snapshot),
   }));
   const finalizationPayload = finalizations[0]?.payload as Partial<SpecialistFinalization> | undefined;
+  const solutionLink = solutionLinks[0];
+  const linkedSolutionRevisions = solutionLink?.specialty === "behavioral"
+    ? await db.select().from(problemSolutionRevisions).where(and(
+      eq(problemSolutionRevisions.ownerId, ownerId),
+      eq(problemSolutionRevisions.specialty, "behavioral"),
+      eq(problemSolutionRevisions.questionId, solutionLink.questionId),
+      eq(problemSolutionRevisions.revision, solutionLink.solutionRevision),
+    )).limit(1)
+    : [];
+  const linkedSolutionRevision = linkedSolutionRevisions[0];
+  const linkedSolutionPayload = linkedSolutionRevision?.payload as SpecialistFinalization["solutionProfile"] | undefined;
+  const practiceScenarios = solutionLink?.specialty === "behavioral" && linkedSolutionRevision
+    ? projectBehavioralPracticeScenarios({
+      questionId: solutionLink.questionId,
+      solutionProfileRevision: solutionLink.solutionRevision,
+      scenarios: linkedSolutionPayload?.practiceScenarios,
+    })
+    : null;
   const interactionModeClassificationHistory = classificationRows.slice(0, 100).reverse().map((row) => ({
     snapshotRevision: row.snapshotRevision,
     correctionOfRevision: row.correctionOfRevision,
@@ -4893,6 +4938,9 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
     finalAnswer,
     finalAnswerMarkdown: renderBehavioralFinalAnswerMarkdown(finalAnswer),
     finalAnswerHtml: renderBehavioralFinalAnswerHtml(finalAnswer),
+    practiceScenarios,
+    practiceScenariosMarkdown: renderBehavioralPracticeScenariosMarkdown(practiceScenarios),
+    practiceScenariosHtml: renderBehavioralPracticeScenariosHtml(practiceScenarios),
     reviews,
     audioClips: clips,
     deliveryAnalyses,

@@ -12,6 +12,9 @@ test("practice-record API returns the immutable snapshot projection and export f
     "finalAnswer: record.finalAnswer",
     "finalAnswerMarkdown: record.finalAnswerMarkdown",
     "finalAnswerHtml: record.finalAnswerHtml",
+    "practiceScenarios: record.practiceScenarios",
+    "practiceScenariosMarkdown: record.practiceScenariosMarkdown",
+    "practiceScenariosHtml: record.practiceScenariosHtml",
   ]) assert.match(route, new RegExp(field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.doesNotMatch(route, /finalAnswerSnapshots: record\.finalAnswerSnapshots/);
 });
@@ -25,9 +28,18 @@ test("Past loads and renders Final tailored answer separately after Conversation
   assert.deepEqual(orderPastReaderSections({
     conversation: "conversation",
     finalAnswer: "final-answer",
+    practiceScenarios: "practice-scenarios",
     codeAttempts: "code-attempts",
     reviewSections: ["review"],
-  }), ["conversation", "final-answer", "code-attempts", "review"]);
+  }), ["conversation", "final-answer", "practice-scenarios", "code-attempts", "review"]);
+});
+
+test("Past renders exact profile-revision scenarios as a dedicated labeled section", async () => {
+  const source = await readFile(new URL("app/home-client.tsx", root), "utf8");
+  assert.match(source, /practiceScenarios: record\.practiceScenarios/);
+  assert.match(source, /id="case-practice-scenarios"/);
+  assert.match(source, />Practice scenarios</);
+  assert.match(source, /not the owner's experience/);
 });
 
 test("Problem Bank Past-attempt navigation opens the exact activity snapshot", async () => {
@@ -44,6 +56,8 @@ test("Export today embeds the same server-rendered Markdown and local HTML", asy
   assert.match(source, /behavioralFinalAnswers/);
   assert.match(source, /finalAnswerMarkdown/);
   assert.match(source, /finalAnswerHtml/);
+  assert.match(source, /practiceScenariosMarkdown/);
+  assert.match(source, /practiceScenariosHtml/);
   assert.match(source, /\/api\/practice-record\?activityId=/);
 });
 
