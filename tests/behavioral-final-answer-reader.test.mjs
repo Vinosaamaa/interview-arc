@@ -89,11 +89,13 @@ test("Export today embeds the same server-rendered Markdown and local HTML", asy
   assert.match(source, /\/api\/practice-record\?activityId=/);
 });
 
-test("responsive Final tailored answer card has visible focus and a single-column mobile layout", async () => {
+test("behavioral snapshot cards preserve visible focus and responsive mobile layouts", async () => {
   const css = await readFile(new URL("app/interview-arc-v2.css", root), "utf8");
   assert.match(css, /\.final-answer-card/);
   assert.match(css, /\.behavioral-attempt-card/);
   assert.match(css, /\.behavioral-claim-audit dl/);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.final-answer-meta/);
+  assert.match(css, /\.resume-context-card > footer a:focus-visible/);
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.resume-context-card dl/);
   assert.match(css, /prefers-reduced-motion: reduce/);
 });

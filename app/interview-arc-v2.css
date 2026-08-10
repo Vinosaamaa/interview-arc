@@ -981,6 +981,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .resume-context-card > footer { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
 .resume-context-card > footer a { min-height: 42px; display: inline-flex; align-items: center; padding: 9px 13px; border: 1px solid #74a99f; border-radius: 8px; color: #155f53; font-weight: 760; text-decoration: none; }
 .resume-context-card > footer a:hover { background: #edf8f4; }
+.resume-context-card > footer a:focus-visible { outline: 3px solid #2d897a; outline-offset: 3px; }
 
 .practice-scenarios-group > div { padding: 0; }
 .practice-scenarios-card {
