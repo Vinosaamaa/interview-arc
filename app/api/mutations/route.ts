@@ -28,6 +28,11 @@ import { toRouteErrorMessage } from "../route-helpers";
 import { clearActivityReviewSchedules, scheduleReview, setProblemStar, upsertOwnerBankQuestion } from "../../../db/durable-practice";
 import { env } from "cloudflare:workers";
 import { publishOwnerLiveUpdate } from "../../../worker/live-update-hub";
+import {
+  addReviewQueueItemsToToday,
+  deferReviewToNextWeek,
+  ReviewQueueConflictError,
+} from "../../../db/review-queue";
 
 type Mutation =
   | {
@@ -54,6 +59,8 @@ type Mutation =
   | { type: "focus-block-remove"; id: string }
   | { type: "session-upsert"; session: { id: string; date: string } & Record<string, unknown> }
   | { type: "session-remove"; id: string; activityIds?: string[] }
+  | { type: "review-defer"; reviewKey: string; expectedDueDate: string }
+  | { type: "review-add-today"; mutationId: string; expectedWorkbenchId: string; expectedWorkbenchRevision: number; reviewKeys: string[] }
   | { type: "workbench-start-fresh"; workbenchId: string };
 
 const TIMER_ACTIONS: TimerAction[] = ["start", "pause", "finish"];
@@ -247,6 +254,43 @@ export async function POST(request: Request) {
         await removeLiveSession(ownerId, mutation.id);
         break;
       }
+      case "review-defer": {
+        if (
+          !mutation.reviewKey
+          || !/^\d{4}-\d{2}-\d{2}$/.test(mutation.expectedDueDate)
+        ) {
+          return Response.json({ error: "Invalid review deferral." }, { status: 400 });
+        }
+        await deferReviewToNextWeek(ownerId, {
+          reviewKey: mutation.reviewKey,
+          expectedDueDate: mutation.expectedDueDate,
+          today: date,
+        }, now);
+        break;
+      }
+      case "review-add-today": {
+        if (
+          !mutation.expectedWorkbenchId
+          || !Number.isInteger(mutation.expectedWorkbenchRevision)
+          || mutation.expectedWorkbenchRevision < 0
+          || !mutation.mutationId
+          || mutation.mutationId.length > 120
+          || !Array.isArray(mutation.reviewKeys)
+          || mutation.reviewKeys.length < 1
+          || mutation.reviewKeys.length > 30
+          || mutation.reviewKeys.some((reviewKey) => typeof reviewKey !== "string" || !reviewKey)
+        ) {
+          return Response.json({ error: "Invalid Review Queue selection." }, { status: 400 });
+        }
+        await addReviewQueueItemsToToday(ownerId, {
+          date,
+          expectedWorkbenchId: mutation.expectedWorkbenchId,
+          expectedWorkbenchRevision: mutation.expectedWorkbenchRevision,
+          mutationId: mutation.mutationId,
+          reviewKeys: mutation.reviewKeys,
+        }, now);
+        break;
+      }
       case "workbench-start-fresh": {
         if (!mutation.workbenchId) {
           return Response.json({ error: "Missing new workbench id." }, { status: 400 });
@@ -269,15 +313,11 @@ export async function POST(request: Request) {
       ...(mutationReceipt ? { mutationReceipt } : {}),
     });
   } catch (error) {
+    if (error instanceof ReviewQueueConflictError || error instanceof TodayPlanningConflictError) {
+      return Response.json({ error: error.message, code: error.code, retryable: false }, { status: 409 });
+    }
     if (error instanceof TimerStateConflictError) {
       return Response.json({ error: error.message, retryable: false }, { status: 409 });
-    }
-    if (error instanceof TodayPlanningConflictError) {
-      return Response.json({
-        error: error.message,
-        code: error.code,
-        retryable: false,
-      }, { status: 409 });
     }
     return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 });
   }

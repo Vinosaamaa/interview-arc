@@ -19,7 +19,7 @@ Before editing website code, read `../docs/agents/website.md` and the shared con
 - Treat D1 as the durable source for mutable timers, result flags, website-created
   sessions, and extras. Browser storage is only an offline cache/retry queue.
   Versioned daily/artifact files remain the durable narrative source.
-- Keep Today, Journey, Past, and Problem Banks as distinct information views; reveal full transcripts and code on demand.
+- Keep Today, Journey, Review Queue, Past, and Problem Banks as distinct information views; reveal full transcripts and code on demand.
 - Show the arrival ritual on every full page entry and keep it visible until the
   user explicitly enters. Draw fresh artwork, encouragement, and a starting track from
   locally hosted, documented, licensed pools. Sound begins only from a user

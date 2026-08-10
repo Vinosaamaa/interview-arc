@@ -46,6 +46,7 @@ export class TodayPlanningConflictError extends Error {
 export type AddPlanningSelectionInput = {
   date: string;
   workbenchId: string;
+  expectedWorkbenchRevision?: number;
   mutationId: string;
   destination: "standalone" | "session";
   sessionNumber: number;
@@ -139,6 +140,15 @@ export async function applyPlanningSelection(
     throw new TodayPlanningConflictError(
       "stale_workbench",
       "Today changed in another surface. Refresh the planner and review the selection.",
+    );
+  }
+  if (
+    input.expectedWorkbenchRevision != null
+    && workbench.revision !== input.expectedWorkbenchRevision
+  ) {
+    throw new TodayPlanningConflictError(
+      "stale_workbench_revision",
+      `Today changed in another surface. Refresh from authoritative revision ${workbench.revision}.`,
     );
   }
 
@@ -256,8 +266,14 @@ export async function applyPlanningSelection(
     ]);
   } catch (error) {
     const receipt = await readPlanningMutation(ownerId, input.mutationId);
-    if (receipt?.requestHash === requestHash) {
-      return { duplicate: true, result: receipt.response };
+    if (receipt) {
+      if (receipt.requestHash === requestHash) {
+        return { duplicate: true, result: receipt.response };
+      }
+      throw new TodayPlanningConflictError(
+        "planning_mutation_identity_conflict",
+        "That planning mutation identifier was already used for different content.",
+      );
     }
     if (isD1TransactionalInvariantFailure(error)) {
       throw new TodayPlanningConflictError(

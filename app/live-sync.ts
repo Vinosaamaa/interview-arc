@@ -107,6 +107,8 @@ export type Mutation =
   | { type: "focus-block-remove"; id: string }
   | { type: "session-upsert"; session: LocalSession }
   | { type: "session-remove"; id: string; activityIds: string[] }
+  | { type: "review-defer"; reviewKey: string; expectedDueDate: string }
+  | { type: "review-add-today"; mutationId: string; expectedWorkbenchId: string; expectedWorkbenchRevision: number; reviewKeys: string[] }
   | { type: "workbench-start-fresh"; workbenchId: string };
 
 const RETRY_INTERVAL_MS = 15000;
@@ -266,6 +268,8 @@ export type LiveStateController = {
   setNow: (value: number) => void;
   hydrated: boolean;
   synced: boolean;
+  mutationError: { type: Mutation["type"]; message: string; code?: string } | null;
+  clearMutationError: () => void;
   enqueue: (...mutations: Mutation[]) => void;
 };
 
@@ -273,6 +277,7 @@ export function useLiveState(date: string): LiveStateController {
   const [draft, setDraft] = useState<LocalDraft>(EMPTY_DRAFT);
   const [hydrated, setHydrated] = useState(false);
   const [synced, setSynced] = useState(false);
+  const [mutationError, setMutationError] = useState<LiveStateController["mutationError"]>(null);
   const [now, setNow] = useState(() => Date.now());
 
   const offsetRef = useRef(0);
@@ -306,12 +311,28 @@ export function useLiveState(date: string): LiveStateController {
             body: JSON.stringify({ date, mutation }),
           });
         } catch {
+          setSynced(false);
           break; // Offline: keep the queue and retry later.
         }
         if (!response.ok) {
           if (mutationFailureDisposition(response.status) === "retry") {
+            setSynced(false);
             break; // Authentication, throttling, and server failures may recover.
           }
+
+          let failure: { error?: unknown; code?: unknown } = {};
+          try {
+            failure = await response.json() as { error?: unknown; code?: unknown };
+          } catch {
+            // Fall back to a stable generic message when an intermediary strips JSON.
+          }
+          setMutationError({
+            type: mutation.type,
+            message: typeof failure.error === "string"
+              ? failure.error
+              : "The server rejected this change because its authoritative state moved.",
+            ...(typeof failure.code === "string" ? { code: failure.code } : {}),
+          });
 
           // A validation/state conflict will never succeed when replayed. Drop
           // only that mutation, then reconcile from D1 before continuing so an
@@ -323,8 +344,12 @@ export function useLiveState(date: string): LiveStateController {
             if (stateResponse.ok) {
               latestState = (await stateResponse.json()) as ServerLiveState;
               offsetRef.current = latestState.serverNow - Date.now();
+              setSynced(true);
+            } else {
+              setSynced(false);
             }
           } catch {
+            setSynced(false);
             // The invalid mutation is already removed. A later successful
             // mutation or the next page load will reconcile authoritative D1.
           }
@@ -333,6 +358,7 @@ export function useLiveState(date: string): LiveStateController {
         const state = (await response.json()) as ServerLiveState;
         latestState = state;
         offsetRef.current = state.serverNow - Date.now();
+        setSynced(true);
         queueRef.current = queueRef.current.slice(1);
         persistQueue();
       }
@@ -349,6 +375,11 @@ export function useLiveState(date: string): LiveStateController {
   const enqueue = useCallback(
     (...mutations: Mutation[]) => {
       if (mutations.length === 0) return;
+      setMutationError((current) => (
+        current && mutations.some((mutation) => mutation.type === current.type)
+          ? null
+          : current
+      ));
       queueRef.current = [...queueRef.current, ...mutations];
       persistQueue();
       void flush();
@@ -361,7 +392,10 @@ export function useLiveState(date: string): LiveStateController {
     reconcilingRef.current = true;
     try {
       const response = await fetch("/api/timer-state", { cache: "no-store" });
-      if (!response.ok) return;
+      if (!response.ok) {
+        setSynced(false);
+        return;
+      }
       const state = (await response.json()) as TimerSyncState;
 
       // A local action may have been queued while the read was in flight. Let
@@ -373,6 +407,7 @@ export function useLiveState(date: string): LiveStateController {
       setDraft((current) => applyTimerSync(current, state, offsetRef.current));
       setSynced(true);
     } catch {
+      setSynced(false);
       // Transient polling failures must not disturb the current display.
     } finally {
       reconcilingRef.current = false;
@@ -384,7 +419,10 @@ export function useLiveState(date: string): LiveStateController {
     reconcilingRef.current = true;
     try {
       const response = await fetch(`/api/state?date=${encodeURIComponent(date)}`, { cache: "no-store" });
-      if (!response.ok) return;
+      if (!response.ok) {
+        setSynced(false);
+        return;
+      }
       const state = (await response.json()) as ServerLiveState;
 
       // Do not overwrite a browser mutation that began while this request was
@@ -396,6 +434,7 @@ export function useLiveState(date: string): LiveStateController {
       setDraft(() => serverToDraft(state, offsetRef.current, date));
       setSynced(true);
     } catch {
+      setSynced(false);
       // A later push event or bounded fallback read will converge on D1.
     } finally {
       reconcilingRef.current = false;
@@ -445,6 +484,7 @@ export function useLiveState(date: string): LiveStateController {
         if (localOnly.length > 0) enqueue(...localOnly);
         setSynced(true);
       } catch {
+        if (!cancelled) setSynced(false);
         // Offline or API unavailable: keep working from the local cache.
         if (!cancelled && !serverApplied) {
           setDraft(() => localDraft);
@@ -473,14 +513,20 @@ export function useLiveState(date: string): LiveStateController {
 
   // Retry the queue when connectivity returns and on a periodic timer.
   useEffect(() => {
-    const onOnline = () => void flush();
+    const onOnline = () => {
+      void flush();
+      void reconcilePracticeState();
+    };
+    const onOffline = () => setSynced(false);
     window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
     const interval = window.setInterval(() => void flush(), RETRY_INTERVAL_MS);
     return () => {
       window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
       window.clearInterval(interval);
     };
-  }, [flush]);
+  }, [flush, reconcilePracticeState]);
 
   // Voice and the Chrome companion mutate the same D1 state. Timer events can
   // use the compact timer endpoint; every other committed event reconciles the
@@ -489,9 +535,9 @@ export function useLiveState(date: string): LiveStateController {
   // while push is unavailable.
   useEffect(() => {
     if (!hydrated) return;
-    void reconcileTimers();
+    const frame = window.requestAnimationFrame(() => void reconcileTimers());
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return subscribeToLiveUpdates({
+    const unsubscribe = subscribeToLiveUpdates({
       url: `${protocol}//${window.location.host}/api/live-events`,
       onUpdate: (update) => {
         if (liveUpdateReconciliationMode(update) === "timers") {
@@ -502,6 +548,10 @@ export function useLiveState(date: string): LiveStateController {
       },
       onFallback: reconcilePracticeState,
     });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      unsubscribe();
+    };
   }, [hydrated, reconcilePracticeState, reconcileTimers]);
 
   // Drive the display. The dashboard owns auto-finish because each session can
@@ -519,6 +569,17 @@ export function useLiveState(date: string): LiveStateController {
   const setDraftPublic = useCallback((updater: (current: LocalDraft) => LocalDraft) => {
     setDraft(updater);
   }, []);
+  const clearMutationError = useCallback(() => setMutationError(null), []);
 
-  return { draft, setDraft: setDraftPublic, now, setNow, hydrated, synced, enqueue };
+  return {
+    draft,
+    setDraft: setDraftPublic,
+    now,
+    setNow,
+    hydrated,
+    synced,
+    mutationError,
+    clearMutationError,
+    enqueue,
+  };
 }

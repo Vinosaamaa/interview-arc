@@ -125,7 +125,7 @@ The website must not imply that browser draft state has already been published t
   preferences locally, and disable motion for `prefers-reduced-motion`.
 - Lead with today's practice and progress, then history and review queues.
 - Favor a focused journal/dashboard over contest theater.
-- Provide Today, Journey, Past, and Problem Banks views without placing every raw log on one page.
+- Provide Today, Journey, Review Queue, Past, and Problem Banks views without placing every raw log on one page.
 - Activity detail should lead with summary, outcome, approach, lessons, and feedback; keep full transcript or code expandable.
 - Treat activity detail as a case file: pinned notes first, then facts, review
   date, summary/solution, review, transcript/code, and references. A linked

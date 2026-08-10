@@ -1,4 +1,5 @@
 import type { QuestionBankItem } from "../app/content-types";
+import type { ReviewReason } from "./review-cadence";
 
 export type PlanningSpecialty = "leetcode" | "system_design" | "behavioral";
 export type PlanningSort = "frequency" | "recent" | "acceptance";
@@ -243,6 +244,8 @@ export type PlanningSelection =
       prompt?: string;
       minutes: number;
       topics?: string[];
+      reviewOfActivityId?: string;
+      reviewReason?: ReviewReason;
     }
   | {
       kind: "focus";
@@ -313,6 +316,8 @@ export function buildPlanningBatch(input: BuildPlanningBatchInput) {
       timerGroupId: sessionId ?? id,
       timingSource: "website",
       status: "planned",
+      ...(selection.reviewOfActivityId ? { reviewOfActivityId: selection.reviewOfActivityId } : {}),
+      ...(selection.reviewReason ? { reviewReason: selection.reviewReason } : {}),
       ...((selection.topics?.length ?? 0) > 0
         ? { notes: selection.topics!.join(", ") }
         : {}),
