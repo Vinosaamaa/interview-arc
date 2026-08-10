@@ -605,6 +605,7 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   const personalMetadata = await readFile(new URL("../drizzle/0012_personal_leetcode_metadata.sql", import.meta.url), "utf8");
   const voiceEvidence = await readFile(new URL("../drizzle/0018_voice_evidence_guards.sql", import.meta.url), "utf8");
   const behavioralEvidence = await readFile(new URL("../drizzle/0024_dazzling_blink.sql", import.meta.url), "utf8");
+  const behavioralTargets = await readFile(new URL("../drizzle/0030_powerful_the_enforcers.sql", import.meta.url), "utf8");
   for (const table of ["timers", "outcomes", "extra_activities", "live_sessions"]) {
     assert.match(live, new RegExp("CREATE TABLE `" + table + "`"));
   }
@@ -638,6 +639,21 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   assert.match(voiceEvidence, /ADD `audio_lost_reason` text/);
   assert.match(voiceEvidence, /ADD `audio_lost_acknowledged_at` integer/);
   assert.match(voiceEvidence, /ADD `publish_without_review_acknowledged_at` integer/);
+  for (const table of [
+    "behavioral_target_profiles",
+    "behavioral_target_profile_revisions",
+    "behavioral_target_profile_operations",
+    "behavioral_target_bindings",
+    "behavioral_target_binding_mutations",
+  ]) {
+    assert.match(behavioralTargets, new RegExp("CREATE TABLE `" + table + "`"));
+  }
+  assert.match(behavioralTargets, /PRIMARY KEY\(`owner_id`, `operation_id`\)/);
+  assert.match(behavioralTargets, /PRIMARY KEY\(`owner_id`, `scope_type`, `scope_id`\)/);
+  assert.match(behavioralTargets, /`display_snapshot` text NOT NULL/);
+  assert.doesNotMatch(behavioralTargets, /behavioral_target_binding_mutations_scope_idx/);
+  assert.match(behavioralTargets, /CREATE TRIGGER `behavioral_target_bindings_delete_activity`/);
+  assert.match(behavioralTargets, /CREATE TRIGGER `behavioral_target_bindings_delete_session`/);
   assert.doesNotMatch(voiceEvidence, /CREATE TABLE `today_planning_mutations`/);
   for (const table of [
     "behavioral_evidence_items",
