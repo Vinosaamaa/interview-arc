@@ -1,6 +1,8 @@
 // Stable content types shared by the D1 loader (`db/content.ts`), the client UI
 // (`app/home-client.tsx`), and the Git-to-D1 import script.
 
+import type { BehavioralPracticeScenario } from "../db/behavioral-practice-scenario";
+
 export type JournalActivity = {
   schemaVersion: number;
   id: string;
@@ -103,6 +105,7 @@ export type QuestionBankItem = {
         evidenceGaps: string[];
       }>;
     };
+    practiceScenarios?: BehavioralPracticeScenario[];
   };
   frequency?: "low" | "medium" | "high";
   answerFormat?: "SIMPLE" | "STAR" | "STARL" | "PPF" | "IFV";

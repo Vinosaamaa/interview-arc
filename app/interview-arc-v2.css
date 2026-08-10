@@ -959,6 +959,51 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .final-answer-card.legacy_model_answer { border-left-color: #8b9690; background: #f7f7f2; }
 .final-answer-card.legacy_model_answer > header span { color: #59655f; }
 
+.practice-scenarios-group > div { padding: 0; }
+.practice-scenarios-card {
+  padding: clamp(22px, 3vw, 34px);
+  border-left: 6px solid #b8782f;
+  background: linear-gradient(135deg, rgba(214, 159, 76, .13), transparent 45%), #fffdf8;
+  color: #263b36;
+}
+.practice-scenarios-card > header { display: grid; gap: 8px; padding-bottom: 18px; border-bottom: 1px solid #e3d5bd; }
+.practice-scenarios-card > header div { display: flex; justify-content: space-between; gap: 18px; }
+.practice-scenarios-card > header span,
+.practice-scenarios-card > header strong,
+.practice-scenario-heading span,
+.practice-scenario-heading small { font-family: var(--font-geist-mono); overflow-wrap: anywhere; }
+.practice-scenarios-card > header span { color: #85551c; font-size: .75rem; font-weight: 800; letter-spacing: .1em; }
+.practice-scenarios-card > header strong { color: #664114; font-size: .78rem; }
+.practice-scenarios-card > header p { margin: 0; color: #654a29; font-weight: 720; }
+.practice-scenario { margin-top: 20px; padding: clamp(18px, 2.5vw, 28px); border: 1px solid #decba8; border-radius: 14px; background: rgba(255,255,255,.8); }
+.practice-scenario.fictional { border-color: #cfb9dc; background: rgba(252,248,255,.86); }
+.practice-scenario-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.practice-scenario-heading > div { display: grid; gap: 8px; }
+.practice-scenario-heading span { color: #7b4c18; font-size: .76rem; font-weight: 800; }
+.practice-scenario.fictional .practice-scenario-heading span { color: #69417d; }
+.practice-scenario-heading h4 { margin: 0; font: 720 clamp(1.15rem, 2vw, 1.45rem)/1.25 var(--font-newsreader); }
+.practice-scenario-heading small { color: #6a746f; font-size: .72rem; text-align: right; }
+.practice-scenario-answer { margin: 20px 0; padding: 18px; border: 1px solid #e4d9c5; background: #fffefb; font-family: var(--font-newsreader); font-size: 1.15rem; line-height: 1.55; }
+.practice-scenario-answer > :first-child { margin-top: 0; }
+.practice-scenario-answer > :last-child { margin-bottom: 0; }
+.practice-scenario-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.practice-scenario-grid > section { min-width: 0; padding: 15px; border: 1px solid #e2ddd1; background: rgba(255,255,255,.7); }
+.practice-scenario-grid h5 { margin: 0 0 9px; color: #654114; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; }
+.practice-scenario-grid p,
+.practice-scenario-grid ul,
+.practice-scenario-grid dl { margin: 0; color: #53635d; font-size: .88rem; line-height: 1.55; }
+.practice-scenario-grid ul { padding-left: 18px; }
+.practice-scenario-grid li,
+.practice-scenario-grid dd { overflow-wrap: anywhere; }
+.practice-scenario-grid li small { display: block; color: #68766f; }
+.practice-scenario-grid dl div + div { margin-top: 10px; }
+.practice-scenario-grid dt { font-weight: 760; }
+.practice-scenario-grid dd { margin: 3px 0 0; }
+.practice-scenario > details { margin-top: 14px; border-top: 1px solid #e2d7c4; }
+.practice-scenario > details > summary { padding: 14px 0 2px; color: #674515; font-weight: 760; cursor: pointer; }
+.practice-scenario > details > summary:focus-visible { outline: 3px solid #2d7f72; outline-offset: 4px; }
+.practice-scenario > details > div { margin-top: 12px; }
+
 .code-attempt-card {
   overflow: hidden;
   border: 1px solid #cbd7d1;
@@ -1889,6 +1934,11 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .final-answer-meta { grid-template-columns: 1fr; }
   .final-answer-card > footer { grid-template-columns: 1fr; }
   .final-answer-card > footer p { grid-column: 1; }
+  .practice-scenarios-card { padding: 20px 16px; border-left-width: 4px; }
+  .practice-scenarios-card > header div,
+  .practice-scenario-heading { flex-direction: column; }
+  .practice-scenario-heading small { text-align: left; }
+  .practice-scenario-grid { grid-template-columns: 1fr; }
   .answer-player.answer-player-unified { grid-template-columns: 38px auto minmax(100px, 1fr) 40px; }
   .answer-volume { display: none; }
 }
