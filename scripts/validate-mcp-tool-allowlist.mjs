@@ -8,6 +8,7 @@ const CONTRACT_FILES = [
   "practice/behavioral/AGENTS.md",
   "docs/contracts/durable-practice-publishing.md",
   "docs/contracts/behavioral-evidence-domain.md",
+  "docs/contracts/resume-revision-ingest.md",
 ];
 
 export function parseRegisteredTools(source) {

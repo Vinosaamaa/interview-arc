@@ -814,6 +814,103 @@ export const behavioralClaimStatusEvents = sqliteTable(
   ],
 );
 
+// Resume source bytes stay owner-private in R2. D1 records only immutable
+// revision identity, integrity metadata, and the current pointer; object keys,
+// provider locators, local paths, and document content are deliberately absent.
+export const resumeSources = sqliteTable(
+  "resume_sources",
+  {
+    ownerId,
+    resumeId: text("resume_id").notNull(),
+    sourceLabel: text("source_label").notNull(),
+    currentRevisionId: text("current_revision_id"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.resumeId] })],
+);
+
+export const resumeRevisions = sqliteTable(
+  "resume_revisions",
+  {
+    ownerId,
+    resumeId: text("resume_id").notNull(),
+    revisionId: text("revision_id").notNull(),
+    parentRevisionId: text("parent_revision_id"),
+    sourceFingerprint: text("source_fingerprint").notNull(),
+    importOperationId: text("import_operation_id").notNull(),
+    visibility: text("visibility", { enum: ["owner_private"] }).notNull().default("owner_private"),
+    importedAt: integer("imported_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.resumeId, table.revisionId] }),
+    uniqueIndex("resume_revisions_source_fingerprint_idx").on(
+      table.ownerId,
+      table.resumeId,
+      table.sourceFingerprint,
+    ),
+  ],
+);
+
+export const resumeRevisionFiles = sqliteTable(
+  "resume_revision_files",
+  {
+    ownerId,
+    resumeId: text("resume_id").notNull(),
+    revisionId: text("revision_id").notNull(),
+    format: text("format", { enum: ["docx", "pdf"] }).notNull(),
+    sha256: text("sha256").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    mimeType: text("mime_type").notNull(),
+    visibility: text("visibility", { enum: ["owner_private"] }).notNull().default("owner_private"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.resumeId, table.revisionId, table.format] }),
+  ],
+);
+
+// One stable operation id owns a single immutable request hash. The stored
+// receipt makes an exact retry safe after an ambiguous HTTP response.
+export const resumeImportOperations = sqliteTable(
+  "resume_import_operations",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    resumeId: text("resume_id").notNull(),
+    requestedRevisionId: text("requested_revision_id").notNull(),
+    requestHash: text("request_hash").notNull(),
+    baseCurrentRevisionId: text("base_current_revision_id"),
+    status: text("status", {
+      enum: ["staging", "retryable_failure", "failed", "saved"],
+    }).notNull().default("staging"),
+    errorCode: text("error_code"),
+    receipt: text("receipt", { mode: "json" }),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+    completedAt: integer("completed_at"),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.operationId] }),
+    index("resume_import_operations_owner_status_idx").on(table.ownerId, table.status, table.updatedAt),
+  ],
+);
+
+// A short owner/resume lease serializes current-pointer changes while allowing
+// another request to recover a Worker invocation that disappeared mid-upload.
+export const resumeImportLocks = sqliteTable(
+  "resume_import_locks",
+  {
+    ownerId,
+    resumeId: text("resume_id").notNull(),
+    operationId: text("operation_id").notNull(),
+    leaseExpiresAt: integer("lease_expires_at").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.resumeId] })],
+);
+
 // Specialist writes first reserve a stable, owner-scoped operation receipt.
 // The MCP request only performs this small enqueue; a scheduled executor owns
 // the potentially expensive durable write and can reclaim an expired lease if
@@ -1016,6 +1113,11 @@ export type BehavioralEvidenceItemRow = typeof behavioralEvidenceItems.$inferSel
 export type BehavioralEvidenceQuestionLinkRow = typeof behavioralEvidenceQuestionLinks.$inferSelect;
 export type BehavioralClaimRow = typeof behavioralClaims.$inferSelect;
 export type BehavioralClaimStatusEventRow = typeof behavioralClaimStatusEvents.$inferSelect;
+export type ResumeSourceRow = typeof resumeSources.$inferSelect;
+export type ResumeRevisionRow = typeof resumeRevisions.$inferSelect;
+export type ResumeRevisionFileRow = typeof resumeRevisionFiles.$inferSelect;
+export type ResumeImportOperationRow = typeof resumeImportOperations.$inferSelect;
+export type ResumeImportLockRow = typeof resumeImportLocks.$inferSelect;
 export type SpecialistWriteJobRow = typeof specialistWriteJobs.$inferSelect;
 export type IntegrationTokenRow = typeof integrationTokens.$inferSelect;
 export type ExtraActivityRow = typeof extraActivities.$inferSelect;

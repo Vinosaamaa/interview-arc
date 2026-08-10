@@ -20,6 +20,7 @@ import {
 } from "../db/behavioral-evidence-policy";
 import { loadContentIndex } from "../db/content";
 import { resolveIntegrationOwner } from "../db/integrations";
+import { getResumeImportStatus } from "../db/resume-revisions";
 import {
   applyFocusTimerAction,
   applyTimerAction,
@@ -157,6 +158,7 @@ import {
   voiceCaptureBatchInputSchema,
 } from "./voice-capture-batch";
 import { requestVoiceDeliveryRetry } from "./voice-delivery-retry";
+import { ingestResumeRevision, ResumeImportError } from "./resume-revision-ingest";
 
 interface Env {
   DB: D1Database;
@@ -269,6 +271,26 @@ async function uploadPracticeAudio(ownerId: string, request: Request, env: Env) 
     throw error;
   }
   return json(request, { clipId, activityId, transcriptTurnId: transcriptTurnId ?? null, filename, mimeType: file.type, label, durationSeconds: durationSeconds ?? null, status: "available" }, { status: 201 });
+}
+
+async function uploadResumeRevision(ownerId: string, request: Request, env: Env) {
+  try {
+    const result = await ingestResumeRevision(ownerId, request, env.AUDIO);
+    return json(request, result.body, { status: result.status });
+  } catch (error) {
+    if (error instanceof ResumeImportError) {
+      return json(request, {
+        error: error.message,
+        code: error.code,
+        retryable: error.retryable,
+      }, { status: error.status });
+    }
+    return json(request, {
+      error: "The private resume import could not be completed. Retry the exact operation after checking status.",
+      code: "resume_import_unavailable",
+      retryable: true,
+    }, { status: 503 });
+  }
 }
 
 async function reportVoiceAudioLoss(
@@ -2453,6 +2475,22 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   );
 
   server.registerTool(
+    "get_resume_import_status",
+    {
+      description: "Read one exact owner-private resume import receipt by stable operation ID. The bounded result exposes revision identity and file integrity only; it never returns resume content, provider or local locators, R2 object keys, or another owner's state.",
+      inputSchema: { operationId: behavioralStableIdSchema },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ operationId }) => {
+      const result = await getResumeImportStatus(ownerId, operationId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
     "save_leetcode_code_attempt",
     {
       description: "Durably enqueue an exact owner-provided LeetCode attempt after an explicit attempt boundary. Reuse one stable operationId and identical payload after transport uncertainty, then inspect get_specialist_write_status until saved. Use a pending review while evaluation runs, then a new operationId to complete that same immutable attempt. For a complete review, draft the structured fields once and render every summary, finding, testing-evidence, and next-step string unchanged in the referenced visible specialist review; semantic paraphrases are rejected. A persistence child must copy those supplied fields verbatim and never synthesize review wording. Ordinary snippets and generated reference solutions must not use this tool.",
@@ -3339,6 +3377,9 @@ export default {
     }
     if (url.pathname === "/audio/upload" && request.method === "POST") {
       return uploadPracticeAudio(ownerId, request, env);
+    }
+    if (url.pathname === "/resume/imports" && request.method === "POST") {
+      return uploadResumeRevision(ownerId, request, env);
     }
     if (url.pathname === "/voice/context" && request.method === "GET") {
       return voiceContext(ownerId, request);
