@@ -52,13 +52,10 @@ persist them as practice dialogue or publication content.
 
 ## Typed Exchange Remediation
 
-For an already-saved typed administrative exchange, use only
-`delete_typed_practice_exchange` after explicit user authorization. First read
-`get_activity_practice_record`, select the exact `typedExchanges` entry, then
-preserve its user/reply IDs and revision with one stable operation ID and audit
-reason. Exact retries reuse the full payload. Never substitute Voice deletion,
-delete by transcript text, reset the activity transcript, or bypass a
-dependent-evidence/finalization rejection.
+Follow the typed-exchange deletion procedure and guards in
+`../docs/contracts/durable-practice-publishing.md`. Specialists use it only for
+an already-saved typed administrative exchange after explicit user
+authorization; never substitute a Voice or whole-transcript deletion.
 
 ## Voice Classification And Grouping
 

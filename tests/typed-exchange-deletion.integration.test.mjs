@@ -16,6 +16,11 @@ const wrangler = fileURLToPath(new URL("../node_modules/.bin/wrangler", import.m
 const config = fileURLToPath(new URL("../wrangler.mcp.jsonc", import.meta.url));
 const project = fileURLToPath(new URL("..", import.meta.url));
 const sha256 = (text) => createHash("sha256").update(text).digest("hex");
+const MAX_WORKER_LOG_BYTES = 64 * 1024;
+
+function appendDiagnosticTail(current, chunk) {
+  return `${current}${chunk}`.slice(-MAX_WORKER_LOG_BYTES);
+}
 
 function availablePort() {
   return new Promise((resolve, reject) => {
@@ -93,6 +98,25 @@ const fixtureSql = (ownerTokenHash, otherTokenHash) => `
     ('owner-typed-delete','activity-ready','typed-response-ready','leetcode','specialist','Ready response.','codex',1,200,500),
     ('owner-typed-delete','activity-stale','typed-user-stale','leetcode','user','Stale exchange.','codex',0,100,500),
     ('owner-typed-delete','activity-stale','typed-response-stale','leetcode','specialist','Stale response.','codex',1,200,600),
+    ('owner-typed-delete','activity-collision','typed-user-collision','leetcode','user','Collision user.','codex',0,100,500),
+    ('owner-typed-delete','activity-collision','typed-response-collision','leetcode','specialist','Selected response.','codex',1,200,600),
+    ('owner-typed-delete','activity-collision','typed-response-collision-other','leetcode','specialist','Competing response.','codex',1,210,610),
+    ('owner-typed-delete','activity-concurrent-id','typed-user-concurrent-id','leetcode','user','Concurrent identity user.','codex',0,100,500),
+    ('owner-typed-delete','activity-concurrent-id','typed-response-concurrent-id','leetcode','specialist','Concurrent identity response.','codex',1,200,600),
+    ('owner-typed-delete','activity-concurrent-op','typed-user-concurrent-op','leetcode','user','Concurrent operation user.','codex',0,100,500),
+    ('owner-typed-delete','activity-concurrent-op','typed-response-concurrent-op','leetcode','specialist','Concurrent operation response.','codex',1,200,600),
+    ('owner-typed-delete','activity-legacy','typed-user-legacy','leetcode','user','Legacy append user.','codex',0,100,500),
+    ('owner-typed-delete','activity-legacy','typed-response-legacy','leetcode','specialist','Legacy append response.','codex',1,200,600),
+    ('owner-typed-delete','activity-review-race','review-origin-user','leetcode','user','Attempt source.','codex',0,100,500),
+    ('owner-typed-delete','activity-review-race','review-origin-response','leetcode','specialist','Attempt acknowledgement.','codex',1,200,500),
+    ('owner-typed-delete','activity-review-race','review-target-user','leetcode','user','Administrative review prompt.','codex',2,300,500),
+    ('owner-typed-delete','activity-review-race','review-target-response','leetcode','specialist','Visible review. Good. Improve. Tested. Next.','codex',3,400,600),
+    ('owner-typed-delete','activity-audio-race','typed-user-audio','leetcode','user','Audio target.','codex',0,100,500),
+    ('owner-typed-delete','activity-audio-race','typed-response-audio','leetcode','specialist','Audio response.','codex',1,200,600),
+    ('owner-typed-delete','activity-finalize-race','typed-user-finalize','system_design','user','Finalization target.','codex',0,100,500),
+    ('owner-typed-delete','activity-finalize-race','typed-response-finalize','system_design','specialist','Finalization response.','codex',1,200,600),
+    ('owner-typed-delete','activity-repair-anchor','typed-user-repair','leetcode','user','Repair target.','codex',0,100,500),
+    ('owner-typed-delete','activity-repair-anchor','typed-response-repair','leetcode','specialist','Repair response.','codex',1,200,600),
     ('owner-typed-delete-other','activity-delete','typed-user-delete','leetcode','user','Other owner user.','codex',0,100,700),
     ('owner-typed-delete-other','activity-delete','typed-response-delete','leetcode','specialist','Other owner response.','codex',1,200,800);
 
@@ -100,7 +124,13 @@ const fixtureSql = (ownerTokenHash, otherTokenHash) => `
     (owner_id,id,activity_id,originating_turn_id,sequence,language,code,line_count,occurred_at,review,review_response_turn_id,observed_correctness,concrete_findings,edge_cases,complexity,final_declaration,created_at,updated_at)
   VALUES
     ('owner-typed-delete','attempt-preserve','activity-delete','typed-user-preserve',1,'java','class Solution {}',1,450,NULL,'typed-response-preserve','not_verified','[]','[]',NULL,'Preserve this attempt.',450,450),
-    ('owner-typed-delete','attempt-code-anchor','activity-code-anchor','typed-user-code',1,'java','class Solution {}',1,250,NULL,'typed-response-code','not_verified','[]','[]',NULL,'Anchors the exchange.',250,250);
+    ('owner-typed-delete','attempt-code-anchor','activity-code-anchor','typed-user-code',1,'java','class Solution {}',1,250,NULL,'typed-response-code','not_verified','[]','[]',NULL,'Anchors the exchange.',250,250),
+    ('owner-typed-delete','attempt-review-race','activity-review-race','review-origin-user',1,'java','class Solution {}',1,250,'{"schemaVersion":1,"status":"pending"}',NULL,'not_verified','[]','[]',NULL,'Pending review.',250,250);
+
+  INSERT INTO voice_response_group_repair_events
+    (owner_id,id,response_turn_id,activity_id,prior_status,result_status,reason,created_at)
+  VALUES
+    ('owner-typed-delete','repair-event-delete-fixture','typed-response-repair','activity-repair-anchor','quarantined_conflict','materialized','Preserve repair audit.',650);
 
   INSERT INTO activity_finalizations
     (owner_id,activity_id,specialty,status,payload,finalized_at,published_at,revision,updated_at)
@@ -114,6 +144,7 @@ test("typed exchange deletion is exact, atomic, owner-scoped, and identity-idemp
   let persistence;
   let worker;
   let ownerClient;
+  let ownerRaceClient;
   let otherClient;
   try {
     releaseIntegrationLock = await acquireMcpIntegrationLock();
@@ -127,8 +158,8 @@ test("typed exchange deletion is exact, atomic, owner-scoped, and identity-idemp
       stdio: ["ignore", "pipe", "pipe"],
     });
     let workerLog = "";
-    worker.stdout.on("data", (chunk) => { workerLog += chunk; });
-    worker.stderr.on("data", (chunk) => { workerLog += chunk; });
+    worker.stdout.on("data", (chunk) => { workerLog = appendDiagnosticTail(workerLog, chunk); });
+    worker.stderr.on("data", (chunk) => { workerLog = appendDiagnosticTail(workerLog, chunk); });
     await waitForWorker(baseUrl, worker);
 
     const connect = async (name, token) => {
@@ -139,12 +170,22 @@ test("typed exchange deletion is exact, atomic, owner-scoped, and identity-idemp
       return client;
     };
     ownerClient = await connect("typed-delete-owner", ownerToken);
+    ownerRaceClient = await connect("typed-delete-owner-race", ownerToken);
     otherClient = await connect("typed-delete-other", otherToken);
     const callRaw = (client, name, args) => client.callTool({ name, arguments: args });
     const call = async (client, name, args) => {
       const result = await callRaw(client, name, args);
       if (result.isError) throw new Error(`${name}: ${JSON.stringify(result.structuredContent ?? result.content)}\n${workerLog}`);
       return result.structuredContent;
+    };
+    const waitForJob = async (jobId) => {
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const status = await call(ownerClient, "get_specialist_write_status", { jobIds: [jobId] });
+        const job = status.jobs[0];
+        if (job && ["saved", "failed"].includes(job.status)) return job;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      throw new Error(`Specialist write ${jobId} did not settle.\n${workerLog}`);
     };
 
     const before = await call(ownerClient, "get_activity_practice_record", { activityId: "activity-delete" });
@@ -265,9 +306,215 @@ test("typed exchange deletion is exact, atomic, owner-scoped, and identity-idemp
     assert.equal(crossOwner.isError, true);
     assert.equal(crossOwner.structuredContent.code, "typed_exchange_not_found");
 
-    await run(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", `
-      SELECT json_extract(
-        CASE WHEN
+    const collision = await call(ownerClient, "delete_typed_practice_exchange", {
+      operationId: "delete-typed-collision",
+      activityId: "activity-collision",
+      userTurnId: "typed-user-collision",
+      responseTurnId: "typed-response-collision",
+      expectedRevision: 600,
+      authorization: "explicit_user_instruction",
+      reason: "Explicit response identity wins despite a sequence collision.",
+    });
+    assert.equal(collision.responseTurnId, "typed-response-collision");
+    const collisionAfter = await call(ownerClient, "get_activity_practice_record", { activityId: "activity-collision" });
+    assert.deepEqual(collisionAfter.turns.map((turn) => turn.turnId), ["typed-response-collision-other"]);
+
+    const repairAnchored = await callRaw(ownerClient, "delete_typed_practice_exchange", {
+      operationId: "delete-typed-repair-anchor",
+      activityId: "activity-repair-anchor",
+      userTurnId: "typed-user-repair",
+      responseTurnId: "typed-response-repair",
+      expectedRevision: 600,
+      authorization: "explicit_user_instruction",
+      reason: "Repair event dependency test.",
+    });
+    assert.equal(repairAnchored.isError, true);
+    assert.equal(repairAnchored.structuredContent.code, "typed_exchange_has_dependent_evidence");
+    assert.equal(repairAnchored.structuredContent.voice, 1);
+
+    const concurrentIdentityBase = {
+      activityId: "activity-concurrent-id",
+      userTurnId: "typed-user-concurrent-id",
+      responseTurnId: "typed-response-concurrent-id",
+      expectedRevision: 600,
+      authorization: "explicit_user_instruction",
+      reason: "Concurrent identity deletion test.",
+    };
+    const concurrentIdentityResults = await Promise.all([
+      callRaw(ownerClient, "delete_typed_practice_exchange", {
+        ...concurrentIdentityBase,
+        operationId: "delete-concurrent-identity-a",
+      }),
+      callRaw(ownerRaceClient, "delete_typed_practice_exchange", {
+        ...concurrentIdentityBase,
+        operationId: "delete-concurrent-identity-b",
+      }),
+    ]);
+    assert.equal(concurrentIdentityResults.filter((result) => !result.isError).length, 1);
+    const concurrentIdentityLoser = concurrentIdentityResults.find((result) => result.isError);
+    assert.equal(concurrentIdentityLoser.structuredContent.code, "typed_exchange_already_deleted");
+    assert.match(
+      concurrentIdentityLoser.structuredContent.existingOperationId,
+      /^delete-concurrent-identity-[ab]$/,
+    );
+    assert.equal(concurrentIdentityLoser.structuredContent.receipt.status, "deleted");
+
+    const concurrentOperationBase = {
+      operationId: "delete-concurrent-operation",
+      activityId: "activity-concurrent-op",
+      userTurnId: "typed-user-concurrent-op",
+      responseTurnId: "typed-response-concurrent-op",
+      expectedRevision: 600,
+      authorization: "explicit_user_instruction",
+    };
+    const concurrentOperationResults = await Promise.all([
+      callRaw(ownerClient, "delete_typed_practice_exchange", {
+        ...concurrentOperationBase,
+        reason: "Concurrent operation payload A.",
+      }),
+      callRaw(ownerRaceClient, "delete_typed_practice_exchange", {
+        ...concurrentOperationBase,
+        reason: "Concurrent operation payload B.",
+      }),
+    ]);
+    assert.equal(concurrentOperationResults.filter((result) => !result.isError).length, 1);
+    assert.equal(
+      concurrentOperationResults.find((result) => result.isError).structuredContent.code,
+      "typed_exchange_operation_conflict",
+    );
+
+    await call(ownerClient, "delete_typed_practice_exchange", {
+      operationId: "delete-typed-legacy",
+      activityId: "activity-legacy",
+      userTurnId: "typed-user-legacy",
+      responseTurnId: "typed-response-legacy",
+      expectedRevision: 600,
+      authorization: "explicit_user_instruction",
+      reason: "Legacy append tombstone test.",
+    });
+    const legacyAppend = await callRaw(ownerClient, "append_practice_transcript", {
+      activityId: "activity-legacy",
+      specialty: "leetcode",
+      turns: [{
+        turnId: "typed-user-legacy",
+        speaker: "user",
+        body: "Legacy append user.",
+        source: "codex",
+        sequence: 0,
+        occurredAt: 100,
+      }],
+    });
+    assert.equal(legacyAppend.isError, true);
+    assert.equal(legacyAppend.structuredContent.code, "typed_exchange_identity_deleted");
+
+    const completeReview = {
+      schemaVersion: 1,
+      status: "complete",
+      summary: "Visible review.",
+      whatWentWell: ["Good."],
+      whatToImprove: ["Improve."],
+      testingEvidence: ["Tested."],
+      nextStep: "Next.",
+      provenance: "specialist_observed",
+      reviewedAt: 700,
+    };
+    const reviewJobId = "complete-review-race";
+    const [reviewEnqueue, reviewDeletion] = await Promise.all([
+      callRaw(ownerClient, "save_leetcode_code_attempt", {
+        operationId: reviewJobId,
+        id: "attempt-review-race",
+        activityId: "activity-review-race",
+        originatingTurnId: "review-origin-user",
+        sequence: 1,
+        language: "java",
+        code: "class Solution {}",
+        occurredAt: 250,
+        review: completeReview,
+        reviewResponseTurnId: "review-target-response",
+        observedCorrectness: "not_verified",
+        concreteFindings: ["Tested."],
+        edgeCases: [],
+        finalDeclaration: "Final.",
+      }),
+      callRaw(ownerRaceClient, "delete_typed_practice_exchange", {
+        operationId: "delete-review-race",
+        activityId: "activity-review-race",
+        userTurnId: "review-target-user",
+        responseTurnId: "review-target-response",
+        expectedRevision: 600,
+        authorization: "explicit_user_instruction",
+        reason: "Code Attempt completion race test.",
+      }),
+    ]);
+    assert.notEqual(reviewEnqueue.isError, true);
+    const reviewJob = await waitForJob(reviewJobId);
+    if (reviewDeletion.isError) {
+      assert.equal(reviewDeletion.structuredContent.code, "typed_exchange_has_dependent_evidence");
+      assert.equal(reviewJob.status, "saved");
+    } else {
+      assert.equal(reviewJob.status, "failed");
+      assert.match(reviewJob.failure?.message, /transcript evidence changed during review completion/i);
+    }
+
+    const [audioDeletion, audioRegistration] = await Promise.all([
+      callRaw(ownerClient, "delete_typed_practice_exchange", {
+        operationId: "delete-audio-race",
+        activityId: "activity-audio-race",
+        userTurnId: "typed-user-audio",
+        responseTurnId: "typed-response-audio",
+        expectedRevision: 600,
+        authorization: "explicit_user_instruction",
+        reason: "Audio registration race test.",
+      }),
+      callRaw(ownerRaceClient, "register_activity_audio_clip", {
+        activityId: "activity-audio-race",
+        transcriptTurnId: "typed-user-audio",
+        clipId: "clip-audio-race",
+        filename: "race.m4a",
+        mimeType: "audio/mp4",
+      }),
+    ]);
+    assert.equal([audioDeletion, audioRegistration].filter((result) => !result.isError).length, 1);
+    if (audioDeletion.isError) {
+      assert.equal(audioDeletion.structuredContent.code, "typed_exchange_has_dependent_evidence");
+    } else {
+      assert.equal(audioRegistration.isError, true);
+    }
+
+    await call(ownerClient, "delete_typed_practice_exchange", {
+      operationId: "delete-before-finalization",
+      activityId: "activity-finalize-race",
+      userTurnId: "typed-user-finalize",
+      responseTurnId: "typed-response-finalize",
+      expectedRevision: 600,
+      authorization: "explicit_user_instruction",
+      reason: "Finalization transcript snapshot baseline test.",
+    });
+    const finalizationAfterDeletion = await call(ownerClient, "save_specialist_finalization", {
+      activityId: "activity-finalize-race",
+      specialty: "system_design",
+      questionId: "finalization-race-question",
+      finalization: {
+        title: "Finalization race fixture",
+        complete: true,
+        transcriptScope: "activity_exchanges",
+        review: { didWell: ["Preserved the intended evidence."], improve: [] },
+        modelAnswer: "A durable model answer.",
+        references: [],
+        solutionProfileAction: "create_or_revise",
+        solutionProfile: {
+          schemaVersion: 1,
+          summary: "A reusable system-design profile.",
+          sections: [{ title: "Architecture", body: "Use an owner-scoped durable boundary." }],
+          tags: ["reliability"],
+          references: [],
+        },
+      },
+    });
+    assert.equal(finalizationAfterDeletion.status, "ready");
+
+    const preservation = await run(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--json", "--command", `
+      SELECT CASE WHEN
           (SELECT count(*) FROM practice_transcript_turns WHERE owner_id='owner-typed-delete' AND activity_id='activity-delete') = 2
           AND (SELECT count(*) FROM typed_practice_exchange_deletions WHERE owner_id='owner-typed-delete' AND activity_id='activity-delete') = 1
           AND (SELECT count(*) FROM timers WHERE owner_id='owner-typed-delete' AND subject_id='activity-delete' AND revision=4) = 1
@@ -276,12 +523,34 @@ test("typed exchange deletion is exact, atomic, owner-scoped, and identity-idemp
           AND (SELECT count(*) FROM leetcode_code_attempts WHERE owner_id='owner-typed-delete' AND id IN ('attempt-preserve','attempt-code-anchor')) = 2
           AND (SELECT count(*) FROM practice_transcript_turns WHERE owner_id='owner-typed-delete' AND activity_id IN ('activity-code-anchor','activity-partial','activity-ready','activity-stale')) = 7
           AND (SELECT count(*) FROM practice_transcript_turns WHERE owner_id='owner-typed-delete-other' AND activity_id='activity-delete') = 2
-        THEN '{"ok":1}' ELSE 'invalid' END,
-        '$.ok'
-      );
+          AND NOT EXISTS (
+            SELECT 1 FROM activity_audio_clips clip
+            LEFT JOIN practice_transcript_turns turn_row
+              ON turn_row.owner_id=clip.owner_id
+             AND turn_row.activity_id=clip.activity_id
+             AND turn_row.turn_id=clip.transcript_turn_id
+            WHERE clip.owner_id='owner-typed-delete'
+              AND clip.transcript_turn_id IS NOT NULL
+              AND turn_row.turn_id IS NULL
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM leetcode_code_attempts attempt
+            WHERE attempt.owner_id='owner-typed-delete'
+              AND attempt.review_response_turn_id IS NOT NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM practice_transcript_turns turn_row
+                WHERE turn_row.owner_id=attempt.owner_id
+                  AND turn_row.activity_id=attempt.activity_id
+                  AND turn_row.turn_id=attempt.review_response_turn_id
+              )
+          )
+        THEN 1 ELSE 0 END AS ok;
     `]);
+    const preservationRows = JSON.parse(preservation.stdout);
+    assert.equal(preservationRows[0]?.results?.[0]?.ok, 1, preservation.stdout);
   } finally {
     await ownerClient?.close().catch(() => {});
+    await ownerRaceClient?.close().catch(() => {});
     await otherClient?.close().catch(() => {});
     if (worker && worker.exitCode === null) worker.kill("SIGTERM");
     if (persistence) await rm(persistence, { recursive: true, force: true });

@@ -2022,6 +2022,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
           userTurnId: input.userTurnId,
           responseTurnId: input.responseTurnId,
           expectedRevision: input.expectedRevision,
+          authorization: input.authorization,
           reason: input.reason,
         }, Date.now());
         await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "practice");
@@ -2278,11 +2279,15 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async ({ activityId, specialty, turns }) => {
-      await appendTranscriptTurns(ownerId, activityId, specialty, turns, Date.now());
-      return {
-        content: [{ type: "text", text: `Saved ${turns.length} transcript turn${turns.length === 1 ? "" : "s"} for ${activityId}.` }],
-        structuredContent: { activityId, saved: turns.length },
-      };
+      try {
+        await appendTranscriptTurns(ownerId, activityId, specialty, turns, Date.now());
+        return {
+          content: [{ type: "text", text: `Saved ${turns.length} transcript turn${turns.length === 1 ? "" : "s"} for ${activityId}.` }],
+          structuredContent: { activityId, saved: turns.length },
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
     },
   );
 
@@ -2854,11 +2859,15 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async ({ clipId, ...input }) => {
-      await registerActivityAudioClip(ownerId, { id: clipId, ...input }, Date.now());
-      return {
-        content: [{ type: "text", text: `Registered audio metadata for ${input.activityId}.` }],
-        structuredContent: { clipId, ...input, status: input.status ?? "local_only" },
-      };
+      try {
+        await registerActivityAudioClip(ownerId, { id: clipId, ...input }, Date.now());
+        return {
+          content: [{ type: "text", text: `Registered audio metadata for ${input.activityId}.` }],
+          structuredContent: { clipId, ...input, status: input.status ?? "local_only" },
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
     },
   );
 

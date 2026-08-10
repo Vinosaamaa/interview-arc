@@ -21,12 +21,39 @@ export class TypedExchangeDeletionError extends Error {
   }
 }
 
-export function resolveTypedExchangePair(
-  turns: TypedExchangeTurn[],
+type TypedExchangeIndex = {
+  byId: Map<string, TypedExchangeTurn>;
+  bySequence: Map<number, TypedExchangeTurn[]>;
+};
+
+function indexTypedExchangeTurns(turns: TypedExchangeTurn[]): TypedExchangeIndex {
+  const byId = new Map<string, TypedExchangeTurn>();
+  const bySequence = new Map<number, TypedExchangeTurn[]>();
+  for (const turn of turns) {
+    byId.set(turn.turnId, turn);
+    const atSequence = bySequence.get(turn.sequence) ?? [];
+    atSequence.push(turn);
+    bySequence.set(turn.sequence, atSequence);
+  }
+  return { byId, bySequence };
+}
+
+function isCompatibleTypedReply(userTurn: TypedExchangeTurn, candidate: TypedExchangeTurn | undefined) {
+  return Boolean(
+    candidate
+    && candidate.sequence === userTurn.sequence + 1
+    && candidate.speaker === "specialist"
+    && candidate.source === "codex"
+    && candidate.specialty === userTurn.specialty,
+  );
+}
+
+function resolveTypedExchangePairFromIndex(
+  index: TypedExchangeIndex,
   userTurnId: string,
   responseTurnId?: string,
 ) {
-  const userTurn = turns.find((turn) => turn.turnId === userTurnId);
+  const userTurn = index.byId.get(userTurnId);
   if (!userTurn) {
     throw new TypedExchangeDeletionError(
       "typed_exchange_not_found",
@@ -40,19 +67,14 @@ export function resolveTypedExchangePair(
     );
   }
 
-  const adjacent = turns.filter((turn) => turn.sequence === userTurn.sequence + 1);
+  const adjacent = index.bySequence.get(userTurn.sequence + 1) ?? [];
   const responseTurn = responseTurnId
-    ? adjacent.find((turn) => turn.turnId === responseTurnId)
-    : adjacent.length === 1
-      ? adjacent[0]
-      : undefined;
-  if (
-    !responseTurn
-    || adjacent.length !== 1
-    || responseTurn.speaker !== "specialist"
-    || responseTurn.source !== "codex"
-    || responseTurn.specialty !== userTurn.specialty
-  ) {
+    ? index.byId.get(responseTurnId)
+    : (() => {
+      const compatible = adjacent.filter((candidate) => isCompatibleTypedReply(userTurn, candidate));
+      return compatible.length === 1 ? compatible[0] : undefined;
+    })();
+  if (!isCompatibleTypedReply(userTurn, responseTurn)) {
     throw new TypedExchangeDeletionError(
       "typed_exchange_reply_mismatch",
       "The exact adjacent typed specialist reply could not be identified safely.",
@@ -60,17 +82,26 @@ export function resolveTypedExchangePair(
   }
   return {
     userTurn,
-    responseTurn,
-    revision: Math.max(userTurn.updatedAt, responseTurn.updatedAt),
+    responseTurn: responseTurn!,
+    revision: Math.max(userTurn.updatedAt, responseTurn!.updatedAt),
   };
 }
 
+export function resolveTypedExchangePair(
+  turns: TypedExchangeTurn[],
+  userTurnId: string,
+  responseTurnId?: string,
+) {
+  return resolveTypedExchangePairFromIndex(indexTypedExchangeTurns(turns), userTurnId, responseTurnId);
+}
+
 export function listTypedExchangePairs(turns: TypedExchangeTurn[]) {
+  const index = indexTypedExchangeTurns(turns);
   return turns
     .filter((turn) => turn.speaker === "user" && turn.source === "codex")
     .flatMap((turn) => {
       try {
-        const pair = resolveTypedExchangePair(turns, turn.turnId);
+        const pair = resolveTypedExchangePairFromIndex(index, turn.turnId);
         return [{
           userTurnId: pair.userTurn.turnId,
           responseTurnId: pair.responseTurn.turnId,
@@ -88,6 +119,7 @@ export async function typedExchangeDeletionFingerprint(input: {
   userTurnId: string;
   responseTurnId?: string;
   expectedRevision: number;
+  authorization: "explicit_user_instruction";
   reason: string;
 }) {
   const canonical = JSON.stringify({
@@ -95,6 +127,7 @@ export async function typedExchangeDeletionFingerprint(input: {
     userTurnId: input.userTurnId,
     responseTurnId: input.responseTurnId ?? null,
     expectedRevision: input.expectedRevision,
+    authorization: input.authorization,
     reason: input.reason,
   });
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));

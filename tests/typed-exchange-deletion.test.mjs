@@ -55,6 +55,11 @@ test("typed exchange pairing requires one adjacent codex user/specialist pair", 
     (error) => error instanceof TypedExchangeDeletionError
       && error.code === "typed_exchange_reply_mismatch",
   );
+  const explicit = resolveTypedExchangePair([
+    ...turns,
+    { ...turns[1], turnId: "competing-response" },
+  ], "typed-user-1", "typed-response-1");
+  assert.equal(explicit.responseTurn.turnId, "typed-response-1");
   assert.throws(
     () => resolveTypedExchangePair([
       { ...turns[0], source: "audio_transcript" },
@@ -71,6 +76,7 @@ test("typed exchange deletion fingerprints exact immutable retry payloads", asyn
     userTurnId: "typed-user-1",
     responseTurnId: "typed-response-1",
     expectedRevision: 800,
+    authorization: "explicit_user_instruction",
     reason: "The user confirmed this was administrative.",
   };
   const first = await typedExchangeDeletionFingerprint(input);

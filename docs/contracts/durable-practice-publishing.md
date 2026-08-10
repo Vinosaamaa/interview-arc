@@ -126,6 +126,12 @@ typed turns or neither and stores an immutable tombstone in
 `typedExchangeDeletions`; exact retries return that receipt, while changed
 payloads or deleted stable-ID reuse conflict. A ready/published exchange or one
 that anchors Code Attempt, Voice, audio, or delivery evidence is ineligible.
+The tombstone fences every transcript writer. Code Attempt review completion
+and audio registration recheck exact transcript identity in their write
+transaction, while finalization checks the activity transcript/deletion
+snapshot it evaluated; concurrent operations therefore leave no dangling
+evidence. Repair-event history is dependent Voice evidence and also blocks
+deletion.
 The operation never resets the whole transcript and never removes activity,
 timer, session, result, note, Code Attempt, Voice, or published state.
 
