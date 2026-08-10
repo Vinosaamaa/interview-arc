@@ -91,6 +91,10 @@ import {
 import {
   resolveBehavioralTarget,
 } from "./behavioral-target-profile";
+import {
+  behavioralTargetReviewSchema,
+  type BehavioralTargetReview,
+} from "./behavioral-practice-preflight-policy";
 
 export type Specialty = "leetcode" | "system_design" | "behavioral";
 export type NoteKind = "remember" | "insight" | "mistake" | "pattern" | "question";
@@ -137,6 +141,7 @@ export type SpecialistFinalization = {
     didWell: string[];
     improve: string[];
   };
+  behavioralReview?: BehavioralTargetReview;
   modelAnswer: string;
   finalAnswerOperationId?: string;
   finalAnswerSnapshot?: BehavioralFinalAnswerSnapshotInput;
@@ -3507,6 +3512,39 @@ async function prepareBehavioralFinalAnswerWrite(
     );
   }
   const snapshot = behavioralFinalAnswerSnapshotInputSchema.parse(payload.finalAnswerSnapshot);
+  const targetReview = payload.behavioralReview
+    ? behavioralTargetReviewSchema.parse(payload.behavioralReview)
+    : undefined;
+  if (snapshot.scope === "target_tailored" && !targetReview) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_target_review_required",
+      "A target-tailored finalization requires the typed target review.",
+    );
+  }
+  if (targetReview) {
+    if (
+      JSON.stringify(targetReview.universalQuality.strengths) !== JSON.stringify(payload.review.didWell)
+      || JSON.stringify(targetReview.universalQuality.improvements) !== JSON.stringify(payload.review.improve)
+    ) {
+      throw new BehavioralFinalAnswerError(
+        "behavioral_target_review_universal_mismatch",
+        "The target review must reuse the finalization's universal strengths and improvements exactly.",
+      );
+    }
+    if (JSON.stringify(targetReview.evidenceGaps) !== JSON.stringify(snapshot.evidenceGaps)) {
+      throw new BehavioralFinalAnswerError(
+        "behavioral_target_review_evidence_mismatch",
+        "The target review must reuse the final-answer evidence gaps exactly.",
+      );
+    }
+    const targetSignals = new Set(snapshot.target?.competencyEmphasis ?? []);
+    if (targetReview.targetAlignment.competencySignals.some((signal) => !targetSignals.has(signal))) {
+      throw new BehavioralFinalAnswerError(
+        "behavioral_target_review_signal_mismatch",
+        "Target review signals must come from the exact final-answer Target Profile snapshot.",
+      );
+    }
+  }
   if (snapshot.question.questionId !== questionId) {
     throw new BehavioralFinalAnswerError(
       "behavioral_final_answer_question_mismatch",

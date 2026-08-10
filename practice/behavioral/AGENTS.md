@@ -77,10 +77,13 @@ reopening the site without a concrete reason.
 
 ## Durable Behavioral Record
 
-After resolving `questionId`, concurrently load the current/provisional
-preferred answer with `get_problem_solution_profile` and the bounded evidence
-slice with `query_behavioral_evidence`. Load only accepted/contrary evidence and
-claims/gaps; story candidates remain empty until their later domain slice.
+After resolving `questionId`, call `get_behavioral_practice_preflight` with the
+exact activity or session at every `start_resume`, `new_question`,
+`post_mutation`, `reconnect_handoff`, and `finalization` boundary. This bounded
+read returns the current/provisional answer, accepted and contrary evidence,
+claims/gaps, authoritative target, grading signals, and accepted target
+variants. Do not assemble those reads independently or reuse pre-compaction
+state. Story candidates remain empty until their later domain slice.
 Ordinary preflight never reads generated HTML, loads an entire dossier, or
 reruns project archaeology. Use `get_behavioral_foundation_status` only for a
 Foundation overview; its aggregate counts and bounded gaps do not replace the
@@ -125,6 +128,15 @@ for an exact retry. Never silently replace a saved attempt: use the explicit
 correction fields. For a target-tailored answer, resolve the authoritative
 activity/session binding and use its exact Target Profile revision; fail closed
 rather than guessing, stripping, or relabeling the target scope.
+
+For a target-tailored completion, persist `behavioralReview` with universal
+quality, target alignment, assistance, and evidence gaps kept separate. Reuse
+`review.didWell`, `review.improve`, and the snapshot evidence gaps exactly;
+target signals must come from the preflight revision. Interviewer, Mentor, and
+Grill may change questioning and coaching, but target preflight never persists
+or infers the interaction mode. An accepted target variant is the immutable
+target-tailored final-answer snapshot itself; when preflight marks it stale,
+never rewrite it to look current.
 
 The reusable STAR/STARL Solution Profile contains:
 

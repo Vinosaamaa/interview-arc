@@ -44,9 +44,9 @@ publishes a new artifact revision through the normal workflow.
 - Issue #201 owns typed Behavioral Attempt analysis and Story Bank identities.
   `story` remains optional until that domain returns an authoritative identity.
 - Issue #209 owns Target Profiles, immutable target revisions, bindings, and
-  preflight. Until its resolver is deployed, `target_tailored` finalization
-  fails with `behavioral_target_profile_unavailable`; callers must not invent a
-  target revision or downgrade the answer to universal.
+  preflight. `target_tailored` finalization must use the exact target returned
+  by the current `finalization` preflight; callers must not invent a target
+  revision or downgrade the answer to universal.
 - Issue #226 owns this snapshot, correction, projection, and reader contract.
   Refinements belong there or in a linked child issue, not by rewriting the
   historical parent descriptions.
