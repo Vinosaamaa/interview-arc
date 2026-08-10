@@ -116,7 +116,7 @@ test("Today deletion and all-session projection remain owner-scoped and revision
     `]);
     worker = spawn(wrangler, ["dev", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
       cwd: project,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: "ignore",
     });
     await waitForWorker(baseUrl, worker);
     owner = await connect(baseUrl, ownerToken, "today-owner");

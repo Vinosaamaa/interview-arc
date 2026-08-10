@@ -334,50 +334,48 @@ export async function removePlannedActivities(
     captureRows,
     sessionRows,
   ] = currentIds.length ? await Promise.all([
-    db.select().from(timers).where(and(
+    db.select({ activityId: timers.subjectId }).from(timers).where(and(
       eq(timers.ownerId, ownerId),
       eq(timers.kind, "activity"),
       inArray(timers.subjectId, currentIds),
       isNotNull(timers.startedAt),
     )),
-    db.select().from(outcomes).where(and(eq(outcomes.ownerId, ownerId), inArray(outcomes.activityId, currentIds))),
-    db.select().from(publicationStatuses).where(and(eq(publicationStatuses.ownerId, ownerId), inArray(publicationStatuses.activityId, currentIds))),
-    db.select().from(practiceTranscriptTurns).where(and(eq(practiceTranscriptTurns.ownerId, ownerId), inArray(practiceTranscriptTurns.activityId, currentIds))),
-    db.select().from(activityFinalizations).where(and(eq(activityFinalizations.ownerId, ownerId), inArray(activityFinalizations.activityId, currentIds))),
-    db.select().from(activityAudioClips).where(and(eq(activityAudioClips.ownerId, ownerId), inArray(activityAudioClips.activityId, currentIds))),
-    db.select().from(activityNotes).where(and(eq(activityNotes.ownerId, ownerId), inArray(activityNotes.activityId, currentIds))),
-    db.select().from(practiceNotes).where(and(eq(practiceNotes.ownerId, ownerId), inArray(practiceNotes.activityId, currentIds))),
-    db.select().from(activityDeliveryAnalyses).where(and(eq(activityDeliveryAnalyses.ownerId, ownerId), inArray(activityDeliveryAnalyses.activityId, currentIds))),
-    db.select().from(reviewSchedules).where(and(eq(reviewSchedules.ownerId, ownerId), inArray(reviewSchedules.activityId, currentIds))),
-    db.select().from(timerIntervals).where(and(eq(timerIntervals.ownerId, ownerId), eq(timerIntervals.kind, "activity"), inArray(timerIntervals.subjectId, currentIds))),
-    db.select().from(leetcodeCodeAttempts).where(and(eq(leetcodeCodeAttempts.ownerId, ownerId), inArray(leetcodeCodeAttempts.activityId, currentIds))),
-    db.select().from(voiceCaptureIntents).where(and(eq(voiceCaptureIntents.ownerId, ownerId), inArray(voiceCaptureIntents.activityId, currentIds))),
+    db.select({ activityId: outcomes.activityId }).from(outcomes).where(and(eq(outcomes.ownerId, ownerId), inArray(outcomes.activityId, currentIds))),
+    db.select({ activityId: publicationStatuses.activityId }).from(publicationStatuses).where(and(eq(publicationStatuses.ownerId, ownerId), inArray(publicationStatuses.activityId, currentIds))),
+    db.select({ activityId: practiceTranscriptTurns.activityId }).from(practiceTranscriptTurns).where(and(eq(practiceTranscriptTurns.ownerId, ownerId), inArray(practiceTranscriptTurns.activityId, currentIds))),
+    db.select({ activityId: activityFinalizations.activityId }).from(activityFinalizations).where(and(eq(activityFinalizations.ownerId, ownerId), inArray(activityFinalizations.activityId, currentIds))),
+    db.select({ activityId: activityAudioClips.activityId }).from(activityAudioClips).where(and(eq(activityAudioClips.ownerId, ownerId), inArray(activityAudioClips.activityId, currentIds))),
+    db.select({ activityId: activityNotes.activityId }).from(activityNotes).where(and(eq(activityNotes.ownerId, ownerId), inArray(activityNotes.activityId, currentIds))),
+    db.select({ activityId: practiceNotes.activityId }).from(practiceNotes).where(and(eq(practiceNotes.ownerId, ownerId), inArray(practiceNotes.activityId, currentIds))),
+    db.select({ activityId: activityDeliveryAnalyses.activityId }).from(activityDeliveryAnalyses).where(and(eq(activityDeliveryAnalyses.ownerId, ownerId), inArray(activityDeliveryAnalyses.activityId, currentIds))),
+    db.select({ activityId: reviewSchedules.activityId }).from(reviewSchedules).where(and(eq(reviewSchedules.ownerId, ownerId), inArray(reviewSchedules.activityId, currentIds))),
+    db.select({ activityId: timerIntervals.subjectId }).from(timerIntervals).where(and(eq(timerIntervals.ownerId, ownerId), eq(timerIntervals.kind, "activity"), inArray(timerIntervals.subjectId, currentIds))),
+    db.select({ activityId: leetcodeCodeAttempts.activityId }).from(leetcodeCodeAttempts).where(and(eq(leetcodeCodeAttempts.ownerId, ownerId), inArray(leetcodeCodeAttempts.activityId, currentIds))),
+    db.select({ activityId: voiceCaptureIntents.activityId }).from(voiceCaptureIntents).where(and(eq(voiceCaptureIntents.ownerId, ownerId), inArray(voiceCaptureIntents.activityId, currentIds))),
     db.select().from(liveSessions).where(and(eq(liveSessions.ownerId, ownerId), eq(liveSessions.workbenchId, workbench.id))),
   ]) : [[], [], [], [], [], [], [], [], [], [], [], [], [], []];
 
-  const ids = (rows: Array<Record<string, unknown>>, field: string) => new Set(
-    rows.flatMap((row) => typeof row[field] === "string" ? [row[field] as string] : []),
-  );
+  const ids = (rows: Array<{ activityId: string }>) => new Set(rows.map((row) => row.activityId));
   const blockers = {
-    timer: ids(timerRows, "subjectId"),
-    result: ids(outcomeRows, "activityId"),
+    timer: ids(timerRows),
+    result: ids(outcomeRows),
     publication: new Set([
-      ...ids(publicationRows, "activityId"),
-      ...ids(finalizationRows, "activityId"),
+      ...ids(publicationRows),
+      ...ids(finalizationRows),
     ]),
     transcript: new Set([
-      ...ids(transcriptRows, "activityId"),
-      ...ids(audioRows, "activityId"),
-      ...ids(deliveryRows, "activityId"),
-      ...ids(captureRows, "activityId"),
-      ...ids(intervalRows, "subjectId"),
+      ...ids(transcriptRows),
+      ...ids(audioRows),
+      ...ids(deliveryRows),
+      ...ids(captureRows),
+      ...ids(intervalRows),
     ]),
-    attempt: ids(attemptRows, "activityId"),
+    attempt: ids(attemptRows),
     note: new Set([
-      ...ids(activityNoteRows, "activityId"),
-      ...ids(practiceNoteRows, "activityId"),
+      ...ids(activityNoteRows),
+      ...ids(practiceNoteRows),
     ]),
-    review: ids(reviewRows, "activityId"),
+    review: ids(reviewRows),
   };
   const rejected: PlannedActivityRemovalRejection[] = [];
   const deletedIds: string[] = [];
@@ -436,11 +434,12 @@ export async function removePlannedActivities(
   }
 
   const deleting = inArray(extraActivities.id, deletedIds);
+  const deletedIdSet = new Set(deletedIds);
   const affectedSessions = sessionRows.flatMap((row) => {
     const payload = row.payload as { activityIds?: unknown; allocatedSeconds?: unknown } & Record<string, unknown>;
-    if (!Array.isArray(payload.activityIds) || !payload.activityIds.some((id) => deletedIds.includes(String(id)))) return [];
+    if (!Array.isArray(payload.activityIds) || !payload.activityIds.some((id) => deletedIdSet.has(String(id)))) return [];
     const removedSeconds = payload.activityIds.reduce((total, id) => {
-      if (!deletedIds.includes(String(id))) return total;
+      if (!deletedIdSet.has(String(id))) return total;
       const activity = currentById.get(String(id))?.payload as { allocatedSeconds?: unknown } | undefined;
       return total + (typeof activity?.allocatedSeconds === "number" ? activity.allocatedSeconds : 0);
     }, 0);
@@ -448,7 +447,7 @@ export async function removePlannedActivities(
       row,
       payload: {
         ...payload,
-        activityIds: payload.activityIds.filter((id) => !deletedIds.includes(String(id))),
+        activityIds: payload.activityIds.filter((id) => !deletedIdSet.has(String(id))),
         ...(typeof payload.allocatedSeconds === "number"
           ? { allocatedSeconds: Math.max(0, payload.allocatedSeconds - removedSeconds) }
           : {}),

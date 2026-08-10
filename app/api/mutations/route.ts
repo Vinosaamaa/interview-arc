@@ -1,6 +1,7 @@
 import {
   applyTimerAction,
   applyFocusTimerAction,
+  ensureOpenWorkbench,
   readLiveState,
   removeFocusBlock,
   removeLiveSession,
@@ -198,15 +199,12 @@ export async function POST(request: Request) {
       }
       case "extra-remove": {
         if (!mutation.id) return Response.json({ error: "Missing activity id." }, { status: 400 });
-        const before = await readLiveState(ownerId, date);
-        if (!before.workbench) {
-          return Response.json({ error: "No open workbench exists." }, { status: 409 });
-        }
+        const workbench = await ensureOpenWorkbench(ownerId, date, now);
         const removal = await removePlannedActivities(ownerId, {
           date,
-          expectedWorkbenchId: before.workbench.id,
+          expectedWorkbenchId: workbench.id,
           expectedWorkbenchRevision: mutation.expectedWorkbenchRevision
-            ?? before.workbench.revision,
+            ?? workbench.revision,
           mutationId: mutation.mutationId ?? `legacy-remove-${mutation.id}`,
           activityIds: [mutation.id],
         }, now);
