@@ -253,7 +253,7 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
       evidenceRead: "available",
       sourceRegistry: "not_available",
       storyBank: "not_available",
-      resumeLibrary: "not_available",
+      resumeLibrary: "available",
     });
 
     const overflowClaimValues = Array.from({ length: 50 }, (_, index) => `

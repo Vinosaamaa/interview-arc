@@ -243,6 +243,59 @@ test("an authenticated staged DOCX/PDF pair becomes one immutable current resume
     assert.equal(nextStatus.import.sourceFingerprint, sha256("opaque-source-revision-3"));
     assert.equal(nextStatus.import.currentRevisionId, "resume-revision-3");
 
+    const library = await call(client, "get_resume_library", {});
+    assert.equal(library.schemaVersion, 1);
+    assert.equal(library.sources.find((source) => source.resumeId === "primary-resume").currentRevisionId, "resume-revision-3");
+    assert.deepEqual(
+      library.sources.find((source) => source.resumeId === "primary-resume").revisions.map((revision) => revision.revisionId),
+      ["resume-revision-3", "resume-revision-1"],
+    );
+    assert.equal(library.sources.every((source) => source.revisions.every((revision) => (
+      revision.files.every((file) => file.downloadPath.startsWith("/api/resume-library/"))
+    ))), true);
+    assert.equal(/resume-private\/|storageGeneration|objectKey/.test(JSON.stringify(library)), false);
+
+    const isolatedLibrary = await call(otherClient, "get_resume_library", {});
+    assert.deepEqual(isolatedLibrary.sources, []);
+
+    const downloaded = await fetch(`${baseUrl}/resume/files/primary-resume/resume-revision-3/pdf`, {
+      headers: { authorization: `Bearer ${ownerToken}` },
+    });
+    assert.equal(downloaded.status, 200);
+    assert.deepEqual(new Uint8Array(await downloaded.arrayBuffer()), newPdfBytes);
+    assert.equal(downloaded.headers.get("content-type"), "application/pdf");
+    assert.match(downloaded.headers.get("content-disposition"), /^attachment; filename="resume-resume-revision-3\.pdf"$/);
+    assert.equal(downloaded.headers.get("cache-control"), "private, no-store");
+    assert.equal([...downloaded.headers].some(([name, value]) => /object|storage|r2/i.test(`${name}:${value}`)), false);
+
+    const isolatedDownload = await fetch(`${baseUrl}/resume/files/primary-resume/resume-revision-3/pdf`, {
+      headers: { authorization: `Bearer ${otherToken}` },
+    });
+    assert.equal(isolatedDownload.status, 404);
+
+    await run(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", `
+      INSERT INTO resume_sources
+        (owner_id,resume_id,source_label,current_revision_id,created_at,updated_at)
+      VALUES
+        ('owner-resume-ingest','missing-resume','Missing object fixture','missing-revision',1,1);
+      INSERT INTO resume_revisions
+        (owner_id,resume_id,revision_id,parent_revision_id,source_fingerprint,import_operation_id,storage_generation,visibility,imported_at)
+      VALUES
+        ('owner-resume-ingest','missing-resume','missing-revision',NULL,'${sha256("missing source")}',
+         'missing-operation','missing-generation','owner_private',1);
+      INSERT INTO resume_revision_files
+        (owner_id,resume_id,revision_id,format,sha256,byte_size,mime_type,visibility,created_at)
+      VALUES
+        ('owner-resume-ingest','missing-resume','missing-revision','pdf','${sha256("missing file")}',12,
+         'application/pdf','owner_private',1);
+    `]);
+    const missingObject = await fetch(`${baseUrl}/resume/files/missing-resume/missing-revision/pdf`, {
+      headers: { authorization: `Bearer ${ownerToken}` },
+    });
+    assert.equal(missingObject.status, 503);
+    assert.equal(missingObject.headers.get("cache-control"), "private, no-store");
+    assert.equal(/key|bucket|r2|generation/i.test(JSON.stringify(await missingObject.json())), false);
+
     const concurrentInput = {
       operationId: "resume-import-concurrent-operation",
       resumeId: "concurrent-resume",

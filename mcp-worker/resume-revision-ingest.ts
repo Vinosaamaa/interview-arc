@@ -9,6 +9,8 @@ import {
   type ResumeFileFormat,
   type ResumeFileIntegrity,
 } from "../db/resume-revisions";
+import { privateResumeObjectKey } from "../db/private-resume-object";
+import { isDisplaySafeResumeSourceLabel } from "../db/resume-revision-policy";
 import { stagePrivateResumePair } from "./private-resume-storage";
 
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -179,6 +181,14 @@ async function parseResumeImport(request: Request): Promise<ParsedResumeImport> 
   requireStableId(resumeId, "resumeId");
   requireStableId(revisionId, "revisionId");
   const sourceLabel = requiredText(form, "sourceLabel", 120);
+  if (!isDisplaySafeResumeSourceLabel(sourceLabel)) {
+    throw new ResumeImportError(
+      "resume_import_invalid_request",
+      "sourceLabel must be a display-safe label without a private locator or credential.",
+      400,
+      false,
+    );
+  }
   const sourceFingerprint = requiredText(form, "sourceFingerprint", 64);
   if (!SHA_256.test(sourceFingerprint)) {
     throw new ResumeImportError(
@@ -212,10 +222,21 @@ async function parseResumeImport(request: Request): Promise<ParsedResumeImport> 
 }
 
 async function privateObjectKeys(ownerId: string, input: ParsedResumeImport, storageGeneration: string) {
-  const privateRoot = await sha256Hex(`${ownerId}\u0000${input.resumeId}\u0000${input.revisionId}`);
   return {
-    docx: `resume-private/${privateRoot}/${storageGeneration}/source.docx`,
-    pdf: `resume-private/${privateRoot}/${storageGeneration}/source.pdf`,
+    docx: await privateResumeObjectKey({
+      ownerId,
+      resumeId: input.resumeId,
+      revisionId: input.revisionId,
+      storageGeneration,
+      format: "docx",
+    }),
+    pdf: await privateResumeObjectKey({
+      ownerId,
+      resumeId: input.resumeId,
+      revisionId: input.revisionId,
+      storageGeneration,
+      format: "pdf",
+    }),
   };
 }
 

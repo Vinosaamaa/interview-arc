@@ -1,8 +1,7 @@
 # Owner-Private Resume Revision Ingest Core
 
-This is the first Reliability tracer bullet of issue #211. It establishes the
-private file/revision durability boundary that a later authenticated Google
-Drive exporter can call; it is not yet the user-facing Resume Library.
+This Reliability contract began as issue #211's private ingest tracer and now
+also owns the bounded owner-private Resume Library read/download boundary.
 
 ## Trust and privacy boundary
 
@@ -53,11 +52,23 @@ that changed since its reservation. No response that says `staging` or
   at most one owner-scoped receipt: safe status/error code, canonical revision
   identity, current pointer, and the two file hashes/sizes/MIME types. Unknown
   and other-owner operations both return `found: false`.
+- `get_resume_library` returns at most 20 sources and 20 newest revisions per
+  source with safe labels, lineage, current markers, integrity metadata, and
+  authenticated website download paths. It never returns storage generations
+  or private object identities.
+- `GET /api/resume-library` serves the same bounded owner-scoped model with
+  `private, no-store`. Behavioral Foundation keeps the Resume Library
+  collapsed by default and reads it only when opened.
+- `GET /api/resume-library/:resumeId/:revisionId/:format` resolves the owner and
+  D1 metadata first, derives the R2 identity server-side, verifies the stored
+  size/hash/generation, and returns an attachment with `private, no-store`.
+  Unknown owners and identities are indistinguishable (`404`); D1/R2 drift
+  fails closed (`503`) without changing state.
 
 ## Deferred issue #211 work
 
 This core deliberately does not add Google connector authorization/export,
-the ignored local mirror, Resume Library UI/downloads, text or bullet
+the ignored local mirror, text or bullet
 extraction, semantic claim/evidence mapping, revision comparison, deletion or
 retention controls, Solution Profile invalidation, attempt-context capture,
 publication, or historical backfill. The Behavioral Foundation capability must

@@ -1,4 +1,6 @@
 import { and, asc, eq, lte, sql } from "drizzle-orm";
+import { env } from "cloudflare:workers";
+import { isDisplaySafeResumeSourceLabel } from "./resume-revision-policy";
 
 import { d1TransactionalInvariantGuard, isD1TransactionalInvariantFailure } from "./d1-transactional-guard";
 import { getDb } from "./index";
@@ -60,6 +62,8 @@ interface CompleteResumeImportInput extends ReserveResumeImportInput {
 }
 
 const LOCK_LEASE_MS = 5 * 60 * 1_000;
+const RESUME_LIBRARY_SOURCE_LIMIT = 20;
+const RESUME_LIBRARY_REVISION_LIMIT = 20;
 
 function sameNullable(left: string | null | undefined, right: string | null | undefined) {
   return (left ?? null) === (right ?? null);
@@ -649,4 +653,176 @@ export async function getResumeImportStatus(ownerId: string, operationId: string
       errorCode: operation.errorCode,
     },
   };
+}
+
+interface ResumeLibraryRow {
+  resumeId: string;
+  sourceLabel: string;
+  currentRevisionId: string | null;
+  sourceUpdatedAt: number;
+  revisionId: string | null;
+  parentRevisionId: string | null;
+  importedAt: number | null;
+  revisionRank: number | null;
+  format: ResumeFileFormat | null;
+  sha256: string | null;
+  byteSize: number | null;
+  mimeType: string | null;
+}
+
+export async function getResumeLibrary(ownerId: string) {
+  const result = await env.DB.prepare(`
+    WITH bounded_sources AS (
+      SELECT owner_id, resume_id, source_label, current_revision_id, updated_at
+      FROM resume_sources
+      WHERE owner_id = ?1
+      ORDER BY updated_at DESC, resume_id ASC
+      LIMIT ?2
+    ), ranked_revisions AS (
+      SELECT
+        revision.*,
+        ROW_NUMBER() OVER (
+          PARTITION BY revision.owner_id, revision.resume_id
+          ORDER BY revision.imported_at DESC, revision.revision_id DESC
+        ) AS revision_rank
+      FROM resume_revisions revision
+      INNER JOIN bounded_sources source
+        ON source.owner_id = revision.owner_id
+       AND source.resume_id = revision.resume_id
+    )
+    SELECT
+      source.resume_id AS resumeId,
+      source.source_label AS sourceLabel,
+      source.current_revision_id AS currentRevisionId,
+      source.updated_at AS sourceUpdatedAt,
+      revision.revision_id AS revisionId,
+      revision.parent_revision_id AS parentRevisionId,
+      revision.imported_at AS importedAt,
+      revision.revision_rank AS revisionRank,
+      file.format AS format,
+      file.sha256 AS sha256,
+      file.byte_size AS byteSize,
+      file.mime_type AS mimeType
+    FROM bounded_sources source
+    LEFT JOIN ranked_revisions revision
+      ON revision.owner_id = source.owner_id
+     AND revision.resume_id = source.resume_id
+     AND revision.revision_rank <= ?3
+    LEFT JOIN resume_revision_files file
+      ON file.owner_id = revision.owner_id
+     AND file.resume_id = revision.resume_id
+     AND file.revision_id = revision.revision_id
+    ORDER BY
+      source.updated_at DESC,
+      source.resume_id ASC,
+      revision.imported_at DESC,
+      revision.revision_id DESC,
+      file.format ASC
+  `).bind(
+    ownerId,
+    RESUME_LIBRARY_SOURCE_LIMIT + 1,
+    RESUME_LIBRARY_REVISION_LIMIT + 1,
+  ).all<ResumeLibraryRow>();
+
+  const sourceRows = new Map<string, {
+    resumeId: string;
+    sourceLabel: string;
+    currentRevisionId: string | null;
+    updatedAt: number;
+    revisions: Map<string, {
+      revisionId: string;
+      parentRevisionId: string | null;
+      importedAt: number;
+      current: boolean;
+      files: Array<{
+        format: ResumeFileFormat;
+        sha256: string;
+        byteSize: number;
+        mimeType: string;
+        downloadPath: string;
+      }>;
+    }>;
+  }>();
+  let revisionsTruncated = false;
+  for (const row of result.results) {
+    let source = sourceRows.get(row.resumeId);
+    if (!source) {
+      source = {
+        resumeId: row.resumeId,
+        sourceLabel: isDisplaySafeResumeSourceLabel(row.sourceLabel) ? row.sourceLabel : "Private resume",
+        currentRevisionId: row.currentRevisionId,
+        updatedAt: row.sourceUpdatedAt,
+        revisions: new Map(),
+      };
+      sourceRows.set(row.resumeId, source);
+    }
+    if (!row.revisionId || !row.importedAt || !row.revisionRank) continue;
+    if (row.revisionRank > RESUME_LIBRARY_REVISION_LIMIT) {
+      revisionsTruncated = true;
+      continue;
+    }
+    let revision = source.revisions.get(row.revisionId);
+    if (!revision) {
+      revision = {
+        revisionId: row.revisionId,
+        parentRevisionId: row.parentRevisionId,
+        importedAt: row.importedAt,
+        current: row.revisionId === source.currentRevisionId,
+        files: [],
+      };
+      source.revisions.set(row.revisionId, revision);
+    }
+    if (row.format && row.sha256 && row.byteSize && row.mimeType) {
+      revision.files.push({
+        format: row.format,
+        sha256: row.sha256,
+        byteSize: row.byteSize,
+        mimeType: row.mimeType,
+        downloadPath: `/api/resume-library/${row.resumeId}/${row.revisionId}/${row.format}`,
+      });
+    }
+  }
+
+  const sources = [...sourceRows.values()];
+  return {
+    schemaVersion: 1 as const,
+    sources: sources.slice(0, RESUME_LIBRARY_SOURCE_LIMIT).map(({ revisions, ...source }) => ({
+      ...source,
+      revisions: [...revisions.values()],
+    })),
+    limits: {
+      sources: RESUME_LIBRARY_SOURCE_LIMIT as 20,
+      revisionsPerSource: RESUME_LIBRARY_REVISION_LIMIT as 20,
+    },
+    truncated: {
+      sources: sources.length > RESUME_LIBRARY_SOURCE_LIMIT,
+      revisions: revisionsTruncated,
+    },
+  };
+}
+
+export async function readResumeRevisionFile(
+  ownerId: string,
+  resumeId: string,
+  revisionId: string,
+  format: ResumeFileFormat,
+) {
+  const rows = await getDb().select({
+    storageGeneration: resumeRevisions.storageGeneration,
+    sha256: resumeRevisionFiles.sha256,
+    byteSize: resumeRevisionFiles.byteSize,
+    mimeType: resumeRevisionFiles.mimeType,
+  }).from(resumeRevisionFiles)
+    .innerJoin(resumeRevisions, and(
+      eq(resumeRevisions.ownerId, resumeRevisionFiles.ownerId),
+      eq(resumeRevisions.resumeId, resumeRevisionFiles.resumeId),
+      eq(resumeRevisions.revisionId, resumeRevisionFiles.revisionId),
+    ))
+    .where(and(
+      eq(resumeRevisionFiles.ownerId, ownerId),
+      eq(resumeRevisionFiles.resumeId, resumeId),
+      eq(resumeRevisionFiles.revisionId, revisionId),
+      eq(resumeRevisionFiles.format, format),
+    )).limit(1);
+  return rows[0] ?? null;
 }
