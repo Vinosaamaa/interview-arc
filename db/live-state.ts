@@ -25,6 +25,10 @@ import {
   voiceCaptureIntents,
 } from "./schema";
 import { foldElapsed, nextTimerState } from "./timer-state";
+import type {
+  PracticeStateExtraActivity,
+  PracticeStateSession,
+} from "../app/content-types";
 import {
   prepareVoiceCapturesForFinish,
   readDurablePracticeSummary,
@@ -1288,7 +1292,7 @@ export async function setActivityNote(
 
 export async function upsertExtraActivity(
   ownerId: string,
-  activity: { id: string; date: string } & Record<string, unknown>,
+  activity: PracticeStateExtraActivity,
   nowMs: number,
 ) {
   const db = getDb();
@@ -1460,7 +1464,7 @@ export async function removeExtraActivity(ownerId: string, id: string) {
 
 export async function upsertLiveSession(
   ownerId: string,
-  session: { id: string; date: string } & Record<string, unknown>,
+  session: PracticeStateSession,
   nowMs: number,
 ) {
   const db = getDb();

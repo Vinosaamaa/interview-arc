@@ -1,4 +1,8 @@
-import type { JournalActivity, PracticeSession } from "./content-types";
+import type {
+  JournalActivity,
+  PracticeStateExtraActivity,
+  PracticeStateSession,
+} from "./content-types";
 import type { FocusBlock } from "./career-work";
 import type { CodeAttemptReviewDisplay } from "../db/code-attempt-review";
 export type { FocusBlock } from "./career-work";
@@ -183,8 +187,8 @@ export type Workbench = {
   closedAt: number | null;
   revision: number;
 };
-export type ExtraActivity = JournalActivity & { timerGroupId: string; workbenchId?: string };
-export type LocalSession = PracticeSession & { source: "extra"; date: string; workbenchId?: string };
+export type ExtraActivity = PracticeStateExtraActivity;
+export type LocalSession = PracticeStateSession;
 export type LocalDraft = {
   workbench: Workbench | null;
   timers: Record<string, TimerDraft>;

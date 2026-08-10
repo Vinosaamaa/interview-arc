@@ -46,6 +46,20 @@ export type PracticeSession = {
   activityIds: string[];
 };
 
+// Exact owner-private payloads accepted by the practice-state command Module.
+// Keep them beside the durable activity/session shapes so the browser and D1
+// adapters share one compile-time contract without a client runtime import.
+export type PracticeStateExtraActivity = JournalActivity & {
+  timerGroupId: string;
+  workbenchId?: string;
+};
+
+export type PracticeStateSession = PracticeSession & {
+  source: "extra";
+  date: string;
+  workbenchId?: string;
+};
+
 export type DailyJournal = {
   schemaVersion: number;
   date: string;

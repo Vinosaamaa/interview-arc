@@ -26,6 +26,10 @@ import {
 import { buildPracticeSnapshot } from "./practice-snapshot";
 import { addReviewQueueItemsToToday, deferReviewToNextWeek } from "./review-queue";
 import { removePlannedActivities } from "./today-planning";
+import type {
+  PracticeStateExtraActivity,
+  PracticeStateSession,
+} from "../app/content-types";
 
 type Specialty = "leetcode" | "system_design" | "behavioral";
 
@@ -55,7 +59,7 @@ export type PracticeStateCommand =
         targetMinutes?: number;
       };
     }
-  | { type: "extra-upsert"; activity: { id: string; date: string } }
+  | { type: "extra-upsert"; activity: PracticeStateExtraActivity }
   | {
       type: "extra-remove";
       id: string;
@@ -74,7 +78,7 @@ export type PracticeStateCommand =
       };
     }
   | { type: "focus-block-remove"; id: string }
-  | { type: "session-upsert"; session: { id: string; date: string } }
+  | { type: "session-upsert"; session: PracticeStateSession }
   | { type: "session-remove"; id: string; activityIds?: string[] }
   | { type: "review-defer"; reviewKey: string; expectedDueDate: string }
   | {
@@ -258,11 +262,7 @@ export async function executePracticeStateCommand(
       if (!command.activity?.id || !command.activity.date) {
         throw new PracticeStateCommandInputError("Invalid extra activity.");
       }
-      await upsertExtraActivity(
-        ownerId,
-        command.activity as { id: string; date: string } & Record<string, unknown>,
-        now,
-      );
+      await upsertExtraActivity(ownerId, command.activity, now);
       break;
     }
     case "extra-remove": {
@@ -305,11 +305,7 @@ export async function executePracticeStateCommand(
       if (!command.session?.id || !command.session.date) {
         throw new PracticeStateCommandInputError("Invalid session.");
       }
-      await upsertLiveSession(
-        ownerId,
-        command.session as { id: string; date: string } & Record<string, unknown>,
-        now,
-      );
+      await upsertLiveSession(ownerId, command.session, now);
       break;
     }
     case "session-remove": {

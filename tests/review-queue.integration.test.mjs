@@ -77,6 +77,16 @@ async function inspect(baseUrl, ownerId, workbenchId) {
   return response.json();
 }
 
+async function executeCommand(baseUrl, ownerId, command, now) {
+  const response = await fetch(`${baseUrl}/practice-command`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ownerId, date: "2026-08-09", command, now }),
+  });
+  assert.equal(response.status, 200);
+  return response.json();
+}
+
 test("concurrent Review Queue planning is atomic, replay-safe, and owner-isolated in D1", { timeout: 90_000 }, async () => {
   let releaseIntegrationLock;
   let persistence;
@@ -94,7 +104,8 @@ test("concurrent Review Queue planning is atomic, replay-safe, and owner-isolate
         ('owner-replay','wb-replay','open','2026-08-09',1,NULL,100),
         ('owner-changed','wb-changed','open','2026-08-09',1,NULL,200),
         ('owner-race','wb-race','open','2026-08-09',1,NULL,300),
-        ('owner-other','wb-other','open','2026-08-09',1,NULL,400);
+        ('owner-other','wb-other','open','2026-08-09',1,NULL,400),
+        ('owner-payload','wb-payload','open','2026-08-09',1,NULL,500);
       INSERT INTO extra_activities
         (owner_id,id,date,workbench_id,payload,revision,updated_at)
       VALUES
@@ -125,6 +136,39 @@ test("concurrent Review Queue planning is atomic, replay-safe, and owner-isolate
       stdio: "ignore",
     });
     await waitForWorker(baseUrl, worker);
+
+    const exactActivity = {
+      schemaVersion: 2,
+      id: "payload-activity",
+      questionId: "payload-question",
+      date: "2026-08-09",
+      source: "extra",
+      type: "leetcode",
+      recordKind: "attempt",
+      title: "Preserve this exact activity",
+      url: "https://leetcode.com/problems/two-sum/",
+      allocatedSeconds: 2400,
+      sessionId: "payload-session",
+      timerGroupId: "payload-session",
+      timingSource: "website",
+      status: "planned",
+      notes: "Keep every persisted field.",
+      vocabularyPackIds: ["arrays"],
+      speechTerms: ["two pointer"],
+    };
+    const exactSession = {
+      id: "payload-session",
+      date: "2026-08-09",
+      label: "Payload session",
+      source: "extra",
+      allocatedSeconds: 2400,
+      activityIds: ["payload-activity"],
+    };
+    await executeCommand(baseUrl, "owner-payload", { type: "extra-upsert", activity: exactActivity }, 5_010);
+    await executeCommand(baseUrl, "owner-payload", { type: "session-upsert", session: exactSession }, 5_020);
+    const payloadState = await inspect(baseUrl, "owner-payload", "wb-payload");
+    assert.deepEqual(payloadState.activities[0].payload, { ...exactActivity, workbenchId: "wb-payload" });
+    assert.deepEqual(payloadState.sessions[0].payload, { ...exactSession, workbenchId: "wb-payload" });
 
     const exactReplay = await Promise.all([
       add(baseUrl, "owner-replay", "wb-replay", "same-operation", ["leetcode:replay"], 1_000),

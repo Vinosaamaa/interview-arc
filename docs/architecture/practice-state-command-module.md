@@ -56,10 +56,19 @@ commands. Companion timer and add-from-LeetCode orchestration stay in place
 because they include Voice-finish and content-catalog behavior that is not part
 of this slice.
 
+The pre-existing command pre-reads, post-command authoritative read-back, and
+awaited live-update publication also stay in place. Removing a read or moving
+invalidation off the response path could improve latency, but it could also
+change conflict timing or what callers may assume when a response arrives.
+Measure and characterize that performance candidate separately rather than
+folding it into this behavior-preserving slice.
+
 ## Preserved behavior and invariants
 
 - Browser queue wire values, discard/retry behavior, and response payloads do
   not change.
+- Extra-activity and session commands retain their exact persisted payload
+  types; the Module Interface cannot narrow them to identity fields.
 - Every D1 read and write remains owner-scoped.
 - Stable mutation identities and receipts for Today removal remain unchanged.
 - Workbench and timer revision conflicts still fail closed.
