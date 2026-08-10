@@ -23,6 +23,7 @@ import {
   behavioralFinalAnswerCorrectionSchema,
   behavioralFinalAnswerSnapshotInputSchema,
 } from "../db/behavioral-final-answer";
+import { behavioralAttemptAnalysisSchema } from "../db/behavioral-attempt-analysis";
 import { behavioralPracticeScenariosSchema } from "../db/behavioral-practice-scenario";
 import {
   BehavioralTargetProfileError,
@@ -2924,6 +2925,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
             improve: z.array(z.string().trim().min(1)),
           }),
           behavioralReview: behavioralTargetReviewSchema.optional(),
+          behavioralAnalysis: behavioralAttemptAnalysisSchema.optional(),
           modelAnswer: z.string().min(1),
           finalAnswerOperationId: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,199}$/).optional(),
           finalAnswerSnapshot: behavioralFinalAnswerSnapshotInputSchema.optional(),

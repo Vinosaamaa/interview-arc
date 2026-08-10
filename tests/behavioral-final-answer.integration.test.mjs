@@ -108,6 +108,44 @@ function finalization({
       complete: true,
       transcriptScope: "full_activity",
       review: { didWell: ["Scoped the decision."], improve: ["Add a measured outcome."] },
+      behavioralAnalysis: {
+        schemaVersion: 1,
+        answerFormat: "STARL",
+        competencies: ["ownership", "reliability"],
+        claimAudit: [
+          {
+            claim: "I improved retry reliability.",
+            status: "verified",
+            supportingEvidenceIds: ["evidence-retry-boundary"],
+            contraryEvidenceIds: [],
+            gaps: [],
+            contradictions: [],
+          },
+          {
+            claim: "The production impact is measured.",
+            status: "unverified",
+            supportingEvidenceIds: [],
+            contraryEvidenceIds: [],
+            gaps: ["Production impact is not independently measured."],
+            contradictions: [],
+          },
+        ],
+        reviewDimensions: {
+          relevance: { status: "strength", observation: "Answered the reliability prompt." },
+          structure: { status: "strength", observation: "Used a clear progression." },
+          specificity: { status: "mixed", observation: "The production impact is not measured." },
+          personalOwnership: { status: "strength", observation: "Named the owner's retry decision." },
+          decisions: { status: "strength", observation: "Explained identity-idempotent retries." },
+          result: { status: "improvement", observation: "Add a measured outcome." },
+          learning: { status: "strength", observation: "Extracted a reusable retry invariant." },
+          delivery: { status: "not_observed" },
+        },
+        strengths: ["Scoped the decision."],
+        improvements: ["Add a measured outcome."],
+        coachingNotes: ["Generated coaching — not evidence: quantify only after owner confirmation."],
+        likelyFollowUps: ["How did you test ambiguous commits?"],
+        nextDrill: "Rehearse the measured-outcome follow-up in two minutes.",
+      },
       ...(scope === "target_tailored" ? {
         behavioralReview: {
           schemaVersion: 1,
@@ -304,6 +342,22 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     assert.equal(record.practiceScenarios.scenarios[0].scenarioId, "retry-recovery-scenario");
     assert.match(record.practiceScenariosMarkdown, /Hypothetical practice scenario — not the owner's experience/);
     assert.match(record.practiceScenariosHtml, /I bounded replay and verified exact recovery receipts\./);
+    assert.equal(record.behavioralAnalysis.snapshotRevision, 1);
+    assert.equal(record.behavioralAnalysis.analysis.claimAudit[1].status, "unverified");
+    assert.match(record.behavioralAnalysisMarkdown, /Generated coaching — not evidence/);
+    assert.match(record.behavioralAnalysisHtml, /Rehearse the measured-outcome follow-up/);
+
+    const missingAnalysisPayload = finalization({
+      activityId,
+      questionId,
+      operationId: "final-answer-operation-missing-analysis",
+      answer,
+      responseTurnId,
+    });
+    delete missingAnalysisPayload.finalization.behavioralAnalysis;
+    const missingAnalysis = await callRaw(client, "save_specialist_finalization", missingAnalysisPayload);
+    assert.equal(missingAnalysis.isError, true);
+    assert.equal(missingAnalysis.structuredContent.code, "behavioral_attempt_analysis_required");
 
     const missingSnapshotPayload = finalization({
       activityId,
@@ -385,6 +439,7 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     assert.equal(correctedRecord.interactionModeClassification.snapshotRevision, 2);
     assert.equal(correctedRecord.interactionModeClassification.correctionOfRevision, 1);
     assert.equal(correctedRecord.interactionModeClassificationHistory.length, 2);
+    assert.equal(correctedRecord.behavioralAnalysis.snapshotRevision, 2);
 
     const orphanTargetReview = finalization({
       activityId,
@@ -569,6 +624,7 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     assert.equal(voiceRecord.finalAnswer.answer, answer);
     assert.equal(voiceRecord.practiceScenarios.scenarios[0].scenarioId, "retry-recovery-scenario");
     assert.equal(voiceRecord.interactionModeClassification.classification.primaryPracticeModeId, "unrecorded");
+    assert.equal(voiceRecord.behavioralAnalysis.analysis.answerFormat, "STARL");
 
     const legacyRecord = await call(client, "get_activity_practice_record", {
       activityId: "activity-behavioral-legacy",
@@ -579,6 +635,9 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     assert.equal(legacyRecord.practiceScenarios, null);
     assert.equal(legacyRecord.practiceScenariosMarkdown, "");
     assert.equal(legacyRecord.practiceScenariosHtml, "");
+    assert.equal(legacyRecord.behavioralAnalysis, null);
+    assert.equal(legacyRecord.behavioralAnalysisMarkdown, "");
+    assert.equal(legacyRecord.behavioralAnalysisHtml, "");
 
     otherClient = new Client({ name: "final-answer-other", version: "1.0.0" });
     await otherClient.connect(new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), {
@@ -587,6 +646,7 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     const isolated = await call(otherClient, "get_activity_practice_record", { activityId });
     assert.equal(isolated.finalAnswer, null);
     assert.deepEqual(isolated.finalAnswerSnapshots, []);
+    assert.equal(isolated.behavioralAnalysis, null);
   } finally {
     await client?.close().catch(() => {});
     await sameOwnerClient?.close().catch(() => {});

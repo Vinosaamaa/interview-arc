@@ -93,6 +93,13 @@ import {
   type StoredBehavioralFinalAnswerSnapshot,
 } from "./behavioral-final-answer";
 import {
+  behavioralAttemptAnalysisSchema,
+  projectBehavioralAttemptAnalysis,
+  renderBehavioralAttemptAnalysisHtml,
+  renderBehavioralAttemptAnalysisMarkdown,
+  type BehavioralAttemptAnalysis,
+} from "./behavioral-attempt-analysis";
+import {
   behavioralPracticeScenariosSchema,
   behavioralPracticeScenariosFingerprint,
   projectBehavioralPracticeScenarios,
@@ -162,6 +169,7 @@ export type SpecialistFinalization = {
     improve: string[];
   };
   behavioralReview?: BehavioralTargetReview;
+  behavioralAnalysis?: BehavioralAttemptAnalysis;
   modelAnswer: string;
   finalAnswerOperationId?: string;
   finalAnswerSnapshot?: BehavioralFinalAnswerSnapshotInput;
@@ -3557,6 +3565,47 @@ function validateBehavioralTargetReview(
   return targetReview;
 }
 
+function validateBehavioralAttemptAnalysis(
+  payload: SpecialistFinalization,
+  snapshot: BehavioralFinalAnswerSnapshotInput,
+) {
+  const analysis = snapshot.behavioralAnalysis;
+  if (!analysis) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_attempt_analysis_required",
+      "Every new completed behavioral finalization requires typed Behavioral Attempt analysis.",
+    );
+  }
+  if (
+    JSON.stringify(analysis.strengths) !== JSON.stringify(payload.review.didWell.map((item) => item.trim()))
+    || JSON.stringify(analysis.improvements) !== JSON.stringify(payload.review.improve.map((item) => item.trim()))
+  ) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_attempt_review_mismatch",
+      "Behavioral Attempt strengths and improvements must reuse the visible review exactly.",
+    );
+  }
+  const supportingIds = new Set(analysis.claimAudit.flatMap((claim) => claim.supportingEvidenceIds));
+  const contraryIds = new Set(analysis.claimAudit.flatMap((claim) => claim.contraryEvidenceIds));
+  const gapSet = new Set(analysis.claimAudit.flatMap((claim) => claim.gaps));
+  const contradictionSet = new Set(analysis.claimAudit.flatMap((claim) => claim.contradictions));
+  const sameSet = (left: Set<string>, right: string[]) => left.size === new Set(right).size
+    && right.every((item) => left.has(item));
+  if ([...supportingIds].some((id) => !snapshot.acceptedEvidenceIds.includes(id))) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_attempt_support_mismatch",
+      "Claim support must come from the final answer's exact accepted evidence IDs.",
+    );
+  }
+  if (!sameSet(gapSet, snapshot.evidenceGaps) || !sameSet(contradictionSet, snapshot.contradictions)) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_attempt_claim_audit_mismatch",
+      "Claim gaps and contradictions must exactly explain the final-answer snapshot metadata.",
+    );
+  }
+  return { analysis, contraryEvidenceIds: [...contraryIds] };
+}
+
 async function prepareBehavioralFinalAnswerWrite(
   db: ReturnType<typeof getDb>,
   ownerId: string,
@@ -3569,7 +3618,8 @@ async function prepareBehavioralFinalAnswerWrite(
     payload.finalAnswerOperationId
     || payload.finalAnswerSnapshot
     || payload.finalAnswerCorrection
-    || payload.behavioralReview,
+    || payload.behavioralReview
+    || payload.behavioralAnalysis,
   );
   if (specialty !== "behavioral") {
     if (hasSnapshotFields) {
@@ -3601,7 +3651,20 @@ async function prepareBehavioralFinalAnswerWrite(
       "finalAnswerOperationId must be a lowercase stable ID.",
     );
   }
-  const snapshot = behavioralFinalAnswerSnapshotInputSchema.parse(payload.finalAnswerSnapshot);
+  const nestedAnalysis = payload.finalAnswerSnapshot.behavioralAnalysis;
+  const topLevelAnalysis = payload.behavioralAnalysis
+    ? behavioralAttemptAnalysisSchema.parse(payload.behavioralAnalysis)
+    : undefined;
+  if (nestedAnalysis && topLevelAnalysis && JSON.stringify(nestedAnalysis) !== JSON.stringify(topLevelAnalysis)) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_attempt_analysis_mismatch",
+      "The top-level and immutable-snapshot Behavioral Attempt analyses must be identical.",
+    );
+  }
+  const snapshot = behavioralFinalAnswerSnapshotInputSchema.parse({
+    ...payload.finalAnswerSnapshot,
+    behavioralAnalysis: topLevelAnalysis ?? nestedAnalysis,
+  });
   const targetReview = validateBehavioralTargetReview(payload, snapshot);
   if (snapshot.question.questionId !== questionId) {
     throw new BehavioralFinalAnswerError(
@@ -3642,6 +3705,7 @@ async function prepareBehavioralFinalAnswerWrite(
       replay: true,
     };
   }
+  const attemptAnalysis = validateBehavioralAttemptAnalysis(payload, snapshot);
   let targetBinding: BehavioralFinalAnswerWritePlan["targetBinding"];
   if (snapshot.scope === "target_tailored") {
     const target = snapshot.target!;
@@ -3721,6 +3785,29 @@ async function prepareBehavioralFinalAnswerWrite(
       throw new BehavioralFinalAnswerError(
         "behavioral_final_answer_evidence_mismatch",
         "The snapshot references evidence that is not accepted supporting evidence for this exact question.",
+      );
+    }
+  }
+  if (attemptAnalysis.contraryEvidenceIds.length) {
+    const contraryEvidence = await db.select({
+      evidenceId: behavioralEvidenceItems.evidenceId,
+    }).from(behavioralEvidenceItems).innerJoin(
+      behavioralEvidenceQuestionLinks,
+      and(
+        eq(behavioralEvidenceQuestionLinks.ownerId, behavioralEvidenceItems.ownerId),
+        eq(behavioralEvidenceQuestionLinks.evidenceId, behavioralEvidenceItems.evidenceId),
+      ),
+    ).where(and(
+      eq(behavioralEvidenceItems.ownerId, ownerId),
+      eq(behavioralEvidenceItems.candidateState, "accepted"),
+      eq(behavioralEvidenceQuestionLinks.questionId, questionId),
+      eq(behavioralEvidenceQuestionLinks.relevance, "contrary"),
+      inArray(behavioralEvidenceItems.evidenceId, attemptAnalysis.contraryEvidenceIds),
+    ));
+    if (new Set(contraryEvidence.map((item) => item.evidenceId)).size !== attemptAnalysis.contraryEvidenceIds.length) {
+      throw new BehavioralFinalAnswerError(
+        "behavioral_attempt_contrary_evidence_mismatch",
+        "Claim contradictions must reference accepted contrary evidence for this exact question.",
       );
     }
   }
@@ -4027,6 +4114,22 @@ export async function saveSpecialistFinalization(
           AND ${behavioralEvidenceQuestionLinks.relevance} = 'supporting'
           AND ${inArray(behavioralEvidenceItems.evidenceId, behavioralFinalAnswer.snapshot.acceptedEvidenceIds)}
       ) = ${behavioralFinalAnswer.snapshot.acceptedEvidenceIds.length}`));
+    }
+    const contraryEvidenceIds = [...new Set(
+      behavioralFinalAnswer.snapshot.behavioralAnalysis?.claimAudit.flatMap((claim) => claim.contraryEvidenceIds) ?? [],
+    )];
+    if (contraryEvidenceIds.length) {
+      finalizationGuards.push(d1TransactionalInvariantGuard(db, sql`(
+        SELECT count(*) FROM ${behavioralEvidenceItems}
+        INNER JOIN ${behavioralEvidenceQuestionLinks}
+          ON ${behavioralEvidenceQuestionLinks.ownerId} = ${behavioralEvidenceItems.ownerId}
+          AND ${behavioralEvidenceQuestionLinks.evidenceId} = ${behavioralEvidenceItems.evidenceId}
+        WHERE ${behavioralEvidenceItems.ownerId} = ${ownerId}
+          AND ${behavioralEvidenceItems.candidateState} = 'accepted'
+          AND ${behavioralEvidenceQuestionLinks.questionId} = ${questionId}
+          AND ${behavioralEvidenceQuestionLinks.relevance} = 'contrary'
+          AND ${inArray(behavioralEvidenceItems.evidenceId, contraryEvidenceIds)}
+      ) = ${contraryEvidenceIds.length}`));
     }
     if (behavioralFinalAnswer.targetBinding) {
       const targetBinding = behavioralFinalAnswer.targetBinding;
@@ -4878,6 +4981,7 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
       ? finalizationPayload?.modelAnswer
       : null,
   });
+  const behavioralAnalysis = projectBehavioralAttemptAnalysis(finalAnswer);
   let transitionIndex = 0;
   const modeOverrideByTurn = new Map(modeTurnOverrides.map((override) => [
     override.responseTurnId,
@@ -4941,6 +5045,9 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
     practiceScenarios,
     practiceScenariosMarkdown: renderBehavioralPracticeScenariosMarkdown(practiceScenarios),
     practiceScenariosHtml: renderBehavioralPracticeScenariosHtml(practiceScenarios),
+    behavioralAnalysis,
+    behavioralAnalysisMarkdown: renderBehavioralAttemptAnalysisMarkdown(behavioralAnalysis),
+    behavioralAnalysisHtml: renderBehavioralAttemptAnalysisHtml(behavioralAnalysis),
     reviews,
     audioClips: clips,
     deliveryAnalyses,

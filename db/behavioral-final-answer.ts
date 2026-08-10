@@ -3,6 +3,10 @@ import {
   behavioralTargetReviewSchema,
   type BehavioralTargetReview,
 } from "./behavioral-practice-preflight-policy.ts";
+import {
+  behavioralAttemptAnalysisSchema,
+  type BehavioralAttemptAnalysis,
+} from "./behavioral-attempt-analysis.ts";
 
 const stableIdSchema = z.string()
   .min(1)
@@ -42,6 +46,7 @@ export const behavioralFinalAnswerSnapshotInputSchema = z.object({
     responseTurnId: stableIdSchema,
   }).strict(),
   target: targetSnapshotSchema.optional(),
+  behavioralAnalysis: behavioralAttemptAnalysisSchema.optional(),
 }).strict().superRefine((snapshot, context) => {
   if (snapshot.question.questionId !== snapshot.solutionProfile.questionId) {
     context.addIssue({
@@ -180,6 +185,7 @@ export type BehavioralFinalAnswerProjection = {
   evidenceGaps: string[];
   contradictions: string[];
   target: BehavioralFinalAnswerSnapshotInput["target"] | null;
+  behavioralAnalysis: BehavioralAttemptAnalysis | null;
   finalizedAt: number | null;
   correctionOfRevision: number | null;
   correctionReason: string | null;
@@ -207,6 +213,7 @@ export function projectBehavioralFinalAnswer(input: {
       evidenceGaps: snapshot.evidenceGaps,
       contradictions: snapshot.contradictions,
       target: snapshot.target ?? null,
+      behavioralAnalysis: snapshot.behavioralAnalysis ?? null,
       finalizedAt: current.finalizedAt,
       correctionOfRevision: current.correctionOfRevision,
       correctionReason: current.correctionReason,
@@ -226,6 +233,7 @@ export function projectBehavioralFinalAnswer(input: {
     evidenceGaps: [],
     contradictions: [],
     target: null,
+    behavioralAnalysis: null,
     finalizedAt: null,
     correctionOfRevision: null,
     correctionReason: null,

@@ -22,6 +22,7 @@ Every new completed behavioral finalization supplies:
 - for `target_tailored`, the exact Target Profile ID, revision, display label,
   and bounded competency emphasis—never a raw JD, source locator, or target
   analysis.
+- the typed attempt audit defined by `behavioral-attempt-analysis.md`.
 
 The response turn may follow a typed or Voice-managed user answer. D1 verifies
 the same activity transcript, accepted question evidence, and linked Solution
