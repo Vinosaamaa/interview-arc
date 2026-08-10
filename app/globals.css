@@ -979,8 +979,8 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .mock-controls { grid-template-columns: auto 1fr; }
   .mock-controls .activity-timer { grid-column: 1 / -1; }
   .bank-totals { margin-top: -18px; grid-template-columns: 1fr; }
-  .bank-totals article { min-height: 96px; border-right: 0; border-bottom: 1px solid var(--line); }
-  .bank-totals article:last-child { border-bottom: 0; }
+  .bank-totals button { min-height: 96px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .bank-totals button:last-child { border-bottom: 0; }
   .problem-bank-entry { grid-template-columns: auto minmax(0, 1fr); padding: 18px 4px 18px 12px; }
   .bank-entry-meta { grid-column: 2; }
   .problem-bank-entry > button { grid-column: 2; grid-row: auto; justify-self: start; }

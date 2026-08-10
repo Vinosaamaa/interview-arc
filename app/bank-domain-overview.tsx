@@ -46,6 +46,12 @@ export default function BankDomainOverview({
 }: Props) {
   const copy = COPY[type];
   const remaining = Math.max(0, total - finished);
+  const metrics = [
+    { key: "completed", label: "COMPLETED", value: finished, title: "Finished attempts", description: `${remaining} prompt${remaining === 1 ? "" : "s"} remain uncompleted.` },
+    { key: "recall", label: "RECALL NOW", value: dueNow, title: "Due today", description: `${needsReview} prompt${needsReview === 1 ? " has" : "s have"} an open review signal.` },
+    { key: "shelf", label: copy.shelf.toUpperCase(), value: reusableSolutions, title: copy.shelf, description: `${copy.shelfNote} available from the shared reader.` },
+    { key: "coverage", label: copy.coverage.toUpperCase(), value: topicCount, title: copy.coverage, description: `${copy.coverageNote} across the current bank.` },
+  ];
 
   return (
     <section className={`bank-domain-overview ${type}`} aria-labelledby={`bank-domain-${type}-title`}>
@@ -58,30 +64,12 @@ export default function BankDomainOverview({
         <small>{total} prompt{total === 1 ? "" : "s"} in this bank</small>
       </header>
       <div className="bank-domain-ledger">
-        <article>
-          <span className="bank-domain-index">COMPLETED</span>
-          <strong>{finished}</strong>
-          <h3>Finished attempts</h3>
-          <p>{remaining} prompt{remaining === 1 ? "" : "s"} remain uncompleted.</p>
-        </article>
-        <article>
-          <span className="bank-domain-index">RECALL NOW</span>
-          <strong>{dueNow}</strong>
-          <h3>Due today</h3>
-          <p>{needsReview} prompt{needsReview === 1 ? " has" : "s have"} an open review signal.</p>
-        </article>
-        <article>
-          <span className="bank-domain-index">{copy.shelf.toUpperCase()}</span>
-          <strong>{reusableSolutions}</strong>
-          <h3>{copy.shelf}</h3>
-          <p>{copy.shelfNote} available from the shared reader.</p>
-        </article>
-        <article>
-          <span className="bank-domain-index">{copy.coverage.toUpperCase()}</span>
-          <strong>{topicCount}</strong>
-          <h3>{copy.coverage}</h3>
-          <p>{copy.coverageNote} across the current bank.</p>
-        </article>
+        {metrics.map((metric) => <article key={metric.key}>
+          <span className="bank-domain-index">{metric.label}</span>
+          <strong>{metric.value}</strong>
+          <h3>{metric.title}</h3>
+          <p>{metric.description}</p>
+        </article>)}
       </div>
       <footer><strong>{starred} starred</strong><span>These totals report saved state; they do not infer mastery.</span></footer>
     </section>

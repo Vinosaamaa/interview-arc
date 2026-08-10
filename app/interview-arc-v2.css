@@ -2089,7 +2089,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   html { scroll-padding-top: 78px; }
   body { padding-bottom: 76px; }
   .app-shell { --sidebar-size: 0px; --sidebar-half: 0px; display: block; }
-  .sidebar { position: fixed; inset: auto 10px 10px; width: auto; height: 62px; padding: 6px; border: 1px solid rgba(122,177,167,.32); border-radius: 16px; background: rgba(13,45,44,.95); backdrop-filter: blur(16px); overflow: hidden; z-index: 58; box-shadow: 0 14px 45px rgba(5,28,27,.34); }
+  .sidebar { position: fixed; inset: auto 10px 10px; width: auto; height: 62px; padding: 6px; border: 1px solid rgba(122,177,167,.32); border-radius: 16px; background: #0d2d2c; backdrop-filter: none; overflow: hidden; z-index: 58; box-shadow: 0 14px 45px rgba(5,28,27,.34); }
   .brand, .sidebar-status, .profile { display: none; }
   .primary-nav { width: 100%; height: 100%; margin: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; }
   .primary-nav button, .primary-nav button.active { min-width: 0; min-height: 48px; padding: 4px 2px; border-radius: 11px; display: grid; grid-template-columns: 1fr; place-items: center; gap: 0; color: #aac1bc; font-size: .67rem; text-align: center; box-shadow: none; }
