@@ -18,6 +18,11 @@ improvements, stronger architecture, follow-ups, consulted references, and a
 standalone model design even after a partial mock. Keep dated transcript and
 feedback out of the reusable profile.
 
+For the shared interaction-mode sidecar, count only specialist responses that
+shaped the live requirements, architecture, tradeoff, or failure-mode work.
+Exclude setup, post-attempt review, reference research, and the standalone
+model design.
+
 Reuse the profile unless requirements, architecture, flows, scaling,
 reliability, or tradeoffs materially improve. Record the decision and research
 reason. Reviews schedule at 4 days for failed/full walkthrough, 7 for approach

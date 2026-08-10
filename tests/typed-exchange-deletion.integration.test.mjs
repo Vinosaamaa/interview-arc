@@ -522,6 +522,13 @@ test("typed exchange deletion is exact, atomic, owner-scoped, and identity-idemp
         review: { didWell: ["Preserved the intended evidence."], improve: [] },
         modelAnswer: "A durable model answer.",
         references: [],
+        interactionModeClassificationOperationId: "mode-finalization-after-deletion",
+        interactionModeEvidence: {
+          schemaVersion: 1,
+          provenance: "recorded",
+          materialSpecialistTurnIds: [],
+          assistanceEvents: [],
+        },
         solutionProfileAction: "create_or_revise",
         solutionProfile: {
           schemaVersion: 1,

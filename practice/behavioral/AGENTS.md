@@ -120,6 +120,11 @@ Delivery Coach evidence, and consulted references. A standalone model answer
 is mandatory even after an incomplete conversation, but may contain only
 owner-confirmed facts and explicit evidence gaps.
 
+For the shared interaction-mode sidecar, count only specialist prompts or
+coaching that materially shaped the live answer. Exclude preflight,
+administration, post-answer review, reference material, rewrites/model answers,
+and finalization prose.
+
 Every new completed behavioral finalization also saves the typed snapshot in
 `behavioral-final-answer-snapshots.md`. Compose one exact answer, reuse it
 byte-for-byte as `modelAnswer` and `finalAnswerSnapshot.answer`, bind the exact

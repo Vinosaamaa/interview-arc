@@ -104,6 +104,63 @@ test("interaction mode MCP state is owner-private, atomic, idempotent, revision-
     assert.equal(exactRetry.current.revision, 1);
     assert.equal(exactRetry.transitions.length, 1);
 
+    const turnOverrideInput = {
+      ...firstMutation,
+      scope: "turn_override",
+      responseTurnId: "specialist-switch-turn",
+      interactionModeId: "grill",
+      expectedRevision: 1,
+      mutationId: "mode-turn-override-1",
+      reason: "Use Grill for this one specialist response only.",
+      occurredAt: 205,
+    };
+    const turnOverride = await call(ownerClient, "set_practice_interaction_mode", turnOverrideInput);
+    assert.equal(turnOverride.receipt.scope, "turn_override");
+    assert.equal(turnOverride.current.interactionModeId, "mentor");
+    assert.equal(turnOverride.current.revision, 1);
+    assert.equal(turnOverride.transitions.length, 1);
+    assert.equal(turnOverride.turnOverrides.length, 1);
+    assert.equal(turnOverride.turnOverrides[0].overrideInteractionModeId, "grill");
+    const activityRecord = await call(ownerClient, "get_activity_practice_record", { activityId: "activity-mode" });
+    assert.deepEqual(
+      activityRecord.turns.find((turn) => turn.turnId === "specialist-switch-turn").interactionMode,
+      { interactionModeId: "grill", revision: 1, turnOverride: true },
+    );
+    const overrideRetry = await call(ownerClient, "set_practice_interaction_mode", turnOverrideInput);
+    assert.equal(overrideRetry.duplicate, true);
+    assert.equal(overrideRetry.current.interactionModeId, "mentor");
+    const overrideConflict = await raw(ownerClient, "set_practice_interaction_mode", {
+      ...turnOverrideInput,
+      interactionModeId: "interviewer",
+    });
+    assert.equal(overrideConflict.isError, true);
+    assert.equal(overrideConflict.structuredContent.code, "interaction_mode_mutation_identity_conflict");
+    const crossScopeConflict = await raw(ownerClient, "set_practice_interaction_mode", {
+      ...firstMutation,
+      mutationId: "mode-turn-override-1",
+      interactionModeId: "interviewer",
+      expectedRevision: 1,
+      triggerTurnId: undefined,
+      reason: "A conflicting activity-scoped use of the same mutation identity.",
+      occurredAt: 206,
+    });
+    assert.equal(crossScopeConflict.isError, true);
+    assert.equal(crossScopeConflict.structuredContent.code, "interaction_mode_mutation_identity_conflict");
+    const occupiedTurnConflict = await raw(ownerClient, "set_practice_interaction_mode", {
+      ...turnOverrideInput,
+      mutationId: "mode-turn-override-2",
+      interactionModeId: "interviewer",
+    });
+    assert.equal(occupiedTurnConflict.isError, true);
+    assert.equal(occupiedTurnConflict.structuredContent.code, "interaction_mode_turn_override_conflict");
+    const invalidOverrideSource = await raw(ownerClient, "set_practice_interaction_mode", {
+      ...turnOverrideInput,
+      mutationId: "mode-turn-override-workflow",
+      source: "workflow_transition",
+    });
+    assert.equal(invalidOverrideSource.isError, true);
+    assert.equal(invalidOverrideSource.structuredContent.code, "interaction_mode_turn_override_source_invalid");
+
     const changedRetry = await raw(ownerClient, "set_practice_interaction_mode", {
       ...firstMutation,
       interactionModeId: "interviewer",

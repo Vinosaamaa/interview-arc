@@ -128,6 +128,13 @@ function finalization({
         },
       },
       finalAnswerOperationId: operationId,
+      interactionModeClassificationOperationId: `mode-${operationId.toLowerCase()}`,
+      interactionModeEvidence: {
+        schemaVersion: 1,
+        provenance: "recorded",
+        materialSpecialistTurnIds: [responseTurnId],
+        assistanceEvents: [],
+      },
       finalAnswerSnapshot: {
         schemaVersion: 1,
         answer,
@@ -145,6 +152,7 @@ function finalization({
         ...(target ? { target } : {}),
       },
       ...(correction ? { finalAnswerCorrection: correction } : {}),
+      ...(correction ? { interactionModeClassificationCorrection: correction } : {}),
     },
   };
 }
@@ -161,6 +169,7 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
   let persistence;
   let worker;
   let client;
+  let sameOwnerClient;
   let otherClient;
   try {
     releaseLock = await acquireMcpIntegrationLock();
@@ -195,6 +204,18 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
       VALUES
         ('owner-final-answer','${questionId}','evidence-retry-boundary','supporting',1,1),
         ('owner-final-answer','behavioral-reliability-voice','evidence-retry-boundary','supporting',1,1);
+      INSERT INTO practice_interaction_mode_states
+        (owner_id,activity_id,interaction_mode_id,registry_version,revision,source,last_mutation_id,updated_at)
+      VALUES
+        ('owner-final-answer','${activityId}','interviewer','2026-08-10.1',1,'explicit_user_instruction','mode-seed-1',1786363199000);
+      INSERT INTO practice_interaction_mode_transitions
+        (owner_id,activity_id,transition_id,mutation_id,from_interaction_mode_id,to_interaction_mode_id,
+         from_revision,to_revision,registry_version,trigger_turn_id,source,reason,occurred_at,created_at)
+      VALUES
+        ('owner-final-answer','${activityId}','mode-transition-seed-1','mode-seed-1',NULL,'interviewer',
+         0,1,'2026-08-10.1',NULL,'explicit_user_instruction','Start in Interviewer mode.',1786363199000,1786363199000);
+      INSERT INTO timer_intervals (owner_id,subject_id,kind,started_at,ended_at)
+      VALUES ('owner-final-answer','${activityId}','activity',1786363200000,1786363203000);
       INSERT INTO activity_finalizations
         (owner_id,activity_id,specialty,status,payload,finalized_at,published_at,revision,updated_at)
       VALUES
@@ -216,6 +237,10 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     await client.connect(new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), {
       requestInit: { headers: { authorization: `Bearer ${token}` } },
     }));
+    sameOwnerClient = new Client({ name: "final-answer-owner-concurrent", version: "1.0.0" });
+    await sameOwnerClient.connect(new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), {
+      requestInit: { headers: { authorization: `Bearer ${token}` } },
+    }));
 
     const invalidOperationId = await callRaw(client, "save_specialist_finalization", finalization({
       activityId,
@@ -226,15 +251,22 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     }));
     assert.equal(invalidOperationId.isError, true);
 
-    const first = await call(client, "save_specialist_finalization", finalization({
+    const firstPayload = finalization({
       activityId,
       questionId,
       operationId: "final-answer-operation-1",
       answer,
       responseTurnId,
-    }));
-    assert.equal(first.finalAnswer.status, "created");
+    });
+    const concurrentFirst = await Promise.all([
+      call(client, "save_specialist_finalization", firstPayload),
+      call(sameOwnerClient, "save_specialist_finalization", firstPayload),
+    ]);
+    assert.deepEqual(concurrentFirst.map((result) => result.finalAnswer.status).sort(), ["created", "unchanged"]);
+    const first = concurrentFirst.find((result) => result.finalAnswer.status === "created");
     assert.equal(first.finalAnswer.snapshotRevision, 1);
+    assert.equal(first.interactionModeClassification.primaryPracticeModeId, "interviewer");
+    assert.equal(first.interactionModeClassification.method, "active_timer_seconds");
 
     const record = await call(client, "get_activity_practice_record", { activityId });
     assert.equal(record.finalAnswer.source, "snapshot_v1");
@@ -242,6 +274,10 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     assert.equal(record.finalAnswer.solutionProfile.revision, 1);
     assert.equal(record.finalAnswerSnapshots.length, 1);
     assert.equal(record.finalAnswerSnapshotsTruncated, false);
+    assert.equal(record.interactionModeClassification.snapshotRevision, 1);
+    assert.equal(record.interactionModeClassification.classification.primaryPracticeModeId, "interviewer");
+    assert.equal(record.interactionModeClassificationHistory.length, 1);
+    assert.equal(record.turns.find((turn) => turn.turnId === responseTurnId).interactionMode.interactionModeId, "interviewer");
     assert.match(record.finalAnswerMarkdown, new RegExp(answer));
     assert.match(record.finalAnswerHtml, new RegExp(answer));
 
@@ -320,6 +356,9 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     assert.equal(correctedRecord.finalAnswerSnapshots.length, 2);
     assert.equal(correctedRecord.finalAnswerSnapshots[0].snapshot.answer, answer);
     assert.equal(correctedRecord.finalAnswerSnapshots[1].snapshot.answer, correctedAnswer);
+    assert.equal(correctedRecord.interactionModeClassification.snapshotRevision, 2);
+    assert.equal(correctedRecord.interactionModeClassification.correctionOfRevision, 1);
+    assert.equal(correctedRecord.interactionModeClassificationHistory.length, 2);
 
     const orphanTargetReview = finalization({
       activityId,
@@ -502,6 +541,7 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     });
     assert.equal(voiceRecord.turns[0].source, "audio_transcript");
     assert.equal(voiceRecord.finalAnswer.answer, answer);
+    assert.equal(voiceRecord.interactionModeClassification.classification.primaryPracticeModeId, "unrecorded");
 
     const legacyRecord = await call(client, "get_activity_practice_record", {
       activityId: "activity-behavioral-legacy",
@@ -519,6 +559,7 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     assert.deepEqual(isolated.finalAnswerSnapshots, []);
   } finally {
     await client?.close().catch(() => {});
+    await sameOwnerClient?.close().catch(() => {});
     await otherClient?.close().catch(() => {});
     worker?.kill("SIGTERM");
     if (worker && worker.exitCode === null) await new Promise((resolve) => worker.once("exit", resolve));

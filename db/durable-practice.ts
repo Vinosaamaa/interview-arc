@@ -17,6 +17,9 @@ import {
   leetcodeCodeAttemptReviewBackfills,
   liveTurnReservations,
   ownerBankQuestions,
+  practiceInteractionModeClassifications,
+  practiceInteractionModeTransitions,
+  practiceInteractionModeTurnOverrides,
   practiceNotes,
   practiceTranscriptTurns,
   problemPreferences,
@@ -25,6 +28,7 @@ import {
   provisionalSolutionProfiles,
   reviewSchedules,
   specialistTasks,
+  timerIntervals,
   typedPracticeExchangeDeletions,
   voiceCaptureIntents,
   voiceExchangeReservations,
@@ -95,6 +99,14 @@ import {
   behavioralTargetReviewSchema,
   type BehavioralTargetReview,
 } from "./behavioral-practice-preflight-policy";
+import {
+  InteractionModeFinalizationError,
+  prepareInteractionModeClassificationWrite,
+} from "./interaction-mode-finalization";
+import {
+  interactionModeClassificationSchema,
+  type InteractionModeClassificationInput,
+} from "./interaction-mode-classification";
 
 export type Specialty = "leetcode" | "system_design" | "behavioral";
 export type NoteKind = "remember" | "insight" | "mistake" | "pattern" | "question";
@@ -146,6 +158,12 @@ export type SpecialistFinalization = {
   finalAnswerOperationId?: string;
   finalAnswerSnapshot?: BehavioralFinalAnswerSnapshotInput;
   finalAnswerCorrection?: BehavioralFinalAnswerCorrection;
+  interactionModeClassificationOperationId?: string;
+  interactionModeEvidence?: InteractionModeClassificationInput;
+  interactionModeClassificationCorrection?: {
+    replacesSnapshotRevision: number;
+    reason: string;
+  };
   solution?: string;
   improvedAnswer?: string;
   complexity?: { time?: string; space?: string };
@@ -3720,6 +3738,8 @@ export async function saveSpecialistFinalization(
   nowMs: number,
 ) {
   const db = getDb();
+  // Preserve the established behavioral validation precedence before checking
+  // the cross-specialty interaction-mode sidecar.
   const behavioralFinalAnswer = await prepareBehavioralFinalAnswerWrite(
     db,
     ownerId,
@@ -3728,7 +3748,26 @@ export async function saveSpecialistFinalization(
     questionId,
     payload,
   );
-  if (behavioralFinalAnswer?.replay) return { finalAnswer: behavioralFinalAnswer.result };
+  const interactionModeClassification = await prepareInteractionModeClassificationWrite({
+    ownerId,
+    activityId,
+    complete: payload.complete,
+    operationId: payload.interactionModeClassificationOperationId,
+    evidence: payload.interactionModeEvidence,
+    correction: payload.interactionModeClassificationCorrection,
+  });
+  if (behavioralFinalAnswer?.replay || interactionModeClassification?.replay) {
+    if (
+      (behavioralFinalAnswer && !behavioralFinalAnswer.replay)
+      || (interactionModeClassification && !interactionModeClassification.replay)
+    ) {
+      throw new Error("Finalization replay identities do not refer to the same immutable write.");
+    }
+    return {
+      finalAnswer: behavioralFinalAnswer?.result ?? null,
+      interactionModeClassification: interactionModeClassification?.classification ?? null,
+    };
+  }
   const transcriptState = payload.complete
     ? await readActivityTranscriptState(db, ownerId, activityId)
     : null;
@@ -3991,6 +4030,57 @@ export async function saveSpecialistFinalization(
     }
   }
   const finalizationStatements = [...finalizationGuards];
+  if (interactionModeClassification) {
+    finalizationStatements.push(d1TransactionalInvariantGuard(db, sql`(
+      SELECT count(*) FROM ${practiceInteractionModeTransitions}
+      WHERE ${practiceInteractionModeTransitions.ownerId} = ${ownerId}
+        AND ${practiceInteractionModeTransitions.activityId} = ${activityId}
+    ) = ${interactionModeClassification.dependencies?.transitionCount ?? interactionModeClassification.classification.transitionCount}`));
+    const intervalDependencies = interactionModeClassification.dependencies?.timerIntervals ?? [];
+    finalizationStatements.push(d1TransactionalInvariantGuard(db, sql`(
+      SELECT count(*) FROM ${timerIntervals}
+      WHERE ${timerIntervals.ownerId} = ${ownerId}
+        AND ${timerIntervals.subjectId} = ${activityId}
+        AND ${timerIntervals.kind} = 'activity'
+    ) = ${intervalDependencies.length}`));
+    for (const interval of intervalDependencies) {
+      finalizationStatements.push(d1TransactionalInvariantGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${timerIntervals}
+        WHERE ${timerIntervals.ownerId} = ${ownerId}
+          AND ${timerIntervals.subjectId} = ${activityId}
+          AND ${timerIntervals.kind} = 'activity'
+          AND ${timerIntervals.startedAt} = ${interval.startedAt}
+          AND ${timerIntervals.endedAt} IS ${interval.endedAt}
+      )`));
+    }
+    const overrideDependencies = interactionModeClassification.dependencies?.turnOverrides ?? [];
+    finalizationStatements.push(d1TransactionalInvariantGuard(db, sql`(
+      SELECT count(*) FROM ${practiceInteractionModeTurnOverrides}
+      WHERE ${practiceInteractionModeTurnOverrides.ownerId} = ${ownerId}
+        AND ${practiceInteractionModeTurnOverrides.activityId} = ${activityId}
+    ) = ${overrideDependencies.length}`));
+    for (const override of overrideDependencies) {
+      finalizationStatements.push(d1TransactionalInvariantGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${practiceInteractionModeTurnOverrides}
+        WHERE ${practiceInteractionModeTurnOverrides.ownerId} = ${ownerId}
+          AND ${practiceInteractionModeTurnOverrides.activityId} = ${activityId}
+          AND ${practiceInteractionModeTurnOverrides.responseTurnId} = ${override.responseTurnId}
+          AND ${practiceInteractionModeTurnOverrides.mutationId} = ${override.mutationId}
+          AND ${practiceInteractionModeTurnOverrides.overrideInteractionModeId} = ${override.overrideInteractionModeId}
+      )`));
+    }
+    finalizationStatements.push(db.insert(practiceInteractionModeClassifications).values({
+      ownerId,
+      activityId,
+      snapshotRevision: interactionModeClassification.snapshotRevision,
+      operationId: interactionModeClassification.operationId,
+      requestFingerprint: interactionModeClassification.requestFingerprint,
+      classification: interactionModeClassification.classification,
+      correctionOfRevision: interactionModeClassification.correctionOfRevision,
+      correctionReason: interactionModeClassification.correctionReason,
+      finalizedAt: nowMs,
+    }));
+  }
   if (behavioralFinalAnswer) {
     finalizationStatements.push(db.insert(behavioralFinalAnswerSnapshots).values({
       ownerId,
@@ -4008,16 +4098,40 @@ export async function saveSpecialistFinalization(
   try {
     await db.batch(finalizationStatements as unknown as Parameters<typeof db.batch>[0]);
   } catch (error) {
-    if (behavioralFinalAnswer) {
-      const racedRows = await db.select().from(behavioralFinalAnswerSnapshots).where(and(
+    const [racedClassifications, racedFinalAnswers] = await Promise.all([
+      interactionModeClassification ? db.select().from(practiceInteractionModeClassifications).where(and(
+        eq(practiceInteractionModeClassifications.ownerId, ownerId),
+        eq(practiceInteractionModeClassifications.operationId, interactionModeClassification.operationId),
+      )).limit(1) : Promise.resolve([]),
+      behavioralFinalAnswer ? db.select().from(behavioralFinalAnswerSnapshots).where(and(
         eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
         eq(behavioralFinalAnswerSnapshots.operationId, behavioralFinalAnswer.operationId),
-      ));
-      if (racedRows[0]?.requestFingerprint === behavioralFinalAnswer.requestFingerprint) {
-        return {
-          finalAnswer: { status: "unchanged" as const, snapshotRevision: racedRows[0].snapshotRevision },
-        };
-      }
+      )).limit(1) : Promise.resolve([]),
+    ]);
+    if (
+      racedClassifications[0]
+      && racedClassifications[0].requestFingerprint !== interactionModeClassification?.requestFingerprint
+    ) {
+      throw new InteractionModeFinalizationError(
+        "interaction_mode_classification_operation_conflict",
+        "That classification operation ID is already bound to different immutable evidence.",
+      );
+    }
+    if (racedFinalAnswers[0] && racedFinalAnswers[0].requestFingerprint !== behavioralFinalAnswer?.requestFingerprint) {
+      throw new BehavioralFinalAnswerError(
+        "behavioral_final_answer_operation_conflict",
+        "That final-answer operation ID is already bound to a different immutable snapshot.",
+      );
+    }
+    const classificationSettled = !interactionModeClassification || Boolean(racedClassifications[0]);
+    const finalAnswerSettled = !behavioralFinalAnswer || Boolean(racedFinalAnswers[0]);
+    if (classificationSettled && finalAnswerSettled) {
+      return {
+        finalAnswer: racedFinalAnswers[0]
+          ? { status: "unchanged" as const, snapshotRevision: racedFinalAnswers[0].snapshotRevision }
+          : null,
+        interactionModeClassification: racedClassifications[0]?.classification ?? null,
+      };
     }
     if (isD1TransactionalInvariantFailure(error)) {
       if (behavioralFinalAnswer) {
@@ -4044,7 +4158,10 @@ export async function saveSpecialistFinalization(
     }
     throw error;
   }
-  return { finalAnswer: behavioralFinalAnswer?.result ?? null };
+  return {
+    finalAnswer: behavioralFinalAnswer?.result ?? null,
+    interactionModeClassification: interactionModeClassification?.classification ?? null,
+  };
 }
 
 export async function markFinalizationPublished(ownerId: string, activityId: string, nowMs: number) {
@@ -4659,7 +4776,7 @@ export async function readSpecialistTasks(ownerId: string) {
 
 export async function readActivityPracticeRecord(ownerId: string, activityId: string) {
   const db = getDb();
-  const [turns, notes, finalizations, finalAnswerRows, reviews, clips, deliveryAnalyses, codeAttempts, typedExchangeDeletions] = await Promise.all([
+  const [turns, notes, finalizations, classificationRows, modeTransitions, modeTurnOverrides, finalAnswerRows, reviews, clips, deliveryAnalyses, codeAttempts, typedExchangeDeletions] = await Promise.all([
     db
       .select()
       .from(practiceTranscriptTurns)
@@ -4667,6 +4784,18 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
       .orderBy(asc(practiceTranscriptTurns.sequence), asc(practiceTranscriptTurns.occurredAt)),
     db.select().from(practiceNotes).where(and(eq(practiceNotes.ownerId, ownerId), eq(practiceNotes.activityId, activityId))),
     db.select().from(activityFinalizations).where(and(eq(activityFinalizations.ownerId, ownerId), eq(activityFinalizations.activityId, activityId))),
+    db.select().from(practiceInteractionModeClassifications).where(and(
+      eq(practiceInteractionModeClassifications.ownerId, ownerId),
+      eq(practiceInteractionModeClassifications.activityId, activityId),
+    )).orderBy(desc(practiceInteractionModeClassifications.snapshotRevision)).limit(101),
+    db.select().from(practiceInteractionModeTransitions).where(and(
+      eq(practiceInteractionModeTransitions.ownerId, ownerId),
+      eq(practiceInteractionModeTransitions.activityId, activityId),
+    )).orderBy(asc(practiceInteractionModeTransitions.occurredAt), asc(practiceInteractionModeTransitions.toRevision)),
+    db.select().from(practiceInteractionModeTurnOverrides).where(and(
+      eq(practiceInteractionModeTurnOverrides.ownerId, ownerId),
+      eq(practiceInteractionModeTurnOverrides.activityId, activityId),
+    )).orderBy(asc(practiceInteractionModeTurnOverrides.createdAt)),
     db.select().from(behavioralFinalAnswerSnapshots).where(and(
       eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
       eq(behavioralFinalAnswerSnapshots.activityId, activityId),
@@ -4691,14 +4820,37 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
     snapshot: behavioralFinalAnswerSnapshotInputSchema.parse(row.snapshot),
   }));
   const finalizationPayload = finalizations[0]?.payload as Partial<SpecialistFinalization> | undefined;
+  const interactionModeClassificationHistory = classificationRows.slice(0, 100).reverse().map((row) => ({
+    snapshotRevision: row.snapshotRevision,
+    correctionOfRevision: row.correctionOfRevision,
+    correctionReason: row.correctionReason,
+    finalizedAt: row.finalizedAt,
+    classification: interactionModeClassificationSchema.parse(row.classification),
+  }));
   const finalAnswer = projectBehavioralFinalAnswer({
     snapshots: finalAnswerSnapshots,
     legacyModelAnswer: finalizations[0]?.specialty === "behavioral"
       ? finalizationPayload?.modelAnswer
       : null,
   });
+  let transitionIndex = 0;
+  const modeOverrideByTurn = new Map(modeTurnOverrides.map((override) => [
+    override.responseTurnId,
+    { interactionModeId: override.overrideInteractionModeId, revision: override.stateRevision, turnOverride: true },
+  ]));
+  const turnsWithModes = turns.map((turn) => {
+    while (
+      transitionIndex + 1 < modeTransitions.length
+      && modeTransitions[transitionIndex + 1].occurredAt <= turn.occurredAt
+    ) transitionIndex += 1;
+    const transition = modeTransitions[transitionIndex];
+    const effective = modeOverrideByTurn.get(turn.turnId) ?? (transition && transition.occurredAt <= turn.occurredAt
+      ? { interactionModeId: transition.toInteractionModeId, revision: transition.toRevision }
+      : null);
+    return { ...turn, interactionMode: effective };
+  });
   return {
-    turns,
+    turns: turnsWithModes,
     typedExchanges: listTypedExchangePairs(turns),
     typedExchangeDeletions: typedExchangeDeletions.map((deletion) => ({
       operationId: deletion.operationId,
@@ -4713,6 +4865,29 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
     })),
     notes,
     finalization: finalizations[0] ?? null,
+    interactionModeClassification: interactionModeClassificationHistory.at(-1) ?? null,
+    interactionModeClassificationHistory,
+    interactionModeClassificationHistoryTruncated: classificationRows.length > 100,
+    interactionModeTransitions: modeTransitions.map((transition) => ({
+      transitionId: transition.transitionId,
+      fromInteractionModeId: transition.fromInteractionModeId,
+      toInteractionModeId: transition.toInteractionModeId,
+      toRevision: transition.toRevision,
+      triggerTurnId: transition.triggerTurnId,
+      source: transition.source,
+      reason: transition.reason,
+      occurredAt: transition.occurredAt,
+    })),
+    interactionModeTurnOverrides: modeTurnOverrides.map((override) => ({
+      mutationId: override.mutationId,
+      responseTurnId: override.responseTurnId,
+      triggerTurnId: override.triggerTurnId,
+      baseInteractionModeId: override.baseInteractionModeId,
+      overrideInteractionModeId: override.overrideInteractionModeId,
+      stateRevision: override.stateRevision,
+      reason: override.reason,
+      occurredAt: override.occurredAt,
+    })),
     finalAnswerSnapshots,
     finalAnswerSnapshotsTruncated: finalAnswerRows.length > 100,
     finalAnswer,
@@ -4788,10 +4963,13 @@ export async function readProblemSolutionProfile(
 
 export async function readDurablePracticeSummary(ownerId: string, _activityIds: string[], today: string) {
   const db = getDb();
-  const [notes, reviews, finalizations, clips, deliveryAnalyses, preferences, profiles, revisions, links, personalQuestions] = await Promise.all([
+  const [notes, reviews, finalizations, classifications, clips, deliveryAnalyses, preferences, profiles, revisions, links, personalQuestions] = await Promise.all([
     db.select().from(practiceNotes).where(eq(practiceNotes.ownerId, ownerId)),
     db.select().from(reviewSchedules).where(eq(reviewSchedules.ownerId, ownerId)),
     db.select().from(activityFinalizations).where(eq(activityFinalizations.ownerId, ownerId)),
+    db.select().from(practiceInteractionModeClassifications)
+      .where(eq(practiceInteractionModeClassifications.ownerId, ownerId))
+      .orderBy(desc(practiceInteractionModeClassifications.snapshotRevision)),
     db.select().from(activityAudioClips).where(eq(activityAudioClips.ownerId, ownerId)),
     db.select().from(activityDeliveryAnalyses).where(eq(activityDeliveryAnalyses.ownerId, ownerId)),
     db.select().from(problemPreferences).where(eq(problemPreferences.ownerId, ownerId)),
@@ -4812,6 +4990,18 @@ export async function readDurablePracticeSummary(ownerId: string, _activityIds: 
     }, {}),
     finalizations: finalizations.reduce<Record<string, typeof finalizations[number]>>((result, row) => {
       result[row.activityId] = row;
+      return result;
+    }, {}),
+    interactionModeClassifications: classifications.reduce<Record<string, {
+      snapshotRevision: number;
+      classification: ReturnType<typeof interactionModeClassificationSchema.parse>;
+    }>>((result, row) => {
+      if (!result[row.activityId]) {
+        result[row.activityId] = {
+          snapshotRevision: row.snapshotRevision,
+          classification: interactionModeClassificationSchema.parse(row.classification),
+        };
+      }
       return result;
     }, {}),
     audioClips: group(clips),

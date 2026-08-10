@@ -11,6 +11,8 @@ Read these shared contracts only when the corresponding action is needed:
   `../docs/contracts/durable-practice-publishing.md`;
 - background writes: `../docs/contracts/background-specialist-persistence.md`;
 - Today/session controls: `../docs/contracts/specialist-today-controls.md`;
+- interaction-mode selection and completed-attempt classification:
+  `../docs/contracts/practice-interaction-modes.md`;
 - artifact structure or reader changes: `../docs/contracts/reader-rendering.md`.
 
 ## Mandatory Last-Line Persistence Status
@@ -49,6 +51,23 @@ activity resolution, the one reusable persistence child, immutable sidecars,
 parent/child operation routing, queued receipts, retry limits, and Finish
 joining. Operational footers and receipts are visible annotations only; never
 persist them as practice dialogue or publication content.
+
+## Interaction-Mode Finalization
+
+At start/resume and before each explicit switch, read the authoritative mode;
+use the transition tool only for an explicit owner instruction. Every completed
+finalization supplies one stable classification operation, the exact material
+specialist response-turn IDs, and any assistance rung events. Exclude setup,
+administration, persistence, review, Editorial/reference, model-answer, and
+finalization turns. Never submit a computed label/share, infer legacy history,
+or count the same turn twice. Exact retries preserve the payload; corrections
+append a named prior revision with a reason.
+
+For “this next turn only,” do not change the activity mode. Apply the requested
+behavior to one response, save that response first, then call the same setter
+with `scope: turn_override`, its exact specialist response-turn ID, the current
+unchanged revision, and the triggering owner turn when available. Read back the
+override; never fabricate a switch-away/switch-back pair.
 
 ## Typed Exchange Remediation
 

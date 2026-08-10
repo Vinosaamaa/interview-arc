@@ -166,7 +166,13 @@ import {
 import {
   readPracticeInteractionMode,
   setPracticeInteractionModeAtomic,
+  setPracticeInteractionModeTurnOverrideAtomic,
 } from "../db/interaction-mode-store";
+import {
+  interactionModeClassificationCorrectionSchema,
+  interactionModeClassificationInputSchema,
+} from "../db/interaction-mode-classification";
+import { InteractionModeFinalizationError } from "../db/interaction-mode-finalization";
 import {
   controlSessionPracticeTimer,
   finishAndAdvancePracticeActivity,
@@ -1799,6 +1805,7 @@ function specialistToolFailure(error: unknown) {
     || error instanceof BehavioralTargetProfileError
     || error instanceof TypedExchangeDeletionError
     || error instanceof InteractionModeError
+    || error instanceof InteractionModeFinalizationError
   ) {
     const candidateCode = (error as { code?: unknown }).code;
     const code = typeof candidateCode === "string"
@@ -2075,13 +2082,15 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "set_practice_interaction_mode",
     {
-      description: "Persist one explicit activity-scoped Interviewer, Mentor, or Grill transition with a stable mutation ID and expected mode revision. Canonical IDs and documented aliases are registry-normalized. Exact retries return the original receipt; changed retries and stale revisions do not mutate D1.",
+      description: "Persist one explicit activity transition or one exact specialist-turn override with a stable mutation ID and expected mode revision. A turn override leaves current activity mode unchanged and requires the already-saved specialist response turn. Canonical IDs and aliases are registry-normalized; exact retries are idempotent.",
       inputSchema: {
         activityId: z.string().min(1),
         interactionModeId: z.string().trim().min(1).max(100),
         expectedRevision: z.number().int().nonnegative(),
         mutationId: z.string().min(1).max(160),
         triggerTurnId: z.string().min(1).max(300).optional(),
+        scope: z.enum(["activity", "turn_override"]).default("activity"),
+        responseTurnId: z.string().min(1).max(300).optional(),
         source: z.enum(["explicit_user_instruction", "workflow_transition"]),
         reason: z.string().trim().min(1).max(2_000),
         occurredAt: z.number().int().positive(),
@@ -2101,7 +2110,28 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
           ...input,
           interactionModeId: resolved.mode.id,
         });
-        const result = await setPracticeInteractionModeAtomic({
+        if (input.scope === "turn_override" && !input.responseTurnId) {
+          throw new InteractionModeError(
+            "interaction_mode_response_turn_required",
+            "A turn-only override requires the exact saved specialist response turn ID.",
+            { retryable: false },
+          );
+        }
+        if (input.scope === "turn_override" && input.source !== "explicit_user_instruction") {
+          throw new InteractionModeError(
+            "interaction_mode_turn_override_source_invalid",
+            "A turn-only override requires an explicit owner instruction.",
+            { retryable: false },
+          );
+        }
+        if (input.scope === "activity" && input.responseTurnId) {
+          throw new InteractionModeError(
+            "interaction_mode_response_turn_unexpected",
+            "An activity-scoped transition cannot name a response turn.",
+            { retryable: false },
+          );
+        }
+        const common = {
           ownerId,
           activityId: input.activityId,
           interactionModeId: resolved.mode.id,
@@ -2110,11 +2140,19 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
           mutationId: input.mutationId,
           requestFingerprint,
           triggerTurnId: input.triggerTurnId,
-          source: input.source,
           reason: input.reason,
           occurredAt: input.occurredAt,
           now: Date.now(),
-        });
+        };
+        const result = input.scope === "turn_override"
+          ? await setPracticeInteractionModeTurnOverrideAtomic({
+              ...common,
+              responseTurnId: input.responseTurnId as string,
+            })
+          : await setPracticeInteractionModeAtomic({
+              ...common,
+              source: input.source,
+            });
         await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "practice");
         const payload = {
           activity,
@@ -2870,7 +2908,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "save_specialist_finalization",
     {
-      description: "Save a specialist finalization bundle in D1. This does not publish Git artifacts, open a PR, or deploy.",
+      description: "Save a specialist finalization bundle and immutable interaction-mode classification in D1. This does not publish Git artifacts, open a PR, or deploy.",
       inputSchema: z.object({
         activityId: z.string().min(1),
         specialty: z.enum(["leetcode", "system_design", "behavioral"]),
@@ -2889,6 +2927,9 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
           finalAnswerOperationId: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,199}$/).optional(),
           finalAnswerSnapshot: behavioralFinalAnswerSnapshotInputSchema.optional(),
           finalAnswerCorrection: behavioralFinalAnswerCorrectionSchema.optional(),
+          interactionModeClassificationOperationId: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,199}$/).optional(),
+          interactionModeEvidence: interactionModeClassificationInputSchema.optional(),
+          interactionModeClassificationCorrection: interactionModeClassificationCorrectionSchema.optional(),
           solution: z.string().optional(),
           improvedAnswer: z.string().optional(),
           complexity: z.object({ time: z.string().optional(), space: z.string().optional() }).optional(),
@@ -2963,6 +3004,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
             specialty,
             status: finalization.complete ? "ready" : "draft",
             finalAnswer: result.finalAnswer,
+            interactionModeClassification: result.interactionModeClassification,
           },
         };
       } catch (error) {

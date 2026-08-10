@@ -7,6 +7,7 @@ import type { FocusBlock } from "./career-work";
 import type { CodeAttemptReviewDisplay } from "../db/code-attempt-review";
 import type { InteractionModeRegistry } from "../db/interaction-mode-policy";
 import type { InteractionModeSummary } from "../db/interaction-mode-store";
+import type { InteractionModeClassification } from "../db/interaction-mode-classification";
 export type { FocusBlock } from "./career-work";
 export type { InteractionModeSummary } from "../db/interaction-mode-store";
 
@@ -41,6 +42,20 @@ export type FinalizationSummary = {
   specialty: ActivityType;
   status: "draft" | "ready" | "published";
   finalizedAt: number | null;
+  interactionModeClassification?: {
+    snapshotRevision: number;
+    classification: InteractionModeClassification;
+  } | null;
+};
+export type InteractionModeTransitionProjection = {
+  transitionId: string;
+  fromInteractionModeId: string | null;
+  toInteractionModeId: string;
+  toRevision: number;
+  triggerTurnId: string | null;
+  source: "explicit_user_instruction" | "workflow_transition";
+  reason: string;
+  occurredAt: number;
 };
 export type TranscriptTurn = {
   activityId: string;
@@ -52,6 +67,7 @@ export type TranscriptTurn = {
   sequence: number;
   occurredAt: number;
   updatedAt: number;
+  interactionMode?: { interactionModeId: string; revision: number; turnOverride?: boolean } | null;
 };
 export type LeetCodeCodeAttempt = {
   id: string;

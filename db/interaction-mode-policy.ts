@@ -125,6 +125,8 @@ export async function interactionModeMutationFingerprint(input: {
   reason: string;
   occurredAt: number;
   authorization: "explicit_user_instruction";
+  scope?: "activity" | "turn_override";
+  responseTurnId?: string;
 }) {
   const canonical = JSON.stringify({
     activityId: input.activityId,
@@ -135,6 +137,8 @@ export async function interactionModeMutationFingerprint(input: {
     reason: input.reason,
     occurredAt: input.occurredAt,
     authorization: input.authorization,
+    scope: input.scope ?? "activity",
+    responseTurnId: input.responseTurnId ?? null,
   });
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
   return [...new Uint8Array(digest)]

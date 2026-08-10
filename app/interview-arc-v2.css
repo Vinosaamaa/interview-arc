@@ -2250,3 +2250,54 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .bank-domain-desk-shell { transition: none; }
   .heat-day { transition: none; }
 }
+
+/* Immutable interaction-mode evidence in Past. */
+.entry-badges .mode-classification-chip { border-color: #8da8a1; background: #edf5f2; color: #244d47; }
+.entry-badges .mode-assistance-chip { border-color: #9d8acc; background: #f3effd; color: #563b91; }
+.mode-share-ribbon { width: 74px; height: 8px; margin-block: 1px; border: 1px solid #b9c9c4; border-radius: 999px; display: inline-flex; overflow: hidden; background: #edf1ed; }
+.entry-badges .mode-share-ribbon { align-self: center; }
+.entry-badges .mode-share-ribbon > i,
+.mode-share-ribbon > i { min-width: 2px; height: 100%; padding: 0; border: 0; border-radius: 0; display: block; }
+.mode-interviewer { background-color: #315da8 !important; }
+.mode-mentor { background-color: #7358b6 !important; }
+.mode-grill { background-color: #b66f21 !important; }
+.mode-unrecorded { background-color: #8b9994 !important; }
+
+.practice-mode-group > div { padding: 0; }
+.practice-mode-card { padding: clamp(18px, 3vw, 30px); display: grid; gap: 18px; background: linear-gradient(120deg, rgba(35,143,132,.08), rgba(255,255,255,.82) 58%); }
+.practice-mode-card.legacy { background: #f5f7f4; }
+.practice-mode-card > header { display: flex; align-items: start; justify-content: space-between; gap: 20px; }
+.practice-mode-card > header > div { display: grid; gap: 5px; }
+.practice-mode-card > header span { color: #55726b; font: 800 .66rem/1 var(--font-geist-mono); letter-spacing: .11em; }
+.practice-mode-card > header strong { color: #123936; font-family: var(--font-newsreader); font-size: clamp(1.55rem, 3vw, 2.35rem); }
+.practice-mode-card > header small { color: #697b75; font: 700 .68rem/1.4 var(--font-geist-mono); }
+.practice-mode-card > .mode-classification-chip,
+.practice-mode-card > .mode-assistance-chip { width: max-content; padding: 6px 10px; border: 1px solid #8da8a1; border-radius: 999px; font-size: .72rem; font-style: normal; font-weight: 800; }
+.practice-mode-card > .mode-assistance-chip { border-color: #9d8acc; background: #f3effd; color: #563b91; }
+.practice-mode-card > .mode-share-ribbon { width: 100%; height: 12px; }
+.practice-mode-card dl { margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid #cfdbd7; border-radius: 12px; overflow: hidden; }
+.practice-mode-card dl > div { min-width: 0; padding: 13px 15px; border-right: 1px solid #cfdbd7; display: grid; gap: 5px; }
+.practice-mode-card dl > div:last-child { border-right: 0; }
+.practice-mode-card dt { color: #687a74; font-size: .68rem; }
+.practice-mode-card dd { margin: 0; color: #173f3b; font-size: .78rem; font-weight: 780; text-transform: capitalize; }
+.practice-mode-card > p { margin: 0; color: #64736e; line-height: 1.55; }
+
+.mode-transition-divider { margin: 18px 0; display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: 9px; color: #667974; font-size: .68rem; }
+.mode-transition-divider::before,
+.mode-transition-divider::after { content: ""; height: 1px; background: #cbd8d4; }
+.mode-transition-divider::before { grid-column: 1 / -1; grid-row: 1; }
+.mode-transition-divider > * { position: relative; grid-row: 1; background: #fffefa; }
+.mode-transition-divider span { padding-left: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.mode-transition-divider strong { padding-inline: 3px; color: #244b45; text-transform: capitalize; }
+.mode-transition-divider small { min-width: 0; padding-right: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.transcript-turn.specialist[class*="mode-"] > article { border-left: 4px solid #8b9994; }
+.transcript-turn.specialist.mode-interviewer > article { border-left-color: #315da8; }
+.transcript-turn.specialist.mode-mentor > article { border-left-color: #7358b6; }
+.transcript-turn.specialist.mode-grill > article { border-left-color: #b66f21; }
+.mode-turn-override-note { margin-left: 8px; color: #7358b6; font-size: .64rem; font-weight: 780; text-transform: none; }
+
+@media (max-width: 700px) {
+  .practice-mode-card dl { grid-template-columns: 1fr 1fr; }
+  .practice-mode-card dl > div:nth-child(2) { border-right: 0; }
+  .practice-mode-card dl > div:nth-child(-n + 2) { border-bottom: 1px solid #cfdbd7; }
+}
