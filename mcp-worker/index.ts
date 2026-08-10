@@ -18,6 +18,11 @@ import {
   validateBehavioralClaimWrite,
   validateBehavioralEvidenceWrite,
 } from "../db/behavioral-evidence-policy";
+import {
+  BehavioralFinalAnswerError,
+  behavioralFinalAnswerCorrectionSchema,
+  behavioralFinalAnswerSnapshotInputSchema,
+} from "../db/behavioral-final-answer";
 import { loadContentIndex } from "../db/content";
 import { resolveIntegrationOwner } from "../db/integrations";
 import { getResumeImportStatus } from "../db/resume-revisions";
@@ -1776,6 +1781,7 @@ function specialistToolFailure(error: unknown) {
     || error instanceof VoiceResponseGroupConflictError
     || error instanceof SpecialistWriteJobError
     || error instanceof BehavioralEvidenceError
+    || error instanceof BehavioralFinalAnswerError
     || error instanceof TypedExchangeDeletionError
     || error instanceof InteractionModeError
   ) {
@@ -1793,7 +1799,9 @@ function specialistToolFailure(error: unknown) {
       structuredContent: {
         error: error.message,
         code,
-        retryable: (error instanceof SpecialistControlError
+        retryable: typeof (error as { retryable?: unknown }).retryable === "boolean"
+          ? (error as { retryable: boolean }).retryable
+          : (error instanceof SpecialistControlError
           || error instanceof InteractionModeError)
           && typeof error.details.retryable === "boolean"
           ? error.details.retryable
@@ -2755,6 +2763,9 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
             improve: z.array(z.string()),
           }),
           modelAnswer: z.string().min(1),
+          finalAnswerOperationId: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,199}$/).optional(),
+          finalAnswerSnapshot: behavioralFinalAnswerSnapshotInputSchema.optional(),
+          finalAnswerCorrection: behavioralFinalAnswerCorrectionSchema.optional(),
           solution: z.string().optional(),
           improvedAnswer: z.string().optional(),
           complexity: z.object({ time: z.string().optional(), space: z.string().optional() }).optional(),
@@ -2813,11 +2824,27 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async ({ activityId, specialty, questionId, finalization }) => {
-      await saveSpecialistFinalization(ownerId, activityId, specialty, questionId ?? null, finalization, Date.now());
-      return {
-        content: [{ type: "text", text: `${activityId} specialist bundle saved as ${finalization.complete ? "ready" : "draft"}.` }],
-        structuredContent: { activityId, specialty, status: finalization.complete ? "ready" : "draft" },
-      };
+      try {
+        const result = await saveSpecialistFinalization(
+          ownerId,
+          activityId,
+          specialty,
+          questionId ?? null,
+          finalization,
+          Date.now(),
+        );
+        return {
+          content: [{ type: "text", text: `${activityId} specialist bundle saved as ${finalization.complete ? "ready" : "draft"}.` }],
+          structuredContent: {
+            activityId,
+            specialty,
+            status: finalization.complete ? "ready" : "draft",
+            finalAnswer: result.finalAnswer,
+          },
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
     },
   );
 

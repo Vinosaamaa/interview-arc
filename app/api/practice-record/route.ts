@@ -10,6 +10,10 @@ export async function GET(request: Request) {
     const ownerId = await resolveOwnerId(request);
     const record = await readActivityPracticeRecord(ownerId, activityId);
     return Response.json({
+      finalization: record.finalization,
+      finalAnswer: record.finalAnswer,
+      finalAnswerMarkdown: record.finalAnswerMarkdown,
+      finalAnswerHtml: record.finalAnswerHtml,
       turns: record.turns.map((turn) => ({
         activityId: turn.activityId,
         turnId: turn.turnId,

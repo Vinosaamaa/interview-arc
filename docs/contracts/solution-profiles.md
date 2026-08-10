@@ -4,6 +4,9 @@ A Problem Bank item owns one current Solution Profile plus immutable revisions.
 Every completed attempt in Past links to the exact revision it produced. Past
 owns attempt-specific facts: transcript, feedback, timer, outcome, notes,
 session membership, and audio. Never copy a transcript into a Solution Profile.
+Behavioral attempts also retain their exact final-answer snapshot under
+`behavioral-final-answer-snapshots.md`; a later Profile revision never rewrites
+that historical answer.
 
 Follow `reader-rendering.md` for the boundary between durable profile content
 and the shared runtime reader. Visual/template improvements do not create a new

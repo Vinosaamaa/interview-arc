@@ -381,7 +381,8 @@ test("the MCP write contract requires specialist-observed review data and leaves
   assert.match(durable, /db\.batch\(\[\s*exactTranscriptEvidenceGuard,\s*db\.update\(leetcodeCodeAttempts\)/);
   assert.match(durable, /const transcriptState = payload\.complete/);
   assert.match(durable, /exactActivityTranscriptStateCondition\(ownerId, activityId, transcriptState\)/);
-  assert.match(durable, /\.\.\.finalizationGuards,\s*finalizationWrite/);
+  assert.match(durable, /const finalizationStatements = \[\.\.\.finalizationGuards\]/);
+  assert.match(durable, /finalizationStatements\.push\(finalizationWrite\)/);
   assert.match(durable, /review\.status === "pending" \? undefined : input\.reviewResponseTurnId/);
   assert.match(coordinatorScript, /explicit_evidence_backfill/);
   assert.match(coordinatorScript, /--apply/);

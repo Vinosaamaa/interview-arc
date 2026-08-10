@@ -523,6 +523,30 @@ export const activityFinalizations = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.activityId] })],
 );
 
+// Completed behavioral answers are append-only attempt evidence. A correction
+// creates another revision and names the revision it replaces; it never edits
+// or backfills the historical snapshot. The payload contains only sanitized,
+// owner-private revision identities—never raw job descriptions or target
+// analysis.
+export const behavioralFinalAnswerSnapshots = sqliteTable(
+  "behavioral_final_answer_snapshots",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    snapshotRevision: integer("snapshot_revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    snapshot: text("snapshot", { mode: "json" }).notNull(),
+    correctionOfRevision: integer("correction_of_revision"),
+    correctionReason: text("correction_reason"),
+    finalizedAt: integer("finalized_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.activityId, table.snapshotRevision] }),
+    uniqueIndex("behavioral_final_answer_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
 // Review scheduling is tied to the stable bank question when available and to
 // the activity otherwise. A full walkthrough/failed attempt starts at four
 // days; approach review starts at seven; successful recalls advance to 21/60.
@@ -1379,6 +1403,7 @@ export type VoiceResponseGroupRepairEventRow = typeof voiceResponseGroupRepairEv
 export type LeetCodeCodeAttemptRow = typeof leetcodeCodeAttempts.$inferSelect;
 export type LeetCodeCodeAttemptReviewBackfillRow = typeof leetcodeCodeAttemptReviewBackfills.$inferSelect;
 export type ActivityFinalizationRow = typeof activityFinalizations.$inferSelect;
+export type BehavioralFinalAnswerSnapshotRow = typeof behavioralFinalAnswerSnapshots.$inferSelect;
 export type ReviewScheduleRow = typeof reviewSchedules.$inferSelect;
 export type SpecialistTaskRow = typeof specialistTasks.$inferSelect;
 export type ActivityAudioClipRow = typeof activityAudioClips.$inferSelect;

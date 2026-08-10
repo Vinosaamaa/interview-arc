@@ -6,6 +6,9 @@ import {
   activityAudioClips,
   activityFinalizations,
   activitySolutionLinks,
+  behavioralEvidenceItems,
+  behavioralEvidenceQuestionLinks,
+  behavioralFinalAnswerSnapshots,
   contentBank,
   deferredVoiceCaptureDecisions,
   leetcodeCodeAttempts,
@@ -71,6 +74,18 @@ import {
   TypedExchangeDeletionError,
   type TypedExchangeTurn,
 } from "./typed-exchange-deletion";
+import {
+  BehavioralFinalAnswerError,
+  behavioralFinalAnswerFingerprint,
+  behavioralFinalAnswerSnapshotInputSchema,
+  projectBehavioralFinalAnswer,
+  renderBehavioralFinalAnswerHtml,
+  renderBehavioralFinalAnswerMarkdown,
+  validateBehavioralFinalAnswerCorrection,
+  type BehavioralFinalAnswerCorrection,
+  type BehavioralFinalAnswerSnapshotInput,
+  type StoredBehavioralFinalAnswerSnapshot,
+} from "./behavioral-final-answer";
 
 export type Specialty = "leetcode" | "system_design" | "behavioral";
 export type NoteKind = "remember" | "insight" | "mistake" | "pattern" | "question";
@@ -118,6 +133,9 @@ export type SpecialistFinalization = {
     improve: string[];
   };
   modelAnswer: string;
+  finalAnswerOperationId?: string;
+  finalAnswerSnapshot?: BehavioralFinalAnswerSnapshotInput;
+  finalAnswerCorrection?: BehavioralFinalAnswerCorrection;
   solution?: string;
   improvedAnswer?: string;
   complexity?: { time?: string; space?: string };
@@ -3423,6 +3441,176 @@ export async function deletePracticeNote(ownerId: string, noteId: string) {
     .where(and(eq(practiceNotes.ownerId, ownerId), eq(practiceNotes.id, noteId)));
 }
 
+type BehavioralFinalAnswerWritePlan = {
+  operationId: string;
+  requestFingerprint: string;
+  snapshot: BehavioralFinalAnswerSnapshotInput;
+  correction?: BehavioralFinalAnswerCorrection;
+  result: ReturnType<typeof validateBehavioralFinalAnswerCorrection>;
+  replay: boolean;
+};
+
+async function prepareBehavioralFinalAnswerWrite(
+  db: ReturnType<typeof getDb>,
+  ownerId: string,
+  activityId: string,
+  specialty: Specialty,
+  questionId: string | null,
+  payload: SpecialistFinalization,
+): Promise<BehavioralFinalAnswerWritePlan | null> {
+  const hasSnapshotFields = Boolean(
+    payload.finalAnswerOperationId
+    || payload.finalAnswerSnapshot
+    || payload.finalAnswerCorrection,
+  );
+  if (specialty !== "behavioral") {
+    if (hasSnapshotFields) {
+      throw new BehavioralFinalAnswerError(
+        "behavioral_final_answer_specialty_mismatch",
+        "Final-answer snapshots are supported only for behavioral finalizations.",
+      );
+    }
+    return null;
+  }
+  if (!payload.complete) {
+    if (hasSnapshotFields) {
+      throw new BehavioralFinalAnswerError(
+        "behavioral_final_answer_incomplete",
+        "A final-answer snapshot belongs only to a completed behavioral finalization.",
+      );
+    }
+    return null;
+  }
+  if (!questionId || !payload.finalAnswerOperationId || !payload.finalAnswerSnapshot) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_final_answer_required",
+      "Every new completed behavioral finalization requires a stable operation ID and a typed final-answer snapshot.",
+    );
+  }
+  if (!/^[a-z0-9][a-z0-9._-]{0,199}$/.test(payload.finalAnswerOperationId)) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_final_answer_invalid_operation",
+      "finalAnswerOperationId must be a lowercase stable ID.",
+    );
+  }
+  const snapshot = behavioralFinalAnswerSnapshotInputSchema.parse(payload.finalAnswerSnapshot);
+  if (snapshot.scope === "target_tailored") {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_target_profile_unavailable",
+      "Target-tailored final answers require the authoritative Target Profile revision domain tracked by issue #209; no target snapshot was saved.",
+    );
+  }
+  if (snapshot.question.questionId !== questionId) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_final_answer_question_mismatch",
+      "The final-answer snapshot question does not match the activity question.",
+    );
+  }
+  if (snapshot.answer !== payload.modelAnswer) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_final_answer_body_mismatch",
+      "modelAnswer and finalAnswerSnapshot.answer must be exactly identical.",
+    );
+  }
+  const requestFingerprint = await behavioralFinalAnswerFingerprint({
+    activityId,
+    questionId,
+    snapshot,
+    correction: payload.finalAnswerCorrection,
+  });
+  const existingOperation = await db.select().from(behavioralFinalAnswerSnapshots).where(and(
+    eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
+    eq(behavioralFinalAnswerSnapshots.operationId, payload.finalAnswerOperationId),
+  ));
+  if (existingOperation[0]) {
+    if (existingOperation[0].requestFingerprint !== requestFingerprint) {
+      throw new BehavioralFinalAnswerError(
+        "behavioral_final_answer_operation_conflict",
+        "This final-answer operation ID is already bound to a different immutable request.",
+      );
+    }
+    return {
+      operationId: payload.finalAnswerOperationId,
+      requestFingerprint,
+      snapshot,
+      correction: payload.finalAnswerCorrection,
+      result: { status: "unchanged", snapshotRevision: existingOperation[0].snapshotRevision },
+      replay: true,
+    };
+  }
+  const responseTurns = await db.select({
+    body: practiceTranscriptTurns.body,
+    specialty: practiceTranscriptTurns.specialty,
+    speaker: practiceTranscriptTurns.speaker,
+  }).from(practiceTranscriptTurns).where(and(
+    eq(practiceTranscriptTurns.ownerId, ownerId),
+    eq(practiceTranscriptTurns.activityId, activityId),
+    eq(practiceTranscriptTurns.turnId, snapshot.provenance.responseTurnId),
+  ));
+  const responseTurn = responseTurns[0];
+  if (
+    !responseTurn
+    || responseTurn.specialty !== "behavioral"
+    || responseTurn.speaker !== "specialist"
+    || !responseTurn.body.includes(snapshot.answer)
+  ) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_final_answer_response_not_found",
+      "The snapshot answer must appear in the exact owner-scoped behavioral specialist response turn.",
+    );
+  }
+  if (snapshot.acceptedEvidenceIds.length) {
+    const acceptedEvidence = await db.select({
+      evidenceId: behavioralEvidenceItems.evidenceId,
+    }).from(behavioralEvidenceItems).innerJoin(
+      behavioralEvidenceQuestionLinks,
+      and(
+        eq(behavioralEvidenceQuestionLinks.ownerId, behavioralEvidenceItems.ownerId),
+        eq(behavioralEvidenceQuestionLinks.evidenceId, behavioralEvidenceItems.evidenceId),
+      ),
+    ).where(and(
+      eq(behavioralEvidenceItems.ownerId, ownerId),
+      eq(behavioralEvidenceItems.candidateState, "accepted"),
+      eq(behavioralEvidenceQuestionLinks.questionId, questionId),
+      eq(behavioralEvidenceQuestionLinks.relevance, "supporting"),
+      inArray(behavioralEvidenceItems.evidenceId, snapshot.acceptedEvidenceIds),
+    ));
+    const acceptedIds = new Set(acceptedEvidence.map((item) => item.evidenceId));
+    const missing = snapshot.acceptedEvidenceIds.filter((evidenceId) => !acceptedIds.has(evidenceId));
+    if (missing.length) {
+      throw new BehavioralFinalAnswerError(
+        "behavioral_final_answer_evidence_mismatch",
+        "The snapshot references evidence that is not accepted supporting evidence for this exact question.",
+      );
+    }
+  }
+  const priorRows = await db.select().from(behavioralFinalAnswerSnapshots).where(and(
+    eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
+    eq(behavioralFinalAnswerSnapshots.activityId, activityId),
+  )).orderBy(desc(behavioralFinalAnswerSnapshots.snapshotRevision)).limit(1);
+  const prior = priorRows[0]
+    ? {
+        snapshotRevision: priorRows[0].snapshotRevision,
+        snapshot: behavioralFinalAnswerSnapshotInputSchema.parse(priorRows[0].snapshot),
+      }
+    : null;
+  const result = validateBehavioralFinalAnswerCorrection(prior, snapshot, payload.finalAnswerCorrection);
+  if (result.status === "unchanged") {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_final_answer_operation_conflict",
+      "This exact snapshot already exists; retry with its original operation ID instead of creating another identity.",
+    );
+  }
+  return {
+    operationId: payload.finalAnswerOperationId,
+    requestFingerprint,
+    snapshot,
+    correction: payload.finalAnswerCorrection,
+    result,
+    replay: false,
+  };
+}
+
 export async function saveSpecialistFinalization(
   ownerId: string,
   activityId: string,
@@ -3432,6 +3620,15 @@ export async function saveSpecialistFinalization(
   nowMs: number,
 ) {
   const db = getDb();
+  const behavioralFinalAnswer = await prepareBehavioralFinalAnswerWrite(
+    db,
+    ownerId,
+    activityId,
+    specialty,
+    questionId,
+    payload,
+  );
+  if (behavioralFinalAnswer?.replay) return { finalAnswer: behavioralFinalAnswer.result };
   const transcriptState = payload.complete
     ? await readActivityTranscriptState(db, ownerId, activityId)
     : null;
@@ -3463,13 +3660,13 @@ export async function saveSpecialistFinalization(
   let currentProfile: typeof problemSolutionProfiles.$inferSelect | undefined;
   if (payload.complete) {
     if (!questionId) throw new Error("A complete finalization needs the stable questionId.");
+    const rows = await db.select().from(problemSolutionProfiles).where(and(
+      eq(problemSolutionProfiles.ownerId, ownerId),
+      eq(problemSolutionProfiles.specialty, specialty),
+      eq(problemSolutionProfiles.questionId, questionId),
+    ));
+    currentProfile = rows[0];
     if (profileAction === "reuse_current") {
-      const rows = await db.select().from(problemSolutionProfiles).where(and(
-        eq(problemSolutionProfiles.ownerId, ownerId),
-        eq(problemSolutionProfiles.specialty, specialty),
-        eq(problemSolutionProfiles.questionId, questionId),
-      ));
-      currentProfile = rows[0];
       if (currentProfile) validateSolutionProfile(specialty, currentProfile.payload as NonNullable<SpecialistFinalization["solutionProfile"]>);
       if (!currentProfile) {
         const category = specialty === "system_design" ? "systemDesign" : specialty;
@@ -3485,6 +3682,12 @@ export async function saveSpecialistFinalization(
         }
         validateSolutionProfile(specialty, canonicalQuestion.solutionProfile);
         const profile = normalizedSolutionProfile(canonicalQuestion.solutionProfile, payload.references);
+        if (behavioralFinalAnswer && behavioralFinalAnswer.snapshot.solutionProfile.revision !== 1) {
+          throw new BehavioralFinalAnswerError(
+            "behavioral_final_answer_solution_revision_mismatch",
+            "The first seeded Solution Profile is revision 1; the snapshot named a different revision.",
+          );
+        }
         await db.insert(problemSolutionProfiles).values({
           ownerId,
           specialty,
@@ -3515,6 +3718,30 @@ export async function saveSpecialistFinalization(
       validateSolutionProfile(specialty, payload.solutionProfile);
     }
   }
+  if (behavioralFinalAnswer && questionId) {
+    let expectedRevision: number;
+    if (profileAction === "reuse_current") {
+      if (!currentProfile) {
+        throw new BehavioralFinalAnswerError(
+          "behavioral_final_answer_solution_revision_mismatch",
+          "The final-answer snapshot cannot reference a missing Solution Profile revision.",
+        );
+      }
+      expectedRevision = currentProfile.currentRevision;
+    } else {
+      const normalized = normalizedSolutionProfile(payload.solutionProfile!, payload.references);
+      expectedRevision = currentProfile
+        && profileFingerprint(currentProfile.payload as NonNullable<SpecialistFinalization["solutionProfile"]>) === profileFingerprint(normalized)
+        ? currentProfile.currentRevision
+        : (currentProfile?.currentRevision ?? 0) + 1;
+    }
+    if (behavioralFinalAnswer.snapshot.solutionProfile.revision !== expectedRevision) {
+      throw new BehavioralFinalAnswerError(
+        "behavioral_final_answer_solution_revision_mismatch",
+        "The final-answer snapshot must name the exact Solution Profile revision this finalization will link.",
+      );
+    }
+  }
   if (payload.complete && specialty === "leetcode" && questionId) {
     const profileTags = profileAction === "reuse_current"
       ? ((currentProfile?.tags ?? []) as string[])
@@ -3524,90 +3751,13 @@ export async function saveSpecialistFinalization(
     // retried instead of leaving a ready finalization without its bank update.
     await enrichPersonalLeetCodeQuestion(ownerId, questionId, profileTags, payload.questionMetadata, nowMs);
   }
-  const status = payload.complete ? "ready" : "draft";
-  const finalizationWrite = db
-    .insert(activityFinalizations)
-    .values({
-      ownerId,
-      activityId,
-      specialty,
-      status,
-      payload,
-      finalizedAt: payload.complete ? nowMs : null,
-      revision: 1,
-      updatedAt: nowMs,
-    })
-    .onConflictDoUpdate({
-      target: [activityFinalizations.ownerId, activityFinalizations.activityId],
-      set: {
-        specialty,
-        status,
-        payload,
-        finalizedAt: payload.complete ? nowMs : null,
-        revision: sql`${activityFinalizations.revision} + 1`,
-        updatedAt: nowMs,
-      },
-    });
-  const finalizationGuards = [];
-  if (transcriptState) {
-    finalizationGuards.push(d1TransactionalInvariantGuard(
-      db,
-      exactActivityTranscriptStateCondition(ownerId, activityId, transcriptState),
-    ));
-  }
-  if (payload.complete && specialty === "leetcode") {
-    finalizationGuards.push(d1TransactionalInvariantGuard(db, sql`NOT EXISTS (
-          SELECT 1 FROM ${leetcodeCodeAttempts}
-          WHERE ${leetcodeCodeAttempts.ownerId} = ${ownerId}
-            AND ${leetcodeCodeAttempts.activityId} = ${activityId}
-            AND json_extract(${leetcodeCodeAttempts.review}, '$.schemaVersion') = 1
-            AND json_extract(${leetcodeCodeAttempts.review}, '$.status') = 'pending'
-        )`));
-  }
-  if (finalizationGuards.length) {
-    try {
-      await db.batch([
-        ...finalizationGuards,
-        finalizationWrite,
-      ] as unknown as Parameters<typeof db.batch>[0]);
-    } catch (error) {
-      if (isD1TransactionalInvariantFailure(error)) {
-        if (specialty === "leetcode") {
-          const attempts = await db.select({
-            id: leetcodeCodeAttempts.id,
-            review: leetcodeCodeAttempts.review,
-          }).from(leetcodeCodeAttempts).where(and(
-            eq(leetcodeCodeAttempts.ownerId, ownerId),
-            eq(leetcodeCodeAttempts.activityId, activityId),
-          ));
-          const pendingAttemptIds = pendingCodeAttemptReviewIds(attempts);
-          if (pendingAttemptIds.length) {
-            throw new Error(`Complete every pending Code Attempt review before finalization: ${pendingAttemptIds.join(", ")}.`);
-          }
-        }
-        throw new Error("The activity transcript changed during finalization; reread the activity before retrying.");
-      }
-      throw error;
-    }
-  } else {
-    await finalizationWrite;
-  }
-
   let linkedRevision: number | null = null;
   if (payload.complete && questionId && profileAction === "reuse_current" && currentProfile) {
     linkedRevision = currentProfile.currentRevision;
   }
   if (payload.complete && questionId && profileAction === "create_or_revise" && payload.solutionProfile) {
-    const prior = await db
-      .select()
-      .from(problemSolutionProfiles)
-      .where(and(
-        eq(problemSolutionProfiles.ownerId, ownerId),
-        eq(problemSolutionProfiles.specialty, specialty),
-        eq(problemSolutionProfiles.questionId, questionId),
-      ));
     const profile = normalizedSolutionProfile(payload.solutionProfile, payload.references);
-    const priorProfile = prior[0];
+    const priorProfile = currentProfile;
     if (priorProfile && profileFingerprint(priorProfile.payload as NonNullable<SpecialistFinalization["solutionProfile"]>) === profileFingerprint(profile)) {
       linkedRevision = priorProfile.currentRevision;
     } else {
@@ -3645,6 +3795,133 @@ export async function saveSpecialistFinalization(
         set: { specialty, questionId, solutionRevision: linkedRevision, updatedAt: nowMs },
       });
   }
+  if (behavioralFinalAnswer && linkedRevision !== behavioralFinalAnswer.snapshot.solutionProfile.revision) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_final_answer_solution_revision_mismatch",
+      "The final-answer snapshot does not reference the exact Solution Profile revision linked to this attempt.",
+    );
+  }
+
+  const status = payload.complete ? "ready" : "draft";
+  const finalizationWrite = db
+    .insert(activityFinalizations)
+    .values({
+      ownerId,
+      activityId,
+      specialty,
+      status,
+      payload,
+      finalizedAt: payload.complete ? nowMs : null,
+      publishedAt: null,
+      revision: 1,
+      updatedAt: nowMs,
+    })
+    .onConflictDoUpdate({
+      target: [activityFinalizations.ownerId, activityFinalizations.activityId],
+      set: {
+        specialty,
+        status,
+        payload,
+        finalizedAt: payload.complete ? nowMs : null,
+        publishedAt: behavioralFinalAnswer ? null : sql`${activityFinalizations.publishedAt}`,
+        revision: sql`${activityFinalizations.revision} + 1`,
+        updatedAt: nowMs,
+      },
+    });
+  const finalizationGuards = [];
+  if (transcriptState) {
+    finalizationGuards.push(d1TransactionalInvariantGuard(
+      db,
+      exactActivityTranscriptStateCondition(ownerId, activityId, transcriptState),
+    ));
+  }
+  if (payload.complete && specialty === "leetcode") {
+    finalizationGuards.push(d1TransactionalInvariantGuard(db, sql`NOT EXISTS (
+          SELECT 1 FROM ${leetcodeCodeAttempts}
+          WHERE ${leetcodeCodeAttempts.ownerId} = ${ownerId}
+            AND ${leetcodeCodeAttempts.activityId} = ${activityId}
+            AND json_extract(${leetcodeCodeAttempts.review}, '$.schemaVersion') = 1
+            AND json_extract(${leetcodeCodeAttempts.review}, '$.status') = 'pending'
+        )`));
+  }
+  if (behavioralFinalAnswer && questionId) {
+    finalizationGuards.push(d1TransactionalInvariantGuard(db, sql`EXISTS (
+      SELECT 1 FROM ${activitySolutionLinks}
+      WHERE ${activitySolutionLinks.ownerId} = ${ownerId}
+        AND ${activitySolutionLinks.activityId} = ${activityId}
+        AND ${activitySolutionLinks.specialty} = 'behavioral'
+        AND ${activitySolutionLinks.questionId} = ${questionId}
+        AND ${activitySolutionLinks.solutionRevision} = ${behavioralFinalAnswer.snapshot.solutionProfile.revision}
+    )`));
+    if (behavioralFinalAnswer.snapshot.acceptedEvidenceIds.length) {
+      finalizationGuards.push(d1TransactionalInvariantGuard(db, sql`(
+        SELECT count(*) FROM ${behavioralEvidenceItems}
+        INNER JOIN ${behavioralEvidenceQuestionLinks}
+          ON ${behavioralEvidenceQuestionLinks.ownerId} = ${behavioralEvidenceItems.ownerId}
+          AND ${behavioralEvidenceQuestionLinks.evidenceId} = ${behavioralEvidenceItems.evidenceId}
+        WHERE ${behavioralEvidenceItems.ownerId} = ${ownerId}
+          AND ${behavioralEvidenceItems.candidateState} = 'accepted'
+          AND ${behavioralEvidenceQuestionLinks.questionId} = ${questionId}
+          AND ${behavioralEvidenceQuestionLinks.relevance} = 'supporting'
+          AND ${inArray(behavioralEvidenceItems.evidenceId, behavioralFinalAnswer.snapshot.acceptedEvidenceIds)}
+      ) = ${behavioralFinalAnswer.snapshot.acceptedEvidenceIds.length}`));
+    }
+  }
+  const finalizationStatements = [...finalizationGuards];
+  if (behavioralFinalAnswer) {
+    finalizationStatements.push(db.insert(behavioralFinalAnswerSnapshots).values({
+      ownerId,
+      activityId,
+      snapshotRevision: behavioralFinalAnswer.result.snapshotRevision,
+      operationId: behavioralFinalAnswer.operationId,
+      requestFingerprint: behavioralFinalAnswer.requestFingerprint,
+      snapshot: behavioralFinalAnswer.snapshot,
+      correctionOfRevision: behavioralFinalAnswer.correction?.replacesSnapshotRevision ?? null,
+      correctionReason: behavioralFinalAnswer.correction?.reason ?? null,
+      finalizedAt: nowMs,
+    }));
+  }
+  finalizationStatements.push(finalizationWrite);
+  try {
+    await db.batch(finalizationStatements as unknown as Parameters<typeof db.batch>[0]);
+  } catch (error) {
+    if (behavioralFinalAnswer) {
+      const racedRows = await db.select().from(behavioralFinalAnswerSnapshots).where(and(
+        eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
+        eq(behavioralFinalAnswerSnapshots.operationId, behavioralFinalAnswer.operationId),
+      ));
+      if (racedRows[0]?.requestFingerprint === behavioralFinalAnswer.requestFingerprint) {
+        return {
+          finalAnswer: { status: "unchanged" as const, snapshotRevision: racedRows[0].snapshotRevision },
+        };
+      }
+    }
+    if (isD1TransactionalInvariantFailure(error)) {
+      if (behavioralFinalAnswer) {
+        throw new BehavioralFinalAnswerError(
+          "behavioral_final_answer_dependency_changed",
+          "The transcript, accepted evidence, or Solution Profile revision changed during finalization; reread the activity before retrying.",
+          true,
+        );
+      }
+      if (specialty === "leetcode") {
+        const attempts = await db.select({
+          id: leetcodeCodeAttempts.id,
+          review: leetcodeCodeAttempts.review,
+        }).from(leetcodeCodeAttempts).where(and(
+          eq(leetcodeCodeAttempts.ownerId, ownerId),
+          eq(leetcodeCodeAttempts.activityId, activityId),
+        ));
+        const pendingAttemptIds = pendingCodeAttemptReviewIds(attempts);
+        if (pendingAttemptIds.length) {
+          throw new Error(`Complete every pending Code Attempt review before finalization: ${pendingAttemptIds.join(", ")}.`);
+        }
+      }
+      throw new Error("The activity transcript changed during finalization; reread the activity before retrying.");
+    }
+    throw error;
+  }
+  return { finalAnswer: behavioralFinalAnswer?.result ?? null };
 }
 
 export async function markFinalizationPublished(ownerId: string, activityId: string, nowMs: number) {
@@ -4259,7 +4536,7 @@ export async function readSpecialistTasks(ownerId: string) {
 
 export async function readActivityPracticeRecord(ownerId: string, activityId: string) {
   const db = getDb();
-  const [turns, notes, finalizations, reviews, clips, deliveryAnalyses, codeAttempts, typedExchangeDeletions] = await Promise.all([
+  const [turns, notes, finalizations, finalAnswerRows, reviews, clips, deliveryAnalyses, codeAttempts, typedExchangeDeletions] = await Promise.all([
     db
       .select()
       .from(practiceTranscriptTurns)
@@ -4267,6 +4544,10 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
       .orderBy(asc(practiceTranscriptTurns.sequence), asc(practiceTranscriptTurns.occurredAt)),
     db.select().from(practiceNotes).where(and(eq(practiceNotes.ownerId, ownerId), eq(practiceNotes.activityId, activityId))),
     db.select().from(activityFinalizations).where(and(eq(activityFinalizations.ownerId, ownerId), eq(activityFinalizations.activityId, activityId))),
+    db.select().from(behavioralFinalAnswerSnapshots).where(and(
+      eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
+      eq(behavioralFinalAnswerSnapshots.activityId, activityId),
+    )).orderBy(desc(behavioralFinalAnswerSnapshots.snapshotRevision)).limit(101),
     db.select().from(reviewSchedules).where(and(eq(reviewSchedules.ownerId, ownerId), eq(reviewSchedules.activityId, activityId))),
     db.select().from(activityAudioClips).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.activityId, activityId))),
     db.select().from(activityDeliveryAnalyses).where(and(eq(activityDeliveryAnalyses.ownerId, ownerId), eq(activityDeliveryAnalyses.activityId, activityId))),
@@ -4279,6 +4560,20 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
       eq(typedPracticeExchangeDeletions.activityId, activityId),
     )).orderBy(asc(typedPracticeExchangeDeletions.deletedAt)),
   ]);
+  const finalAnswerSnapshots: StoredBehavioralFinalAnswerSnapshot[] = finalAnswerRows.slice(0, 100).reverse().map((row) => ({
+    snapshotRevision: row.snapshotRevision,
+    correctionOfRevision: row.correctionOfRevision,
+    correctionReason: row.correctionReason,
+    finalizedAt: row.finalizedAt,
+    snapshot: behavioralFinalAnswerSnapshotInputSchema.parse(row.snapshot),
+  }));
+  const finalizationPayload = finalizations[0]?.payload as Partial<SpecialistFinalization> | undefined;
+  const finalAnswer = projectBehavioralFinalAnswer({
+    snapshots: finalAnswerSnapshots,
+    legacyModelAnswer: finalizations[0]?.specialty === "behavioral"
+      ? finalizationPayload?.modelAnswer
+      : null,
+  });
   return {
     turns,
     typedExchanges: listTypedExchangePairs(turns),
@@ -4295,6 +4590,11 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
     })),
     notes,
     finalization: finalizations[0] ?? null,
+    finalAnswerSnapshots,
+    finalAnswerSnapshotsTruncated: finalAnswerRows.length > 100,
+    finalAnswer,
+    finalAnswerMarkdown: renderBehavioralFinalAnswerMarkdown(finalAnswer),
+    finalAnswerHtml: renderBehavioralFinalAnswerHtml(finalAnswer),
     reviews,
     audioClips: clips,
     deliveryAnalyses,
