@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { mutationFailureDisposition } from "./mutation-queue";
 import { applyTimerSync, type TimerSyncState } from "./timer-reconciliation";
 import { requireLiveUpdateReconciliation, subscribeToLiveUpdates } from "./live-event-policy";
+import { mergePendingInteractionModes } from "./interaction-mode-view";
 import type { PracticeStateCommand } from "../db/practice-state-commands";
 import {
   EMPTY_DRAFT,
@@ -59,6 +60,8 @@ type ServerLiveState = {
   historyActivities: ExtraActivity[];
   historyFocusBlocks: FocusBlock[];
   historySessions: LocalSession[];
+  interactionModeRegistry: LocalDraft["interactionModeRegistry"];
+  interactionModes: LocalDraft["interactionModes"];
   focusedActivityId: string | null;
   focusedSessionId: string | null;
   focusedAt: number | null;
@@ -133,6 +136,8 @@ function serverToDraft(state: ServerLiveState, offset: number, date = ""): Local
     historyActivities: state.historyActivities ?? state.extraActivities ?? [],
     historyFocusBlocks: state.historyFocusBlocks ?? state.focusBlocks ?? [],
     historySessions: (state.historySessions ?? state.sessions ?? []).map((session) => ({ ...session, date: session.date ?? date })),
+    interactionModeRegistry: state.interactionModeRegistry ?? null,
+    interactionModes: state.interactionModes ?? {},
     focusedActivityId: state.focusedActivityId ?? null,
     focusedSessionId: state.focusedSessionId ?? null,
     focusedAt: state.focusedAt,
@@ -141,7 +146,7 @@ function serverToDraft(state: ServerLiveState, offset: number, date = ""): Local
 
 // Server state wins on conflict; anything created only on this device is kept and
 // reported back so it can be pushed up, so a first sync never drops local work.
-function mergeDrafts(server: LocalDraft, local: LocalDraft) {
+function mergeDrafts(server: LocalDraft, local: LocalDraft, queued: readonly Mutation[] = []) {
   const serverExtraIds = new Set(server.extraActivities.map((activity) => activity.id));
   const serverFocusBlockIds = new Set(server.focusBlocks.map((block) => block.id));
   const serverSessionIds = new Set(server.sessions.map((session) => session.id));
@@ -191,6 +196,8 @@ function mergeDrafts(server: LocalDraft, local: LocalDraft) {
     historyActivities: server.historyActivities,
     historyFocusBlocks: server.historyFocusBlocks,
     historySessions: server.historySessions,
+    interactionModeRegistry: server.interactionModeRegistry ?? local.interactionModeRegistry,
+    interactionModes: mergePendingInteractionModes(server.interactionModes, local.interactionModes, queued),
     focusedActivityId: server.focusedActivityId ?? local.focusedActivityId,
     focusedSessionId: server.focusedSessionId ?? local.focusedSessionId,
     focusedAt: server.focusedAt ?? local.focusedAt,
@@ -226,6 +233,8 @@ function readDraft(date: string): LocalDraft {
       historyActivities: parsed.historyActivities ?? parsed.extraActivities ?? [],
       historyFocusBlocks: parsed.historyFocusBlocks ?? parsed.focusBlocks ?? [],
       historySessions: (parsed.historySessions ?? parsed.sessions ?? []).map((session) => ({ ...session, date: session.date ?? date })),
+      interactionModeRegistry: parsed.interactionModeRegistry ?? null,
+      interactionModes: parsed.interactionModes ?? {},
       focusedActivityId: parsed.focusedActivityId ?? null,
       focusedSessionId: parsed.focusedSessionId ?? null,
       focusedAt: parsed.focusedAt ?? null,
@@ -455,7 +464,7 @@ export function useLiveState(date: string): LiveStateController {
         if (cancelled) return;
         offsetRef.current = state.serverNow - Date.now();
         const serverDraft = serverToDraft(state, offsetRef.current, date);
-        const { merged, localOnly } = mergeDrafts(serverDraft, localDraft);
+        const { merged, localOnly } = mergeDrafts(serverDraft, localDraft, queueRef.current);
         serverApplied = true;
         setDraft(() => merged);
         setHydrated(true);

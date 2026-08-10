@@ -5,7 +5,10 @@ import type {
 } from "./content-types";
 import type { FocusBlock } from "./career-work";
 import type { CodeAttemptReviewDisplay } from "../db/code-attempt-review";
+import type { InteractionModeRegistry } from "../db/interaction-mode-policy";
+import type { InteractionModeSummary } from "../db/interaction-mode-store";
 export type { FocusBlock } from "./career-work";
+export type { InteractionModeSummary } from "../db/interaction-mode-store";
 
 export type ActivityType = JournalActivity["type"];
 export type Outcome = "solved" | "solved_after_reviewing_approach" | "failed";
@@ -212,6 +215,8 @@ export type LocalDraft = {
   historyActivities: ExtraActivity[];
   historyFocusBlocks: FocusBlock[];
   historySessions: LocalSession[];
+  interactionModeRegistry: InteractionModeRegistry | null;
+  interactionModes: Record<string, InteractionModeSummary>;
   focusedActivityId: string | null;
   focusedSessionId: string | null;
   focusedAt: number | null;
@@ -254,6 +259,8 @@ export const EMPTY_DRAFT: LocalDraft = {
   historyActivities: [],
   historyFocusBlocks: [],
   historySessions: [],
+  interactionModeRegistry: null,
+  interactionModes: {},
   focusedActivityId: null,
   focusedSessionId: null,
   focusedAt: null,

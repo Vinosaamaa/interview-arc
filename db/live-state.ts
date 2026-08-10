@@ -40,6 +40,11 @@ import {
   d1TransactionalInvariantGuard,
   isD1TransactionalInvariantFailure,
 } from "./d1-transactional-guard";
+import { interactionModeRegistry } from "./interaction-mode-policy";
+import {
+  readPracticeInteractionModeSummaries,
+  type InteractionModeSummary,
+} from "./interaction-mode-store";
 
 export type TimerKind = "activity" | "session";
 export type TimerAction = "start" | "pause" | "finish";
@@ -97,6 +102,8 @@ export type LiveState = {
   historyActivities: unknown[];
   historyFocusBlocks: unknown[];
   historySessions: unknown[];
+  interactionModeRegistry: typeof interactionModeRegistry;
+  interactionModes: Record<string, InteractionModeSummary>;
   focusedActivityId: string | null;
   focusedSessionId: string | null;
   focusedAt: number | null;
@@ -703,7 +710,10 @@ export async function readLiveState(
     .map(toFocusBlock);
   const historyFocusBlocks = focusBlockRows.map(toFocusBlock);
   const historyActivityIds = new Set(historyActivities.map((activity) => activity.id));
-  const durable = await readDurablePracticeSummary(ownerId, [...historyActivityIds], date);
+  const [durable, interactionModes] = await Promise.all([
+    readDurablePracticeSummary(ownerId, [...historyActivityIds], date),
+    readPracticeInteractionModeSummaries(ownerId, visibleActivities.map((activity) => activity.id)),
+  ]);
 
   const outcomeMap: Record<string, OutcomeValue> = {};
   const outcomeRevisionMap: Record<string, number> = {};
@@ -776,6 +786,8 @@ export async function readLiveState(
     historyActivities,
     historyFocusBlocks,
     historySessions,
+    interactionModeRegistry,
+    interactionModes,
     focusedActivityId: focus?.activityId ?? null,
     focusedSessionId: focus?.sessionId ?? null,
     focusedAt: focus?.focusedAt ?? null,

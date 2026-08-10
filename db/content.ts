@@ -1,4 +1,4 @@
-import { asc } from "drizzle-orm";
+import { asc, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import { contentArtifacts, contentBank, contentJournals, contentStories } from "./schema";
 import type {
@@ -39,4 +39,17 @@ export async function loadContentIndex(): Promise<ContentIndex> {
   }
 
   return { journals, artifacts, stories, questionBanks };
+}
+
+export async function readPublishedJournalActivity(activityId: string) {
+  const rows = await getDb().select({ payload: contentJournals.payload })
+    .from(contentJournals)
+    .where(sql`EXISTS (
+      SELECT 1
+      FROM json_each(${contentJournals.payload}, '$.activities') AS activity
+      WHERE json_extract(activity.value, '$.id') = ${activityId}
+    )`)
+    .limit(1);
+  const journal = rows[0]?.payload as DailyJournal | undefined;
+  return journal?.activities.find((activity) => activity.id === activityId) ?? null;
 }

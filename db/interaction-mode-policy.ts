@@ -54,6 +54,16 @@ export function classifyInteractionModeAtomicFailure(kind: D1TransactionalFailur
 }
 
 export const interactionModeRegistry = registryData as InteractionModeRegistry;
+export const interactionModeReadBatchSize = 200;
+
+export function interactionModeActivityIdBatches(activityIds: readonly string[]) {
+  const ids = [...new Set(activityIds.filter(Boolean))];
+  const batches: string[][] = [];
+  for (let index = 0; index < ids.length; index += interactionModeReadBatchSize) {
+    batches.push(ids.slice(index, index + interactionModeReadBatchSize));
+  }
+  return batches;
+}
 
 function normalizedModeName(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");

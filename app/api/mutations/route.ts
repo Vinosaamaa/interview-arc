@@ -36,6 +36,7 @@ export async function POST(request: Request) {
     if (error instanceof PracticeStateCommandInputError) {
       return Response.json({
         error: error.message,
+        ...(error.code ? { code: error.code } : {}),
         ...(error.retryable !== undefined ? { retryable: error.retryable } : {}),
       }, { status: error.status });
     }
