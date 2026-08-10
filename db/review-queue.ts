@@ -1,7 +1,6 @@
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { getDb } from "./index";
-import { reviewSchedules } from "./schema";
-import { readLiveState } from "./live-state";
+import { extraActivities, reviewSchedules, timers } from "./schema";
 import { applyPlanningSelection, readPlanningMutation } from "./today-planning";
 import {
   planningRequestFingerprint,
@@ -9,7 +8,6 @@ import {
 import {
   reviewDeferralTarget,
   reviewEstimateMinutes,
-  type ReviewQueueReason,
 } from "./review-queue-policy";
 
 export class ReviewQueueConflictError extends Error {
@@ -80,12 +78,16 @@ export async function addReviewQueueItemsToToday(
   input: {
     date: string;
     expectedWorkbenchId: string;
+    expectedWorkbenchRevision: number;
     mutationId: string;
     reviewKeys: string[];
   },
   now = Date.now(),
 ) {
   const uniqueKeys = [...new Set(input.reviewKeys)];
+  if (uniqueKeys.length === 0) {
+    throw new ReviewQueueConflictError("empty_review_selection", "Select at least one review.");
+  }
   if (uniqueKeys.length !== input.reviewKeys.length) {
     throw new ReviewQueueConflictError("duplicate_review_selection", "Select each review only once.");
   }
@@ -93,6 +95,7 @@ export async function addReviewQueueItemsToToday(
     operation: "review_queue_add",
     date: input.date,
     expectedWorkbenchId: input.expectedWorkbenchId,
+    expectedWorkbenchRevision: input.expectedWorkbenchRevision,
     reviewKeys: input.reviewKeys,
   });
   const priorReceipt = await readPlanningMutation(ownerId, input.mutationId);
@@ -108,16 +111,27 @@ export async function addReviewQueueItemsToToday(
     return { duplicate: true, result: priorReceipt.response };
   }
 
-  const state = await readLiveState(ownerId, input.date, { includeAll: true });
-  const schedules = Object.values(state.reviews) as Array<{
-    reviewKey: string;
-    activityId: string;
-    questionId: string | null;
-    specialty: "leetcode" | "system_design" | "behavioral";
-    status: "scheduled" | "due" | "completed" | "dismissed";
-    reason: ReviewQueueReason;
-  }>;
-  const historyActivities = state.historyActivities as Array<{
+  const db = getDb();
+  const schedules = await db.select().from(reviewSchedules).where(and(
+    eq(reviewSchedules.ownerId, ownerId),
+    inArray(reviewSchedules.reviewKey, uniqueKeys),
+  ));
+  const schedulesByKey = new Map(schedules.map((schedule) => [schedule.reviewKey, schedule]));
+  const sourceActivityIds = [...new Set(schedules.map((schedule) => schedule.activityId))];
+  const [activityRows, timerRows] = sourceActivityIds.length > 0
+    ? await Promise.all([
+      db.select().from(extraActivities).where(and(
+        eq(extraActivities.ownerId, ownerId),
+        inArray(extraActivities.id, sourceActivityIds),
+      )),
+      db.select().from(timers).where(and(
+        eq(timers.ownerId, ownerId),
+        eq(timers.kind, "activity"),
+        inArray(timers.subjectId, sourceActivityIds),
+      )),
+    ])
+    : [[], []];
+  type SourceActivity = {
     id: string;
     questionId?: string;
     type: "leetcode" | "system_design" | "behavioral";
@@ -125,17 +139,22 @@ export async function addReviewQueueItemsToToday(
     url?: string;
     prompt?: string;
     allocatedSeconds: number;
-  }>;
+  };
+  const activitiesById = new Map(activityRows.map((row) => [
+    row.id,
+    row.payload as SourceActivity,
+  ]));
+  const timersByActivityId = new Map(timerRows.map((timer) => [timer.subjectId, timer]));
   const selections = uniqueKeys.map((reviewKey) => {
-    const schedule = schedules.find((candidate) => candidate.reviewKey === reviewKey);
+    const schedule = schedulesByKey.get(reviewKey);
     if (!schedule || schedule.status === "completed" || schedule.status === "dismissed") {
       throw new ReviewQueueConflictError(
         "review_not_available",
         "One selected review is no longer available. Refresh the queue before adding it.",
       );
     }
-    const activity = historyActivities.find((candidate) => candidate.id === schedule.activityId);
-    const timer = state.timers[schedule.activityId];
+    const activity = activitiesById.get(schedule.activityId);
+    const timer = timersByActivityId.get(schedule.activityId);
     if (!activity || !timer?.completed || activity.type !== schedule.specialty || typeof activity.title !== "string") {
       throw new ReviewQueueConflictError(
         "review_source_not_completed",
@@ -157,6 +176,7 @@ export async function addReviewQueueItemsToToday(
   return applyPlanningSelection(ownerId, {
     date: input.date,
     workbenchId: input.expectedWorkbenchId,
+    expectedWorkbenchRevision: input.expectedWorkbenchRevision,
     mutationId: input.mutationId,
     destination: "standalone",
     sessionNumber: 1,

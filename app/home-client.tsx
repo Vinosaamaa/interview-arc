@@ -1433,7 +1433,17 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   // user enters without forcing React to discard a mismatched server tree.
   const [view, setView] = useState<View>("today");
   const [viewMemoryReady, setViewMemoryReady] = useState(false);
-  const { draft, setDraft, now, setNow, hydrated, synced, enqueue } = useLiveState(journal.date);
+  const {
+    draft,
+    setDraft,
+    now,
+    setNow,
+    hydrated,
+    synced,
+    mutationError,
+    clearMutationError,
+    enqueue,
+  } = useLiveState(journal.date);
   const yesterdayDate = shiftDate(journal.date, -1);
   const yesterdayDraft = useReadOnlyLiveState(yesterdayDate);
   const [composer, setComposer] = useState<ComposerState>(EMPTY_COMPOSER);
@@ -3861,11 +3871,17 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       return;
     }
     const reviewKeys = [...new Set(items.map((item) => item.reviewKey))];
-    setPendingReviewKeys((current) => [...new Set([...current, ...reviewKeys])]);
+    setPendingReviewKeys((current) => [
+      ...new Set([
+        ...(mutationError?.type === "review-add-today" ? [] : current),
+        ...reviewKeys,
+      ]),
+    ]);
     enqueue({
       type: "review-add-today",
       mutationId: `review-queue-${crypto.randomUUID()}`,
       expectedWorkbenchId: workbenchId,
+      expectedWorkbenchRevision: draft.workbench.revision,
       reviewKeys,
     });
     showUiToast(`${reviewKeys.length} review${reviewKeys.length === 1 ? "" : "s"} queued for Today.`);
@@ -3885,7 +3901,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       };
     });
     enqueue({ type: "review-defer", reviewKey: item.reviewKey, expectedDueDate: item.dueDate });
-    showUiToast(`${item.title} moved to next week.`);
+    showUiToast(`${item.title} is queued to move to next week.`);
   }
 
   function openReviewAttempt(item: ReviewQueueItem) {
@@ -3897,6 +3913,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     openPastEntry(entry, reviewQueueItems.flatMap((candidate) => (
       libraryEntries.find((entryCandidate) => entryCandidate.id === candidate.activityId) ?? []
     )));
+  }
+
+  function dismissReviewQueueError() {
+    if (mutationError?.type === "review-add-today") setPendingReviewKeys([]);
+    clearMutationError();
   }
 
   useEffect(() => {
@@ -4730,14 +4751,20 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       items={reviewQueueItems}
       loading={!hydrated}
       stale={hydrated && !synced}
+      errorMessage={mutationError?.type === "review-add-today" || mutationError?.type === "review-defer"
+        ? mutationError.message
+        : null}
       reviewStreak={reviewQueueStreak}
       blockedQuestionIds={reviewBlockedQuestionIds}
       blockedTitles={reviewBlockedTitles}
-      pendingReviewKeys={new Set(pendingReviewKeys)}
+      pendingReviewKeys={new Set(
+        mutationError?.type === "review-add-today" ? [] : pendingReviewKeys,
+      )}
       canAddToToday={Boolean(draft.workbench)}
       onAddToToday={addReviewsToToday}
       onDefer={deferReview}
       onOpenAttempt={openReviewAttempt}
+      onDismissError={dismissReviewQueueError}
     />;
   }
 

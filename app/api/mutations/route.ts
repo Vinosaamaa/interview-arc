@@ -33,7 +33,6 @@ import {
   deferReviewToNextWeek,
   ReviewQueueConflictError,
 } from "../../../db/review-queue";
-import { TodayPlanningConflictError } from "../../../db/today-planning";
 
 type Mutation =
   | {
@@ -61,7 +60,7 @@ type Mutation =
   | { type: "session-upsert"; session: { id: string; date: string } & Record<string, unknown> }
   | { type: "session-remove"; id: string; activityIds?: string[] }
   | { type: "review-defer"; reviewKey: string; expectedDueDate: string }
-  | { type: "review-add-today"; mutationId: string; expectedWorkbenchId: string; reviewKeys: string[] }
+  | { type: "review-add-today"; mutationId: string; expectedWorkbenchId: string; expectedWorkbenchRevision: number; reviewKeys: string[] }
   | { type: "workbench-start-fresh"; workbenchId: string };
 
 const TIMER_ACTIONS: TimerAction[] = ["start", "pause", "finish"];
@@ -272,6 +271,8 @@ export async function POST(request: Request) {
       case "review-add-today": {
         if (
           !mutation.expectedWorkbenchId
+          || !Number.isInteger(mutation.expectedWorkbenchRevision)
+          || mutation.expectedWorkbenchRevision < 0
           || !mutation.mutationId
           || mutation.mutationId.length > 120
           || !Array.isArray(mutation.reviewKeys)
@@ -284,6 +285,7 @@ export async function POST(request: Request) {
         await addReviewQueueItemsToToday(ownerId, {
           date,
           expectedWorkbenchId: mutation.expectedWorkbenchId,
+          expectedWorkbenchRevision: mutation.expectedWorkbenchRevision,
           mutationId: mutation.mutationId,
           reviewKeys: mutation.reviewKeys,
         }, now);
@@ -316,13 +318,6 @@ export async function POST(request: Request) {
     }
     if (error instanceof TimerStateConflictError) {
       return Response.json({ error: error.message, retryable: false }, { status: 409 });
-    }
-    if (error instanceof TodayPlanningConflictError) {
-      return Response.json({
-        error: error.message,
-        code: error.code,
-        retryable: false,
-      }, { status: 409 });
     }
     return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 });
   }

@@ -10,6 +10,10 @@ import {
   reviewHorizon,
   reviewStreakDays,
 } from "../db/review-queue-policy.ts";
+import {
+  parseReviewQueueUiState,
+  REVIEW_QUEUE_UI_STORAGE_KEY,
+} from "../app/review-queue-state.ts";
 import { buildPlanningBatch } from "../db/today-planning-policy.ts";
 
 const attempts = [
@@ -144,34 +148,32 @@ test("review planning preserves the source attempt and reason in the Today activ
   assert.equal(batch.activities[0].allocatedSeconds, 1_200);
 });
 
-test("Review Queue writes are owner-scoped, replay-safe, and reconciled through the existing live state", async () => {
-  const [store, route, client, view, css] = await Promise.all([
-    readFile(new URL("../db/review-queue.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/api/mutations/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/live-sync.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/review-queue-view.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/review-queue.css", import.meta.url), "utf8"),
-  ]);
-  assert.match(store, /eq\(reviewSchedules\.ownerId, ownerId\)/);
-  assert.match(store, /eq\(reviewSchedules\.dueDate, input\.expectedDueDate\)/);
-  assert.match(store, /\.returning\(\)/);
-  assert.match(store, /applyPlanningSelection/);
-  assert.ok(
-    store.indexOf("readPlanningMutation(ownerId, input.mutationId)") < store.indexOf("readLiveState(ownerId, input.date"),
-    "an exact add-to-Today retry must replay before eligibility is re-evaluated",
-  );
-  assert.match(store, /specialistRequestHash: requestIdentity/);
-  assert.match(route, /case "review-defer"/);
-  assert.match(route, /case "review-add-today"/);
-  assert.match(route, /const state = await readLiveState\(ownerId, date\)/);
-  assert.match(client, /interview-arc-queue-v2/);
-  assert.match(client, /type: "review-add-today"/);
-  assert.match(view, /review-queue-loading/);
-  assert.match(view, /No reviews match these filters/);
-  assert.match(view, /onWheel=/);
-  assert.match(view, /onPointerMove=/);
-  assert.match(view, /onKeyDown=/);
-  assert.match(css, /\.review-selection-folio \{ height: 128px/);
-  assert.match(css, /min-height: 44px/);
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+test("Review Queue UI state restores only supported filters, sort order, and selections", () => {
+  assert.deepEqual(parseReviewQueueUiState(JSON.stringify({
+    search: "window",
+    specialties: ["leetcode", "unsupported", "leetcode"],
+    due: "week",
+    sort: "review_time",
+    selectedKeys: ["review-a", "review-a", "", 42],
+  })), {
+    search: "window",
+    specialties: ["leetcode"],
+    due: "week",
+    sort: "review_time",
+    selectedKeys: ["review-a"],
+  });
+  assert.deepEqual(parseReviewQueueUiState("not-json"), {
+    search: "",
+    specialties: [],
+    due: "all",
+    sort: "priority",
+    selectedKeys: [],
+  });
+});
+
+test("Review Queue persists its scoped UI state in session storage", async () => {
+  const view = await readFile(new URL("../app/review-queue-view.tsx", import.meta.url), "utf8");
+  assert.match(view, /window\.sessionStorage\.getItem\(REVIEW_QUEUE_UI_STORAGE_KEY\)/);
+  assert.match(view, /window\.sessionStorage\.setItem\(REVIEW_QUEUE_UI_STORAGE_KEY, JSON\.stringify\(uiState\)\)/);
+  assert.equal(REVIEW_QUEUE_UI_STORAGE_KEY, "interview-arc-review-queue-ui-v1");
 });

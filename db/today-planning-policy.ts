@@ -1,4 +1,5 @@
 import type { QuestionBankItem } from "../app/content-types";
+import type { ReviewReason } from "./review-cadence";
 
 export type PlanningSpecialty = "leetcode" | "system_design" | "behavioral";
 export type PlanningSort = "frequency" | "recent" | "acceptance";
@@ -244,7 +245,7 @@ export type PlanningSelection =
       minutes: number;
       topics?: string[];
       reviewOfActivityId?: string;
-      reviewReason?: "failed" | "full_walkthrough" | "approach_review" | "manual" | "successful_recall";
+      reviewReason?: ReviewReason;
     }
   | {
       kind: "focus";

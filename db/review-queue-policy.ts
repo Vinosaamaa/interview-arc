@@ -1,6 +1,8 @@
+import type { ReviewReason } from "./review-cadence";
+
 export type ReviewQueueSpecialty = "leetcode" | "system_design" | "behavioral";
 export type ReviewQueueOutcome = "solved" | "solved_after_reviewing_approach" | "failed";
-export type ReviewQueueReason = "failed" | "full_walkthrough" | "approach_review" | "manual" | "successful_recall";
+export type ReviewQueueReason = ReviewReason;
 export type ReviewQueueHorizon = "now" | "soon" | "later";
 
 export type ReviewQueueAttempt = {
@@ -66,6 +68,19 @@ function dateDaysBetween(left: string, right: string) {
   );
 }
 
+const REVIEW_HORIZON_RANK: Record<ReviewQueueHorizon, number> = {
+  now: 0,
+  soon: 1,
+  later: 2,
+};
+
+function compareReviewPriority(left: ReviewQueueItem, right: ReviewQueueItem) {
+  return REVIEW_HORIZON_RANK[left.horizon] - REVIEW_HORIZON_RANK[right.horizon]
+    || left.dueDate.localeCompare(right.dueDate)
+    || right.lastAttemptDate.localeCompare(left.lastAttemptDate)
+    || left.title.localeCompare(right.title);
+}
+
 export function reviewDeferralTarget(today: string) {
   const value = new Date(`${today}T12:00:00Z`);
   value.setUTCDate(value.getUTCDate() + 7);
@@ -129,13 +144,7 @@ export function buildReviewQueue(
       horizon: reviewHorizon(today, schedule.dueDate),
       ...(attempt.url ? { url: attempt.url } : {}),
     }];
-  }).sort((left, right) => {
-    const rank = { now: 0, soon: 1, later: 2 };
-    return rank[left.horizon] - rank[right.horizon]
-      || left.dueDate.localeCompare(right.dueDate)
-      || right.lastAttemptDate.localeCompare(left.lastAttemptDate)
-      || left.title.localeCompare(right.title);
-  });
+  }).sort(compareReviewPriority);
 }
 
 export function filterReviewQueue(items: ReviewQueueItem[], filters: ReviewQueueFilters) {
@@ -143,16 +152,15 @@ export function filterReviewQueue(items: ReviewQueueItem[], filters: ReviewQueue
   const specialties = filters.specialties ?? new Set<ReviewQueueSpecialty>();
   const due = filters.due ?? "all";
   const sort = filters.sort ?? "priority";
-  const rank = { now: 0, soon: 1, later: 2 };
   return items
-    .filter((item) => !query || normalized([
-      item.title,
-      item.reasonLabel,
-      item.specialty,
-      item.previousResult ?? "",
-    ].join(" ")).includes(query))
-    .filter((item) => specialties.size === 0 || specialties.has(item.specialty))
     .filter((item) => {
+      if (query && !normalized([
+        item.title,
+        item.reasonLabel,
+        item.specialty,
+        item.previousResult ?? "",
+      ].join(" ")).includes(query)) return false;
+      if (specialties.size > 0 && !specialties.has(item.specialty)) return false;
       if (due === "now") return item.daysUntilDue <= 0;
       if (due === "week") return item.daysUntilDue <= 7;
       if (due === "month") return item.daysUntilDue <= 30;
@@ -162,9 +170,7 @@ export function filterReviewQueue(items: ReviewQueueItem[], filters: ReviewQueue
       if (sort === "due") return left.dueDate.localeCompare(right.dueDate) || left.title.localeCompare(right.title);
       if (sort === "review_time") return left.estimatedMinutes - right.estimatedMinutes || left.dueDate.localeCompare(right.dueDate);
       if (sort === "last_attempt") return right.lastAttemptDate.localeCompare(left.lastAttemptDate) || left.title.localeCompare(right.title);
-      return rank[left.horizon] - rank[right.horizon]
-        || left.dueDate.localeCompare(right.dueDate)
-        || left.title.localeCompare(right.title);
+      return compareReviewPriority(left, right);
     });
 }
 
