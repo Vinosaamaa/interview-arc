@@ -78,7 +78,9 @@ preferred answer with `get_problem_solution_profile` and the bounded evidence
 slice with `query_behavioral_evidence`. Load only accepted/contrary evidence and
 claims/gaps; story candidates remain empty until their later domain slice.
 Ordinary preflight never reads generated HTML, loads an entire dossier, or
-reruns project archaeology. Create a provisional profile only when none exists;
+reruns project archaeology. Use `get_behavioral_foundation_status` only for a
+Foundation overview; its aggregate counts and bounded gaps do not replace the
+question-scoped preflight. Create a provisional profile only when none exists;
 the final personal answer still requires owner-confirmed facts.
 
 Treat new user facts as owner-attested evidence candidates and confirm their

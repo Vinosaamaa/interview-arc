@@ -226,6 +226,36 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
     }]);
     assert.deepEqual(preflight.storyCandidates, []);
 
+    const foundation = await call(ownerClient, "get_behavioral_foundation_status", {});
+    assert.deepEqual(foundation.evidence, {
+      total: 2,
+      accepted: 2,
+      pending: 0,
+      rejected: 0,
+      superseded: 0,
+      projects: 1,
+      sourceRevisions: 0,
+    });
+    assert.deepEqual(foundation.claims, {
+      total: 1,
+      unverified: 0,
+      partial: 0,
+      verified: 1,
+      contradicted: 0,
+      questions: 1,
+    });
+    assert.deepEqual(foundation.gaps, [{
+      claimId: claimInput.claim.claimId,
+      questionId: claimInput.claim.questionId,
+      text: "Production outcome remains unverified.",
+    }]);
+    assert.deepEqual(foundation.capabilities, {
+      evidenceRead: "available",
+      sourceRegistry: "not_available",
+      storyBank: "not_available",
+      resumeLibrary: "not_available",
+    });
+
     const revisedClaimInput = {
       ...claimInput,
       operationId: "behavioral-claim-operation-2",
@@ -326,6 +356,10 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
     });
     assert.deepEqual(isolated.supportingEvidence, []);
     assert.deepEqual(isolated.claims, []);
+    const isolatedFoundation = await call(otherClient, "get_behavioral_foundation_status", {});
+    assert.equal(isolatedFoundation.evidence.total, 0);
+    assert.equal(isolatedFoundation.claims.total, 0);
+    assert.deepEqual(isolatedFoundation.gaps, []);
 
     const exactReplay = await call(ownerClient, "upsert_behavioral_evidence_item", evidenceInput);
     assert.equal(exactReplay.status, "saved");

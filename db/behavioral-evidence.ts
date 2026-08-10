@@ -1,4 +1,4 @@
-import { and, asc, eq, getTableColumns, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 
 import { getDb } from "./index";
 import {
@@ -561,6 +561,125 @@ export async function queryBehavioralEvidence(ownerId: string, questionId: strin
       claims: claimRows.length > BEHAVIORAL_CLAIM_LIMIT,
       gaps: claimRows.length > BEHAVIORAL_CLAIM_LIMIT || allGaps.length > BEHAVIORAL_GAP_LIMIT,
       storyCandidates: false,
+    },
+  };
+}
+
+const BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT = 50;
+
+export async function getBehavioralFoundationStatus(ownerId: string) {
+  const db = getDb();
+  const [evidenceSummaryRows, evidenceStateRows, claimSummaryRows, claimStateRows, claimDetailRows] = await Promise.all([
+    db.select({
+      total: sql<number>`count(*)`,
+      projects: sql<number>`count(distinct ${behavioralEvidenceItems.projectKey})`,
+      sourceRevisions: sql<number>`count(distinct ${behavioralEvidenceItems.sourceRevision})`,
+      latestUpdatedAt: sql<number | null>`max(${behavioralEvidenceItems.updatedAt})`,
+    }).from(behavioralEvidenceItems).where(eq(behavioralEvidenceItems.ownerId, ownerId)),
+    db.select({
+      state: behavioralEvidenceItems.candidateState,
+      count: sql<number>`count(*)`,
+    }).from(behavioralEvidenceItems)
+      .where(eq(behavioralEvidenceItems.ownerId, ownerId))
+      .groupBy(behavioralEvidenceItems.candidateState),
+    db.select({
+      total: sql<number>`count(*)`,
+      questions: sql<number>`count(distinct ${behavioralClaims.questionId})`,
+      latestUpdatedAt: sql<number | null>`max(${behavioralClaims.updatedAt})`,
+    }).from(behavioralClaims).where(eq(behavioralClaims.ownerId, ownerId)),
+    db.select({
+      status: behavioralClaims.status,
+      count: sql<number>`count(*)`,
+    }).from(behavioralClaims)
+      .where(eq(behavioralClaims.ownerId, ownerId))
+      .groupBy(behavioralClaims.status),
+    db.select({
+      claimId: behavioralClaims.claimId,
+      questionId: behavioralClaims.questionId,
+      status: behavioralClaims.status,
+      gaps: behavioralClaims.gaps,
+      updatedAt: behavioralClaims.updatedAt,
+    }).from(behavioralClaims)
+      .where(eq(behavioralClaims.ownerId, ownerId))
+      .orderBy(desc(behavioralClaims.updatedAt), asc(behavioralClaims.claimId))
+      .limit(BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT + 1),
+  ]);
+
+  const evidenceSummary = evidenceSummaryRows[0] ?? {
+    total: 0,
+    projects: 0,
+    sourceRevisions: 0,
+    latestUpdatedAt: null,
+  };
+  const claimSummary = claimSummaryRows[0] ?? { total: 0, questions: 0, latestUpdatedAt: null };
+  const evidenceCounts = new Map(evidenceStateRows.map((row) => [row.state, Number(row.count)]));
+  const claimCounts = new Map(claimStateRows.map((row) => [row.status, Number(row.count)]));
+  const visibleClaimRows = claimDetailRows.slice(0, BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT);
+  const allGaps = visibleClaimRows.flatMap((claim) => (claim.gaps as string[]).map((text) => ({
+    claimId: claim.claimId,
+    questionId: claim.questionId,
+    text,
+  })));
+  const questionCoverage = new Map<string, {
+    questionId: string;
+    claims: number;
+    verified: number;
+    contradicted: number;
+    gaps: number;
+  }>();
+  for (const claim of visibleClaimRows) {
+    const current = questionCoverage.get(claim.questionId) ?? {
+      questionId: claim.questionId,
+      claims: 0,
+      verified: 0,
+      contradicted: 0,
+      gaps: 0,
+    };
+    current.claims += 1;
+    current.verified += claim.status === "verified" ? 1 : 0;
+    current.contradicted += claim.status === "contradicted" ? 1 : 0;
+    current.gaps += (claim.gaps as string[]).length;
+    questionCoverage.set(claim.questionId, current);
+  }
+
+  return {
+    schemaVersion: 1 as const,
+    evidence: {
+      total: Number(evidenceSummary.total),
+      accepted: evidenceCounts.get("accepted") ?? 0,
+      pending: evidenceCounts.get("pending") ?? 0,
+      rejected: evidenceCounts.get("rejected") ?? 0,
+      superseded: evidenceCounts.get("superseded") ?? 0,
+      projects: Number(evidenceSummary.projects),
+      sourceRevisions: Number(evidenceSummary.sourceRevisions),
+    },
+    claims: {
+      total: Number(claimSummary.total),
+      unverified: claimCounts.get("unverified") ?? 0,
+      partial: claimCounts.get("partial") ?? 0,
+      verified: claimCounts.get("verified") ?? 0,
+      contradicted: claimCounts.get("contradicted") ?? 0,
+      questions: Number(claimSummary.questions),
+    },
+    questionCoverage: [...questionCoverage.values()].sort((left, right) => left.questionId.localeCompare(right.questionId)),
+    gaps: allGaps.slice(0, BEHAVIORAL_GAP_LIMIT),
+    capabilities: {
+      evidenceRead: "available" as const,
+      sourceRegistry: "not_available" as const,
+      storyBank: "not_available" as const,
+      resumeLibrary: "not_available" as const,
+    },
+    lastUpdatedAt: Math.max(
+      Number(evidenceSummary.latestUpdatedAt ?? 0),
+      Number(claimSummary.latestUpdatedAt ?? 0),
+    ) || null,
+    limits: {
+      claimDetails: BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT,
+      gaps: BEHAVIORAL_GAP_LIMIT,
+    },
+    truncated: {
+      claimDetails: claimDetailRows.length > BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT,
+      gaps: claimDetailRows.length > BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT || allGaps.length > BEHAVIORAL_GAP_LIMIT,
     },
   };
 }

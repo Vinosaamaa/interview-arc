@@ -62,10 +62,25 @@ superseded evidence is excluded. Limits and truncation are explicit. Story
 candidates are an empty list until their later #201 domain slice; never infer
 them from transcripts or generated coaching.
 
+## Behavioral Foundation aggregate
+
+`get_behavioral_foundation_status` and the authenticated Bank hub consume one
+bounded owner-scoped read model over the same evidence and claim tables. It
+reports evidence/claim status counts, sanitized project and source-revision
+counts, question coverage, open gaps, last update time, and explicit truncation.
+It never returns local paths, source locators, raw documents or code, private
+remotes, credentials, or another owner's rows.
+
+Capability fields are truthful product boundaries, not empty-data guesses.
+Until their later slices ship, source registration, Resume Library imports, and
+the durable Story Bank remain `not_available`; the UI must not infer source
+availability from old evidence or construct stories from transcripts. Résumé
+curriculum completion and claim verification remain separate measures.
+
 ## Recovery and non-goals
 
 Failed validation receipts are terminal. Retry only failures explicitly marked
 retryable and always reuse the original operation ID/payload. A missing local
-source, candidate review, source refresh, story persistence, Foundation UI,
-Behavioral Attempt reader, profile revision, publication, merge, and deployment
-remain outside this slice.
+source, candidate review, source refresh, story persistence, Behavioral Attempt
+reader, profile revision, publication, merge, and deployment remain outside
+this slice.
