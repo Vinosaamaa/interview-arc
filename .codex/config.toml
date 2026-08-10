@@ -21,6 +21,8 @@ enabled_tools = [
   "upsert_behavioral_evidence_item",
   "set_behavioral_claim_status",
   "query_behavioral_evidence",
+  "upsert_behavioral_story",
+  "query_behavioral_stories",
   "get_behavioral_foundation_status",
   "upsert_behavioral_target_profile",
   "query_behavioral_target_profiles",

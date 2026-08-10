@@ -33,15 +33,34 @@ export const behavioralFoundationStatusSchema = z.object({
     questionId: z.string().min(1),
     text: z.string().min(1),
   })),
+  stories: z.object({
+    total: count,
+    active: count,
+    archived: count,
+    projects: count,
+    recent: z.array(z.object({
+      storyId: z.string().min(1),
+      revision: z.number().int().positive(),
+      title: z.string().min(1),
+      projectKey: z.string().min(1),
+      competencies: z.array(z.string().min(1)),
+      questionCount: count,
+      gapCount: count,
+      updatedAt: z.number().int().positive(),
+    })),
+    lastUpdatedAt: z.number().int().positive().nullable(),
+    limit: count,
+    truncated: z.boolean(),
+  }),
   capabilities: z.object({
     evidenceRead: z.literal("available"),
     sourceRegistry: z.literal("not_available"),
-    storyBank: z.literal("not_available"),
+    storyBank: z.literal("available"),
     resumeLibrary: z.literal("available"),
   }),
   lastUpdatedAt: z.number().int().positive().nullable(),
-  limits: z.object({ claimDetails: count, gaps: count }),
-  truncated: z.object({ claimDetails: z.boolean(), gaps: z.boolean() }),
+  limits: z.object({ claimDetails: count, gaps: count, stories: count }),
+  truncated: z.object({ claimDetails: z.boolean(), gaps: z.boolean(), stories: z.boolean() }),
 });
 
 export type BehavioralFoundationStatus = z.infer<typeof behavioralFoundationStatusSchema>;

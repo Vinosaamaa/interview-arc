@@ -9,15 +9,34 @@ const validStatus = {
   claims: { total: 1, unverified: 0, partial: 0, verified: 1, contradicted: 0, questions: 1 },
   questionCoverage: [{ questionId: "question-1", claims: 1, verified: 1, contradicted: 0, gaps: 1 }],
   gaps: [{ claimId: "claim-1", questionId: "question-1", text: "Confirm the rollout." }],
+  stories: {
+    total: 1,
+    active: 1,
+    archived: 0,
+    projects: 1,
+    recent: [{
+      storyId: "story-1",
+      revision: 1,
+      title: "Recovered a stalled launch",
+      projectKey: "example-project",
+      competencies: ["ownership"],
+      questionCount: 1,
+      gapCount: 0,
+      updatedAt: 1,
+    }],
+    lastUpdatedAt: 1,
+    limit: 6,
+    truncated: false,
+  },
   capabilities: {
     evidenceRead: "available",
     sourceRegistry: "not_available",
-    storyBank: "not_available",
+    storyBank: "available",
     resumeLibrary: "available",
   },
   lastUpdatedAt: 1,
-  limits: { claimDetails: 50, gaps: 20 },
-  truncated: { claimDetails: false, gaps: false },
+  limits: { claimDetails: 50, gaps: 20, stories: 6 },
+  truncated: { claimDetails: false, gaps: false, stories: false },
 };
 
 test("the Behavioral Foundation API contract accepts the complete bounded read model", () => {
@@ -31,6 +50,6 @@ test("the Behavioral Foundation API contract rejects incomplete or invalid state
   }));
   assert.throws(() => behavioralFoundationStatusSchema.parse({
     ...validStatus,
-    capabilities: { ...validStatus.capabilities, storyBank: "available" },
+    capabilities: { ...validStatus.capabilities, storyBank: "not_available" },
   }));
 });

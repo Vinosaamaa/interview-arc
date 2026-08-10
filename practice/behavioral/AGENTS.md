@@ -22,6 +22,8 @@ Load only what the current action needs:
   `../../docs/contracts/behavioral-evidence-bundle.md`;
 - D1 evidence write, claim checkpoint, or ordinary evidence preflight:
   `../../docs/contracts/behavioral-evidence-domain.md`.
+- Story Bank write, revision, or question-scoped retrieval:
+  `../../docs/contracts/behavioral-story-bank.md`.
 - explicit Target Profile write, binding, or authoritative target resolution:
   `../../docs/contracts/behavioral-target-profiles.md`.
 
@@ -87,7 +89,8 @@ exact activity or session at every `start_resume`, `new_question`,
 read returns the current/provisional answer, accepted and contrary evidence,
 claims/gaps, authoritative target, grading signals, and accepted target
 variants. Do not assemble those reads independently or reuse pre-compaction
-state. Story candidates remain empty until their later domain slice.
+state. Story candidates are exact current Story Bank revisions linked to the
+question; never substitute an unlinked story from memory.
 Ordinary preflight never reads generated HTML, loads an entire dossier, or
 reruns project archaeology. Use `get_behavioral_foundation_status` only for a
 Foundation overview; its aggregate counts and bounded gaps do not replace the
@@ -101,6 +104,14 @@ persist items and claim checkpoints only through the MCP workflow in
 `docs/contracts/behavioral-evidence-domain.md`; that contract is authoritative
 for revisions, receipts, bounded polling, retries, provenance, identity, and
 the current supersession boundary. A queued response is not saved evidence.
+
+Create or revise a reusable STARL story only after its owner-private claims and
+accepted evidence are durable. Call `upsert_behavioral_story` with one stable
+operation ID and the exact expected revision, then verify through
+`query_behavioral_stories`. Reuse an operation ID only for an identical retry;
+reread after a revision conflict. Keep uncertainties in `gaps`, archive rather
+than overwrite, and never copy transcripts, raw source text, generated
+scenarios, locators, credentials, or target analysis into the Story Bank.
 
 When the user explicitly requests a hypothetical or fictional variant, store
 it only as a labeled Solution Profile `practiceScenario`. Give it a stable
@@ -138,6 +149,9 @@ for an exact retry. Never silently replace a saved attempt: use the explicit
 correction fields. For a target-tailored answer, resolve the authoritative
 activity/session binding and use its exact Target Profile revision; fail closed
 rather than guessing, stripping, or relabeling the target scope.
+When selecting a Story Bank story, use the `storyId` and `revision` returned by
+the current question preflight. D1 rejects a stale, archived, cross-owner, or
+question-mismatched story and requires its evidence IDs in the final snapshot.
 
 At the finalization boundary, call `get_resume_library`. When it reports a
 current résumé revision, send that exact `resumeId` and `revisionId` as
@@ -176,16 +190,16 @@ wording polish alone. Record the revision/research decision.
 Schedule failed/full-walkthrough review in 4 days, approach review in 7, and
 successful reimplementation in 21 then 60 days.
 
-## Artifacts And Story Bank
+## Artifacts And Source Notes
 
 - Sessions: `sessions/YYYY-MM-DD-<topic>-attempt-01.md`
-- Story sources: `story-bank/projects/<project-id>.md`
-- Story format: `story-bank/README.md`
+- Legacy/local story-source notes: `story-bank/projects/<project-id>.md`
+- Local source-note format: `story-bank/README.md`
 
 Never overwrite attempts. Store only user-provided story facts: context,
 responsibility, decisions, conflict, failures, leadership, results, and lessons.
-Link reusable stories to source project/session rather than duplicating
-inconsistent versions.
+Durable reusable stories live in the owner-private D1 Story Bank. Local notes
+may inform evidence review but never replace the authoritative story revision.
 
 Feedback identifies the interview signal, STAR gaps, vague/long phrasing, a
 stronger truthful version, likely follow-ups, and one next drill.

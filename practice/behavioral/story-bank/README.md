@@ -1,6 +1,10 @@
 # Behavioral Story Bank
 
-This folder preserves truthful source material about the user's projects and reusable interview stories. It is not a library of invented polished answers.
+This folder may preserve legacy local source notes about the user's projects.
+It is not the authoritative reusable Story Bank and is never a library of
+invented polished answers. Current owner-private STARL stories and their
+immutable revisions live in D1 under
+`docs/contracts/behavioral-story-bank.md`.
 
 Store project evidence under `projects/<project-id>.md` with these sections when known:
 
@@ -26,4 +30,8 @@ Store project evidence under `projects/<project-id>.md` with these sections when
 ## Linked Sessions
 ```
 
-Omit unknown sections or mark them as questions to explore. Never invent metrics, responsibilities, or outcomes. Behavioral session artifacts may link to this source file and shape one subset of its facts into a STAR answer.
+Omit unknown sections or mark them as questions to explore. Never invent
+metrics, responsibilities, or outcomes. Before reuse, sanitize and establish
+the relevant facts through the evidence/claim workflow, then create the D1
+story with explicit question links. Do not copy raw source notes or local paths
+into D1.

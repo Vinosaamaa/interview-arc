@@ -838,6 +838,74 @@ export const behavioralClaimStatusEvents = sqliteTable(
   ],
 );
 
+// Behavioral stories are owner-private, evidence-backed STARL records. The
+// stable row is only a current pointer; immutable revisions preserve the exact
+// reusable story that existed when a later answer selected it.
+export const behavioralStories = sqliteTable(
+  "behavioral_stories",
+  {
+    ownerId,
+    storyId: text("story_id").notNull(),
+    currentRevision: integer("current_revision").notNull(),
+    state: text("state", { enum: ["active", "archived"] }).notNull(),
+    title: text("title").notNull(),
+    projectKey: text("project_key").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.storyId] }),
+    index("behavioral_stories_owner_state_idx").on(table.ownerId, table.state, table.updatedAt),
+  ],
+);
+
+export const behavioralStoryRevisions = sqliteTable(
+  "behavioral_story_revisions",
+  {
+    ownerId,
+    storyId: text("story_id").notNull(),
+    revision: integer("revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    snapshot: text("snapshot", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.storyId, table.revision] }),
+    uniqueIndex("behavioral_story_revisions_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
+export const behavioralStoryOperations = sqliteTable(
+  "behavioral_story_operations",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    storyId: text("story_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    storyRevision: integer("story_revision").notNull(),
+    status: text("status", { enum: ["created", "revised", "unchanged"] }).notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.operationId] })],
+);
+
+export const behavioralStoryQuestionLinks = sqliteTable(
+  "behavioral_story_question_links",
+  {
+    ownerId,
+    storyId: text("story_id").notNull(),
+    questionId: text("question_id").notNull(),
+    storyRevision: integer("story_revision").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.storyId, table.questionId] }),
+    index("behavioral_story_question_idx").on(table.ownerId, table.questionId, table.storyRevision),
+  ],
+);
+
 // Target Profiles are owner-private hiring-context inputs, never candidate
 // evidence. The stable row is only a current pointer; every revision remains
 // append-only so completed attempts can retain the exact target they used.
@@ -1566,6 +1634,10 @@ export type BehavioralEvidenceItemRow = typeof behavioralEvidenceItems.$inferSel
 export type BehavioralEvidenceQuestionLinkRow = typeof behavioralEvidenceQuestionLinks.$inferSelect;
 export type BehavioralClaimRow = typeof behavioralClaims.$inferSelect;
 export type BehavioralClaimStatusEventRow = typeof behavioralClaimStatusEvents.$inferSelect;
+export type BehavioralStoryRow = typeof behavioralStories.$inferSelect;
+export type BehavioralStoryRevisionRow = typeof behavioralStoryRevisions.$inferSelect;
+export type BehavioralStoryOperationRow = typeof behavioralStoryOperations.$inferSelect;
+export type BehavioralStoryQuestionLinkRow = typeof behavioralStoryQuestionLinks.$inferSelect;
 export type ResumeSourceRow = typeof resumeSources.$inferSelect;
 export type ResumeRevisionRow = typeof resumeRevisions.$inferSelect;
 export type ResumeRevisionFileRow = typeof resumeRevisionFiles.$inferSelect;

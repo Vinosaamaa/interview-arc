@@ -81,7 +81,7 @@ export type BehavioralAttemptAnalysisProjection = {
   solutionProfile: { questionId: string; revision: number };
   scope: "universal" | "target_tailored";
   target: { targetId: string; revision: number; label: string; competencyEmphasis: string[] } | null;
-  story: { storyId: string; alternativeId?: string } | null;
+  story: { storyId: string; revision?: number; alternativeId?: string } | null;
   analysis: BehavioralAttemptAnalysis;
 };
 
@@ -149,7 +149,7 @@ export function renderBehavioralAttemptAnalysisMarkdown(projection: BehavioralAt
     "",
     `Answer format: ${analysis.answerFormat} · Scope: ${projection.scope}`,
     ...(projection.target ? [`Target: ${projection.target.label} · revision ${projection.target.revision}`] : []),
-    ...(projection.story ? [`Story: ${projection.story.storyId}${projection.story.alternativeId ? ` · alternative ${projection.story.alternativeId}` : ""}`] : []),
+    ...(projection.story ? [`Story: ${projection.story.storyId} · ${projection.story.revision ? `revision ${projection.story.revision}` : "legacy unversioned reference"}${projection.story.alternativeId ? ` · alternative ${projection.story.alternativeId}` : ""}`] : []),
     `Competencies: ${analysis.competencies.join(" · ")}`,
     "",
     "### Claim audit",
@@ -190,7 +190,7 @@ export function renderBehavioralAttemptAnalysisHtml(projection: BehavioralAttemp
     `<p>${escapeHtml(`${projection.question.questionId} · Profile revision ${projection.solutionProfile.revision} · Answer snapshot ${projection.snapshotRevision}`)}</p>`,
     `<p>Answer format: ${escapeHtml(analysis.answerFormat)} · Scope: ${escapeHtml(projection.scope)}</p>`,
     ...(projection.target ? [`<p>Target: ${escapeHtml(projection.target.label)} · revision ${projection.target.revision}</p>`] : []),
-    ...(projection.story ? [`<p>Story: ${escapeHtml(projection.story.storyId)}${projection.story.alternativeId ? ` · alternative ${escapeHtml(projection.story.alternativeId)}` : ""}</p>`] : []),
+    ...(projection.story ? [`<p>Story: ${escapeHtml(projection.story.storyId)} · ${projection.story.revision ? `revision ${projection.story.revision}` : "legacy unversioned reference"}${projection.story.alternativeId ? ` · alternative ${escapeHtml(projection.story.alternativeId)}` : ""}</p>`] : []),
     `<p>Competencies: ${escapeHtml(analysis.competencies.join(" · "))}</p>`,
     "<h3>Claim audit</h3>",
     ...analysis.claimAudit.map((claim) => [

@@ -41,6 +41,7 @@ export const behavioralFinalAnswerSnapshotInputSchema = z.object({
   }).strict(),
   story: z.object({
     storyId: stableIdSchema,
+    revision: z.number().int().positive().optional(),
     alternativeId: stableIdSchema.optional(),
   }).strict().optional(),
   acceptedEvidenceIds: z.array(stableIdSchema).max(100),
@@ -261,6 +262,7 @@ export function renderBehavioralFinalAnswerMarkdown(projection: BehavioralFinalA
     "## Final tailored answer",
     "",
     metadata,
+    ...(projection.story ? [`Story ${projection.story.storyId} · ${projection.story.revision ? `revision ${projection.story.revision}` : "legacy unversioned reference"}`] : []),
     "",
     projection.answer,
     "",
@@ -297,6 +299,7 @@ export function renderBehavioralFinalAnswerHtml(projection: BehavioralFinalAnswe
     '<section data-behavioral-final-answer="true">',
     "<h2>Final tailored answer</h2>",
     `<p>${escapeHtml(metadata)}</p>`,
+    ...(projection.story ? [`<p>Story ${escapeHtml(projection.story.storyId)} · ${projection.story.revision ? `revision ${projection.story.revision}` : "legacy unversioned reference"}</p>`] : []),
     `<div>${escapeHtml(projection.answer).replaceAll("\n", "<br>")}</div>`,
     "<h3>Evidence gaps</h3>",
     htmlList(projection.evidenceGaps, "None recorded."),

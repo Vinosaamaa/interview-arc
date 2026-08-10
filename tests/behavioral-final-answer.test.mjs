@@ -27,6 +27,7 @@ function universalSnapshot(overrides = {}) {
     },
     story: {
       storyId: "delivery-reliability",
+      revision: 2,
       alternativeId: "universal",
     },
     acceptedEvidenceIds: ["evidence-retry-boundary"],
@@ -189,4 +190,22 @@ test("legacy modelAnswer is an explicit fallback and is never fabricated as a sn
   assert.equal(projection.snapshotRevision, null);
   assert.equal(projection.answer, "A historical answer saved before snapshot v1.");
   assert.equal(projection.scope, null);
+});
+
+test("historical snapshots keep unversioned story identities without fabricating a revision", () => {
+  const legacyStorySnapshot = universalSnapshot({
+    story: { storyId: "delivery-reliability" },
+  });
+  const projection = projectBehavioralFinalAnswer({
+    snapshots: [{
+      snapshotRevision: 1,
+      correctionOfRevision: null,
+      correctionReason: null,
+      finalizedAt: 1,
+      snapshot: legacyStorySnapshot,
+    }],
+  });
+  assert.deepEqual(projection.story, { storyId: "delivery-reliability" });
+  assert.match(renderBehavioralFinalAnswerMarkdown(projection), /legacy unversioned reference/);
+  assert.match(renderBehavioralFinalAnswerHtml(projection), /legacy unversioned reference/);
 });

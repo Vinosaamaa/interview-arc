@@ -49,4 +49,6 @@ test("specialist contract requirements are registered and exposed", async () => 
   assert.ok(result.contracts.required.includes("set_behavioral_claim_status"));
   assert.ok(result.contracts.required.includes("query_behavioral_evidence"));
   assert.ok(result.contracts.required.includes("get_behavioral_foundation_status"));
+  assert.ok(result.contracts.required.includes("upsert_behavioral_story"));
+  assert.ok(result.contracts.required.includes("query_behavioral_stories"));
 });

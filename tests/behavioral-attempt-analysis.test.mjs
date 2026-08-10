@@ -81,7 +81,7 @@ test("Markdown and local HTML preserve the same authoritative analysis", () => {
     solutionProfile: { questionId: "behavioral-reliability-1", revision: 3 },
     scope: "universal",
     target: null,
-    story: { storyId: "story-retry-boundary" },
+    story: { storyId: "story-retry-boundary", revision: 1 },
     analysis: behavioralAttemptAnalysisSchema.parse(analysis()),
   };
   const markdown = renderBehavioralAttemptAnalysisMarkdown(projection);
