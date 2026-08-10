@@ -1,6 +1,7 @@
 export function orderPastReaderSections<T>(input: {
   conversation?: T | null;
   finalAnswer?: T | null;
+  resumeContext?: T | null;
   practiceScenarios?: T | null;
   behavioralAnalysis?: T | null;
   codeAttempts?: T | null;
@@ -9,6 +10,7 @@ export function orderPastReaderSections<T>(input: {
   return [
     input.conversation,
     input.finalAnswer,
+    input.resumeContext,
     input.practiceScenarios,
     input.behavioralAnalysis,
     input.codeAttempts,

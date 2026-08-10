@@ -25,6 +25,7 @@ import {
 } from "../db/behavioral-final-answer";
 import { behavioralAttemptAnalysisSchema } from "../db/behavioral-attempt-analysis";
 import { behavioralPracticeScenariosSchema } from "../db/behavioral-practice-scenario";
+import { resumeContextSelectionSchema } from "../db/activity-resume-context";
 import {
   BehavioralTargetProfileError,
   behavioralTargetBindingWriteSchema,
@@ -2947,6 +2948,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
           finalAnswerOperationId: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,199}$/).optional(),
           finalAnswerSnapshot: behavioralFinalAnswerSnapshotInputSchema.optional(),
           finalAnswerCorrection: behavioralFinalAnswerCorrectionSchema.optional(),
+          resumeContext: resumeContextSelectionSchema.optional(),
           interactionModeClassificationOperationId: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,199}$/).optional(),
           interactionModeEvidence: interactionModeClassificationInputSchema.optional(),
           interactionModeClassificationCorrection: interactionModeClassificationCorrectionSchema.optional(),

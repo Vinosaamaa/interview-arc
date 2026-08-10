@@ -225,6 +225,13 @@
       "when": 1786379867730,
       "tag": "0031_careful_shatterstar",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1786389235920,
+      "tag": "0032_flippant_hydra",
+      "breakpoints": true
     }
   ]
 }

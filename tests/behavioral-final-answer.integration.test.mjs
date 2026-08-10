@@ -79,6 +79,10 @@ function finalization({
   solutionRevision = 1,
   scope = "universal",
   target,
+  resumeContext = {
+    resumeId: "resume-primary",
+    revisionId: "resume-revision-1",
+  },
   practiceScenarios = [{
     schemaVersion: 1,
     scenarioId: "retry-recovery-scenario",
@@ -186,6 +190,7 @@ function finalization({
         practiceScenarios,
       },
       finalAnswerOperationId: operationId,
+      resumeContext,
       interactionModeClassificationOperationId: `mode-${operationId.toLowerCase()}`,
       interactionModeEvidence: {
         schemaVersion: 1,
@@ -262,6 +267,26 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
       VALUES
         ('owner-final-answer','${questionId}','evidence-retry-boundary','supporting',1,1),
         ('owner-final-answer','behavioral-reliability-voice','evidence-retry-boundary','supporting',1,1);
+      INSERT INTO behavioral_claims
+        (owner_id,claim_id,question_id,text,scope,status,claim_strength,evidence_ids,
+         contrary_evidence_ids,gaps,safer_wording,tags,visibility,revision,created_at,updated_at)
+      VALUES
+        ('owner-final-answer','claim-retry-reliability','${questionId}',
+         'I improved retry reliability.','personal_contribution','verified',
+         'personal_contribution_candidate','["evidence-retry-boundary"]','[]','[]',NULL,
+         '["reliability"]','owner_private',1,1,1);
+      INSERT INTO resume_sources
+        (owner_id,resume_id,source_label,current_revision_id,created_at,updated_at)
+      VALUES
+        ('owner-final-answer','resume-primary','Primary resume','resume-revision-1',1,1);
+      INSERT INTO resume_revisions
+        (owner_id,resume_id,revision_id,parent_revision_id,source_fingerprint,
+         import_operation_id,storage_generation,visibility,imported_at)
+      VALUES
+        ('owner-final-answer','resume-primary','resume-revision-1',NULL,
+         'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+         'resume-import-operation-1','resume-storage-generation-1',
+         'owner_private',1786363000000);
       INSERT INTO practice_interaction_mode_states
         (owner_id,activity_id,interaction_mode_id,registry_version,revision,source,last_mutation_id,updated_at)
       VALUES
@@ -309,6 +334,29 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     }));
     assert.equal(invalidOperationId.isError, true);
 
+    const missingResumeContextPayload = finalization({
+      activityId,
+      questionId,
+      operationId: "final-answer-operation-missing-resume",
+      answer,
+      responseTurnId,
+    });
+    delete missingResumeContextPayload.finalization.resumeContext;
+    const missingResumeContext = await callRaw(client, "save_specialist_finalization", missingResumeContextPayload);
+    assert.equal(missingResumeContext.isError, true);
+    assert.equal(missingResumeContext.structuredContent.code, "behavioral_resume_context_required");
+
+    const staleResumeContext = await callRaw(client, "save_specialist_finalization", finalization({
+      activityId,
+      questionId,
+      operationId: "final-answer-operation-stale-resume",
+      answer,
+      responseTurnId,
+      resumeContext: { resumeId: "resume-primary", revisionId: "resume-revision-stale" },
+    }));
+    assert.equal(staleResumeContext.isError, true);
+    assert.equal(staleResumeContext.structuredContent.code, "behavioral_resume_context_mismatch");
+
     const firstPayload = finalization({
       activityId,
       questionId,
@@ -346,6 +394,21 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     assert.equal(record.behavioralAnalysis.analysis.claimAudit[1].status, "unverified");
     assert.match(record.behavioralAnalysisMarkdown, /Generated coaching — not evidence/);
     assert.match(record.behavioralAnalysisHtml, /Rehearse the measured-outcome follow-up/);
+    const { capturedAt, ...resumeContext } = record.resumeContext;
+    assert.ok(Number.isInteger(capturedAt) && capturedAt > 0);
+    assert.deepEqual(resumeContext, {
+      schemaVersion: 1,
+      state: "contemporaneous",
+      snapshotRevision: 1,
+      resumeId: "resume-primary",
+      resumeRevisionId: "resume-revision-1",
+      sourceLabel: "Primary resume",
+      resumeImportedAt: 1786363000000,
+      claimIds: ["claim-retry-reliability"],
+      evidenceIds: ["evidence-retry-boundary"],
+    });
+    assert.match(record.resumeContextMarkdown, /Primary resume · revision resume-revision-1/);
+    assert.match(record.resumeContextHtml, /data-activity-resume-context="true"/);
 
     const missingAnalysisPayload = finalization({
       activityId,
@@ -440,6 +503,9 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     assert.equal(correctedRecord.interactionModeClassification.correctionOfRevision, 1);
     assert.equal(correctedRecord.interactionModeClassificationHistory.length, 2);
     assert.equal(correctedRecord.behavioralAnalysis.snapshotRevision, 2);
+    assert.equal(correctedRecord.resumeContext.snapshotRevision, 2);
+    assert.equal(correctedRecord.resumeContext.resumeRevisionId, "resume-revision-1");
+    assert.deepEqual(correctedRecord.resumeContextHistory.map((context) => context.snapshotRevision), [1, 2]);
 
     const orphanTargetReview = finalization({
       activityId,
@@ -632,6 +698,9 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     assert.equal(legacyRecord.finalAnswer.source, "legacy_model_answer");
     assert.equal(legacyRecord.finalAnswer.snapshotRevision, null);
     assert.deepEqual(legacyRecord.finalAnswerSnapshots, []);
+    assert.equal(legacyRecord.resumeContext, null);
+    assert.equal(legacyRecord.resumeContextMarkdown, "");
+    assert.equal(legacyRecord.resumeContextHtml, "");
     assert.equal(legacyRecord.practiceScenarios, null);
     assert.equal(legacyRecord.practiceScenariosMarkdown, "");
     assert.equal(legacyRecord.practiceScenariosHtml, "");
@@ -647,6 +716,8 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     assert.equal(isolated.finalAnswer, null);
     assert.deepEqual(isolated.finalAnswerSnapshots, []);
     assert.equal(isolated.behavioralAnalysis, null);
+    assert.equal(isolated.resumeContext, null);
+    assert.deepEqual(isolated.resumeContextHistory, []);
   } finally {
     await client?.close().catch(() => {});
     await sameOwnerClient?.close().catch(() => {});

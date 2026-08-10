@@ -7,6 +7,10 @@ import {
   behavioralAttemptAnalysisSchema,
   type BehavioralAttemptAnalysis,
 } from "./behavioral-attempt-analysis.ts";
+import {
+  resumeContextSelectionSchema,
+  type ResumeContextSelection,
+} from "./activity-resume-context.ts";
 
 const stableIdSchema = z.string()
   .min(1)
@@ -92,6 +96,7 @@ export async function behavioralFinalAnswerFingerprint(input: {
   snapshot: BehavioralFinalAnswerSnapshotInput;
   correction?: BehavioralFinalAnswerCorrection;
   behavioralReview?: BehavioralTargetReview;
+  resumeContext?: ResumeContextSelection;
 }) {
   const canonical = JSON.stringify({
     activityId: input.activityId,
@@ -103,6 +108,9 @@ export async function behavioralFinalAnswerFingerprint(input: {
     behavioralReview: input.behavioralReview
       ? behavioralTargetReviewSchema.parse(input.behavioralReview)
       : null,
+    ...(input.resumeContext
+      ? { resumeContext: resumeContextSelectionSchema.parse(input.resumeContext) }
+      : {}),
   });
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
   return [...new Uint8Array(digest)]

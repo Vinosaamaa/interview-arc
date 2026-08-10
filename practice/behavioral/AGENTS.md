@@ -10,6 +10,8 @@ Load only what the current action needs:
 - Solution Profile/finalization: `../../docs/contracts/solution-profiles.md`;
 - completed final answer/correction:
   `../../docs/contracts/behavioral-final-answer-snapshots.md`;
+- completed-attempt résumé context:
+  `../../docs/contracts/resume-revision-ingest.md`;
 - completed attempt analysis:
   `../../docs/contracts/behavioral-attempt-analysis.md`;
 - prompt selection/import: `bank/questions.json`;
@@ -136,6 +138,12 @@ for an exact retry. Never silently replace a saved attempt: use the explicit
 correction fields. For a target-tailored answer, resolve the authoritative
 activity/session binding and use its exact Target Profile revision; fail closed
 rather than guessing, stripping, or relabeling the target scope.
+
+At the finalization boundary, call `get_resume_library`. When it reports a
+current résumé revision, send that exact `resumeId` and `revisionId` as
+`resumeContext`; never guess, reuse stale pre-compaction IDs, or include résumé
+text or locators. If no current résumé exists, omit the field. D1 derives and
+atomically freezes the bounded claim/evidence links for the answer revision.
 
 The same finalization must include the typed `behavioralAnalysis` defined in
 `behavioral-attempt-analysis.md`. Derive it from the exact visible review and

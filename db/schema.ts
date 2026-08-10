@@ -977,6 +977,27 @@ export const resumeRevisionFiles = sqliteTable(
   ],
 );
 
+// Immutable, owner-private provenance for the exact resume revision that was
+// current when one behavioral final-answer snapshot was completed. Raw resume
+// content, object keys, and provider locators never enter this table.
+export const activityResumeContexts = sqliteTable(
+  "activity_resume_contexts",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    snapshotRevision: integer("snapshot_revision").notNull(),
+    resumeId: text("resume_id").notNull(),
+    resumeRevisionId: text("resume_revision_id").notNull(),
+    sourceLabel: text("source_label").notNull(),
+    resumeImportedAt: integer("resume_imported_at").notNull(),
+    state: text("state", { enum: ["contemporaneous", "backfilled"] }).notNull(),
+    claimIds: text("claim_ids", { mode: "json" }).notNull(),
+    evidenceIds: text("evidence_ids", { mode: "json" }).notNull(),
+    capturedAt: integer("captured_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.activityId, table.snapshotRevision] })],
+);
+
 // One stable operation id owns a single immutable request hash. The stored
 // receipt makes an exact retry safe after an ambiguous HTTP response.
 export const resumeImportOperations = sqliteTable(
@@ -1548,6 +1569,7 @@ export type BehavioralClaimStatusEventRow = typeof behavioralClaimStatusEvents.$
 export type ResumeSourceRow = typeof resumeSources.$inferSelect;
 export type ResumeRevisionRow = typeof resumeRevisions.$inferSelect;
 export type ResumeRevisionFileRow = typeof resumeRevisionFiles.$inferSelect;
+export type ActivityResumeContextRow = typeof activityResumeContexts.$inferSelect;
 export type ResumeImportOperationRow = typeof resumeImportOperations.$inferSelect;
 export type ResumeImportLockRow = typeof resumeImportLocks.$inferSelect;
 export type SpecialistWriteJobRow = typeof specialistWriteJobs.$inferSelect;

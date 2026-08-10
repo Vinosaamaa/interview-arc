@@ -959,6 +959,30 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .final-answer-card.legacy_model_answer { border-left-color: #8b9690; background: #f7f7f2; }
 .final-answer-card.legacy_model_answer > header span { color: #59655f; }
 
+.resume-context-group > div { padding: 0; }
+.resume-context-card {
+  padding: clamp(22px, 3vw, 32px);
+  border-left: 6px solid #2d897a;
+  background: linear-gradient(135deg, rgba(45,137,122,.12), transparent 44%), #fbfefc;
+  color: #233b36;
+}
+.resume-context-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: 17px; border-bottom: 1px solid #c8ddd7; }
+.resume-context-card > header div { display: grid; gap: 5px; }
+.resume-context-card > header span { color: #216f62; font: 800 .7rem/1.2 var(--font-geist-mono); letter-spacing: .11em; }
+.resume-context-card > header strong { font-size: 1rem; }
+.resume-context-card > header small { color: #5c716a; }
+.resume-context-card dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 20px 0; border: 1px solid #cbdcd7; background: #cbdcd7; }
+.resume-context-card dl div { min-width: 0; padding: 14px; background: rgba(255,255,255,.86); }
+.resume-context-card dt { color: #60746e; font-size: .7rem; font-weight: 760; text-transform: uppercase; }
+.resume-context-card dd { margin: 5px 0 0; overflow-wrap: anywhere; font-weight: 720; }
+.resume-context-references { display: grid; gap: 10px; }
+.resume-context-references p { margin: 0; display: grid; gap: 4px; }
+.resume-context-references span { color: #52665f; overflow-wrap: anywhere; }
+.resume-context-card > footer { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.resume-context-card > footer a { min-height: 42px; display: inline-flex; align-items: center; padding: 9px 13px; border: 1px solid #74a99f; border-radius: 8px; color: #155f53; font-weight: 760; text-decoration: none; }
+.resume-context-card > footer a:hover { background: #edf8f4; }
+.resume-context-card > footer a:focus-visible { outline: 3px solid #2d897a; outline-offset: 3px; }
+
 .practice-scenarios-group > div { padding: 0; }
 .practice-scenarios-card {
   padding: clamp(22px, 3vw, 34px);
@@ -1970,6 +1994,9 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .final-answer-meta { grid-template-columns: 1fr; }
   .final-answer-card > footer { grid-template-columns: 1fr; }
   .final-answer-card > footer p { grid-column: 1; }
+  .resume-context-card { padding: 20px 16px; border-left-width: 4px; }
+  .resume-context-card > header { display: grid; }
+  .resume-context-card dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .practice-scenarios-card { padding: 20px 16px; border-left-width: 4px; }
   .behavioral-attempt-card { padding: 20px 16px; border-left-width: 4px; }
   .behavioral-attempt-card > header div,

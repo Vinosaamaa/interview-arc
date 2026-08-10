@@ -5,7 +5,9 @@ import {
   activityDeliveryAnalyses,
   activityAudioClips,
   activityFinalizations,
+  activityResumeContexts,
   activitySolutionLinks,
+  behavioralClaims,
   behavioralEvidenceItems,
   behavioralEvidenceQuestionLinks,
   behavioralFinalAnswerSnapshots,
@@ -27,6 +29,8 @@ import {
   problemSolutionRevisions,
   provisionalSolutionProfiles,
   reviewSchedules,
+  resumeRevisions,
+  resumeSources,
   specialistTasks,
   timerIntervals,
   typedPracticeExchangeDeletions,
@@ -122,6 +126,14 @@ import {
   interactionModeClassificationSchema,
   type InteractionModeClassificationInput,
 } from "./interaction-mode-classification";
+import {
+  renderActivityResumeContextHtml,
+  renderActivityResumeContextMarkdown,
+  resumeContextSelectionSchema,
+  storedActivityResumeContextSchema,
+  type ActivityResumeContext,
+  type ResumeContextSelection,
+} from "./activity-resume-context";
 
 export type Specialty = "leetcode" | "system_design" | "behavioral";
 export type NoteKind = "remember" | "insight" | "mistake" | "pattern" | "question";
@@ -174,6 +186,7 @@ export type SpecialistFinalization = {
   finalAnswerOperationId?: string;
   finalAnswerSnapshot?: BehavioralFinalAnswerSnapshotInput;
   finalAnswerCorrection?: BehavioralFinalAnswerCorrection;
+  resumeContext?: ResumeContextSelection;
   interactionModeClassificationOperationId?: string;
   interactionModeEvidence?: InteractionModeClassificationInput;
   interactionModeClassificationCorrection?: {
@@ -3507,6 +3520,9 @@ type BehavioralFinalAnswerWritePlan = {
   correction?: BehavioralFinalAnswerCorrection;
   result: ReturnType<typeof validateBehavioralFinalAnswerCorrection>;
   replay: boolean;
+  resumeContext?: Omit<ActivityResumeContext, "capturedAt">;
+  resumeSourceUpdatedAt?: number;
+  resumeContextExpectedAbsent: boolean;
   targetBinding?: {
     source: "activity" | "session";
     scopeId: string;
@@ -3619,7 +3635,8 @@ async function prepareBehavioralFinalAnswerWrite(
     || payload.finalAnswerSnapshot
     || payload.finalAnswerCorrection
     || payload.behavioralReview
-    || payload.behavioralAnalysis,
+    || payload.behavioralAnalysis
+    || payload.resumeContext,
   );
   if (specialty !== "behavioral") {
     if (hasSnapshotFields) {
@@ -3678,12 +3695,16 @@ async function prepareBehavioralFinalAnswerWrite(
       "modelAnswer and finalAnswerSnapshot.answer must be exactly identical.",
     );
   }
+  const resumeSelection = payload.resumeContext
+    ? resumeContextSelectionSchema.parse(payload.resumeContext)
+    : undefined;
   const requestFingerprint = await behavioralFinalAnswerFingerprint({
     activityId,
     questionId,
     snapshot,
     correction: payload.finalAnswerCorrection,
     behavioralReview: targetReview,
+    resumeContext: resumeSelection,
   });
   const existingOperation = await db.select().from(behavioralFinalAnswerSnapshots).where(and(
     eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
@@ -3703,6 +3724,7 @@ async function prepareBehavioralFinalAnswerWrite(
       correction: payload.finalAnswerCorrection,
       result: { status: "unchanged", snapshotRevision: existingOperation[0].snapshotRevision },
       replay: true,
+      resumeContextExpectedAbsent: false,
     };
   }
   const attemptAnalysis = validateBehavioralAttemptAnalysis(payload, snapshot);
@@ -3811,6 +3833,68 @@ async function prepareBehavioralFinalAnswerWrite(
       );
     }
   }
+  const currentResumeRows = await db.select({
+    resumeId: resumeSources.resumeId,
+    currentRevisionId: resumeSources.currentRevisionId,
+    sourceLabel: resumeSources.sourceLabel,
+    updatedAt: resumeSources.updatedAt,
+  }).from(resumeSources).where(and(
+    eq(resumeSources.ownerId, ownerId),
+    isNotNull(resumeSources.currentRevisionId),
+  ));
+  if (currentResumeRows.length && !resumeSelection) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_resume_context_required",
+      "A current resume exists; include its exact resume and revision IDs in the completed behavioral finalization.",
+    );
+  }
+  const selectedResume = resumeSelection
+    ? currentResumeRows.find((row) => row.resumeId === resumeSelection.resumeId)
+    : undefined;
+  if (resumeSelection && selectedResume?.currentRevisionId !== resumeSelection.revisionId) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_resume_context_mismatch",
+      "The selected resume revision is not the current owner-scoped revision; reread the Resume Library before retrying.",
+      true,
+    );
+  }
+  const selectedRevisionRows = resumeSelection ? await db.select({
+    importedAt: resumeRevisions.importedAt,
+  }).from(resumeRevisions).where(and(
+    eq(resumeRevisions.ownerId, ownerId),
+    eq(resumeRevisions.resumeId, resumeSelection.resumeId),
+    eq(resumeRevisions.revisionId, resumeSelection.revisionId),
+  )).limit(1) : [];
+  if (resumeSelection && !selectedRevisionRows[0]) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_resume_context_mismatch",
+      "The selected resume revision is unavailable to this owner.",
+    );
+  }
+  const auditClaimTexts = attemptAnalysis.analysis.claimAudit.map((claim) => claim.claim);
+  const linkedClaimRows = resumeSelection && auditClaimTexts.length ? await db.select({
+    claimId: behavioralClaims.claimId,
+  }).from(behavioralClaims).where(and(
+    eq(behavioralClaims.ownerId, ownerId),
+    eq(behavioralClaims.questionId, questionId),
+    inArray(behavioralClaims.text, auditClaimTexts),
+  )).orderBy(asc(behavioralClaims.claimId)).limit(101) : [];
+  if (linkedClaimRows.length > 100) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_resume_context_too_large",
+      "The exact behavioral claim context exceeds the bounded snapshot limit.",
+    );
+  }
+  const contextEvidenceIds = [...new Set([
+    ...snapshot.acceptedEvidenceIds,
+    ...attemptAnalysis.contraryEvidenceIds,
+  ])].sort();
+  if (contextEvidenceIds.length > 100) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_resume_context_too_large",
+      "The exact behavioral evidence context exceeds the bounded snapshot limit.",
+    );
+  }
   const priorRows = await db.select().from(behavioralFinalAnswerSnapshots).where(and(
     eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
     eq(behavioralFinalAnswerSnapshots.activityId, activityId),
@@ -3836,6 +3920,19 @@ async function prepareBehavioralFinalAnswerWrite(
     result,
     replay: false,
     targetBinding,
+    resumeContext: selectedResume && selectedRevisionRows[0] ? {
+      schemaVersion: 1,
+      state: "contemporaneous",
+      snapshotRevision: result.snapshotRevision,
+      resumeId: selectedResume.resumeId,
+      resumeRevisionId: selectedResume.currentRevisionId!,
+      sourceLabel: selectedResume.sourceLabel,
+      resumeImportedAt: selectedRevisionRows[0].importedAt,
+      claimIds: linkedClaimRows.map((row) => row.claimId),
+      evidenceIds: contextEvidenceIds,
+    } : undefined,
+    resumeSourceUpdatedAt: selectedResume?.updatedAt,
+    resumeContextExpectedAbsent: !selectedResume,
   };
 }
 
@@ -4154,6 +4251,30 @@ export async function saveSpecialistFinalization(
               : sql``}
         )`));
     }
+    if (behavioralFinalAnswer.resumeContext) {
+      const context = behavioralFinalAnswer.resumeContext;
+      finalizationGuards.push(d1TransactionalInvariantGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${resumeSources}
+        WHERE ${resumeSources.ownerId} = ${ownerId}
+          AND ${resumeSources.resumeId} = ${context.resumeId}
+          AND ${resumeSources.currentRevisionId} = ${context.resumeRevisionId}
+          AND ${resumeSources.sourceLabel} = ${context.sourceLabel}
+          AND ${resumeSources.updatedAt} = ${behavioralFinalAnswer.resumeSourceUpdatedAt!}
+      )`));
+      finalizationGuards.push(d1TransactionalInvariantGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${resumeRevisions}
+        WHERE ${resumeRevisions.ownerId} = ${ownerId}
+          AND ${resumeRevisions.resumeId} = ${context.resumeId}
+          AND ${resumeRevisions.revisionId} = ${context.resumeRevisionId}
+          AND ${resumeRevisions.importedAt} = ${context.resumeImportedAt}
+      )`));
+    } else if (behavioralFinalAnswer.resumeContextExpectedAbsent) {
+      finalizationGuards.push(d1TransactionalInvariantGuard(db, sql`NOT EXISTS (
+        SELECT 1 FROM ${resumeSources}
+        WHERE ${resumeSources.ownerId} = ${ownerId}
+          AND ${resumeSources.currentRevisionId} IS NOT NULL
+      )`));
+    }
   }
   const finalizationStatements = [...finalizationGuards];
   if (interactionModeClassification) {
@@ -4219,6 +4340,21 @@ export async function saveSpecialistFinalization(
       correctionReason: behavioralFinalAnswer.correction?.reason ?? null,
       finalizedAt: nowMs,
     }));
+    if (behavioralFinalAnswer.resumeContext) {
+      finalizationStatements.push(db.insert(activityResumeContexts).values({
+        ownerId,
+        activityId,
+        snapshotRevision: behavioralFinalAnswer.resumeContext.snapshotRevision,
+        resumeId: behavioralFinalAnswer.resumeContext.resumeId,
+        resumeRevisionId: behavioralFinalAnswer.resumeContext.resumeRevisionId,
+        sourceLabel: behavioralFinalAnswer.resumeContext.sourceLabel,
+        resumeImportedAt: behavioralFinalAnswer.resumeContext.resumeImportedAt,
+        state: behavioralFinalAnswer.resumeContext.state,
+        claimIds: behavioralFinalAnswer.resumeContext.claimIds,
+        evidenceIds: behavioralFinalAnswer.resumeContext.evidenceIds,
+        capturedAt: nowMs,
+      }));
+    }
   }
   finalizationStatements.push(finalizationWrite);
   try {
@@ -4902,7 +5038,7 @@ export async function readSpecialistTasks(ownerId: string) {
 
 export async function readActivityPracticeRecord(ownerId: string, activityId: string) {
   const db = getDb();
-  const [turns, notes, finalizations, classificationRows, modeTransitions, modeTurnOverrides, finalAnswerRows, reviews, clips, deliveryAnalyses, codeAttempts, typedExchangeDeletions, solutionLinks] = await Promise.all([
+  const [turns, notes, finalizations, classificationRows, modeTransitions, modeTurnOverrides, finalAnswerRows, resumeContextRows, reviews, clips, deliveryAnalyses, codeAttempts, typedExchangeDeletions, solutionLinks] = await Promise.all([
     db
       .select()
       .from(practiceTranscriptTurns)
@@ -4926,6 +5062,10 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
       eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
       eq(behavioralFinalAnswerSnapshots.activityId, activityId),
     )).orderBy(desc(behavioralFinalAnswerSnapshots.snapshotRevision)).limit(101),
+    db.select().from(activityResumeContexts).where(and(
+      eq(activityResumeContexts.ownerId, ownerId),
+      eq(activityResumeContexts.activityId, activityId),
+    )).orderBy(desc(activityResumeContexts.snapshotRevision)).limit(101),
     db.select().from(reviewSchedules).where(and(eq(reviewSchedules.ownerId, ownerId), eq(reviewSchedules.activityId, activityId))),
     db.select().from(activityAudioClips).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.activityId, activityId))),
     db.select().from(activityDeliveryAnalyses).where(and(eq(activityDeliveryAnalyses.ownerId, ownerId), eq(activityDeliveryAnalyses.activityId, activityId))),
@@ -4948,6 +5088,18 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
     correctionReason: row.correctionReason,
     finalizedAt: row.finalizedAt,
     snapshot: behavioralFinalAnswerSnapshotInputSchema.parse(row.snapshot),
+  }));
+  const resumeContextHistory = resumeContextRows.slice(0, 100).reverse().map((row) => storedActivityResumeContextSchema.parse({
+    schemaVersion: 1,
+    state: row.state,
+    snapshotRevision: row.snapshotRevision,
+    resumeId: row.resumeId,
+    resumeRevisionId: row.resumeRevisionId,
+    sourceLabel: row.sourceLabel,
+    resumeImportedAt: row.resumeImportedAt,
+    claimIds: row.claimIds,
+    evidenceIds: row.evidenceIds,
+    capturedAt: row.capturedAt,
   }));
   const finalizationPayload = finalizations[0]?.payload as Partial<SpecialistFinalization> | undefined;
   const solutionLink = solutionLinks[0];
@@ -4982,6 +5134,9 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
       : null,
   });
   const behavioralAnalysis = projectBehavioralAttemptAnalysis(finalAnswer);
+  const resumeContext = finalAnswer?.source === "snapshot_v1"
+    ? resumeContextHistory.find((context) => context.snapshotRevision === finalAnswer.snapshotRevision) ?? null
+    : null;
   let transitionIndex = 0;
   const modeOverrideByTurn = new Map(modeTurnOverrides.map((override) => [
     override.responseTurnId,
@@ -5042,6 +5197,11 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
     finalAnswer,
     finalAnswerMarkdown: renderBehavioralFinalAnswerMarkdown(finalAnswer),
     finalAnswerHtml: renderBehavioralFinalAnswerHtml(finalAnswer),
+    resumeContext,
+    resumeContextHistory,
+    resumeContextHistoryTruncated: resumeContextRows.length > 100,
+    resumeContextMarkdown: renderActivityResumeContextMarkdown(resumeContext),
+    resumeContextHtml: renderActivityResumeContextHtml(resumeContext),
     practiceScenarios,
     practiceScenariosMarkdown: renderBehavioralPracticeScenariosMarkdown(practiceScenarios),
     practiceScenariosHtml: renderBehavioralPracticeScenariosHtml(practiceScenarios),
