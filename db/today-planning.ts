@@ -28,6 +28,7 @@ import {
 } from "./d1-transactional-guard";
 import {
   buildPlanningBatch,
+  plannedActivityRemovalIdentity,
   planningRequestFingerprint,
   type PlanningSelection,
 } from "./today-planning-policy";
@@ -58,6 +59,7 @@ export type RemovePlannedActivitiesInput = {
   expectedWorkbenchRevision: number;
   mutationId: string;
   activityIds: string[];
+  legacyRouteRevisionless?: boolean;
 };
 
 export type PlannedActivityRemovalRejection = {
@@ -280,11 +282,10 @@ export async function removePlannedActivities(
       "Each planned activity ID may appear only once.",
     );
   }
-  const requestHash = await planningRequestFingerprint({
-    operation: "remove_today_practice_activities",
+  const requestHash = await planningRequestFingerprint(plannedActivityRemovalIdentity({
     ...input,
     activityIds,
-  });
+  }));
   const existingReceipt = await readPlanningMutation(ownerId, input.mutationId);
   if (existingReceipt) {
     if (existingReceipt.requestHash !== requestHash) {

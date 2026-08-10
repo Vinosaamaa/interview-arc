@@ -731,6 +731,11 @@ test("workbenches separate Today from the undated publication queue", async () =
 
   assert.match(liveState, /export async function ensureOpenWorkbench/);
   assert.match(liveState, /export async function startFreshWorkbench/);
+  const sessionUpsert = liveState.slice(
+    liveState.indexOf("export async function upsertLiveSession"),
+    liveState.indexOf("export async function startFreshWorkbench"),
+  );
+  assert.match(sessionUpsert, /revision: sql`\$\{liveSessions\.revision\} \+ 1`/);
   assert.match(liveState, /extraRows[\s\S]*row\.workbenchId === workbench\.id/);
   assert.match(liveState, /includeAll/);
   assert.match(liveSync, /"workbench-start-fresh"/);

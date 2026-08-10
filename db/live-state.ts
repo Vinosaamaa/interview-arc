@@ -1435,7 +1435,13 @@ export async function upsertLiveSession(
     })
     .onConflictDoUpdate({
       target: [liveSessions.ownerId, liveSessions.id],
-      set: { date: session.date, workbenchId: workbench.id, payload, updatedAt: nowMs },
+      set: {
+        date: session.date,
+        workbenchId: workbench.id,
+        payload,
+        revision: sql`${liveSessions.revision} + 1`,
+        updatedAt: nowMs,
+      },
     });
   await db.batch([upsert, advanceWorkbenchRevision(db, ownerId, workbench.id, nowMs)]);
 }

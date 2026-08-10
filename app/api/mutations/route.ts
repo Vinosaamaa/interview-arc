@@ -200,6 +200,7 @@ export async function POST(request: Request) {
       case "extra-remove": {
         if (!mutation.id) return Response.json({ error: "Missing activity id." }, { status: 400 });
         const workbench = await ensureOpenWorkbench(ownerId, date, now);
+        const legacyRouteRevisionless = !mutation.mutationId;
         const removal = await removePlannedActivities(ownerId, {
           date,
           expectedWorkbenchId: workbench.id,
@@ -207,6 +208,7 @@ export async function POST(request: Request) {
             ?? workbench.revision,
           mutationId: mutation.mutationId ?? `legacy-remove-${mutation.id}`,
           activityIds: [mutation.id],
+          legacyRouteRevisionless,
         }, now);
         mutationReceipt = removal;
         break;
