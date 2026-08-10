@@ -41,7 +41,7 @@ import {
 import { behavioralTargetReviewSchema } from "../db/behavioral-practice-preflight-policy";
 import { loadContentIndex } from "../db/content";
 import { resolveIntegrationOwner } from "../db/integrations";
-import { getResumeImportStatus } from "../db/resume-revisions";
+import { getResumeImportStatus, getResumeLibrary } from "../db/resume-revisions";
 import {
   applyFocusTimerAction,
   applyTimerAction,
@@ -203,6 +203,7 @@ import {
 } from "./voice-capture-batch";
 import { requestVoiceDeliveryRetry } from "./voice-delivery-retry";
 import { ingestResumeRevision, ResumeImportError } from "./resume-revision-ingest";
+import { servePrivateResumeFile } from "./resume-library-download";
 import { routeLiveV1 } from "./live-v1";
 import { isLiveV1Path } from "./live-v1-path";
 
@@ -2795,6 +2796,22 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   );
 
   server.registerTool(
+    "get_resume_library",
+    {
+      description: "Read the bounded owner-private Resume Library: safe source labels, immutable revision lineage, current markers, integrity metadata, and authenticated website download paths. It never returns resume content, provider/local locators, R2 keys, storage generations, or another owner's state.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async () => {
+      const result = await getResumeLibrary(ownerId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
     "save_leetcode_code_attempt",
     {
       description: "Durably enqueue an exact owner-provided LeetCode attempt after an explicit attempt boundary. Reuse one stable operationId and identical payload after transport uncertainty, then inspect get_specialist_write_status until saved. Use a pending review while evaluation runs, then a new operationId to complete that same immutable attempt. For a complete review, draft the structured fields once and render every summary, finding, testing-evidence, and next-step string unchanged in the referenced visible specialist review; semantic paraphrases are rejected. A persistence child must copy those supplied fields verbatim and never synthesize review wording. Ordinary snippets and generated reference solutions must not use this tool.",
@@ -3722,6 +3739,16 @@ export default {
     }
     if (url.pathname === "/resume/imports" && request.method === "POST") {
       return uploadResumeRevision(ownerId, request, env);
+    }
+    const resumeFile = url.pathname.match(/^\/resume\/files\/([^/]+)\/([^/]+)\/(docx|pdf)$/);
+    if (resumeFile && request.method === "GET") {
+      return servePrivateResumeFile(
+        ownerId,
+        decodeURIComponent(resumeFile[1]),
+        decodeURIComponent(resumeFile[2]),
+        resumeFile[3],
+        env.AUDIO,
+      );
     }
     if (url.pathname === "/voice/context" && request.method === "GET") {
       return voiceContext(ownerId, request);

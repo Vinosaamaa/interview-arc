@@ -673,7 +673,7 @@ export async function getBehavioralFoundationStatus(ownerId: string) {
       evidenceRead: "available" as const,
       sourceRegistry: "not_available" as const,
       storyBank: "not_available" as const,
-      resumeLibrary: "not_available" as const,
+      resumeLibrary: "available" as const,
     },
     lastUpdatedAt: Math.max(
       Number(evidenceSummary.latestUpdatedAt ?? 0),

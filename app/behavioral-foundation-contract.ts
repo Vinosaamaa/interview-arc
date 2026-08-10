@@ -37,7 +37,7 @@ export const behavioralFoundationStatusSchema = z.object({
     evidenceRead: z.literal("available"),
     sourceRegistry: z.literal("not_available"),
     storyBank: z.literal("not_available"),
-    resumeLibrary: z.literal("not_available"),
+    resumeLibrary: z.literal("available"),
   }),
   lastUpdatedAt: z.number().int().positive().nullable(),
   limits: z.object({ claimDetails: count, gaps: count }),

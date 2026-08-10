@@ -13,7 +13,7 @@ const validStatus = {
     evidenceRead: "available",
     sourceRegistry: "not_available",
     storyBank: "not_available",
-    resumeLibrary: "not_available",
+    resumeLibrary: "available",
   },
   lastUpdatedAt: 1,
   limits: { claimDetails: 50, gaps: 20 },

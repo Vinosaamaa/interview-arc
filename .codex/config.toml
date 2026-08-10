@@ -28,6 +28,7 @@ enabled_tools = [
   "resolve_behavioral_target",
   "get_behavioral_practice_preflight",
   "get_resume_import_status",
+  "get_resume_library",
   "save_leetcode_code_attempt",
   "get_specialist_write_status",
   "retry_specialist_writes",
