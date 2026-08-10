@@ -9,6 +9,7 @@ import {
   requireLiveUpdateReconciliation,
   subscribeToLiveUpdates,
 } from "../app/live-event-policy.ts";
+import { isLiveV1Path } from "../mcp-worker/live-v1-path.ts";
 
 class FakeWebSocket {
   static OPEN = 1;
@@ -65,6 +66,13 @@ test("live update envelopes require a positive monotonic revision", () => {
   });
   assert.equal(parseLiveUpdate('{"type":"practice_changed","revision":0}'), null);
   assert.equal(parseLiveUpdate("not json"), null);
+});
+
+test("Live v1 authentication and routing share one exact path boundary", () => {
+  assert.equal(isLiveV1Path("/live/v1"), true);
+  assert.equal(isLiveV1Path("/live/v1/today"), true);
+  assert.equal(isLiveV1Path("/live/v10"), false);
+  assert.equal(isLiveV1Path("/live/v1-legacy"), false);
 });
 
 test("fallback refresh backs off and remains bounded", () => {

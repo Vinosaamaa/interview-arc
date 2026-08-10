@@ -177,6 +177,7 @@ import {
 import { requestVoiceDeliveryRetry } from "./voice-delivery-retry";
 import { ingestResumeRevision, ResumeImportError } from "./resume-revision-ingest";
 import { routeLiveV1 } from "./live-v1";
+import { isLiveV1Path } from "./live-v1-path";
 
 interface Env {
   DB: D1Database;
@@ -3491,9 +3492,8 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(request) });
     if (url.pathname === "/health") return json(request, { ok: true, service: "interview-arc-mcp" });
 
-    const liveV1Path = url.pathname === "/live/v1" || url.pathname.startsWith("/live/v1/");
     const ownerId = await resolveIntegrationOwner(
-      liveV1Path ? authorizationBearerToken(request) : bearerToken(request),
+      isLiveV1Path(url.pathname) ? authorizationBearerToken(request) : bearerToken(request),
     );
     if (!ownerId) {
       return json(request, { error: "Unauthorized", code: "unauthorized", retryable: false }, {

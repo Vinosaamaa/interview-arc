@@ -72,7 +72,8 @@ type ErrorBody = {
 Unknown request and response fields must be ignored. Clients must not infer
 authority from an unknown field. Stable IDs are opaque and case-sensitive.
 Timestamps are server epoch milliseconds. JSON numbers used as IDs are not
-accepted.
+accepted. JSON mutation bodies are limited to 1,048,576 encoded bytes and an
+oversized body returns `400 invalid_request` before deserialization.
 
 ## Read projections
 

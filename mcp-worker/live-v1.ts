@@ -18,6 +18,7 @@ import {
 } from "../db/live-v1";
 import { publishOwnerLiveUpdate } from "../worker/live-update-hub";
 import type { LiveUpdateNamespace } from "../worker/live-update-hub";
+import { isLiveV1Path } from "./live-v1-path";
 
 type JsonResponder = (body: unknown, init?: ResponseInit) => Response;
 
@@ -28,6 +29,7 @@ type LiveV1Env = {
 
 const stableIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
 const uuidV4Pattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const LIVE_JSON_BODY_MAX_BYTES = 1_048_576;
 
 function decodedPathId(value: string) {
   try {
@@ -46,10 +48,50 @@ function decodedPathId(value: string) {
 
 async function requestObject(request: Request) {
   try {
-    const value = await request.json();
+    const declaredLength = request.headers.get("content-length");
+    if (declaredLength) {
+      const byteLength = Number(declaredLength);
+      if (!Number.isSafeInteger(byteLength)
+          || byteLength < 0
+          || byteLength > LIVE_JSON_BODY_MAX_BYTES) {
+        throw new LiveV1Error(
+          "invalid_request",
+          `A Live JSON request body must be no larger than ${LIVE_JSON_BODY_MAX_BYTES} bytes.`,
+          400,
+          false,
+        );
+      }
+    }
+    if (!request.body) throw new Error("missing body");
+    const reader = request.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > LIVE_JSON_BODY_MAX_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        throw new LiveV1Error(
+          "invalid_request",
+          `A Live JSON request body must be no larger than ${LIVE_JSON_BODY_MAX_BYTES} bytes.`,
+          400,
+          false,
+        );
+      }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    const value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
     if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid");
     return value as Record<string, unknown>;
-  } catch {
+  } catch (error) {
+    if (error instanceof LiveV1Error) throw error;
     throw new LiveV1Error(
       "invalid_request",
       "A JSON object is required.",
@@ -356,7 +398,7 @@ export async function routeLiveV1(
   respond: JsonResponder,
 ): Promise<Response | null> {
   const url = new URL(request.url);
-  if (url.pathname !== "/live/v1" && !url.pathname.startsWith("/live/v1/")) return null;
+  if (!isLiveV1Path(url.pathname)) return null;
 
   try {
     if (url.pathname === "/live/v1/today" && request.method === "GET") {

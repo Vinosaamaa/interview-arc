@@ -204,14 +204,20 @@ async function loadOpenWorkbench(ownerId: string, detailActivityId = "") {
     const activities = activityRows.flatMap((row) => validActivity(row.payload)
       ? [{ row, payload: row.payload }]
       : []);
+    const activityIds = new Set(activities.map(({ row }) => row.id));
     const sessions = sessionRows.flatMap((row) => validSession(row.payload)
-      ? [{ row, payload: row.payload }]
+      ? [{
+          row,
+          payload: {
+            ...row.payload,
+            activityIds: row.payload.activityIds.filter((activityId) => activityIds.has(activityId)),
+          },
+        }]
       : []);
     const subjectIds = new Set([
       ...activities.map(({ row }) => row.id),
       ...sessions.map(({ row }) => row.id),
     ]);
-    const activityIds = new Set(activities.map(({ row }) => row.id));
     const timerRows = allTimerRows.filter((row) => subjectIds.has(row.subjectId));
     const outcomeRows = allOutcomeRows.filter((row) => activityIds.has(row.activityId));
     const timerByKey = new Map(timerRows.map((row) => [`${row.kind}:${row.subjectId}`, row]));

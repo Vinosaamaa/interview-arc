@@ -137,7 +137,7 @@ before(async () => {
     INSERT INTO live_sessions
       (owner_id,id,date,workbench_id,payload,revision,updated_at)
     VALUES
-      ('owner-live','session-live','2026-08-09','workbench-live','{"id":"session-live","date":"2026-08-09","label":"System design session","activityIds":["activity-design","activity-design-next","activity-code"],"allocatedSeconds":9600}',1,100),
+      ('owner-live','session-live','2026-08-09','workbench-live','{"id":"session-live","date":"2026-08-09","label":"System design session","activityIds":["activity-design","activity-design-next","activity-code","activity-missing"],"allocatedSeconds":9600}',1,100),
       ('owner-live','session-terminal','2026-08-09','workbench-live','{"id":"session-terminal","date":"2026-08-09","label":"Terminal session","activityIds":["activity-terminal"],"allocatedSeconds":3600}',1,100),
       ('owner-live','session-finish-race','2026-08-09','workbench-live','{"id":"session-finish-race","date":"2026-08-09","label":"Concurrent finish session","activityIds":["activity-finish-a","activity-finish-b"],"allocatedSeconds":7200}',1,100);
     INSERT INTO timers
@@ -206,6 +206,10 @@ test("Live bearer reads resume only the resolved owner's System Design work", as
   assert.equal(today.body.workbench.id, "workbench-live");
   assert.equal(today.body.workbench.revision, 100);
   assert.equal(today.body.focus.activityId, "activity-design");
+  assert.deepEqual(
+    today.body.sessions.find(({ id }) => id === "session-live").activityIds,
+    ["activity-design", "activity-design-next", "activity-code"],
+  );
   assert.deepEqual(today.body.activities.map((activity) => activity.id), [
     "activity-finish-a",
     "activity-finish-b",
@@ -240,6 +244,19 @@ test("Live bearer reads resume only the resolved owner's System Design work", as
   const nonSystemDesign = await request("/live/v1/activities/activity-code");
   assert.equal(nonSystemDesign.status, 404);
   assert.equal(nonSystemDesign.body.code, "activity_not_found");
+
+  const oversized = await request("/live/v1/activities/activity-missing/lease/acquire", {
+    method: "POST",
+    body: {
+      operationId: "oversized-live-request",
+      holderId: "99999999-9999-4999-8999-999999999999",
+      holderSessionId: "oversized-room",
+      padding: "x".repeat(1_048_576),
+    },
+  });
+  assert.equal(oversized.status, 400);
+  assert.equal(oversized.body.code, "invalid_request");
+  assert.match(oversized.body.error, /no larger than 1048576 bytes/i);
 });
 
 test("Live leases enforce 90-second fenced ownership, expiry takeover, release, and receipts", async () => {
@@ -796,6 +813,15 @@ test("Live stages and streams optional private clips without weakening accepted 
     `/live/v1/activities/activity-design/receipts/${corruptAvailableOperation}`,
   );
   assert.equal(corruptReceipt.status, 404);
+  const preservedAfterCorruptRetry = await fetch(
+    `${baseUrl}/live/v1/activities/activity-design/clips/clip-live-1/content`,
+    { headers: { authorization: `Bearer ${ownerToken}` } },
+  );
+  assert.equal(preservedAfterCorruptRetry.status, 200);
+  assert.deepEqual(
+    new Uint8Array(await preservedAfterCorruptRetry.arrayBuffer()),
+    clipBytes,
+  );
 
   const concurrentUploadHeaders = {
     ...uploadHeaders,
