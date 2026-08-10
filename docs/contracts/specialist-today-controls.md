@@ -3,7 +3,7 @@
 ## Purpose
 
 Interview Arc specialists may operate the authenticated owner's Today workbench
-through six MCP tools. D1 remains authoritative. The tools do not scrape
+through seven MCP tools. D1 remains authoritative. The tools do not scrape
 LeetCode, infer outcomes, or replace the website and Voice interfaces.
 
 ## Tool Catalog
@@ -15,6 +15,10 @@ LeetCode, infer outcomes, or replace the website and Voice interfaces.
 - `plan_today_practice` adds an exact authoritative selection as standalone
   work or one session. Its filtered-session mode requires an exact count and
   fails with `insufficient_eligible_questions` instead of relaxing filters.
+- `remove_today_practice_activities` removes one or more exact untouched plan
+  rows after an explicit user instruction. It requires the current workbench
+  revision, preserves every durable row, and returns deleted and rejected IDs
+  with reasons in one idempotent receipt.
 - `control_practice_timer` starts, pauses, resumes, or finishes one practice
   timer. Its guarded `finish_and_advance` operation finishes the current
   activity and starts the next unfinished practice activity in canonical
@@ -40,6 +44,15 @@ Every mutation includes:
 - a stable `mutationId`, reused unchanged for an exact retry; and
 - for timer commands, `expectedRevision` for the targeted activity or session
   timer.
+
+Selective plan removal additionally requires `expectedWorkbenchRevision` and
+exact activity IDs. Unknown and cross-owner IDs share the same
+`not_in_current_workbench` result, so the contract does not reveal another
+owner's data. A mixed request deletes only eligible untouched rows and reports
+durable rows without modifying them. Session membership and allocation,
+focused activity, workbench revision, and receipt commit atomically with the
+eligible deletions. A concurrent timer, transcript/capture, attempt, note,
+review, result, or publication write fails the guarded commit.
 
 The server rejects a stale workbench or timer revision. Reusing a mutation ID
 with changed content is an identity conflict. Reusing it with identical content
@@ -84,9 +97,12 @@ guards.
 Any eligible planned practice activity in the current open workbench is a valid
 timer or result target, even when no activity or session is focused yet. MCP
 controls resolve their target from the authoritative workbench state and join
-its timer and outcome by activity ID. They must not use the Voice timer
-instrument as an activity catalog: that instrument intentionally projects only
-an already-running session or one explicitly focused activity.
+its timer and outcome by activity ID. The Voice timer instrument's additive
+`workbenchActivities` field projects every current-workbench session,
+standalone activity, and focus block exactly once, including completed rows.
+Each row carries its nullable owning session ID; focus remains a separate
+pointer and never hides another session. Legacy clients may keep using the
+focused `activities` slice until they adopt the additive field.
 
 `finish_and_advance` preflights the current result, current and next timer
 revisions, next-activity eligibility, and session order before finishing. Voice

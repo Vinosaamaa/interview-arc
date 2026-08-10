@@ -359,3 +359,23 @@ export async function planningRequestFingerprint(value: unknown) {
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
 }
+
+export function plannedActivityRemovalIdentity(input: {
+  date: string;
+  expectedWorkbenchId: string;
+  expectedWorkbenchRevision: number;
+  mutationId: string;
+  activityIds: string[];
+  legacyRouteRevisionless?: boolean;
+}) {
+  return {
+    operation: "remove_today_practice_activities",
+    date: input.date,
+    expectedWorkbenchId: input.expectedWorkbenchId,
+    ...(!input.legacyRouteRevisionless
+      ? { expectedWorkbenchRevision: input.expectedWorkbenchRevision }
+      : { compatibilityScope: "legacy_route" }),
+    mutationId: input.mutationId,
+    activityIds: input.activityIds,
+  };
+}

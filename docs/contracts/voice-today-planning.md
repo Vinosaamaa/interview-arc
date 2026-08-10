@@ -27,6 +27,7 @@ The response contains:
 
 - protocol version and Pacific date;
 - current open workbench identity;
+- its optimistic workbench revision;
 - Today summary and current sessions, activities, focus blocks, and timers;
 - a paginated specialty-local catalog;
 - per-question owner star, eligibility, disabled reason, and recent completion.
@@ -80,3 +81,14 @@ evidence. Same-workbench duplicate questions return `already_planned`.
 Conflicts are recoverable: refresh authoritative state, preserve still-valid
 local selections, and explain disabled items before retrying with a new
 mutation ID.
+
+## Timer Projection
+
+The authenticated Voice timer read adds `workbenchActivities`, containing every
+activity and focus block in the open workbench grouped by nullable `sessionId`,
+plus `sessions` and each session timer. Completed rows remain visible there
+with their authoritative timer state so a client can show them as complete and
+suppress Start. The legacy `activities` focused-session slice remains during
+native-client rollout. A focused or running row is only the current pointer;
+it never narrows `workbenchActivities`. An empty workbench is represented by
+empty arrays, not by falling back to Session 1.

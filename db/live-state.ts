@@ -30,7 +30,11 @@ import {
   readDurablePracticeSummary,
   voiceFinishGuardMessage,
 } from "./durable-practice";
-import { voiceTimerActivityIds } from "./voice-timer-policy";
+import { voiceWorkbenchActivityProjection } from "./voice-timer-policy";
+import {
+  d1TransactionalInvariantGuard,
+  isD1TransactionalInvariantFailure,
+} from "./d1-transactional-guard";
 
 export type TimerKind = "activity" | "session";
 export type TimerAction = "start" | "pause" | "finish";
@@ -49,6 +53,7 @@ export type WorkbenchState = {
   openedPacificDate: string;
   openedAt: number;
   closedAt: number | null;
+  revision: number;
 };
 
 // Serialized clock as the client consumes it. `runningSince` is server epoch ms;
@@ -121,7 +126,7 @@ function toTimerState(row: {
   };
 }
 
-type ActivityPayload = { id: string; date: string; sessionId?: string } & Record<string, unknown>;
+type ActivityPayload = { id: string; date: string; sessionId?: string | null } & Record<string, unknown>;
 type SessionPayload = { id: string; date?: string; activityIds: string[] } & Record<string, unknown>;
 
 function toFocusBlock(row: FocusBlockRow) {
@@ -153,6 +158,7 @@ export type ActiveVoiceActivity = ActivityPayload & {
 export type VoiceTimerActivity =
   | (ActivityPayload & {
       activityClass: "practice";
+      sessionId: string | null;
       type: "leetcode" | "system_design" | "behavioral";
       title: string;
       questionId?: string;
@@ -167,6 +173,7 @@ export type VoiceTimerActivity =
       id: string;
       date: string;
       activityClass: "focus_block";
+      sessionId: string | null;
       type: "focus_block";
       focusCategory: string;
       title: string;
@@ -179,12 +186,23 @@ export type VoiceTimerActivity =
 export type VoiceTimerInstrument = {
   serverNow: number;
   workbenchId: string | null;
+  workbenchRevision: number | null;
+  focusedActivityId: string | null;
+  focusedSessionId: string | null;
   session: (SessionPayload & {
     label: string;
     allocatedSeconds: number;
     timer: TimerState;
   }) | null;
+  sessions: Array<SessionPayload & {
+    label: string;
+    allocatedSeconds: number;
+    timer: TimerState | null;
+  }>;
   activity: VoiceTimerActivity | null;
+  // Additive all-workbench projection for new clients. `activities` remains
+  // the legacy focused-session slice until native Voice adopts this field.
+  workbenchActivities: VoiceTimerActivity[];
   activities: VoiceTimerActivity[];
 };
 
@@ -234,6 +252,11 @@ export async function readVoiceTimerTarget(
   ]);
   const timer = timerRows[0] ? toTimerState(timerRows[0]) : null;
   if (timer?.completed) return null;
+  const sessionRow = sessionRows.find((row) => {
+    const candidate = row.payload as SessionPayload;
+    return Array.isArray(candidate.activityIds) && candidate.activityIds.includes(activityId);
+  });
+  const sessionPayload = sessionRow?.payload as SessionPayload | undefined;
   const focusBlock = focusBlockRows[0];
   if (focusBlock) {
     return {
@@ -242,6 +265,7 @@ export async function readVoiceTimerTarget(
         id: focusBlock.id,
         date: focusBlock.date,
         activityClass: "focus_block",
+        sessionId: sessionRow?.id ?? null,
         type: "focus_block",
         focusCategory: focusBlock.category,
         title: focusBlock.title,
@@ -250,24 +274,22 @@ export async function readVoiceTimerTarget(
         starred: false,
         requiresOutcome: false,
       },
-      session: null,
+      session: sessionRow && sessionPayload
+        ? { id: sessionRow.id, activityIds: sessionPayload.activityIds }
+        : null,
     };
   }
 
   const activityRow = activityRows[0];
   const payload = activityRow?.payload as ActivityPayload | undefined;
   if (!activityRow || !isVoiceActivityPayload(payload)) return null;
-  const sessionRow = sessionRows.find((row) => {
-    const candidate = row.payload as SessionPayload;
-    return Array.isArray(candidate.activityIds) && candidate.activityIds.includes(activityId);
-  });
-  const sessionPayload = sessionRow?.payload as SessionPayload | undefined;
   const questionId = typeof payload.questionId === "string" ? payload.questionId : undefined;
   return {
     workbenchId: workbench.id,
     activity: {
       ...payload,
       activityClass: "practice",
+      sessionId: sessionRow?.id ?? null,
       type: payload.type,
       title: payload.title,
       questionId,
@@ -349,7 +371,18 @@ export async function readVoiceTimerInstrument(ownerId: string): Promise<VoiceTi
   ]);
   const workbench = workbenchRows[0];
   if (!workbench) {
-    return { serverNow: Date.now(), workbenchId: null, session: null, activity: null, activities: [] };
+    return {
+      serverNow: Date.now(),
+      workbenchId: null,
+      workbenchRevision: null,
+      focusedActivityId: null,
+      focusedSessionId: null,
+      session: null,
+      sessions: [],
+      activity: null,
+      workbenchActivities: [],
+      activities: [],
+    };
   }
   const [sessionRows, activityRows, focusBlockRows] = await Promise.all([
     db.select().from(liveSessions).where(and(
@@ -450,20 +483,37 @@ export async function readVoiceTimerInstrument(ownerId: string): Promise<VoiceTi
       }
     : null;
 
-  const activityIds = voiceTimerActivityIds(
-    session?.activityIds ?? null,
-    focus?.activityId ?? null,
+  const sessions = sessionRows.flatMap((row) => {
+    const payload = row.payload as SessionPayload;
+    if (
+      !Array.isArray(payload.activityIds)
+      || typeof payload.label !== "string"
+      || typeof payload.allocatedSeconds !== "number"
+    ) return [];
+    return [{
+      ...payload,
+      label: payload.label,
+      allocatedSeconds: payload.allocatedSeconds,
+      timer: sessionTimerById.get(row.id) ?? null,
+    }];
+  });
+  const projection = voiceWorkbenchActivityProjection(
+    sessions.map((candidate) => ({
+      id: candidate.id,
+      activityIds: candidate.activityIds,
+    })),
+    [...activityRows.map((row) => row.id), ...focusBlockRows.map((row) => row.id)],
   );
-  const activities: VoiceTimerActivity[] = activityIds.flatMap<VoiceTimerActivity>((activityId) => {
+  const workbenchActivities: VoiceTimerActivity[] = projection.activityIds.flatMap<VoiceTimerActivity>((activityId) => {
     const payload = activityById.get(activityId);
     const focusBlock = focusBlockById.get(activityId);
     if (focusBlock) {
       const timer = activityTimerById.get(activityId) ?? null;
-      if (timer?.completed) return [];
       return [{
         id: focusBlock.id,
         date: focusBlock.date,
         activityClass: "focus_block" as const,
+        sessionId: projection.sessionIdByActivityId[activityId] ?? null,
         type: "focus_block" as const,
         focusCategory: focusBlock.category,
         title: focusBlock.title,
@@ -475,12 +525,12 @@ export async function readVoiceTimerInstrument(ownerId: string): Promise<VoiceTi
     }
     if (!isVoiceActivityPayload(payload)) return [];
     const timer = activityTimerById.get(activityId) ?? null;
-    if (timer?.completed) return [];
     const specialty = payload.type;
     const questionId = typeof payload.questionId === "string" ? payload.questionId : undefined;
     return [{
       ...payload,
       activityClass: "practice" as const,
+      sessionId: projection.sessionIdByActivityId[activityId] ?? null,
       type: specialty,
       title: payload.title,
       questionId,
@@ -494,16 +544,27 @@ export async function readVoiceTimerInstrument(ownerId: string): Promise<VoiceTi
       } : {}),
     } satisfies VoiceTimerActivity];
   });
-  const runningActivity = activities.find((candidate) => candidate.timer?.runningSince) ?? null;
+  const runningActivity = workbenchActivities.find((candidate) => candidate.timer?.runningSince) ?? null;
   const focusedActivity = focus?.activityId
-    ? activities.find((candidate) => candidate.id === focus.activityId) ?? null
+    ? workbenchActivities.find((candidate) => candidate.id === focus.activityId) ?? null
     : null;
+  const legacyActivityIds = session?.activityIds
+    ?? (focus?.activityId ? [focus.activityId] : []);
+  const activities = legacyActivityIds.flatMap((activityId) => {
+    const activity = workbenchActivities.find((candidate) => candidate.id === activityId);
+    return activity && !activity.timer?.completed ? [activity] : [];
+  });
 
   return {
     serverNow: Date.now(),
     workbenchId: workbench.id,
+    workbenchRevision: workbench.updatedAt,
+    focusedActivityId: focus?.activityId ?? null,
+    focusedSessionId: focus?.sessionId ?? null,
     session,
+    sessions,
     activity: runningActivity ?? focusedActivity,
+    workbenchActivities,
     activities,
   };
 }
@@ -515,7 +576,50 @@ function toWorkbenchState(row: typeof practiceWorkbenches.$inferSelect): Workben
     openedPacificDate: row.openedPacificDate,
     openedAt: row.openedAt,
     closedAt: row.closedAt,
+    revision: row.updatedAt,
   };
+}
+
+function advanceWorkbenchRevision(
+  db: Db,
+  ownerId: string,
+  workbenchId: string,
+  nowMs: number,
+) {
+  return db.update(practiceWorkbenches).set({
+    updatedAt: sql`CASE
+      WHEN ${practiceWorkbenches.updatedAt} >= ${nowMs}
+        THEN ${practiceWorkbenches.updatedAt} + 1
+      ELSE ${nowMs}
+    END`,
+  }).where(and(
+    eq(practiceWorkbenches.ownerId, ownerId),
+    eq(practiceWorkbenches.id, workbenchId),
+    eq(practiceWorkbenches.status, "open"),
+  ));
+}
+
+function openWorkbenchInvariant(
+  db: Db,
+  ownerId: string,
+  workbench: WorkbenchState,
+) {
+  return d1TransactionalInvariantGuard(db, sql`EXISTS (
+    SELECT 1 FROM ${practiceWorkbenches}
+    WHERE ${practiceWorkbenches.ownerId} = ${ownerId}
+      AND ${practiceWorkbenches.id} = ${workbench.id}
+      AND ${practiceWorkbenches.status} = 'open'
+      AND ${practiceWorkbenches.updatedAt} = ${workbench.revision}
+  )`);
+}
+
+function throwWorkbenchMutationConflict(error: unknown): never {
+  if (isD1TransactionalInvariantFailure(error)) {
+    throw new TimerStateConflictError(
+      "Today changed in another surface. Refresh before retrying.",
+    );
+  }
+  throw error;
 }
 
 export async function ensureOpenWorkbench(ownerId: string, date: string, nowMs = Date.now()) {
@@ -548,7 +652,7 @@ export async function ensureOpenWorkbench(ownerId: string, date: string, nowMs =
     .set({ workbenchId: id, updatedAt: nowMs })
     .where(and(eq(liveSessions.ownerId, ownerId), isNull(liveSessions.workbenchId)));
 
-  return { id, status: "open" as const, openedPacificDate: date, openedAt: nowMs, closedAt: null };
+  return { id, status: "open" as const, openedPacificDate: date, openedAt: nowMs, closedAt: null, revision: nowMs };
 }
 
 export async function readLiveState(
@@ -1190,8 +1294,7 @@ export async function upsertExtraActivity(
   const db = getDb();
   const workbench = await ensureOpenWorkbench(ownerId, activity.date, nowMs);
   const payload = { ...activity, workbenchId: workbench.id };
-  await db
-    .insert(extraActivities)
+  const upsert = db.insert(extraActivities)
     .values({
       ownerId,
       id: activity.id,
@@ -1205,6 +1308,15 @@ export async function upsertExtraActivity(
       target: [extraActivities.ownerId, extraActivities.id],
       set: { date: activity.date, workbenchId: workbench.id, payload, updatedAt: nowMs },
     });
+  try {
+    await db.batch([
+      openWorkbenchInvariant(db, ownerId, workbench),
+      upsert,
+      advanceWorkbenchRevision(db, ownerId, workbench.id, nowMs),
+    ]);
+  } catch (error) {
+    throwWorkbenchMutationConflict(error);
+  }
 }
 
 export async function upsertFocusBlock(
@@ -1229,7 +1341,7 @@ export async function upsertFocusBlock(
     eq(focusBlocks.ownerId, ownerId),
     eq(focusBlocks.id, input.id),
   ));
-  await db.insert(focusBlocks).values({
+  const upsert = db.insert(focusBlocks).values({
     ownerId,
     id: input.id,
     workbenchId: workbench.id,
@@ -1252,6 +1364,15 @@ export async function upsertFocusBlock(
       updatedAt: nowMs,
     },
   });
+  try {
+    await db.batch([
+      openWorkbenchInvariant(db, ownerId, workbench),
+      upsert,
+      advanceWorkbenchRevision(db, ownerId, workbench.id, nowMs),
+    ]);
+  } catch (error) {
+    throwWorkbenchMutationConflict(error);
+  }
 }
 
 export async function removeFocusBlock(ownerId: string, id: string) {
@@ -1345,8 +1466,7 @@ export async function upsertLiveSession(
   const db = getDb();
   const workbench = await ensureOpenWorkbench(ownerId, session.date, nowMs);
   const payload = { ...session, workbenchId: workbench.id };
-  await db
-    .insert(liveSessions)
+  const upsert = db.insert(liveSessions)
     .values({
       ownerId,
       id: session.id,
@@ -1358,8 +1478,23 @@ export async function upsertLiveSession(
     })
     .onConflictDoUpdate({
       target: [liveSessions.ownerId, liveSessions.id],
-      set: { date: session.date, workbenchId: workbench.id, payload, updatedAt: nowMs },
+      set: {
+        date: session.date,
+        workbenchId: workbench.id,
+        payload,
+        revision: sql`${liveSessions.revision} + 1`,
+        updatedAt: nowMs,
+      },
     });
+  try {
+    await db.batch([
+      openWorkbenchInvariant(db, ownerId, workbench),
+      upsert,
+      advanceWorkbenchRevision(db, ownerId, workbench.id, nowMs),
+    ]);
+  } catch (error) {
+    throwWorkbenchMutationConflict(error);
+  }
 }
 
 export async function startFreshWorkbench(
@@ -1440,7 +1575,7 @@ export async function startFreshWorkbench(
     closedAt: null,
     updatedAt: nowMs,
   });
-  return { id, status: "open" as const, openedPacificDate: date, openedAt: nowMs, closedAt: null };
+  return { id, status: "open" as const, openedPacificDate: date, openedAt: nowMs, closedAt: null, revision: nowMs };
 }
 
 export async function rolloverPublishedWorkbench(ownerId: string, date: string, nowMs: number) {

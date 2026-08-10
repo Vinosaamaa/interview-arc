@@ -96,11 +96,17 @@ similarly named operation or loop retries.
   `Start a new session` is an explicit override.
 - Today catalog/planning/result/session behavior uses
   `query_practice_catalog`, `plan_today_practice`,
+  `remove_today_practice_activities`,
   `control_practice_timer`, `control_practice_session_timer`,
   `control_practice_workbench`, and `set_practice_result` only when the exact
   tool is discoverable and the user has supplied the required authorization.
   Preserve current workbench/timer revisions and stable mutation IDs. Never
   infer timers, results, or permission to mutate.
+- Use `remove_today_practice_activities` only for an explicit request naming
+  exact untouched planned activity IDs. Read the current workbench revision,
+  reuse one stable mutation ID for an exact retry, and report every deleted or
+  rejected ID from the receipt. Never substitute whole-workbench rollover or
+  delete durable evidence.
 - `Publish this session` flushes and finalizes one activity in D1.
 - `Publish today's practice` finalizes every ready activity for that specialty
   in D1, including failures. It performs no Git, PR, publication, or deploy.

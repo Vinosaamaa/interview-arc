@@ -7,7 +7,7 @@ import {
   setPracticeResult,
 } from "../db/specialist-controls-runtime.ts";
 import { nextTimerState } from "../db/timer-state.ts";
-import { voiceTimerActivityIds } from "../db/voice-timer-policy.ts";
+import { voiceWorkbenchActivityProjection } from "../db/voice-timer-policy.ts";
 
 function practiceActivity(id, sessionId) {
   return {
@@ -427,11 +427,26 @@ test("starting a session activity also starts its parent session", async () => {
   assert.equal(state.timers["activity-1"].revision, 1);
 });
 
-test("the Voice timer projection remains focused-session or focused-activity only", () => {
-  assert.deepEqual(voiceTimerActivityIds(null, null), []);
-  assert.deepEqual(voiceTimerActivityIds(null, "focused-activity"), ["focused-activity"]);
+test("the Voice timer projection includes every workbench session and standalone activity", () => {
   assert.deepEqual(
-    voiceTimerActivityIds(["session-activity-1", "session-activity-2"], "focused-activity"),
-    ["session-activity-1", "session-activity-2"],
+    voiceWorkbenchActivityProjection([
+      { id: "session-1", activityIds: ["activity-1", "activity-2"] },
+      { id: "session-3", activityIds: ["activity-3", "career-block"] },
+    ], ["activity-3", "activity-1", "standalone", "career-block"]),
+    {
+      activityIds: ["activity-1", "activity-3", "career-block", "standalone"],
+      sessionIdByActivityId: {
+        "activity-1": "session-1",
+        "activity-3": "session-3",
+        "career-block": "session-3",
+      },
+    },
   );
+});
+
+test("the Voice timer projection is empty only when the workbench is empty", () => {
+  assert.deepEqual(voiceWorkbenchActivityProjection([], []), {
+    activityIds: [],
+    sessionIdByActivityId: {},
+  });
 });

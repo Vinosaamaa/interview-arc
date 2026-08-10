@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   buildPlanningBatch,
   filterPlanningCatalog,
+  plannedActivityRemovalIdentity,
   planningRequestFingerprint,
   specialistPlanningReplay,
   selectExactPlanningQuestions,
@@ -214,6 +215,37 @@ test("request fingerprints are stable across object key order and reject changed
     mutationId: "same",
   });
   assert.notEqual(today, tomorrow);
+});
+
+test("legacy activity-removal retries keep identity across inferred revision changes", async () => {
+  const base = {
+    date: "2026-08-09",
+    expectedWorkbenchId: "workbench-1",
+    mutationId: "legacy-remove-activity-1",
+    activityIds: ["activity-1"],
+  };
+  const legacyFirst = await planningRequestFingerprint(plannedActivityRemovalIdentity({
+    ...base,
+    expectedWorkbenchRevision: 100,
+    legacyRouteRevisionless: true,
+  }));
+  const legacyRetry = await planningRequestFingerprint(plannedActivityRemovalIdentity({
+    ...base,
+    expectedWorkbenchRevision: 101,
+    legacyRouteRevisionless: true,
+  }));
+  const explicitFirst = await planningRequestFingerprint(plannedActivityRemovalIdentity({
+    ...base,
+    expectedWorkbenchRevision: 100,
+  }));
+  const explicitChanged = await planningRequestFingerprint(plannedActivityRemovalIdentity({
+    ...base,
+    expectedWorkbenchRevision: 101,
+  }));
+
+  assert.equal(legacyFirst, legacyRetry);
+  assert.notEqual(explicitFirst, explicitChanged);
+  assert.notEqual(legacyFirst, explicitFirst);
 });
 
 test("specialist planning retries validate identity and legacy scope", () => {

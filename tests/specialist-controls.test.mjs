@@ -142,6 +142,7 @@ test("specialist Today controls are registered, allowlisted, and contract-bound"
   for (const tool of [
     "query_practice_catalog",
     "plan_today_practice",
+    "remove_today_practice_activities",
     "control_practice_timer",
     "control_practice_session_timer",
     "control_practice_workbench",

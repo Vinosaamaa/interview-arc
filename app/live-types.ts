@@ -181,6 +181,7 @@ export type Workbench = {
   openedPacificDate: string;
   openedAt: number;
   closedAt: number | null;
+  revision: number;
 };
 export type ExtraActivity = JournalActivity & { timerGroupId: string; workbenchId?: string };
 export type LocalSession = PracticeSession & { source: "extra"; date: string; workbenchId?: string };

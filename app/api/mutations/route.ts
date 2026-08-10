@@ -1,8 +1,8 @@
 import {
   applyTimerAction,
   applyFocusTimerAction,
+  ensureOpenWorkbench,
   readLiveState,
-  removeExtraActivity,
   removeFocusBlock,
   removeLiveSession,
   setActivityNote,
@@ -18,6 +18,10 @@ import {
   type TimerAction,
   type TimerKind,
 } from "../../../db/live-state";
+import {
+  removePlannedActivities,
+  TodayPlanningConflictError,
+} from "../../../db/today-planning";
 import { resolveOwnerId } from "../../../db/owner";
 import { buildPracticeSnapshot } from "../../../db/practice-snapshot";
 import { toRouteErrorMessage } from "../route-helpers";
@@ -40,7 +44,12 @@ type Mutation =
   | { type: "problem-star"; specialty: "leetcode" | "system_design" | "behavioral"; questionId: string; starred: boolean }
   | { type: "personal-question-upsert"; specialty: "leetcode" | "system_design" | "behavioral"; question: { questionId: string; title: string; prompt?: string; url?: string; tags?: string[]; priority?: number; targetMinutes?: number } }
   | { type: "extra-upsert"; activity: { id: string; date: string } & Record<string, unknown> }
-  | { type: "extra-remove"; id: string }
+  | {
+      type: "extra-remove";
+      id: string;
+      mutationId?: string;
+      expectedWorkbenchRevision?: number;
+    }
   | { type: "focus-block-upsert"; block: { id: string; date: string; focusCategory: "job_applications"; title: string; plannedSeconds: number; note?: string } }
   | { type: "focus-block-remove"; id: string }
   | { type: "session-upsert"; session: { id: string; date: string } & Record<string, unknown> }
@@ -94,6 +103,7 @@ export async function POST(request: Request) {
 
     const ownerId = await resolveOwnerId(request);
     const now = Date.now();
+    let mutationReceipt: unknown;
 
     switch (mutation.type) {
       case "timer": {
@@ -189,7 +199,18 @@ export async function POST(request: Request) {
       }
       case "extra-remove": {
         if (!mutation.id) return Response.json({ error: "Missing activity id." }, { status: 400 });
-        await removeExtraActivity(ownerId, mutation.id);
+        const workbench = await ensureOpenWorkbench(ownerId, date, now);
+        const legacyRouteRevisionless = !mutation.mutationId;
+        const removal = await removePlannedActivities(ownerId, {
+          date,
+          expectedWorkbenchId: workbench.id,
+          expectedWorkbenchRevision: mutation.expectedWorkbenchRevision
+            ?? workbench.revision,
+          mutationId: mutation.mutationId ?? `legacy-remove-${mutation.id}`,
+          activityIds: [mutation.id],
+          legacyRouteRevisionless,
+        }, now);
+        mutationReceipt = removal;
         break;
       }
       case "focus-block-upsert": {
@@ -243,10 +264,20 @@ export async function POST(request: Request) {
       ownerId,
       mutation.type === "timer" ? "timer" : mutation.type === "publication-status" ? "publication" : "practice",
     );
-    return Response.json(state);
+    return Response.json({
+      ...state,
+      ...(mutationReceipt ? { mutationReceipt } : {}),
+    });
   } catch (error) {
     if (error instanceof TimerStateConflictError) {
       return Response.json({ error: error.message, retryable: false }, { status: 409 });
+    }
+    if (error instanceof TodayPlanningConflictError) {
+      return Response.json({
+        error: error.message,
+        code: error.code,
+        retryable: false,
+      }, { status: 409 });
     }
     return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 });
   }
