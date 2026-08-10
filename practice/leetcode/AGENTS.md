@@ -71,8 +71,8 @@ Use this bounded warm startup:
 
 1. Read Today once and reuse one planned/focused activity; never duplicate it.
 2. Resolve `questionId` and load its Solution Profile once.
-3. Run controller `ensure` and `navigate` once, read the exact live Java
-   starter, and prepare/resume the source.
+3. Run the [controller commands](#test-editorial-and-submit) once, read the
+   exact live Java starter, and prepare/resume the source.
 4. Send the tmux-safe `nvim` command as the first visible handoff.
 5. After it renders, start the timer, reserve the harness, and return the
    prompt/restatement plus Quick/Full commands without waiting for helpers.
@@ -173,7 +173,7 @@ Then it runs a real local controller `ensure`. Specialists report the
 controller's recovery command rather than installing dependencies during the
 submission hot path.
 
-Warm startup:
+Controller commands for startup step 3:
 
 ```bash
 node scripts/leetcode-playwright-controller.mjs ensure
