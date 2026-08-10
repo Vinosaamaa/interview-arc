@@ -23,6 +23,8 @@ export type AverageEffortBucket = {
   averageSeconds: number | null;
 };
 
+export type ReaderSpecialty = "leetcode" | "system_design" | "behavioral";
+
 export type JourneyReaderState = {
   attemptId: string;
   range: "30" | "90" | "365" | "all";
@@ -30,23 +32,47 @@ export type JourneyReaderState = {
   heatmap: "all" | "leetcode" | "system_design" | "behavioral" | "job_applications";
   day: string;
   topic: string;
+  specialty?: ReaderSpecialty;
+  problemId?: string;
 };
 
 export type PastReaderState = {
+  attemptId: string;
+  specialty?: ReaderSpecialty;
+  problemId?: string;
+};
+
+export type BankReaderState = {
+  specialty: ReaderSpecialty;
+  problemId: string;
   attemptId: string;
 };
 
 export type WorkspaceRouteView = "today" | "journey" | "past" | "banks";
 
 export type ReaderClosePlan = {
-  view: "journey" | "past";
+  view: "journey" | "past" | "banks";
   href: string;
 };
 
-const READER_QUERY_KEYS = ["attempt", "range", "metric", "heatmap", "day", "topic"] as const;
+const READER_QUERY_KEYS = ["attempt", "range", "metric", "heatmap", "day", "topic", "specialty", "problem"] as const;
+const READER_SPECIALTIES = ["leetcode", "system_design", "behavioral"] as const;
 
 function clearReaderQuery(url: URL) {
   READER_QUERY_KEYS.forEach((key) => url.searchParams.delete(key));
+}
+
+function readReaderProblemIdentity(url: URL): { specialty?: ReaderSpecialty; problemId?: string } | null {
+  const specialty = url.searchParams.get("specialty")?.trim() ?? "";
+  const problemId = url.searchParams.get("problem")?.trim() ?? "";
+  if (!specialty && !problemId) return {};
+  if (!specialty || !problemId || !READER_SPECIALTIES.includes(specialty as ReaderSpecialty)) return null;
+  return { specialty: specialty as ReaderSpecialty, problemId };
+}
+
+export function readerDepthAfterNestedClose(value: unknown) {
+  const depth = typeof value === "number" && Number.isInteger(value) ? value : 0;
+  return Math.max(0, depth - 1);
 }
 
 function identity(value: string) {
@@ -108,6 +134,8 @@ export function averageEffortBreakdown(
 
 export function journeyReaderHref(currentHref: string, state: JourneyReaderState) {
   const url = new URL(currentHref);
+  url.searchParams.delete("specialty");
+  url.searchParams.delete("problem");
   url.searchParams.set("view", "journey");
   url.searchParams.set("attempt", state.attemptId);
   url.searchParams.set("range", state.range);
@@ -115,6 +143,10 @@ export function journeyReaderHref(currentHref: string, state: JourneyReaderState
   url.searchParams.set("heatmap", state.heatmap);
   if (state.day) url.searchParams.set("day", state.day); else url.searchParams.delete("day");
   if (state.topic) url.searchParams.set("topic", state.topic); else url.searchParams.delete("topic");
+  if (state.specialty && state.problemId) {
+    url.searchParams.set("specialty", state.specialty);
+    url.searchParams.set("problem", state.problemId);
+  }
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
@@ -127,11 +159,21 @@ export function readJourneyReaderState(currentHref: string): JourneyReaderState 
   const heatmap = url.searchParams.get("heatmap") ?? "all";
   const day = url.searchParams.get("day") ?? "";
   const topic = url.searchParams.get("topic") ?? "";
+  const problemIdentity = readReaderProblemIdentity(url);
   if (!attemptId || !["30", "90", "365", "all"].includes(range)
     || !["activities", "time"].includes(metric)
     || !["all", "leetcode", "system_design", "behavioral", "job_applications"].includes(heatmap)
-    || (day && !/^\d{4}-\d{2}-\d{2}$/.test(day))) return null;
-  return { attemptId, range: range as JourneyReaderState["range"], metric: metric as JourneyReaderState["metric"], heatmap: heatmap as JourneyReaderState["heatmap"], day, topic };
+    || (day && !/^\d{4}-\d{2}-\d{2}$/.test(day))
+    || !problemIdentity) return null;
+  return {
+    attemptId,
+    range: range as JourneyReaderState["range"],
+    metric: metric as JourneyReaderState["metric"],
+    heatmap: heatmap as JourneyReaderState["heatmap"],
+    day,
+    topic,
+    ...problemIdentity,
+  };
 }
 
 export function journeyHrefWithoutReader(currentHref: string) {
@@ -153,7 +195,48 @@ export function readPastReaderState(currentHref: string): PastReaderState | null
   const url = new URL(currentHref);
   if (url.searchParams.get("view") !== "past") return null;
   const attemptId = url.searchParams.get("attempt")?.trim() ?? "";
-  return attemptId ? { attemptId } : null;
+  const problemIdentity = readReaderProblemIdentity(url);
+  if (!attemptId || !problemIdentity) return null;
+  return {
+    attemptId,
+    ...problemIdentity,
+  };
+}
+
+export function pastSolutionReaderHref(
+  currentHref: string,
+  attemptId: string,
+  specialty: NonNullable<PastReaderState["specialty"]>,
+  problemId: string,
+) {
+  const url = new URL(pastReaderHref(currentHref, attemptId), new URL(currentHref).origin);
+  url.searchParams.set("specialty", specialty);
+  url.searchParams.set("problem", problemId);
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+export function bankReaderHref(
+  currentHref: string,
+  specialty: BankReaderState["specialty"],
+  problemId: string,
+  attemptId = "",
+) {
+  const url = new URL(currentHref);
+  clearReaderQuery(url);
+  url.searchParams.set("view", "banks");
+  url.searchParams.set("specialty", specialty);
+  url.searchParams.set("problem", problemId);
+  if (attemptId) url.searchParams.set("attempt", attemptId);
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+export function readBankReaderState(currentHref: string): BankReaderState | null {
+  const url = new URL(currentHref);
+  if (url.searchParams.get("view") !== "banks") return null;
+  const problemIdentity = readReaderProblemIdentity(url);
+  const attemptId = url.searchParams.get("attempt")?.trim() ?? "";
+  if (!problemIdentity?.specialty || !problemIdentity.problemId) return null;
+  return { specialty: problemIdentity.specialty, problemId: problemIdentity.problemId, attemptId };
 }
 
 export function workspaceViewHref(currentHref: string, view: WorkspaceRouteView) {
@@ -164,11 +247,40 @@ export function workspaceViewHref(currentHref: string, view: WorkspaceRouteView)
 }
 
 export function readerClosePlan(currentHref: string): ReaderClosePlan | null {
-  if (readJourneyReaderState(currentHref)) {
+  const journeyReader = readJourneyReaderState(currentHref);
+  if (journeyReader) {
+    if (journeyReader.specialty && journeyReader.problemId) {
+      return {
+        view: "journey",
+        href: journeyReaderHref(currentHref, {
+          attemptId: journeyReader.attemptId,
+          range: journeyReader.range,
+          metric: journeyReader.metric,
+          heatmap: journeyReader.heatmap,
+          day: journeyReader.day,
+          topic: journeyReader.topic,
+        }),
+      };
+    }
     return { view: "journey", href: journeyHrefWithoutReader(currentHref) };
   }
-  if (readPastReaderState(currentHref)) {
-    return { view: "past", href: workspaceViewHref(currentHref, "past") };
+  const pastReader = readPastReaderState(currentHref);
+  if (pastReader) {
+    return {
+      view: "past",
+      href: pastReader.specialty && pastReader.problemId
+        ? pastReaderHref(currentHref, pastReader.attemptId)
+        : workspaceViewHref(currentHref, "past"),
+    };
+  }
+  const bankReader = readBankReaderState(currentHref);
+  if (bankReader) {
+    return {
+      view: "banks",
+      href: bankReader.attemptId
+        ? bankReaderHref(currentHref, bankReader.specialty, bankReader.problemId)
+        : workspaceViewHref(currentHref, "banks"),
+    };
   }
   return null;
 }

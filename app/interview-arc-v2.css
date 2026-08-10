@@ -1505,25 +1505,36 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   from { opacity: 1; }
   to { opacity: 0; }
 }
-.master-pane-toggle { display: inline-grid; place-items: center; }
-
-.library-page.has-open-entry .past-master-detail,
-.banks-page.has-open-solution .bank-master-detail {
+.reader-workspace {
   --reader-pane-width: 1200px;
-  --master-pane-width: 525px;
-  --reader-workspace-gap: 12px;
   width: min(var(--reader-pane-width), calc(100vw - var(--sidebar-size) - 32px));
   height: calc(100dvh - 104px);
-  grid-template-columns: 0 minmax(0, 1fr);
-  gap: 0;
-  align-items: stretch;
   position: fixed;
   top: 88px;
   left: calc(var(--sidebar-size) + (100vw - var(--sidebar-size)) / 2);
   transform: translateX(-50%);
-  overflow: visible;
   z-index: 26;
   animation: reader-workspace-enter .2s cubic-bezier(.2,.8,.2,1) both;
+}
+.focused-attempt-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.focused-attempt-workspace.reader-closing {
+  pointer-events: none;
+  animation: reader-workspace-exit .18s cubic-bezier(.4,0,.2,1) both;
+}
+.focused-attempt-pane { display: block; width: 100%; height: 100%; min-width: 0; }
+.master-pane-toggle { display: inline-grid; place-items: center; }
+
+.library-page.has-open-entry .past-master-detail,
+.banks-page.has-open-solution .bank-master-detail {
+  --master-pane-width: 525px;
+  --reader-workspace-gap: 12px;
+  grid-template-columns: 0 minmax(0, 1fr);
+  gap: 0;
+  align-items: stretch;
+  overflow: visible;
   transition:
     width .3s cubic-bezier(.2,.8,.2,1),
     grid-template-columns .3s cubic-bezier(.2,.8,.2,1),
@@ -1670,10 +1681,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
     --sidebar-size: 0px;
     --sidebar-half: 0px;
   }
-  .library-page.has-open-entry .past-master-detail,
-  .banks-page.has-open-solution .bank-master-detail,
-  .library-page.has-open-entry .past-master-detail.master-pane-open,
-  .banks-page.has-open-solution .bank-master-detail.master-pane-open {
+  .reader-workspace {
     width: calc(100vw - 32px);
     height: auto;
     inset: 156px auto 16px 50%;
@@ -1682,10 +1690,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 
 @media (max-width: 760px) {
   .topbar { top: 0; }
-  .library-page.has-open-entry .past-master-detail,
-  .banks-page.has-open-solution .bank-master-detail,
-  .library-page.has-open-entry .past-master-detail.master-pane-open,
-  .banks-page.has-open-solution .bank-master-detail.master-pane-open {
+  .reader-workspace {
     width: 100%;
     height: auto;
     inset: 66px 0 72px;
@@ -1805,8 +1810,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 
 @media (prefers-reduced-motion: reduce) {
   .page-enter-stage,
-  .library-page.has-open-entry .past-master-detail,
-  .banks-page.has-open-solution .bank-master-detail { animation-duration: .01ms !important; }
+  .reader-workspace { animation-duration: .01ms !important; }
 }
 
 /* Workbench lifecycle and final interaction polish ------------------------ */

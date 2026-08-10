@@ -2,11 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   averageEffortBreakdown,
+  bankReaderHref,
   journeyHrefWithoutReader,
   journeyReaderHref,
   pastReaderHref,
+  pastSolutionReaderHref,
+  readerDepthAfterNestedClose,
   readerClosePlan,
   readJourneyReaderState,
+  readBankReaderState,
   readPastReaderState,
   readWorkspaceRouteView,
   uniqueJourneyEntries,
@@ -44,6 +48,8 @@ test("Journey attempt URLs round-trip state and can return to Journey", () => {
 test("Malformed Journey reader URLs fail closed", () => {
   assert.equal(readJourneyReaderState("https://example.test/?view=journey&attempt=x&range=garbage"), null);
   assert.equal(readJourneyReaderState("https://example.test/?view=journey&attempt=x&day=yesterday"), null);
+  assert.equal(readJourneyReaderState("https://example.test/?view=journey&attempt=x&specialty=leetcode"), null);
+  assert.equal(readPastReaderState("https://example.test/?view=past&attempt=x&problem=word-break-ii"), null);
 });
 
 test("Past attempt URLs round-trip stable selection without Journey-only state", () => {
@@ -56,6 +62,17 @@ test("Past attempt URLs round-trip stable selection without Journey-only state",
   assert.doesNotMatch(href, /range=|topic=/);
 });
 
+test("Past nested solution URLs retain both attempt and stable problem identity", () => {
+  const href = pastSolutionReaderHref("https://example.test/practice?keep=yes", "activity/one", "leetcode", "word-break-ii");
+  assert.deepEqual(readPastReaderState(`https://example.test${href}`), {
+    attemptId: "activity/one",
+    specialty: "leetcode",
+    problemId: "word-break-ii",
+  });
+  assert.match(href, /specialty=leetcode/);
+  assert.match(href, /problem=word-break-ii/);
+});
+
 test("Workspace routes keep every primary surface visible in the URL and clear stale reader state", () => {
   const href = workspaceViewHref("https://example.test/practice?keep=yes&view=journey&attempt=old&range=30", "past");
   assert.equal(readWorkspaceRouteView(`https://example.test${href}`), "past");
@@ -65,17 +82,48 @@ test("Workspace routes keep every primary surface visible in the URL and clear s
   assert.equal(readWorkspaceRouteView("https://example.test/?view=unknown"), null);
 });
 
-test("reader close plans deterministically return Journey and Past readers to their origin routes", () => {
-  const journeyReader = "https://example.test/practice?keep=yes&view=journey&attempt=activity%2Fone&range=30&metric=time&heatmap=leetcode&day=2026-08-07&topic=Graphs#reader";
-  assert.deepEqual(readerClosePlan(journeyReader), {
-    view: "journey",
-    href: "/practice?keep=yes&view=journey#reader",
+test("Problem Bank URLs preserve stable problem and nested attempt identity", () => {
+  const solution = bankReaderHref("https://example.test/practice?keep=yes", "leetcode", "word-break-ii");
+  assert.deepEqual(readBankReaderState(`https://example.test${solution}`), {
+    specialty: "leetcode",
+    problemId: "word-break-ii",
+    attemptId: "",
   });
+  assert.match(solution, /view=banks/);
+  assert.match(solution, /problem=word-break-ii/);
+  assert.match(solution, /keep=yes/);
 
-  const pastReader = "https://example.test/practice?keep=yes&view=past&attempt=activity%2Fone&range=30#reader";
-  assert.deepEqual(readerClosePlan(pastReader), {
-    view: "past",
-    href: "/practice?keep=yes&view=past#reader",
+  const attempt = bankReaderHref(`https://example.test${solution}`, "leetcode", "word-break-ii", "activity/one");
+  assert.deepEqual(readBankReaderState(`https://example.test${attempt}`), {
+    specialty: "leetcode",
+    problemId: "word-break-ii",
+    attemptId: "activity/one",
   });
+  assert.match(attempt, /attempt=activity%2Fone/);
+  assert.equal(readBankReaderState("https://example.test/?view=banks&specialty=unknown&problem=x"), null);
+});
+
+test("reader close plans deterministically return Journey, Past, and Bank readers to their origin routes", () => {
+  const journeyReader = "https://example.test/practice?keep=yes&view=journey&attempt=activity%2Fone&range=30&metric=time&heatmap=leetcode&day=2026-08-07&topic=Graphs#reader";
+  const journeySolution = journeyReader.replace("#reader", "&specialty=leetcode&problem=word-break-ii#reader");
+  const pastReader = "https://example.test/practice?keep=yes&view=past&attempt=activity%2Fone&range=30#reader";
+  const pastSolution = pastReader.replace("#reader", "&specialty=leetcode&problem=word-break-ii#reader");
+  const bankAttempt = "https://example.test/practice?keep=yes&view=banks&specialty=leetcode&problem=word-break-ii&attempt=activity%2Fone#reader";
+  const cases = [
+    [journeyReader, { view: "journey", href: "/practice?keep=yes&view=journey#reader" }],
+    [journeySolution, { view: "journey", href: "/practice?keep=yes&view=journey&attempt=activity%2Fone&range=30&metric=time&heatmap=leetcode&day=2026-08-07&topic=Graphs#reader" }],
+    [pastReader, { view: "past", href: "/practice?keep=yes&view=past#reader" }],
+    [pastSolution, { view: "past", href: "/practice?keep=yes&view=past&attempt=activity%2Fone#reader" }],
+    [bankAttempt, { view: "banks", href: "/practice?keep=yes&view=banks&specialty=leetcode&problem=word-break-ii#reader" }],
+    ["https://example.test/practice?view=banks&specialty=leetcode&problem=word-break-ii", { view: "banks", href: "/practice?view=banks" }],
+  ];
+  cases.forEach(([href, expected]) => assert.deepEqual(readerClosePlan(href), expected, href));
   assert.equal(readerClosePlan("https://example.test/practice?view=today"), null);
+});
+
+test("direct nested-reader close fallbacks never fabricate browser history depth", () => {
+  assert.equal(readerDepthAfterNestedClose(undefined), 0);
+  assert.equal(readerDepthAfterNestedClose(0), 0);
+  assert.equal(readerDepthAfterNestedClose(1), 0);
+  assert.equal(readerDepthAfterNestedClose(3), 2);
 });
