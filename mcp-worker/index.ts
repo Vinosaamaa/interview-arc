@@ -2729,7 +2729,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
       try {
         const result = await readBehavioralPracticePreflight(ownerId, input);
         return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          content: [{ type: "text", text: JSON.stringify(result) }],
           structuredContent: result,
         };
       } catch (error) {
@@ -2881,8 +2881,8 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
           summary: z.string().optional(),
           transcriptScope: z.enum(["full_activity", "activity_exchanges", "none_observed"]),
           review: z.object({
-            didWell: z.array(z.string()),
-            improve: z.array(z.string()),
+            didWell: z.array(z.string().trim().min(1)),
+            improve: z.array(z.string().trim().min(1)),
           }),
           behavioralReview: behavioralTargetReviewSchema.optional(),
           modelAnswer: z.string().min(1),

@@ -3468,6 +3468,54 @@ type BehavioralFinalAnswerWritePlan = {
   };
 };
 
+function validateBehavioralTargetReview(
+  payload: SpecialistFinalization,
+  snapshot: BehavioralFinalAnswerSnapshotInput,
+) {
+  const targetReview = payload.behavioralReview
+    ? behavioralTargetReviewSchema.parse(payload.behavioralReview)
+    : undefined;
+  if (snapshot.scope === "target_tailored" && !targetReview) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_target_review_required",
+      "A target-tailored finalization requires the typed target review.",
+    );
+  }
+  if (snapshot.scope !== "target_tailored" && targetReview) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_target_review_scope_mismatch",
+      "The typed target review belongs only to a target-tailored final-answer snapshot.",
+    );
+  }
+  if (!targetReview) return undefined;
+
+  const universalStrengths = payload.review.didWell.map((item) => item.trim());
+  const universalImprovements = payload.review.improve.map((item) => item.trim());
+  if (
+    JSON.stringify(targetReview.universalQuality.strengths) !== JSON.stringify(universalStrengths)
+    || JSON.stringify(targetReview.universalQuality.improvements) !== JSON.stringify(universalImprovements)
+  ) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_target_review_universal_mismatch",
+      "The target review must reuse the finalization's universal strengths and improvements exactly.",
+    );
+  }
+  if (JSON.stringify(targetReview.evidenceGaps) !== JSON.stringify(snapshot.evidenceGaps)) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_target_review_evidence_mismatch",
+      "The target review must reuse the final-answer evidence gaps exactly.",
+    );
+  }
+  const targetSignals = new Set(snapshot.target?.competencyEmphasis ?? []);
+  if (targetReview.targetAlignment.competencySignals.some((signal) => !targetSignals.has(signal))) {
+    throw new BehavioralFinalAnswerError(
+      "behavioral_target_review_signal_mismatch",
+      "Target review signals must come from the exact final-answer Target Profile snapshot.",
+    );
+  }
+  return targetReview;
+}
+
 async function prepareBehavioralFinalAnswerWrite(
   db: ReturnType<typeof getDb>,
   ownerId: string,
@@ -3513,39 +3561,7 @@ async function prepareBehavioralFinalAnswerWrite(
     );
   }
   const snapshot = behavioralFinalAnswerSnapshotInputSchema.parse(payload.finalAnswerSnapshot);
-  const targetReview = payload.behavioralReview
-    ? behavioralTargetReviewSchema.parse(payload.behavioralReview)
-    : undefined;
-  if (snapshot.scope === "target_tailored" && !targetReview) {
-    throw new BehavioralFinalAnswerError(
-      "behavioral_target_review_required",
-      "A target-tailored finalization requires the typed target review.",
-    );
-  }
-  if (targetReview) {
-    if (
-      JSON.stringify(targetReview.universalQuality.strengths) !== JSON.stringify(payload.review.didWell)
-      || JSON.stringify(targetReview.universalQuality.improvements) !== JSON.stringify(payload.review.improve)
-    ) {
-      throw new BehavioralFinalAnswerError(
-        "behavioral_target_review_universal_mismatch",
-        "The target review must reuse the finalization's universal strengths and improvements exactly.",
-      );
-    }
-    if (JSON.stringify(targetReview.evidenceGaps) !== JSON.stringify(snapshot.evidenceGaps)) {
-      throw new BehavioralFinalAnswerError(
-        "behavioral_target_review_evidence_mismatch",
-        "The target review must reuse the final-answer evidence gaps exactly.",
-      );
-    }
-    const targetSignals = new Set(snapshot.target?.competencyEmphasis ?? []);
-    if (targetReview.targetAlignment.competencySignals.some((signal) => !targetSignals.has(signal))) {
-      throw new BehavioralFinalAnswerError(
-        "behavioral_target_review_signal_mismatch",
-        "Target review signals must come from the exact final-answer Target Profile snapshot.",
-      );
-    }
-  }
+  const targetReview = validateBehavioralTargetReview(payload, snapshot);
   if (snapshot.question.questionId !== questionId) {
     throw new BehavioralFinalAnswerError(
       "behavioral_final_answer_question_mismatch",
@@ -4709,9 +4725,23 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
   };
 }
 
-export async function readProblemSolutionProfile(ownerId: string, specialty: Specialty, questionId: string) {
+export async function readProblemSolutionProfile(
+  ownerId: string,
+  specialty: Specialty,
+  questionId: string,
+  options?: { revisionLimit?: number },
+) {
   const db = getDb();
   const category = specialty === "system_design" ? "systemDesign" : specialty;
+  const revisionQuery = db.select({
+    revision: problemSolutionRevisions.revision,
+    activityId: problemSolutionRevisions.activityId,
+    createdAt: problemSolutionRevisions.createdAt,
+  }).from(problemSolutionRevisions).where(and(
+    eq(problemSolutionRevisions.ownerId, ownerId),
+    eq(problemSolutionRevisions.specialty, specialty),
+    eq(problemSolutionRevisions.questionId, questionId),
+  )).orderBy(desc(problemSolutionRevisions.revision));
   const [profiles, provisionalProfiles, revisions, canonicalQuestions] = await Promise.all([
     db.select().from(problemSolutionProfiles).where(and(
       eq(problemSolutionProfiles.ownerId, ownerId),
@@ -4723,15 +4753,7 @@ export async function readProblemSolutionProfile(ownerId: string, specialty: Spe
       eq(provisionalSolutionProfiles.specialty, specialty),
       eq(provisionalSolutionProfiles.questionId, questionId),
     )),
-    db.select({
-      revision: problemSolutionRevisions.revision,
-      activityId: problemSolutionRevisions.activityId,
-      createdAt: problemSolutionRevisions.createdAt,
-    }).from(problemSolutionRevisions).where(and(
-      eq(problemSolutionRevisions.ownerId, ownerId),
-      eq(problemSolutionRevisions.specialty, specialty),
-      eq(problemSolutionRevisions.questionId, questionId),
-    )).orderBy(desc(problemSolutionRevisions.revision)),
+    options?.revisionLimit ? revisionQuery.limit(options.revisionLimit) : revisionQuery,
     db.select({ payload: contentBank.payload }).from(contentBank).where(and(
       eq(contentBank.category, category),
       eq(contentBank.id, questionId),

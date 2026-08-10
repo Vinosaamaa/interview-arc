@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, max, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { queryBehavioralEvidence } from "./behavioral-evidence";
@@ -37,7 +37,7 @@ export const behavioralPracticePreflightInputSchema = z.object({
 export type BehavioralPracticePreflightInput = z.infer<typeof behavioralPracticePreflightInputSchema>;
 
 const VARIANT_LIMIT = 50;
-const VARIANT_SCAN_LIMIT = 101;
+const VARIANT_SCAN_LIMIT = VARIANT_LIMIT + 1;
 
 export async function readBehavioralPracticePreflight(
   ownerId: string,
@@ -45,8 +45,19 @@ export async function readBehavioralPracticePreflight(
 ) {
   const input = behavioralPracticePreflightInputSchema.parse(inputValue);
   const db = getDb();
+  const latestSnapshotRevisions = db.select({
+    ownerId: behavioralFinalAnswerSnapshots.ownerId,
+    activityId: behavioralFinalAnswerSnapshots.activityId,
+    latestSnapshotRevision: max(behavioralFinalAnswerSnapshots.snapshotRevision).as("latest_snapshot_revision"),
+  }).from(behavioralFinalAnswerSnapshots).where(and(
+    eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
+    sql`json_extract(${behavioralFinalAnswerSnapshots.snapshot}, '$.question.questionId') = ${input.questionId}`,
+  )).groupBy(
+    behavioralFinalAnswerSnapshots.ownerId,
+    behavioralFinalAnswerSnapshots.activityId,
+  ).as("latest_behavioral_answer_revisions");
   const [solutionProfile, evidence, resolvedTarget, rows] = await Promise.all([
-    readProblemSolutionProfile(ownerId, "behavioral", input.questionId),
+    readProblemSolutionProfile(ownerId, "behavioral", input.questionId, { revisionLimit: 1 }),
     queryBehavioralEvidence(ownerId, input.questionId),
     resolveBehavioralTarget(ownerId, {
       ...(input.activityId ? { activityId: input.activityId } : {}),
@@ -58,7 +69,14 @@ export async function readBehavioralPracticePreflight(
       snapshot: behavioralFinalAnswerSnapshots.snapshot,
       finalizedAt: behavioralFinalAnswerSnapshots.finalizedAt,
       finalization: activityFinalizations.payload,
-    }).from(behavioralFinalAnswerSnapshots).leftJoin(
+    }).from(behavioralFinalAnswerSnapshots).innerJoin(
+      latestSnapshotRevisions,
+      and(
+        eq(latestSnapshotRevisions.ownerId, behavioralFinalAnswerSnapshots.ownerId),
+        eq(latestSnapshotRevisions.activityId, behavioralFinalAnswerSnapshots.activityId),
+        eq(latestSnapshotRevisions.latestSnapshotRevision, behavioralFinalAnswerSnapshots.snapshotRevision),
+      ),
+    ).leftJoin(
       activityFinalizations,
       and(
         eq(activityFinalizations.ownerId, behavioralFinalAnswerSnapshots.ownerId),
@@ -66,16 +84,14 @@ export async function readBehavioralPracticePreflight(
       ),
     ).where(and(
       eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
-      sql`json_extract(${behavioralFinalAnswerSnapshots.snapshot}, '$.question.questionId') = ${input.questionId}`,
+      sql`json_extract(${behavioralFinalAnswerSnapshots.snapshot}, '$.scope') = 'target_tailored'`,
     )).orderBy(
       desc(behavioralFinalAnswerSnapshots.finalizedAt),
       desc(behavioralFinalAnswerSnapshots.snapshotRevision),
     ).limit(VARIANT_SCAN_LIMIT),
   ]);
 
-  const latestByActivity = new Map<string, (typeof rows)[number]>();
-  for (const row of rows) if (!latestByActivity.has(row.activityId)) latestByActivity.set(row.activityId, row);
-  const allTargetSnapshots = [...latestByActivity.values()].map((row) => ({
+  const allTargetSnapshots = rows.map((row) => ({
     row,
     snapshot: behavioralFinalAnswerSnapshotInputSchema.parse(row.snapshot),
   })).filter(({ snapshot }) => snapshot.scope === "target_tailored");
@@ -166,7 +182,7 @@ export async function readBehavioralPracticePreflight(
     },
     limits: { acceptedTargetVariants: VARIANT_LIMIT },
     truncated: {
-      acceptedTargetVariants: rows.length >= VARIANT_SCAN_LIMIT || allTargetSnapshots.length > VARIANT_LIMIT,
+      acceptedTargetVariants: allTargetSnapshots.length > VARIANT_LIMIT,
     },
   };
 }

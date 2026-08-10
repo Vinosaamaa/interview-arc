@@ -321,6 +321,35 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     assert.equal(correctedRecord.finalAnswerSnapshots[0].snapshot.answer, answer);
     assert.equal(correctedRecord.finalAnswerSnapshots[1].snapshot.answer, correctedAnswer);
 
+    const orphanTargetReview = finalization({
+      activityId,
+      questionId,
+      operationId: "final-answer-operation-orphan-target-review",
+      answer: correctedAnswer,
+      responseTurnId: "behavioral-response-2",
+      solutionRevision: 2,
+    });
+    orphanTargetReview.finalization.behavioralReview = {
+      schemaVersion: 1,
+      universalQuality: {
+        strengths: ["Scoped the decision."],
+        improvements: ["Add a measured outcome."],
+      },
+      targetAlignment: { strengths: [], gaps: [], competencySignals: [] },
+      assistance: { level: "none", details: [] },
+      evidenceGaps: ["Production impact is not independently measured."],
+    };
+    const orphanTargetReviewResult = await callRaw(
+      client,
+      "save_specialist_finalization",
+      orphanTargetReview,
+    );
+    assert.equal(orphanTargetReviewResult.isError, true);
+    assert.equal(
+      orphanTargetReviewResult.structuredContent.code,
+      "behavioral_target_review_scope_mismatch",
+    );
+
     const targetCreated = await call(client, "upsert_behavioral_target_profile", {
       operationId: "target-final-answer-create-1",
       expectedRevision: 0,
@@ -414,6 +443,8 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
       target: targetReference,
       correction: { replacesSnapshotRevision: 2, reason: "Tailor for an approved target." },
     });
+    targetFinalization.finalization.review.didWell[0] = "  Scoped the decision.  ";
+    targetFinalization.finalization.review.improve[0] = "  Add a measured outcome.  ";
     const targetSaved = await call(client, "save_specialist_finalization", targetFinalization);
     assert.equal(targetSaved.finalAnswer.status, "corrected");
     assert.equal(targetSaved.finalAnswer.snapshotRevision, 3);
