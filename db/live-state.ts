@@ -752,6 +752,7 @@ export async function readLiveState(
       specialty: row.specialty,
       status: row.status,
       finalizedAt: row.finalizedAt,
+      interactionModeClassification: durable.interactionModeClassifications[activityId] ?? null,
     }])),
     audioClips: Object.fromEntries(Object.entries(durable.audioClips).map(([activityId, rows]) => [activityId, rows.map((row) => ({
       id: row.id,

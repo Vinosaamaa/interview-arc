@@ -281,6 +281,10 @@ Historical backfill is coordinator-owned.
 - only references actually consulted;
 - available Delivery Coach evidence (queued/failed analysis never blocks).
 
+For the shared interaction-mode sidecar, count only live problem-solving
+responses. Exclude harness setup, submission bookkeeping, post-submit review,
+Editorial/reference comparison, and reference-code explanation.
+
 When no coding conversation occurred, use `transcriptScope: none_observed`
 and never invent an attempt. If the canonical prompt/API cannot be established,
 keep finalization incomplete and request it.

@@ -218,6 +218,13 @@
       "when": 1786367582444,
       "tag": "0030_powerful_the_enforcers",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1786379867730,
+      "tag": "0031_careful_shatterstar",
+      "breakpoints": true
     }
   ]
 }

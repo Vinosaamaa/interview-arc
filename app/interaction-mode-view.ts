@@ -4,6 +4,7 @@ import type {
   PracticeSpecialty,
 } from "../db/interaction-mode-policy";
 import type { InteractionModeSummary } from "../db/interaction-mode-store";
+import type { InteractionModeClassification } from "../db/interaction-mode-classification";
 
 export function selectableInteractionModes(
   registry: InteractionModeRegistry,
@@ -40,4 +41,25 @@ export function mergePendingInteractionModes(
     }
   }
   return merged;
+}
+
+const classificationLabels: Record<string, string> = {
+  interviewer: "Interview-led",
+  mentor: "Mentor-led",
+  grill: "Grill-led",
+  mixed: "Mixed practice",
+  unrecorded: "Mode not recorded",
+};
+
+export function interactionModeClassificationLabel(classification: Pick<InteractionModeClassification, "primaryPracticeModeId">) {
+  return classificationLabels[classification.primaryPracticeModeId]
+    ?? `${classification.primaryPracticeModeId.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase())}-led`;
+}
+
+export function matchesInteractionModeFilter(
+  classification: Pick<InteractionModeClassification, "primaryPracticeModeId" | "hadMentorAssistance"> | null | undefined,
+  filter: string,
+) {
+  if (filter === "mentor_assistance") return Boolean(classification?.hadMentorAssistance);
+  return (classification?.primaryPracticeModeId ?? "unrecorded") === filter;
 }

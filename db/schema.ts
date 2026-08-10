@@ -1374,6 +1374,51 @@ export const practiceInteractionModeMutations = sqliteTable(
   ],
 );
 
+export const practiceInteractionModeTurnOverrides = sqliteTable(
+  "practice_interaction_mode_turn_overrides",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    responseTurnId: text("response_turn_id").notNull(),
+    mutationId: text("mutation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    baseInteractionModeId: text("base_interaction_mode_id").notNull(),
+    overrideInteractionModeId: text("override_interaction_mode_id").notNull(),
+    stateRevision: integer("state_revision").notNull(),
+    registryVersion: text("registry_version").notNull(),
+    triggerTurnId: text("trigger_turn_id"),
+    reason: text("reason").notNull(),
+    occurredAt: integer("occurred_at").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.activityId, table.responseTurnId] }),
+    uniqueIndex("practice_mode_turn_override_mutation_idx").on(table.ownerId, table.mutationId),
+  ],
+);
+
+// Completed-attempt mode classifications are immutable snapshots. Corrections
+// append a revision that names the snapshot it replaces; historical attempts
+// and their transcript evidence are never rewritten.
+export const practiceInteractionModeClassifications = sqliteTable(
+  "practice_interaction_mode_classifications",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    snapshotRevision: integer("snapshot_revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    classification: text("classification", { mode: "json" }).notNull(),
+    correctionOfRevision: integer("correction_of_revision"),
+    correctionReason: text("correction_reason"),
+    finalizedAt: integer("finalized_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.activityId, table.snapshotRevision] }),
+    uniqueIndex("practice_mode_classification_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
 // Website-created activities (extras and full-session problems). Stored as a
 // JSON payload matching the client draft shape so the schema stays stable while
 // the UI model evolves; the columns that need indexing are lifted out.
