@@ -68,6 +68,8 @@ import {
 import { readMasterPanePreference, writeMasterPanePreference } from "./ui-preferences";
 import { effectiveProfileTags, isReusableSolutionProfile } from "./solution-profile-policy";
 import BehavioralFoundation from "./behavioral-foundation";
+import BehavioralTargetBindings from "./behavioral-target-bindings";
+import BehavioralTargetDesk from "./behavioral-target-desk";
 import BankDomainOverview from "./bank-domain-overview";
 import { activityLifecycleState } from "./activity-state";
 import {
@@ -4623,6 +4625,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         </section>
 
         <div className="today-actions"><div><h2>Current workbench</h2><p>It stays open across Pacific midnight until you publish it or explicitly start fresh.</p></div><div><button className="secondary-action" onClick={() => allTodayActivities.length || allSessions.length || currentFocusBlocks.length ? setFreshDayConfirmOpen(true) : startFreshPracticeDay()}>Start fresh day</button><button className="secondary-action" onClick={openNewActivity}>Add activities</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
+        <BehavioralTargetBindings activities={allTodayActivities} sessions={allSessions} />
         <section className="session-stack">{allSessions.length ? allSessions.map(renderSession) : <div className="quiet-empty session-empty"><strong>No session planned yet.</strong><span>Add another session to choose up to six coding questions and one question from each available interview bank.</span></div>}</section>
 
         <section className="loose-section">
@@ -5083,12 +5086,15 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           {(["leetcode", "system_design", "behavioral"] as const).map((type) => {
             const open = expandedBankDesk === type;
             return <div className={`bank-domain-desk-shell ${open ? "open" : ""}`} id={`bank-domain-desk-${type}`} aria-hidden={!open} inert={open ? undefined : true} key={type}><div>
-              {type === "behavioral" ? <BehavioralFoundation
-                key={open ? "open" : "closed"}
-                enabled={open}
-                curriculumQuestionIds={behavioralCurriculum.map((question) => question.id)}
-                completedCurriculumQuestionIds={completedBehavioralCurriculum}
-              /> : <BankDomainOverview type={type} {...bankOverviewFor(type)} />}
+              {type === "behavioral" ? <>
+                <BehavioralTargetDesk enabled={open} />
+                <BehavioralFoundation
+                  key={open ? "open" : "closed"}
+                  enabled={open}
+                  curriculumQuestionIds={behavioralCurriculum.map((question) => question.id)}
+                  completedCurriculumQuestionIds={completedBehavioralCurriculum}
+                />
+              </> : <BankDomainOverview type={type} {...bankOverviewFor(type)} />}
             </div></div>;
           })}
         </div>

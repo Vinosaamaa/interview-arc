@@ -12,93 +12,26 @@ import {
   extraActivities,
   liveSessions,
 } from "./schema";
+import {
+  behavioralTargetBindingWriteSchema,
+  behavioralTargetProfileDisplaySnapshotSchema,
+  behavioralTargetProfileInputSchema,
+  behavioralTargetProfileStateWriteSchema,
+  behavioralTargetProfileWriteSchema,
+  behavioralTargetStableIdSchema,
+  type BehavioralTargetBindingWrite,
+  type BehavioralTargetProfileDisplaySnapshot,
+  type BehavioralTargetProfileInput,
+  type BehavioralTargetProfileStateWrite,
+  type BehavioralTargetProfileWrite,
+  type DisplaySafeBehavioralTargetRevision,
+} from "./behavioral-target-profile-policy";
 
-const stableIdSchema = z.string()
-  .min(1)
-  .max(200)
-  .regex(/^[a-z0-9][a-z0-9._-]*$/, "Use a lowercase stable ID.");
-const boundedText = (max: number) => z.string().trim().min(1).max(max);
-const boundedList = (items: number, length: number) => z.array(boundedText(length)).max(items);
-
-const verifiedCompanySignalSchema = z.object({
-  signal: boundedText(500),
-  sourceLabel: boundedText(240),
-  verifiedAt: z.number().int().positive(),
-}).strict();
-
-export const behavioralTargetProfileInputSchema = z.object({
-  targetId: stableIdSchema,
-  label: boundedText(240),
-  state: z.enum(["active", "archived"]),
-  company: boundedText(240),
-  roleTitle: boundedText(240),
-  targetLevel: boundedText(120).optional(),
-  location: boundedText(240).optional(),
-  team: boundedText(240).optional(),
-  source: z.object({
-    kind: z.literal("pasted_jd"),
-    displayLocator: boundedText(240),
-    capturedAt: z.number().int().positive(),
-    jdText: boundedText(100_000),
-  }).strict(),
-  responsibilities: boundedList(100, 1_000),
-  requiredQualifications: boundedList(100, 1_000),
-  preferredQualifications: boundedList(100, 1_000),
-  competencySignals: boundedList(100, 500),
-  seniorityIndicators: boundedList(100, 500),
-  domainVocabulary: boundedList(100, 200),
-  verifiedCompanySignals: z.array(verifiedCompanySignalSchema).max(50),
-  unresolvedAmbiguities: boundedList(100, 1_000),
-  ownerNotes: boundedList(100, 1_000),
-}).strict();
-
-export const behavioralTargetProfileWriteSchema = z.object({
-  operationId: stableIdSchema,
-  expectedRevision: z.number().int().nonnegative(),
-  target: behavioralTargetProfileInputSchema,
-}).strict();
-
-export const behavioralTargetBindingWriteSchema = z.object({
-  mutationId: stableIdSchema,
-  scope: z.object({
-    type: z.enum(["session", "activity"]),
-    id: stableIdSchema,
-  }).strict(),
-  action: z.enum(["set", "clear"]),
-  targetId: stableIdSchema.optional(),
-  targetRevision: z.number().int().positive().optional(),
-  expectedRevision: z.number().int().nonnegative(),
-  authorization: z.literal("explicit_user_instruction"),
-}).strict().superRefine((input, context) => {
-  if (input.action === "set" && (!input.targetId || !input.targetRevision)) {
-    context.addIssue({ code: "custom", path: ["targetId"], message: "Set requires an exact target revision." });
-  }
-  if (input.action === "clear" && (input.targetId || input.targetRevision)) {
-    context.addIssue({ code: "custom", path: ["targetId"], message: "Clear must not include target identity." });
-  }
-});
-
-export type BehavioralTargetProfileInput = z.infer<typeof behavioralTargetProfileInputSchema>;
-export type BehavioralTargetProfileWrite = z.infer<typeof behavioralTargetProfileWriteSchema>;
-export type BehavioralTargetBindingWrite = z.infer<typeof behavioralTargetBindingWriteSchema>;
-
-const behavioralTargetProfileDisplaySnapshotSchema = behavioralTargetProfileInputSchema
-  .omit({ source: true })
-  .extend({
-    source: behavioralTargetProfileInputSchema.shape.source.omit({ jdText: true }),
-  });
-
-type BehavioralTargetProfileDisplaySnapshot = z.infer<typeof behavioralTargetProfileDisplaySnapshotSchema>;
-
-export type DisplaySafeBehavioralTargetRevision = Omit<BehavioralTargetProfileDisplaySnapshot, "source"> & {
-  revision: number;
-  source: {
-    kind: "pasted_jd";
-    displayLocator: string;
-    capturedAt: number;
-    fingerprint: string;
-  };
-  createdAt: number;
+export {
+  behavioralTargetBindingWriteSchema,
+  behavioralTargetProfileInputSchema,
+  behavioralTargetProfileStateWriteSchema,
+  behavioralTargetProfileWriteSchema,
 };
 
 export class BehavioralTargetProfileError extends Error {
@@ -348,13 +281,50 @@ export async function upsertBehavioralTargetProfile(
   return { ...receipt, duplicate: false };
 }
 
+export async function changeBehavioralTargetProfileState(
+  ownerId: string,
+  inputValue: BehavioralTargetProfileStateWrite,
+  nowMs = Date.now(),
+) {
+  const input = behavioralTargetProfileStateWriteSchema.parse(inputValue);
+  const rows = await getDb().select({
+    currentRevision: behavioralTargetProfiles.currentRevision,
+    privateSnapshot: behavioralTargetProfileRevisions.privateSnapshot,
+  }).from(behavioralTargetProfiles).innerJoin(
+    behavioralTargetProfileRevisions,
+    and(
+      eq(behavioralTargetProfileRevisions.ownerId, behavioralTargetProfiles.ownerId),
+      eq(behavioralTargetProfileRevisions.targetId, behavioralTargetProfiles.targetId),
+      eq(behavioralTargetProfileRevisions.revision, behavioralTargetProfiles.currentRevision),
+    ),
+  ).where(and(
+    eq(behavioralTargetProfiles.ownerId, ownerId),
+    eq(behavioralTargetProfiles.targetId, input.targetId),
+  )).limit(1);
+  const row = rows[0];
+  if (!row) throw new BehavioralTargetProfileError(
+    "behavioral_target_revision_not_found",
+    "The exact owner-private Target Profile revision is unavailable.",
+  );
+  if (row.currentRevision !== input.expectedRevision) throw new BehavioralTargetProfileError(
+    "behavioral_target_revision_conflict",
+    "The Target Profile revision changed; reread it before retrying.",
+  );
+  const target = behavioralTargetProfileInputSchema.parse(row.privateSnapshot);
+  return upsertBehavioralTargetProfile(ownerId, {
+    operationId: input.operationId,
+    expectedRevision: input.expectedRevision,
+    target: { ...target, state: input.state },
+  }, nowMs);
+}
+
 export async function queryBehavioralTargetProfiles(ownerId: string, input: {
   targetId?: string;
   revision?: number;
   includeArchived?: boolean;
 }) {
   const parsed = z.object({
-    targetId: stableIdSchema.optional(),
+    targetId: behavioralTargetStableIdSchema.optional(),
     revision: z.number().int().positive().optional(),
     includeArchived: z.boolean().optional(),
   }).strict().refine((value) => !value.revision || Boolean(value.targetId), {
@@ -446,7 +416,7 @@ async function assertBindingScopeExists(ownerId: string, input: BehavioralTarget
   );
 }
 
-async function readBinding(ownerId: string, scopeType: "session" | "activity", scopeId: string) {
+export async function readBehavioralTargetBinding(ownerId: string, scopeType: "session" | "activity", scopeId: string) {
   const rows = await getDb().select().from(behavioralTargetBindings).where(and(
     eq(behavioralTargetBindings.ownerId, ownerId),
     eq(behavioralTargetBindings.scopeType, scopeType),
@@ -502,7 +472,7 @@ export async function setBehavioralTargetBinding(
   if (input.action === "set") {
     await assertCurrentTargetRevision(ownerId, input.targetId!, input.targetRevision!);
   }
-  const current = await readBinding(ownerId, input.scope.type, input.scope.id);
+  const current = await readBehavioralTargetBinding(ownerId, input.scope.type, input.scope.id);
   const actualRevision = current?.revision ?? 0;
   if (actualRevision !== input.expectedRevision) {
     throw new BehavioralTargetProfileError(
@@ -603,7 +573,7 @@ export async function setBehavioralTargetBinding(
       }
       return { ...(racedMutation.receipt as object), duplicate: true };
     }
-    const racedBinding = await readBinding(ownerId, input.scope.type, input.scope.id);
+    const racedBinding = await readBehavioralTargetBinding(ownerId, input.scope.type, input.scope.id);
     if ((racedBinding?.revision ?? 0) !== input.expectedRevision) {
       throw new BehavioralTargetProfileError(
         "behavioral_target_binding_revision_conflict",
@@ -753,8 +723,8 @@ export async function resolveBehavioralTarget(ownerId: string, input: {
   sessionId?: string;
 }) {
   const parsed = z.object({
-    activityId: stableIdSchema.optional(),
-    sessionId: stableIdSchema.optional(),
+    activityId: behavioralTargetStableIdSchema.optional(),
+    sessionId: behavioralTargetStableIdSchema.optional(),
   }).strict().refine((value) => Boolean(value.activityId || value.sessionId), {
     message: "Resolve requires an activity or session.",
   }).parse(input);

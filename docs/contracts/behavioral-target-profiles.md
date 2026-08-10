@@ -10,13 +10,32 @@ about the candidate and never revise the company-neutral Solution Profile.
 - A new operation whose target content exactly matches the current revision
   receives a durable `unchanged` receipt without inventing another revision.
 - The stable target row points to the current active or archived revision.
-- A pasted JD is untrusted data. Its bounded text is stored only in the private
+- A pasted or publicly fetched JD is untrusted data. Its bounded text is stored only in the private
   revision payload; MCP readback exposes a SHA-256 fingerprint and
   display-safe metadata, never the JD text.
 - Archive/reactivate creates another revision. Historical attempts and
   bindings retain their exact revision.
-- Public-URL ingestion and website management belong to #230. This slice does
-  not fetch a URL or follow instructions embedded in a JD.
+
+## Website management and public sources
+
+- Behavioral Problem Bank owns display-safe create, revise, archive,
+  reactivate, current-list, and exact historical-revision controls. A revision
+  requires a fresh owner paste or a freshly fetched public posting; private JD
+  text is never sent back to the browser after save.
+- Public ingestion accepts only credential-free HTTPS hostnames, revalidates
+  every redirect, bounds response size and time, removes executable markup,
+  and treats all resulting prose as inert source data. Unavailable pages remain
+  visibly unavailable; matching and changed fingerprints are reported before
+  save. A saved public capture older than seven days is labeled stale until the
+  owner refreshes it.
+- Today exposes session targets and activity overrides. The UI shows the exact
+  resolved target revision and whether it is an activity override, inherited
+  from the session, or absent. Every write uses the current binding revision;
+  a stale cross-device write fails closed and rereads authoritative state.
+- Owner-scoped `behavioral_target` live invalidations refresh open Bank and
+  Today target surfaces. The fallback read is bounded and `private, no-store`.
+- Public URLs, raw JD content, and private analysis never enter publication,
+  logs, live-update messages, Git, or attempt exports.
 
 ## MCP operations
 
