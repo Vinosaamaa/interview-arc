@@ -252,8 +252,18 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
     assert.deepEqual(foundation.capabilities, {
       evidenceRead: "available",
       sourceRegistry: "not_available",
-      storyBank: "not_available",
+      storyBank: "available",
       resumeLibrary: "available",
+    });
+    assert.deepEqual(foundation.stories, {
+      total: 0,
+      active: 0,
+      archived: 0,
+      projects: 0,
+      recent: [],
+      lastUpdatedAt: null,
+      limit: 6,
+      truncated: false,
     });
 
     const overflowClaimValues = Array.from({ length: 50 }, (_, index) => `

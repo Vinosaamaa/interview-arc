@@ -100,10 +100,15 @@ export default function BehavioralFoundation({
           </article>
           <article>
             <span className="foundation-index">STORY SHELF</span>
-            <strong>—</strong>
-            <h3>No durable stories yet</h3>
-            <p>The evidence foundation is live. Story composition remains a later owner-reviewed slice.</p>
-            <small>Transcripts are never copied into this reusable layer.</small>
+            <strong>{status.stories.active}</strong>
+            <h3>{status.stories.active ? "Reusable stories" : "No durable stories yet"}</h3>
+            {status.stories.recent.length
+              ? <ol className="foundation-story-list">{status.stories.recent.slice(0, 3).map((story) => <li key={`${story.storyId}:${story.revision}`}>
+                  <span>{story.title}</span>
+                  <small>v{story.revision} · {story.questionCount} prompt{story.questionCount === 1 ? "" : "s"}</small>
+                </li>)}</ol>
+              : <p>Compose the first evidence-backed STARL story with the Behavioral specialist.</p>}
+            <small>{status.stories.truncated ? "More stories are available through the question-scoped preflight." : "Transcripts are never copied into this reusable layer."}</small>
           </article>
         </div>
 

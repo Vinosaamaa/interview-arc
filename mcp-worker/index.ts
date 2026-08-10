@@ -25,6 +25,13 @@ import {
 } from "../db/behavioral-final-answer";
 import { behavioralAttemptAnalysisSchema } from "../db/behavioral-attempt-analysis";
 import { behavioralPracticeScenariosSchema } from "../db/behavioral-practice-scenario";
+import {
+  BehavioralStoryError,
+  behavioralStoryQuerySchema,
+  behavioralStoryWriteSchema,
+  queryBehavioralStories,
+  upsertBehavioralStory,
+} from "../db/behavioral-story";
 import { resumeContextSelectionSchema } from "../db/activity-resume-context";
 import {
   BehavioralTargetProfileError,
@@ -1807,6 +1814,7 @@ function specialistToolFailure(error: unknown) {
     || error instanceof BehavioralEvidenceError
     || error instanceof BehavioralFinalAnswerError
     || error instanceof BehavioralTargetProfileError
+    || error instanceof BehavioralStoryError
     || error instanceof TypedExchangeDeletionError
     || error instanceof InteractionModeError
     || error instanceof InteractionModeFinalizationError
@@ -2636,13 +2644,53 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "query_behavioral_evidence",
     {
-      description: "Read the bounded owner-private evidence preflight for one behavioral question: accepted supporting and contrary evidence, claim state, gaps, deterministic limits, and truncation flags. Pending, rejected, and superseded evidence is excluded; story candidates remain empty until their later domain slice.",
+      description: "Read the bounded owner-private evidence preflight for one behavioral question: accepted supporting and contrary evidence, claim state, gaps, exact current Story Bank candidates, deterministic limits, and truncation flags. Pending, rejected, superseded, and archived records are excluded.",
       inputSchema: { questionId: behavioralStableIdSchema },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async ({ questionId }) => {
       try {
         const result = await queryBehavioralEvidence(ownerId, questionId);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "upsert_behavioral_story",
+    {
+      description: "Create or revise one owner-private, evidence-backed STARL Story Bank record. Use expectedRevision=0 for creation and the exact current revision for updates. Every claim, accepted evidence item, competency, and question link is explicit; transcripts and raw source material are never copied. Reuse an identical operationId after transport uncertainty.",
+      inputSchema: behavioralStoryWriteSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await upsertBehavioralStory(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Story ${result.storyId} revision ${result.revision} is durably saved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_behavioral_stories",
+    {
+      description: "Read bounded owner-private Story Bank records by exact story revision, question, or current active library. Results retain evidence/claim links and never include transcripts, raw source documents, local paths, remotes, or credentials.",
+      inputSchema: behavioralStoryQuerySchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryBehavioralStories(ownerId, input);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           structuredContent: result,

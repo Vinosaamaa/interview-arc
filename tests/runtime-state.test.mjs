@@ -606,6 +606,7 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   const voiceEvidence = await readFile(new URL("../drizzle/0018_voice_evidence_guards.sql", import.meta.url), "utf8");
   const behavioralEvidence = await readFile(new URL("../drizzle/0024_dazzling_blink.sql", import.meta.url), "utf8");
   const behavioralTargets = await readFile(new URL("../drizzle/0030_powerful_the_enforcers.sql", import.meta.url), "utf8");
+  const behavioralStories = await readFile(new URL("../drizzle/0033_powerful_cargill.sql", import.meta.url), "utf8");
   for (const table of ["timers", "outcomes", "extra_activities", "live_sessions"]) {
     assert.match(live, new RegExp("CREATE TABLE `" + table + "`"));
   }
@@ -665,6 +666,16 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   }
   assert.match(behavioralEvidence, /PRIMARY KEY\(`owner_id`, ?`evidence_id`\)/);
   assert.match(behavioralEvidence, /UNIQUE INDEX `behavioral_claim_events_operation_idx`/);
+  for (const table of [
+    "behavioral_stories",
+    "behavioral_story_revisions",
+    "behavioral_story_operations",
+    "behavioral_story_question_links",
+  ]) {
+    assert.match(behavioralStories, new RegExp("CREATE TABLE `" + table + "`"));
+  }
+  assert.match(behavioralStories, /UNIQUE INDEX `behavioral_story_revisions_operation_idx`/);
+  assert.match(behavioralStories, /CREATE INDEX `behavioral_story_question_idx`/);
 });
 
 test("content highlights persist editable notes", async () => {

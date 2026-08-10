@@ -459,6 +459,10 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .foundation-ledger p, .foundation-ledger li { color: #626d64; font-size: .78rem; line-height: 1.5; }
 .foundation-ledger p { margin: 0; }
 .foundation-ledger ul { margin: 0; padding-left: 17px; display: grid; gap: 4px; }
+.foundation-story-list { margin: 1px 0 0; padding: 0; display: grid; gap: 7px; list-style: none; }
+.foundation-story-list li { min-width: 0; padding-left: 10px; border-left: 2px solid #c9b4d3; display: grid; gap: 1px; }
+.foundation-story-list li > span { overflow: hidden; color: #34443d; font-size: .75rem; font-weight: 720; text-overflow: ellipsis; white-space: nowrap; }
+.foundation-story-list li > small { color: #837989; font-family: var(--font-geist-mono); font-size: .62rem; }
 .foundation-ledger article > small { margin-top: auto; padding-top: 16px; color: #807587; font-size: .7rem; line-height: 1.5; }
 .foundation-empty { margin: 0 20px 20px 25px; padding: 13px 15px; border: 1px dashed #bfaaca; border-radius: 10px; background: #fbf7fd; display: grid; gap: 3px; }
 .foundation-empty strong { font-size: .82rem; }

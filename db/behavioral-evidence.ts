@@ -22,6 +22,10 @@ import {
   validateBehavioralClaimWrite,
   validateBehavioralEvidenceWrite,
 } from "./behavioral-evidence-policy";
+import {
+  getBehavioralStoryFoundationSummary,
+  queryBehavioralStories,
+} from "./behavioral-story";
 
 function jsonEqual(left: unknown, right: unknown) {
   return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
@@ -514,13 +518,14 @@ export async function queryBehavioralEvidence(ownerId: string, questionId: strin
     ))
     .orderBy(asc(behavioralEvidenceItems.evidenceId))
     .limit(BEHAVIORAL_EVIDENCE_LIMIT + 1);
-  const [supportingRows, contraryRows, claimRows] = await Promise.all([
+  const [supportingRows, contraryRows, claimRows, storyResult] = await Promise.all([
     acceptedEvidenceQuery("supporting"),
     acceptedEvidenceQuery("contrary"),
     db.select().from(behavioralClaims).where(and(
       eq(behavioralClaims.ownerId, ownerId),
       eq(behavioralClaims.questionId, questionId),
     )).orderBy(asc(behavioralClaims.claimId)).limit(BEHAVIORAL_CLAIM_LIMIT + 1),
+    queryBehavioralStories(ownerId, { questionId, limit: 3 }),
   ]);
   const supportingEvidence = supportingRows.slice(0, BEHAVIORAL_EVIDENCE_LIMIT).map(evidenceReadModel);
   const contraryEvidence = contraryRows.slice(0, BEHAVIORAL_EVIDENCE_LIMIT).map(evidenceReadModel);
@@ -547,7 +552,7 @@ export async function queryBehavioralEvidence(ownerId: string, questionId: strin
       visibility: claim.visibility,
     })),
     gaps: allGaps.slice(0, BEHAVIORAL_GAP_LIMIT),
-    storyCandidates: [],
+    storyCandidates: storyResult.stories,
     limits: {
       supportingEvidence: BEHAVIORAL_EVIDENCE_LIMIT,
       contraryEvidence: BEHAVIORAL_EVIDENCE_LIMIT,
@@ -560,7 +565,7 @@ export async function queryBehavioralEvidence(ownerId: string, questionId: strin
       contraryEvidence: contraryRows.length > BEHAVIORAL_EVIDENCE_LIMIT,
       claims: claimRows.length > BEHAVIORAL_CLAIM_LIMIT,
       gaps: claimRows.length > BEHAVIORAL_CLAIM_LIMIT || allGaps.length > BEHAVIORAL_GAP_LIMIT,
-      storyCandidates: false,
+      storyCandidates: storyResult.truncated,
     },
   };
 }
@@ -569,7 +574,7 @@ const BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT = 50;
 
 export async function getBehavioralFoundationStatus(ownerId: string) {
   const db = getDb();
-  const [evidenceSummaryRows, claimSummaryRows, questionCoverageRows, claimDetailRows] = await Promise.all([
+  const [evidenceSummaryRows, claimSummaryRows, questionCoverageRows, claimDetailRows, storySummary] = await Promise.all([
     db.select({
       total: sql<number>`count(*)`,
       accepted: sql<number>`sum(case when ${behavioralEvidenceItems.candidateState} = 'accepted' then 1 else 0 end)`,
@@ -609,6 +614,7 @@ export async function getBehavioralFoundationStatus(ownerId: string) {
       .where(eq(behavioralClaims.ownerId, ownerId))
       .orderBy(desc(behavioralClaims.updatedAt), asc(behavioralClaims.claimId))
       .limit(BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT + 1),
+    getBehavioralStoryFoundationSummary(ownerId),
   ]);
 
   const evidenceSummary = evidenceSummaryRows[0] ?? {
@@ -669,23 +675,27 @@ export async function getBehavioralFoundationStatus(ownerId: string) {
       gaps: Number(row.gaps ?? 0),
     })),
     gaps: allGaps.slice(0, BEHAVIORAL_GAP_LIMIT),
+    stories: storySummary,
     capabilities: {
       evidenceRead: "available" as const,
       sourceRegistry: "not_available" as const,
-      storyBank: "not_available" as const,
+      storyBank: "available" as const,
       resumeLibrary: "available" as const,
     },
     lastUpdatedAt: Math.max(
       Number(evidenceSummary.latestUpdatedAt ?? 0),
       Number(claimSummary.latestUpdatedAt ?? 0),
+      Number(storySummary.lastUpdatedAt ?? 0),
     ) || null,
     limits: {
       claimDetails: BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT,
       gaps: BEHAVIORAL_GAP_LIMIT,
+      stories: storySummary.limit,
     },
     truncated: {
       claimDetails: claimDetailRows.length > BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT,
       gaps: claimDetailRows.length > BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT || allGaps.length > BEHAVIORAL_GAP_LIMIT,
+      stories: storySummary.truncated,
     },
   };
 }

@@ -11,6 +11,8 @@ import {
   behavioralEvidenceItems,
   behavioralEvidenceQuestionLinks,
   behavioralFinalAnswerSnapshots,
+  behavioralStories,
+  behavioralStoryRevisions,
   behavioralTargetBindings,
   contentBank,
   deferredVoiceCaptureDecisions,
@@ -111,6 +113,7 @@ import {
   renderBehavioralPracticeScenariosMarkdown,
   type BehavioralPracticeScenario,
 } from "./behavioral-practice-scenario";
+import { behavioralStoryInputSchema } from "./behavioral-story-policy";
 import {
   resolveBehavioralTarget,
 } from "./behavioral-target-profile";
@@ -3810,6 +3813,45 @@ async function prepareBehavioralFinalAnswerWrite(
       );
     }
   }
+  if (snapshot.story) {
+    if (!snapshot.story.revision) {
+      throw new BehavioralFinalAnswerError(
+        "behavioral_final_answer_story_revision_required",
+        "Every new Story Bank selection requires its exact current revision.",
+      );
+    }
+    const storyIdentity = { storyId: snapshot.story.storyId, revision: snapshot.story.revision };
+    const storyRows = await db.select({
+      currentRevision: behavioralStories.currentRevision,
+      state: behavioralStories.state,
+      snapshot: behavioralStoryRevisions.snapshot,
+    }).from(behavioralStories).innerJoin(
+      behavioralStoryRevisions,
+      and(
+        eq(behavioralStoryRevisions.ownerId, behavioralStories.ownerId),
+        eq(behavioralStoryRevisions.storyId, behavioralStories.storyId),
+        eq(behavioralStoryRevisions.revision, storyIdentity.revision),
+      ),
+    ).where(and(
+      eq(behavioralStories.ownerId, ownerId),
+      eq(behavioralStories.storyId, storyIdentity.storyId),
+    )).limit(1);
+    const storyRow = storyRows[0];
+    if (!storyRow || storyRow.state !== "active" || storyRow.currentRevision !== storyIdentity.revision) {
+      throw new BehavioralFinalAnswerError(
+        "behavioral_final_answer_story_mismatch",
+        "The final answer must reference the exact current owner-private Story Bank revision.",
+      );
+    }
+    const story = behavioralStoryInputSchema.parse(storyRow.snapshot);
+    if (!story.questionIds.includes(questionId)
+        || story.evidenceIds.some((evidenceId) => !snapshot.acceptedEvidenceIds.includes(evidenceId))) {
+      throw new BehavioralFinalAnswerError(
+        "behavioral_final_answer_story_mismatch",
+        "The selected Story Bank revision must belong to this question and reuse its accepted evidence links.",
+      );
+    }
+  }
   if (attemptAnalysis.contraryEvidenceIds.length) {
     const contraryEvidence = await db.select({
       evidenceId: behavioralEvidenceItems.evidenceId,
@@ -4211,6 +4253,24 @@ export async function saveSpecialistFinalization(
           AND ${behavioralEvidenceQuestionLinks.relevance} = 'supporting'
           AND ${inArray(behavioralEvidenceItems.evidenceId, behavioralFinalAnswer.snapshot.acceptedEvidenceIds)}
       ) = ${behavioralFinalAnswer.snapshot.acceptedEvidenceIds.length}`));
+    }
+    if (behavioralFinalAnswer.snapshot.story) {
+      const story = behavioralFinalAnswer.snapshot.story;
+      if (!story.revision) throw new BehavioralFinalAnswerError(
+        "behavioral_final_answer_story_revision_required",
+        "Every new Story Bank selection requires its exact current revision.",
+      );
+      finalizationGuards.push(d1TransactionalInvariantGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${behavioralStories}
+        INNER JOIN ${behavioralStoryRevisions}
+          ON ${behavioralStoryRevisions.ownerId} = ${behavioralStories.ownerId}
+          AND ${behavioralStoryRevisions.storyId} = ${behavioralStories.storyId}
+          AND ${behavioralStoryRevisions.revision} = ${story.revision}
+        WHERE ${behavioralStories.ownerId} = ${ownerId}
+          AND ${behavioralStories.storyId} = ${story.storyId}
+          AND ${behavioralStories.currentRevision} = ${story.revision}
+          AND ${behavioralStories.state} = 'active'
+      )`));
     }
     const contraryEvidenceIds = [...new Set(
       behavioralFinalAnswer.snapshot.behavioralAnalysis?.claimAudit.flatMap((claim) => claim.contraryEvidenceIds) ?? [],

@@ -79,6 +79,7 @@ function finalization({
   solutionRevision = 1,
   scope = "universal",
   target,
+  story,
   resumeContext = {
     resumeId: "resume-primary",
     revisionId: "resume-revision-1",
@@ -103,6 +104,9 @@ function finalization({
     visibility: "owner_private",
   }],
 }) {
+  const selectedStory = story === undefined && questionId === "behavioral-reliability-1"
+    ? { storyId: "story-retry-boundary", revision: 1 }
+    : story;
   return {
     activityId,
     specialty: "behavioral",
@@ -208,6 +212,7 @@ function finalization({
           prompt: "Tell me about a time you improved reliability.",
         },
         solutionProfile: { questionId, revision: solutionRevision },
+        ...(selectedStory ? { story: selectedStory } : {}),
         acceptedEvidenceIds: ["evidence-retry-boundary"],
         evidenceGaps: ["Production impact is not independently measured."],
         contradictions: [],
@@ -325,6 +330,50 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
       requestInit: { headers: { authorization: `Bearer ${token}` } },
     }));
 
+    const story = await call(client, "upsert_behavioral_story", {
+      operationId: "story-final-answer-create-1",
+      expectedRevision: 0,
+      story: {
+        schemaVersion: 1,
+        storyId: "story-retry-boundary",
+        state: "active",
+        title: "Made retries identity-idempotent",
+        projectKey: "example-project",
+        situation: "A retry path could lose its visible receipt.",
+        task: "Preserve one authoritative outcome through ambiguous delivery.",
+        actions: ["Bound the retry to a stable identity.", "Read back the durable receipt."],
+        result: "The same operation now resolves to one authoritative outcome.",
+        learning: "Separate transport uncertainty from operation identity.",
+        claimIds: ["claim-retry-reliability"],
+        evidenceIds: ["evidence-retry-boundary"],
+        gaps: ["Production impact is not independently measured."],
+        competencies: ["ownership", "reliability"],
+        questionIds: [questionId],
+        visibility: "owner_private",
+      },
+    });
+    assert.equal(story.revision, 1);
+    const staleStory = await callRaw(client, "save_specialist_finalization", finalization({
+      activityId,
+      questionId,
+      operationId: "final-answer-operation-stale-story",
+      answer,
+      responseTurnId,
+      story: { storyId: "story-retry-boundary", revision: 2 },
+    }));
+    assert.equal(staleStory.isError, true);
+    assert.equal(staleStory.structuredContent.code, "behavioral_final_answer_story_mismatch");
+    const unversionedStory = await callRaw(client, "save_specialist_finalization", finalization({
+      activityId,
+      questionId,
+      operationId: "final-answer-operation-unversioned-story",
+      answer,
+      responseTurnId,
+      story: { storyId: "story-retry-boundary" },
+    }));
+    assert.equal(unversionedStory.isError, true);
+    assert.equal(unversionedStory.structuredContent.code, "behavioral_final_answer_story_revision_required");
+
     const invalidOperationId = await callRaw(client, "save_specialist_finalization", finalization({
       activityId,
       questionId,
@@ -378,6 +427,7 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     assert.equal(record.finalAnswer.source, "snapshot_v1");
     assert.equal(record.finalAnswer.answer, answer);
     assert.equal(record.finalAnswer.solutionProfile.revision, 1);
+    assert.deepEqual(record.finalAnswer.story, { storyId: "story-retry-boundary", revision: 1 });
     assert.equal(record.finalAnswerSnapshots.length, 1);
     assert.equal(record.finalAnswerSnapshotsTruncated, false);
     assert.equal(record.interactionModeClassification.snapshotRevision, 1);
