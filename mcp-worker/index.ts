@@ -32,6 +32,11 @@ import {
   setBehavioralTargetBinding,
   upsertBehavioralTargetProfile,
 } from "../db/behavioral-target-profile";
+import {
+  behavioralPracticePreflightInputSchema,
+  readBehavioralPracticePreflight,
+} from "../db/behavioral-practice-preflight";
+import { behavioralTargetReviewSchema } from "../db/behavioral-practice-preflight-policy";
 import { loadContentIndex } from "../db/content";
 import { resolveIntegrationOwner } from "../db/integrations";
 import { getResumeImportStatus } from "../db/resume-revisions";
@@ -2714,6 +2719,26 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   );
 
   server.registerTool(
+    "get_behavioral_practice_preflight",
+    {
+      description: "Load one deterministic owner-private behavioral preflight at start/resume, new-question, post-mutation, reconnect/handoff, or finalization. It presents the current Solution Profile read, accepted evidence and gaps, authoritative Target Profile resolution, target grading signals, and bounded accepted target-tailored answer snapshots with source-revision staleness. It never returns raw job descriptions or private target analysis.",
+      inputSchema: behavioralPracticePreflightInputSchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await readBehavioralPracticePreflight(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
     "get_resume_import_status",
     {
       description: "Read one exact owner-private resume import receipt by stable operation ID. The bounded result exposes revision identity and file integrity only; it never returns resume content, provider or local locators, R2 object keys, or another owner's state.",
@@ -2856,9 +2881,10 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
           summary: z.string().optional(),
           transcriptScope: z.enum(["full_activity", "activity_exchanges", "none_observed"]),
           review: z.object({
-            didWell: z.array(z.string()),
-            improve: z.array(z.string()),
+            didWell: z.array(z.string().trim().min(1)),
+            improve: z.array(z.string().trim().min(1)),
           }),
+          behavioralReview: behavioralTargetReviewSchema.optional(),
           modelAnswer: z.string().min(1),
           finalAnswerOperationId: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,199}$/).optional(),
           finalAnswerSnapshot: behavioralFinalAnswerSnapshotInputSchema.optional(),

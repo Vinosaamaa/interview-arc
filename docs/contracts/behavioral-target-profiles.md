@@ -72,6 +72,14 @@ and session clear resolves to none. Reads and writes are owner-scoped.
 When an activity is supplied, resolution derives its parent session from the
 authoritative activity record; a caller cannot substitute another session.
 
+`get_behavioral_practice_preflight` composes that resolver with the exact
+question's Solution Profile, accepted evidence, gaps, and bounded accepted
+target-tailored snapshots. Call it at start/resume, new-question,
+post-mutation, reconnect/handoff, and finalization. Every call rereads D1;
+target context never survives compaction as assumed state. Accepted variants
+are immutable final-answer snapshots, with staleness derived from the exact
+Target and Solution Profile revisions.
+
 ## Final-answer boundary
 
 A `target_tailored` final answer is accepted only when:

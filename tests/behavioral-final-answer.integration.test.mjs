@@ -89,6 +89,25 @@ function finalization({
       complete: true,
       transcriptScope: "full_activity",
       review: { didWell: ["Scoped the decision."], improve: ["Add a measured outcome."] },
+      ...(scope === "target_tailored" ? {
+        behavioralReview: {
+          schemaVersion: 1,
+          universalQuality: {
+            strengths: ["Scoped the decision."],
+            improvements: ["Add a measured outcome."],
+          },
+          targetAlignment: {
+            strengths: ["Connected the decision to reliability ownership."],
+            gaps: ["Staff-level influence is not independently established."],
+            competencySignals: target?.competencyEmphasis ?? [],
+          },
+          assistance: {
+            level: "probing",
+            details: ["Prompted for the measured outcome."],
+          },
+          evidenceGaps: ["Production impact is not independently measured."],
+        },
+      } : {}),
       modelAnswer: answer,
       references: [],
       solutionProfileAction: "create_or_revise",
@@ -302,6 +321,35 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     assert.equal(correctedRecord.finalAnswerSnapshots[0].snapshot.answer, answer);
     assert.equal(correctedRecord.finalAnswerSnapshots[1].snapshot.answer, correctedAnswer);
 
+    const orphanTargetReview = finalization({
+      activityId,
+      questionId,
+      operationId: "final-answer-operation-orphan-target-review",
+      answer: correctedAnswer,
+      responseTurnId: "behavioral-response-2",
+      solutionRevision: 2,
+    });
+    orphanTargetReview.finalization.behavioralReview = {
+      schemaVersion: 1,
+      universalQuality: {
+        strengths: ["Scoped the decision."],
+        improvements: ["Add a measured outcome."],
+      },
+      targetAlignment: { strengths: [], gaps: [], competencySignals: [] },
+      assistance: { level: "none", details: [] },
+      evidenceGaps: ["Production impact is not independently measured."],
+    };
+    const orphanTargetReviewResult = await callRaw(
+      client,
+      "save_specialist_finalization",
+      orphanTargetReview,
+    );
+    assert.equal(orphanTargetReviewResult.isError, true);
+    assert.equal(
+      orphanTargetReviewResult.structuredContent.code,
+      "behavioral_target_review_scope_mismatch",
+    );
+
     const targetCreated = await call(client, "upsert_behavioral_target_profile", {
       operationId: "target-final-answer-create-1",
       expectedRevision: 0,
@@ -358,6 +406,14 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
       authorization: "explicit_user_instruction",
     });
     assert.equal(activityBinding.binding.revision, 1);
+    const targetPreflight = await call(client, "get_behavioral_practice_preflight", {
+      boundary: "finalization",
+      questionId,
+      activityId,
+    });
+    assert.equal(targetPreflight.targeting.mode, "target_tailored");
+    assert.deepEqual(targetPreflight.targeting.competencySignals, ["reliability"]);
+    assert.deepEqual(targetPreflight.acceptedTargetVariants, []);
 
     const targetMismatch = await callRaw(client, "save_specialist_finalization", finalization({
       activityId,
@@ -387,6 +443,8 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
       target: targetReference,
       correction: { replacesSnapshotRevision: 2, reason: "Tailor for an approved target." },
     });
+    targetFinalization.finalization.review.didWell[0] = "  Scoped the decision.  ";
+    targetFinalization.finalization.review.improve[0] = "  Add a measured outcome.  ";
     const targetSaved = await call(client, "save_specialist_finalization", targetFinalization);
     assert.equal(targetSaved.finalAnswer.status, "corrected");
     assert.equal(targetSaved.finalAnswer.snapshotRevision, 3);
@@ -398,6 +456,14 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
       label: "Example target",
       competencyEmphasis: ["reliability"],
     });
+    const acceptedVariantPreflight = await call(client, "get_behavioral_practice_preflight", {
+      boundary: "reconnect_handoff",
+      questionId,
+      activityId,
+    });
+    assert.equal(acceptedVariantPreflight.acceptedTargetVariants.length, 1);
+    assert.equal(acceptedVariantPreflight.acceptedTargetVariants[0].stale, false);
+    assert.equal(acceptedVariantPreflight.acceptedTargetVariants[0].review.assistance.level, "probing");
     await call(client, "set_behavioral_target_binding", {
       mutationId: "target-final-answer-clear-2",
       scope: { type: "activity", id: activityId },
@@ -405,6 +471,14 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
       expectedRevision: 1,
       authorization: "explicit_user_instruction",
     });
+    const staleVariantPreflight = await call(client, "get_behavioral_practice_preflight", {
+      boundary: "post_mutation",
+      questionId,
+      activityId,
+    });
+    assert.equal(staleVariantPreflight.targeting.mode, "universal");
+    assert.equal(staleVariantPreflight.acceptedTargetVariants[0].stale, true);
+    assert.deepEqual(staleVariantPreflight.acceptedTargetVariants[0].staleReasons, ["target_not_resolved"]);
     const targetRetryAfterClear = await call(
       client,
       "save_specialist_finalization",

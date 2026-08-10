@@ -26,6 +26,7 @@ enabled_tools = [
   "query_behavioral_target_profiles",
   "set_behavioral_target_binding",
   "resolve_behavioral_target",
+  "get_behavioral_practice_preflight",
   "get_resume_import_status",
   "save_leetcode_code_attempt",
   "get_specialist_write_status",

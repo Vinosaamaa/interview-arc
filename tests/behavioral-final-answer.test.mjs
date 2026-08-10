@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   BehavioralFinalAnswerError,
+  behavioralFinalAnswerFingerprint,
   behavioralFinalAnswerSnapshotInputSchema,
   projectBehavioralFinalAnswer,
   renderBehavioralFinalAnswerHtml,
@@ -78,6 +79,35 @@ test("scope validation forbids target data on universal answers and requires it 
       target: { ...tailored.target, rawJobDescription: "private JD" },
     }),
   );
+});
+
+test("final-answer identity includes the typed target review", async () => {
+  const base = {
+    activityId: "activity-target-review",
+    questionId: "behavioral-reliability-1",
+    snapshot: universalSnapshot(),
+  };
+  const first = await behavioralFinalAnswerFingerprint({
+    ...base,
+    behavioralReview: {
+      schemaVersion: 1,
+      universalQuality: { strengths: ["Clear."], improvements: [] },
+      targetAlignment: { strengths: [], gaps: [], competencySignals: [] },
+      assistance: { level: "none", details: [] },
+      evidenceGaps: [],
+    },
+  });
+  const changed = await behavioralFinalAnswerFingerprint({
+    ...base,
+    behavioralReview: {
+      schemaVersion: 1,
+      universalQuality: { strengths: ["Specific."], improvements: [] },
+      targetAlignment: { strengths: [], gaps: [], competencySignals: [] },
+      assistance: { level: "none", details: [] },
+      evidenceGaps: [],
+    },
+  });
+  assert.notEqual(first, changed);
 });
 
 test("correction validation never silently replaces an immutable snapshot", () => {
