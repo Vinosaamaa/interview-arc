@@ -67,6 +67,7 @@ import {
 import { readMasterPanePreference, writeMasterPanePreference } from "./ui-preferences";
 import { effectiveProfileTags, isReusableSolutionProfile } from "./solution-profile-policy";
 import BehavioralFoundation from "./behavioral-foundation";
+import { activityLifecycleState } from "./activity-state";
 import {
   formatPracticeTimerTimestamp,
   formatPracticeTimestamp,
@@ -638,6 +639,16 @@ function ActivityTimer({
         {timer?.startedAt ? formatPracticeTimerTimestamp(timer.startedAt) : "\u00A0"}
       </small>
     </div>
+  );
+}
+
+function ActivityStateStamp({ timer }: { timer?: TimerDraft }) {
+  const state = activityLifecycleState(timer);
+  return (
+    <span className={`activity-state-stamp ${state.key}`}>
+      <i aria-hidden="true" />
+      {state.label}
+    </span>
   );
 }
 
@@ -3475,7 +3486,16 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       showUiToast("This activity already contains practice work, so it stays in your history.");
       return;
     }
-    enqueue({ type: "extra-remove", id: activityId });
+    if (!draft.workbench) {
+      showUiToast("Today is still loading. Try removing this activity again.");
+      return;
+    }
+    enqueue({
+      type: "extra-remove",
+      id: activityId,
+      mutationId: `website-remove-${crypto.randomUUID()}`,
+      expectedWorkbenchRevision: draft.workbench.revision,
+    });
     setDraft((current) => {
       const timers = { ...current.timers };
       const outcomes = { ...current.outcomes };
@@ -3920,6 +3940,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         openedPacificDate,
         openedAt: timestamp,
         closedAt: null,
+        revision: timestamp,
       },
       extraActivities: [],
       focusBlocks: [],
@@ -4341,7 +4362,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
               return (
                 <div className="problem-ledger-row" key={activity.id}>
                   <span className={`row-count ${isActivityComplete(activity) ? "complete" : ""}`}>{isActivityComplete(activity) ? "✓" : problemIndex + 1}</span>
-                  <div className="problem-title"><strong>{activity.title}</strong><span>{activity.notes ?? "Coding problem"}</span>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open on LeetCode ↗</a>}</div>
+                  <div className="problem-title"><strong>{activity.title}</strong><ActivityStateStamp timer={draft.timers[activity.id]} /><span>{activity.notes ?? "Coding problem"}</span>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open on LeetCode ↗</a>}</div>
                   <ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} locked={sessionLocked} />
                   <ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} disabled={!draft.timers[activity.id]?.startedAt || draft.publicationStatuses[activity.id] === "published"} required={requiredResultIds.includes(activity.id)} />
                   <PublicationControl status={publicationStatusFor(activity)} />
@@ -4359,7 +4380,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             const isExtra = item.source === "extra";
             return (
               <section className={`mock-sheet ${item.type}`} key={item.id}>
-                <div className="mock-topline"><span className={`type-chip ${item.type}`}>{typeLabel(item.type)}</span>{isExtra && <button className={`icon-action danger ${draft.timers[item.id]?.startedAt ? "action-locked" : ""}`} onClick={() => removeActivity(item.id)} aria-disabled={Boolean(draft.timers[item.id]?.startedAt)} aria-label={`Remove ${item.title}`} title={draft.timers[item.id]?.startedAt ? "Started activities stay in your history" : "Remove untouched activity"}><Icon name="close" /></button>}</div>
+                <div className="mock-topline"><span className={`type-chip ${item.type}`}>{typeLabel(item.type)}</span><div className="mock-state-actions"><ActivityStateStamp timer={draft.timers[item.id]} />{isExtra && <button className={`icon-action danger ${draft.timers[item.id]?.startedAt ? "action-locked" : ""}`} onClick={() => removeActivity(item.id)} aria-disabled={Boolean(draft.timers[item.id]?.startedAt)} aria-label={`Remove ${item.title}`} title={draft.timers[item.id]?.startedAt ? "Started activities stay in your history" : "Remove untouched activity"}><Icon name="close" /></button>}</div></div>
                 <h3>{item.title}</h3>
                 <p>{item.prompt}</p>
                 <div className="mock-controls">
@@ -4426,7 +4447,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
         <section className="loose-section">
           <div className="section-title"><div><span className="eyebrow">STANDALONE PRACTICE</span><h2>Outside a full session</h2><p>Each card keeps only the controls you need: stopwatch, result, journal state, star, and remove.</p></div></div>
-          {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add activities” above to select across the banks or create a custom prompt.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <StandaloneActivityCard key={activity.id} title={activity.title} onRemove={() => removeActivity(activity.id)} removeDisabled={Boolean(draft.timers[activity.id]?.startedAt)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><small>{typeLabel(activity.type)} · local draft</small><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} /><ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} disabled={!draft.timers[activity.id]?.startedAt || draft.publicationStatuses[activity.id] === "published"} required={requiredResultIds.includes(activity.id)} /><PublicationControl status={publicationStatusFor(activity)} /><button className={`star-control ${isStarred(activity.type, activity.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(activity.type, activity.questionId)} disabled={!activity.questionId} aria-label={`${isStarred(activity.type, activity.questionId) ? "Unstar" : "Star"} ${activity.title}`}>★</button></StandaloneActivityCard>)}</div>}
+          {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add activities” above to select across the banks or create a custom prompt.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <StandaloneActivityCard key={activity.id} title={activity.title} onRemove={() => removeActivity(activity.id)} removeDisabled={Boolean(draft.timers[activity.id]?.startedAt)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><div className="loose-activity-meta"><small>{typeLabel(activity.type)}</small><ActivityStateStamp timer={draft.timers[activity.id]} /></div><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} /><ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} disabled={!draft.timers[activity.id]?.startedAt || draft.publicationStatuses[activity.id] === "published"} required={requiredResultIds.includes(activity.id)} /><PublicationControl status={publicationStatusFor(activity)} /><button className={`star-control ${isStarred(activity.type, activity.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(activity.type, activity.questionId)} disabled={!activity.questionId} aria-label={`${isStarred(activity.type, activity.questionId) ? "Unstar" : "Star"} ${activity.title}`}>★</button></StandaloneActivityCard>)}</div>}
           {looseFocusBlocks.length > 0 && <section className="career-focus-section" aria-labelledby="career-focus-title"><header><div><span className="eyebrow">CAREER WORK</span><h3 id="career-focus-title">Job application focus</h3></div><small>Time only · no result or publication required</small></header><div className="career-focus-list">{looseFocusBlocks.map((block) => <article className={`career-focus-card ${draft.timers[block.id]?.completed ? "completed" : ""}`} key={block.id}><span className="career-focus-mark" aria-hidden="true">J</span><div className="career-focus-copy"><small>Focus block · {Math.round(block.plannedSeconds / 60)} planned min</small><strong>{block.title}</strong>{block.note && <p>{block.note}</p>}</div><ActivityTimer activity={block} timer={draft.timers[block.id]} now={now} onToggle={toggleTimer} onComplete={completeFocusBlock} /><div className="career-focus-actions"><button className="icon-action" onClick={() => editFocusBlock(block)} disabled={Boolean(draft.timers[block.id]?.completed)} aria-label={`Edit ${block.title}`}>✎</button><button className="icon-action" onClick={() => removeFocusBlockFromToday(block.id)} disabled={Boolean(draft.timers[block.id]?.startedAt)} aria-label={`Remove ${block.title}`}>×</button></div></article>)}</div></section>}
         </section>
       </>

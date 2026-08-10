@@ -35,6 +35,7 @@ enabled_tools = [
   "save_delivery_analysis",
   "query_practice_catalog",
   "plan_today_practice",
+  "remove_today_practice_activities",
   "control_practice_timer",
   "control_practice_session_timer",
   "control_practice_workbench",

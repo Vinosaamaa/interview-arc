@@ -106,6 +106,7 @@ import {
   applyPlanningSelection,
   readPlanningMutation,
   rememberPlanningMutation,
+  removePlannedActivities,
   TodayPlanningConflictError,
 } from "../db/today-planning";
 import {
@@ -3010,6 +3011,41 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
           },
         ), env, priorReceipt);
         const result = await decodeInternalResponse(response);
+        const authoritative = await authoritativeSpecialistState(ownerId);
+        const payload = { ...result, authoritative };
+        return {
+          content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+          structuredContent: payload,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "remove_today_practice_activities",
+    {
+      description: "Remove one or more exact untouched planned activity IDs from the authenticated owner's current workbench. Requires an explicit user instruction, the authoritative workbench ID and revision, and a stable mutation ID. Started or durable activities are rejected and preserved.",
+      inputSchema: {
+        expectedWorkbenchId: z.string().min(1),
+        expectedWorkbenchRevision: z.number().int().nonnegative(),
+        mutationId: z.string().min(1).max(120),
+        activityIds: z.array(z.string().min(1)).min(1).max(30),
+        authorization: z.literal("explicit_user_instruction"),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await removePlannedActivities(ownerId, {
+          date: dateInPracticeTimeZone(),
+          expectedWorkbenchId: input.expectedWorkbenchId,
+          expectedWorkbenchRevision: input.expectedWorkbenchRevision,
+          mutationId: input.mutationId,
+          activityIds: input.activityIds,
+        });
+        await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "practice");
         const authoritative = await authoritativeSpecialistState(ownerId);
         const payload = { ...result, authoritative };
         return {

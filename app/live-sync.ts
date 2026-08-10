@@ -97,7 +97,12 @@ export type Mutation =
   | { type: "problem-star"; specialty: import("./live-types").ActivityType; questionId: string; starred: boolean }
   | { type: "personal-question-upsert"; specialty: import("./live-types").ActivityType; question: { questionId: string; title: string; prompt?: string; url?: string; tags?: string[]; priority?: number; targetMinutes?: number } }
   | { type: "extra-upsert"; activity: ExtraActivity }
-  | { type: "extra-remove"; id: string }
+  | {
+      type: "extra-remove";
+      id: string;
+      mutationId?: string;
+      expectedWorkbenchRevision?: number;
+    }
   | { type: "focus-block-upsert"; block: FocusBlock }
   | { type: "focus-block-remove"; id: string }
   | { type: "session-upsert"; session: LocalSession }
