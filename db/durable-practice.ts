@@ -3522,6 +3522,7 @@ type BehavioralFinalAnswerWritePlan = {
   replay: boolean;
   resumeContext?: Omit<ActivityResumeContext, "capturedAt">;
   resumeSourceUpdatedAt?: number;
+  resumeContextExpectedAbsent: boolean;
   targetBinding?: {
     source: "activity" | "session";
     scopeId: string;
@@ -3723,6 +3724,7 @@ async function prepareBehavioralFinalAnswerWrite(
       correction: payload.finalAnswerCorrection,
       result: { status: "unchanged", snapshotRevision: existingOperation[0].snapshotRevision },
       replay: true,
+      resumeContextExpectedAbsent: false,
     };
   }
   const attemptAnalysis = validateBehavioralAttemptAnalysis(payload, snapshot);
@@ -3930,6 +3932,7 @@ async function prepareBehavioralFinalAnswerWrite(
       evidenceIds: contextEvidenceIds,
     } : undefined,
     resumeSourceUpdatedAt: selectedResume?.updatedAt,
+    resumeContextExpectedAbsent: !selectedResume,
   };
 }
 
@@ -4264,6 +4267,12 @@ export async function saveSpecialistFinalization(
           AND ${resumeRevisions.resumeId} = ${context.resumeId}
           AND ${resumeRevisions.revisionId} = ${context.resumeRevisionId}
           AND ${resumeRevisions.importedAt} = ${context.resumeImportedAt}
+      )`));
+    } else if (behavioralFinalAnswer.resumeContextExpectedAbsent) {
+      finalizationGuards.push(d1TransactionalInvariantGuard(db, sql`NOT EXISTS (
+        SELECT 1 FROM ${resumeSources}
+        WHERE ${resumeSources.ownerId} = ${ownerId}
+          AND ${resumeSources.currentRevisionId} IS NOT NULL
       )`));
     }
   }
