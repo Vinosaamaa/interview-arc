@@ -219,8 +219,8 @@ test("owner creates a private pasted-JD target and reads its display-safe revisi
       target: {
         ...createTarget.target,
         source: {
-          kind: "public_posting",
-          displayLocator: "https://jobs.example.com/platform/42",
+          kind: "pasted_jd",
+          displayLocator: "Owner-provided job description",
           capturedAt: 1_786_377_700_000,
           jdText: "Design reliable distributed services and lead cross-team delivery.",
         },
@@ -233,8 +233,8 @@ test("owner creates a private pasted-JD target and reads its display-safe revisi
     const revisedRead = await call(client, "query_behavioral_target_profiles", {
       targetId: "target-meta-senior-backend",
     });
-    assert.equal(revisedRead.targets[0].source.kind, "public_posting");
-    assert.equal(revisedRead.targets[0].source.displayLocator, "https://jobs.example.com/platform/42");
+    assert.equal(revisedRead.targets[0].source.kind, "pasted_jd");
+    assert.equal(revisedRead.targets[0].source.displayLocator, "Owner-provided job description");
     assert.doesNotMatch(JSON.stringify(revisedRead), /lead cross-team delivery|jdText/);
     const historical = await call(client, "query_behavioral_target_profiles", {
       targetId: "target-meta-senior-backend",

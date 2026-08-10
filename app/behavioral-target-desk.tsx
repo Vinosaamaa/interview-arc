@@ -121,7 +121,7 @@ export default function BehavioralTargetDesk({ enabled = true }: { enabled?: boo
   };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!draft.jdText.trim()) {
+    if ((draft.sourceMode === "pasted_jd" && !draft.jdText.trim()) || (draft.sourceMode === "public_posting" && !preview)) {
       setNotice(draft.sourceMode === "public_posting" ? "Import the public posting before saving." : "Paste the job description before saving.");
       return;
     }
@@ -129,12 +129,6 @@ export default function BehavioralTargetDesk({ enabled = true }: { enabled?: boo
     setNotice(null);
     const targetId = editing?.targetId
       ?? `target-${stableSlug(draft.company)}-${stableSlug(draft.roleTitle)}-${crypto.randomUUID().slice(0, 8).toLowerCase()}`;
-    const capturedAt = draft.sourceMode === "public_posting" && preview
-      ? preview.source.capturedAt
-      : Date.now();
-    const displayLocator = draft.sourceMode === "public_posting" && preview
-      ? preview.source.displayLocator
-      : "Owner-provided job description";
     try {
       await behavioralTargetRequest("/api/behavioral-targets", {
         method: "POST",
@@ -151,7 +145,18 @@ export default function BehavioralTargetDesk({ enabled = true }: { enabled?: boo
             targetLevel: optional(draft.targetLevel),
             location: optional(draft.location),
             team: optional(draft.team),
-            source: { kind: draft.sourceMode, displayLocator, capturedAt, jdText: draft.jdText },
+            source: draft.sourceMode === "public_posting"
+              ? {
+                  kind: "public_posting",
+                  displayLocator: preview!.source.displayLocator,
+                  expectedFingerprint: preview!.source.fingerprint,
+                }
+              : {
+                  kind: "pasted_jd",
+                  displayLocator: "Owner-provided job description",
+                  capturedAt: Date.now(),
+                  jdText: draft.jdText,
+                },
             responsibilities: [],
             requiredQualifications: [],
             preferredQualifications: [],
@@ -235,7 +240,7 @@ export default function BehavioralTargetDesk({ enabled = true }: { enabled?: boo
         <label><span>Location</span><input value={draft.location} onChange={(event) => update("location", event.target.value)} /></label>
         <label><span>Team</span><input value={draft.team} onChange={(event) => update("team", event.target.value)} /></label>
       </div>
-      <div className="target-source-tabs" role="group" aria-label="Job description source"><button type="button" className={draft.sourceMode === "pasted_jd" ? "active" : ""} onClick={() => { update("sourceMode", "pasted_jd"); setPreview(null); }}>Paste job description</button><button type="button" className={draft.sourceMode === "public_posting" ? "active" : ""} onClick={() => update("sourceMode", "public_posting")}>Import public posting</button></div>
+      <div className="target-source-tabs" role="group" aria-label="Job description source"><button type="button" className={draft.sourceMode === "pasted_jd" ? "active" : ""} onClick={() => { setDraft((current) => ({ ...current, sourceMode: "pasted_jd", publicUrl: "", jdText: "" })); setPreview(null); }}>Paste job description</button><button type="button" className={draft.sourceMode === "public_posting" ? "active" : ""} onClick={() => { setDraft((current) => ({ ...current, sourceMode: "public_posting", jdText: "" })); setPreview(null); }}>Import public posting</button></div>
       {draft.sourceMode === "pasted_jd" ? <label className="target-jd-field"><span>Private job description</span><textarea required rows={8} value={draft.jdText} onChange={(event) => update("jdText", event.target.value)} /><small>Stored owner-private; never rendered after save.</small></label> : <div className="target-public-import"><label><span>Public posting URL</span><input type="url" required value={draft.publicUrl} onChange={(event) => { update("publicUrl", event.target.value); setPreview(null); update("jdText", ""); }} /></label><button type="button" disabled={busy || !draft.publicUrl} onClick={() => void importPublicPosting()}>{busy ? "Checking…" : "Import securely"}</button></div>}
       <label className="target-jd-field"><span>Competency signals · one per line</span><textarea rows={4} value={draft.signals} onChange={(event) => update("signals", event.target.value)} /><small>Owner-authored labels only. The posting never issues instructions to Interview Arc.</small></label>
       <footer><button type="button" onClick={() => setFormOpen(false)}>Cancel</button><button className="primary-action" type="submit" disabled={busy}>{busy ? "Saving…" : editing ? "Save new revision" : "Create target"}</button></footer>

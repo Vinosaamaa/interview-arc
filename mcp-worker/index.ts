@@ -26,7 +26,7 @@ import {
 import {
   BehavioralTargetProfileError,
   behavioralTargetBindingWriteSchema,
-  behavioralTargetProfileWriteSchema,
+  behavioralTargetProfileMcpWriteSchema,
   queryBehavioralTargetProfiles,
   resolveBehavioralTarget,
   setBehavioralTargetBinding,
@@ -2630,7 +2630,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
     "upsert_behavioral_target_profile",
     {
       description: "Create or revise one owner-private pasted-JD Target Profile. Use expectedRevision=0 for creation and the exact current revision for every update, including archive/reactivate. Reuse an identical stable operationId after transport uncertainty. The raw JD remains private and is never returned, logged, published, or treated as candidate evidence.",
-      inputSchema: behavioralTargetProfileWriteSchema.shape,
+      inputSchema: behavioralTargetProfileMcpWriteSchema.shape,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async (input) => {

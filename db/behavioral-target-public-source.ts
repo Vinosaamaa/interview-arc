@@ -14,6 +14,9 @@ export class BehavioralTargetPublicSourceError extends Error {
 }
 
 function unsafeHostname(hostnameValue: string) {
+  // Defense in depth. Production uses the standard Workers fetch capability,
+  // whose outbound proxy permits public Internet services rather than internal
+  // network services; this Worker has no VPC binding.
   const hostname = hostnameValue.toLowerCase().replace(/^\[|\]$/g, "");
   return hostname === "localhost"
     || hostname === "metadata.google.internal"
@@ -111,6 +114,9 @@ async function boundedBody(response: Response) {
       );
       chunks.push(value);
     }
+  } catch (error) {
+    await reader.cancel("public posting rejected").catch(() => undefined);
+    throw error;
   } finally {
     reader.releaseLock();
   }
@@ -131,14 +137,48 @@ export async function fetchPublicBehavioralTargetSource(input: {
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    let response: Response;
     try {
-      response = await fetcher(currentUrl, {
+      const response = await fetcher(currentUrl, {
         headers: { accept: "text/html,text/plain;q=0.9" },
         redirect: "manual",
         signal: controller.signal,
       });
-    } catch {
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        const location = response.headers.get("location");
+        if (!location || redirect === MAX_REDIRECTS) throw new BehavioralTargetPublicSourceError(
+          "behavioral_target_public_redirect_unavailable",
+          "The public posting redirected outside the protected import limit.",
+        );
+        currentUrl = normalizePublicPostingUrl(new URL(location, currentUrl).toString());
+        continue;
+      }
+      if (!response.ok) throw new BehavioralTargetPublicSourceError(
+        "behavioral_target_public_unavailable",
+        "The public posting is unavailable. Paste the job description instead.",
+      );
+      const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+      if (contentType && !contentType.includes("text/html") && !contentType.includes("text/plain")) {
+        throw new BehavioralTargetPublicSourceError(
+          "behavioral_target_public_content_unsupported",
+          "The public posting did not return readable text or HTML.",
+        );
+      }
+      const jdText = extractPostingText(await boundedBody(response));
+      const fingerprint = await sha256(jdText.trim());
+      return {
+        status: "available" as const,
+        change: postingChangeState(input.expectedFingerprint, fingerprint),
+        freshness: classifyPostingFreshness(nowMs, nowMs),
+        source: {
+          kind: "public_posting" as const,
+          displayLocator: currentUrl,
+          capturedAt: nowMs,
+          jdText,
+          fingerprint,
+        },
+      };
+    } catch (error) {
+      if (error instanceof BehavioralTargetPublicSourceError) throw error;
       throw new BehavioralTargetPublicSourceError(
         "behavioral_target_public_unavailable",
         "The public posting could not be reached. Paste the job description instead.",
@@ -146,40 +186,6 @@ export async function fetchPublicBehavioralTargetSource(input: {
     } finally {
       clearTimeout(timeout);
     }
-    if ([301, 302, 303, 307, 308].includes(response.status)) {
-      const location = response.headers.get("location");
-      if (!location || redirect === MAX_REDIRECTS) throw new BehavioralTargetPublicSourceError(
-        "behavioral_target_public_redirect_unavailable",
-        "The public posting redirected outside the protected import limit.",
-      );
-      currentUrl = normalizePublicPostingUrl(new URL(location, currentUrl).toString());
-      continue;
-    }
-    if (!response.ok) throw new BehavioralTargetPublicSourceError(
-      "behavioral_target_public_unavailable",
-      "The public posting is unavailable. Paste the job description instead.",
-    );
-    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
-    if (contentType && !contentType.includes("text/html") && !contentType.includes("text/plain")) {
-      throw new BehavioralTargetPublicSourceError(
-        "behavioral_target_public_content_unsupported",
-        "The public posting did not return readable text or HTML.",
-      );
-    }
-    const jdText = extractPostingText(await boundedBody(response));
-    const fingerprint = await sha256(jdText.trim());
-    return {
-      status: "available" as const,
-      change: postingChangeState(input.expectedFingerprint, fingerprint),
-      freshness: "current" as const,
-      source: {
-        kind: "public_posting" as const,
-        displayLocator: currentUrl,
-        capturedAt: nowMs,
-        jdText,
-        fingerprint,
-      },
-    };
   }
   throw new BehavioralTargetPublicSourceError(
     "behavioral_target_public_unavailable",

@@ -16,6 +16,7 @@ import {
   behavioralTargetBindingWriteSchema,
   behavioralTargetProfileDisplaySnapshotSchema,
   behavioralTargetProfileInputSchema,
+  behavioralTargetProfileMcpWriteSchema,
   behavioralTargetProfileStateWriteSchema,
   behavioralTargetProfileWriteSchema,
   behavioralTargetStableIdSchema,
@@ -30,9 +31,12 @@ import {
 export {
   behavioralTargetBindingWriteSchema,
   behavioralTargetProfileInputSchema,
+  behavioralTargetProfileMcpWriteSchema,
   behavioralTargetProfileStateWriteSchema,
   behavioralTargetProfileWriteSchema,
 };
+
+export const VERIFIED_PUBLIC_TARGET_SOURCE = Symbol("verified-public-target-source");
 
 export class BehavioralTargetProfileError extends Error {
   readonly code: string;
@@ -54,7 +58,16 @@ async function sha256(value: string) {
 }
 
 async function requestFingerprint(input: BehavioralTargetProfileWrite) {
-  return sha256(JSON.stringify(input));
+  const canonical = input.target.source.kind === "public_posting"
+    ? {
+        ...input,
+        target: {
+          ...input.target,
+          source: { ...input.target.source, capturedAt: 0 },
+        },
+      }
+    : input;
+  return sha256(JSON.stringify(canonical));
 }
 
 function displaySafeRevision(row: {
@@ -90,10 +103,17 @@ function displaySnapshot(target: BehavioralTargetProfileInput): BehavioralTarget
 
 export async function upsertBehavioralTargetProfile(
   ownerId: string,
-  inputValue: BehavioralTargetProfileWrite,
+  inputValue: unknown,
   nowMs = Date.now(),
+  publicSourceTrust?: typeof VERIFIED_PUBLIC_TARGET_SOURCE,
 ) {
   const input = behavioralTargetProfileWriteSchema.parse(inputValue);
+  if (input.target.source.kind === "public_posting" && publicSourceTrust !== VERIFIED_PUBLIC_TARGET_SOURCE) {
+    throw new BehavioralTargetProfileError(
+      "behavioral_target_public_source_unverified",
+      "Public postings must be fetched and fingerprint-verified by the authenticated website boundary.",
+    );
+  }
   const db = getDb();
   const fingerprint = await requestFingerprint(input);
   const sourceFingerprint = await sha256(input.target.source.jdText.trim());
@@ -315,7 +335,7 @@ export async function changeBehavioralTargetProfileState(
     operationId: input.operationId,
     expectedRevision: input.expectedRevision,
     target: { ...target, state: input.state },
-  }, nowMs);
+  }, nowMs, target.source.kind === "public_posting" ? VERIFIED_PUBLIC_TARGET_SOURCE : undefined);
 }
 
 export async function queryBehavioralTargetProfiles(ownerId: string, input: {
@@ -448,7 +468,7 @@ async function assertCurrentTargetRevision(
 
 export async function setBehavioralTargetBinding(
   ownerId: string,
-  inputValue: BehavioralTargetBindingWrite,
+  inputValue: unknown,
   nowMs = Date.now(),
 ) {
   const input = behavioralTargetBindingWriteSchema.parse(inputValue);
@@ -471,14 +491,6 @@ export async function setBehavioralTargetBinding(
   await assertBindingScopeExists(ownerId, input);
   if (input.action === "set") {
     await assertCurrentTargetRevision(ownerId, input.targetId!, input.targetRevision!);
-  }
-  const current = await readBehavioralTargetBinding(ownerId, input.scope.type, input.scope.id);
-  const actualRevision = current?.revision ?? 0;
-  if (actualRevision !== input.expectedRevision) {
-    throw new BehavioralTargetProfileError(
-      "behavioral_target_binding_revision_conflict",
-      "The target binding changed; reread it before retrying.",
-    );
   }
   const revision = input.expectedRevision + 1;
   const binding = {

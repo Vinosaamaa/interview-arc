@@ -13,16 +13,29 @@ const verifiedCompanySignalSchema = z.object({
   verifiedAt: z.number().int().positive(),
 }).strict();
 
-export const behavioralTargetSourceSchema = z.object({
-  kind: z.enum(["pasted_jd", "public_posting"]),
+export const behavioralTargetPastedSourceSchema = z.object({
+  kind: z.literal("pasted_jd"),
   displayLocator: boundedText(240),
   capturedAt: z.number().int().positive(),
   jdText: boundedText(100_000),
 }).strict();
 
-export const behavioralTargetDisplaySourceSchema = behavioralTargetSourceSchema.omit({ jdText: true });
+export const behavioralTargetPublicSourceSchema = behavioralTargetPastedSourceSchema.extend({
+  kind: z.literal("public_posting"),
+  displayLocator: z.string().trim().url().max(240),
+});
 
-export const behavioralTargetProfileInputSchema = z.object({
+export const behavioralTargetSourceSchema = z.discriminatedUnion("kind", [
+  behavioralTargetPastedSourceSchema,
+  behavioralTargetPublicSourceSchema,
+]);
+
+export const behavioralTargetDisplaySourceSchema = z.discriminatedUnion("kind", [
+  behavioralTargetPastedSourceSchema.omit({ jdText: true }),
+  behavioralTargetPublicSourceSchema.omit({ jdText: true }),
+]);
+
+const behavioralTargetProfileCoreSchema = z.object({
   targetId: behavioralTargetStableIdSchema,
   label: boundedText(240),
   state: z.enum(["active", "archived"]),
@@ -31,7 +44,6 @@ export const behavioralTargetProfileInputSchema = z.object({
   targetLevel: boundedText(120).optional(),
   location: boundedText(240).optional(),
   team: boundedText(240).optional(),
-  source: behavioralTargetSourceSchema,
   responsibilities: boundedList(100, 1_000),
   requiredQualifications: boundedList(100, 1_000),
   preferredQualifications: boundedList(100, 1_000),
@@ -43,10 +55,37 @@ export const behavioralTargetProfileInputSchema = z.object({
   ownerNotes: boundedList(100, 1_000),
 }).strict();
 
+export const behavioralTargetProfileInputSchema = behavioralTargetProfileCoreSchema.extend({
+  source: behavioralTargetSourceSchema,
+});
+
 export const behavioralTargetProfileWriteSchema = z.object({
   operationId: behavioralTargetStableIdSchema,
   expectedRevision: z.number().int().nonnegative(),
   target: behavioralTargetProfileInputSchema,
+}).strict();
+
+export const behavioralTargetProfileMcpWriteSchema = behavioralTargetProfileWriteSchema.extend({
+  target: behavioralTargetProfileCoreSchema.extend({ source: behavioralTargetPastedSourceSchema }),
+});
+
+export const behavioralTargetPublicWebsiteSourceSchema = z.object({
+  kind: z.literal("public_posting"),
+  displayLocator: boundedText(240),
+  expectedFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+}).strict();
+
+export const behavioralTargetWebsiteProfileInputSchema = behavioralTargetProfileCoreSchema.extend({
+  source: z.discriminatedUnion("kind", [
+    behavioralTargetPastedSourceSchema,
+    behavioralTargetPublicWebsiteSourceSchema,
+  ]),
+});
+
+export const behavioralTargetWebsiteProfileWriteSchema = z.object({
+  operationId: behavioralTargetStableIdSchema,
+  expectedRevision: z.number().int().nonnegative(),
+  target: behavioralTargetWebsiteProfileInputSchema,
 }).strict();
 
 export const behavioralTargetProfileStateWriteSchema = z.object({
@@ -80,9 +119,18 @@ export const behavioralTargetProfileDisplaySnapshotSchema = behavioralTargetProf
   .omit({ source: true })
   .extend({ source: behavioralTargetDisplaySourceSchema });
 
+const behavioralTargetDisplayRevisionSourceSchema = z.discriminatedUnion("kind", [
+  behavioralTargetPastedSourceSchema.omit({ jdText: true }).extend({
+    fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  }),
+  behavioralTargetPublicSourceSchema.omit({ jdText: true }).extend({
+    fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  }),
+]);
+
 export const displaySafeBehavioralTargetRevisionSchema = behavioralTargetProfileDisplaySnapshotSchema.extend({
   revision: z.number().int().positive(),
-  source: behavioralTargetDisplaySourceSchema.extend({ fingerprint: z.string().regex(/^[a-f0-9]{64}$/) }),
+  source: behavioralTargetDisplayRevisionSourceSchema,
   createdAt: z.number().int().positive(),
 });
 
@@ -93,6 +141,7 @@ export const behavioralTargetProfileListSchema = z.object({
 
 export type BehavioralTargetProfileInput = z.infer<typeof behavioralTargetProfileInputSchema>;
 export type BehavioralTargetProfileWrite = z.infer<typeof behavioralTargetProfileWriteSchema>;
+export type BehavioralTargetWebsiteProfileWrite = z.infer<typeof behavioralTargetWebsiteProfileWriteSchema>;
 export type BehavioralTargetProfileStateWrite = z.infer<typeof behavioralTargetProfileStateWriteSchema>;
 export type BehavioralTargetBindingWrite = z.infer<typeof behavioralTargetBindingWriteSchema>;
 export type BehavioralTargetProfileDisplaySnapshot = z.infer<typeof behavioralTargetProfileDisplaySnapshotSchema>;

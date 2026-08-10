@@ -28,6 +28,11 @@ about the candidate and never revise the company-neutral Solution Profile.
   visibly unavailable; matching and changed fingerprints are reported before
   save. A saved public capture older than seven days is labeled stale until the
   owner refreshes it.
+- Production public imports use only the standard Cloudflare Workers outbound
+  `fetch` capability and no VPC binding. Cloudflare's outbound proxy restricts
+  that capability to public Internet services; textual hostname checks remain
+  defense in depth for local and future runtimes. See the official
+  [Workers security model](https://developers.cloudflare.com/workers/reference/security-model/).
 - Today exposes session targets and activity overrides. The UI shows the exact
   resolved target revision and whether it is an activity override, inherited
   from the session, or absent. Every write uses the current binding revision;

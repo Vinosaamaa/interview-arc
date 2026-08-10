@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import {
   behavioralTargetProfileListSchema,
+  behavioralTargetPublicSourceSchema,
   displaySafeBehavioralTargetRevisionSchema,
 } from "../db/behavioral-target-profile-policy";
 
@@ -28,15 +29,20 @@ export const behavioralTargetBindingReadSchema = z.object({
   resolution: behavioralTargetResolutionSchema,
 });
 
+export const behavioralTargetBindingBatchReadSchema = z.object({
+  bindings: z.array(z.object({
+    scope: z.object({ type: z.enum(["session", "activity"]), id: z.string().min(1) }),
+    directBinding: behavioralTargetDirectBindingSchema,
+    resolution: behavioralTargetResolutionSchema,
+  })),
+});
+
 export const behavioralTargetPublicPreviewSchema = z.object({
   status: z.literal("available"),
   change: z.enum(["new", "unchanged", "changed"]),
   freshness: z.literal("current"),
-  source: z.object({
-    kind: z.literal("public_posting"),
-    displayLocator: z.string().url(),
-    capturedAt: z.number().int().positive(),
-    jdText: z.string().min(1).max(100_000),
+  source: behavioralTargetPublicSourceSchema.extend({
+    displayLocator: z.string().url().max(240),
     fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
   }),
 });
