@@ -410,6 +410,34 @@ test("Live leases enforce 90-second fenced ownership, expiry takeover, release, 
   assert.equal(takeoverRelease.status, 200);
 });
 
+test("legacy planning deletion cannot orphan an immutable Live receipt", async () => {
+  const removed = await request("/voice/planning/mutations", {
+    method: "POST",
+    body: {
+      type: "remove",
+      mutationId: "legacy-remove-live-history",
+      workbenchId: "workbench-live",
+      kind: "activity",
+      id: "activity-design-next",
+    },
+  });
+  assert.equal(removed.status, 409);
+  assert.equal(removed.body.code, "planning_conflict");
+
+  const rows = await queryLocalD1(`
+    SELECT
+      EXISTS (
+        SELECT 1 FROM extra_activities
+        WHERE owner_id = 'owner-live' AND id = 'activity-design-next'
+      ) AS activity_exists,
+      EXISTS (
+        SELECT 1 FROM live_mutation_receipts
+        WHERE owner_id = 'owner-live' AND activity_id = 'activity-design-next'
+      ) AS receipt_exists;
+  `);
+  assert.deepEqual(rows, [{ activity_exists: 1, receipt_exists: 1 }]);
+});
+
 test("concurrent Live starts preserve the owner-wide single-active stopwatch invariant", async () => {
   const rooms = [
     {
