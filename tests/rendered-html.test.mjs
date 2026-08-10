@@ -165,10 +165,11 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /centerAnchor: true/);
   assert.match(client, /pending\.centerAnchor/);
   assert.match(client, /list\.scrollTo\(\{ top: Math\.max\(0, target\), behavior: "instant" \}\)/);
-  assert.match(client, /key=\{`\$\{view\}-\$\{viewTransitionId\}`\}/);
+  assert.match(client, /<div className="page-content" id="practice-content">/);
+  assert.doesNotMatch(client, /viewTransitionId|viewDirection|page-enter-(?:stage|forward|backward)/);
   assert.doesNotMatch(client, /kind: "activity-result"/);
   assert.doesNotMatch(client, /Choose a result first/);
-  assert.match(css, /@keyframes page-enter/);
+  assert.doesNotMatch(css, /@keyframes page-enter|\.page-enter-(?:stage|forward|backward)/);
   assert.match(css, /left: calc\(var\(--sidebar-size\) \+ \(100vw - var\(--sidebar-size\)\) \/ 2\)/);
   assert.match(css, /@media \(min-width: 1977px\)/);
   assert.match(css, /--reader-pane-width: 1200px/);

@@ -1424,8 +1424,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   // user enters without forcing React to discard a mismatched server tree.
   const [view, setView] = useState<View>("today");
   const [viewMemoryReady, setViewMemoryReady] = useState(false);
-  const [viewDirection, setViewDirection] = useState<"forward" | "backward">("forward");
-  const [viewTransitionId, setViewTransitionId] = useState(0);
   const { draft, setDraft, now, setNow, hydrated, enqueue } = useLiveState(journal.date);
   const yesterdayDate = shiftDate(journal.date, -1);
   const yesterdayDraft = useReadOnlyLiveState(yesterdayDate);
@@ -3873,9 +3871,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function transitionToView(nextView: View) {
     if (nextView === view) return;
-    const order: View[] = ["today", "journey", "library", "banks"];
-    setViewDirection(order.indexOf(nextView) >= order.indexOf(view) ? "forward" : "backward");
-    setViewTransitionId((current) => current + 1);
     setView(nextView);
   }
 
@@ -5825,7 +5820,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             <button className="secondary-action" onClick={exportDraft}>Export today</button>
           </div>
         </header>
-        <div className={`page-content page-enter-stage page-enter-${viewDirection}`} id="practice-content" key={`${view}-${viewTransitionId}`}>{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
+        <div className="page-content" id="practice-content">{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
       </section>
 
       {composer.open && <div className={`modal-backdrop ${composerClosing ? "closing" : ""}`} role="presentation" onMouseDown={closeComposer} onAnimationEnd={finishComposerClose}>

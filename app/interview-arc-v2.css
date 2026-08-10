@@ -1492,11 +1492,6 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 }
 
 /* Reader workspace motion --------------------------------------------------- */
-.page-enter-stage { animation: page-enter .26s cubic-bezier(.2,.8,.2,1) both; }
-@keyframes page-enter {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
 @keyframes reader-workspace-enter {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -1809,7 +1804,6 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .annotation-form-actions { justify-content: flex-end !important; }
 
 @media (prefers-reduced-motion: reduce) {
-  .page-enter-stage,
   .reader-workspace { animation-duration: .01ms !important; }
 }
 
@@ -1880,17 +1874,6 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .library-page.has-open-entry .log-entry-actions {
   display: grid;
   grid-template-columns: repeat(2, 38px);
-}
-
-.page-enter-forward { animation: page-enter-forward .24s cubic-bezier(.2,.8,.2,1); }
-.page-enter-backward { animation: page-enter-backward .24s cubic-bezier(.2,.8,.2,1); }
-@keyframes page-enter-forward {
-  from { opacity: .35; }
-  to { opacity: 1; }
-}
-@keyframes page-enter-backward {
-  from { opacity: .35; }
-  to { opacity: 1; }
 }
 
 @media (max-width: 760px) {
