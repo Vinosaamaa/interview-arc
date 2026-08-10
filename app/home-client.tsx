@@ -82,6 +82,7 @@ import {
   type ReviewQueueAttempt,
   type ReviewQueueItem,
 } from "../db/review-queue-policy";
+import type { BehavioralFinalAnswerProjection } from "../db/behavioral-final-answer";
 
 type View = "today" | "journey" | "reviews" | "library" | "banks";
 type ComposerMode = "session" | "activity";
@@ -227,6 +228,7 @@ type LogEntry = {
   audioClips?: AudioClip[];
   deliveryAnalyses?: DeliveryAnalysis[];
   codeAttempts?: LeetCodeCodeAttempt[];
+  finalAnswer?: BehavioralFinalAnswerProjection | null;
 };
 
 const EMPTY_COMPOSER: ComposerState = {
@@ -1198,6 +1200,26 @@ function ActivityTranscript({
       </div>
     </section>
   );
+}
+
+function FinalAnswerCard({ finalAnswer }: { finalAnswer: BehavioralFinalAnswerProjection }) {
+  const snapshotLabel = finalAnswer.source === "legacy_model_answer"
+    ? "Legacy answer · saved before snapshot v1"
+    : `${finalAnswer.scope === "target_tailored" ? "Target-tailored" : "Universal"} · Snapshot ${finalAnswer.snapshotRevision}`;
+  return <section className={`final-answer-card ${finalAnswer.source}`} aria-label="Final tailored answer">
+    <header>
+      <div><span>FINAL ANSWER SNAPSHOT</span><small>{snapshotLabel}</small></div>
+      {finalAnswer.solutionProfile && <strong>Solution revision {finalAnswer.solutionProfile.revision}</strong>}
+    </header>
+    {finalAnswer.target && <div className="final-answer-target"><span>{finalAnswer.target.label}</span><small>{finalAnswer.target.competencyEmphasis.join(" · ")}</small></div>}
+    <div className="final-answer-body"><MarkdownBody source={finalAnswer.answer} /></div>
+    <div className="final-answer-meta">
+      <section><h5>Evidence used</h5>{finalAnswer.acceptedEvidenceIds.length ? <ul>{finalAnswer.acceptedEvidenceIds.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No accepted evidence IDs recorded.</p>}</section>
+      <section><h5>Evidence gaps</h5>{finalAnswer.evidenceGaps.length ? <ul>{finalAnswer.evidenceGaps.map((item) => <li key={item}>{item}</li>)}</ul> : <p>None recorded.</p>}</section>
+      <section><h5>Contradictions</h5>{finalAnswer.contradictions.length ? <ul>{finalAnswer.contradictions.map((item) => <li key={item}>{item}</li>)}</ul> : <p>None recorded.</p>}</section>
+    </div>
+    {finalAnswer.correctionOfRevision && <footer><strong>Explicit correction</strong><span>Replaces snapshot {finalAnswer.correctionOfRevision}</span>{finalAnswer.correctionReason && <p>{finalAnswer.correctionReason}</p>}</footer>}
+  </section>;
 }
 
 function transcriptBodyWithoutCodeAttempts(source: string, attempts: LeetCodeCodeAttempt[]) {
@@ -3584,7 +3606,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     });
   }
 
-  function exportDraft() {
+  async function exportDraft() {
     const timestamp = now;
     const timers = Object.fromEntries(Object.entries(draft.timers).map(([id, timer]) => [id, {
       elapsedSeconds: elapsed(timer, timestamp),
@@ -3622,8 +3644,40 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         return (timer?.completedAt ? practiceDateAt(timer.completedAt) : journal.date) === date;
       })]),
     );
+    let behavioralFinalAnswers: Record<string, {
+      finalAnswer: BehavioralFinalAnswerProjection;
+      finalAnswerMarkdown: string;
+      finalAnswerHtml: string;
+    }> = {};
+    try {
+      const behavioralActivityIds = [...new Set(
+        allTodayActivities
+          .filter((activity) => activity.type === "behavioral")
+          .map((activity) => activity.id),
+      )];
+      const records = await Promise.all(behavioralActivityIds.map(async (activityId) => {
+        const response = await fetch(`/api/practice-record?activityId=${encodeURIComponent(activityId)}`);
+        if (!response.ok) throw new Error("Behavioral final-answer export read failed.");
+        const record = await response.json() as {
+          finalAnswer: BehavioralFinalAnswerProjection | null;
+          finalAnswerMarkdown: string;
+          finalAnswerHtml: string;
+        };
+        return [activityId, record] as const;
+      }));
+      behavioralFinalAnswers = Object.fromEntries(records.flatMap(([activityId, record]) => (
+        record.finalAnswer ? [[activityId, {
+          finalAnswer: record.finalAnswer,
+          finalAnswerMarkdown: record.finalAnswerMarkdown,
+          finalAnswerHtml: record.finalAnswerHtml,
+        }]] : []
+      )));
+    } catch {
+      showUiToast("Export stopped because an authoritative final answer could not be read.");
+      return;
+    }
     const payload = {
-      schemaVersion: 6,
+      schemaVersion: 7,
       date: journal.date,
       practiceTimeZone: PRACTICE_TIME_ZONE,
       exportedAt: new Date(timestamp).toISOString(),
@@ -3636,6 +3690,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       structuredNotes: draft.structuredNotes,
       reviews: draft.reviews,
       finalizations: draft.finalizations,
+      behavioralFinalAnswers,
       audioClips: draft.audioClips,
       problemPreferences: draft.problemPreferences,
       solutionProfiles: draft.solutionProfiles,
@@ -5287,6 +5342,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const selectedEntryClips = readerSelectedEntry?.audioClips ?? [];
   const selectedEntryDeliveryAnalyses = readerSelectedEntry?.deliveryAnalyses ?? [];
   const selectedEntryCodeAttempts = readerSelectedEntry?.codeAttempts ?? [];
+  const selectedEntryFinalAnswer = readerSelectedEntry?.finalAnswer ?? null;
   const selectedCaseSections = dedupeReaderSections(readerSelectedEntry?.artifact?.sections.filter((section) => !(selectedEntryTurns.length && isTranscriptSection(section.title))) ?? []);
   const selectedCaseGroups = groupReaderSections(selectedCaseSections);
   const selectedSolutionGroups = groupReaderSections(selectedProblemProfileReusable ? selectedProblemProfile?.payload.sections ?? [] : []);
@@ -5634,11 +5690,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (!selectedEntryActivityId) return;
     const controller = new AbortController();
     void fetch(`/api/practice-record?activityId=${encodeURIComponent(selectedEntryActivityId)}`, { signal: controller.signal })
-      .then(async (response) => response.ok ? response.json() as Promise<{ turns: TranscriptTurn[]; notes: PracticeNote[]; audioClips: AudioClip[]; deliveryAnalyses: DeliveryAnalysis[]; codeAttempts: LeetCodeCodeAttempt[] }> : null)
+      .then(async (response) => response.ok ? response.json() as Promise<{ turns: TranscriptTurn[]; notes: PracticeNote[]; audioClips: AudioClip[]; deliveryAnalyses: DeliveryAnalysis[]; codeAttempts: LeetCodeCodeAttempt[]; finalAnswer: BehavioralFinalAnswerProjection | null }> : null)
       .then((record) => {
         if (!record) return;
         const enrich = (current: LogEntry | null) => current && (current.artifact?.activityId || current.id) === selectedEntryActivityId
-          ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips, deliveryAnalyses: record.deliveryAnalyses, codeAttempts: record.codeAttempts }
+          ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips, deliveryAnalyses: record.deliveryAnalyses, codeAttempts: record.codeAttempts, finalAnswer: record.finalAnswer }
           : current;
         if (view === "banks") setBankNestedEntry(enrich);
         else if (view === "journey") setJourneyNestedEntry(enrich);
@@ -5840,7 +5896,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return (
       <article className={`workspace-reader journal-case-reader ${nestedReaderFocus ? "nested-reader" : ""}`} aria-labelledby="journal-reader-title" aria-label="Case file contents">
         <div className="reader-chrome">
-          <div className="reader-chrome-leading">{!nestedReaderFocus && <button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button>}<ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</ReaderOutline></div>
+          <div className="reader-chrome-leading">{!nestedReaderFocus && <button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button>}<ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedEntryFinalAnswer && <a href="#case-final-answer">Final tailored answer</a>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</ReaderOutline></div>
           <div className="reader-chrome-actions">{readerNavigationIndex >= 0 && <div className="reader-attempt-navigation" aria-label="Past practice records"><button type="button" onClick={() => navigateReaderEntry(readerNavigationEntries[readerNavigationIndex - 1])} disabled={readerNavigationIndex <= 0} aria-label="Previous practice record" title={readerNavigationIndex <= 0 ? "First record in this list" : "Previous practice record"}>←</button><span>{readerNavigationIndex + 1} / {readerNavigationEntries.length}</span><button type="button" onClick={() => navigateReaderEntry(readerNavigationEntries[readerNavigationIndex + 1])} disabled={readerNavigationIndex >= readerNavigationEntries.length - 1} aria-label="Next practice record" title={readerNavigationIndex >= readerNavigationEntries.length - 1 ? "Last record in this list" : "Next practice record"}>→</button></div>}<button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close case file" title="Close"><Icon name="close" /></button></div>
         </div>
         <div className="case-document workspace-reader-scroll" ref={readerDocumentRef} onScroll={rememberReaderPosition} onMouseUp={(event) => captureHighlightSelection(event.clientX, event.clientY)} onKeyUp={() => captureHighlightSelection()}>
@@ -5853,6 +5909,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
               ? selectedCaseGroups.filter((group) => group.key === "record").map((group) => { const groupId = `case-group-${group.key}`; return <details className="reader-group record-group" id={groupId} open={readerGroupOpen(groupId, true)} onToggle={(event) => rememberReaderGroup(groupId, event.currentTarget.open)} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></div></details>; })
               : <div className="unpublished-letter" id="case-draft"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to finalize the transcript, review, solution, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
             {selectedEntryTurns.length > 0 && <details className="reader-group conversation-group" id="case-transcript" open={readerGroupOpen("case-transcript", false)} onToggle={(event) => rememberReaderGroup("case-transcript", event.currentTarget.open)}><summary><span>Conversation</span><small>{selectedEntryTurns.length} exchange{selectedEntryTurns.length === 1 ? "" : "s"} · recordings inline</small></summary><div id="case-transcript-thread"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} codeAttempts={selectedEntryCodeAttempts} /></div></details>}
+            {selectedEntryFinalAnswer && <details className="reader-group final-answer-group" id="case-final-answer" open={readerGroupOpen("case-final-answer", true)} onToggle={(event) => rememberReaderGroup("case-final-answer", event.currentTarget.open)}><summary><span>Final tailored answer</span><small>{selectedEntryFinalAnswer.source === "snapshot_v1" ? `Immutable snapshot ${selectedEntryFinalAnswer.snapshotRevision}` : "Legacy fallback"}</small></summary><div><FinalAnswerCard finalAnswer={selectedEntryFinalAnswer} /></div></details>}
             {selectedEntryCodeAttempts.length > 0 && <details className="reader-group code-attempts-group" id="case-code-attempts" open={readerGroupOpen("case-code-attempts", true)} onToggle={(event) => rememberReaderGroup("case-code-attempts", event.currentTarget.open)}><summary><span>User Code Attempts</span><small>{selectedEntryCodeAttempts.length} version{selectedEntryCodeAttempts.length === 1 ? "" : "s"}</small></summary><div>{selectedEntryCodeAttempts.map((attempt) => <article className="code-attempt-card" key={attempt.id}><header><strong>Code Attempt {attempt.sequence} · {attempt.language}</strong><span>{attempt.lineCount} lines</span></header><CodeAttemptBody attempt={attempt} /></article>)}</div></details>}
             {selectedEntry.artifact && selectedCaseGroups.filter((group) => group.key !== "record").map((group) => { const groupId = `case-group-${group.key}`; return <details className={`reader-group ${group.key}-group`} id={groupId} open={readerGroupOpen(groupId, group.key !== "conversation")} onToggle={(event) => rememberReaderGroup(groupId, event.currentTarget.open)} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></div></details>; })}
           </div>
@@ -5959,7 +6016,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             <button className={`atmosphere-toggle ${petalsEnabled ? "active" : ""}`} onClick={togglePetals} aria-pressed={petalsEnabled} title={petalsEnabled ? "Pause cherry blossoms" : "Resume cherry blossoms"}><span aria-hidden="true">✦</span>Petals</button>
             {view === "today" && pipSupported && <button className={`secondary-action pip-toggle ${pipWindow && !pipWindow.closed ? "active" : ""}`} onClick={openNowWindow} aria-pressed={Boolean(pipWindow && !pipWindow.closed)}>{pipWindow && !pipWindow.closed ? "Close timer" : "Pop out timer"}</button>}
             <button className="secondary-action" onClick={() => setIntegrationOpen(true)}>Connect</button>
-            <button className="secondary-action" onClick={exportDraft}>Export today</button>
+            <button className="secondary-action" onClick={() => void exportDraft()}>Export today</button>
           </div>
         </header>
         <div className="page-content" id="practice-content">{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
@@ -6102,7 +6159,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       {false && selectedEntry && <div className="letter-backdrop" role="presentation" onMouseDown={() => setSelectedEntry(null)}>
         <article className="reading-letter case-file-shell" role="dialog" aria-modal="true" aria-labelledby="letter-title" onMouseDown={(event) => event.stopPropagation()}>
           <button className="letter-close icon-action" onClick={() => setSelectedEntry(null)} aria-label="Close case file" title="Close"><Icon name="close" /></button>
-          <aside className="case-toc" aria-label="Case file contents"><span>Contents</span><nav><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}</nav></aside>
+          <aside className="case-toc" aria-label="Case file contents"><span>Contents</span><nav><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedEntryFinalAnswer && <a href="#case-final-answer">Final tailored answer</a>}</nav></aside>
           <div className="case-document" ref={readerDocumentRef} onMouseUp={captureHighlightSelection}>
             <header id="case-summary"><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time></div><div className="case-title-row"><h2 id="letter-title">{selectedEntry.title}</h2><div className="case-title-actions"><button className={`star-control ${isStarred(selectedEntry.type, selectedEntry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedEntry.type, selectedEntry.questionId)} disabled={!selectedEntry.questionId} aria-label={`${isStarred(selectedEntry.type, selectedEntry.questionId) ? "Unstar" : "Star"} ${selectedEntry.title}`} title="Star this problem"><Icon name="star" /></button><button className="icon-action note-add" onClick={() => openNoteComposer()} disabled={!selectedEntryActivityId} aria-label="Add a note" title="Add a note"><Icon name="note" /><i><Icon name="plus" /></i></button></div></div>{meaningfulSubtitle(selectedEntry.subtitle) && <p>{meaningfulSubtitle(selectedEntry.subtitle)}</p>}{selectedEntry.questionId && <button className="solution-link-button" onClick={() => { const question = bankFor(selectedEntry.type).find((candidate) => candidate.id === selectedEntry.questionId); if (question) { setSelectedEntry(null); setSelectedProblem({ type: selectedEntry.type, question }); } }}>View solution →</button>}</header>
             {pendingHighlight && <button className="selection-highlight-action" type="button" onClick={() => void saveHighlight()}>Highlight selection</button>}
@@ -6114,6 +6171,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
               ? <section className="reader-group record-group" id={`case-group-${group.key}`} key={group.key}><h2>{group.title}</h2><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></section>
               : <details className={`reader-group ${group.key}-group`} id={`case-group-${group.key}`} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></div></details>)}</div> : <div className="unpublished-letter" id="case-draft"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to finalize the transcript, review, solution, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
             {selectedEntryTurns.length > 0 && <details className="reader-group conversation-group" id="case-transcript"><summary><span>Conversation</span><small>{selectedEntryTurns.length} exchange{selectedEntryTurns.length === 1 ? "" : "s"} · recordings inline</small></summary><div id="case-transcript-thread"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} codeAttempts={selectedEntryCodeAttempts} /></div></details>}
+            {selectedEntryFinalAnswer && <details className="reader-group final-answer-group" id="case-final-answer" open><summary><span>Final tailored answer</span><small>{selectedEntryFinalAnswer.source === "snapshot_v1" ? `Immutable snapshot ${selectedEntryFinalAnswer.snapshotRevision}` : "Legacy fallback"}</small></summary><div><FinalAnswerCard finalAnswer={selectedEntryFinalAnswer} /></div></details>}
             <footer>Interview Arc · {selectedEntry.id}</footer>
           </div>
         </article>

@@ -8,6 +8,8 @@ Load only what the current action needs:
 
 - artifact creation: `../../docs/contracts/session-artifact.md`;
 - Solution Profile/finalization: `../../docs/contracts/solution-profiles.md`;
+- completed final answer/correction:
+  `../../docs/contracts/behavioral-final-answer-snapshots.md`;
 - prompt selection/import: `bank/questions.json`;
 - resume curriculum: `profile/README.md` and the ignored
   `../../private-sources/sources.local.json` when available;
@@ -112,6 +114,15 @@ improvements, stronger truthful answer, likely follow-ups, next drill,
 Delivery Coach evidence, and consulted references. A standalone model answer
 is mandatory even after an incomplete conversation, but may contain only
 owner-confirmed facts and explicit evidence gaps.
+
+Every new completed behavioral finalization also saves the typed snapshot in
+`behavioral-final-answer-snapshots.md`. Compose one exact answer, reuse it
+byte-for-byte as `modelAnswer` and `finalAnswerSnapshot.answer`, bind the exact
+response turn/evidence/Profile revision, and reuse the same operation ID only
+for an exact retry. Never silently replace a saved attempt: use the explicit
+correction fields. Until #209 ships authoritative Target Profile revisions,
+report the structured target dependency rather than guessing, stripping, or
+mislabeling a target-tailored answer.
 
 The reusable STAR/STARL Solution Profile contains:
 

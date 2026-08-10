@@ -308,6 +308,8 @@ Every complete bundle contains:
   Profile holds the canonical best answer and normalized tags; it never holds
   an attempt transcript. Past retains the activity transcript, feedback,
   timing, notes, result, and recording links.
+- for every new completed behavioral activity, the immutable typed final-answer
+  snapshot defined by `behavioral-final-answer-snapshots.md`.
 
 For a CLI-native Java LeetCode activity, the specialist may maintain one local
 working file at
@@ -375,6 +377,13 @@ architecture, flows, tradeoffs, reliability, and concise interview walkthrough.
 For behavioral it is the strongest truthful standalone answer supported by the
 user's verified evidence. The coordinator renders this field but does not
 invent or improve specialist content silently.
+
+Behavioral `modelAnswer` remains the compatibility field, but new completed
+behavioral finalizations must also store the byte-identical typed snapshot.
+Past and exports read the attempt snapshot; they never substitute the current
+canonical Solution Profile. A changed saved answer is an explicit append-only
+correction, not a finalization overwrite. Legacy `modelAnswer` remains an
+explicit fallback without fabricated backfill.
 
 Once the typed field is supported, behavioral finalization may additionally
 carry the explicitly requested, labeled `practiceScenarios` defined by
