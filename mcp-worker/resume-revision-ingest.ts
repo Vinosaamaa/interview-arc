@@ -236,100 +236,113 @@ export async function ingestResumeRevision(
     return { status: 200, body: reservation.receipt };
   }
 
-  const existingRevision = await findResumeRevision(ownerId, input.resumeId, input.revisionId);
-  if (existingRevision && existingRevision.sourceFingerprint !== input.sourceFingerprint) {
-    await failResumeImport(
-      ownerId,
-      identity,
-      reservation.leaseToken,
-      "resume_import_revision_identity_conflict",
-      false,
-    );
-    throw new ResumeImportError(
-      "resume_import_revision_identity_conflict",
-      "That immutable resume revision ID already belongs to a different source fingerprint.",
-      409,
-      false,
-    );
-  }
-  const canonical = await findResumeRevisionByFingerprint(
-    ownerId,
-    input.resumeId,
-    input.sourceFingerprint,
-  );
-  if (canonical) {
-    const requestedFiles = new Map([
-      ["docx", input.docx.integrity],
-      ["pdf", input.pdf.integrity],
-    ]);
-    const matches = canonical.files.length === 2 && canonical.files.every((file) => {
-      const requested = requestedFiles.get(file.format);
-      return requested
-        && requested.sha256 === file.sha256
-        && requested.byteSize === file.byteSize
-        && requested.mimeType === file.mimeType;
-    });
-    if (!matches) {
+  try {
+    const existingRevision = await findResumeRevision(ownerId, input.resumeId, input.revisionId);
+    if (existingRevision && existingRevision.sourceFingerprint !== input.sourceFingerprint) {
       await failResumeImport(
         ownerId,
         identity,
         reservation.leaseToken,
-        "resume_import_source_fingerprint_conflict",
+        "resume_import_revision_identity_conflict",
         false,
       );
       throw new ResumeImportError(
-        "resume_import_source_fingerprint_conflict",
-        "That source fingerprint already belongs to different private file integrity metadata.",
+        "resume_import_revision_identity_conflict",
+        "That immutable resume revision ID already belongs to a different source fingerprint.",
         409,
         false,
       );
     }
-    const unchanged = await completeUnchangedResumeImport(ownerId, identity, reservation.leaseToken, {
-      revisionId: canonical.revision.revisionId,
-      parentRevisionId: canonical.revision.parentRevisionId,
-      sourceFingerprint: canonical.revision.sourceFingerprint,
-      importedAt: canonical.revision.importedAt,
-      files: canonical.files as [ResumeFileIntegrity, ResumeFileIntegrity],
-    });
-    return { status: 200, body: unchanged.receipt };
-  }
-
-  const keys = await privateObjectKeys(ownerId, input, reservation.leaseToken);
-  const staged = await stagePrivateResumePair(bucket, [
-    { key: keys.docx, stagingGeneration: reservation.leaseToken, ...input.docx },
-    { key: keys.pdf, stagingGeneration: reservation.leaseToken, ...input.pdf },
-  ]);
-  if (!staged.complete) {
-    await failResumeImport(
+    const canonical = await findResumeRevisionByFingerprint(
       ownerId,
-      identity,
-      reservation.leaseToken,
-      "resume_import_storage_unavailable",
-      true,
+      input.resumeId,
+      input.sourceFingerprint,
     );
-    throw new ResumeImportError(
-      "resume_import_storage_unavailable",
-      "The private DOCX/PDF pair was not fully staged. Retry the exact operation.",
-      503,
-      true,
-    );
-  }
-
-  try {
-    const completed = await completeResumeImport(ownerId, {
-      ...identity,
-      sourceLabel: input.sourceLabel,
-      sourceFingerprint: input.sourceFingerprint,
-      storageGeneration: reservation.leaseToken,
-      files: [input.docx.integrity, input.pdf.integrity],
-    }, reservation.leaseToken);
-    if (completed.cleanupStaging) {
-      await Promise.allSettled([bucket.delete(keys.docx), bucket.delete(keys.pdf)]);
+    if (canonical) {
+      const requestedFiles = new Map([
+        ["docx", input.docx.integrity],
+        ["pdf", input.pdf.integrity],
+      ]);
+      const matches = canonical.files.length === 2 && canonical.files.every((file) => {
+        const requested = requestedFiles.get(file.format);
+        return requested
+          && requested.sha256 === file.sha256
+          && requested.byteSize === file.byteSize
+          && requested.mimeType === file.mimeType;
+      });
+      if (!matches) {
+        await failResumeImport(
+          ownerId,
+          identity,
+          reservation.leaseToken,
+          "resume_import_source_fingerprint_conflict",
+          false,
+        );
+        throw new ResumeImportError(
+          "resume_import_source_fingerprint_conflict",
+          "That source fingerprint already belongs to different private file integrity metadata.",
+          409,
+          false,
+        );
+      }
+      const unchanged = await completeUnchangedResumeImport(ownerId, identity, reservation.leaseToken, {
+        revisionId: canonical.revision.revisionId,
+        parentRevisionId: canonical.revision.parentRevisionId,
+        sourceFingerprint: canonical.revision.sourceFingerprint,
+        importedAt: canonical.revision.importedAt,
+        files: canonical.files as [ResumeFileIntegrity, ResumeFileIntegrity],
+      });
+      return { status: 200, body: unchanged.receipt };
     }
-    return { status: completed.duplicate ? 200 : 201, body: completed.receipt };
+
+    const keys = await privateObjectKeys(ownerId, input, reservation.leaseToken);
+    const staged = await stagePrivateResumePair(bucket, [
+      { key: keys.docx, stagingGeneration: reservation.leaseToken, ...input.docx },
+      { key: keys.pdf, stagingGeneration: reservation.leaseToken, ...input.pdf },
+    ]);
+    if (!staged.complete) {
+      await failResumeImport(
+        ownerId,
+        identity,
+        reservation.leaseToken,
+        "resume_import_storage_unavailable",
+        true,
+      );
+      throw new ResumeImportError(
+        "resume_import_storage_unavailable",
+        "The private DOCX/PDF pair was not fully staged. Retry the exact operation.",
+        503,
+        true,
+      );
+    }
+
+    try {
+      const completed = await completeResumeImport(ownerId, {
+        ...identity,
+        sourceLabel: input.sourceLabel,
+        sourceFingerprint: input.sourceFingerprint,
+        storageGeneration: reservation.leaseToken,
+        files: [input.docx.integrity, input.pdf.integrity],
+      }, reservation.leaseToken);
+      if (completed.cleanupStaging) {
+        await Promise.allSettled([bucket.delete(keys.docx), bucket.delete(keys.pdf)]);
+      }
+      return { status: completed.duplicate ? 200 : 201, body: completed.receipt };
+    } catch (error) {
+      if (error instanceof ResumeImportError && !error.retryable) {
+        await Promise.allSettled([bucket.delete(keys.docx), bucket.delete(keys.pdf)]);
+      }
+      throw error;
+    }
   } catch (error) {
-    if (error instanceof ResumeImportError && !error.retryable) {
-      await Promise.allSettled([bucket.delete(keys.docx), bucket.delete(keys.pdf)]);
+    if (!(error instanceof ResumeImportError)) {
+      await failResumeImport(
+        ownerId,
+        identity,
+        reservation.leaseToken,
+        "resume_import_unavailable",
+        true,
+      ).catch(() => {});
     }
     throw error;
   }

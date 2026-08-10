@@ -128,6 +128,34 @@ test("an authenticated staged DOCX/PDF pair becomes one immutable current resume
     worker.stdout.on("data", appendWorkerLog);
     worker.stderr.on("data", appendWorkerLog);
     await waitForWorker(baseUrl, worker);
+    client = await connect(baseUrl, ownerToken, "resume-ingest-owner");
+
+    await run(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", `
+      CREATE TRIGGER fail_transient_resume_insert
+      BEFORE INSERT ON resume_sources
+      WHEN NEW.resume_id = 'transient-resume'
+      BEGIN
+        SELECT RAISE(FAIL, 'synthetic transient');
+      END;
+    `]);
+    const transientInput = {
+      operationId: "resume-import-transient-operation",
+      resumeId: "transient-resume",
+      revisionId: "transient-revision-1",
+      sourceFingerprint: sha256("opaque-transient-source-revision"),
+    };
+    const transientFailure = await postResumeImport(baseUrl, ownerToken, transientInput);
+    assert.equal(transientFailure.response.status, 503);
+    assert.equal(transientFailure.body.code, "resume_import_unavailable");
+    const failedStatus = await call(client, "get_resume_import_status", {
+      operationId: transientInput.operationId,
+    });
+    assert.equal(failedStatus.import.status, "retryable_failure");
+    assert.equal(failedStatus.import.retryable, true);
+    await run(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", "DROP TRIGGER fail_transient_resume_insert;"]);
+    const transientRetry = await postResumeImport(baseUrl, ownerToken, transientInput);
+    assert.equal(transientRetry.response.status, 201, JSON.stringify(transientRetry.body));
+    assert.equal(transientRetry.body.status, "saved");
 
     const { docxBytes, pdfBytes } = resumeImportForm();
     const { response, body: imported } = await postResumeImport(baseUrl, ownerToken);
@@ -143,7 +171,6 @@ test("an authenticated staged DOCX/PDF pair becomes one immutable current resume
     assert.equal(imported.files.pdf.sha256, sha256(pdfBytes));
     assert.equal(JSON.stringify(imported).includes("objectKey"), false);
 
-    client = await connect(baseUrl, ownerToken, "resume-ingest-owner");
     const status = await call(client, "get_resume_import_status", {
       operationId: "resume-import-operation-1",
     });
@@ -215,6 +242,27 @@ test("an authenticated staged DOCX/PDF pair becomes one immutable current resume
     assert.equal(nextStatus.import.parentRevisionId, "resume-revision-1");
     assert.equal(nextStatus.import.sourceFingerprint, sha256("opaque-source-revision-3"));
     assert.equal(nextStatus.import.currentRevisionId, "resume-revision-3");
+
+    const concurrentInput = {
+      operationId: "resume-import-concurrent-operation",
+      resumeId: "concurrent-resume",
+      revisionId: "concurrent-revision-1",
+      sourceFingerprint: sha256("opaque-concurrent-source-revision"),
+    };
+    const concurrent = await Promise.all([
+      postResumeImport(baseUrl, ownerToken, concurrentInput),
+      postResumeImport(baseUrl, ownerToken, concurrentInput),
+    ]);
+    const concurrentStatuses = concurrent.map(({ response: item }) => item.status).sort();
+    assert.equal(concurrentStatuses.includes(201), true);
+    assert.equal(concurrentStatuses.every((statusCode) => [200, 201, 409].includes(statusCode)), true);
+    for (const result of concurrent.filter(({ response: item }) => item.status === 409)) {
+      assert.equal(result.body.code, "resume_import_busy");
+      assert.equal(result.body.retryable, true);
+    }
+    const concurrentReplay = await postResumeImport(baseUrl, ownerToken, concurrentInput);
+    assert.equal(concurrentReplay.response.status, 200);
+    assert.equal(concurrentReplay.body.status, "saved");
   } finally {
     await otherClient?.close().catch(() => {});
     await client?.close().catch(() => {});
