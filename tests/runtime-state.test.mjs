@@ -435,12 +435,12 @@ test("finished activities enter the journal queue without a second toggle", () =
 test("result flags stay separate from timer completion and publication readiness", async () => {
   const liveState = await readFile(new URL("../db/live-state.ts", import.meta.url), "utf8");
   const snapshot = await readFile(new URL("../db/practice-snapshot.ts", import.meta.url), "utf8");
-  const mutationRoute = await readFile(new URL("../app/api/mutations/route.ts", import.meta.url), "utf8");
+  const commandModule = await readFile(new URL("../db/practice-state-commands.ts", import.meta.url), "utf8");
   const setOutcomeBody = liveState.slice(liveState.indexOf("export async function setOutcome"), liveState.indexOf("export async function setPublicationStatus"));
   assert.doesNotMatch(setOutcomeBody, /applyTimerAction|setPracticeFocus/);
   assert.match(snapshot, /publicationStatus === "ready" && Boolean\(activity\.outcome\)/);
   assert.match(snapshot, /publicationStatus !== "ready" \|\| !outcome/);
-  assert.match(mutationRoute, /Start the .* before finishing it/);
+  assert.match(commandModule, /Start the .* before finishing it/);
 });
 
 test("the clean-start release cannot replay stale mock browser queues", async () => {
@@ -735,6 +735,7 @@ test("workbenches separate Today from the undated publication queue", async () =
   const liveState = await readFile(new URL("../db/live-state.ts", import.meta.url), "utf8");
   const liveSync = await readFile(new URL("../app/live-sync.ts", import.meta.url), "utf8");
   const mutationRoute = await readFile(new URL("../app/api/mutations/route.ts", import.meta.url), "utf8");
+  const commandModule = await readFile(new URL("../db/practice-state-commands.ts", import.meta.url), "utf8");
   const client = await readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8");
   const contract = await readFile(new URL("../docs/contracts/durable-practice-publishing.md", import.meta.url), "utf8");
 
@@ -754,8 +755,9 @@ test("workbenches separate Today from the undated publication queue", async () =
   }
   assert.match(liveState, /extraRows[\s\S]*row\.workbenchId === workbench\.id/);
   assert.match(liveState, /includeAll/);
-  assert.match(liveSync, /"workbench-start-fresh"/);
-  assert.match(mutationRoute, /case "workbench-start-fresh"/);
+  assert.match(liveSync, /PracticeStateCommand/);
+  assert.match(commandModule, /case "workbench-start-fresh"/);
+  assert.match(mutationRoute, /executePracticeStateCommand/);
   assert.match(client, /Start fresh day/);
   assert.match(client, /interview-arc-workspace-ui-v1/);
   assert.match(client, /interview-arc-selected-past/);
@@ -944,6 +946,7 @@ test("the Chrome companion follows live Interview Arc focus and public LeetCode 
   const sidePanel = await readFile(new URL("../extension/sidepanel.js", import.meta.url), "utf8");
   const sidePanelHtml = await readFile(new URL("../extension/sidepanel.html", import.meta.url), "utf8");
   const mcpWorker = await readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8");
+  const commandModule = await readFile(new URL("../db/practice-state-commands.ts", import.meta.url), "utf8");
   assert.equal(manifest.manifest_version, 3);
   assert.ok(manifest.permissions.includes("sidePanel"));
   assert.deepEqual(manifest.host_permissions, [
@@ -989,7 +992,9 @@ test("the Chrome companion follows live Interview Arc focus and public LeetCode 
   assert.match(sidePanel, /type: "problem-star", specialty, questionId, starred/);
   assert.match(sidePanel, /currentActivityStarred\(\)/);
   assert.match(mcpWorker, /mutation\.type === "problem-star"/);
-  assert.match(mcpWorker, /setProblemStar\(ownerId, mutation\.specialty, mutation\.questionId, mutation\.starred, now\)/);
+  assert.match(mcpWorker, /executeCompanionPracticeStateCommand\(ownerId, request, date, mutation, now\)/);
+  assert.match(mcpWorker, /await executePracticeStateCommand\(ownerId, date, command, now\)/);
+  assert.match(commandModule, /setProblemStar\(ownerId, command\.specialty, command\.questionId, command\.starred, now\)/);
   assert.match(mcpWorker, /responseUrl\.searchParams\.set\("url", problemUrl\)/);
   assert.match(mcpWorker, /activeCodingActivity \?\? focusedCodingActivity/);
 });

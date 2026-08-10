@@ -77,6 +77,21 @@ async function inspect(baseUrl, ownerId, workbenchId) {
   return response.json();
 }
 
+async function commandResponse(baseUrl, ownerId, command, now) {
+  const response = await fetch(`${baseUrl}/practice-command`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ownerId, date: "2026-08-09", command, now }),
+  });
+  return { status: response.status, body: await response.json() };
+}
+
+async function executeCommand(baseUrl, ownerId, command, now) {
+  const response = await commandResponse(baseUrl, ownerId, command, now);
+  assert.equal(response.status, 200);
+  return response.body;
+}
+
 test("concurrent Review Queue planning is atomic, replay-safe, and owner-isolated in D1", { timeout: 90_000 }, async () => {
   let releaseIntegrationLock;
   let persistence;
@@ -94,7 +109,16 @@ test("concurrent Review Queue planning is atomic, replay-safe, and owner-isolate
         ('owner-replay','wb-replay','open','2026-08-09',1,NULL,100),
         ('owner-changed','wb-changed','open','2026-08-09',1,NULL,200),
         ('owner-race','wb-race','open','2026-08-09',1,NULL,300),
-        ('owner-other','wb-other','open','2026-08-09',1,NULL,400);
+        ('owner-other','wb-other','open','2026-08-09',1,NULL,400),
+        ('owner-payload','wb-payload','open','2026-08-09',1,NULL,500),
+        ('owner-legacy','wb-legacy','open','2026-08-09',1,NULL,600),
+        ('owner-invalid','wb-invalid','open','2026-08-09',1,NULL,700),
+        ('owner-cross-midnight','wb-cross-midnight','open','2026-08-08',1,NULL,800),
+        ('owner-review','wb-review','open','2026-08-09',1,NULL,900);
+      INSERT INTO live_sessions
+        (owner_id,id,date,workbench_id,payload,revision,updated_at)
+      VALUES
+        ('owner-legacy','legacy-session','2026-08-09','wb-legacy','{"id":"legacy-session","date":"2026-08-09","label":"Legacy Session","source":"extra","allocatedSeconds":2400,"activityIds":[]}',1,1);
       INSERT INTO extra_activities
         (owner_id,id,date,workbench_id,payload,revision,updated_at)
       VALUES
@@ -125,6 +149,165 @@ test("concurrent Review Queue planning is atomic, replay-safe, and owner-isolate
       stdio: "ignore",
     });
     await waitForWorker(baseUrl, worker);
+
+    const invalidOutcome = await commandResponse(baseUrl, "owner-invalid", {
+      type: "outcome",
+      activityId: "invalid-outcome",
+      outcome: "mostly_solved",
+    }, 5_000);
+    assert.deepEqual(invalidOutcome, {
+      status: 400,
+      body: { error: "Invalid outcome mutation." },
+    });
+    assert.equal((await inspect(baseUrl, "owner-invalid", "wb-invalid")).outcomes.length, 0);
+
+    const crossMidnightActivity = {
+      schemaVersion: 2,
+      id: "cross-midnight-activity",
+      date: "2026-08-08",
+      source: "extra",
+      type: "leetcode",
+      title: "Cross-midnight activity",
+      allocatedSeconds: 2400,
+      timerGroupId: "cross-midnight-activity",
+      timingSource: "website",
+      status: "planned",
+    };
+    const crossMidnightSession = {
+      id: "cross-midnight-session",
+      date: "2026-08-08",
+      label: "Cross-midnight session",
+      source: "extra",
+      allocatedSeconds: 2400,
+      activityIds: ["cross-midnight-activity"],
+    };
+    await executeCommand(baseUrl, "owner-cross-midnight", {
+      type: "extra-upsert",
+      activity: crossMidnightActivity,
+    }, 5_001);
+    await executeCommand(baseUrl, "owner-cross-midnight", {
+      type: "session-upsert",
+      session: crossMidnightSession,
+    }, 5_002);
+    await executeCommand(baseUrl, "owner-cross-midnight", {
+      type: "focus-block-upsert",
+      block: {
+        id: "cross-midnight-focus",
+        date: "2026-08-08",
+        focusCategory: "job_applications",
+        title: "Cross-midnight focus",
+        plannedSeconds: 1800,
+      },
+    }, 5_003);
+    const crossMidnightState = await inspect(baseUrl, "owner-cross-midnight", "wb-cross-midnight");
+    assert.equal(crossMidnightState.activities[0].date, "2026-08-08");
+    assert.equal(crossMidnightState.sessions[0].date, "2026-08-08");
+    assert.equal(crossMidnightState.focusBlocks[0].date, "2026-08-08");
+
+    await executeCommand(baseUrl, "owner-legacy", {
+      type: "session-remove",
+      sessionId: "legacy-session",
+      activityIds: [],
+    }, 5_004);
+    assert.equal((await inspect(baseUrl, "owner-legacy", "wb-legacy")).sessions.length, 0);
+
+    const exactActivity = {
+      schemaVersion: 2,
+      id: "payload-activity",
+      questionId: "payload-question",
+      date: "2026-08-09",
+      source: "extra",
+      type: "leetcode",
+      recordKind: "attempt",
+      title: "Preserve this exact activity",
+      url: "https://leetcode.com/problems/two-sum/",
+      allocatedSeconds: 2400,
+      sessionId: "payload-session",
+      timerGroupId: "payload-session",
+      timingSource: "website",
+      status: "planned",
+      notes: "Keep every persisted field.",
+      vocabularyPackIds: ["arrays"],
+      speechTerms: ["two pointer"],
+    };
+    const exactSession = {
+      id: "payload-session",
+      date: "2026-08-09",
+      label: "Payload session",
+      source: "extra",
+      allocatedSeconds: 2400,
+      activityIds: ["payload-activity"],
+    };
+    await executeCommand(baseUrl, "owner-payload", { type: "extra-upsert", activity: exactActivity }, 5_010);
+    await executeCommand(baseUrl, "owner-payload", { type: "session-upsert", session: exactSession }, 5_020);
+    const payloadState = await inspect(baseUrl, "owner-payload", "wb-payload");
+    assert.deepEqual(payloadState.activities[0].payload, { ...exactActivity, workbenchId: "wb-payload" });
+    assert.deepEqual(payloadState.sessions[0].payload, { ...exactSession, workbenchId: "wb-payload" });
+
+    const reviewActivity = {
+      schemaVersion: 2,
+      id: "review-activity",
+      questionId: "review-question",
+      date: "2026-08-09",
+      source: "extra",
+      type: "leetcode",
+      title: "Review scheduling characterization",
+      allocatedSeconds: 2400,
+      timerGroupId: "review-activity",
+      timingSource: "website",
+      status: "planned",
+    };
+    await executeCommand(baseUrl, "owner-review", { type: "extra-upsert", activity: reviewActivity }, 6_000);
+    await executeCommand(baseUrl, "owner-review", {
+      type: "timer",
+      subjectId: "review-activity",
+      kind: "activity",
+      action: "start",
+    }, 7_000);
+    const beforeRejectedFinish = await inspect(baseUrl, "owner-review", "wb-review");
+    const rejectedFinish = await commandResponse(baseUrl, "owner-review", {
+      type: "timer",
+      subjectId: "review-activity",
+      kind: "activity",
+      action: "finish",
+    }, 8_000);
+    assert.equal(rejectedFinish.status, 409);
+    assert.equal(rejectedFinish.body.error, "Choose Solved, Solved with help, or Failed before finishing this activity.");
+    const afterRejectedFinish = await inspect(baseUrl, "owner-review", "wb-review");
+    assert.deepEqual(afterRejectedFinish.timers, beforeRejectedFinish.timers);
+    assert.equal(afterRejectedFinish.reviewSchedules.length, 0);
+
+    await executeCommand(baseUrl, "owner-review", {
+      type: "outcome",
+      activityId: "review-activity",
+      outcome: "failed",
+    }, 9_000);
+    await executeCommand(baseUrl, "owner-review", {
+      type: "timer",
+      subjectId: "review-activity",
+      kind: "activity",
+      action: "finish",
+    }, 10_000);
+    const finishedReviewState = await inspect(baseUrl, "owner-review", "wb-review");
+    assert.equal(finishedReviewState.timers[0].completed, true);
+    assert.deepEqual(
+      finishedReviewState.reviewSchedules.map((row) => ({
+        activityId: row.activityId,
+        dueDate: row.dueDate,
+        intervalDays: row.intervalDays,
+        reason: row.reason,
+        reviewKey: row.reviewKey,
+        status: row.status,
+      })),
+      [{
+        activityId: "review-activity",
+        dueDate: "2026-08-13",
+        intervalDays: 4,
+        reason: "failed",
+        reviewKey: "leetcode:review-question",
+        status: "scheduled",
+      }],
+    );
 
     const exactReplay = await Promise.all([
       add(baseUrl, "owner-replay", "wb-replay", "same-operation", ["leetcode:replay"], 1_000),

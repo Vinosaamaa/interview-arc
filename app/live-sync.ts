@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { mutationFailureDisposition } from "./mutation-queue";
 import { applyTimerSync, type TimerSyncState } from "./timer-reconciliation";
 import { liveUpdateReconciliationMode, subscribeToLiveUpdates } from "./live-event-policy";
+import type { PracticeStateCommand } from "../db/practice-state-commands";
 import {
   EMPTY_DRAFT,
   type ExtraActivity,
@@ -82,34 +83,7 @@ export function useReadOnlyLiveState(date: string) {
   return state;
 }
 
-export type Mutation =
-  | {
-      type: "timer";
-      subjectId: string;
-      kind: "activity" | "session";
-      action: "start" | "pause" | "finish";
-      sessionId?: string;
-      activityIds?: string[];
-    }
-  | { type: "outcome"; activityId: string; outcome: Outcome | null; sessionId?: string }
-  | { type: "publication-status"; activityId: string; status: PublicationStatus; artifactPath?: string }
-  | { type: "activity-note"; activityId: string; note: string }
-  | { type: "problem-star"; specialty: import("./live-types").ActivityType; questionId: string; starred: boolean }
-  | { type: "personal-question-upsert"; specialty: import("./live-types").ActivityType; question: { questionId: string; title: string; prompt?: string; url?: string; tags?: string[]; priority?: number; targetMinutes?: number } }
-  | { type: "extra-upsert"; activity: ExtraActivity }
-  | {
-      type: "extra-remove";
-      id: string;
-      mutationId?: string;
-      expectedWorkbenchRevision?: number;
-    }
-  | { type: "focus-block-upsert"; block: FocusBlock }
-  | { type: "focus-block-remove"; id: string }
-  | { type: "session-upsert"; session: LocalSession }
-  | { type: "session-remove"; id: string; activityIds: string[] }
-  | { type: "review-defer"; reviewKey: string; expectedDueDate: string }
-  | { type: "review-add-today"; mutationId: string; expectedWorkbenchId: string; expectedWorkbenchRevision: number; reviewKeys: string[] }
-  | { type: "workbench-start-fresh"; workbenchId: string };
+export type Mutation = PracticeStateCommand;
 
 const RETRY_INTERVAL_MS = 15000;
 

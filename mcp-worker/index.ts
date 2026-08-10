@@ -33,7 +33,6 @@ import {
   removeFocusBlock,
   removeLiveSession,
   startFreshWorkbench,
-  setActivityNote,
   setOutcome,
   setPublicationStatus,
   rolloverPublishedWorkbench,
@@ -45,6 +44,11 @@ import {
   type LiveState,
 } from "../db/live-state";
 import { buildPracticeSnapshot, buildPublicationQueue, dateInPracticeTimeZone } from "../db/practice-snapshot";
+import {
+  executePracticeStateCommand,
+  PracticeStateCommandInputError,
+  type PracticeStateCommand,
+} from "../db/practice-state-commands";
 import { leetCodeQuestionMetadataSchema } from "../db/question-metadata";
 import {
   connectOwnerLiveUpdates,
@@ -1481,6 +1485,27 @@ async function companionState(ownerId: string, request: Request) {
   return json(request, { ...snapshot, currentActivity });
 }
 
+async function executeCompanionPracticeStateCommand(
+  ownerId: string,
+  request: Request,
+  date: string,
+  command: PracticeStateCommand,
+  now: number,
+) {
+  try {
+    await executePracticeStateCommand(ownerId, date, command, now);
+    return null;
+  } catch (error) {
+    if (error instanceof PracticeStateCommandInputError) {
+      return json(request, {
+        error: error.message,
+        ...(error.retryable !== undefined ? { retryable: error.retryable } : {}),
+      }, { status: error.status });
+    }
+    throw error;
+  }
+}
+
 async function companionMutation(ownerId: string, request: Request, env: Env) {
   const body = (await request.json()) as {
     date?: string;
@@ -1552,43 +1577,24 @@ async function companionMutation(ownerId: string, request: Request, env: Env) {
       }
     }
   } else if (mutation.type === "outcome") {
-    const snapshot = await buildPracticeSnapshot(ownerId, date);
-    const activity = snapshot.activities.find((candidate) => candidate.id === mutation.activityId);
-    await setOutcome(ownerId, mutation.activityId, mutation.outcome, now);
-    if (!activity?.timer?.completed) {
-      await clearActivityReviewSchedules(ownerId, mutation.activityId);
-    } else if (mutation.outcome === "failed" || mutation.outcome === "solved_after_reviewing_approach") {
-      await scheduleReview(ownerId, {
-        activityId: mutation.activityId,
-        questionId: activity?.questionId,
-        specialty: activity?.type ?? "leetcode",
-        completedDate: date,
-        reason: mutation.outcome === "failed" ? "failed" : "approach_review",
-      }, now);
-    } else if (mutation.outcome === "solved" && activity?.reviewOfActivityId) {
-      await scheduleReview(ownerId, {
-        activityId: mutation.activityId,
-        questionId: activity.questionId,
-        specialty: activity.type ?? "leetcode",
-        completedDate: date,
-        reason: "successful_recall",
-      }, now);
-    } else {
-      await clearActivityReviewSchedules(ownerId, mutation.activityId);
-    }
+    const errorResponse = await executeCompanionPracticeStateCommand(ownerId, request, date, mutation, now);
+    if (errorResponse) return errorResponse;
   } else if (mutation.type === "publication-status") {
     if (!["draft", "ready", "published"].includes(mutation.status)) {
       return json(request, { error: "Invalid publication status." }, { status: 400 });
     }
-    await setPublicationStatus(ownerId, mutation.activityId, date, mutation.status, now);
+    const errorResponse = await executeCompanionPracticeStateCommand(ownerId, request, date, mutation, now);
+    if (errorResponse) return errorResponse;
   } else if (mutation.type === "activity-note") {
     if (mutation.note.length > 20_000) return json(request, { error: "Note is too long." }, { status: 400 });
-    await setActivityNote(ownerId, mutation.activityId, date, mutation.note, now);
+    const errorResponse = await executeCompanionPracticeStateCommand(ownerId, request, date, mutation, now);
+    if (errorResponse) return errorResponse;
   } else if (mutation.type === "problem-star") {
     if (!mutation.questionId || !["leetcode", "system_design", "behavioral"].includes(mutation.specialty) || typeof mutation.starred !== "boolean") {
       return json(request, { error: "Invalid problem-star mutation." }, { status: 400 });
     }
-    await setProblemStar(ownerId, mutation.specialty, mutation.questionId, mutation.starred, now);
+    const errorResponse = await executeCompanionPracticeStateCommand(ownerId, request, date, mutation, now);
+    if (errorResponse) return errorResponse;
   } else if (mutation.type === "add-leetcode") {
     const normalizedUrl = normalizeLeetCodeUrl(mutation.url);
     if (!normalizedUrl) return json(request, { error: "A public LeetCode problem URL is required." }, { status: 400 });

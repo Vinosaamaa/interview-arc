@@ -177,6 +177,87 @@ test("Today deletion and all-session projection remain owner-scoped and revision
     assert.equal(started.result.activityId, "session-three");
     assert.equal(started.authoritative.timerInstrument.session.id, "session-3");
 
+    const companionHeaders = {
+      authorization: `Bearer ${ownerToken}`,
+      "content-type": "application/json",
+    };
+    const outcomeResponse = await fetch(`${baseUrl}/companion/mutations`, {
+      method: "POST",
+      headers: companionHeaders,
+      body: JSON.stringify({
+        date: "2026-08-09",
+        mutation: {
+          type: "outcome",
+          activityId: "session-three",
+          outcome: "solved_after_reviewing_approach",
+        },
+      }),
+    });
+    assert.equal(outcomeResponse.status, 200);
+    const outcomeState = await outcomeResponse.json();
+    assert.equal(
+      outcomeState.activities.find((activity) => activity.id === "session-three")?.outcome,
+      "solved_after_reviewing_approach",
+    );
+
+    const invalidOutcomeResponse = await fetch(`${baseUrl}/companion/mutations`, {
+      method: "POST",
+      headers: companionHeaders,
+      body: JSON.stringify({
+        date: "2026-08-09",
+        mutation: {
+          type: "outcome",
+          activityId: "session-three",
+          outcome: "mostly_solved",
+        },
+      }),
+    });
+    assert.equal(invalidOutcomeResponse.status, 400);
+    assert.deepEqual(await invalidOutcomeResponse.json(), { error: "Invalid outcome mutation." });
+    const outcomeAfterInvalidResponse = await fetch(`${baseUrl}/companion/state?date=2026-08-09`, {
+      headers: { authorization: `Bearer ${ownerToken}` },
+    });
+    assert.equal(outcomeAfterInvalidResponse.status, 200);
+    const outcomeAfterInvalid = await outcomeAfterInvalidResponse.json();
+    assert.equal(
+      outcomeAfterInvalid.activities.find((activity) => activity.id === "session-three")?.outcome,
+      "solved_after_reviewing_approach",
+    );
+
+    const noteResponse = await fetch(`${baseUrl}/companion/mutations`, {
+      method: "POST",
+      headers: companionHeaders,
+      body: JSON.stringify({
+        date: "2026-08-09",
+        mutation: {
+          type: "activity-note",
+          activityId: "session-three",
+          note: "Remember the owner-scoped command result.",
+        },
+      }),
+    });
+    assert.equal(noteResponse.status, 200);
+    const noteState = await noteResponse.json();
+    assert.equal(
+      noteState.activities.find((activity) => activity.id === "session-three")?.personalNote,
+      "Remember the owner-scoped command result.",
+    );
+
+    const invalidNoteResponse = await fetch(`${baseUrl}/companion/mutations`, {
+      method: "POST",
+      headers: companionHeaders,
+      body: JSON.stringify({
+        date: "2026-08-09",
+        mutation: {
+          type: "activity-note",
+          activityId: "session-three",
+          note: "x".repeat(20_001),
+        },
+      }),
+    });
+    assert.equal(invalidNoteResponse.status, 400);
+    assert.deepEqual(await invalidNoteResponse.json(), { error: "Note is too long." });
+
     other = await connect(baseUrl, otherToken, "today-other");
     const crossOwner = await call(other, "remove_today_practice_activities", {
       expectedWorkbenchId: "workbench-other",
