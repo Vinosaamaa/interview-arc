@@ -95,6 +95,7 @@ import {
 } from "../db/review-queue-policy";
 import type { BehavioralFinalAnswerProjection } from "../db/behavioral-final-answer";
 import type { BehavioralPracticeScenarioProjection } from "../db/behavioral-practice-scenario";
+import type { BehavioralAttemptAnalysisProjection } from "../db/behavioral-attempt-analysis";
 import type { InteractionModeClassification } from "../db/interaction-mode-classification";
 
 type View = "today" | "journey" | "reviews" | "library" | "banks";
@@ -245,6 +246,7 @@ type LogEntry = {
   codeAttempts?: LeetCodeCodeAttempt[];
   finalAnswer?: BehavioralFinalAnswerProjection | null;
   practiceScenarios?: BehavioralPracticeScenarioProjection | null;
+  behavioralAnalysis?: BehavioralAttemptAnalysisProjection | null;
   interactionModeClassification?: {
     snapshotRevision: number;
     classification: InteractionModeClassification;
@@ -1268,6 +1270,19 @@ function PracticeScenariosCard({ projection }: { projection: BehavioralPracticeS
       </div>
       <details><summary>Challenge map and follow-ups</summary><div className="practice-scenario-grid"><section><h5>Challenge map</h5>{scenario.challengeMap.length ? <dl>{scenario.challengeMap.map((item) => <div key={item.challenge}><dt>{item.challenge}</dt><dd>{item.response}</dd></div>)}</dl> : <p>None recorded.</p>}</section><section><h5>Likely follow-ups</h5>{scenario.likelyFollowUps.length ? <ul>{scenario.likelyFollowUps.map((item) => <li key={item}>{item}</li>)}</ul> : <p>None recorded.</p>}</section><section><h5>Limitations</h5>{scenario.limitations.length ? <ul>{scenario.limitations.map((item) => <li key={item}>{item}</li>)}</ul> : <p>None recorded.</p>}</section></div></details>
     </article>)}
+  </section>;
+}
+
+function BehavioralAttemptAnalysisCard({ projection }: { projection: BehavioralAttemptAnalysisProjection }) {
+  const { analysis } = projection;
+  return <section className="behavioral-attempt-card" aria-label="Behavioral Attempt analysis">
+    <header><div><span>BEHAVIORAL ATTEMPT · IMMUTABLE AUDIT</span><strong>{analysis.answerFormat} · snapshot {projection.snapshotRevision}</strong></div><p>{projection.question.questionId} · Profile revision {projection.solutionProfile.revision}</p>{projection.story && <p>Story {projection.story.storyId}{projection.story.alternativeId ? ` · alternative ${projection.story.alternativeId}` : ""}</p>}{projection.target && <p>Target {projection.target.label} · revision {projection.target.revision}</p>}</header>
+    <div className="behavioral-attempt-competencies" aria-label="Competencies">{analysis.competencies.map((item) => <span key={item}>{item}</span>)}</div>
+    <div className="behavioral-claim-audit">{analysis.claimAudit.map((claim, index) => <article className={`claim-${claim.status}`} key={`${claim.claim}-${index}`}><header><strong>{claim.status}</strong><span>{claim.claim}</span></header><dl><div><dt>Supporting evidence</dt><dd>{claim.supportingEvidenceIds.join(" · ") || "None"}</dd></div><div><dt>Contrary evidence</dt><dd>{claim.contraryEvidenceIds.join(" · ") || "None"}</dd></div><div><dt>Missing</dt><dd>{claim.gaps.join(" · ") || "None"}</dd></div><div><dt>Contradictions</dt><dd>{claim.contradictions.join(" · ") || "None"}</dd></div></dl></article>)}</div>
+    <div className="behavioral-attempt-dimensions" aria-label="Structured review dimensions">{Object.entries(analysis.reviewDimensions).map(([dimension, value]) => <article className={`dimension-${value.status}`} key={dimension}><span>{dimension.replace(/([A-Z])/g, " $1")}</span><strong>{value.status.replaceAll("_", " ")}</strong>{value.observation && <p>{value.observation}</p>}</article>)}</div>
+    <div className="behavioral-attempt-review"><section><h5>What worked</h5>{analysis.strengths.length ? <ul>{analysis.strengths.map((item) => <li key={item}>{item}</li>)}</ul> : <p>None recorded.</p>}</section><section><h5>Improve next</h5>{analysis.improvements.length ? <ul>{analysis.improvements.map((item) => <li key={item}>{item}</li>)}</ul> : <p>None recorded.</p>}</section></div>
+    <aside><strong>Generated coaching — not evidence</strong>{analysis.coachingNotes.length ? <ul>{analysis.coachingNotes.map((item) => <li key={item}>{item}</li>)}</ul> : <p>None recorded.</p>}</aside>
+    <footer><section><h5>Likely follow-ups</h5>{analysis.likelyFollowUps.length ? <ul>{analysis.likelyFollowUps.map((item) => <li key={item}>{item}</li>)}</ul> : <p>None recorded.</p>}</section><section><h5>Next drill</h5><p>{analysis.nextDrill}</p></section></footer>
   </section>;
 }
 
@@ -3819,6 +3834,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       practiceScenarios: BehavioralPracticeScenarioProjection | null;
       practiceScenariosMarkdown: string;
       practiceScenariosHtml: string;
+      behavioralAnalysis: BehavioralAttemptAnalysisProjection | null;
+      behavioralAnalysisMarkdown: string;
+      behavioralAnalysisHtml: string;
     }> = {};
     try {
       const behavioralActivityIds = [...new Set(
@@ -3836,6 +3854,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           practiceScenarios: BehavioralPracticeScenarioProjection | null;
           practiceScenariosMarkdown: string;
           practiceScenariosHtml: string;
+          behavioralAnalysis: BehavioralAttemptAnalysisProjection | null;
+          behavioralAnalysisMarkdown: string;
+          behavioralAnalysisHtml: string;
         };
         return [activityId, record] as const;
       }));
@@ -3847,6 +3868,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           practiceScenarios: record.practiceScenarios,
           practiceScenariosMarkdown: record.practiceScenariosMarkdown,
           practiceScenariosHtml: record.practiceScenariosHtml,
+          behavioralAnalysis: record.behavioralAnalysis,
+          behavioralAnalysisMarkdown: record.behavioralAnalysisMarkdown,
+          behavioralAnalysisHtml: record.behavioralAnalysisHtml,
         }]] : []
       )));
     } catch {
@@ -5615,6 +5639,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const selectedEntryModeTransitions = readerSelectedEntry?.interactionModeTransitions ?? [];
   const selectedEntryFinalAnswer = readerSelectedEntry?.finalAnswer ?? null;
   const selectedEntryPracticeScenarios = readerSelectedEntry?.practiceScenarios ?? null;
+  const selectedEntryBehavioralAnalysis = readerSelectedEntry?.behavioralAnalysis ?? null;
   const selectedCaseSections = dedupeReaderSections(readerSelectedEntry?.artifact?.sections.filter((section) => !(selectedEntryTurns.length && isTranscriptSection(section.title))) ?? []);
   const selectedCaseGroups = groupReaderSections(selectedCaseSections);
   const selectedSolutionGroups = groupReaderSections(selectedProblemProfileReusable ? selectedProblemProfile?.payload.sections ?? [] : []);
@@ -5970,13 +5995,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         codeAttempts: LeetCodeCodeAttempt[];
         finalAnswer: BehavioralFinalAnswerProjection | null;
         practiceScenarios: BehavioralPracticeScenarioProjection | null;
+        behavioralAnalysis: BehavioralAttemptAnalysisProjection | null;
         interactionModeClassification: LogEntry["interactionModeClassification"];
         interactionModeTransitions: InteractionModeTransitionProjection[];
       }> : null)
       .then((record) => {
         if (!record) return;
         const enrich = (current: LogEntry | null) => current && (current.artifact?.activityId || current.id) === selectedEntryActivityId
-          ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips, deliveryAnalyses: record.deliveryAnalyses, codeAttempts: record.codeAttempts, finalAnswer: record.finalAnswer, practiceScenarios: record.practiceScenarios, interactionModeClassification: record.interactionModeClassification, interactionModeTransitions: record.interactionModeTransitions }
+          ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips, deliveryAnalyses: record.deliveryAnalyses, codeAttempts: record.codeAttempts, finalAnswer: record.finalAnswer, practiceScenarios: record.practiceScenarios, behavioralAnalysis: record.behavioralAnalysis, interactionModeClassification: record.interactionModeClassification, interactionModeTransitions: record.interactionModeTransitions }
           : current;
         if (view === "banks") setBankNestedEntry(enrich);
         else if (view === "journey") setJourneyNestedEntry(enrich);
@@ -6179,7 +6205,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return (
       <article className={`workspace-reader journal-case-reader ${nestedReaderFocus ? "nested-reader" : ""}`} aria-labelledby="journal-reader-title" aria-label="Case file contents">
         <div className="reader-chrome">
-          <div className="reader-chrome-leading">{!nestedReaderFocus && <button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button>}<ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a><a href="#case-practice-mode">Practice mode</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedEntryFinalAnswer && <a href="#case-final-answer">Final tailored answer</a>}{selectedEntryPracticeScenarios && <a href="#case-practice-scenarios">Practice scenarios</a>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</ReaderOutline></div>
+          <div className="reader-chrome-leading">{!nestedReaderFocus && <button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button>}<ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a><a href="#case-practice-mode">Practice mode</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedEntryFinalAnswer && <a href="#case-final-answer">Final tailored answer</a>}{selectedEntryPracticeScenarios && <a href="#case-practice-scenarios">Practice scenarios</a>}{selectedEntryBehavioralAnalysis && <a href="#case-behavioral-analysis">Behavioral Attempt</a>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</ReaderOutline></div>
           <div className="reader-chrome-actions">{readerNavigationIndex >= 0 && <div className="reader-attempt-navigation" aria-label="Past practice records"><button type="button" onClick={() => navigateReaderEntry(readerNavigationEntries[readerNavigationIndex - 1])} disabled={readerNavigationIndex <= 0} aria-label="Previous practice record" title={readerNavigationIndex <= 0 ? "First record in this list" : "Previous practice record"}>←</button><span>{readerNavigationIndex + 1} / {readerNavigationEntries.length}</span><button type="button" onClick={() => navigateReaderEntry(readerNavigationEntries[readerNavigationIndex + 1])} disabled={readerNavigationIndex >= readerNavigationEntries.length - 1} aria-label="Next practice record" title={readerNavigationIndex >= readerNavigationEntries.length - 1 ? "Last record in this list" : "Next practice record"}>→</button></div>}<button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close case file" title="Close"><Icon name="close" /></button></div>
         </div>
         <div className="case-document workspace-reader-scroll" ref={readerDocumentRef} onScroll={rememberReaderPosition} onMouseUp={(event) => captureHighlightSelection(event.clientX, event.clientY)} onKeyUp={() => captureHighlightSelection()}>
@@ -6196,6 +6222,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
               conversation: selectedEntryTurns.length > 0 ? <details className="reader-group conversation-group" id="case-transcript" open={readerGroupOpen("case-transcript", false)} onToggle={(event) => rememberReaderGroup("case-transcript", event.currentTarget.open)} key="conversation"><summary><span>Conversation</span><small>{selectedEntryTurns.length} exchange{selectedEntryTurns.length === 1 ? "" : "s"} · recordings inline</small></summary><div id="case-transcript-thread"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} codeAttempts={selectedEntryCodeAttempts} modeTransitions={selectedEntryModeTransitions} /></div></details> : null,
               finalAnswer: selectedEntryFinalAnswer ? <details className="reader-group final-answer-group" id="case-final-answer" open={readerGroupOpen("case-final-answer", true)} onToggle={(event) => rememberReaderGroup("case-final-answer", event.currentTarget.open)} key="final-answer"><summary><span>Final tailored answer</span><small>{selectedEntryFinalAnswer.source === "snapshot_v1" ? `Immutable snapshot ${selectedEntryFinalAnswer.snapshotRevision}` : "Legacy fallback"}</small></summary><div><FinalAnswerCard finalAnswer={selectedEntryFinalAnswer} /></div></details> : null,
               practiceScenarios: selectedEntryPracticeScenarios ? <details className="reader-group practice-scenarios-group" id="case-practice-scenarios" open={readerGroupOpen("case-practice-scenarios", false)} onToggle={(event) => rememberReaderGroup("case-practice-scenarios", event.currentTarget.open)} key="practice-scenarios"><summary><span>Practice scenarios</span><small>{selectedEntryPracticeScenarios.scenarios.length} labeled exercise{selectedEntryPracticeScenarios.scenarios.length === 1 ? "" : "s"}</small></summary><div><PracticeScenariosCard projection={selectedEntryPracticeScenarios} /></div></details> : null,
+              behavioralAnalysis: selectedEntryBehavioralAnalysis ? <details className="reader-group behavioral-analysis-group" id="case-behavioral-analysis" open={readerGroupOpen("case-behavioral-analysis", true)} onToggle={(event) => rememberReaderGroup("case-behavioral-analysis", event.currentTarget.open)} key="behavioral-analysis"><summary><span>Behavioral Attempt</span><small>Claim audit · coaching · next drill</small></summary><div><BehavioralAttemptAnalysisCard projection={selectedEntryBehavioralAnalysis} /></div></details> : null,
               codeAttempts: selectedEntryCodeAttempts.length > 0 ? <details className="reader-group code-attempts-group" id="case-code-attempts" open={readerGroupOpen("case-code-attempts", true)} onToggle={(event) => rememberReaderGroup("case-code-attempts", event.currentTarget.open)} key="code-attempts"><summary><span>User Code Attempts</span><small>{selectedEntryCodeAttempts.length} version{selectedEntryCodeAttempts.length === 1 ? "" : "s"}</small></summary><div>{selectedEntryCodeAttempts.map((attempt) => <article className="code-attempt-card" key={attempt.id}><header><strong>Code Attempt {attempt.sequence} · {attempt.language}</strong><span>{attempt.lineCount} lines</span></header><CodeAttemptBody attempt={attempt} /></article>)}</div></details> : null,
               reviewSections: selectedEntry.artifact ? selectedCaseGroups.filter((group) => group.key !== "record").map((group) => { const groupId = `case-group-${group.key}`; return <details className={`reader-group ${group.key}-group`} id={groupId} open={readerGroupOpen(groupId, group.key !== "conversation")} onToggle={(event) => rememberReaderGroup(groupId, event.currentTarget.open)} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></div></details>; }) : [],
             })}

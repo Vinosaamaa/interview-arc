@@ -966,6 +966,42 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   background: linear-gradient(135deg, rgba(214, 159, 76, .13), transparent 45%), #fffdf8;
   color: #263b36;
 }
+
+.behavioral-attempt-card {
+  padding: 26px;
+  border: 1px solid #d8c9df;
+  border-left: 6px solid #87539e;
+  background: linear-gradient(145deg, #fffdf8, #fbf5fd);
+}
+.behavioral-attempt-card > header { display: grid; gap: 8px; padding-bottom: 18px; border-bottom: 1px solid #dfd1e5; }
+.behavioral-attempt-card > header div { display: flex; justify-content: space-between; gap: 16px; }
+.behavioral-attempt-card > header span { color: #75478e; font-size: .72rem; font-weight: 800; letter-spacing: .11em; }
+.behavioral-attempt-card > header strong { color: #563369; font-size: .78rem; }
+.behavioral-attempt-card > header p { margin: 0; color: #65726b; }
+.behavioral-attempt-competencies { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
+.behavioral-attempt-competencies span { padding: 5px 9px; border: 1px solid #cfbdd8; border-radius: 999px; background: #fff; color: #654174; font-size: .75rem; font-weight: 750; }
+.behavioral-claim-audit { display: grid; gap: 12px; }
+.behavioral-claim-audit article { padding: 16px; border: 1px solid #ded9d2; border-left: 4px solid #88958e; background: #fff; }
+.behavioral-claim-audit article.claim-verified { border-left-color: #7f9e2e; }
+.behavioral-claim-audit article.claim-partial { border-left-color: #c9912c; }
+.behavioral-claim-audit article.claim-contradicted { border-left-color: #bd5949; }
+.behavioral-claim-audit article > header { display: grid; gap: 5px; }
+.behavioral-claim-audit article > header strong { text-transform: uppercase; font-size: .68rem; letter-spacing: .1em; }
+.behavioral-claim-audit dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 14px 0 0; }
+.behavioral-claim-audit dl div { min-width: 0; }
+.behavioral-claim-audit dt { color: #6a756f; font-size: .7rem; font-weight: 760; text-transform: uppercase; }
+.behavioral-claim-audit dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+.behavioral-attempt-dimensions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 20px; }
+.behavioral-attempt-dimensions article { min-width: 0; padding: 12px; border: 1px solid #ded7e1; background: #fff; }
+.behavioral-attempt-dimensions span, .behavioral-attempt-dimensions strong { display: block; text-transform: capitalize; }
+.behavioral-attempt-dimensions span { color: #69766f; font-size: .7rem; }
+.behavioral-attempt-dimensions strong { margin-top: 3px; color: #45314e; font-size: .76rem; }
+.behavioral-attempt-dimensions p { margin: 7px 0 0; color: #59675f; font-size: .76rem; }
+.behavioral-attempt-review, .behavioral-attempt-card > footer { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 20px; }
+.behavioral-attempt-card h5 { margin: 0 0 8px; }
+.behavioral-attempt-card ul { margin: 0; padding-left: 19px; }
+.behavioral-attempt-card > aside { margin-top: 20px; padding: 16px; border: 1px dashed #ad8abd; background: #faf4fc; }
+.behavioral-attempt-card > aside strong { color: #613c72; }
 .practice-scenarios-card > header { display: grid; gap: 8px; padding-bottom: 18px; border-bottom: 1px solid #e3d5bd; }
 .practice-scenarios-card > header div { display: flex; justify-content: space-between; gap: 18px; }
 .practice-scenarios-card > header span,
@@ -1935,6 +1971,13 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .final-answer-card > footer { grid-template-columns: 1fr; }
   .final-answer-card > footer p { grid-column: 1; }
   .practice-scenarios-card { padding: 20px 16px; border-left-width: 4px; }
+  .behavioral-attempt-card { padding: 20px 16px; border-left-width: 4px; }
+  .behavioral-attempt-card > header div,
+  .behavioral-attempt-review,
+  .behavioral-attempt-card > footer,
+  .behavioral-claim-audit dl,
+  .behavioral-attempt-dimensions { grid-template-columns: 1fr; }
+  .behavioral-attempt-card > header div { display: grid; }
   .practice-scenarios-card > header div,
   .practice-scenario-heading { flex-direction: column; }
   .practice-scenario-heading small { text-align: left; }

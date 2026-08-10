@@ -2,6 +2,7 @@ export function orderPastReaderSections<T>(input: {
   conversation?: T | null;
   finalAnswer?: T | null;
   practiceScenarios?: T | null;
+  behavioralAnalysis?: T | null;
   codeAttempts?: T | null;
   reviewSections?: readonly T[];
 }) {
@@ -9,6 +10,7 @@ export function orderPastReaderSections<T>(input: {
     input.conversation,
     input.finalAnswer,
     input.practiceScenarios,
+    input.behavioralAnalysis,
     input.codeAttempts,
     ...(input.reviewSections ?? []),
   ].filter((section): section is T => section !== null && section !== undefined);

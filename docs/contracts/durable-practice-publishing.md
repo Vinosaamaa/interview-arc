@@ -310,6 +310,8 @@ Every complete bundle contains:
   timing, notes, result, and recording links.
 - for every new completed behavioral activity, the immutable typed final-answer
   snapshot defined by `behavioral-final-answer-snapshots.md`.
+- the typed Behavioral Attempt audit embedded in that snapshot, as defined by
+  `behavioral-attempt-analysis.md`.
 
 For a CLI-native Java LeetCode activity, the specialist may maintain one local
 working file at

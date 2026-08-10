@@ -10,6 +10,8 @@ Load only what the current action needs:
 - Solution Profile/finalization: `../../docs/contracts/solution-profiles.md`;
 - completed final answer/correction:
   `../../docs/contracts/behavioral-final-answer-snapshots.md`;
+- completed attempt analysis:
+  `../../docs/contracts/behavioral-attempt-analysis.md`;
 - prompt selection/import: `bank/questions.json`;
 - resume curriculum: `profile/README.md` and the ignored
   `../../private-sources/sources.local.json` when available;
@@ -134,6 +136,13 @@ for an exact retry. Never silently replace a saved attempt: use the explicit
 correction fields. For a target-tailored answer, resolve the authoritative
 activity/session binding and use its exact Target Profile revision; fail closed
 rather than guessing, stripping, or relabeling the target scope.
+
+The same finalization must include the typed `behavioralAnalysis` defined in
+`behavioral-attempt-analysis.md`. Derive it from the exact visible review and
+immutable answer snapshot: keep verified, partial, missing, and contrary claims
+structurally separate, and label generated coaching as non-evidence. Reuse the
+final-answer operation for an exact retry; use the same explicit correction for
+a changed answer or analysis.
 
 For a target-tailored completion, persist `behavioralReview` with universal
 quality, target alignment, assistance, and evidence gaps kept separate. Reuse
