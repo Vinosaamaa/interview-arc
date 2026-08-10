@@ -5023,6 +5023,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             const open = expandedBankDesk === type;
             return <div className={`bank-domain-desk-shell ${open ? "open" : ""}`} id={`bank-domain-desk-${type}`} aria-hidden={!open} inert={open ? undefined : true} key={type}><div>
               {type === "behavioral" ? <BehavioralFoundation
+                key={open ? "open" : "closed"}
                 enabled={open}
                 curriculumQuestionIds={behavioralCurriculum.map((question) => question.id)}
                 completedCurriculumQuestionIds={completedBehavioralCurriculum}

@@ -110,6 +110,7 @@ test("Bank specialty desks are collapsed, lazy, animated, and reader-safe", asyn
   assert.ok(hasJsxClass(file, "bank-domain-desks"));
   assert.ok(hasJsxAttribute(file, "aria-expanded", "expandedBankDesk === type"));
   assert.ok(hasJsxAttribute(file, "enabled", "open"));
+  assert.ok(hasJsxAttribute(file, "key", 'open ? "open" : "closed"'));
   assert.ok(hasJsxAttribute(file, "inert", "open ? undefined : true"));
   assert.equal(cssRules(rules, ".bank-domain-desk-shell")[0].declarations["grid-template-rows"], "0fr");
   assert.equal(cssRules(rules, ".bank-domain-desk-shell.open")[0].declarations["grid-template-rows"], "1fr");
