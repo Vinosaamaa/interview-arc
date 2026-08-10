@@ -68,6 +68,12 @@ test("all live clients use server push instead of recurring one-second HTTP read
   assert.match(mcpConfig, /LIVE_UPDATES/);
 });
 
+test("live clients compare revisions within each invalidation scope", async () => {
+  const policy = await readFile(new URL("../app/live-event-policy.ts", import.meta.url), "utf8");
+  assert.match(policy, /latestRevisionByScope/);
+  assert.match(policy, /latestRevisionByScope\.get\(update\.scope\)/);
+});
+
 test("Voice reliability keeps decisions race-safe, status-first, and conflicts terminal", async () => {
   const [schema, durable, bridge, migration] = await Promise.all([
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),

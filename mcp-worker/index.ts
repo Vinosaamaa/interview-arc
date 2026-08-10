@@ -176,6 +176,7 @@ import {
 } from "./voice-capture-batch";
 import { requestVoiceDeliveryRetry } from "./voice-delivery-retry";
 import { ingestResumeRevision, ResumeImportError } from "./resume-revision-ingest";
+import { routeLiveV1 } from "./live-v1";
 
 interface Env {
   DB: D1Database;
@@ -1425,10 +1426,15 @@ async function saveVoiceDelivery(ownerId: string, request: Request) {
   return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, analysisId: body.id, status: body.status }, { status: 201 });
 }
 
-function bearerToken(request: Request) {
+function authorizationBearerToken(request: Request) {
   const authorization = request.headers.get("authorization") ?? "";
   const match = authorization.match(/^Bearer\s+(.+)$/i);
-  if (match?.[1]) return match[1].trim();
+  return match?.[1]?.trim() ?? "";
+}
+
+function bearerToken(request: Request) {
+  const authorizationToken = authorizationBearerToken(request);
+  if (authorizationToken) return authorizationToken;
   const encoded = (request.headers.get("sec-websocket-protocol") ?? "")
     .split(",")
     .map((value) => value.trim())
@@ -1447,8 +1453,8 @@ function corsHeaders(request: Request) {
   const allowedOrigin = origin.startsWith("chrome-extension://") ? origin : "";
   return {
     ...(allowedOrigin ? { "access-control-allow-origin": allowedOrigin } : {}),
-    "access-control-allow-headers": "authorization, content-type",
-    "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
+    "access-control-allow-headers": "authorization, content-type, content-length, range, x-content-sha256, x-live-operation-id, x-live-holder-id, x-live-holder-session-id, x-live-fencing-token",
+    "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
     "access-control-max-age": "86400",
     vary: "Origin",
   };
@@ -3485,13 +3491,25 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(request) });
     if (url.pathname === "/health") return json(request, { ok: true, service: "interview-arc-mcp" });
 
-    const ownerId = await resolveIntegrationOwner(bearerToken(request));
+    const liveV1Path = url.pathname === "/live/v1" || url.pathname.startsWith("/live/v1/");
+    const ownerId = await resolveIntegrationOwner(
+      liveV1Path ? authorizationBearerToken(request) : bearerToken(request),
+    );
     if (!ownerId) {
-      return json(request, { error: "Unauthorized" }, {
+      return json(request, { error: "Unauthorized", code: "unauthorized", retryable: false }, {
         status: 401,
         headers: { "www-authenticate": "Bearer realm=\"Interview Arc\"" },
       });
     }
+
+    const liveV1Response = await routeLiveV1(
+      ownerId,
+      request,
+      env,
+      ctx,
+      (body, init) => json(request, body, init),
+    );
+    if (liveV1Response) return liveV1Response;
 
     if (url.pathname === "/companion/state" && request.method === "GET") {
       return companionState(ownerId, request);

@@ -8,6 +8,7 @@ import {
   extraActivities,
   focusBlocks,
   leetcodeCodeAttempts,
+  liveMutationReceipts,
   liveSessions,
   outcomes,
   practiceFocus,
@@ -349,6 +350,7 @@ export async function removePlannedActivities(
     intervalRows,
     attemptRows,
     captureRows,
+    liveReceiptRows,
     sessionRows,
   ] = currentIds.length ? await Promise.all([
     db.select({ activityId: timers.subjectId }).from(timers).where(and(
@@ -369,8 +371,9 @@ export async function removePlannedActivities(
     db.select({ activityId: timerIntervals.subjectId }).from(timerIntervals).where(and(eq(timerIntervals.ownerId, ownerId), eq(timerIntervals.kind, "activity"), inArray(timerIntervals.subjectId, currentIds))),
     db.select({ activityId: leetcodeCodeAttempts.activityId }).from(leetcodeCodeAttempts).where(and(eq(leetcodeCodeAttempts.ownerId, ownerId), inArray(leetcodeCodeAttempts.activityId, currentIds))),
     db.select({ activityId: voiceCaptureIntents.activityId }).from(voiceCaptureIntents).where(and(eq(voiceCaptureIntents.ownerId, ownerId), inArray(voiceCaptureIntents.activityId, currentIds))),
+    db.select({ activityId: liveMutationReceipts.activityId }).from(liveMutationReceipts).where(and(eq(liveMutationReceipts.ownerId, ownerId), inArray(liveMutationReceipts.activityId, currentIds))),
     db.select().from(liveSessions).where(and(eq(liveSessions.ownerId, ownerId), eq(liveSessions.workbenchId, workbench.id))),
-  ]) : [[], [], [], [], [], [], [], [], [], [], [], [], [], []];
+  ]) : [[], [], [], [], [], [], [], [], [], [], [], [], [], [], []];
 
   const ids = (rows: Array<{ activityId: string }>) => new Set(rows.map((row) => row.activityId));
   const blockers = {
@@ -386,6 +389,7 @@ export async function removePlannedActivities(
       ...ids(deliveryRows),
       ...ids(captureRows),
       ...ids(intervalRows),
+      ...ids(liveReceiptRows),
     ]),
     attempt: ids(attemptRows),
     note: new Set([
@@ -553,6 +557,11 @@ export async function removePlannedActivities(
         SELECT 1 FROM ${voiceCaptureIntents}
         WHERE ${voiceCaptureIntents.ownerId} = ${ownerId}
           AND ${inArray(voiceCaptureIntents.activityId, deletedIds)}
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM ${liveMutationReceipts}
+        WHERE ${liveMutationReceipts.ownerId} = ${ownerId}
+          AND ${inArray(liveMutationReceipts.activityId, deletedIds)}
       )
     `),
     ...affectedSessions.map(({ row }) => d1TransactionalInvariantGuard(db, sql`EXISTS (

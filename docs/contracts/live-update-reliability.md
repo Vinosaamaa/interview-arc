@@ -12,11 +12,16 @@ a replacement database.
   `/api/live-events` route.
 - Companion and Voice connect through the integration-token-authenticated
   `limitless-mcp /events` route.
+- Interview Arc Live uses the same integration-token stream and the locked
+  [`/live/v1` HTTP contract](./live-v1.md); `live` scope remains an invalidation
+  hint and never carries room content.
 - A committed mutation emits one compact `practice_changed` envelope containing
-  a monotonically increasing owner revision, scope, and occurrence time.
-- Clients discard invalid or stale revisions and then read the appropriate REST
-  projection. No transcript, token, note, code, or audio content travels in a
-  push envelope.
+  a monotonically increasing owner revision for that scope, the scope, and
+  occurrence time. Live's scope-local revision is D1-backed so unrelated
+  browser/Voice traffic cannot create a gap with `/live/v1` projections.
+- Clients discard invalid or stale revisions relative to the same scope and
+  then read the appropriate REST projection. No transcript, token, note, code,
+  or audio content travels in a push envelope.
 - Website clients reconcile `timer` scope through the compact timer projection.
   Every other scope reconciles the full authoritative practice projection so
   Voice- or Companion-originated session, activity, focus-block, workbench, and

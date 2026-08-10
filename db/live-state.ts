@@ -8,6 +8,7 @@ import {
   extraActivities,
   focusBlocks,
   leetcodeCodeAttempts,
+  liveMutationReceipts,
   liveSessions,
   outcomes,
   practiceFocus,
@@ -1408,6 +1409,7 @@ export async function removeExtraActivity(ownerId: string, id: string) {
     intervals,
     codeAttempts,
     captureIntents,
+    liveReceipts,
   ] = await Promise.all([
     loadTimer(db, ownerId, id, "activity"),
     db.select().from(outcomes).where(and(eq(outcomes.ownerId, ownerId), eq(outcomes.activityId, id))),
@@ -1425,6 +1427,7 @@ export async function removeExtraActivity(ownerId: string, id: string) {
     )),
     db.select().from(leetcodeCodeAttempts).where(and(eq(leetcodeCodeAttempts.ownerId, ownerId), eq(leetcodeCodeAttempts.activityId, id))),
     db.select().from(voiceCaptureIntents).where(and(eq(voiceCaptureIntents.ownerId, ownerId), eq(voiceCaptureIntents.activityId, id))),
+    db.select().from(liveMutationReceipts).where(and(eq(liveMutationReceipts.ownerId, ownerId), eq(liveMutationReceipts.activityId, id))),
   ]);
   if (
     timer?.startedAt ||
@@ -1438,7 +1441,8 @@ export async function removeExtraActivity(ownerId: string, id: string) {
     reviews.length ||
     intervals.length ||
     codeAttempts.length ||
-    captureIntents.length
+    captureIntents.length ||
+    liveReceipts.length
   ) {
     throw new TimerStateConflictError("Only an untouched activity can be removed. Started work stays in your history.");
   }

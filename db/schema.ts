@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // Live practice state owned by the deployed website. Durable narrative content
 // (daily journals, attempt write-ups, transcripts) stays in Git; these tables
@@ -968,6 +968,209 @@ export const integrationTokens = sqliteTable("integration_tokens", {
   revokedAt: integer("revoked_at"),
 });
 
+// Interview Arc Live v1 is a separate, versioned write surface over the same
+// owner-scoped practice authority. These rows hold only Live protocol state;
+// canonical timers, results, focus, and transcript text remain in the shared
+// tables above.
+export const liveOwnerRevisions = sqliteTable("live_owner_revisions", {
+  ownerId: text("owner_id").primaryKey(),
+  revision: integer("revision").notNull().default(0),
+  updatedAt,
+});
+
+export const liveActivityLeases = sqliteTable(
+  "live_activity_leases",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    holderId: text("holder_id"),
+    holderSessionId: text("holder_session_id"),
+    fencingToken: integer("fencing_token").notNull().default(0),
+    expiresAt: integer("expires_at"),
+    acquiredAt: integer("acquired_at"),
+    renewedAt: integer("renewed_at"),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.activityId] }),
+    index("live_activity_leases_owner_expiry_idx").on(table.ownerId, table.expiresAt),
+  ],
+);
+
+export const liveTurnPairs = sqliteTable(
+  "live_turn_pairs",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    pairId: text("pair_id").notNull(),
+    candidateTurnId: text("candidate_turn_id").notNull(),
+    interviewerTurnId: text("interviewer_turn_id").notNull(),
+    candidateText: text("candidate_text").notNull(),
+    candidateEvidenceStatus: text("candidate_evidence_status", {
+      enum: ["verified", "best_available", "possible_contamination"],
+    }).notNull(),
+    interviewerDisplayMarkdown: text("interviewer_display_markdown").notNull(),
+    interviewerSpokenText: text("interviewer_spoken_text").notNull(),
+    candidateOccurredAt: integer("candidate_occurred_at").notNull(),
+    interviewerOccurredAt: integer("interviewer_occurred_at").notNull(),
+    candidateSequence: integer("candidate_sequence").notNull(),
+    interviewerSequence: integer("interviewer_sequence").notNull(),
+    clipId: text("clip_id"),
+    requestDigest: text("request_digest").notNull(),
+    evidenceConfirmedAt: integer("evidence_confirmed_at"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.activityId, table.pairId] }),
+    check(
+      "live_turn_pairs_evidence_status_check",
+      sql`${table.candidateEvidenceStatus} IN ('verified','best_available','possible_contamination')`,
+    ),
+    check(
+      "live_turn_pairs_adjacent_sequence_check",
+      sql`${table.interviewerSequence} = ${table.candidateSequence} + 1`,
+    ),
+    uniqueIndex("live_turn_pairs_candidate_turn_unique").on(
+      table.ownerId,
+      table.activityId,
+      table.candidateTurnId,
+    ),
+    uniqueIndex("live_turn_pairs_interviewer_turn_unique").on(
+      table.ownerId,
+      table.activityId,
+      table.interviewerTurnId,
+    ),
+    uniqueIndex("live_turn_pairs_candidate_sequence_unique").on(
+      table.ownerId,
+      table.activityId,
+      table.candidateSequence,
+    ),
+    uniqueIndex("live_turn_pairs_interviewer_sequence_unique").on(
+      table.ownerId,
+      table.activityId,
+      table.interviewerSequence,
+    ),
+  ],
+);
+
+// One cross-role reservation table prevents a Live candidate identity or
+// sequence from being reused later as an interviewer identity (or vice versa)
+// without imposing a new invariant on unfenced legacy writers.
+export const liveTurnReservations = sqliteTable(
+  "live_turn_reservations",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    turnId: text("turn_id").notNull(),
+    pairId: text("pair_id").notNull(),
+    side: text("side", { enum: ["candidate", "interviewer"] }).notNull(),
+    sequence: integer("sequence").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.activityId, table.turnId] }),
+    check("live_turn_reservations_side_check", sql`${table.side} IN ('candidate','interviewer')`),
+    uniqueIndex("live_turn_reservations_sequence_unique").on(
+      table.ownerId,
+      table.activityId,
+      table.sequence,
+    ),
+    uniqueIndex("live_turn_reservations_pair_side_unique").on(
+      table.ownerId,
+      table.activityId,
+      table.pairId,
+      table.side,
+    ),
+  ],
+);
+
+export const liveCandidateEvidenceConfirmations = sqliteTable(
+  "live_candidate_evidence_confirmations",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    pairId: text("pair_id").notNull(),
+    operationId: text("operation_id").notNull(),
+    confirmedAt: integer("confirmed_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.activityId, table.pairId] }),
+    uniqueIndex("live_candidate_evidence_confirmations_operation_unique").on(
+      table.ownerId,
+      table.activityId,
+      table.operationId,
+    ),
+  ],
+);
+
+export const liveActivityClips = sqliteTable(
+  "live_activity_clips",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    clipId: text("clip_id").notNull(),
+    candidateTurnId: text("candidate_turn_id").notNull(),
+    pairId: text("pair_id"),
+    expectedMimeType: text("expected_mime_type").notNull(),
+    expectedByteSize: integer("expected_byte_size").notNull(),
+    expectedSha256: text("expected_sha256").notNull(),
+    objectKey: text("object_key").notNull(),
+    status: text("status", {
+      enum: ["staged", "uploading", "available", "failed", "abandoned"],
+    }).notNull().default("staged"),
+    uploadOperationId: text("upload_operation_id"),
+    uploadRequestDigest: text("upload_request_digest"),
+    uploadHolderId: text("upload_holder_id"),
+    uploadHolderSessionId: text("upload_holder_session_id"),
+    uploadFencingToken: integer("upload_fencing_token"),
+    failureCode: text("failure_code"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.activityId, table.clipId] }),
+    check(
+      "live_activity_clips_mime_type_check",
+      sql`${table.expectedMimeType} IN ('audio/mp4','audio/mpeg','audio/wav','audio/webm','audio/x-m4a')`,
+    ),
+    check(
+      "live_activity_clips_byte_size_check",
+      sql`${table.expectedByteSize} > 0 AND ${table.expectedByteSize} <= 104857600`,
+    ),
+    check(
+      "live_activity_clips_sha256_check",
+      sql`length(${table.expectedSha256}) = 64 AND ${table.expectedSha256} NOT GLOB '*[^0-9a-f]*'`,
+    ),
+    check(
+      "live_activity_clips_status_check",
+      sql`${table.status} IN ('staged','uploading','available','failed','abandoned')`,
+    ),
+    uniqueIndex("live_activity_clips_candidate_turn_unique").on(
+      table.ownerId,
+      table.activityId,
+      table.candidateTurnId,
+    ),
+    index("live_activity_clips_owner_status_idx").on(table.ownerId, table.status, table.updatedAt),
+  ],
+);
+
+export const liveMutationReceipts = sqliteTable(
+  "live_mutation_receipts",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    operationId: text("operation_id").notNull(),
+    operation: text("operation").notNull(),
+    requestDigest: text("request_digest").notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.activityId, table.operationId] }),
+    index("live_mutation_receipts_owner_created_idx").on(table.ownerId, table.createdAt),
+  ],
+);
+
 // Native Today planning mutations are identity-idempotent. The request hash
 // rejects a changed retry while the stored response lets an exact retry return
 // the original authoritative result without creating duplicate work.
@@ -1197,6 +1400,13 @@ export type ResumeImportOperationRow = typeof resumeImportOperations.$inferSelec
 export type ResumeImportLockRow = typeof resumeImportLocks.$inferSelect;
 export type SpecialistWriteJobRow = typeof specialistWriteJobs.$inferSelect;
 export type IntegrationTokenRow = typeof integrationTokens.$inferSelect;
+export type LiveOwnerRevisionRow = typeof liveOwnerRevisions.$inferSelect;
+export type LiveActivityLeaseRow = typeof liveActivityLeases.$inferSelect;
+export type LiveTurnPairRow = typeof liveTurnPairs.$inferSelect;
+export type LiveTurnReservationRow = typeof liveTurnReservations.$inferSelect;
+export type LiveCandidateEvidenceConfirmationRow = typeof liveCandidateEvidenceConfirmations.$inferSelect;
+export type LiveActivityClipRow = typeof liveActivityClips.$inferSelect;
+export type LiveMutationReceiptRow = typeof liveMutationReceipts.$inferSelect;
 export type ExtraActivityRow = typeof extraActivities.$inferSelect;
 export type FocusBlockRow = typeof focusBlocks.$inferSelect;
 export type LiveSessionRow = typeof liveSessions.$inferSelect;

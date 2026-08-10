@@ -10,6 +10,7 @@ import {
   deferredVoiceCaptureDecisions,
   leetcodeCodeAttempts,
   leetcodeCodeAttemptReviewBackfills,
+  liveTurnReservations,
   ownerBankQuestions,
   practiceNotes,
   practiceTranscriptTurns,
@@ -442,6 +443,11 @@ function typedExchangeDependencyPredicates(ownerId: string, activityId: string, 
       eq(activityFinalizations.activityId, activityId),
       inArray(activityFinalizations.status, ["ready", "published"]),
     ),
+    liveReservations: and(
+      eq(liveTurnReservations.ownerId, ownerId),
+      eq(liveTurnReservations.activityId, activityId),
+      inArray(liveTurnReservations.turnId, turnIds),
+    ),
   };
 }
 
@@ -796,6 +802,7 @@ export async function deleteTypedPracticeExchange(
     voiceRepairEvents,
     voiceReservations,
     finalizations,
+    liveReservations,
   ] = await Promise.all([
     db.select({ id: leetcodeCodeAttempts.id }).from(leetcodeCodeAttempts)
       .where(dependencyPredicates.codeAttempts),
@@ -818,6 +825,8 @@ export async function deleteTypedPracticeExchange(
       .where(dependencyPredicates.voiceReservations),
     db.select({ status: activityFinalizations.status }).from(activityFinalizations)
       .where(dependencyPredicates.finalizations),
+    db.select({ turnId: liveTurnReservations.turnId }).from(liveTurnReservations)
+      .where(dependencyPredicates.liveReservations),
   ]);
   const dependentCounts = {
     codeAttempts: codeAttempts.length + reviewBackfills.length,
@@ -825,6 +834,7 @@ export async function deleteTypedPracticeExchange(
     voice: voiceResponses.length + voiceGroupMembers.length + voiceGroups.length
       + voiceRepairEvents.length + voiceReservations.length,
     finalized: finalizations.length,
+    live: liveReservations.length,
   };
   if (Object.values(dependentCounts).some((count) => count > 0)) {
     throw new TypedExchangeDeletionError(
@@ -865,6 +875,8 @@ export async function deleteTypedPracticeExchange(
       .where(dependencyPredicates.voiceReservations)),
     notExists(db.select({ one: sql<number>`1` }).from(activityFinalizations)
       .where(dependencyPredicates.finalizations)),
+    notExists(db.select({ one: sql<number>`1` }).from(liveTurnReservations)
+      .where(dependencyPredicates.liveReservations)),
   )!;
   const exactPairGuard = d1TransactionalInvariantGuard(db, sql`(
     SELECT count(*) FROM ${practiceTranscriptTurns}
@@ -2956,6 +2968,7 @@ export async function prepareVoiceCapturesForFinish(
   ownerId: string,
   activityId: string,
   nowMs: number,
+  options: { discardPending?: boolean } = {},
 ): Promise<VoiceFinishGuard> {
   const db = getDb();
   const active = await db.select().from(voiceCaptureIntents).where(and(
@@ -2973,7 +2986,7 @@ export async function prepareVoiceCapturesForFinish(
   const untouched = active.filter((intent) =>
     finishDispositionForVoiceStatus(intent.status as VoiceIntentStatus) === "discard_unclassified");
   const untouchedIds = untouched.map((intent) => intent.captureId);
-  if (untouchedIds.length) {
+  if (untouchedIds.length && options.discardPending !== false) {
     await db.batch([
       db.update(voiceCaptureIntents).set({
         status: "discarded_unclassified",

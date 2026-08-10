@@ -48,7 +48,7 @@ export function subscribeToLiveUpdates({
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
   let attempt = 0;
-  let latestRevision = 0;
+  const latestRevisionByScope = new Map<string, number>();
 
   const clearTimers = () => {
     if (reconnectTimer) clearTimeout(reconnectTimer);
@@ -79,8 +79,10 @@ export function subscribeToLiveUpdates({
     socket.addEventListener("message", (event) => {
       if (typeof event.data !== "string") return;
       const update = parseLiveUpdate(event.data);
-      if (!update || update.revision <= latestRevision) return;
-      latestRevision = update.revision;
+      if (!update) return;
+      const latestRevision = latestRevisionByScope.get(update.scope) ?? 0;
+      if (update.revision <= latestRevision) return;
+      latestRevisionByScope.set(update.scope, update.revision);
       onUpdate(update);
     });
     socket.addEventListener("close", () => {
