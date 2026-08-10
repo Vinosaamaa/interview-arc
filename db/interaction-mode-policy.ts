@@ -38,6 +38,23 @@ export class InteractionModeError extends Error {
   }
 }
 
+export function classifyInteractionModeAtomicFailure(error: unknown) {
+  const normalized = String(error).toLowerCase();
+  const deterministicConflict = normalized.includes("malformed json")
+    || normalized.includes("constraint failed");
+  return deterministicConflict
+    ? {
+        code: "interaction_mode_atomic_conflict",
+        message: "The interaction-mode preconditions conflicted, so no state was changed.",
+        retryable: false,
+      }
+    : {
+        code: "interaction_mode_atomic_write_failed",
+        message: "The interaction-mode state and transition were not committed.",
+        retryable: true,
+      };
+}
+
 export const interactionModeRegistry = registryData as InteractionModeRegistry;
 
 function normalizedModeName(value: string) {

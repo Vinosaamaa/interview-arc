@@ -26,13 +26,16 @@ the state revision once. Current state, transition, and receipt commit in one D1
 transaction or none commit.
 
 An optional trigger turn is only a reference. It must already be an owner-scoped
-turn in the same activity. Persisting a mode transition never appends or copies
-Voice-managed transcript text.
+**user** turn in the same activity; a specialist turn cannot authorize its own
+mode change. Persisting a mode transition never appends or copies Voice-managed
+transcript text.
 
 ## MCP boundary
 
 - `get_practice_interaction_mode` reads the registry, owner-scoped activity
-  identity, current state/revision, and ordered transitions.
+  identity, current state/revision, and the latest 100 transitions in
+  chronological order. Its `transitionHistory` metadata reports the limit,
+  returned revision range, and whether older history was truncated.
 - `set_practice_interaction_mode` performs one explicit activity-scoped
   transition. It requires `expectedRevision`, stable `mutationId`, occurrence
   time, source, reason, and `authorization: explicit_user_instruction`.
@@ -43,6 +46,10 @@ fresh authoritative state without another transition. The same mutation ID with
 changed canonical content is an identity conflict. A stale revision, invalid
 trigger turn, unknown/deprecated mode, unsupported specialty, or unavailable
 phase changes no state.
+
+Structured failures expose stable public codes and bounded reconciliation
+metadata only. They never echo raw D1/SQL errors, query text, schema details,
+transcript content, or other internal failure causes.
 
 D1 is authoritative. After commit, the Worker emits an owner-scoped `practice`
 invalidation so connected surfaces reread; push is never the mutation receipt.

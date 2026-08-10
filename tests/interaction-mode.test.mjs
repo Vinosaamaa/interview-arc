@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   InteractionModeError,
+  classifyInteractionModeAtomicFailure,
   interactionModeRegistry,
   resolveInteractionMode,
 } from "../db/interaction-mode-policy.ts";
@@ -102,5 +103,24 @@ test("the MCP and D1 tracer keep registry IDs extensible and writes transaction-
   assert.match(store, /await db\.batch\(\[/);
   assert.match(store, /d1TransactionalInvariantGuard/);
   assert.match(store, /practiceTranscriptTurns/);
+  assert.match(store, /practiceTranscriptTurns\.speaker, "user"/);
+  assert.match(store, /transitionReadLimit = 100/);
+  assert.match(store, /transitionHistoryTruncated/);
+  assert.doesNotMatch(store, /cause:\s*String\(error\)/);
   assert.doesNotMatch(worker, /plan_today_practice[\s\S]{0,500}interactionModeId/);
+});
+
+test("atomic failure retryability never treats an invariant conflict as transient", () => {
+  assert.deepEqual(
+    classifyInteractionModeAtomicFailure(new Error("malformed JSON")),
+    {
+      code: "interaction_mode_atomic_conflict",
+      message: "The interaction-mode preconditions conflicted, so no state was changed.",
+      retryable: false,
+    },
+  );
+  assert.equal(
+    classifyInteractionModeAtomicFailure(new Error("temporary D1 transport failure")).retryable,
+    true,
+  );
 });

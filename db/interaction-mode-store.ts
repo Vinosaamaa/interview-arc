@@ -1,7 +1,7 @@
-import { and, asc, eq, sql } from "drizzle-orm";
-import { d1TransactionalInvariantGuard, isD1TransactionalInvariantFailure } from "./d1-transactional-guard";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { d1TransactionalInvariantGuard } from "./d1-transactional-guard";
 import { getDb } from "./index";
-import { InteractionModeError } from "./interaction-mode-policy";
+import { classifyInteractionModeAtomicFailure, InteractionModeError } from "./interaction-mode-policy";
 import {
   practiceInteractionModeMutations,
   practiceInteractionModeStates,
@@ -26,9 +26,11 @@ export type InteractionModeMutationReceipt = {
   occurredAt: number;
 };
 
+const transitionReadLimit = 100;
+
 export async function readPracticeInteractionMode(ownerId: string, activityId: string) {
   const db = getDb();
-  const [currentRows, transitions] = await Promise.all([
+  const [currentRows, latestTransitions] = await Promise.all([
     db.select().from(practiceInteractionModeStates).where(and(
       eq(practiceInteractionModeStates.ownerId, ownerId),
       eq(practiceInteractionModeStates.activityId, activityId),
@@ -36,9 +38,11 @@ export async function readPracticeInteractionMode(ownerId: string, activityId: s
     db.select().from(practiceInteractionModeTransitions).where(and(
       eq(practiceInteractionModeTransitions.ownerId, ownerId),
       eq(practiceInteractionModeTransitions.activityId, activityId),
-    )).orderBy(asc(practiceInteractionModeTransitions.toRevision)),
+    )).orderBy(desc(practiceInteractionModeTransitions.toRevision)).limit(transitionReadLimit + 1),
   ]);
   const current = currentRows[0] ?? null;
+  const transitionHistoryTruncated = latestTransitions.length > transitionReadLimit;
+  const transitions = latestTransitions.slice(0, transitionReadLimit).reverse();
   return {
     state: current ? "recorded" as const : "needs_selection" as const,
     current: current ? {
@@ -50,6 +54,14 @@ export async function readPracticeInteractionMode(ownerId: string, activityId: s
       lastMutationId: current.lastMutationId,
       updatedAt: current.updatedAt,
     } : null,
+    transitionHistory: {
+      order: "chronological" as const,
+      limit: transitionReadLimit,
+      returnedCount: transitions.length,
+      truncated: transitionHistoryTruncated,
+      oldestReturnedRevision: transitions[0]?.toRevision ?? null,
+      latestReturnedRevision: transitions.at(-1)?.toRevision ?? null,
+    },
     transitions: transitions.map((transition) => ({
       transitionId: transition.transitionId,
       mutationId: transition.mutationId,
@@ -82,6 +94,7 @@ async function triggerTurnExists(ownerId: string, activityId: string, triggerTur
       eq(practiceTranscriptTurns.ownerId, ownerId),
       eq(practiceTranscriptTurns.activityId, activityId),
       eq(practiceTranscriptTurns.turnId, triggerTurnId),
+      eq(practiceTranscriptTurns.speaker, "user"),
     )).limit(1);
   return Boolean(rows[0]);
 }
@@ -177,6 +190,7 @@ export async function setPracticeInteractionModeAtomic(input: {
         WHERE ${practiceTranscriptTurns.ownerId} = ${input.ownerId}
           AND ${practiceTranscriptTurns.activityId} = ${input.activityId}
           AND ${practiceTranscriptTurns.turnId} = ${input.triggerTurnId}
+          AND ${practiceTranscriptTurns.speaker} = 'user'
       )`
     : sql`1 = 1`;
 
@@ -285,11 +299,10 @@ export async function setPracticeInteractionModeAtomic(input: {
         { triggerTurnId: input.triggerTurnId, retryable: false },
       );
     }
-    throw new InteractionModeError(
-      "interaction_mode_atomic_write_failed",
-      "The interaction-mode state and transition were not committed.",
-      { retryable: isD1TransactionalInvariantFailure(error), cause: String(error) },
-    );
+    const failure = classifyInteractionModeAtomicFailure(error);
+    throw new InteractionModeError(failure.code, failure.message, {
+      retryable: failure.retryable,
+    });
   }
 
   return {

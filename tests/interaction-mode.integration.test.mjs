@@ -90,6 +90,7 @@ test("interaction mode MCP state is owner-private, atomic, idempotent, revision-
         ('owner-other','activity-private','2026-08-09','workbench-other','{"schemaVersion":1,"id":"activity-private","date":"2026-08-09","source":"extra","type":"leetcode","title":"Private activity","allocatedSeconds":2400,"timingSource":"website","status":"planned"}',0,1);
       INSERT INTO practice_transcript_turns (owner_id,activity_id,turn_id,specialty,speaker,body,source,sequence,occurred_at,updated_at) VALUES
         ('owner-mode','activity-mode','voice-switch-turn','leetcode','user','Switch to Mentor.','audio_transcript',1,100,100),
+        ('owner-mode','activity-mode','specialist-switch-turn','leetcode','specialist','Would you like Mentor?','codex',2,110,110),
         ('owner-mode','activity-other','wrong-activity-turn','leetcode','user','Administrative note.','audio_transcript',1,100,100),
         ('owner-other','activity-private','other-owner-turn','leetcode','user','Private note.','audio_transcript',1,100,100);
     `]);
@@ -165,6 +166,16 @@ test("interaction mode MCP state is owner-private, atomic, idempotent, revision-
     assert.equal(wrongTurn.isError, true);
     assert.equal(wrongTurn.structuredContent.code, "interaction_mode_trigger_turn_mismatch");
 
+    const specialistTurn = await raw(ownerClient, "set_practice_interaction_mode", {
+      ...firstMutation,
+      mutationId: "mode-mutation-specialist-turn",
+      expectedRevision: 1,
+      interactionModeId: "grill",
+      triggerTurnId: "specialist-switch-turn",
+    });
+    assert.equal(specialistTurn.isError, true);
+    assert.equal(specialistTurn.structuredContent.code, "interaction_mode_trigger_turn_mismatch");
+
     const otherClient = await connectClient(baseUrl, otherToken, "interaction-mode-other-owner");
     clients.push(otherClient);
     const crossOwnerRead = await raw(otherClient, "get_practice_interaction_mode", { activityId: "activity-mode" });
@@ -198,6 +209,14 @@ test("interaction mode MCP state is owner-private, atomic, idempotent, revision-
     const final = await call(ownerClient, "get_practice_interaction_mode", { activityId: "activity-mode" });
     assert.equal(final.current.revision, 2);
     assert.equal(final.transitions.length, 2);
+    assert.deepEqual(final.transitionHistory, {
+      order: "chronological",
+      limit: 100,
+      returnedCount: 2,
+      truncated: false,
+      oldestReturnedRevision: 1,
+      latestReturnedRevision: 2,
+    });
     assert.deepEqual(final.transitions.map((transition) => transition.toRevision), [1, 2]);
     assert.equal(new Set(final.transitions.map((transition) => transition.mutationId)).size, 2);
   } finally {
