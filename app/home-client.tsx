@@ -10,6 +10,7 @@ import {
   type ActivityBatchDestination,
   type SelectedActivity,
 } from "./activity-batch";
+import { findExactPastSnapshot, orderPastReaderSections } from "./behavioral-final-answer-view";
 import type {
   ContentArtifact,
   ContentIndex,
@@ -3088,6 +3089,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function openAttemptFromSolution(entry: LibraryEntry) {
+    const exactEntry = findExactPastSnapshot(libraryEntries, entry.id);
+    if (!exactEntry) {
+      setReaderNotFound("That exact historical attempt is no longer available.");
+      return;
+    }
     setReaderClosing(false);
     if (view === "banks" && selectedProblem) {
       const currentDepth = Number.isInteger(window.history.state?.interviewArcBankDepth)
@@ -3096,17 +3102,17 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       window.history.pushState(
         { interviewArcBankReader: true, interviewArcBankDepth: currentDepth + 1 },
         "",
-        bankReaderHref(window.location.href, selectedProblem.type, selectedProblem.question.id, entry.id),
+        bankReaderHref(window.location.href, selectedProblem.type, selectedProblem.question.id, exactEntry.id),
       );
-      setBankNestedEntry(entry);
+      setBankNestedEntry(exactEntry);
       return;
     }
     if (view === "journey") {
-      openJourneyEntry(entry, selectedProblemAttempts);
+      openJourneyEntry(exactEntry, selectedProblemAttempts);
       return;
     }
     setLibraryNestedProblem(null);
-    openPastEntry(entry, selectedProblemAttempts);
+    openPastEntry(exactEntry, selectedProblemAttempts);
   }
 
   function bankQuestionForEntry(entry: LogEntry) {
@@ -5908,10 +5914,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             {selectedEntry.artifact
               ? selectedCaseGroups.filter((group) => group.key === "record").map((group) => { const groupId = `case-group-${group.key}`; return <details className="reader-group record-group" id={groupId} open={readerGroupOpen(groupId, true)} onToggle={(event) => rememberReaderGroup(groupId, event.currentTarget.open)} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></div></details>; })
               : <div className="unpublished-letter" id="case-draft"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to finalize the transcript, review, solution, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
-            {selectedEntryTurns.length > 0 && <details className="reader-group conversation-group" id="case-transcript" open={readerGroupOpen("case-transcript", false)} onToggle={(event) => rememberReaderGroup("case-transcript", event.currentTarget.open)}><summary><span>Conversation</span><small>{selectedEntryTurns.length} exchange{selectedEntryTurns.length === 1 ? "" : "s"} · recordings inline</small></summary><div id="case-transcript-thread"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} codeAttempts={selectedEntryCodeAttempts} /></div></details>}
-            {selectedEntryFinalAnswer && <details className="reader-group final-answer-group" id="case-final-answer" open={readerGroupOpen("case-final-answer", true)} onToggle={(event) => rememberReaderGroup("case-final-answer", event.currentTarget.open)}><summary><span>Final tailored answer</span><small>{selectedEntryFinalAnswer.source === "snapshot_v1" ? `Immutable snapshot ${selectedEntryFinalAnswer.snapshotRevision}` : "Legacy fallback"}</small></summary><div><FinalAnswerCard finalAnswer={selectedEntryFinalAnswer} /></div></details>}
-            {selectedEntryCodeAttempts.length > 0 && <details className="reader-group code-attempts-group" id="case-code-attempts" open={readerGroupOpen("case-code-attempts", true)} onToggle={(event) => rememberReaderGroup("case-code-attempts", event.currentTarget.open)}><summary><span>User Code Attempts</span><small>{selectedEntryCodeAttempts.length} version{selectedEntryCodeAttempts.length === 1 ? "" : "s"}</small></summary><div>{selectedEntryCodeAttempts.map((attempt) => <article className="code-attempt-card" key={attempt.id}><header><strong>Code Attempt {attempt.sequence} · {attempt.language}</strong><span>{attempt.lineCount} lines</span></header><CodeAttemptBody attempt={attempt} /></article>)}</div></details>}
-            {selectedEntry.artifact && selectedCaseGroups.filter((group) => group.key !== "record").map((group) => { const groupId = `case-group-${group.key}`; return <details className={`reader-group ${group.key}-group`} id={groupId} open={readerGroupOpen(groupId, group.key !== "conversation")} onToggle={(event) => rememberReaderGroup(groupId, event.currentTarget.open)} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></div></details>; })}
+            {orderPastReaderSections({
+              conversation: selectedEntryTurns.length > 0 ? <details className="reader-group conversation-group" id="case-transcript" open={readerGroupOpen("case-transcript", false)} onToggle={(event) => rememberReaderGroup("case-transcript", event.currentTarget.open)} key="conversation"><summary><span>Conversation</span><small>{selectedEntryTurns.length} exchange{selectedEntryTurns.length === 1 ? "" : "s"} · recordings inline</small></summary><div id="case-transcript-thread"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} codeAttempts={selectedEntryCodeAttempts} /></div></details> : null,
+              finalAnswer: selectedEntryFinalAnswer ? <details className="reader-group final-answer-group" id="case-final-answer" open={readerGroupOpen("case-final-answer", true)} onToggle={(event) => rememberReaderGroup("case-final-answer", event.currentTarget.open)} key="final-answer"><summary><span>Final tailored answer</span><small>{selectedEntryFinalAnswer.source === "snapshot_v1" ? `Immutable snapshot ${selectedEntryFinalAnswer.snapshotRevision}` : "Legacy fallback"}</small></summary><div><FinalAnswerCard finalAnswer={selectedEntryFinalAnswer} /></div></details> : null,
+              codeAttempts: selectedEntryCodeAttempts.length > 0 ? <details className="reader-group code-attempts-group" id="case-code-attempts" open={readerGroupOpen("case-code-attempts", true)} onToggle={(event) => rememberReaderGroup("case-code-attempts", event.currentTarget.open)} key="code-attempts"><summary><span>User Code Attempts</span><small>{selectedEntryCodeAttempts.length} version{selectedEntryCodeAttempts.length === 1 ? "" : "s"}</small></summary><div>{selectedEntryCodeAttempts.map((attempt) => <article className="code-attempt-card" key={attempt.id}><header><strong>Code Attempt {attempt.sequence} · {attempt.language}</strong><span>{attempt.lineCount} lines</span></header><CodeAttemptBody attempt={attempt} /></article>)}</div></details> : null,
+              reviewSections: selectedEntry.artifact ? selectedCaseGroups.filter((group) => group.key !== "record").map((group) => { const groupId = `case-group-${group.key}`; return <details className={`reader-group ${group.key}-group`} id={groupId} open={readerGroupOpen(groupId, group.key !== "conversation")} onToggle={(event) => rememberReaderGroup(groupId, event.currentTarget.open)} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></div></details>; }) : [],
+            })}
           </div>
           <footer>Interview Arc · {selectedEntry.id}</footer>
         </div>

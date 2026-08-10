@@ -11,7 +11,6 @@ export async function GET(request: Request) {
     const record = await readActivityPracticeRecord(ownerId, activityId);
     return Response.json({
       finalization: record.finalization,
-      finalAnswerSnapshots: record.finalAnswerSnapshots,
       finalAnswer: record.finalAnswer,
       finalAnswerMarkdown: record.finalAnswerMarkdown,
       finalAnswerHtml: record.finalAnswerHtml,

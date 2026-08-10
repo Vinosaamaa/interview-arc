@@ -3660,13 +3660,13 @@ export async function saveSpecialistFinalization(
   let currentProfile: typeof problemSolutionProfiles.$inferSelect | undefined;
   if (payload.complete) {
     if (!questionId) throw new Error("A complete finalization needs the stable questionId.");
+    const rows = await db.select().from(problemSolutionProfiles).where(and(
+      eq(problemSolutionProfiles.ownerId, ownerId),
+      eq(problemSolutionProfiles.specialty, specialty),
+      eq(problemSolutionProfiles.questionId, questionId),
+    ));
+    currentProfile = rows[0];
     if (profileAction === "reuse_current") {
-      const rows = await db.select().from(problemSolutionProfiles).where(and(
-        eq(problemSolutionProfiles.ownerId, ownerId),
-        eq(problemSolutionProfiles.specialty, specialty),
-        eq(problemSolutionProfiles.questionId, questionId),
-      ));
-      currentProfile = rows[0];
       if (currentProfile) validateSolutionProfile(specialty, currentProfile.payload as NonNullable<SpecialistFinalization["solutionProfile"]>);
       if (!currentProfile) {
         const category = specialty === "system_design" ? "systemDesign" : specialty;
@@ -3729,17 +3729,11 @@ export async function saveSpecialistFinalization(
       }
       expectedRevision = currentProfile.currentRevision;
     } else {
-      const priorRows = await db.select().from(problemSolutionProfiles).where(and(
-        eq(problemSolutionProfiles.ownerId, ownerId),
-        eq(problemSolutionProfiles.specialty, specialty),
-        eq(problemSolutionProfiles.questionId, questionId),
-      ));
       const normalized = normalizedSolutionProfile(payload.solutionProfile!, payload.references);
-      const prior = priorRows[0];
-      expectedRevision = prior
-        && profileFingerprint(prior.payload as NonNullable<SpecialistFinalization["solutionProfile"]>) === profileFingerprint(normalized)
-        ? prior.currentRevision
-        : (prior?.currentRevision ?? 0) + 1;
+      expectedRevision = currentProfile
+        && profileFingerprint(currentProfile.payload as NonNullable<SpecialistFinalization["solutionProfile"]>) === profileFingerprint(normalized)
+        ? currentProfile.currentRevision
+        : (currentProfile?.currentRevision ?? 0) + 1;
     }
     if (behavioralFinalAnswer.snapshot.solutionProfile.revision !== expectedRevision) {
       throw new BehavioralFinalAnswerError(
@@ -3762,16 +3756,8 @@ export async function saveSpecialistFinalization(
     linkedRevision = currentProfile.currentRevision;
   }
   if (payload.complete && questionId && profileAction === "create_or_revise" && payload.solutionProfile) {
-    const prior = await db
-      .select()
-      .from(problemSolutionProfiles)
-      .where(and(
-        eq(problemSolutionProfiles.ownerId, ownerId),
-        eq(problemSolutionProfiles.specialty, specialty),
-        eq(problemSolutionProfiles.questionId, questionId),
-      ));
     const profile = normalizedSolutionProfile(payload.solutionProfile, payload.references);
-    const priorProfile = prior[0];
+    const priorProfile = currentProfile;
     if (priorProfile && profileFingerprint(priorProfile.payload as NonNullable<SpecialistFinalization["solutionProfile"]>) === profileFingerprint(profile)) {
       linkedRevision = priorProfile.currentRevision;
     } else {
@@ -4560,7 +4546,7 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
     db.select().from(behavioralFinalAnswerSnapshots).where(and(
       eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
       eq(behavioralFinalAnswerSnapshots.activityId, activityId),
-    )).orderBy(asc(behavioralFinalAnswerSnapshots.snapshotRevision)),
+    )).orderBy(desc(behavioralFinalAnswerSnapshots.snapshotRevision)).limit(101),
     db.select().from(reviewSchedules).where(and(eq(reviewSchedules.ownerId, ownerId), eq(reviewSchedules.activityId, activityId))),
     db.select().from(activityAudioClips).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.activityId, activityId))),
     db.select().from(activityDeliveryAnalyses).where(and(eq(activityDeliveryAnalyses.ownerId, ownerId), eq(activityDeliveryAnalyses.activityId, activityId))),
@@ -4573,7 +4559,7 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
       eq(typedPracticeExchangeDeletions.activityId, activityId),
     )).orderBy(asc(typedPracticeExchangeDeletions.deletedAt)),
   ]);
-  const finalAnswerSnapshots: StoredBehavioralFinalAnswerSnapshot[] = finalAnswerRows.map((row) => ({
+  const finalAnswerSnapshots: StoredBehavioralFinalAnswerSnapshot[] = finalAnswerRows.slice(0, 100).reverse().map((row) => ({
     snapshotRevision: row.snapshotRevision,
     correctionOfRevision: row.correctionOfRevision,
     correctionReason: row.correctionReason,
@@ -4604,6 +4590,7 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
     notes,
     finalization: finalizations[0] ?? null,
     finalAnswerSnapshots,
+    finalAnswerSnapshotsTruncated: finalAnswerRows.length > 100,
     finalAnswer,
     finalAnswerMarkdown: renderBehavioralFinalAnswerMarkdown(finalAnswer),
     finalAnswerHtml: renderBehavioralFinalAnswerHtml(finalAnswer),

@@ -16,6 +16,11 @@ const wrangler = fileURLToPath(new URL("../node_modules/.bin/wrangler", import.m
 const config = fileURLToPath(new URL("../wrangler.mcp.jsonc", import.meta.url));
 const project = fileURLToPath(new URL("..", import.meta.url));
 const sha256 = (text) => createHash("sha256").update(text).digest("hex");
+const MAX_DIAGNOSTIC_CHARS = 16_384;
+
+function appendDiagnosticTail(current, chunk) {
+  return `${current}${chunk}`.slice(-MAX_DIAGNOSTIC_CHARS);
+}
 
 function availablePort() {
   return new Promise((resolve, reject) => {
@@ -35,8 +40,8 @@ function run(command, args) {
     const child = spawn(command, args, { cwd: project });
     let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (chunk) => { stdout += chunk; });
-    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.stdout.on("data", (chunk) => { stdout = appendDiagnosticTail(stdout, chunk); });
+    child.stderr.on("data", (chunk) => { stderr = appendDiagnosticTail(stderr, chunk); });
     child.on("error", reject);
     child.on("exit", (code) => code === 0
       ? resolve({ stdout, stderr })
@@ -179,7 +184,7 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     `]);
     worker = spawn(wrangler, ["dev", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
       cwd: project,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["ignore", "ignore", "ignore"],
     });
     await waitForWorker(baseUrl, worker);
     client = new Client({ name: "final-answer-owner", version: "1.0.0" });
@@ -202,6 +207,7 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     assert.equal(record.finalAnswer.answer, answer);
     assert.equal(record.finalAnswer.solutionProfile.revision, 1);
     assert.equal(record.finalAnswerSnapshots.length, 1);
+    assert.equal(record.finalAnswerSnapshotsTruncated, false);
     assert.match(record.finalAnswerMarkdown, new RegExp(answer));
     assert.match(record.finalAnswerHtml, new RegExp(answer));
 

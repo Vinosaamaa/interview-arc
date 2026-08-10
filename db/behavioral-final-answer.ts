@@ -116,10 +116,6 @@ export class BehavioralFinalAnswerError extends Error {
   }
 }
 
-function canonicalSnapshot(snapshot: BehavioralFinalAnswerSnapshotInput) {
-  return JSON.stringify(behavioralFinalAnswerSnapshotInputSchema.parse(snapshot));
-}
-
 export function validateBehavioralFinalAnswerCorrection(
   prior: Pick<StoredBehavioralFinalAnswerSnapshot, "snapshotRevision" | "snapshot"> | null,
   incomingValue: BehavioralFinalAnswerSnapshotInput,
@@ -138,7 +134,8 @@ export function validateBehavioralFinalAnswerCorrection(
     }
     return { status: "created" as const, snapshotRevision: 1 };
   }
-  if (canonicalSnapshot(prior.snapshot) === canonicalSnapshot(incoming)) {
+  const priorSnapshot = behavioralFinalAnswerSnapshotInputSchema.parse(prior.snapshot);
+  if (JSON.stringify(priorSnapshot) === JSON.stringify(incoming)) {
     if (correction) {
       throw new BehavioralFinalAnswerError(
         "behavioral_final_answer_correction_conflict",
@@ -183,7 +180,10 @@ export function projectBehavioralFinalAnswer(input: {
   snapshots: StoredBehavioralFinalAnswerSnapshot[];
   legacyModelAnswer?: string | null;
 }): BehavioralFinalAnswerProjection | null {
-  const current = [...input.snapshots].sort((left, right) => right.snapshotRevision - left.snapshotRevision)[0];
+  const current = input.snapshots.reduce<StoredBehavioralFinalAnswerSnapshot | undefined>(
+    (latest, candidate) => !latest || candidate.snapshotRevision > latest.snapshotRevision ? candidate : latest,
+    undefined,
+  );
   if (current) {
     const snapshot = behavioralFinalAnswerSnapshotInputSchema.parse(current.snapshot);
     return {
