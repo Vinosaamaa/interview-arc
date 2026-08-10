@@ -18,6 +18,9 @@ test("practice-record API returns the immutable snapshot projection and export f
     "behavioralAnalysis: record.behavioralAnalysis",
     "behavioralAnalysisMarkdown: record.behavioralAnalysisMarkdown",
     "behavioralAnalysisHtml: record.behavioralAnalysisHtml",
+    "resumeContext: record.resumeContext",
+    "resumeContextMarkdown: record.resumeContextMarkdown",
+    "resumeContextHtml: record.resumeContextHtml",
   ]) assert.match(route, new RegExp(field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.doesNotMatch(route, /finalAnswerSnapshots: record\.finalAnswerSnapshots/);
 });
@@ -31,11 +34,12 @@ test("Past loads and renders Final tailored answer separately after Conversation
   assert.deepEqual(orderPastReaderSections({
     conversation: "conversation",
     finalAnswer: "final-answer",
+    resumeContext: "resume-context",
     practiceScenarios: "practice-scenarios",
     behavioralAnalysis: "behavioral-analysis",
     codeAttempts: "code-attempts",
     reviewSections: ["review"],
-  }), ["conversation", "final-answer", "practice-scenarios", "behavioral-analysis", "code-attempts", "review"]);
+  }), ["conversation", "final-answer", "resume-context", "practice-scenarios", "behavioral-analysis", "code-attempts", "review"]);
 });
 
 test("Past renders exact profile-revision scenarios as a dedicated labeled section", async () => {
@@ -52,6 +56,14 @@ test("Past renders one dedicated Behavioral Attempt audit after adjacent attempt
   assert.match(source, /id="case-behavioral-analysis"/);
   assert.match(source, />Behavioral Attempt</);
   assert.match(source, /Generated coaching — not evidence/);
+});
+
+test("Past renders the exact immutable resume context without resume contents", async () => {
+  const source = await readFile(new URL("app/home-client.tsx", root), "utf8");
+  assert.match(source, /resumeContext: record\.resumeContext/);
+  assert.match(source, /id="case-resume-context"/);
+  assert.match(source, />Resume context</);
+  assert.doesNotMatch(source, /resumeContext\.raw|resumeContext\.objectKey|resumeContext\.providerLocator/);
 });
 
 test("Problem Bank Past-attempt navigation opens the exact activity snapshot", async () => {
@@ -72,6 +84,8 @@ test("Export today embeds the same server-rendered Markdown and local HTML", asy
   assert.match(source, /practiceScenariosHtml/);
   assert.match(source, /behavioralAnalysisMarkdown/);
   assert.match(source, /behavioralAnalysisHtml/);
+  assert.match(source, /resumeContextMarkdown/);
+  assert.match(source, /resumeContextHtml/);
   assert.match(source, /\/api\/practice-record\?activityId=/);
 });
 

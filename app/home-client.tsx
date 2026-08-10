@@ -96,6 +96,7 @@ import {
 import type { BehavioralFinalAnswerProjection } from "../db/behavioral-final-answer";
 import type { BehavioralPracticeScenarioProjection } from "../db/behavioral-practice-scenario";
 import type { BehavioralAttemptAnalysisProjection } from "../db/behavioral-attempt-analysis";
+import type { ActivityResumeContext } from "../db/activity-resume-context";
 import type { InteractionModeClassification } from "../db/interaction-mode-classification";
 
 type View = "today" | "journey" | "reviews" | "library" | "banks";
@@ -247,6 +248,7 @@ type LogEntry = {
   finalAnswer?: BehavioralFinalAnswerProjection | null;
   practiceScenarios?: BehavioralPracticeScenarioProjection | null;
   behavioralAnalysis?: BehavioralAttemptAnalysisProjection | null;
+  resumeContext?: ActivityResumeContext | null;
   interactionModeClassification?: {
     snapshotRevision: number;
     classification: InteractionModeClassification;
@@ -1253,6 +1255,24 @@ function FinalAnswerCard({ finalAnswer }: { finalAnswer: BehavioralFinalAnswerPr
       <section><h5>Contradictions</h5>{finalAnswer.contradictions.length ? <ul>{finalAnswer.contradictions.map((item) => <li key={item}>{item}</li>)}</ul> : <p>None recorded.</p>}</section>
     </div>
     {finalAnswer.correctionOfRevision && <footer><strong>Explicit correction</strong><span>Replaces snapshot {finalAnswer.correctionOfRevision}</span>{finalAnswer.correctionReason && <p>{finalAnswer.correctionReason}</p>}</footer>}
+  </section>;
+}
+
+function ResumeContextCard({ context }: { context: ActivityResumeContext }) {
+  const revisionPath = `${encodeURIComponent(context.resumeId)}/${encodeURIComponent(context.resumeRevisionId)}`;
+  return <section className="resume-context-card" aria-label="Resume context">
+    <header><div><span>IMMUTABLE RÉSUMÉ CONTEXT</span><strong>{context.sourceLabel}</strong></div><small>Answer snapshot {context.snapshotRevision}</small></header>
+    <dl>
+      <div><dt>Résumé revision</dt><dd>{context.resumeRevisionId}</dd></div>
+      <div><dt>Captured state</dt><dd>{context.state}</dd></div>
+      <div><dt>Claims linked</dt><dd>{context.claimIds.length}</dd></div>
+      <div><dt>Evidence linked</dt><dd>{context.evidenceIds.length}</dd></div>
+    </dl>
+    {(context.claimIds.length > 0 || context.evidenceIds.length > 0) && <div className="resume-context-references">
+      {context.claimIds.length > 0 && <p><strong>Claims</strong><span>{context.claimIds.join(" · ")}</span></p>}
+      {context.evidenceIds.length > 0 && <p><strong>Evidence</strong><span>{context.evidenceIds.join(" · ")}</span></p>}
+    </div>}
+    <footer><a href={`/api/resume-library/${revisionPath}/pdf`}>Download exact PDF</a><a href={`/api/resume-library/${revisionPath}/docx`}>Download exact DOCX</a></footer>
   </section>;
 }
 
@@ -3837,6 +3857,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       behavioralAnalysis: BehavioralAttemptAnalysisProjection | null;
       behavioralAnalysisMarkdown: string;
       behavioralAnalysisHtml: string;
+      resumeContext: ActivityResumeContext | null;
+      resumeContextMarkdown: string;
+      resumeContextHtml: string;
     }> = {};
     try {
       const behavioralActivityIds = [...new Set(
@@ -3857,6 +3880,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           behavioralAnalysis: BehavioralAttemptAnalysisProjection | null;
           behavioralAnalysisMarkdown: string;
           behavioralAnalysisHtml: string;
+          resumeContext: ActivityResumeContext | null;
+          resumeContextMarkdown: string;
+          resumeContextHtml: string;
         };
         return [activityId, record] as const;
       }));
@@ -3871,6 +3897,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           behavioralAnalysis: record.behavioralAnalysis,
           behavioralAnalysisMarkdown: record.behavioralAnalysisMarkdown,
           behavioralAnalysisHtml: record.behavioralAnalysisHtml,
+          resumeContext: record.resumeContext,
+          resumeContextMarkdown: record.resumeContextMarkdown,
+          resumeContextHtml: record.resumeContextHtml,
         }]] : []
       )));
     } catch {
@@ -5640,6 +5669,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const selectedEntryFinalAnswer = readerSelectedEntry?.finalAnswer ?? null;
   const selectedEntryPracticeScenarios = readerSelectedEntry?.practiceScenarios ?? null;
   const selectedEntryBehavioralAnalysis = readerSelectedEntry?.behavioralAnalysis ?? null;
+  const selectedEntryResumeContext = readerSelectedEntry?.resumeContext ?? null;
   const selectedCaseSections = dedupeReaderSections(readerSelectedEntry?.artifact?.sections.filter((section) => !(selectedEntryTurns.length && isTranscriptSection(section.title))) ?? []);
   const selectedCaseGroups = groupReaderSections(selectedCaseSections);
   const selectedSolutionGroups = groupReaderSections(selectedProblemProfileReusable ? selectedProblemProfile?.payload.sections ?? [] : []);
@@ -5996,13 +6026,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         finalAnswer: BehavioralFinalAnswerProjection | null;
         practiceScenarios: BehavioralPracticeScenarioProjection | null;
         behavioralAnalysis: BehavioralAttemptAnalysisProjection | null;
+        resumeContext: ActivityResumeContext | null;
         interactionModeClassification: LogEntry["interactionModeClassification"];
         interactionModeTransitions: InteractionModeTransitionProjection[];
       }> : null)
       .then((record) => {
         if (!record) return;
         const enrich = (current: LogEntry | null) => current && (current.artifact?.activityId || current.id) === selectedEntryActivityId
-          ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips, deliveryAnalyses: record.deliveryAnalyses, codeAttempts: record.codeAttempts, finalAnswer: record.finalAnswer, practiceScenarios: record.practiceScenarios, behavioralAnalysis: record.behavioralAnalysis, interactionModeClassification: record.interactionModeClassification, interactionModeTransitions: record.interactionModeTransitions }
+          ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips, deliveryAnalyses: record.deliveryAnalyses, codeAttempts: record.codeAttempts, finalAnswer: record.finalAnswer, practiceScenarios: record.practiceScenarios, behavioralAnalysis: record.behavioralAnalysis, resumeContext: record.resumeContext, interactionModeClassification: record.interactionModeClassification, interactionModeTransitions: record.interactionModeTransitions }
           : current;
         if (view === "banks") setBankNestedEntry(enrich);
         else if (view === "journey") setJourneyNestedEntry(enrich);
@@ -6205,7 +6236,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return (
       <article className={`workspace-reader journal-case-reader ${nestedReaderFocus ? "nested-reader" : ""}`} aria-labelledby="journal-reader-title" aria-label="Case file contents">
         <div className="reader-chrome">
-          <div className="reader-chrome-leading">{!nestedReaderFocus && <button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button>}<ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a><a href="#case-practice-mode">Practice mode</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedEntryFinalAnswer && <a href="#case-final-answer">Final tailored answer</a>}{selectedEntryPracticeScenarios && <a href="#case-practice-scenarios">Practice scenarios</a>}{selectedEntryBehavioralAnalysis && <a href="#case-behavioral-analysis">Behavioral Attempt</a>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</ReaderOutline></div>
+          <div className="reader-chrome-leading">{!nestedReaderFocus && <button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button>}<ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a><a href="#case-practice-mode">Practice mode</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedEntryFinalAnswer && <a href="#case-final-answer">Final tailored answer</a>}{selectedEntryResumeContext && <a href="#case-resume-context">Resume context</a>}{selectedEntryPracticeScenarios && <a href="#case-practice-scenarios">Practice scenarios</a>}{selectedEntryBehavioralAnalysis && <a href="#case-behavioral-analysis">Behavioral Attempt</a>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</ReaderOutline></div>
           <div className="reader-chrome-actions">{readerNavigationIndex >= 0 && <div className="reader-attempt-navigation" aria-label="Past practice records"><button type="button" onClick={() => navigateReaderEntry(readerNavigationEntries[readerNavigationIndex - 1])} disabled={readerNavigationIndex <= 0} aria-label="Previous practice record" title={readerNavigationIndex <= 0 ? "First record in this list" : "Previous practice record"}>←</button><span>{readerNavigationIndex + 1} / {readerNavigationEntries.length}</span><button type="button" onClick={() => navigateReaderEntry(readerNavigationEntries[readerNavigationIndex + 1])} disabled={readerNavigationIndex >= readerNavigationEntries.length - 1} aria-label="Next practice record" title={readerNavigationIndex >= readerNavigationEntries.length - 1 ? "Last record in this list" : "Next practice record"}>→</button></div>}<button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close case file" title="Close"><Icon name="close" /></button></div>
         </div>
         <div className="case-document workspace-reader-scroll" ref={readerDocumentRef} onScroll={rememberReaderPosition} onMouseUp={(event) => captureHighlightSelection(event.clientX, event.clientY)} onKeyUp={() => captureHighlightSelection()}>
@@ -6221,6 +6252,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             {orderPastReaderSections({
               conversation: selectedEntryTurns.length > 0 ? <details className="reader-group conversation-group" id="case-transcript" open={readerGroupOpen("case-transcript", false)} onToggle={(event) => rememberReaderGroup("case-transcript", event.currentTarget.open)} key="conversation"><summary><span>Conversation</span><small>{selectedEntryTurns.length} exchange{selectedEntryTurns.length === 1 ? "" : "s"} · recordings inline</small></summary><div id="case-transcript-thread"><ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} codeAttempts={selectedEntryCodeAttempts} modeTransitions={selectedEntryModeTransitions} /></div></details> : null,
               finalAnswer: selectedEntryFinalAnswer ? <details className="reader-group final-answer-group" id="case-final-answer" open={readerGroupOpen("case-final-answer", true)} onToggle={(event) => rememberReaderGroup("case-final-answer", event.currentTarget.open)} key="final-answer"><summary><span>Final tailored answer</span><small>{selectedEntryFinalAnswer.source === "snapshot_v1" ? `Immutable snapshot ${selectedEntryFinalAnswer.snapshotRevision}` : "Legacy fallback"}</small></summary><div><FinalAnswerCard finalAnswer={selectedEntryFinalAnswer} /></div></details> : null,
+              resumeContext: selectedEntryResumeContext ? <details className="reader-group resume-context-group" id="case-resume-context" open={readerGroupOpen("case-resume-context", true)} onToggle={(event) => rememberReaderGroup("case-resume-context", event.currentTarget.open)} key="resume-context"><summary><span>Resume context</span><small>Exact owner-private revision used by this answer</small></summary><div><ResumeContextCard context={selectedEntryResumeContext} /></div></details> : null,
               practiceScenarios: selectedEntryPracticeScenarios ? <details className="reader-group practice-scenarios-group" id="case-practice-scenarios" open={readerGroupOpen("case-practice-scenarios", false)} onToggle={(event) => rememberReaderGroup("case-practice-scenarios", event.currentTarget.open)} key="practice-scenarios"><summary><span>Practice scenarios</span><small>{selectedEntryPracticeScenarios.scenarios.length} labeled exercise{selectedEntryPracticeScenarios.scenarios.length === 1 ? "" : "s"}</small></summary><div><PracticeScenariosCard projection={selectedEntryPracticeScenarios} /></div></details> : null,
               behavioralAnalysis: selectedEntryBehavioralAnalysis ? <details className="reader-group behavioral-analysis-group" id="case-behavioral-analysis" open={readerGroupOpen("case-behavioral-analysis", true)} onToggle={(event) => rememberReaderGroup("case-behavioral-analysis", event.currentTarget.open)} key="behavioral-analysis"><summary><span>Behavioral Attempt</span><small>Claim audit · coaching · next drill</small></summary><div><BehavioralAttemptAnalysisCard projection={selectedEntryBehavioralAnalysis} /></div></details> : null,
               codeAttempts: selectedEntryCodeAttempts.length > 0 ? <details className="reader-group code-attempts-group" id="case-code-attempts" open={readerGroupOpen("case-code-attempts", true)} onToggle={(event) => rememberReaderGroup("case-code-attempts", event.currentTarget.open)} key="code-attempts"><summary><span>User Code Attempts</span><small>{selectedEntryCodeAttempts.length} version{selectedEntryCodeAttempts.length === 1 ? "" : "s"}</small></summary><div>{selectedEntryCodeAttempts.map((attempt) => <article className="code-attempt-card" key={attempt.id}><header><strong>Code Attempt {attempt.sequence} · {attempt.language}</strong><span>{attempt.lineCount} lines</span></header><CodeAttemptBody attempt={attempt} /></article>)}</div></details> : null,

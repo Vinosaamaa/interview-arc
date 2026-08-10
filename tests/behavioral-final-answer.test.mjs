@@ -110,6 +110,25 @@ test("final-answer identity includes the typed target review", async () => {
   assert.notEqual(first, changed);
 });
 
+test("final-answer identity binds the exact resume revision when supplied", async () => {
+  const base = {
+    activityId: "activity-resume-context",
+    questionId: "behavioral-reliability-1",
+    snapshot: universalSnapshot(),
+  };
+  const withoutResume = await behavioralFinalAnswerFingerprint(base);
+  const first = await behavioralFinalAnswerFingerprint({
+    ...base,
+    resumeContext: { resumeId: "resume-primary", revisionId: "resume-revision-1" },
+  });
+  const changed = await behavioralFinalAnswerFingerprint({
+    ...base,
+    resumeContext: { resumeId: "resume-primary", revisionId: "resume-revision-2" },
+  });
+  assert.notEqual(first, withoutResume);
+  assert.notEqual(first, changed);
+});
+
 test("correction validation never silently replaces an immutable snapshot", () => {
   const prior = { snapshotRevision: 2, snapshot: universalSnapshot() };
   assert.throws(

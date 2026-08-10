@@ -69,7 +69,23 @@ that changed since its reservation. No response that says `staging` or
 
 This core deliberately does not add Google connector authorization/export,
 the ignored local mirror, text or bullet
-extraction, semantic claim/evidence mapping, revision comparison, deletion or
-retention controls, Solution Profile invalidation, attempt-context capture,
-publication, or historical backfill. The Behavioral Foundation capability must
-remain truthful about those unavailable surfaces until their own slices ship.
+extraction, broad semantic claim/evidence mapping, revision comparison,
+deletion or retention controls, Solution Profile invalidation, publication, or
+historical backfill. The Behavioral Foundation capability must remain truthful
+about those unavailable surfaces until their own slices ship.
+
+## Completed-attempt context
+
+For every new completed behavioral finalization, the specialist first reads
+`get_resume_library`. If a current résumé exists, the write must name that exact
+resume/revision pair. D1 verifies the owner-scoped current pointer and immutable
+revision in the final transaction, then appends one `activity_resume_contexts`
+row for the final-answer snapshot revision.
+
+The row snapshots only the display-safe source label, import time, answer
+revision, and bounded exact claim/evidence IDs derived server-side from the
+typed attempt analysis. It contains no raw résumé text, file bytes, storage
+generation, object key, or provider/local locator. Exact retries are unchanged;
+an explicit answer correction appends a new context revision while preserving
+all earlier rows. Legacy and genuinely no-résumé attempts remain explicitly
+without context—no backfill is fabricated.
