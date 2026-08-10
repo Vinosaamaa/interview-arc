@@ -33,7 +33,6 @@ import {
   removeFocusBlock,
   removeLiveSession,
   startFreshWorkbench,
-  setActivityNote,
   setOutcome,
   setPublicationStatus,
   rolloverPublishedWorkbench,
@@ -45,6 +44,7 @@ import {
   type LiveState,
 } from "../db/live-state";
 import { buildPracticeSnapshot, buildPublicationQueue, dateInPracticeTimeZone } from "../db/practice-snapshot";
+import { executePracticeStateCommand } from "../db/practice-state-commands";
 import { leetCodeQuestionMetadataSchema } from "../db/question-metadata";
 import {
   connectOwnerLiveUpdates,
@@ -1552,43 +1552,20 @@ async function companionMutation(ownerId: string, request: Request, env: Env) {
       }
     }
   } else if (mutation.type === "outcome") {
-    const snapshot = await buildPracticeSnapshot(ownerId, date);
-    const activity = snapshot.activities.find((candidate) => candidate.id === mutation.activityId);
-    await setOutcome(ownerId, mutation.activityId, mutation.outcome, now);
-    if (!activity?.timer?.completed) {
-      await clearActivityReviewSchedules(ownerId, mutation.activityId);
-    } else if (mutation.outcome === "failed" || mutation.outcome === "solved_after_reviewing_approach") {
-      await scheduleReview(ownerId, {
-        activityId: mutation.activityId,
-        questionId: activity?.questionId,
-        specialty: activity?.type ?? "leetcode",
-        completedDate: date,
-        reason: mutation.outcome === "failed" ? "failed" : "approach_review",
-      }, now);
-    } else if (mutation.outcome === "solved" && activity?.reviewOfActivityId) {
-      await scheduleReview(ownerId, {
-        activityId: mutation.activityId,
-        questionId: activity.questionId,
-        specialty: activity.type ?? "leetcode",
-        completedDate: date,
-        reason: "successful_recall",
-      }, now);
-    } else {
-      await clearActivityReviewSchedules(ownerId, mutation.activityId);
-    }
+    await executePracticeStateCommand(ownerId, date, mutation, now);
   } else if (mutation.type === "publication-status") {
     if (!["draft", "ready", "published"].includes(mutation.status)) {
       return json(request, { error: "Invalid publication status." }, { status: 400 });
     }
-    await setPublicationStatus(ownerId, mutation.activityId, date, mutation.status, now);
+    await executePracticeStateCommand(ownerId, date, mutation, now);
   } else if (mutation.type === "activity-note") {
     if (mutation.note.length > 20_000) return json(request, { error: "Note is too long." }, { status: 400 });
-    await setActivityNote(ownerId, mutation.activityId, date, mutation.note, now);
+    await executePracticeStateCommand(ownerId, date, mutation, now);
   } else if (mutation.type === "problem-star") {
     if (!mutation.questionId || !["leetcode", "system_design", "behavioral"].includes(mutation.specialty) || typeof mutation.starred !== "boolean") {
       return json(request, { error: "Invalid problem-star mutation." }, { status: 400 });
     }
-    await setProblemStar(ownerId, mutation.specialty, mutation.questionId, mutation.starred, now);
+    await executePracticeStateCommand(ownerId, date, mutation, now);
   } else if (mutation.type === "add-leetcode") {
     const normalizedUrl = normalizeLeetCodeUrl(mutation.url);
     if (!normalizedUrl) return json(request, { error: "A public LeetCode problem URL is required." }, { status: 400 });
