@@ -113,6 +113,10 @@ test("Today deletion and all-session projection remain owner-scoped and revision
         (owner_id,subject_id,kind,accumulated_seconds,started_at,running_since,completed,completed_at,revision,updated_at)
       VALUES
         ('owner-today','completed-row','activity',120,10,NULL,1,130,1,130);
+      INSERT INTO live_mutation_receipts
+        (owner_id,activity_id,operation_id,operation,request_digest,receipt,created_at)
+      VALUES
+        ('owner-today','standalone','live-history','lease.acquire','${"0".repeat(64)}','{"protocolVersion":1}',5);
     `]);
     worker = spawn(wrangler, ["dev", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
       cwd: project,
@@ -125,7 +129,7 @@ test("Today deletion and all-session projection remain owner-scoped and revision
       expectedWorkbenchId: "workbench-owner",
       expectedWorkbenchRevision: 100,
       mutationId: "remove-owner-a-b",
-      activityIds: ["remove-a", "remove-b", "completed-row", "unknown-row"],
+      activityIds: ["remove-a", "remove-b", "completed-row", "standalone", "unknown-row"],
       authorization: "explicit_user_instruction",
     };
     const removed = await call(owner, "remove_today_practice_activities", input);
@@ -135,6 +139,7 @@ test("Today deletion and all-session projection remain owner-scoped and revision
       removed.result.rejected.map((item) => [item.activityId, item.code]),
       [
         ["completed-row", "timer_started"],
+        ["standalone", "transcript_or_capture_exists"],
         ["unknown-row", "not_in_current_workbench"],
       ],
     );

@@ -4,13 +4,18 @@ export type LiveUpdateScope =
   | "practice"
   | "voice_intent"
   | "voice_capture"
+  | "live"
   | "publication"
   | `voice_delivery_retry:${string}`;
 
 export type LiveUpdateNamespace = DurableObjectNamespace;
 
 export class OwnerLiveUpdateHub {
-  constructor(private readonly state: DurableObjectState) {}
+  private readonly state: DurableObjectState;
+
+  constructor(state: DurableObjectState) {
+    this.state = state;
+  }
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
@@ -33,13 +38,33 @@ export class OwnerLiveUpdateHub {
       });
     }
     if (url.pathname === "/publish" && request.method === "POST") {
-      const input = (await request.json()) as { scope?: LiveUpdateScope };
-      const revision = Number(await this.state.storage.get<number>("revision") ?? 0) + 1;
-      await this.state.storage.put("revision", revision);
+      const input = (await request.json()) as { scope?: LiveUpdateScope; revision?: number };
+      const scope = input.scope ?? "practice";
+      const currentRevision = Number(await this.state.storage.get<number>("revision") ?? 0);
+      const requestedRevision = Number.isSafeInteger(input.revision) && Number(input.revision) > 0
+        ? Number(input.revision)
+        : 0;
+      let revision: number;
+      if (scope === "live" && requestedRevision > 0) {
+        // Live commits have one authoritative revision sequence in D1. Keep a
+        // scope-local high-water mark so unrelated browser/Voice invalidations
+        // cannot rewrite that committed revision or create a projection gap.
+        const currentLiveRevision = Number(
+          await this.state.storage.get<number>("liveRevision") ?? 0,
+        );
+        revision = Math.max(currentLiveRevision, requestedRevision);
+        if (revision > currentLiveRevision) {
+          await this.state.storage.put("liveRevision", revision);
+        }
+        if (revision > currentRevision) await this.state.storage.put("revision", revision);
+      } else {
+        revision = Math.max(currentRevision + 1, requestedRevision);
+        await this.state.storage.put("revision", revision);
+      }
       const event = JSON.stringify({
         type: "practice_changed",
         revision,
-        scope: input.scope ?? "practice",
+        scope,
         occurredAt: Date.now(),
       });
       let attempted = 0;
@@ -87,14 +112,23 @@ export async function publishOwnerLiveUpdate(
   namespace: LiveUpdateNamespace | undefined,
   ownerId: string,
   scope: LiveUpdateScope,
-  options: { executionContext?: ExecutionContext; awaitDelivery?: boolean } = {},
+  options: {
+    executionContext?: ExecutionContext;
+    awaitDelivery?: boolean;
+    ownerRevision?: number;
+  } = {},
 ) {
   const publish = async () => {
     if (!namespace) return false;
     const response = await ownerStub(namespace, ownerId).fetch("https://live-update.internal/publish", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ scope }),
+      body: JSON.stringify({
+        scope,
+        ...("ownerRevision" in options && typeof options.ownerRevision === "number"
+          ? { revision: options.ownerRevision }
+          : {}),
+      }),
     });
     if (!response.ok) return false;
     const payload = await response.json() as { signalDelivered?: boolean };

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mutationFailureDisposition } from "./mutation-queue";
 import { applyTimerSync, type TimerSyncState } from "./timer-reconciliation";
-import { liveUpdateReconciliationMode, subscribeToLiveUpdates } from "./live-event-policy";
+import { requireLiveUpdateReconciliation, subscribeToLiveUpdates } from "./live-event-policy";
 import type { PracticeStateCommand } from "../db/practice-state-commands";
 import {
   EMPTY_DRAFT,
@@ -362,54 +362,58 @@ export function useLiveState(date: string): LiveStateController {
   );
 
   const reconcileTimers = useCallback(async () => {
-    if (reconcilingRef.current || flushingRef.current || queueRef.current.length > 0) return;
+    if (reconcilingRef.current || flushingRef.current || queueRef.current.length > 0) return false;
     reconcilingRef.current = true;
     try {
       const response = await fetch("/api/timer-state", { cache: "no-store" });
       if (!response.ok) {
         setSynced(false);
-        return;
+        return false;
       }
       const state = (await response.json()) as TimerSyncState;
 
       // A local action may have been queued while the read was in flight. Let
       // its mutation response reconcile instead of replacing optimistic UI.
-      if (flushingRef.current || queueRef.current.length > 0) return;
-      if (state.serverNow < lastTimerSyncServerNowRef.current) return;
+      if (flushingRef.current || queueRef.current.length > 0) return false;
+      if (state.serverNow < lastTimerSyncServerNowRef.current) return true;
       lastTimerSyncServerNowRef.current = state.serverNow;
       offsetRef.current = state.serverNow - Date.now();
       setDraft((current) => applyTimerSync(current, state, offsetRef.current));
       setSynced(true);
+      return true;
     } catch {
       setSynced(false);
       // Transient polling failures must not disturb the current display.
+      return false;
     } finally {
       reconcilingRef.current = false;
     }
   }, []);
 
   const reconcilePracticeState = useCallback(async () => {
-    if (reconcilingRef.current || flushingRef.current || queueRef.current.length > 0) return;
+    if (reconcilingRef.current || flushingRef.current || queueRef.current.length > 0) return false;
     reconcilingRef.current = true;
     try {
       const response = await fetch(`/api/state?date=${encodeURIComponent(date)}`, { cache: "no-store" });
       if (!response.ok) {
         setSynced(false);
-        return;
+        return false;
       }
       const state = (await response.json()) as ServerLiveState;
 
       // Do not overwrite a browser mutation that began while this request was
       // in flight. Its mutation response will carry the authoritative state.
-      if (flushingRef.current || queueRef.current.length > 0) return;
-      if (state.serverNow < lastPracticeSyncServerNowRef.current) return;
+      if (flushingRef.current || queueRef.current.length > 0) return false;
+      if (state.serverNow < lastPracticeSyncServerNowRef.current) return true;
       lastPracticeSyncServerNowRef.current = state.serverNow;
       offsetRef.current = state.serverNow - Date.now();
       setDraft(() => serverToDraft(state, offsetRef.current, date));
       setSynced(true);
+      return true;
     } catch {
       setSynced(false);
       // A later push event or bounded fallback read will converge on D1.
+      return false;
     } finally {
       reconcilingRef.current = false;
     }
@@ -513,14 +517,15 @@ export function useLiveState(date: string): LiveStateController {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const unsubscribe = subscribeToLiveUpdates({
       url: `${protocol}//${window.location.host}/api/live-events`,
-      onUpdate: (update) => {
-        if (liveUpdateReconciliationMode(update) === "timers") {
-          void reconcileTimers();
-        } else {
-          void reconcilePracticeState();
+      onUpdate: (update) => requireLiveUpdateReconciliation(update, {
+        timers: reconcileTimers,
+        practice: reconcilePracticeState,
+      }),
+      onFallback: async () => {
+        if (!await reconcilePracticeState()) {
+          throw new Error("Authoritative Live fallback reconciliation did not complete.");
         }
       },
-      onFallback: reconcilePracticeState,
     });
     return () => {
       window.cancelAnimationFrame(frame);

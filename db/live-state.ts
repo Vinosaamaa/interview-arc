@@ -8,6 +8,7 @@ import {
   extraActivities,
   focusBlocks,
   leetcodeCodeAttempts,
+  liveMutationReceipts,
   liveSessions,
   outcomes,
   practiceFocus,
@@ -1408,6 +1409,7 @@ export async function removeExtraActivity(ownerId: string, id: string) {
     intervals,
     codeAttempts,
     captureIntents,
+    liveReceipts,
   ] = await Promise.all([
     loadTimer(db, ownerId, id, "activity"),
     db.select().from(outcomes).where(and(eq(outcomes.ownerId, ownerId), eq(outcomes.activityId, id))),
@@ -1425,6 +1427,10 @@ export async function removeExtraActivity(ownerId: string, id: string) {
     )),
     db.select().from(leetcodeCodeAttempts).where(and(eq(leetcodeCodeAttempts.ownerId, ownerId), eq(leetcodeCodeAttempts.activityId, id))),
     db.select().from(voiceCaptureIntents).where(and(eq(voiceCaptureIntents.ownerId, ownerId), eq(voiceCaptureIntents.activityId, id))),
+    db.select({ operationId: liveMutationReceipts.operationId })
+      .from(liveMutationReceipts)
+      .where(and(eq(liveMutationReceipts.ownerId, ownerId), eq(liveMutationReceipts.activityId, id)))
+      .limit(1),
   ]);
   if (
     timer?.startedAt ||
@@ -1438,28 +1444,119 @@ export async function removeExtraActivity(ownerId: string, id: string) {
     reviews.length ||
     intervals.length ||
     codeAttempts.length ||
-    captureIntents.length
+    captureIntents.length ||
+    liveReceipts.length
   ) {
     throw new TimerStateConflictError("Only an untouched activity can be removed. Started work stays in your history.");
   }
-  await db.delete(extraActivities).where(and(eq(extraActivities.ownerId, ownerId), eq(extraActivities.id, id)));
-  await db.delete(outcomes).where(and(eq(outcomes.ownerId, ownerId), eq(outcomes.activityId, id)));
-  await db.delete(publicationStatuses).where(and(eq(publicationStatuses.ownerId, ownerId), eq(publicationStatuses.activityId, id)));
-  await db.delete(activityNotes).where(and(eq(activityNotes.ownerId, ownerId), eq(activityNotes.activityId, id)));
-  await db.delete(practiceNotes).where(and(eq(practiceNotes.ownerId, ownerId), eq(practiceNotes.activityId, id)));
-  await db.delete(practiceTranscriptTurns).where(and(eq(practiceTranscriptTurns.ownerId, ownerId), eq(practiceTranscriptTurns.activityId, id)));
-  await db.delete(activityFinalizations).where(and(eq(activityFinalizations.ownerId, ownerId), eq(activityFinalizations.activityId, id)));
-  await db.delete(activityAudioClips).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.activityId, id)));
-  await db.delete(activityDeliveryAnalyses).where(and(eq(activityDeliveryAnalyses.ownerId, ownerId), eq(activityDeliveryAnalyses.activityId, id)));
-  await db.delete(reviewSchedules).where(and(eq(reviewSchedules.ownerId, ownerId), eq(reviewSchedules.activityId, id)));
-  await db.delete(leetcodeCodeAttempts).where(and(eq(leetcodeCodeAttempts.ownerId, ownerId), eq(leetcodeCodeAttempts.activityId, id)));
-  await db.delete(voiceCaptureIntents).where(and(eq(voiceCaptureIntents.ownerId, ownerId), eq(voiceCaptureIntents.activityId, id)));
-  await db.delete(timers).where(and(eq(timers.ownerId, ownerId), eq(timers.subjectId, id), eq(timers.kind, "activity")));
-  await db.delete(timerIntervals).where(and(eq(timerIntervals.ownerId, ownerId), eq(timerIntervals.subjectId, id), eq(timerIntervals.kind, "activity")));
-  await db
-    .update(practiceFocus)
-    .set({ activityId: null, updatedAt: Date.now() })
-    .where(and(eq(practiceFocus.ownerId, ownerId), eq(practiceFocus.activityId, id)));
+  const now = Date.now();
+  const statements = [
+    d1TransactionalInvariantGuard(db, sql`
+      NOT EXISTS (
+        SELECT 1 FROM ${timers}
+        WHERE ${timers.ownerId} = ${ownerId}
+          AND ${timers.subjectId} = ${id}
+          AND ${timers.kind} = 'activity'
+          AND ${timers.startedAt} IS NOT NULL
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM ${outcomes}
+        WHERE ${outcomes.ownerId} = ${ownerId}
+          AND ${outcomes.activityId} = ${id}
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM ${publicationStatuses}
+        WHERE ${publicationStatuses.ownerId} = ${ownerId}
+          AND ${publicationStatuses.activityId} = ${id}
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM ${practiceTranscriptTurns}
+        WHERE ${practiceTranscriptTurns.ownerId} = ${ownerId}
+          AND ${practiceTranscriptTurns.activityId} = ${id}
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM ${activityFinalizations}
+        WHERE ${activityFinalizations.ownerId} = ${ownerId}
+          AND ${activityFinalizations.activityId} = ${id}
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM ${activityAudioClips}
+        WHERE ${activityAudioClips.ownerId} = ${ownerId}
+          AND ${activityAudioClips.activityId} = ${id}
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM ${activityNotes}
+        WHERE ${activityNotes.ownerId} = ${ownerId}
+          AND ${activityNotes.activityId} = ${id}
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM ${practiceNotes}
+        WHERE ${practiceNotes.ownerId} = ${ownerId}
+          AND ${practiceNotes.activityId} = ${id}
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM ${activityDeliveryAnalyses}
+        WHERE ${activityDeliveryAnalyses.ownerId} = ${ownerId}
+          AND ${activityDeliveryAnalyses.activityId} = ${id}
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM ${reviewSchedules}
+        WHERE ${reviewSchedules.ownerId} = ${ownerId}
+          AND ${reviewSchedules.activityId} = ${id}
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM ${timerIntervals}
+        WHERE ${timerIntervals.ownerId} = ${ownerId}
+          AND ${timerIntervals.subjectId} = ${id}
+          AND ${timerIntervals.kind} = 'activity'
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM ${leetcodeCodeAttempts}
+        WHERE ${leetcodeCodeAttempts.ownerId} = ${ownerId}
+          AND ${leetcodeCodeAttempts.activityId} = ${id}
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM ${voiceCaptureIntents}
+        WHERE ${voiceCaptureIntents.ownerId} = ${ownerId}
+          AND ${voiceCaptureIntents.activityId} = ${id}
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM ${liveMutationReceipts}
+        WHERE ${liveMutationReceipts.ownerId} = ${ownerId}
+          AND ${liveMutationReceipts.activityId} = ${id}
+      )
+    `),
+    db.delete(extraActivities).where(and(eq(extraActivities.ownerId, ownerId), eq(extraActivities.id, id))),
+    db.delete(outcomes).where(and(eq(outcomes.ownerId, ownerId), eq(outcomes.activityId, id))),
+    db.delete(publicationStatuses).where(and(eq(publicationStatuses.ownerId, ownerId), eq(publicationStatuses.activityId, id))),
+    db.delete(activityNotes).where(and(eq(activityNotes.ownerId, ownerId), eq(activityNotes.activityId, id))),
+    db.delete(practiceNotes).where(and(eq(practiceNotes.ownerId, ownerId), eq(practiceNotes.activityId, id))),
+    db.delete(practiceTranscriptTurns).where(and(eq(practiceTranscriptTurns.ownerId, ownerId), eq(practiceTranscriptTurns.activityId, id))),
+    db.delete(activityFinalizations).where(and(eq(activityFinalizations.ownerId, ownerId), eq(activityFinalizations.activityId, id))),
+    db.delete(activityAudioClips).where(and(eq(activityAudioClips.ownerId, ownerId), eq(activityAudioClips.activityId, id))),
+    db.delete(activityDeliveryAnalyses).where(and(eq(activityDeliveryAnalyses.ownerId, ownerId), eq(activityDeliveryAnalyses.activityId, id))),
+    db.delete(reviewSchedules).where(and(eq(reviewSchedules.ownerId, ownerId), eq(reviewSchedules.activityId, id))),
+    db.delete(leetcodeCodeAttempts).where(and(eq(leetcodeCodeAttempts.ownerId, ownerId), eq(leetcodeCodeAttempts.activityId, id))),
+    db.delete(voiceCaptureIntents).where(and(eq(voiceCaptureIntents.ownerId, ownerId), eq(voiceCaptureIntents.activityId, id))),
+    db.delete(timers).where(and(eq(timers.ownerId, ownerId), eq(timers.subjectId, id), eq(timers.kind, "activity"))),
+    db.delete(timerIntervals).where(and(eq(timerIntervals.ownerId, ownerId), eq(timerIntervals.subjectId, id), eq(timerIntervals.kind, "activity"))),
+    db.update(practiceFocus)
+      .set({ activityId: null, updatedAt: now })
+      .where(and(eq(practiceFocus.ownerId, ownerId), eq(practiceFocus.activityId, id))),
+  ];
+  try {
+    await db.batch(statements as [
+      (typeof statements)[number],
+      ...(typeof statements)[number][],
+    ]);
+  } catch (error) {
+    if (isD1TransactionalInvariantFailure(error)) {
+      throw new TimerStateConflictError(
+        "Only an untouched activity can be removed. Started work stays in your history.",
+      );
+    }
+    throw error;
+  }
 }
 
 export async function upsertLiveSession(

@@ -117,6 +117,8 @@ const fixtureSql = (ownerTokenHash, otherTokenHash) => `
     ('owner-typed-delete','activity-finalize-race','typed-response-finalize','system_design','specialist','Finalization response.','codex',1,200,600),
     ('owner-typed-delete','activity-repair-anchor','typed-user-repair','leetcode','user','Repair target.','codex',0,100,500),
     ('owner-typed-delete','activity-repair-anchor','typed-response-repair','leetcode','specialist','Repair response.','codex',1,200,600),
+    ('owner-typed-delete','activity-live-reserved','typed-user-live-reserved','system_design','user','Reserved Live user.','codex',0,100,500),
+    ('owner-typed-delete','activity-live-reserved','typed-response-live-reserved','system_design','specialist','Reserved Live response.','codex',1,200,600),
     ('owner-typed-delete-other','activity-delete','typed-user-delete','leetcode','user','Other owner user.','codex',0,100,700),
     ('owner-typed-delete-other','activity-delete','typed-response-delete','leetcode','specialist','Other owner response.','codex',1,200,800);
 
@@ -131,6 +133,12 @@ const fixtureSql = (ownerTokenHash, otherTokenHash) => `
     (owner_id,id,response_turn_id,activity_id,prior_status,result_status,reason,created_at)
   VALUES
     ('owner-typed-delete','repair-event-delete-fixture','typed-response-repair','activity-repair-anchor','quarantined_conflict','materialized','Preserve repair audit.',650);
+
+  INSERT INTO live_turn_reservations
+    (owner_id,activity_id,turn_id,pair_id,side,sequence,created_at)
+  VALUES
+    ('owner-typed-delete','activity-live-reserved','typed-user-live-reserved','live-reserved-pair','candidate',0,500),
+    ('owner-typed-delete','activity-live-reserved','typed-response-live-reserved','live-reserved-pair','interviewer',1,500);
 
   INSERT INTO activity_finalizations
     (owner_id,activity_id,specialty,status,payload,finalized_at,published_at,revision,updated_at)
@@ -293,6 +301,19 @@ test("typed exchange deletion is exact, atomic, owner-scoped, and identity-idemp
     });
     assert.equal(finalized.isError, true);
     assert.equal(finalized.structuredContent.code, "typed_exchange_has_dependent_evidence");
+
+    const liveReserved = await callRaw(ownerClient, "delete_typed_practice_exchange", {
+      operationId: "delete-typed-live-reserved",
+      activityId: "activity-live-reserved",
+      userTurnId: "typed-user-live-reserved",
+      responseTurnId: "typed-response-live-reserved",
+      expectedRevision: 600,
+      authorization: "explicit_user_instruction",
+      reason: "Live reservation dependency guard test.",
+    });
+    assert.equal(liveReserved.isError, true);
+    assert.equal(liveReserved.structuredContent.code, "typed_exchange_has_dependent_evidence");
+    assert.equal(liveReserved.structuredContent.live, 2);
 
     const crossOwner = await callRaw(otherClient, "delete_typed_practice_exchange", {
       operationId: "delete-typed-cross-owner",
