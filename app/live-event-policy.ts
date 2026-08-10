@@ -11,6 +11,19 @@ export function liveUpdateReconciliationMode(update: LiveUpdate): LiveUpdateReco
   return update.scope === "timer" ? "timers" : "practice";
 }
 
+export async function requireLiveUpdateReconciliation(
+  update: LiveUpdate,
+  reconcile: {
+    timers: () => boolean | Promise<boolean>;
+    practice: () => boolean | Promise<boolean>;
+  },
+) {
+  const completed = await reconcile[liveUpdateReconciliationMode(update)]();
+  if (!completed) {
+    throw new Error("Authoritative Live reconciliation did not complete.");
+  }
+}
+
 export function parseLiveUpdate(value: string): LiveUpdate | null {
   try {
     const parsed = JSON.parse(value) as Partial<LiveUpdate>;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mutationFailureDisposition } from "./mutation-queue";
 import { applyTimerSync, type TimerSyncState } from "./timer-reconciliation";
-import { liveUpdateReconciliationMode, subscribeToLiveUpdates } from "./live-event-policy";
+import { requireLiveUpdateReconciliation, subscribeToLiveUpdates } from "./live-event-policy";
 import type { PracticeStateCommand } from "../db/practice-state-commands";
 import {
   EMPTY_DRAFT,
@@ -374,7 +374,7 @@ export function useLiveState(date: string): LiveStateController {
 
       // A local action may have been queued while the read was in flight. Let
       // its mutation response reconcile instead of replacing optimistic UI.
-      if (flushingRef.current || queueRef.current.length > 0) return true;
+      if (flushingRef.current || queueRef.current.length > 0) return false;
       if (state.serverNow < lastTimerSyncServerNowRef.current) return true;
       lastTimerSyncServerNowRef.current = state.serverNow;
       offsetRef.current = state.serverNow - Date.now();
@@ -403,7 +403,7 @@ export function useLiveState(date: string): LiveStateController {
 
       // Do not overwrite a browser mutation that began while this request was
       // in flight. Its mutation response will carry the authoritative state.
-      if (flushingRef.current || queueRef.current.length > 0) return true;
+      if (flushingRef.current || queueRef.current.length > 0) return false;
       if (state.serverNow < lastPracticeSyncServerNowRef.current) return true;
       lastPracticeSyncServerNowRef.current = state.serverNow;
       offsetRef.current = state.serverNow - Date.now();
@@ -517,12 +517,10 @@ export function useLiveState(date: string): LiveStateController {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const unsubscribe = subscribeToLiveUpdates({
       url: `${protocol}//${window.location.host}/api/live-events`,
-      onUpdate: async (update) => {
-        const reconciled = liveUpdateReconciliationMode(update) === "timers"
-          ? await reconcileTimers()
-          : await reconcilePracticeState();
-        if (!reconciled) throw new Error("Authoritative Live reconciliation did not complete.");
-      },
+      onUpdate: (update) => requireLiveUpdateReconciliation(update, {
+        timers: reconcileTimers,
+        practice: reconcilePracticeState,
+      }),
       onFallback: async () => {
         if (!await reconcilePracticeState()) {
           throw new Error("Authoritative Live fallback reconciliation did not complete.");

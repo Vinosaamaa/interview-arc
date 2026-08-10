@@ -6,6 +6,7 @@ import {
   boundedFallbackDelay,
   liveUpdateReconciliationMode,
   parseLiveUpdate,
+  requireLiveUpdateReconciliation,
   subscribeToLiveUpdates,
 } from "../app/live-event-policy.ts";
 
@@ -88,6 +89,36 @@ test("structural practice events require full-state reconciliation", () => {
       occurredAt: 1_721_000_000_001,
     }), "practice");
   }
+});
+
+test("a mutation that starts during reconciliation prevents revision acknowledgement", async () => {
+  let releaseRead;
+  let mutationPending = false;
+  const readInFlight = new Promise((resolve) => { releaseRead = resolve; });
+  const update = {
+    type: "practice_changed",
+    revision: 15,
+    scope: "practice",
+    occurredAt: 1_721_000_000_000,
+  };
+  const reconciliation = requireLiveUpdateReconciliation(update, {
+    timers: async () => true,
+    practice: async () => {
+      await readInFlight;
+      return !mutationPending;
+    },
+  });
+  mutationPending = true;
+  releaseRead();
+  await assert.rejects(reconciliation, /did not complete/);
+
+  // Once the retryable mutation fails and leaves the queue, a subsequent
+  // authoritative read is allowed to acknowledge the same revision.
+  mutationPending = false;
+  await requireLiveUpdateReconciliation(update, {
+    timers: async () => true,
+    practice: async () => !mutationPending,
+  });
 });
 
 test("all live clients use server push instead of recurring one-second HTTP reads", async () => {
