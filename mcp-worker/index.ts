@@ -2721,7 +2721,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "get_behavioral_practice_preflight",
     {
-      description: "Load one deterministic owner-private behavioral preflight at start/resume, new-question, post-mutation, reconnect/handoff, or finalization. It atomically presents the current Solution Profile read, accepted evidence and gaps, authoritative Target Profile resolution, target grading signals, and bounded accepted target-tailored answer snapshots with source-revision staleness. It never returns raw job descriptions or private target analysis.",
+      description: "Load one deterministic owner-private behavioral preflight at start/resume, new-question, post-mutation, reconnect/handoff, or finalization. It presents the current Solution Profile read, accepted evidence and gaps, authoritative Target Profile resolution, target grading signals, and bounded accepted target-tailored answer snapshots with source-revision staleness. It never returns raw job descriptions or private target analysis.",
       inputSchema: behavioralPracticePreflightInputSchema.shape,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },

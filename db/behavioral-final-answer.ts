@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  behavioralTargetReviewSchema,
+  type BehavioralTargetReview,
+} from "./behavioral-practice-preflight-policy.ts";
 
 const stableIdSchema = z.string()
   .min(1)
@@ -82,6 +86,7 @@ export async function behavioralFinalAnswerFingerprint(input: {
   questionId: string;
   snapshot: BehavioralFinalAnswerSnapshotInput;
   correction?: BehavioralFinalAnswerCorrection;
+  behavioralReview?: BehavioralTargetReview;
 }) {
   const canonical = JSON.stringify({
     activityId: input.activityId,
@@ -89,6 +94,9 @@ export async function behavioralFinalAnswerFingerprint(input: {
     snapshot: behavioralFinalAnswerSnapshotInputSchema.parse(input.snapshot),
     correction: input.correction
       ? behavioralFinalAnswerCorrectionSchema.parse(input.correction)
+      : null,
+    behavioralReview: input.behavioralReview
+      ? behavioralTargetReviewSchema.parse(input.behavioralReview)
       : null,
   });
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));

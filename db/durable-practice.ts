@@ -3479,7 +3479,8 @@ async function prepareBehavioralFinalAnswerWrite(
   const hasSnapshotFields = Boolean(
     payload.finalAnswerOperationId
     || payload.finalAnswerSnapshot
-    || payload.finalAnswerCorrection,
+    || payload.finalAnswerCorrection
+    || payload.behavioralReview,
   );
   if (specialty !== "behavioral") {
     if (hasSnapshotFields) {
@@ -3562,6 +3563,7 @@ async function prepareBehavioralFinalAnswerWrite(
     questionId,
     snapshot,
     correction: payload.finalAnswerCorrection,
+    behavioralReview: targetReview,
   });
   const existingOperation = await db.select().from(behavioralFinalAnswerSnapshots).where(and(
     eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),

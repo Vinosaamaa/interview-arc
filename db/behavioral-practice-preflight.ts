@@ -66,7 +66,6 @@ export async function readBehavioralPracticePreflight(
       ),
     ).where(and(
       eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
-      sql`json_extract(${behavioralFinalAnswerSnapshots.snapshot}, '$.scope') = 'target_tailored'`,
       sql`json_extract(${behavioralFinalAnswerSnapshots.snapshot}, '$.question.questionId') = ${input.questionId}`,
     )).orderBy(
       desc(behavioralFinalAnswerSnapshots.finalizedAt),
@@ -76,11 +75,11 @@ export async function readBehavioralPracticePreflight(
 
   const latestByActivity = new Map<string, (typeof rows)[number]>();
   for (const row of rows) if (!latestByActivity.has(row.activityId)) latestByActivity.set(row.activityId, row);
-  const selectedRows = [...latestByActivity.values()].slice(0, VARIANT_LIMIT);
-  const snapshots = selectedRows.map((row) => ({
+  const allTargetSnapshots = [...latestByActivity.values()].map((row) => ({
     row,
     snapshot: behavioralFinalAnswerSnapshotInputSchema.parse(row.snapshot),
-  }));
+  })).filter(({ snapshot }) => snapshot.scope === "target_tailored");
+  const snapshots = allTargetSnapshots.slice(0, VARIANT_LIMIT);
   const targetIds = [...new Set(snapshots.flatMap(({ snapshot }) => snapshot.target?.targetId ?? []))];
   const targetRows = targetIds.length
     ? await db.select({
@@ -123,17 +122,34 @@ export async function readBehavioralPracticePreflight(
     };
   });
 
+  const targetContext = resolvedTarget.target
+    ? {
+        targetId: resolvedTarget.target.targetId,
+        revision: resolvedTarget.target.revision,
+        label: resolvedTarget.target.label,
+        company: resolvedTarget.target.company,
+        roleTitle: resolvedTarget.target.roleTitle,
+        targetLevel: resolvedTarget.target.targetLevel,
+        competencySignals: resolvedTarget.target.competencySignals,
+        seniorityIndicators: resolvedTarget.target.seniorityIndicators,
+        domainVocabulary: resolvedTarget.target.domainVocabulary,
+      }
+    : null;
   return {
     schemaVersion: 1 as const,
     boundary: input.boundary,
     questionId: input.questionId,
-    targetResolution: resolvedTarget,
-    targeting: resolvedTarget.target
+    targetResolution: {
+      source: resolvedTarget.source,
+      binding: resolvedTarget.binding,
+      target: targetContext,
+    },
+    targeting: targetContext
       ? {
           mode: "target_tailored" as const,
-          competencySignals: resolvedTarget.target.competencySignals,
-          seniorityIndicators: resolvedTarget.target.seniorityIndicators,
-          domainVocabulary: resolvedTarget.target.domainVocabulary,
+          competencySignals: targetContext.competencySignals,
+          seniorityIndicators: targetContext.seniorityIndicators,
+          domainVocabulary: targetContext.domainVocabulary,
         }
       : {
           mode: "universal" as const,
@@ -150,7 +166,7 @@ export async function readBehavioralPracticePreflight(
     },
     limits: { acceptedTargetVariants: VARIANT_LIMIT },
     truncated: {
-      acceptedTargetVariants: rows.length >= VARIANT_SCAN_LIMIT || latestByActivity.size > VARIANT_LIMIT,
+      acceptedTargetVariants: rows.length >= VARIANT_SCAN_LIMIT || allTargetSnapshots.length > VARIANT_LIMIT,
     },
   };
 }
