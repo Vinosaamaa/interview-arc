@@ -12,3 +12,40 @@ export function toRouteErrorMessage(error: unknown) {
 
   return message;
 }
+
+export class RouteBodyTooLargeError extends Error {
+  constructor() {
+    super("The request body is too large.");
+    this.name = "RouteBodyTooLargeError";
+  }
+}
+
+export async function readBoundedJson(request: Request, maxBytes: number): Promise<unknown> {
+  const declared = Number(request.headers.get("content-length") ?? 0);
+  if (declared > maxBytes) throw new RouteBodyTooLargeError();
+  if (!request.body) return {};
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) throw new RouteBodyTooLargeError();
+      chunks.push(value);
+    }
+  } catch (error) {
+    await reader.cancel("request body rejected").catch(() => undefined);
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
