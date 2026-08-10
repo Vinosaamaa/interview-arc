@@ -223,6 +223,14 @@ export async function reserveResumeImport(
     eq(resumeImportOperations.ownerId, ownerId),
     eq(resumeImportOperations.operationId, input.operationId),
     eq(resumeImportOperations.requestHash, input.requestHash),
+    sql`${resumeImportOperations.status} <> 'saved'`,
+    sql`EXISTS (
+      SELECT 1 FROM ${resumeImportLocks}
+      WHERE ${resumeImportLocks.ownerId} = ${ownerId}
+        AND ${resumeImportLocks.resumeId} = ${input.resumeId}
+        AND ${resumeImportLocks.operationId} = ${input.operationId}
+        AND ${resumeImportLocks.leaseToken} = ${leaseToken}
+    )`,
   ));
   return {
     duplicate: false as const,
