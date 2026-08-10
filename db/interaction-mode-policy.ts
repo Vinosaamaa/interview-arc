@@ -94,7 +94,6 @@ export function resolveInteractionMode(
 export async function interactionModeMutationFingerprint(input: {
   activityId: string;
   interactionModeId: string;
-  registryVersion: string;
   expectedRevision: number;
   triggerTurnId?: string;
   source: "explicit_user_instruction" | "workflow_transition";
@@ -105,7 +104,6 @@ export async function interactionModeMutationFingerprint(input: {
   const canonical = JSON.stringify({
     activityId: input.activityId,
     interactionModeId: input.interactionModeId,
-    registryVersion: input.registryVersion,
     expectedRevision: input.expectedRevision,
     triggerTurnId: input.triggerTurnId ?? null,
     source: input.source,

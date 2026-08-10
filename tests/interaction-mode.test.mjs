@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -78,4 +79,28 @@ test("runtime validation is data-driven and rejects deprecated, unknown, and uns
     () => resolveInteractionMode("invented", "leetcode", "active_attempt", registry),
     (error) => error instanceof InteractionModeError && error.code === "interaction_mode_unknown",
   );
+});
+
+test("the MCP and D1 tracer keep registry IDs extensible and writes transaction-guarded", async () => {
+  const [worker, config, contract, migration, schema, store] = await Promise.all([
+    readFile(new URL("../mcp-worker/index.ts", import.meta.url), "utf8"),
+    readFile(new URL("../.codex/config.toml", import.meta.url), "utf8"),
+    readFile(new URL("../docs/contracts/practice-interaction-modes.md", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0027_little_cyclops.sql", import.meta.url), "utf8"),
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../db/interaction-mode-store.ts", import.meta.url), "utf8"),
+  ]);
+  for (const tool of ["get_practice_interaction_mode", "set_practice_interaction_mode"]) {
+    assert.match(worker, new RegExp(`server\\.registerTool\\(\\s*["']${tool}["']`));
+    assert.match(config, new RegExp(`["']${tool}["']`));
+    assert.equal(contract.includes(`\`${tool}\``), true);
+  }
+  assert.match(migration, /practice_interaction_mode_states/);
+  assert.match(migration, /practice_interaction_mode_transitions/);
+  assert.match(migration, /practice_interaction_mode_mutations/);
+  assert.match(schema, /interactionModeId: text\("interaction_mode_id"\)\.notNull\(\)/);
+  assert.match(store, /await db\.batch\(\[/);
+  assert.match(store, /d1TransactionalInvariantGuard/);
+  assert.match(store, /practiceTranscriptTurns/);
+  assert.doesNotMatch(worker, /plan_today_practice[\s\S]{0,500}interactionModeId/);
 });

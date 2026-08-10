@@ -4,6 +4,8 @@ required = false
 url = "https://limitless-mcp.vinosama.workers.dev/mcp"
 bearer_token_env_var = "INTERVIEW_ARC_MCP_TOKEN"
 enabled_tools = [
+  "get_practice_interaction_mode",
+  "set_practice_interaction_mode",
   "save_practice_exchange",
   "delete_typed_practice_exchange",
   "resolve_voice_capture_and_save_response",

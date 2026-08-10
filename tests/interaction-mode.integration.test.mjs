@@ -65,8 +65,8 @@ async function connectClient(baseUrl, token, name) {
 }
 
 test("interaction mode MCP state is owner-private, atomic, idempotent, revision-guarded, and reconnect-safe", { timeout: 90_000 }, async () => {
-  const ownerToken = "ia_interaction_mode_owner";
-  const otherToken = "ia_interaction_mode_other";
+  const ownerToken = "ia_interaction_mode_owner_integration_token";
+  const otherToken = "ia_interaction_mode_other_integration_token";
   let releaseIntegrationLock;
   let persistence;
   let worker;
