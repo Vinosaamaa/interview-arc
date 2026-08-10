@@ -54,6 +54,7 @@ import {
   journeyReaderHref,
   pastReaderHref,
   pastSolutionReaderHref,
+  readerDepthAfterNestedClose,
   readerClosePlan,
   readBankReaderState,
   readJourneyReaderState,
@@ -4455,7 +4456,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       <section className={`view-page journey-page ${journeyNestedEntry || journeyNestedProblem ? "has-open-reader" : ""}`}>
         <header className="view-masthead journey-masthead"><span className="eyebrow">JOURNEY · PUBLISHED + TODAY&apos;S LIVE RECORD</span><h1>Your practice,<br /><em>mapped over time.</em></h1><p>This page counts only recorded work. Explore consistency, outcomes, topic coverage, effort, and the exact days behind every trend.</p></header>
         {readerNotFound && <div className="journey-reader-not-found" role="alert"><strong>That practice record is unavailable.</strong><span>The saved reader link points to <code>{readerNotFound}</code>, which is not present in the current authoritative record.</span></div>}
-        {(journeyNestedEntry || journeyNestedProblem) && <div className={`journey-reader-detail focused-attempt-workspace ${readerClosing ? "reader-closing" : ""}`}><aside className="journey-reader-pane focused-attempt-pane" aria-label="Selected Journey reader">{journeyNestedProblem ? renderSolutionReader() : renderCaseReader()}</aside></div>}
+        {(journeyNestedEntry || journeyNestedProblem) && <div className={`journey-reader-detail reader-workspace focused-attempt-workspace ${readerClosing ? "reader-closing" : ""}`}><aside className="journey-reader-pane focused-attempt-pane" aria-label="Selected Journey reader">{journeyNestedProblem ? renderSolutionReader() : renderCaseReader()}</aside></div>}
         <div className="stat-ledger">
           <article className="stat-block coding-stat"><span>Coding solved</span><strong>{codingSolved}</strong><small>{codingFailed} failed attempt{codingFailed === 1 ? "" : "s"}</small></article>
           <article className="stat-block system-stat"><span>System designs</span><strong>{systemCompleted}</strong><small>completed or published</small></article>
@@ -4646,7 +4647,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       <section className={`view-page library-page ${selectedEntry ? "has-open-entry" : ""} ${listRestoring === "library" ? "list-restoring" : ""}`}>
         <header className="view-masthead"><span className="eyebrow">PAST · COMPLETED WORK</span><h1>Read the journey<br /><em>like a field journal.</em></h1><p>Past contains finished activity timers and published case files—never planned work or result flags by themselves.</p></header>
         {readerNotFound && <div className="journey-reader-not-found" role="alert"><strong>That practice record is unavailable.</strong><span>The saved reader link points to <code>{readerNotFound}</code>, which is not present in the current authoritative record.</span></div>}
-        <div className={`past-master-detail ${masterPaneOpen ? "master-pane-open" : ""} ${nestedReaderFocus ? "nested-reader-focus" : ""} ${readerClosing ? "reader-closing" : ""}`}>
+        <div className={`past-master-detail ${masterPaneOpen ? "master-pane-open" : ""} ${selectedEntry ? "reader-workspace" : ""} ${nestedReaderFocus ? "nested-reader-focus" : ""} ${readerClosing ? "reader-closing" : ""}`}>
           <div
             className="past-master-pane"
             onClickCapture={(event) => {
@@ -4826,7 +4827,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           <article className="system_design"><strong>{bankFor("system_design").length}</strong><span>System designs</span></article>
           <article className="behavioral"><strong>{bankFor("behavioral").length}</strong><span>Behavioral prompts</span></article>
         </div>
-        <div className={`bank-master-detail ${masterPaneOpen ? "master-pane-open" : ""} ${nestedReaderFocus ? "nested-reader-focus" : ""} ${readerClosing ? "reader-closing" : ""}`}>
+        <div className={`bank-master-detail ${masterPaneOpen ? "master-pane-open" : ""} ${selectedProblem ? "reader-workspace" : ""} ${nestedReaderFocus ? "nested-reader-focus" : ""} ${readerClosing ? "reader-closing" : ""}`}>
         <div
           className="bank-master-pane"
           onClickCapture={(event) => {
@@ -5513,7 +5514,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         else window.history.replaceState(
           {
             interviewArcJourneyReader: true,
-            interviewArcJourneyDepth: Math.max(1, depth - 1),
+            interviewArcJourneyDepth: readerDepthAfterNestedClose(depth),
             interviewArcJourneyScrollY: scrollY,
           },
           "",
@@ -5546,7 +5547,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       setReaderClosing(false);
       if (window.history.state?.interviewArcPastReader && depth > 1) window.history.go(-1);
       else window.history.replaceState(
-        { interviewArcPastReader: true, interviewArcPastDepth: Math.max(1, depth - 1) },
+        { interviewArcPastReader: true, interviewArcPastDepth: readerDepthAfterNestedClose(depth) },
         "",
         closePlan.href,
       );
@@ -5561,7 +5562,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         setBankNestedEntry(null);
         if (window.history.state?.interviewArcBankReader && depth > 1) window.history.go(-(depth - 1));
         else window.history.replaceState(
-          { interviewArcBankReader: true, interviewArcBankDepth: 1 },
+          { interviewArcBankReader: true, interviewArcBankDepth: readerDepthAfterNestedClose(depth) },
           "",
           closePlan.href,
         );

@@ -23,6 +23,8 @@ export type AverageEffortBucket = {
   averageSeconds: number | null;
 };
 
+export type ReaderSpecialty = "leetcode" | "system_design" | "behavioral";
+
 export type JourneyReaderState = {
   attemptId: string;
   range: "30" | "90" | "365" | "all";
@@ -30,18 +32,18 @@ export type JourneyReaderState = {
   heatmap: "all" | "leetcode" | "system_design" | "behavioral" | "job_applications";
   day: string;
   topic: string;
-  specialty?: "leetcode" | "system_design" | "behavioral";
+  specialty?: ReaderSpecialty;
   problemId?: string;
 };
 
 export type PastReaderState = {
   attemptId: string;
-  specialty?: "leetcode" | "system_design" | "behavioral";
+  specialty?: ReaderSpecialty;
   problemId?: string;
 };
 
 export type BankReaderState = {
-  specialty: "leetcode" | "system_design" | "behavioral";
+  specialty: ReaderSpecialty;
   problemId: string;
   attemptId: string;
 };
@@ -54,9 +56,23 @@ export type ReaderClosePlan = {
 };
 
 const READER_QUERY_KEYS = ["attempt", "range", "metric", "heatmap", "day", "topic", "specialty", "problem"] as const;
+const READER_SPECIALTIES = ["leetcode", "system_design", "behavioral"] as const;
 
 function clearReaderQuery(url: URL) {
   READER_QUERY_KEYS.forEach((key) => url.searchParams.delete(key));
+}
+
+function readReaderProblemIdentity(url: URL): { specialty?: ReaderSpecialty; problemId?: string } | null {
+  const specialty = url.searchParams.get("specialty")?.trim() ?? "";
+  const problemId = url.searchParams.get("problem")?.trim() ?? "";
+  if (!specialty && !problemId) return {};
+  if (!specialty || !problemId || !READER_SPECIALTIES.includes(specialty as ReaderSpecialty)) return null;
+  return { specialty: specialty as ReaderSpecialty, problemId };
+}
+
+export function readerDepthAfterNestedClose(value: unknown) {
+  const depth = typeof value === "number" && Number.isInteger(value) ? value : 0;
+  return Math.max(0, depth - 1);
 }
 
 function identity(value: string) {
@@ -143,14 +159,12 @@ export function readJourneyReaderState(currentHref: string): JourneyReaderState 
   const heatmap = url.searchParams.get("heatmap") ?? "all";
   const day = url.searchParams.get("day") ?? "";
   const topic = url.searchParams.get("topic") ?? "";
-  const specialty = url.searchParams.get("specialty") ?? "";
-  const problemId = url.searchParams.get("problem")?.trim() ?? "";
+  const problemIdentity = readReaderProblemIdentity(url);
   if (!attemptId || !["30", "90", "365", "all"].includes(range)
     || !["activities", "time"].includes(metric)
     || !["all", "leetcode", "system_design", "behavioral", "job_applications"].includes(heatmap)
     || (day && !/^\d{4}-\d{2}-\d{2}$/.test(day))
-    || Boolean(specialty) !== Boolean(problemId)
-    || (specialty && !["leetcode", "system_design", "behavioral"].includes(specialty))) return null;
+    || !problemIdentity) return null;
   return {
     attemptId,
     range: range as JourneyReaderState["range"],
@@ -158,7 +172,7 @@ export function readJourneyReaderState(currentHref: string): JourneyReaderState 
     heatmap: heatmap as JourneyReaderState["heatmap"],
     day,
     topic,
-    ...(specialty && problemId ? { specialty: specialty as JourneyReaderState["specialty"], problemId } : {}),
+    ...problemIdentity,
   };
 }
 
@@ -181,13 +195,11 @@ export function readPastReaderState(currentHref: string): PastReaderState | null
   const url = new URL(currentHref);
   if (url.searchParams.get("view") !== "past") return null;
   const attemptId = url.searchParams.get("attempt")?.trim() ?? "";
-  const specialty = url.searchParams.get("specialty") ?? "";
-  const problemId = url.searchParams.get("problem")?.trim() ?? "";
-  if (!attemptId || Boolean(specialty) !== Boolean(problemId)
-    || (specialty && !["leetcode", "system_design", "behavioral"].includes(specialty))) return null;
+  const problemIdentity = readReaderProblemIdentity(url);
+  if (!attemptId || !problemIdentity) return null;
   return {
     attemptId,
-    ...(specialty && problemId ? { specialty: specialty as PastReaderState["specialty"], problemId } : {}),
+    ...problemIdentity,
   };
 }
 
@@ -221,11 +233,10 @@ export function bankReaderHref(
 export function readBankReaderState(currentHref: string): BankReaderState | null {
   const url = new URL(currentHref);
   if (url.searchParams.get("view") !== "banks") return null;
-  const specialty = url.searchParams.get("specialty") ?? "";
-  const problemId = url.searchParams.get("problem")?.trim() ?? "";
+  const problemIdentity = readReaderProblemIdentity(url);
   const attemptId = url.searchParams.get("attempt")?.trim() ?? "";
-  if (!problemId || !["leetcode", "system_design", "behavioral"].includes(specialty)) return null;
-  return { specialty: specialty as BankReaderState["specialty"], problemId, attemptId };
+  if (!problemIdentity?.specialty || !problemIdentity.problemId) return null;
+  return { specialty: problemIdentity.specialty, problemId: problemIdentity.problemId, attemptId };
 }
 
 export function workspaceViewHref(currentHref: string, view: WorkspaceRouteView) {

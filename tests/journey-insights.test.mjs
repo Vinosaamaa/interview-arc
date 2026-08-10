@@ -7,6 +7,7 @@ import {
   journeyReaderHref,
   pastReaderHref,
   pastSolutionReaderHref,
+  readerDepthAfterNestedClose,
   readerClosePlan,
   readJourneyReaderState,
   readBankReaderState,
@@ -47,6 +48,8 @@ test("Journey attempt URLs round-trip state and can return to Journey", () => {
 test("Malformed Journey reader URLs fail closed", () => {
   assert.equal(readJourneyReaderState("https://example.test/?view=journey&attempt=x&range=garbage"), null);
   assert.equal(readJourneyReaderState("https://example.test/?view=journey&attempt=x&day=yesterday"), null);
+  assert.equal(readJourneyReaderState("https://example.test/?view=journey&attempt=x&specialty=leetcode"), null);
+  assert.equal(readPastReaderState("https://example.test/?view=past&attempt=x&problem=word-break-ii"), null);
 });
 
 test("Past attempt URLs round-trip stable selection without Journey-only state", () => {
@@ -102,35 +105,25 @@ test("Problem Bank URLs preserve stable problem and nested attempt identity", ()
 
 test("reader close plans deterministically return Journey, Past, and Bank readers to their origin routes", () => {
   const journeyReader = "https://example.test/practice?keep=yes&view=journey&attempt=activity%2Fone&range=30&metric=time&heatmap=leetcode&day=2026-08-07&topic=Graphs#reader";
-  assert.deepEqual(readerClosePlan(journeyReader), {
-    view: "journey",
-    href: "/practice?keep=yes&view=journey#reader",
-  });
   const journeySolution = journeyReader.replace("#reader", "&specialty=leetcode&problem=word-break-ii#reader");
-  assert.deepEqual(readerClosePlan(journeySolution), {
-    view: "journey",
-    href: "/practice?keep=yes&view=journey&attempt=activity%2Fone&range=30&metric=time&heatmap=leetcode&day=2026-08-07&topic=Graphs#reader",
-  });
-
   const pastReader = "https://example.test/practice?keep=yes&view=past&attempt=activity%2Fone&range=30#reader";
-  assert.deepEqual(readerClosePlan(pastReader), {
-    view: "past",
-    href: "/practice?keep=yes&view=past#reader",
-  });
   const pastSolution = pastReader.replace("#reader", "&specialty=leetcode&problem=word-break-ii#reader");
-  assert.deepEqual(readerClosePlan(pastSolution), {
-    view: "past",
-    href: "/practice?keep=yes&view=past&attempt=activity%2Fone#reader",
-  });
-
   const bankAttempt = "https://example.test/practice?keep=yes&view=banks&specialty=leetcode&problem=word-break-ii&attempt=activity%2Fone#reader";
-  assert.deepEqual(readerClosePlan(bankAttempt), {
-    view: "banks",
-    href: "/practice?keep=yes&view=banks&specialty=leetcode&problem=word-break-ii#reader",
-  });
-  assert.deepEqual(readerClosePlan("https://example.test/practice?view=banks&specialty=leetcode&problem=word-break-ii"), {
-    view: "banks",
-    href: "/practice?view=banks",
-  });
+  const cases = [
+    [journeyReader, { view: "journey", href: "/practice?keep=yes&view=journey#reader" }],
+    [journeySolution, { view: "journey", href: "/practice?keep=yes&view=journey&attempt=activity%2Fone&range=30&metric=time&heatmap=leetcode&day=2026-08-07&topic=Graphs#reader" }],
+    [pastReader, { view: "past", href: "/practice?keep=yes&view=past#reader" }],
+    [pastSolution, { view: "past", href: "/practice?keep=yes&view=past&attempt=activity%2Fone#reader" }],
+    [bankAttempt, { view: "banks", href: "/practice?keep=yes&view=banks&specialty=leetcode&problem=word-break-ii#reader" }],
+    ["https://example.test/practice?view=banks&specialty=leetcode&problem=word-break-ii", { view: "banks", href: "/practice?view=banks" }],
+  ];
+  cases.forEach(([href, expected]) => assert.deepEqual(readerClosePlan(href), expected, href));
   assert.equal(readerClosePlan("https://example.test/practice?view=today"), null);
+});
+
+test("direct nested-reader close fallbacks never fabricate browser history depth", () => {
+  assert.equal(readerDepthAfterNestedClose(undefined), 0);
+  assert.equal(readerDepthAfterNestedClose(0), 0);
+  assert.equal(readerDepthAfterNestedClose(1), 0);
+  assert.equal(readerDepthAfterNestedClose(3), 2);
 });
