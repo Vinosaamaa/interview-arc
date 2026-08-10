@@ -1427,7 +1427,10 @@ export async function removeExtraActivity(ownerId: string, id: string) {
     )),
     db.select().from(leetcodeCodeAttempts).where(and(eq(leetcodeCodeAttempts.ownerId, ownerId), eq(leetcodeCodeAttempts.activityId, id))),
     db.select().from(voiceCaptureIntents).where(and(eq(voiceCaptureIntents.ownerId, ownerId), eq(voiceCaptureIntents.activityId, id))),
-    db.select().from(liveMutationReceipts).where(and(eq(liveMutationReceipts.ownerId, ownerId), eq(liveMutationReceipts.activityId, id))),
+    db.select({ operationId: liveMutationReceipts.operationId })
+      .from(liveMutationReceipts)
+      .where(and(eq(liveMutationReceipts.ownerId, ownerId), eq(liveMutationReceipts.activityId, id)))
+      .limit(1),
   ]);
   if (
     timer?.startedAt ||
