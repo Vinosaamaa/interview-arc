@@ -4,6 +4,7 @@ import { z } from "zod";
 import { codeAttemptReviewInputSchema } from "./code-attempt-review-schema";
 import { codeLineCount } from "../db/code-attempt-review";
 import {
+  getBehavioralFoundationStatus,
   queryBehavioralEvidence,
   setBehavioralClaimStatus,
   upsertBehavioralEvidenceItem,
@@ -2368,6 +2369,26 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
     async ({ questionId }) => {
       try {
         const result = await queryBehavioralEvidence(ownerId, questionId);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_behavioral_foundation_status",
+    {
+      description: "Read the bounded owner-private Behavioral Foundation aggregate used by the website: evidence and claim counts, question coverage, unresolved gaps, truncation, and truthful capability availability. This read never returns local paths, source locators, raw documents, raw code, private remotes, or credentials.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async () => {
+      try {
+        const result = await getBehavioralFoundationStatus(ownerId);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           structuredContent: result,

@@ -18,6 +18,7 @@ enabled_tools = [
   "upsert_behavioral_evidence_item",
   "set_behavioral_claim_status",
   "query_behavioral_evidence",
+  "get_behavioral_foundation_status",
   "save_leetcode_code_attempt",
   "get_specialist_write_status",
   "retry_specialist_writes",

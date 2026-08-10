@@ -66,6 +66,7 @@ import {
 } from "./journey-insights";
 import { readMasterPanePreference, writeMasterPanePreference } from "./ui-preferences";
 import { effectiveProfileTags, isReusableSolutionProfile } from "./solution-profile-policy";
+import BehavioralFoundation from "./behavioral-foundation";
 import {
   formatPracticeTimerTimestamp,
   formatPracticeTimestamp,
@@ -4784,6 +4785,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     ];
     const finishedCount = bankEntries.filter((entry) => entry.finished).length;
     const finishedPercent = bankEntries.length ? Math.round((finishedCount / bankEntries.length) * 100) : 0;
+    const behavioralCurriculum = bankFor("behavioral").filter(isResumeCurriculumQuestion);
+    const completedBehavioralCurriculum = behavioralCurriculum
+      .filter((question) => Boolean(latestFinishedAttempt(libraryEntries, "behavioral", question)))
+      .map((question) => question.id);
     const activeBankFilterCount = bankLevelFilters.length + bankAttentionFilters.length;
     const hasBankFilters = bankTypeFilters.length > 0
       || bankAttentionFilters.length > 0
@@ -4827,6 +4832,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           <article className="system_design"><strong>{bankFor("system_design").length}</strong><span>System designs</span></article>
           <article className="behavioral"><strong>{bankFor("behavioral").length}</strong><span>Behavioral prompts</span></article>
         </div>
+        <BehavioralFoundation
+          curriculumQuestionIds={behavioralCurriculum.map((question) => question.id)}
+          completedCurriculumQuestionIds={completedBehavioralCurriculum}
+        />
         <div className={`bank-master-detail ${masterPaneOpen ? "master-pane-open" : ""} ${selectedProblem ? "reader-workspace" : ""} ${nestedReaderFocus ? "nested-reader-focus" : ""} ${readerClosing ? "reader-closing" : ""}`}>
         <div
           className="bank-master-pane"

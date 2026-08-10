@@ -1,4 +1,4 @@
-import { and, asc, eq, getTableColumns, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 
 import { getDb } from "./index";
 import {
@@ -561,6 +561,131 @@ export async function queryBehavioralEvidence(ownerId: string, questionId: strin
       claims: claimRows.length > BEHAVIORAL_CLAIM_LIMIT,
       gaps: claimRows.length > BEHAVIORAL_CLAIM_LIMIT || allGaps.length > BEHAVIORAL_GAP_LIMIT,
       storyCandidates: false,
+    },
+  };
+}
+
+const BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT = 50;
+
+export async function getBehavioralFoundationStatus(ownerId: string) {
+  const db = getDb();
+  const [evidenceSummaryRows, claimSummaryRows, questionCoverageRows, claimDetailRows] = await Promise.all([
+    db.select({
+      total: sql<number>`count(*)`,
+      accepted: sql<number>`sum(case when ${behavioralEvidenceItems.candidateState} = 'accepted' then 1 else 0 end)`,
+      pending: sql<number>`sum(case when ${behavioralEvidenceItems.candidateState} = 'pending' then 1 else 0 end)`,
+      rejected: sql<number>`sum(case when ${behavioralEvidenceItems.candidateState} = 'rejected' then 1 else 0 end)`,
+      superseded: sql<number>`sum(case when ${behavioralEvidenceItems.candidateState} = 'superseded' then 1 else 0 end)`,
+      projects: sql<number>`count(distinct ${behavioralEvidenceItems.projectKey})`,
+      sourceRevisions: sql<number>`count(distinct ${behavioralEvidenceItems.sourceRevision})`,
+      latestUpdatedAt: sql<number | null>`max(${behavioralEvidenceItems.updatedAt})`,
+    }).from(behavioralEvidenceItems).where(eq(behavioralEvidenceItems.ownerId, ownerId)),
+    db.select({
+      total: sql<number>`count(*)`,
+      unverified: sql<number>`sum(case when ${behavioralClaims.status} = 'unverified' then 1 else 0 end)`,
+      partial: sql<number>`sum(case when ${behavioralClaims.status} = 'partial' then 1 else 0 end)`,
+      verified: sql<number>`sum(case when ${behavioralClaims.status} = 'verified' then 1 else 0 end)`,
+      contradicted: sql<number>`sum(case when ${behavioralClaims.status} = 'contradicted' then 1 else 0 end)`,
+      questions: sql<number>`count(distinct ${behavioralClaims.questionId})`,
+      latestUpdatedAt: sql<number | null>`max(${behavioralClaims.updatedAt})`,
+    }).from(behavioralClaims).where(eq(behavioralClaims.ownerId, ownerId)),
+    db.select({
+      questionId: behavioralClaims.questionId,
+      claims: sql<number>`count(*)`,
+      verified: sql<number>`sum(case when ${behavioralClaims.status} = 'verified' then 1 else 0 end)`,
+      contradicted: sql<number>`sum(case when ${behavioralClaims.status} = 'contradicted' then 1 else 0 end)`,
+      gaps: sql<number>`sum(json_array_length(${behavioralClaims.gaps}))`,
+    }).from(behavioralClaims)
+      .where(eq(behavioralClaims.ownerId, ownerId))
+      .groupBy(behavioralClaims.questionId)
+      .orderBy(asc(behavioralClaims.questionId)),
+    db.select({
+      claimId: behavioralClaims.claimId,
+      questionId: behavioralClaims.questionId,
+      status: behavioralClaims.status,
+      gaps: behavioralClaims.gaps,
+      updatedAt: behavioralClaims.updatedAt,
+    }).from(behavioralClaims)
+      .where(eq(behavioralClaims.ownerId, ownerId))
+      .orderBy(desc(behavioralClaims.updatedAt), asc(behavioralClaims.claimId))
+      .limit(BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT + 1),
+  ]);
+
+  const evidenceSummary = evidenceSummaryRows[0] ?? {
+    total: 0,
+    accepted: 0,
+    pending: 0,
+    rejected: 0,
+    superseded: 0,
+    projects: 0,
+    sourceRevisions: 0,
+    latestUpdatedAt: null,
+  };
+  const claimSummary = claimSummaryRows[0] ?? {
+    total: 0,
+    unverified: 0,
+    partial: 0,
+    verified: 0,
+    contradicted: 0,
+    questions: 0,
+    latestUpdatedAt: null,
+  };
+  const visibleClaimRows = claimDetailRows.slice(0, BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT);
+  const allGaps: Array<{ claimId: string; questionId: string; text: string }> = [];
+  for (const claim of visibleClaimRows) {
+    const claimGaps = claim.gaps as string[];
+    const gapSlots = Math.max(0, BEHAVIORAL_GAP_LIMIT + 1 - allGaps.length);
+    allGaps.push(...claimGaps.slice(0, gapSlots).map((text) => ({
+      claimId: claim.claimId,
+      questionId: claim.questionId,
+      text,
+    })));
+  }
+
+  return {
+    schemaVersion: 1 as const,
+    evidence: {
+      total: Number(evidenceSummary.total),
+      accepted: Number(evidenceSummary.accepted ?? 0),
+      pending: Number(evidenceSummary.pending ?? 0),
+      rejected: Number(evidenceSummary.rejected ?? 0),
+      superseded: Number(evidenceSummary.superseded ?? 0),
+      projects: Number(evidenceSummary.projects),
+      sourceRevisions: Number(evidenceSummary.sourceRevisions),
+    },
+    claims: {
+      total: Number(claimSummary.total),
+      unverified: Number(claimSummary.unverified ?? 0),
+      partial: Number(claimSummary.partial ?? 0),
+      verified: Number(claimSummary.verified ?? 0),
+      contradicted: Number(claimSummary.contradicted ?? 0),
+      questions: Number(claimSummary.questions),
+    },
+    questionCoverage: questionCoverageRows.map((row) => ({
+      questionId: row.questionId,
+      claims: Number(row.claims),
+      verified: Number(row.verified ?? 0),
+      contradicted: Number(row.contradicted ?? 0),
+      gaps: Number(row.gaps ?? 0),
+    })),
+    gaps: allGaps.slice(0, BEHAVIORAL_GAP_LIMIT),
+    capabilities: {
+      evidenceRead: "available" as const,
+      sourceRegistry: "not_available" as const,
+      storyBank: "not_available" as const,
+      resumeLibrary: "not_available" as const,
+    },
+    lastUpdatedAt: Math.max(
+      Number(evidenceSummary.latestUpdatedAt ?? 0),
+      Number(claimSummary.latestUpdatedAt ?? 0),
+    ) || null,
+    limits: {
+      claimDetails: BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT,
+      gaps: BEHAVIORAL_GAP_LIMIT,
+    },
+    truncated: {
+      claimDetails: claimDetailRows.length > BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT,
+      gaps: claimDetailRows.length > BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT || allGaps.length > BEHAVIORAL_GAP_LIMIT,
     },
   };
 }
