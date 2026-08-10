@@ -83,6 +83,25 @@ async function request(path, { token = ownerToken, ...init } = {}) {
   return { status: response.status, headers: response.headers, body };
 }
 
+async function queryLocalD1(command) {
+  const { stdout } = await run(wrangler, [
+    "d1", "execute", "DB", "--local", "--persist-to", persistence,
+    "--config", config, "--command", command, "--json",
+  ]);
+  return JSON.parse(stdout)[0]?.results ?? [];
+}
+
+function currentPacificDate(now = Date.now()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(now));
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
 before(async () => {
   releaseIntegrationLock = await acquireMcpIntegrationLock();
   persistence = await mkdtemp(join(tmpdir(), "interview-arc-live-v1-"));
@@ -112,6 +131,8 @@ before(async () => {
       ('owner-live','activity-race-b','2026-08-09','workbench-live','{"schemaVersion":2,"id":"activity-race-b","questionId":"design-race-b","date":"2026-08-09","source":"extra","type":"system_design","title":"Race B","allocatedSeconds":3600,"timerGroupId":"activity-race-b","timingSource":"website","status":"planned"}',1,100),
       ('owner-live','activity-finish-a','2026-08-09','workbench-live','{"schemaVersion":2,"id":"activity-finish-a","questionId":"design-finish-a","date":"2026-08-09","source":"extra","type":"system_design","title":"Finish A","allocatedSeconds":3600,"sessionId":"session-finish-race","timerGroupId":"activity-finish-a","timingSource":"website","status":"planned"}',1,100),
       ('owner-live','activity-finish-b','2026-08-09','workbench-live','{"schemaVersion":2,"id":"activity-finish-b","questionId":"design-finish-b","date":"2026-08-09","source":"extra","type":"system_design","title":"Finish B","allocatedSeconds":3600,"sessionId":"session-finish-race","timerGroupId":"activity-finish-b","timingSource":"website","status":"planned"}',1,100),
+      ('owner-live','activity-published','2026-08-09','workbench-live','{"schemaVersion":2,"id":"activity-published","questionId":"design-published","date":"2026-08-09","source":"extra","type":"system_design","title":"Published result","allocatedSeconds":3600,"timerGroupId":"activity-published","timingSource":"website","status":"completed"}',1,100),
+      ('owner-live','activity-review-attempt','2026-08-09','workbench-live','{"schemaVersion":2,"id":"activity-review-attempt","questionId":"design-review","date":"2026-08-09","source":"extra","type":"system_design","title":"Review attempt","allocatedSeconds":3600,"timerGroupId":"activity-review-attempt","timingSource":"website","status":"planned","reviewOfActivityId":"activity-review-origin","reviewReason":"failed"}',1,100),
       ('other-live','activity-design','2026-08-09','workbench-other','{"schemaVersion":2,"id":"activity-design","questionId":"other-design","date":"2026-08-09","source":"daily","type":"system_design","title":"Other owner secret","prompt":"Do not disclose.","allocatedSeconds":3600,"timerGroupId":"activity-design","timingSource":"website","status":"planned"}',1,100);
     INSERT INTO live_sessions
       (owner_id,id,date,workbench_id,payload,revision,updated_at)
@@ -123,10 +144,17 @@ before(async () => {
       (owner_id,subject_id,kind,accumulated_seconds,started_at,running_since,completed,completed_at,revision,updated_at)
     VALUES
       ('owner-live','activity-design','activity',120,1000,NULL,0,NULL,3,2000),
+      ('owner-live','activity-published','activity',300,1000,NULL,1,2000,2,2000),
       ('owner-live','session-live','session',120,1000,NULL,0,NULL,2,2000);
     INSERT INTO outcomes
       (owner_id,activity_id,outcome,revision,updated_at)
     VALUES ('owner-live','activity-design','solved_after_reviewing_approach',2,2000);
+    INSERT INTO outcomes
+      (owner_id,activity_id,outcome,revision,updated_at)
+    VALUES ('owner-live','activity-published','solved',1,2000);
+    INSERT INTO publication_statuses
+      (owner_id,activity_id,date,status,artifact_path,published_at,revision,updated_at)
+    VALUES ('owner-live','activity-published','2026-08-09','published','practice/system-design/published.md',2000,1,2000);
     INSERT INTO practice_focus
       (owner_id,activity_id,session_id,focused_at,updated_at)
     VALUES ('owner-live','activity-design','session-live',1000,2000);
@@ -187,6 +215,7 @@ test("Live bearer reads resume only the resolved owner's System Design work", as
     "activity-terminal",
     "activity-race-a",
     "activity-race-b",
+    "activity-review-attempt",
   ]);
   const plannedDesign = today.body.activities.find(({ id }) => id === "activity-design");
   assert.equal(plannedDesign.timer.revision, 3);
@@ -1010,6 +1039,124 @@ test("Live stages and streams optional private clips without weakening accepted 
   });
   assert.equal(changedFenceReuse.status, 409);
   assert.equal(changedFenceReuse.body.code, "idempotency_conflict");
+});
+
+test("Live result commands keep published results read-only", async () => {
+  const holderId = "77777777-7777-4777-8777-777777777777";
+  const holderSessionId = "room-published-result";
+  const acquired = await request("/live/v1/activities/activity-published/lease/acquire", {
+    method: "POST",
+    body: { operationId: "published-result-lease", holderId, holderSessionId },
+  });
+  assert.equal(acquired.status, 200, JSON.stringify({ body: acquired.body, workerLog }));
+  const identity = { holderId, holderSessionId, fencingToken: acquired.body.lease.fencingToken };
+  const setResult = await request("/live/v1/activities/activity-published/commands", {
+    method: "POST",
+    body: {
+      operationId: "published-result-set",
+      command: "set_result",
+      ...identity,
+      expectedWorkbenchRevision: 100,
+      expectedResultRevision: 1,
+      result: "failed",
+    },
+  });
+  assert.equal(setResult.status, 409);
+  assert.equal(setResult.body.code, "timer_completed");
+  assert.equal(setResult.body.retryable, false);
+
+  const clearResult = await request("/live/v1/activities/activity-published/commands", {
+    method: "POST",
+    body: {
+      operationId: "published-result-clear",
+      command: "clear_result",
+      ...identity,
+      expectedWorkbenchRevision: 100,
+      expectedResultRevision: 1,
+    },
+  });
+  assert.equal(clearResult.status, 409);
+  assert.equal(clearResult.body.code, "timer_completed");
+  const persisted = await request("/live/v1/activities/activity-published");
+  assert.equal(persisted.body.activity.result.value, "solved");
+  assert.equal(persisted.body.activity.result.revision, 1);
+});
+
+test("a solved review attempt advances recall cadence and uses its Pacific completion date", async () => {
+  const holderId = "88888888-8888-4888-8888-888888888888";
+  const holderSessionId = "room-review-attempt";
+  const acquired = await request("/live/v1/activities/activity-review-attempt/lease/acquire", {
+    method: "POST",
+    body: { operationId: "review-attempt-lease", holderId, holderSessionId },
+  });
+  assert.equal(acquired.status, 200, JSON.stringify({ body: acquired.body, workerLog }));
+  const identity = { holderId, holderSessionId, fencingToken: acquired.body.lease.fencingToken };
+  const command = (body) => request("/live/v1/activities/activity-review-attempt/commands", {
+    method: "POST",
+    body: { ...identity, expectedWorkbenchRevision: 100, ...body },
+  });
+  const result = await command({
+    operationId: "review-attempt-result",
+    command: "set_result",
+    expectedResultRevision: 0,
+    result: "solved",
+  });
+  assert.equal(result.status, 200);
+  const started = await command({
+    operationId: "review-attempt-start",
+    command: "start",
+    expectedTimerRevision: 0,
+  });
+  assert.equal(started.status, 200);
+  const pair = await request("/live/v1/activities/activity-review-attempt/turn-pairs", {
+    method: "POST",
+    body: {
+      operationId: "review-attempt-pair",
+      ...identity,
+      pairId: "review-attempt-pair",
+      candidate: {
+        turnId: "review-attempt-candidate",
+        text: "I can now retrieve the design trade-offs without looking at the prior approach.",
+        evidenceStatus: "verified",
+        occurredAt: 7_000,
+      },
+      interviewer: {
+        turnId: "review-attempt-interviewer",
+        displayMarkdown: "That recall is sufficient.",
+        spokenText: "That recall is sufficient.",
+        occurredAt: 7_100,
+      },
+    },
+  });
+  assert.equal(pair.status, 200);
+  const completionDate = currentPacificDate();
+  assert.notEqual(completionDate, "2026-08-09");
+  const finished = await command({
+    operationId: "review-attempt-finish",
+    command: "finish",
+    expectedTimerRevision: started.body.activity.activity.timer.revision,
+    expectedResultRevision: result.body.activity.activity.result.revision,
+  });
+  assert.equal(finished.status, 200, JSON.stringify({ body: finished.body, workerLog }));
+
+  const reviews = await queryLocalD1(`
+    SELECT activity_id, reason, interval_days, stage, review_count
+    FROM review_schedules
+    WHERE owner_id = 'owner-live' AND review_key = 'system_design:design-review';
+  `);
+  assert.deepEqual(reviews, [{
+    activity_id: "activity-review-attempt",
+    reason: "successful_recall",
+    interval_days: 21,
+    stage: 1,
+    review_count: 1,
+  }]);
+  const publications = await queryLocalD1(`
+    SELECT date, status
+    FROM publication_statuses
+    WHERE owner_id = 'owner-live' AND activity_id = 'activity-review-attempt';
+  `);
+  assert.deepEqual(publications, [{ date: completionDate, status: "ready" }]);
 });
 
 test("Live commands atomically control result, timer, and deterministic finish-next state", async () => {

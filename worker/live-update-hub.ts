@@ -53,7 +53,9 @@ export class OwnerLiveUpdateHub {
           await this.state.storage.get<number>("liveRevision") ?? 0,
         );
         revision = Math.max(currentLiveRevision, requestedRevision);
-        await this.state.storage.put("liveRevision", revision);
+        if (revision > currentLiveRevision) {
+          await this.state.storage.put("liveRevision", revision);
+        }
         if (revision > currentRevision) await this.state.storage.put("revision", revision);
       } else {
         revision = Math.max(currentRevision + 1, requestedRevision);

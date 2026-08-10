@@ -6,7 +6,49 @@ import {
   boundedFallbackDelay,
   liveUpdateReconciliationMode,
   parseLiveUpdate,
+  subscribeToLiveUpdates,
 } from "../app/live-event-policy.ts";
+
+class FakeWebSocket {
+  static OPEN = 1;
+  static instances = [];
+
+  readyState = 0;
+  listeners = new Map();
+
+  constructor() {
+    FakeWebSocket.instances.push(this);
+  }
+
+  addEventListener(type, listener) {
+    const listeners = this.listeners.get(type) ?? [];
+    listeners.push(listener);
+    this.listeners.set(type, listeners);
+  }
+
+  emit(type, event = {}) {
+    if (type === "open") this.readyState = FakeWebSocket.OPEN;
+    if (type === "close") this.readyState = 3;
+    for (const listener of this.listeners.get(type) ?? []) {
+      try {
+        listener(event);
+      } catch {
+        // Browser EventTarget reports listener errors without rethrowing them to
+        // the WebSocket producer. Keep this fake aligned with that behavior.
+      }
+    }
+  }
+
+  close() {
+    this.readyState = 3;
+  }
+}
+
+async function flushMicrotasks() {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
 
 test("live update envelopes require a positive monotonic revision", () => {
   assert.deepEqual(parseLiveUpdate(JSON.stringify({
@@ -59,7 +101,6 @@ test("all live clients use server push instead of recurring one-second HTTP read
 
   assert.match(liveSync, /subscribeToLiveUpdates/);
   assert.match(liveSync, /reconcilePracticeState/);
-  assert.match(liveSync, /onFallback:\s*reconcilePracticeState/);
   assert.doesNotMatch(liveSync, /setInterval\(\(\) => void reconcileTimers\(\), 1000\)/);
   assert.doesNotMatch(homeClient, /void reconcileTimers\(\);\s*\}, 1000\)/);
   assert.match(companion, /new WebSocket/);
@@ -68,10 +109,159 @@ test("all live clients use server push instead of recurring one-second HTTP read
   assert.match(mcpConfig, /LIVE_UPDATES/);
 });
 
-test("live clients compare revisions within each invalidation scope", async () => {
-  const policy = await readFile(new URL("../app/live-event-policy.ts", import.meta.url), "utf8");
-  assert.match(policy, /latestRevisionByScope/);
-  assert.match(policy, /latestRevisionByScope\.get\(update\.scope\)/);
+test("live clients filter duplicate revisions independently within each scope", async () => {
+  const originalWebSocket = globalThis.WebSocket;
+  FakeWebSocket.instances = [];
+  globalThis.WebSocket = FakeWebSocket;
+  const updates = [];
+  const unsubscribe = subscribeToLiveUpdates({
+    url: "wss://example.test/live",
+    onUpdate: (update) => updates.push(`${update.scope}:${update.revision}`),
+    onFallback: () => {},
+  });
+  try {
+    const socket = FakeWebSocket.instances[0];
+    const emit = async (scope, revision) => {
+      socket.emit("message", { data: JSON.stringify({
+        type: "practice_changed",
+        revision,
+        scope,
+        occurredAt: 1_721_000_000_000 + revision,
+      }) });
+      await flushMicrotasks();
+    };
+    await emit("live", 20);
+    await emit("timer", 20);
+    await emit("live", 20);
+    await emit("timer", 19);
+    assert.deepEqual(updates, ["live:20", "timer:20"]);
+  } finally {
+    unsubscribe();
+    globalThis.WebSocket = originalWebSocket;
+  }
+});
+
+test("a failed reconciliation keeps the same scoped revision retryable", async () => {
+  const originalWebSocket = globalThis.WebSocket;
+  FakeWebSocket.instances = [];
+  globalThis.WebSocket = FakeWebSocket;
+  let attempts = 0;
+  const unsubscribe = subscribeToLiveUpdates({
+    url: "wss://example.test/live",
+    onUpdate: () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("transient projection read failure");
+    },
+    onFallback: () => {},
+  });
+  try {
+    const socket = FakeWebSocket.instances[0];
+    const event = { data: JSON.stringify({
+      type: "practice_changed",
+      revision: 41,
+      scope: "live",
+      occurredAt: 1_721_000_000_000,
+    }) };
+    socket.emit("message", event);
+    await flushMicrotasks();
+    socket.emit("message", event);
+    await flushMicrotasks();
+    assert.equal(attempts, 2);
+  } finally {
+    unsubscribe();
+    globalThis.WebSocket = originalWebSocket;
+  }
+});
+
+test("a failed reconciliation schedules bounded authoritative recovery while connected", async () => {
+  const originalWebSocket = globalThis.WebSocket;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const timers = new Map();
+  let nextTimer = 1;
+  FakeWebSocket.instances = [];
+  globalThis.WebSocket = FakeWebSocket;
+  globalThis.setTimeout = (callback, delay) => {
+    const id = nextTimer++;
+    timers.set(id, { callback, delay });
+    return id;
+  };
+  globalThis.clearTimeout = (id) => timers.delete(id);
+  let fallbackReads = 0;
+  const unsubscribe = subscribeToLiveUpdates({
+    url: "wss://example.test/live",
+    onUpdate: () => {
+      throw new Error("transient projection read failure");
+    },
+    onFallback: () => {
+      fallbackReads += 1;
+    },
+  });
+  try {
+    const socket = FakeWebSocket.instances[0];
+    socket.emit("open");
+    socket.emit("message", { data: JSON.stringify({
+      type: "practice_changed",
+      revision: 42,
+      scope: "live",
+      occurredAt: 1_721_000_000_001,
+    }) });
+    await flushMicrotasks();
+    assert.equal(timers.size, 1);
+    const [{ callback, delay }] = timers.values();
+    assert.ok(delay >= 15_000 && delay <= 17_250);
+    await callback();
+    assert.equal(fallbackReads, 1);
+  } finally {
+    unsubscribe();
+    globalThis.WebSocket = originalWebSocket;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});
+
+test("reopening after a disconnect performs an authoritative recovery read", async () => {
+  const originalWebSocket = globalThis.WebSocket;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const timers = new Map();
+  let nextTimer = 1;
+  FakeWebSocket.instances = [];
+  globalThis.WebSocket = FakeWebSocket;
+  globalThis.setTimeout = (callback, delay) => {
+    const id = nextTimer++;
+    timers.set(id, { callback, delay });
+    return id;
+  };
+  globalThis.clearTimeout = (id) => timers.delete(id);
+  let fallbackReads = 0;
+  const unsubscribe = subscribeToLiveUpdates({
+    url: "wss://example.test/live",
+    onUpdate: () => {},
+    onFallback: () => {
+      fallbackReads += 1;
+    },
+  });
+  try {
+    FakeWebSocket.instances[0].emit("open");
+    assert.equal(fallbackReads, 0);
+    FakeWebSocket.instances[0].emit("close");
+    const reconnect = [...timers.values()].find(({ delay }) => delay === 1_000);
+    const disconnectedFallback = [...timers.values()].find(({ delay }) => delay >= 15_000);
+    assert.ok(reconnect);
+    assert.ok(disconnectedFallback);
+    await disconnectedFallback.callback();
+    assert.equal(fallbackReads, 1);
+    reconnect.callback();
+    FakeWebSocket.instances[1].emit("open");
+    await flushMicrotasks();
+    assert.equal(fallbackReads, 2);
+  } finally {
+    unsubscribe();
+    globalThis.WebSocket = originalWebSocket;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
 });
 
 test("Voice reliability keeps decisions race-safe, status-first, and conflicts terminal", async () => {

@@ -6,14 +6,18 @@ import { OwnerLiveUpdateHub } from "../worker/live-update-hub.ts";
 function hubFixture() {
   const stored = new Map();
   const delivered = [];
+  const puts = [];
   const state = {
     storage: {
       get: async (key) => stored.get(key),
-      put: async (key, value) => stored.set(key, value),
+      put: async (key, value) => {
+        puts.push([key, value]);
+        stored.set(key, value);
+      },
     },
     getWebSockets: () => [{ send: (value) => delivered.push(JSON.parse(value)) }],
   };
-  return { hub: new OwnerLiveUpdateHub(state), stored, delivered };
+  return { hub: new OwnerLiveUpdateHub(state), stored, delivered, puts };
 }
 
 test("Live invalidations preserve the committed owner revision and disclose no content", async () => {
@@ -37,8 +41,8 @@ test("Live invalidations preserve the committed owner revision and disclose no c
   assert.equal(Number.isSafeInteger(delivered[0].occurredAt), true);
 });
 
-test("Live invalidations remain monotonic when an older requested revision arrives", async () => {
-  const { hub, stored, delivered } = hubFixture();
+test("Live invalidations remain monotonic without rewriting an unchanged high-water mark", async () => {
+  const { hub, stored, delivered, puts } = hubFixture();
   stored.set("revision", 500);
   stored.set("liveRevision", 500);
 
@@ -51,6 +55,7 @@ test("Live invalidations remain monotonic when an older requested revision arriv
   assert.equal(delivered[0].revision, 500);
   assert.equal(stored.get("revision"), 500);
   assert.equal(stored.get("liveRevision"), 500);
+  assert.deepEqual(puts, []);
 });
 
 test("Live invalidations use the D1-backed Live revision independently of legacy event traffic", async () => {

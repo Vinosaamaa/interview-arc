@@ -96,6 +96,8 @@ type ActivityPayload = {
   prompt?: string;
   allocatedSeconds: number;
   sessionId?: string | null;
+  reviewOfActivityId?: string;
+  reviewReason?: ReviewReason;
 };
 
 type SessionPayload = {
@@ -2112,9 +2114,13 @@ function discardPendingVoiceStatements(ownerId: string, activityId: string, now:
   ];
 }
 
-function resultReviewReason(result: LiveResult): ReviewReason | null {
+function resultReviewReason(
+  result: LiveResult,
+  reviewOfActivityId?: string,
+): ReviewReason | null {
   if (result === "failed") return "failed";
   if (result === "solved_after_reviewing_approach") return "approach_review";
+  if (result === "solved" && reviewOfActivityId) return "successful_recall";
   return null;
 }
 
@@ -2122,13 +2128,14 @@ function scheduleReviewStatements(input: {
   ownerId: string;
   activityId: string;
   questionId?: string;
+  reviewOfActivityId?: string;
   result: LiveResult;
   completedDate: string;
   prior: typeof reviewSchedules.$inferSelect | undefined;
   now: number;
 }): LiveDbStatement[] {
   const db = getDb();
-  const reason = resultReviewReason(input.result);
+  const reason = resultReviewReason(input.result, input.reviewOfActivityId);
   if (!reason) {
     return [db.delete(reviewSchedules).where(and(
       eq(reviewSchedules.ownerId, input.ownerId),
@@ -2137,6 +2144,7 @@ function scheduleReviewStatements(input: {
   }
   const reviewKey = `system_design:${input.questionId ?? input.activityId}`;
   const intervalDays = reviewIntervalDays(reason, input.prior?.intervalDays);
+  const successfulRecall = reason === "successful_recall";
   return [db.insert(reviewSchedules).values({
     ownerId: input.ownerId,
     reviewKey,
@@ -2147,8 +2155,10 @@ function scheduleReviewStatements(input: {
     reason,
     dueDate: addDays(input.completedDate, intervalDays),
     intervalDays,
-    stage: 0,
-    reviewCount: input.prior?.reviewCount ?? 0,
+    stage: successfulRecall ? (input.prior?.stage ?? 0) + 1 : 0,
+    reviewCount: successfulRecall
+      ? (input.prior?.reviewCount ?? 0) + 1
+      : (input.prior?.reviewCount ?? 0),
     createdAt: input.prior?.createdAt ?? input.now,
     updatedAt: input.now,
   }).onConflictDoUpdate({
@@ -2161,8 +2171,10 @@ function scheduleReviewStatements(input: {
       reason,
       dueDate: addDays(input.completedDate, intervalDays),
       intervalDays,
-      stage: 0,
-      reviewCount: input.prior?.reviewCount ?? 0,
+      stage: successfulRecall ? (input.prior?.stage ?? 0) + 1 : 0,
+      reviewCount: successfulRecall
+        ? (input.prior?.reviewCount ?? 0) + 1
+        : (input.prior?.reviewCount ?? 0),
       updatedAt: input.now,
     },
   })];
@@ -2195,6 +2207,16 @@ function publicationReadyStatement(
       updatedAt: now,
     },
   });
+}
+
+function unpublishedResultInvariant(ownerId: string, activityId: string) {
+  const db = getDb();
+  return d1TransactionalInvariantGuard(db, sql`NOT EXISTS (
+    SELECT 1 FROM ${publicationStatuses}
+    WHERE ${publicationStatuses.ownerId} = ${ownerId}
+      AND ${publicationStatuses.activityId} = ${activityId}
+      AND ${publicationStatuses.status} = 'published'
+  )`);
 }
 
 function finishPreconditionError(code: string, message: string): never {
@@ -2270,11 +2292,23 @@ export async function applyLiveActivityCommand(
     if (input.command === "set_result" && !input.result) {
       throw new LiveV1Error("invalid_request", "set_result requires a supported result.", 400, false);
     }
-    statements.push(outcomeRevisionInvariant(
-      input.ownerId,
-      input.activityId,
-      input.expectedResultRevision,
-    ));
+    const publicationRows = await db.select({ status: publicationStatuses.status })
+      .from(publicationStatuses)
+      .where(and(
+        eq(publicationStatuses.ownerId, input.ownerId),
+        eq(publicationStatuses.activityId, input.activityId),
+      ));
+    if (publicationRows[0]?.status === "published") {
+      finishPreconditionError("timer_completed", "Published results are permanently read-only.");
+    }
+    statements.push(
+      outcomeRevisionInvariant(
+        input.ownerId,
+        input.activityId,
+        input.expectedResultRevision,
+      ),
+      unpublishedResultInvariant(input.ownerId, input.activityId),
+    );
     if (input.command === "clear_result") {
       if (result) {
         statements.push(db.delete(outcomes).where(and(
@@ -2313,6 +2347,7 @@ export async function applyLiveActivityCommand(
           ownerId: input.ownerId,
           activityId: input.activityId,
           questionId: item.payload.questionId,
+          reviewOfActivityId: item.payload.reviewOfActivityId,
           result: input.result!,
           completedDate: dateInPracticeTimeZone(new Date(timer.completedAt ?? input.now)),
           prior: priorRows[0],
@@ -2602,6 +2637,7 @@ export async function applyLiveActivityCommand(
       }
 
       const reviewKey = `system_design:${item.payload.questionId ?? input.activityId}`;
+      const completionDate = dateInPracticeTimeZone(new Date(input.now));
       const [priorReviews, publicationRows] = await Promise.all([
         db.select().from(reviewSchedules).where(and(
           eq(reviewSchedules.ownerId, input.ownerId),
@@ -2620,7 +2656,7 @@ export async function applyLiveActivityCommand(
         publicationReadyStatement(
           input.ownerId,
           input.activityId,
-          item.payload.date,
+          completionDate,
           publicationRows[0],
           input.now,
         ),
@@ -2628,8 +2664,9 @@ export async function applyLiveActivityCommand(
           ownerId: input.ownerId,
           activityId: input.activityId,
           questionId: item.payload.questionId,
+          reviewOfActivityId: item.payload.reviewOfActivityId,
           result: result.outcome,
-          completedDate: dateInPracticeTimeZone(new Date(input.now)),
+          completedDate: completionDate,
           prior: priorReviews[0],
           now: input.now,
         }),
