@@ -183,7 +183,7 @@ export default function ReviewQueueView({
         <details className="review-expanded-controls">
           <summary aria-label={`Expanded review filters, ${activeFilterCount} active`}><span aria-hidden="true">☷</span>{activeFilterCount > 0 && <i>{activeFilterCount}</i>}</summary>
           <div>
-            <fieldset><legend>Specialty</legend>{SPECIALTIES.map((specialty) => <button type="button" key={specialty.value} aria-pressed={specialties.includes(specialty.value)} onClick={() => toggleSpecialty(specialty.value)}>{specialty.label}</button>)}</fieldset>
+            <fieldset><legend>Specialty</legend><button type="button" aria-pressed={specialties.length === 0} onClick={() => setUiState((current) => ({ ...current, specialties: [] }))}>All</button>{SPECIALTIES.map((specialty) => <button type="button" key={specialty.value} aria-pressed={specialties.includes(specialty.value)} onClick={() => toggleSpecialty(specialty.value)}>{specialty.label}</button>)}</fieldset>
             <fieldset><legend>Due date</legend>{([['now', 'Due now'], ['week', '7 days'], ['month', '30 days'], ['all', 'Any']] as const).map(([value, label]) => <button type="button" key={value} aria-pressed={due === value} onClick={() => updateUiState("due", value)}>{label}</button>)}</fieldset>
             <fieldset><legend>Sort by</legend>{([['priority', 'Priority'], ['due', 'Due date'], ['review_time', 'Review time'], ['last_attempt', 'Last attempt']] as const).map(([value, label]) => <button type="button" key={value} aria-pressed={sort === value} onClick={() => updateUiState("sort", value)}>{label}</button>)}</fieldset>
             <footer><button type="button" onClick={resetFilters} disabled={activeFilterCount === 0}>Reset</button><span>{visibleItems.length} item{visibleItems.length === 1 ? "" : "s"}</span></footer>
@@ -191,21 +191,17 @@ export default function ReviewQueueView({
         </details>
       </div>
 
-      <div className="review-specialty-rail" role="group" aria-label="Filter by specialty">
-        {SPECIALTIES.map((specialty) => <button type="button" key={specialty.value} aria-pressed={specialties.includes(specialty.value)} onClick={() => toggleSpecialty(specialty.value)}>{specialty.label}</button>)}
-        {activeFilterCount > 0 && <button type="button" className="review-reset" onClick={resetFilters}>Reset {activeFilterCount}</button>}
-      </div>
-
       {errorMessage && <div className="review-queue-error" role="alert"><div><strong>That queue change was not saved.</strong><span>{errorMessage} The queue has been refreshed from D1.</span></div><button type="button" onClick={onDismissError}>Dismiss</button></div>}
       {stale && <div className="review-queue-stale" role="status"><strong>Showing the last saved queue.</strong><span>Interview Arc will reconcile with D1 when the connection returns. Add and defer actions stay in the retry queue.</span></div>}
 
       <div className="review-queue-sheet" aria-busy={loading}>
+        {!loading && visibleItems.length > 0 && <div className="review-column-headings" aria-hidden="true"><span /><span>Type</span><span>Practice</span><span>Previous result</span><span>Last attempt</span><span>Why due</span><span>Time</span><span>Actions</span></div>}
         {loading ? <div className="review-queue-loading" aria-label="Loading review queue">{Array.from({ length: 4 }, (_, index) => <span key={index} />)}</div> : items.length === 0 ? <div className="review-queue-empty"><i aria-hidden="true">✓</i><div><strong>Nothing needs another pass.</strong><span>Completed attempts return here when their next recall window opens.</span></div></div> : visibleItems.length === 0 ? <div className="review-queue-empty filtered"><div><strong>No reviews match these filters.</strong><button type="button" onClick={resetFilters}>Reset filters</button></div></div> : <div className="recall-spine">
           {HORIZONS.map((horizon) => {
             const groupItems = visibleItems.filter((item) => item.horizon === horizon.value);
             if (!groupItems.length) return null;
             return <section className={`recall-group ${horizon.value}`} key={horizon.value} aria-labelledby={`review-${horizon.value}`}>
-              <header><span aria-hidden="true" /><div><h2 id={`review-${horizon.value}`}>{horizon.label}</h2><p>{horizon.note}</p></div></header>
+              <header><div><h2 id={`review-${horizon.value}`}>{horizon.label}</h2><p>{horizon.note}</p></div></header>
               <div className="recall-rows">{groupItems.map((item) => {
                 const selected = selectedKeySet.has(item.reviewKey);
                 const blocked = isBlocked(item);

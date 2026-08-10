@@ -7,6 +7,7 @@ import {
 } from "./behavioral-foundation-contract";
 
 type Props = {
+  enabled?: boolean;
   curriculumQuestionIds: string[];
   completedCurriculumQuestionIds: string[];
 };
@@ -24,6 +25,7 @@ function readableUpdatedAt(value: number | null) {
 }
 
 export default function BehavioralFoundation({
+  enabled = true,
   curriculumQuestionIds,
   completedCurriculumQuestionIds,
 }: Props) {
@@ -31,6 +33,7 @@ export default function BehavioralFoundation({
   const [requestKey, setRequestKey] = useState(0);
 
   useEffect(() => {
+    if (!enabled) return;
     const controller = new AbortController();
     void fetch("/api/behavioral-foundation", { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
@@ -43,7 +46,7 @@ export default function BehavioralFoundation({
         setStatus(null);
       });
     return () => controller.abort();
-  }, [requestKey]);
+  }, [enabled, requestKey]);
 
   const curriculumQuestionSet = useMemo(() => new Set(curriculumQuestionIds), [curriculumQuestionIds]);
   const evidenceLinkedCurriculum = status?.questionCoverage.filter((item) => curriculumQuestionSet.has(item.questionId)).length ?? 0;
