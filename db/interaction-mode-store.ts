@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { classifyD1TransactionalFailure, d1TransactionalInvariantGuard } from "./d1-transactional-guard";
 import { getDb } from "./index";
 import { classifyInteractionModeAtomicFailure, InteractionModeError } from "./interaction-mode-policy";
@@ -28,6 +28,50 @@ export type InteractionModeMutationReceipt = {
 
 const transitionReadLimit = 100;
 
+export type InteractionModeCurrent = {
+  activityId: string;
+  interactionModeId: string;
+  registryVersion: string;
+  revision: number;
+  source: InteractionModeSource;
+  lastMutationId: string;
+  updatedAt: number;
+};
+
+export type InteractionModeSummary = {
+  state: "recorded" | "needs_selection";
+  current: InteractionModeCurrent | null;
+};
+
+function interactionModeCurrent(row: typeof practiceInteractionModeStates.$inferSelect): InteractionModeCurrent {
+  return {
+    activityId: row.activityId,
+    interactionModeId: row.interactionModeId,
+    registryVersion: row.registryVersion,
+    revision: row.revision,
+    source: row.source,
+    lastMutationId: row.lastMutationId,
+    updatedAt: row.updatedAt,
+  };
+}
+
+export async function readPracticeInteractionModeSummaries(
+  ownerId: string,
+  activityIds: readonly string[],
+): Promise<Record<string, InteractionModeSummary>> {
+  const ids = [...new Set(activityIds.filter(Boolean))];
+  if (ids.length === 0) return {};
+  const rows = await getDb().select().from(practiceInteractionModeStates).where(and(
+    eq(practiceInteractionModeStates.ownerId, ownerId),
+    inArray(practiceInteractionModeStates.activityId, ids),
+  ));
+  const currentByActivity = new Map(rows.map((row) => [row.activityId, interactionModeCurrent(row)]));
+  return Object.fromEntries(ids.map((activityId) => {
+    const current = currentByActivity.get(activityId) ?? null;
+    return [activityId, { state: current ? "recorded" : "needs_selection", current }];
+  }));
+}
+
 async function readCurrentPracticeInteractionMode(ownerId: string, activityId: string) {
   const rows = await getDb().select().from(practiceInteractionModeStates).where(and(
     eq(practiceInteractionModeStates.ownerId, ownerId),
@@ -50,15 +94,7 @@ export async function readPracticeInteractionMode(ownerId: string, activityId: s
   const transitions = latestTransitions.slice(0, transitionReadLimit).reverse();
   return {
     state: current ? "recorded" as const : "needs_selection" as const,
-    current: current ? {
-      activityId: current.activityId,
-      interactionModeId: current.interactionModeId,
-      registryVersion: current.registryVersion,
-      revision: current.revision,
-      source: current.source,
-      lastMutationId: current.lastMutationId,
-      updatedAt: current.updatedAt,
-    } : null,
+    current: current ? interactionModeCurrent(current) : null,
     transitionHistory: {
       order: "chronological" as const,
       limit: transitionReadLimit,

@@ -26,6 +26,15 @@ import {
 import { buildPracticeSnapshot } from "./practice-snapshot";
 import { addReviewQueueItemsToToday, deferReviewToNextWeek } from "./review-queue";
 import { removePlannedActivities } from "./today-planning";
+import { readPracticeActivityIdentity } from "./practice-activity-identity";
+import {
+  interactionModeMutationFingerprint,
+  InteractionModeError,
+  resolveInteractionMode,
+  type InteractionModePhase,
+  type PracticeSpecialty,
+} from "./interaction-mode-policy";
+import { setPracticeInteractionModeAtomic } from "./interaction-mode-store";
 import type {
   PracticeStateExtraActivity,
   PracticeStateSession,
@@ -95,6 +104,17 @@ export type PracticeStateCommand =
       expectedWorkbenchRevision: number;
       reviewKeys: string[];
     }
+  | {
+      type: "interaction-mode-set";
+      activityId: string;
+      interactionModeId: string;
+      expectedRevision: number;
+      mutationId: string;
+      source: "explicit_user_instruction";
+      reason: string;
+      occurredAt: number;
+      authorization: "explicit_user_instruction";
+    }
   | { type: "workbench-start-fresh"; workbenchId: string };
 
 export type PracticeStateUpdateScope = "timer" | "publication" | "practice";
@@ -107,11 +127,89 @@ export type PracticeStateCommandResult = {
 export class PracticeStateCommandInputError extends Error {
   constructor(
     message: string,
-    readonly status: 400 | 409 = 400,
+    readonly status: 400 | 404 | 409 | 503 = 400,
     readonly retryable?: boolean,
+    readonly code?: string,
   ) {
     super(message);
     this.name = "PracticeStateCommandInputError";
+  }
+}
+
+function interactionModeCommandError(error: InteractionModeError) {
+  const retryable = error.details.retryable === true;
+  const conflictCodes = new Set([
+    "interaction_mode_already_active",
+    "interaction_mode_atomic_conflict",
+    "interaction_mode_mutation_identity_conflict",
+    "interaction_mode_stale_revision",
+    "interaction_mode_trigger_turn_mismatch",
+  ]);
+  return new PracticeStateCommandInputError(
+    error.message,
+    retryable ? 503 : conflictCodes.has(error.code) ? 409 : 400,
+    retryable,
+    error.code,
+  );
+}
+
+async function setInteractionModeFromWebsite(
+  ownerId: string,
+  command: Extract<PracticeStateCommand, { type: "interaction-mode-set" }>,
+  now: number,
+) {
+  if (
+    !command.activityId
+    || !command.interactionModeId?.trim()
+    || !Number.isInteger(command.expectedRevision)
+    || command.expectedRevision < 0
+    || !command.mutationId
+    || command.mutationId.length > 160
+    || command.source !== "explicit_user_instruction"
+    || !command.reason?.trim()
+    || command.reason.length > 2_000
+    || !Number.isInteger(command.occurredAt)
+    || command.occurredAt <= 0
+    || command.authorization !== "explicit_user_instruction"
+  ) {
+    throw new PracticeStateCommandInputError("Invalid interaction-mode mutation.");
+  }
+  const activity = await readPracticeActivityIdentity(ownerId, command.activityId);
+  if (!activity) {
+    throw new PracticeStateCommandInputError(
+      "That owner-scoped practice activity does not exist.",
+      404,
+      false,
+      "interaction_mode_activity_not_found",
+    );
+  }
+  try {
+    const resolved = resolveInteractionMode(
+      command.interactionModeId,
+      activity.specialty as PracticeSpecialty,
+      activity.phase as InteractionModePhase,
+    );
+    const canonical = {
+      activityId: command.activityId,
+      interactionModeId: resolved.mode.id,
+      expectedRevision: command.expectedRevision,
+      source: command.source,
+      reason: command.reason.trim(),
+      occurredAt: command.occurredAt,
+      authorization: command.authorization,
+    } as const;
+    const requestFingerprint = await interactionModeMutationFingerprint(canonical);
+    return await setPracticeInteractionModeAtomic({
+      ownerId,
+      ...canonical,
+      registryVersion: resolved.registryVersion,
+      mutationId: command.mutationId,
+      requestFingerprint,
+      now,
+    });
+  } catch (error) {
+    if (error instanceof InteractionModeError) throw interactionModeCommandError(error);
+    throw error;
   }
 }
 
@@ -361,6 +459,10 @@ export async function executePracticeStateCommand(
         mutationId: command.mutationId,
         reviewKeys: command.reviewKeys,
       }, now);
+      break;
+    }
+    case "interaction-mode-set": {
+      mutationReceipt = await setInteractionModeFromWebsite(ownerId, command, now);
       break;
     }
     case "workbench-start-fresh": {

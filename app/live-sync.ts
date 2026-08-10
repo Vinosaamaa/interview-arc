@@ -59,6 +59,8 @@ type ServerLiveState = {
   historyActivities: ExtraActivity[];
   historyFocusBlocks: FocusBlock[];
   historySessions: LocalSession[];
+  interactionModeRegistry: LocalDraft["interactionModeRegistry"];
+  interactionModes: LocalDraft["interactionModes"];
   focusedActivityId: string | null;
   focusedSessionId: string | null;
   focusedAt: number | null;
@@ -133,6 +135,8 @@ function serverToDraft(state: ServerLiveState, offset: number, date = ""): Local
     historyActivities: state.historyActivities ?? state.extraActivities ?? [],
     historyFocusBlocks: state.historyFocusBlocks ?? state.focusBlocks ?? [],
     historySessions: (state.historySessions ?? state.sessions ?? []).map((session) => ({ ...session, date: session.date ?? date })),
+    interactionModeRegistry: state.interactionModeRegistry ?? null,
+    interactionModes: state.interactionModes ?? {},
     focusedActivityId: state.focusedActivityId ?? null,
     focusedSessionId: state.focusedSessionId ?? null,
     focusedAt: state.focusedAt,
@@ -191,6 +195,8 @@ function mergeDrafts(server: LocalDraft, local: LocalDraft) {
     historyActivities: server.historyActivities,
     historyFocusBlocks: server.historyFocusBlocks,
     historySessions: server.historySessions,
+    interactionModeRegistry: server.interactionModeRegistry ?? local.interactionModeRegistry,
+    interactionModes: server.interactionModes,
     focusedActivityId: server.focusedActivityId ?? local.focusedActivityId,
     focusedSessionId: server.focusedSessionId ?? local.focusedSessionId,
     focusedAt: server.focusedAt ?? local.focusedAt,
@@ -226,6 +232,8 @@ function readDraft(date: string): LocalDraft {
       historyActivities: parsed.historyActivities ?? parsed.extraActivities ?? [],
       historyFocusBlocks: parsed.historyFocusBlocks ?? parsed.focusBlocks ?? [],
       historySessions: (parsed.historySessions ?? parsed.sessions ?? []).map((session) => ({ ...session, date: session.date ?? date })),
+      interactionModeRegistry: parsed.interactionModeRegistry ?? null,
+      interactionModes: parsed.interactionModes ?? {},
       focusedActivityId: parsed.focusedActivityId ?? null,
       focusedSessionId: parsed.focusedSessionId ?? null,
       focusedAt: parsed.focusedAt ?? null,

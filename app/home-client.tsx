@@ -41,6 +41,7 @@ import {
   type TimerDraft,
   type TranscriptTurn,
   type LeetCodeCodeAttempt,
+  type InteractionModeSummary,
 } from "./live-types";
 import { careerHeatLevel, type CareerJob, type CareerSummary, type JobStatus } from "./career-work";
 import { useLiveState, useReadOnlyLiveState } from "./live-sync";
@@ -1503,6 +1504,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [pendingReviewKeys, setPendingReviewKeys] = useState<string[]>([]);
   const [freshDayConfirmOpen, setFreshDayConfirmOpen] = useState(false);
   const [requiredResultIds, setRequiredResultIds] = useState<string[]>([]);
+  const [lastModeIntent, setLastModeIntent] = useState<{ activityId: string; interactionModeId: string } | null>(null);
   const [libraryTypeFilters, setLibraryTypeFilters] = useState<ActivityType[]>(workspaceUiMemory.libraryTypeFilters ?? []);
   const [libraryAttentionFilters, setLibraryAttentionFilters] = useState<LibraryAttentionFilter[]>(workspaceUiMemory.libraryAttentionFilters ?? []);
   const [librarySearch, setLibrarySearch] = useState(workspaceUiMemory.librarySearch ?? "");
@@ -1955,6 +1957,70 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const assignedExtraIds = new Set(allSessions.flatMap((session) => session.activityIds));
   const looseActivities = allTodayActivities.filter((activity) => !assignedExtraIds.has(activity.id));
   const looseFocusBlocks = currentFocusBlocks.filter((block) => !assignedExtraIds.has(block.id));
+
+  function interactionModePhase(activityId: string) {
+    const timer = draft.timers[activityId];
+    return timer?.completed
+      ? "review" as const
+      : timer?.startedAt
+        ? "active_attempt" as const
+        : "fresh_attempt" as const;
+  }
+
+  function interactionModeDefinition(activityId: string) {
+    const modeId = draft.interactionModes[activityId]?.current?.interactionModeId;
+    return draft.interactionModeRegistry?.modes.find((mode) => mode.id === modeId) ?? null;
+  }
+
+  function interactionModeBadge(activityId: string) {
+    const summary = draft.interactionModes[activityId];
+    const definition = interactionModeDefinition(activityId);
+    const pending = summary?.current?.lastMutationId.startsWith("pending:");
+    return (
+      <span className={`interaction-mode-badge ${summary?.state === "recorded" ? "recorded" : "unselected"} ${pending ? "pending" : ""}`}>
+        {pending ? "Saving" : definition?.label ?? summary?.current?.interactionModeId ?? "Choose mode"}
+      </span>
+    );
+  }
+
+  function selectInteractionMode(activity: JournalActivity, interactionModeId: string) {
+    const registry = draft.interactionModeRegistry;
+    if (!registry) return;
+    const timestamp = Date.now();
+    const mutationId = `website-mode-${crypto.randomUUID()}`;
+    const prior = draft.interactionModes[activity.id]?.current ?? null;
+    const expectedRevision = prior?.revision ?? 0;
+    setLastModeIntent({ activityId: activity.id, interactionModeId });
+    setDraft((current) => ({
+      ...current,
+      interactionModes: {
+        ...current.interactionModes,
+        [activity.id]: {
+          state: "recorded",
+          current: {
+            activityId: activity.id,
+            interactionModeId,
+            registryVersion: registry.registryVersion,
+            revision: expectedRevision + 1,
+            source: "explicit_user_instruction",
+            lastMutationId: `pending:${mutationId}`,
+            updatedAt: timestamp,
+          },
+        } satisfies InteractionModeSummary,
+      },
+    }));
+    enqueue({
+      type: "interaction-mode-set",
+      activityId: activity.id,
+      interactionModeId,
+      expectedRevision,
+      mutationId,
+      source: "explicit_user_instruction",
+      reason: `The owner selected ${interactionModeId} on Today.`,
+      occurredAt: timestamp,
+      authorization: "explicit_user_instruction",
+    });
+  }
 
   const careerQueryParams = useCallback((cursor?: string) => {
     const params = new URLSearchParams({
@@ -4544,7 +4610,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
               return (
                 <div className="problem-ledger-row" key={activity.id}>
                   <span className={`row-count ${isActivityComplete(activity) ? "complete" : ""}`}>{isActivityComplete(activity) ? "✓" : problemIndex + 1}</span>
-                  <div className="problem-title"><strong>{activity.title}</strong><ActivityStateStamp timer={draft.timers[activity.id]} /><span>{activity.notes ?? "Coding problem"}</span>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open on LeetCode ↗</a>}</div>
+                  <div className="problem-title"><strong>{activity.title}</strong><div className="activity-state-pills"><ActivityStateStamp timer={draft.timers[activity.id]} />{interactionModeBadge(activity.id)}</div><span>{activity.notes ?? "Coding problem"}</span>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open on LeetCode ↗</a>}</div>
                   <ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} locked={sessionLocked} />
                   <ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} disabled={!draft.timers[activity.id]?.startedAt || draft.publicationStatuses[activity.id] === "published"} required={requiredResultIds.includes(activity.id)} />
                   <PublicationControl status={publicationStatusFor(activity)} />
@@ -4562,7 +4628,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             const isExtra = item.source === "extra";
             return (
               <section className={`mock-sheet ${item.type}`} key={item.id}>
-                <div className="mock-topline"><span className={`type-chip ${item.type}`}>{typeLabel(item.type)}</span><div className="mock-state-actions"><ActivityStateStamp timer={draft.timers[item.id]} />{isExtra && <button className={`icon-action danger ${draft.timers[item.id]?.startedAt ? "action-locked" : ""}`} onClick={() => removeActivity(item.id)} aria-disabled={Boolean(draft.timers[item.id]?.startedAt)} aria-label={`Remove ${item.title}`} title={draft.timers[item.id]?.startedAt ? "Started activities stay in your history" : "Remove untouched activity"}><Icon name="close" /></button>}</div></div>
+                <div className="mock-topline"><span className={`type-chip ${item.type}`}>{typeLabel(item.type)}</span><div className="mock-state-actions"><ActivityStateStamp timer={draft.timers[item.id]} />{interactionModeBadge(item.id)}{isExtra && <button className={`icon-action danger ${draft.timers[item.id]?.startedAt ? "action-locked" : ""}`} onClick={() => removeActivity(item.id)} aria-disabled={Boolean(draft.timers[item.id]?.startedAt)} aria-label={`Remove ${item.title}`} title={draft.timers[item.id]?.startedAt ? "Started activities stay in your history" : "Remove untouched activity"}><Icon name="close" /></button>}</div></div>
                 <h3>{item.title}</h3>
                 <p>{item.prompt}</p>
                 <div className="mock-controls">
@@ -4624,13 +4690,40 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             : <div className="orchestrator-empty"><strong>No activity running.</strong><span>Start any activity stopwatch when you are ready. Voice stays unlinked until then.</span></div>}
         </section>
 
+        {railActivity && draft.interactionModeRegistry && <section className="interaction-mode-selector" aria-labelledby="interaction-mode-heading">
+          <div className="interaction-mode-selector-copy">
+            <span className="eyebrow">INTERACTION MODE</span>
+            <strong id="interaction-mode-heading">How should the specialist work with you?</strong>
+            <small>{interactionModeDefinition(railActivity.id)?.description ?? "Choose explicitly. Legacy activities stay unclassified until you do."}</small>
+          </div>
+          <div className="interaction-mode-options" role="group" aria-label={`Interaction mode for ${railActivity.title}`}>
+            {draft.interactionModeRegistry.modes.filter((mode) => (
+              !mode.deprecated
+              && mode.supportedSpecialties.includes(railActivity.type)
+              && mode.selectableWhen.includes(interactionModePhase(railActivity.id))
+            )).map((mode) => {
+              const summary = draft.interactionModes[railActivity.id];
+              const selected = summary?.current?.interactionModeId === mode.id;
+              const pending = summary?.current?.lastMutationId.startsWith("pending:");
+              return <button key={mode.id} type="button" aria-pressed={selected} disabled={Boolean(pending || selected)} onClick={() => selectInteractionMode(railActivity, mode.id)} title={mode.helpPolicy}><strong>{mode.label}</strong><span>{mode.description}</span></button>;
+            })}
+          </div>
+          <div className="interaction-mode-status" aria-live="polite">
+            {draft.interactionModes[railActivity.id]?.current?.lastMutationId.startsWith("pending:")
+              ? <span className="saving">Saving mode…</span>
+              : mutationError?.type === "interaction-mode-set"
+                ? <><span className="error">{mutationError.message}</span>{lastModeIntent?.activityId === railActivity.id && <button type="button" onClick={() => selectInteractionMode(railActivity, lastModeIntent.interactionModeId)}>Try again</button>}</>
+                : <span>{interactionModeDefinition(railActivity.id) ? `Revision ${draft.interactionModes[railActivity.id]?.current?.revision ?? 0} · synced` : "Selection required"}</span>}
+          </div>
+        </section>}
+
         <div className="today-actions"><div><h2>Current workbench</h2><p>It stays open across Pacific midnight until you publish it or explicitly start fresh.</p></div><div><button className="secondary-action" onClick={() => allTodayActivities.length || allSessions.length || currentFocusBlocks.length ? setFreshDayConfirmOpen(true) : startFreshPracticeDay()}>Start fresh day</button><button className="secondary-action" onClick={openNewActivity}>Add activities</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
         <BehavioralTargetBindings activities={allTodayActivities} sessions={allSessions} />
         <section className="session-stack">{allSessions.length ? allSessions.map(renderSession) : <div className="quiet-empty session-empty"><strong>No session planned yet.</strong><span>Add another session to choose up to six coding questions and one question from each available interview bank.</span></div>}</section>
 
         <section className="loose-section">
           <div className="section-title"><div><span className="eyebrow">STANDALONE PRACTICE</span><h2>Outside a full session</h2><p>Each card keeps only the controls you need: stopwatch, result, journal state, star, and remove.</p></div></div>
-          {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add activities” above to select across the banks or create a custom prompt.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <StandaloneActivityCard key={activity.id} title={activity.title} onRemove={() => removeActivity(activity.id)} removeDisabled={Boolean(draft.timers[activity.id]?.startedAt)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><div className="loose-activity-meta"><small>{typeLabel(activity.type)}</small><ActivityStateStamp timer={draft.timers[activity.id]} /></div><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} /><ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} disabled={!draft.timers[activity.id]?.startedAt || draft.publicationStatuses[activity.id] === "published"} required={requiredResultIds.includes(activity.id)} /><PublicationControl status={publicationStatusFor(activity)} /><button className={`star-control ${isStarred(activity.type, activity.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(activity.type, activity.questionId)} disabled={!activity.questionId} aria-label={`${isStarred(activity.type, activity.questionId) ? "Unstar" : "Star"} ${activity.title}`}>★</button></StandaloneActivityCard>)}</div>}
+          {looseActivities.length === 0 ? <div className="quiet-empty"><strong>No standalone activities yet.</strong><span>Use “Add activities” above to select across the banks or create a custom prompt.</span></div> : <div className="loose-list">{looseActivities.map((activity) => <StandaloneActivityCard key={activity.id} title={activity.title} onRemove={() => removeActivity(activity.id)} removeDisabled={Boolean(draft.timers[activity.id]?.startedAt)}><span className={`type-mark ${activity.type}`}>{typeMark(activity.type)}</span><div className="loose-activity-copy"><div className="loose-activity-meta"><small>{typeLabel(activity.type)}</small><ActivityStateStamp timer={draft.timers[activity.id]} />{interactionModeBadge(activity.id)}</div><strong>{activity.title}</strong>{activity.url && <a href={activity.url} target="_blank" rel="noreferrer">Open reference ↗</a>}</div><ActivityTimer activity={activity} timer={draft.timers[activity.id]} now={now} onToggle={toggleTimer} onComplete={completeTimer} /><ResultFlag activityType={activity.type} outcome={draft.outcomes[activity.id] ?? activity.outcome} onChange={(outcome) => setOutcome(activity.id, outcome)} disabled={!draft.timers[activity.id]?.startedAt || draft.publicationStatuses[activity.id] === "published"} required={requiredResultIds.includes(activity.id)} /><PublicationControl status={publicationStatusFor(activity)} /><button className={`star-control ${isStarred(activity.type, activity.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(activity.type, activity.questionId)} disabled={!activity.questionId} aria-label={`${isStarred(activity.type, activity.questionId) ? "Unstar" : "Star"} ${activity.title}`}>★</button></StandaloneActivityCard>)}</div>}
           {looseFocusBlocks.length > 0 && <section className="career-focus-section" aria-labelledby="career-focus-title"><header><div><span className="eyebrow">CAREER WORK</span><h3 id="career-focus-title">Job application focus</h3></div><small>Time only · no result or publication required</small></header><div className="career-focus-list">{looseFocusBlocks.map((block) => <article className={`career-focus-card ${draft.timers[block.id]?.completed ? "completed" : ""}`} key={block.id}><span className="career-focus-mark" aria-hidden="true">J</span><div className="career-focus-copy"><small>Focus block · {Math.round(block.plannedSeconds / 60)} planned min</small><strong>{block.title}</strong>{block.note && <p>{block.note}</p>}</div><ActivityTimer activity={block} timer={draft.timers[block.id]} now={now} onToggle={toggleTimer} onComplete={completeFocusBlock} /><div className="career-focus-actions"><button className="icon-action" onClick={() => editFocusBlock(block)} disabled={Boolean(draft.timers[block.id]?.completed)} aria-label={`Edit ${block.title}`}>✎</button><button className="icon-action" onClick={() => removeFocusBlockFromToday(block.id)} disabled={Boolean(draft.timers[block.id]?.startedAt)} aria-label={`Remove ${block.title}`}>×</button></div></article>)}</div></section>}
         </section>
       </>
