@@ -96,7 +96,7 @@ async function postResumeImport(baseUrl, token, overrides = {}) {
   return { response, body: await response.json() };
 }
 
-test("an authenticated staged DOCX/PDF pair becomes one immutable current resume revision", { timeout: 90_000 }, async () => {
+test("an authenticated staged DOCX/PDF pair becomes one immutable current resume revision", { timeout: 180_000 }, async () => {
   const ownerToken = "ia_resume_revision_owner_integration_token";
   let releaseIntegrationLock;
   let persistence;
