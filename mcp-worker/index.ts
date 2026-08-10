@@ -1799,7 +1799,9 @@ function specialistToolFailure(error: unknown) {
       structuredContent: {
         error: error.message,
         code,
-        retryable: (error instanceof SpecialistControlError
+        retryable: typeof (error as { retryable?: unknown }).retryable === "boolean"
+          ? (error as { retryable: boolean }).retryable
+          : (error instanceof SpecialistControlError
           || error instanceof InteractionModeError)
           && typeof error.details.retryable === "boolean"
           ? error.details.retryable
@@ -2761,7 +2763,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
             improve: z.array(z.string()),
           }),
           modelAnswer: z.string().min(1),
-          finalAnswerOperationId: z.string().min(1).max(200).optional(),
+          finalAnswerOperationId: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,199}$/).optional(),
           finalAnswerSnapshot: behavioralFinalAnswerSnapshotInputSchema.optional(),
           finalAnswerCorrection: behavioralFinalAnswerCorrectionSchema.optional(),
           solution: z.string().optional(),

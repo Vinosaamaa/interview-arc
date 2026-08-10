@@ -3901,6 +3901,7 @@ export async function saveSpecialistFinalization(
         throw new BehavioralFinalAnswerError(
           "behavioral_final_answer_dependency_changed",
           "The transcript, accepted evidence, or Solution Profile revision changed during finalization; reread the activity before retrying.",
+          true,
         );
       }
       if (specialty === "leetcode") {

@@ -107,12 +107,13 @@ export type StoredBehavioralFinalAnswerSnapshot = {
 
 export class BehavioralFinalAnswerError extends Error {
   readonly code: string;
-  readonly retryable = false;
+  readonly retryable: boolean;
 
-  constructor(code: string, message: string) {
+  constructor(code: string, message: string, retryable = false) {
     super(message);
     this.name = "BehavioralFinalAnswerError";
     this.code = code;
+    this.retryable = retryable;
   }
 }
 

@@ -192,6 +192,15 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
       requestInit: { headers: { authorization: `Bearer ${token}` } },
     }));
 
+    const invalidOperationId = await callRaw(client, "save_specialist_finalization", finalization({
+      activityId,
+      questionId,
+      operationId: "INVALID-OPERATION",
+      answer,
+      responseTurnId,
+    }));
+    assert.equal(invalidOperationId.isError, true);
+
     const first = await call(client, "save_specialist_finalization", finalization({
       activityId,
       questionId,

@@ -106,6 +106,11 @@ test("correction validation never silently replaces an immutable snapshot", () =
   );
 });
 
+test("dependency races are explicitly retryable while validation errors remain terminal", () => {
+  assert.equal(new BehavioralFinalAnswerError("validation", "terminal").retryable, false);
+  assert.equal(new BehavioralFinalAnswerError("dependency", "reread and retry", true).retryable, true);
+});
+
 test("Markdown and local HTML exports project the same authoritative snapshot", () => {
   const stored = {
     snapshotRevision: 1,
