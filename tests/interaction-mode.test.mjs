@@ -112,7 +112,7 @@ test("the MCP and D1 tracer keep registry IDs extensible and writes transaction-
 
 test("atomic failure retryability never treats an invariant conflict as transient", () => {
   assert.deepEqual(
-    classifyInteractionModeAtomicFailure(new Error("malformed JSON")),
+    classifyInteractionModeAtomicFailure("invariant_conflict"),
     {
       code: "interaction_mode_atomic_conflict",
       message: "The interaction-mode preconditions conflicted, so no state was changed.",
@@ -120,7 +120,7 @@ test("atomic failure retryability never treats an invariant conflict as transien
     },
   );
   assert.equal(
-    classifyInteractionModeAtomicFailure(new Error("temporary D1 transport failure")).retryable,
+    classifyInteractionModeAtomicFailure("unknown").retryable,
     true,
   );
 });

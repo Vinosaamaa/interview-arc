@@ -2427,15 +2427,6 @@
             "to_revision"
           ],
           "isUnique": true
-        },
-        "practice_interaction_mode_transition_activity_idx": {
-          "name": "practice_interaction_mode_transition_activity_idx",
-          "columns": [
-            "owner_id",
-            "activity_id",
-            "to_revision"
-          ],
-          "isUnique": false
         }
       },
       "foreignKeys": {},

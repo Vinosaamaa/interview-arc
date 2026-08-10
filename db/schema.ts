@@ -1038,11 +1038,6 @@ export const practiceInteractionModeTransitions = sqliteTable(
       table.activityId,
       table.toRevision,
     ),
-    index("practice_interaction_mode_transition_activity_idx").on(
-      table.ownerId,
-      table.activityId,
-      table.toRevision,
-    ),
   ],
 );
 

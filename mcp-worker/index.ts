@@ -49,6 +49,7 @@ import {
   PracticeStateCommandInputError,
   type PracticeStateCommand,
 } from "../db/practice-state-commands";
+import { readPracticeActivityIdentity } from "../db/practice-activity-identity";
 import { leetCodeQuestionMetadataSchema } from "../db/question-metadata";
 import {
   connectOwnerLiveUpdates,
@@ -1985,12 +1986,7 @@ async function authoritativeSpecialistState(ownerId: string, date?: string) {
 }
 
 async function resolveInteractionModeActivity(ownerId: string, activityId: string) {
-  const snapshot = await buildPracticeSnapshot(
-    ownerId,
-    dateInPracticeTimeZone(),
-    { includeAll: true },
-  );
-  const activity = snapshot.activities.find((candidate) => candidate.id === activityId);
+  const activity = await readPracticeActivityIdentity(ownerId, activityId);
   if (!activity) {
     throw new InteractionModeError(
       "interaction_mode_activity_not_found",
@@ -1998,15 +1994,10 @@ async function resolveInteractionModeActivity(ownerId: string, activityId: strin
       { activityId, retryable: false },
     );
   }
-  const phase: InteractionModePhase = activity.status === "planned"
-    ? "fresh_attempt"
-    : activity.status === "completed"
-      ? "review"
-      : "active_attempt";
   return {
     activityId,
-    specialty: activity.type as PracticeSpecialty,
-    phase,
+    specialty: activity.specialty as PracticeSpecialty,
+    phase: activity.phase as InteractionModePhase,
   };
 }
 

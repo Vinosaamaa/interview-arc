@@ -44,4 +44,3 @@ CREATE TABLE `practice_interaction_mode_transitions` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `practice_interaction_mode_transition_revision_idx` ON `practice_interaction_mode_transitions` (`owner_id`,`activity_id`,`to_revision`);--> statement-breakpoint
-CREATE INDEX `practice_interaction_mode_transition_activity_idx` ON `practice_interaction_mode_transitions` (`owner_id`,`activity_id`,`to_revision`);

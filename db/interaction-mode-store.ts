@@ -1,5 +1,5 @@
 import { and, desc, eq, sql } from "drizzle-orm";
-import { d1TransactionalInvariantGuard } from "./d1-transactional-guard";
+import { classifyD1TransactionalFailure, d1TransactionalInvariantGuard } from "./d1-transactional-guard";
 import { getDb } from "./index";
 import { classifyInteractionModeAtomicFailure, InteractionModeError } from "./interaction-mode-policy";
 import {
@@ -28,19 +28,24 @@ export type InteractionModeMutationReceipt = {
 
 const transitionReadLimit = 100;
 
+async function readCurrentPracticeInteractionMode(ownerId: string, activityId: string) {
+  const rows = await getDb().select().from(practiceInteractionModeStates).where(and(
+    eq(practiceInteractionModeStates.ownerId, ownerId),
+    eq(practiceInteractionModeStates.activityId, activityId),
+  )).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function readPracticeInteractionMode(ownerId: string, activityId: string) {
   const db = getDb();
   const [currentRows, latestTransitions] = await Promise.all([
-    db.select().from(practiceInteractionModeStates).where(and(
-      eq(practiceInteractionModeStates.ownerId, ownerId),
-      eq(practiceInteractionModeStates.activityId, activityId),
-    )).limit(1),
+    readCurrentPracticeInteractionMode(ownerId, activityId),
     db.select().from(practiceInteractionModeTransitions).where(and(
       eq(practiceInteractionModeTransitions.ownerId, ownerId),
       eq(practiceInteractionModeTransitions.activityId, activityId),
     )).orderBy(desc(practiceInteractionModeTransitions.toRevision)).limit(transitionReadLimit + 1),
   ]);
-  const current = currentRows[0] ?? null;
+  const current = currentRows;
   const transitionHistoryTruncated = latestTransitions.length > transitionReadLimit;
   const transitions = latestTransitions.slice(0, transitionReadLimit).reverse();
   return {
@@ -107,6 +112,36 @@ function mutationConflict() {
   );
 }
 
+async function validateMutationPreconditions(input: {
+  ownerId: string;
+  activityId: string;
+  expectedRevision: number;
+  triggerTurnId?: string;
+}) {
+  const [current, validTrigger] = await Promise.all([
+    readCurrentPracticeInteractionMode(input.ownerId, input.activityId),
+    input.triggerTurnId
+      ? triggerTurnExists(input.ownerId, input.activityId, input.triggerTurnId)
+      : Promise.resolve(true),
+  ]);
+  const actualRevision = current?.revision ?? 0;
+  if (actualRevision !== input.expectedRevision) {
+    throw new InteractionModeError(
+      "interaction_mode_stale_revision",
+      "Interaction mode changed in another surface. Read it again before retrying.",
+      { expectedRevision: input.expectedRevision, actualRevision, retryable: false },
+    );
+  }
+  if (!validTrigger) {
+    throw new InteractionModeError(
+      "interaction_mode_trigger_turn_mismatch",
+      "The trigger turn is not an owner-scoped user turn in this activity.",
+      { triggerTurnId: input.triggerTurnId, retryable: false },
+    );
+  }
+  return current;
+}
+
 export async function setPracticeInteractionModeAtomic(input: {
   ownerId: string;
   activityId: string;
@@ -131,27 +166,12 @@ export async function setPracticeInteractionModeAtomic(input: {
     };
   }
 
-  const before = await readPracticeInteractionMode(input.ownerId, input.activityId);
-  const actualRevision = before.current?.revision ?? 0;
-  if (actualRevision !== input.expectedRevision) {
-    throw new InteractionModeError(
-      "interaction_mode_stale_revision",
-      "Interaction mode changed in another surface. Read it again before retrying.",
-      { expectedRevision: input.expectedRevision, actualRevision, retryable: false },
-    );
-  }
-  if (before.current?.interactionModeId === input.interactionModeId) {
+  const before = await validateMutationPreconditions(input);
+  if (before?.interactionModeId === input.interactionModeId) {
     throw new InteractionModeError(
       "interaction_mode_already_active",
       `Interaction mode “${input.interactionModeId}” is already active.`,
-      { actualRevision, retryable: false },
-    );
-  }
-  if (input.triggerTurnId && !await triggerTurnExists(input.ownerId, input.activityId, input.triggerTurnId)) {
-    throw new InteractionModeError(
-      "interaction_mode_trigger_turn_mismatch",
-      "The trigger turn is not an owner-scoped turn in this activity.",
-      { triggerTurnId: input.triggerTurnId, retryable: false },
+      { actualRevision: before.revision, retryable: false },
     );
   }
 
@@ -162,7 +182,7 @@ export async function setPracticeInteractionModeAtomic(input: {
     mutationId: input.mutationId,
     activityId: input.activityId,
     transitionId,
-    fromInteractionModeId: before.current?.interactionModeId ?? null,
+    fromInteractionModeId: before?.interactionModeId ?? null,
     toInteractionModeId: input.interactionModeId,
     fromRevision: input.expectedRevision,
     toRevision,
@@ -280,26 +300,8 @@ export async function setPracticeInteractionModeAtomic(input: {
         ...(await readPracticeInteractionMode(input.ownerId, input.activityId)),
       };
     }
-    const current = await readPracticeInteractionMode(input.ownerId, input.activityId);
-    if ((current.current?.revision ?? 0) !== input.expectedRevision) {
-      throw new InteractionModeError(
-        "interaction_mode_stale_revision",
-        "Interaction mode changed in another surface. Read it again before retrying.",
-        {
-          expectedRevision: input.expectedRevision,
-          actualRevision: current.current?.revision ?? 0,
-          retryable: false,
-        },
-      );
-    }
-    if (input.triggerTurnId && !await triggerTurnExists(input.ownerId, input.activityId, input.triggerTurnId)) {
-      throw new InteractionModeError(
-        "interaction_mode_trigger_turn_mismatch",
-        "The trigger turn is not an owner-scoped turn in this activity.",
-        { triggerTurnId: input.triggerTurnId, retryable: false },
-      );
-    }
-    const failure = classifyInteractionModeAtomicFailure(error);
+    await validateMutationPreconditions(input);
+    const failure = classifyInteractionModeAtomicFailure(classifyD1TransactionalFailure(error));
     throw new InteractionModeError(failure.code, failure.message, {
       retryable: failure.retryable,
     });

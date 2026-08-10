@@ -1,4 +1,5 @@
 import registryData from "../data/interaction-modes.json" with { type: "json" };
+import type { D1TransactionalFailureKind } from "./d1-transactional-guard";
 
 export type PracticeSpecialty = "leetcode" | "system_design" | "behavioral";
 export type InteractionModePhase = "fresh_attempt" | "active_attempt" | "review";
@@ -38,11 +39,8 @@ export class InteractionModeError extends Error {
   }
 }
 
-export function classifyInteractionModeAtomicFailure(error: unknown) {
-  const normalized = String(error).toLowerCase();
-  const deterministicConflict = normalized.includes("malformed json")
-    || normalized.includes("constraint failed");
-  return deterministicConflict
+export function classifyInteractionModeAtomicFailure(kind: D1TransactionalFailureKind) {
+  return kind !== "unknown"
     ? {
         code: "interaction_mode_atomic_conflict",
         message: "The interaction-mode preconditions conflicted, so no state was changed.",
