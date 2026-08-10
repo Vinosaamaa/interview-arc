@@ -9,6 +9,7 @@ import {
   contentBank,
   deferredVoiceCaptureDecisions,
   leetcodeCodeAttempts,
+  leetcodeCodeAttemptReviewBackfills,
   ownerBankQuestions,
   practiceNotes,
   practiceTranscriptTurns,
@@ -18,6 +19,7 @@ import {
   provisionalSolutionProfiles,
   reviewSchedules,
   specialistTasks,
+  typedPracticeExchangeDeletions,
   voiceCaptureIntents,
   voiceExchangeReservations,
   voiceResponseGroupMembers,
@@ -61,6 +63,12 @@ import {
   d1TransactionalInvariantGuard,
   isD1TransactionalInvariantFailure,
 } from "./d1-transactional-guard";
+import {
+  listTypedExchangePairs,
+  resolveTypedExchangePair,
+  typedExchangeDeletionFingerprint,
+  TypedExchangeDeletionError,
+} from "./typed-exchange-deletion";
 
 export type Specialty = "leetcode" | "system_design" | "behavioral";
 export type NoteKind = "remember" | "insight" | "mistake" | "pattern" | "question";
@@ -376,6 +384,23 @@ export async function saveTypedPracticeExchange(
   }
   const db = getDb();
   const requestedIds = [input.userTurn.turnId, input.specialistTurn.turnId];
+  const deletedIdentity = await db.select({ operationId: typedPracticeExchangeDeletions.operationId })
+    .from(typedPracticeExchangeDeletions)
+    .where(and(
+      eq(typedPracticeExchangeDeletions.ownerId, ownerId),
+      eq(typedPracticeExchangeDeletions.activityId, input.activityId),
+      or(
+        inArray(typedPracticeExchangeDeletions.userTurnId, requestedIds),
+        inArray(typedPracticeExchangeDeletions.responseTurnId, requestedIds),
+      ),
+    ));
+  if (deletedIdentity.length) {
+    throw new TypedExchangeDeletionError(
+      "typed_exchange_identity_deleted",
+      "A deleted typed exchange cannot be recreated with the same stable turn IDs.",
+      { operationId: deletedIdentity[0]?.operationId },
+    );
+  }
   const existing = await db.select().from(practiceTranscriptTurns).where(and(
     eq(practiceTranscriptTurns.ownerId, ownerId),
     eq(practiceTranscriptTurns.activityId, input.activityId),
@@ -419,10 +444,30 @@ export async function saveTypedPracticeExchange(
       updatedAt: nowMs,
     },
   ];
-  await db.batch([
-    db.insert(practiceTranscriptTurns).values(values[0]).onConflictDoNothing(),
-    db.insert(practiceTranscriptTurns).values(values[1]).onConflictDoNothing(),
-  ]);
+  const identityNotDeletedGuard = d1TransactionalInvariantGuard(db, sql`NOT EXISTS (
+    SELECT 1 FROM ${typedPracticeExchangeDeletions}
+    WHERE ${typedPracticeExchangeDeletions.ownerId} = ${ownerId}
+      AND ${typedPracticeExchangeDeletions.activityId} = ${input.activityId}
+      AND (
+        ${typedPracticeExchangeDeletions.userTurnId} IN (${input.userTurn.turnId}, ${input.specialistTurn.turnId})
+        OR ${typedPracticeExchangeDeletions.responseTurnId} IN (${input.userTurn.turnId}, ${input.specialistTurn.turnId})
+      )
+  )`);
+  try {
+    await db.batch([
+      identityNotDeletedGuard,
+      db.insert(practiceTranscriptTurns).values(values[0]).onConflictDoNothing(),
+      db.insert(practiceTranscriptTurns).values(values[1]).onConflictDoNothing(),
+    ]);
+  } catch (error) {
+    if (isD1TransactionalInvariantFailure(error)) {
+      throw new TypedExchangeDeletionError(
+        "typed_exchange_identity_deleted",
+        "A deleted typed exchange cannot be recreated with the same stable turn IDs.",
+      );
+    }
+    throw error;
+  }
   const stored = await db.select().from(practiceTranscriptTurns).where(and(
     eq(practiceTranscriptTurns.ownerId, ownerId),
     eq(practiceTranscriptTurns.activityId, input.activityId),
@@ -444,6 +489,326 @@ export async function saveTypedPracticeExchange(
     userTurn: stored.find((turn) => turn.turnId === input.userTurn.turnId)!,
     specialistTurn: stored.find((turn) => turn.turnId === input.specialistTurn.turnId)!,
   };
+}
+
+export type TypedExchangeDeletionReceipt = {
+  status: "deleted";
+  operationId: string;
+  activityId: string;
+  userTurnId: string;
+  responseTurnId: string;
+  deletedTurnIds: string[];
+  preserved: ["activity", "timer", "session", "result", "notes", "code_attempts", "voice_evidence"];
+  deletedAt: number;
+  duplicate: boolean;
+};
+
+function storedTypedExchangeDeletionReceipt(
+  row: typeof typedPracticeExchangeDeletions.$inferSelect,
+  duplicate: boolean,
+) {
+  return {
+    ...(row.receipt as Omit<TypedExchangeDeletionReceipt, "duplicate">),
+    duplicate,
+  };
+}
+
+export async function deleteTypedPracticeExchange(
+  ownerId: string,
+  input: {
+    operationId: string;
+    activityId: string;
+    userTurnId: string;
+    responseTurnId?: string;
+    expectedRevision: number;
+    reason: string;
+  },
+  nowMs: number,
+): Promise<TypedExchangeDeletionReceipt> {
+  const reason = input.reason.trim();
+  if (!reason) {
+    throw new TypedExchangeDeletionError(
+      "typed_exchange_reason_required",
+      "Typed exchange deletion requires a non-empty audit reason.",
+    );
+  }
+  const db = getDb();
+  const requestFingerprint = await typedExchangeDeletionFingerprint({ ...input, reason });
+  const operationRows = await db.select().from(typedPracticeExchangeDeletions).where(and(
+    eq(typedPracticeExchangeDeletions.ownerId, ownerId),
+    eq(typedPracticeExchangeDeletions.operationId, input.operationId),
+  ));
+  if (operationRows[0]) {
+    if (operationRows[0].requestFingerprint !== requestFingerprint) {
+      throw new TypedExchangeDeletionError(
+        "typed_exchange_operation_conflict",
+        "That deletion operation ID was already used with a different immutable payload.",
+        { operationId: input.operationId },
+      );
+    }
+    return storedTypedExchangeDeletionReceipt(operationRows[0], true);
+  }
+
+  const priorDeletionRows = await db.select().from(typedPracticeExchangeDeletions).where(and(
+    eq(typedPracticeExchangeDeletions.ownerId, ownerId),
+    eq(typedPracticeExchangeDeletions.activityId, input.activityId),
+    eq(typedPracticeExchangeDeletions.userTurnId, input.userTurnId),
+  ));
+  if (priorDeletionRows[0]) {
+    throw new TypedExchangeDeletionError(
+      "typed_exchange_already_deleted",
+      "That typed exchange was already deleted; use its original stable operation ID for an exact retry.",
+      { existingOperationId: priorDeletionRows[0].operationId },
+    );
+  }
+
+  const turns = await db.select().from(practiceTranscriptTurns).where(and(
+    eq(practiceTranscriptTurns.ownerId, ownerId),
+    eq(practiceTranscriptTurns.activityId, input.activityId),
+  )).orderBy(asc(practiceTranscriptTurns.sequence), asc(practiceTranscriptTurns.occurredAt));
+  const pair = resolveTypedExchangePair(turns, input.userTurnId, input.responseTurnId);
+  if (pair.revision !== input.expectedRevision) {
+    throw new TypedExchangeDeletionError(
+      "typed_exchange_revision_conflict",
+      `The typed exchange changed from revision ${input.expectedRevision} to ${pair.revision}; read the activity record before retrying.`,
+      { expectedRevision: input.expectedRevision, actualRevision: pair.revision },
+    );
+  }
+  const turnIds = [pair.userTurn.turnId, pair.responseTurn.turnId];
+  const [
+    codeAttempts,
+    reviewBackfills,
+    audioClips,
+    deliveryAnalyses,
+    voiceResponses,
+    voiceGroupMembers,
+    voiceGroups,
+    voiceReservations,
+    finalizations,
+  ] = await Promise.all([
+    db.select({ id: leetcodeCodeAttempts.id }).from(leetcodeCodeAttempts).where(and(
+      eq(leetcodeCodeAttempts.ownerId, ownerId),
+      eq(leetcodeCodeAttempts.activityId, input.activityId),
+      or(
+        inArray(leetcodeCodeAttempts.originatingTurnId, turnIds),
+        inArray(leetcodeCodeAttempts.reviewResponseTurnId, turnIds),
+      ),
+    )),
+    db.select({ attemptId: leetcodeCodeAttemptReviewBackfills.attemptId })
+      .from(leetcodeCodeAttemptReviewBackfills)
+      .where(and(
+        eq(leetcodeCodeAttemptReviewBackfills.ownerId, ownerId),
+        eq(leetcodeCodeAttemptReviewBackfills.activityId, input.activityId),
+        inArray(leetcodeCodeAttemptReviewBackfills.reviewResponseTurnId, turnIds),
+      )),
+    db.select({ id: activityAudioClips.id }).from(activityAudioClips).where(and(
+      eq(activityAudioClips.ownerId, ownerId),
+      eq(activityAudioClips.activityId, input.activityId),
+      inArray(activityAudioClips.transcriptTurnId, turnIds),
+    )),
+    db.select({ id: activityDeliveryAnalyses.id }).from(activityDeliveryAnalyses).where(and(
+      eq(activityDeliveryAnalyses.ownerId, ownerId),
+      eq(activityDeliveryAnalyses.activityId, input.activityId),
+      inArray(activityDeliveryAnalyses.transcriptTurnId, turnIds),
+    )),
+    db.select({ captureId: voiceSpecialistResponses.captureId }).from(voiceSpecialistResponses).where(and(
+      eq(voiceSpecialistResponses.ownerId, ownerId),
+      eq(voiceSpecialistResponses.activityId, input.activityId),
+      or(
+        inArray(voiceSpecialistResponses.userTurnId, turnIds),
+        inArray(voiceSpecialistResponses.responseTurnId, turnIds),
+      ),
+    )),
+    db.select({ captureId: voiceResponseGroupMembers.captureId }).from(voiceResponseGroupMembers).where(and(
+      eq(voiceResponseGroupMembers.ownerId, ownerId),
+      eq(voiceResponseGroupMembers.activityId, input.activityId),
+      or(
+        inArray(voiceResponseGroupMembers.userTurnId, turnIds),
+        inArray(voiceResponseGroupMembers.responseTurnId, turnIds),
+      ),
+    )),
+    db.select({ responseTurnId: voiceResponseGroups.responseTurnId }).from(voiceResponseGroups).where(and(
+      eq(voiceResponseGroups.ownerId, ownerId),
+      eq(voiceResponseGroups.activityId, input.activityId),
+      inArray(voiceResponseGroups.responseTurnId, turnIds),
+    )),
+    db.select({ identity: voiceExchangeReservations.identity }).from(voiceExchangeReservations).where(and(
+      eq(voiceExchangeReservations.ownerId, ownerId),
+      or(
+        inArray(voiceExchangeReservations.identity, turnIds),
+        inArray(voiceExchangeReservations.responseTurnId, turnIds),
+      ),
+    )),
+    db.select({ status: activityFinalizations.status }).from(activityFinalizations).where(and(
+      eq(activityFinalizations.ownerId, ownerId),
+      eq(activityFinalizations.activityId, input.activityId),
+      inArray(activityFinalizations.status, ["ready", "published"]),
+    )),
+  ]);
+  const dependentCounts = {
+    codeAttempts: codeAttempts.length + reviewBackfills.length,
+    audio: audioClips.length + deliveryAnalyses.length,
+    voice: voiceResponses.length + voiceGroupMembers.length + voiceGroups.length + voiceReservations.length,
+    finalized: finalizations.length,
+  };
+  if (Object.values(dependentCounts).some((count) => count > 0)) {
+    throw new TypedExchangeDeletionError(
+      "typed_exchange_has_dependent_evidence",
+      "The typed exchange owns or anchors durable evidence and cannot be deleted without corrupting another record.",
+      dependentCounts,
+    );
+  }
+
+  const receipt: Omit<TypedExchangeDeletionReceipt, "duplicate"> = {
+    status: "deleted",
+    operationId: input.operationId,
+    activityId: input.activityId,
+    userTurnId: pair.userTurn.turnId,
+    responseTurnId: pair.responseTurn.turnId,
+    deletedTurnIds: turnIds,
+    preserved: ["activity", "timer", "session", "result", "notes", "code_attempts", "voice_evidence"],
+    deletedAt: nowMs,
+  };
+  const exactPairGuard = d1TransactionalInvariantGuard(db, sql`(
+    SELECT count(*) FROM ${practiceTranscriptTurns}
+    WHERE ${practiceTranscriptTurns.ownerId} = ${ownerId}
+      AND ${practiceTranscriptTurns.activityId} = ${input.activityId}
+      AND (
+        (
+          ${practiceTranscriptTurns.turnId} = ${pair.userTurn.turnId}
+          AND ${practiceTranscriptTurns.specialty} = ${pair.userTurn.specialty}
+          AND ${practiceTranscriptTurns.speaker} = 'user'
+          AND ${practiceTranscriptTurns.source} = 'codex'
+          AND ${practiceTranscriptTurns.body} = ${pair.userTurn.body}
+          AND ${practiceTranscriptTurns.sequence} = ${pair.userTurn.sequence}
+          AND ${practiceTranscriptTurns.occurredAt} = ${pair.userTurn.occurredAt}
+          AND ${practiceTranscriptTurns.updatedAt} = ${pair.userTurn.updatedAt}
+        ) OR (
+          ${practiceTranscriptTurns.turnId} = ${pair.responseTurn.turnId}
+          AND ${practiceTranscriptTurns.specialty} = ${pair.responseTurn.specialty}
+          AND ${practiceTranscriptTurns.speaker} = 'specialist'
+          AND ${practiceTranscriptTurns.source} = 'codex'
+          AND ${practiceTranscriptTurns.body} = ${pair.responseTurn.body}
+          AND ${practiceTranscriptTurns.sequence} = ${pair.responseTurn.sequence}
+          AND ${practiceTranscriptTurns.occurredAt} = ${pair.responseTurn.occurredAt}
+          AND ${practiceTranscriptTurns.updatedAt} = ${pair.responseTurn.updatedAt}
+        )
+      )
+  ) = 2 AND NOT EXISTS (
+    SELECT 1 FROM ${typedPracticeExchangeDeletions}
+    WHERE ${typedPracticeExchangeDeletions.ownerId} = ${ownerId}
+      AND (
+        ${typedPracticeExchangeDeletions.operationId} = ${input.operationId}
+        OR (
+          ${typedPracticeExchangeDeletions.activityId} = ${input.activityId}
+          AND (
+            ${typedPracticeExchangeDeletions.userTurnId} IN (${pair.userTurn.turnId}, ${pair.responseTurn.turnId})
+            OR ${typedPracticeExchangeDeletions.responseTurnId} IN (${pair.userTurn.turnId}, ${pair.responseTurn.turnId})
+          )
+        )
+      )
+  ) AND NOT EXISTS (
+    SELECT 1 FROM ${leetcodeCodeAttempts}
+    WHERE ${leetcodeCodeAttempts.ownerId} = ${ownerId}
+      AND ${leetcodeCodeAttempts.activityId} = ${input.activityId}
+      AND (
+        ${leetcodeCodeAttempts.originatingTurnId} IN (${pair.userTurn.turnId}, ${pair.responseTurn.turnId})
+        OR ${leetcodeCodeAttempts.reviewResponseTurnId} IN (${pair.userTurn.turnId}, ${pair.responseTurn.turnId})
+      )
+  ) AND NOT EXISTS (
+    SELECT 1 FROM ${leetcodeCodeAttemptReviewBackfills}
+    WHERE ${leetcodeCodeAttemptReviewBackfills.ownerId} = ${ownerId}
+      AND ${leetcodeCodeAttemptReviewBackfills.activityId} = ${input.activityId}
+      AND ${leetcodeCodeAttemptReviewBackfills.reviewResponseTurnId} IN (${pair.userTurn.turnId}, ${pair.responseTurn.turnId})
+  ) AND NOT EXISTS (
+    SELECT 1 FROM ${activityAudioClips}
+    WHERE ${activityAudioClips.ownerId} = ${ownerId}
+      AND ${activityAudioClips.activityId} = ${input.activityId}
+      AND ${activityAudioClips.transcriptTurnId} IN (${pair.userTurn.turnId}, ${pair.responseTurn.turnId})
+  ) AND NOT EXISTS (
+    SELECT 1 FROM ${activityDeliveryAnalyses}
+    WHERE ${activityDeliveryAnalyses.ownerId} = ${ownerId}
+      AND ${activityDeliveryAnalyses.activityId} = ${input.activityId}
+      AND ${activityDeliveryAnalyses.transcriptTurnId} IN (${pair.userTurn.turnId}, ${pair.responseTurn.turnId})
+  ) AND NOT EXISTS (
+    SELECT 1 FROM ${voiceSpecialistResponses}
+    WHERE ${voiceSpecialistResponses.ownerId} = ${ownerId}
+      AND ${voiceSpecialistResponses.activityId} = ${input.activityId}
+      AND (
+        ${voiceSpecialistResponses.userTurnId} IN (${pair.userTurn.turnId}, ${pair.responseTurn.turnId})
+        OR ${voiceSpecialistResponses.responseTurnId} IN (${pair.userTurn.turnId}, ${pair.responseTurn.turnId})
+      )
+  ) AND NOT EXISTS (
+    SELECT 1 FROM ${voiceResponseGroupMembers}
+    WHERE ${voiceResponseGroupMembers.ownerId} = ${ownerId}
+      AND ${voiceResponseGroupMembers.activityId} = ${input.activityId}
+      AND (
+        ${voiceResponseGroupMembers.userTurnId} IN (${pair.userTurn.turnId}, ${pair.responseTurn.turnId})
+        OR ${voiceResponseGroupMembers.responseTurnId} IN (${pair.userTurn.turnId}, ${pair.responseTurn.turnId})
+      )
+  ) AND NOT EXISTS (
+    SELECT 1 FROM ${voiceResponseGroups}
+    WHERE ${voiceResponseGroups.ownerId} = ${ownerId}
+      AND ${voiceResponseGroups.activityId} = ${input.activityId}
+      AND ${voiceResponseGroups.responseTurnId} IN (${pair.userTurn.turnId}, ${pair.responseTurn.turnId})
+  ) AND NOT EXISTS (
+    SELECT 1 FROM ${voiceExchangeReservations}
+    WHERE ${voiceExchangeReservations.ownerId} = ${ownerId}
+      AND (
+        ${voiceExchangeReservations.identity} IN (${pair.userTurn.turnId}, ${pair.responseTurn.turnId})
+        OR ${voiceExchangeReservations.responseTurnId} IN (${pair.userTurn.turnId}, ${pair.responseTurn.turnId})
+      )
+  ) AND NOT EXISTS (
+    SELECT 1 FROM ${activityFinalizations}
+    WHERE ${activityFinalizations.ownerId} = ${ownerId}
+      AND ${activityFinalizations.activityId} = ${input.activityId}
+      AND ${activityFinalizations.status} IN ('ready', 'published')
+  )`);
+  try {
+    await db.batch([
+      exactPairGuard,
+      db.delete(practiceTranscriptTurns).where(and(
+        eq(practiceTranscriptTurns.ownerId, ownerId),
+        eq(practiceTranscriptTurns.activityId, input.activityId),
+        inArray(practiceTranscriptTurns.turnId, turnIds),
+      )),
+      db.insert(typedPracticeExchangeDeletions).values({
+        ownerId,
+        operationId: input.operationId,
+        activityId: input.activityId,
+        userTurnId: pair.userTurn.turnId,
+        responseTurnId: pair.responseTurn.turnId,
+        specialty: pair.userTurn.specialty as Specialty,
+        expectedRevision: pair.revision,
+        requestFingerprint,
+        reason: reason.slice(0, 2_000),
+        receipt,
+        deletedAt: nowMs,
+      }),
+    ]);
+  } catch (error) {
+    const raced = await db.select().from(typedPracticeExchangeDeletions).where(and(
+      eq(typedPracticeExchangeDeletions.ownerId, ownerId),
+      eq(typedPracticeExchangeDeletions.operationId, input.operationId),
+    ));
+    if (raced[0]?.requestFingerprint === requestFingerprint) {
+      return storedTypedExchangeDeletionReceipt(raced[0], true);
+    }
+    if (isD1TransactionalInvariantFailure(error)) {
+      throw new TypedExchangeDeletionError(
+        "typed_exchange_changed",
+        "The exchange or one of its dependent evidence records changed during deletion; nothing was removed.",
+      );
+    }
+    if (String(error).toLowerCase().includes("unique constraint")) {
+      throw new TypedExchangeDeletionError(
+        "typed_exchange_deletion_conflict",
+        "That operation or exchange identity already belongs to a different deletion receipt.",
+      );
+    }
+    throw error;
+  }
+  return { ...receipt, duplicate: false };
 }
 
 // The native voice bridge owns the stable turn id and writes the transcript
@@ -2690,15 +3055,40 @@ export async function saveLeetCodeCodeAttempt(
             AND ${activityFinalizations.specialty} = 'leetcode'
             AND ${activityFinalizations.status} IN ('ready', 'published')
         )`);
+    const exactTranscriptEvidenceGuard = d1TransactionalInvariantGuard(db, sql`EXISTS (
+          SELECT 1 FROM ${practiceTranscriptTurns}
+          WHERE ${practiceTranscriptTurns.ownerId} = ${ownerId}
+            AND ${practiceTranscriptTurns.activityId} = ${incoming.activityId}
+            AND ${practiceTranscriptTurns.turnId} = ${incoming.originatingTurnId}
+            AND ${practiceTranscriptTurns.speaker} = 'user'
+        ) AND ${review.status === "complete" ? sql`EXISTS (
+          SELECT 1 FROM ${practiceTranscriptTurns}
+          WHERE ${practiceTranscriptTurns.ownerId} = ${ownerId}
+            AND ${practiceTranscriptTurns.activityId} = ${incoming.activityId}
+            AND ${practiceTranscriptTurns.turnId} = ${incoming.reviewResponseTurnId!}
+            AND ${practiceTranscriptTurns.speaker} = 'specialist'
+        )` : sql`1 = 1`}`);
     try {
       await db.batch([
         noReadyFinalizationGuard,
+        exactTranscriptEvidenceGuard,
         db.insert(leetcodeCodeAttempts).values(values),
       ]);
     } catch (error) {
       const message = String(error).toLowerCase();
       if (isD1TransactionalInvariantFailure(error)) {
-        throw new Error("A Code Attempt cannot be added after its activity is ready or published.");
+        const readyFinalization = await db.select({ status: activityFinalizations.status })
+          .from(activityFinalizations)
+          .where(and(
+            eq(activityFinalizations.ownerId, ownerId),
+            eq(activityFinalizations.activityId, incoming.activityId),
+            eq(activityFinalizations.specialty, "leetcode"),
+            inArray(activityFinalizations.status, ["ready", "published"]),
+          ));
+        if (readyFinalization.length) {
+          throw new Error("A Code Attempt cannot be added after its activity is ready or published.");
+        }
+        throw new Error("The Code Attempt transcript evidence changed during persistence; reread the activity before retrying.");
       }
       if (message.includes("unique constraint")) {
         throw new Error(`Code Attempt ${incoming.sequence} already belongs to another code version.`);
@@ -3567,7 +3957,7 @@ export async function readSpecialistTasks(ownerId: string) {
 
 export async function readActivityPracticeRecord(ownerId: string, activityId: string) {
   const db = getDb();
-  const [turns, notes, finalizations, reviews, clips, deliveryAnalyses, codeAttempts] = await Promise.all([
+  const [turns, notes, finalizations, reviews, clips, deliveryAnalyses, codeAttempts, typedExchangeDeletions] = await Promise.all([
     db
       .select()
       .from(practiceTranscriptTurns)
@@ -3582,8 +3972,32 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
       eq(leetcodeCodeAttempts.ownerId, ownerId),
       eq(leetcodeCodeAttempts.activityId, activityId),
     )).orderBy(asc(leetcodeCodeAttempts.sequence), asc(leetcodeCodeAttempts.occurredAt)),
+    db.select().from(typedPracticeExchangeDeletions).where(and(
+      eq(typedPracticeExchangeDeletions.ownerId, ownerId),
+      eq(typedPracticeExchangeDeletions.activityId, activityId),
+    )).orderBy(asc(typedPracticeExchangeDeletions.deletedAt)),
   ]);
-  return { turns, notes, finalization: finalizations[0] ?? null, reviews, audioClips: clips, deliveryAnalyses, codeAttempts };
+  return {
+    turns,
+    typedExchanges: listTypedExchangePairs(turns),
+    typedExchangeDeletions: typedExchangeDeletions.map((deletion) => ({
+      operationId: deletion.operationId,
+      activityId: deletion.activityId,
+      userTurnId: deletion.userTurnId,
+      responseTurnId: deletion.responseTurnId,
+      specialty: deletion.specialty,
+      expectedRevision: deletion.expectedRevision,
+      reason: deletion.reason,
+      receipt: deletion.receipt,
+      deletedAt: deletion.deletedAt,
+    })),
+    notes,
+    finalization: finalizations[0] ?? null,
+    reviews,
+    audioClips: clips,
+    deliveryAnalyses,
+    codeAttempts,
+  };
 }
 
 export async function readProblemSolutionProfile(ownerId: string, specialty: Specialty, questionId: string) {

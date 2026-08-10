@@ -1,0 +1,290 @@
+import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { spawn } from "node:child_process";
+import { createServer } from "node:net";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { acquireMcpIntegrationLock } from "./helpers/mcp-integration-lock.mjs";
+
+const wrangler = fileURLToPath(new URL("../node_modules/.bin/wrangler", import.meta.url));
+const config = fileURLToPath(new URL("../wrangler.mcp.jsonc", import.meta.url));
+const project = fileURLToPath(new URL("..", import.meta.url));
+const sha256 = (text) => createHash("sha256").update(text).digest("hex");
+
+function availablePort() {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      server.close((error) => error
+        ? reject(error)
+        : resolve(typeof address === "object" && address ? address.port : 0));
+    });
+  });
+}
+
+function run(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { cwd: project, ...options });
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.on("data", (chunk) => { stdout += chunk; });
+    child.stderr?.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", reject);
+    child.on("exit", (code) => code === 0
+      ? resolve({ stdout, stderr })
+      : reject(new Error(`${command} exited ${code}\n${stdout}\n${stderr}`)));
+  });
+}
+
+async function waitForWorker(baseUrl, child) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (child.exitCode !== null) throw new Error(`Local MCP Worker exited ${child.exitCode} before startup.`);
+    try {
+      const response = await fetch(`${baseUrl}/mcp`);
+      if (response.status === 401 || response.status === 405) return;
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("Local MCP Worker did not start.");
+}
+
+const fixtureSql = (ownerTokenHash, otherTokenHash) => `
+  INSERT INTO integration_tokens
+    (token_hash,owner_id,label,created_at,last_used_at,revoked_at)
+  VALUES
+    ('${ownerTokenHash}','owner-typed-delete','Typed deletion integration',1,NULL,NULL),
+    ('${otherTokenHash}','owner-typed-delete-other','Other owner',1,NULL,NULL);
+
+  INSERT INTO practice_workbenches
+    (owner_id,id,status,opened_pacific_date,opened_at,closed_at,updated_at)
+  VALUES ('owner-typed-delete','workbench-typed-delete','open','2026-08-09',1,NULL,1);
+  INSERT INTO extra_activities
+    (owner_id,id,date,workbench_id,payload,revision,updated_at)
+  VALUES ('owner-typed-delete','activity-delete','2026-08-09','workbench-typed-delete','{"id":"activity-delete","type":"leetcode","title":"Deletion fixture","source":"extra","targetMinutes":40}',0,1);
+  INSERT INTO timers
+    (owner_id,subject_id,kind,accumulated_seconds,started_at,running_since,completed,completed_at,revision,updated_at)
+  VALUES ('owner-typed-delete','activity-delete','activity',123,10,NULL,0,NULL,4,500);
+  INSERT INTO outcomes
+    (owner_id,activity_id,outcome,revision,updated_at)
+  VALUES ('owner-typed-delete','activity-delete','failed',2,500);
+  INSERT INTO practice_notes
+    (owner_id,id,activity_id,date,body,kind,pinned,created_at,updated_at)
+  VALUES ('owner-typed-delete','note-delete','activity-delete','2026-08-09','Keep this note.','remember',1,400,400);
+
+  INSERT INTO practice_transcript_turns
+    (owner_id,activity_id,turn_id,specialty,speaker,body,source,sequence,occurred_at,updated_at)
+  VALUES
+    ('owner-typed-delete','activity-delete','typed-user-delete','leetcode','user','Administrative user turn.','codex',0,100,700),
+    ('owner-typed-delete','activity-delete','typed-response-delete','leetcode','specialist','Administrative response.','codex',1,200,800),
+    ('owner-typed-delete','activity-delete','typed-user-preserve','leetcode','user','Real attempt.','codex',2,300,900),
+    ('owner-typed-delete','activity-delete','typed-response-preserve','leetcode','specialist','Real review.','codex',3,400,900),
+    ('owner-typed-delete','activity-code-anchor','typed-user-code','leetcode','user','Code attempt.','codex',0,100,600),
+    ('owner-typed-delete','activity-code-anchor','typed-response-code','leetcode','specialist','Code review.','codex',1,200,600),
+    ('owner-typed-delete','activity-partial','typed-user-partial','leetcode','user','Partial exchange.','codex',0,100,500),
+    ('owner-typed-delete','activity-ready','typed-user-ready','leetcode','user','Ready exchange.','codex',0,100,500),
+    ('owner-typed-delete','activity-ready','typed-response-ready','leetcode','specialist','Ready response.','codex',1,200,500),
+    ('owner-typed-delete','activity-stale','typed-user-stale','leetcode','user','Stale exchange.','codex',0,100,500),
+    ('owner-typed-delete','activity-stale','typed-response-stale','leetcode','specialist','Stale response.','codex',1,200,600),
+    ('owner-typed-delete-other','activity-delete','typed-user-delete','leetcode','user','Other owner user.','codex',0,100,700),
+    ('owner-typed-delete-other','activity-delete','typed-response-delete','leetcode','specialist','Other owner response.','codex',1,200,800);
+
+  INSERT INTO leetcode_code_attempts
+    (owner_id,id,activity_id,originating_turn_id,sequence,language,code,line_count,occurred_at,review,review_response_turn_id,observed_correctness,concrete_findings,edge_cases,complexity,final_declaration,created_at,updated_at)
+  VALUES
+    ('owner-typed-delete','attempt-preserve','activity-delete','typed-user-preserve',1,'java','class Solution {}',1,450,NULL,'typed-response-preserve','not_verified','[]','[]',NULL,'Preserve this attempt.',450,450),
+    ('owner-typed-delete','attempt-code-anchor','activity-code-anchor','typed-user-code',1,'java','class Solution {}',1,250,NULL,'typed-response-code','not_verified','[]','[]',NULL,'Anchors the exchange.',250,250);
+
+  INSERT INTO activity_finalizations
+    (owner_id,activity_id,specialty,status,payload,finalized_at,published_at,revision,updated_at)
+  VALUES ('owner-typed-delete','activity-ready','leetcode','ready','{}',300,NULL,1,300);
+`;
+
+test("typed exchange deletion is exact, atomic, owner-scoped, and identity-idempotent", { timeout: 90_000 }, async () => {
+  const ownerToken = "ia_typed_exchange_delete_owner_token_178";
+  const otherToken = "ia_typed_exchange_delete_other_token_178";
+  let releaseIntegrationLock;
+  let persistence;
+  let worker;
+  let ownerClient;
+  let otherClient;
+  try {
+    releaseIntegrationLock = await acquireMcpIntegrationLock();
+    persistence = await mkdtemp(join(tmpdir(), "interview-arc-typed-delete-"));
+    const port = await availablePort();
+    const baseUrl = `http://127.0.0.1:${port}`;
+    await run(wrangler, ["d1", "migrations", "apply", "DB", "--local", "--persist-to", persistence, "--config", config]);
+    await run(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", fixtureSql(sha256(ownerToken), sha256(otherToken))]);
+    worker = spawn(wrangler, ["dev", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
+      cwd: project,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let workerLog = "";
+    worker.stdout.on("data", (chunk) => { workerLog += chunk; });
+    worker.stderr.on("data", (chunk) => { workerLog += chunk; });
+    await waitForWorker(baseUrl, worker);
+
+    const connect = async (name, token) => {
+      const client = new Client({ name, version: "1.0.0" });
+      await client.connect(new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), {
+        requestInit: { headers: { authorization: `Bearer ${token}` } },
+      }));
+      return client;
+    };
+    ownerClient = await connect("typed-delete-owner", ownerToken);
+    otherClient = await connect("typed-delete-other", otherToken);
+    const callRaw = (client, name, args) => client.callTool({ name, arguments: args });
+    const call = async (client, name, args) => {
+      const result = await callRaw(client, name, args);
+      if (result.isError) throw new Error(`${name}: ${JSON.stringify(result.structuredContent ?? result.content)}\n${workerLog}`);
+      return result.structuredContent;
+    };
+
+    const before = await call(ownerClient, "get_activity_practice_record", { activityId: "activity-delete" });
+    assert.equal(before.typedExchanges.length, 2);
+    const target = before.typedExchanges.find((exchange) => exchange.userTurnId === "typed-user-delete");
+    assert.equal(target.revision, 800);
+
+    const deletionInput = {
+      operationId: "delete-typed-exchange-1",
+      activityId: "activity-delete",
+      userTurnId: "typed-user-delete",
+      expectedRevision: target.revision,
+      authorization: "explicit_user_instruction",
+      reason: "The user confirmed this typed handoff was administrative.",
+    };
+    const deleted = await call(ownerClient, "delete_typed_practice_exchange", deletionInput);
+    assert.equal(deleted.status, "deleted");
+    assert.equal(deleted.duplicate, false);
+    assert.equal(deleted.responseTurnId, "typed-response-delete");
+    assert.deepEqual(deleted.deletedTurnIds, ["typed-user-delete", "typed-response-delete"]);
+
+    const after = await call(ownerClient, "get_activity_practice_record", { activityId: "activity-delete" });
+    assert.deepEqual(after.turns.map((turn) => turn.turnId), ["typed-user-preserve", "typed-response-preserve"]);
+    assert.equal(after.notes[0].id, "note-delete");
+    assert.equal(after.codeAttempts[0].id, "attempt-preserve");
+    assert.equal(after.typedExchangeDeletions[0].operationId, deletionInput.operationId);
+    assert.equal(after.typedExchangeDeletions[0].requestFingerprint, undefined);
+
+    const replay = await call(ownerClient, "delete_typed_practice_exchange", deletionInput);
+    assert.equal(replay.duplicate, true);
+    assert.deepEqual(replay.deletedTurnIds, deleted.deletedTurnIds);
+
+    const changedReplay = await callRaw(ownerClient, "delete_typed_practice_exchange", {
+      ...deletionInput,
+      reason: "Changed retry payload.",
+    });
+    assert.equal(changedReplay.isError, true);
+    assert.equal(changedReplay.structuredContent.code, "typed_exchange_operation_conflict");
+
+    const recreated = await callRaw(ownerClient, "save_practice_exchange", {
+      activityId: "activity-delete",
+      activityTitle: "Deletion fixture",
+      specialty: "leetcode",
+      userTurn: { turnId: "typed-user-delete", body: "Administrative user turn.", occurredAt: 100 },
+      specialistTurn: { turnId: "typed-response-delete", body: "Administrative response.", occurredAt: 200 },
+    });
+    assert.equal(recreated.isError, true);
+    assert.equal(recreated.structuredContent.code, "typed_exchange_identity_deleted");
+
+    const stale = await callRaw(ownerClient, "delete_typed_practice_exchange", {
+      operationId: "delete-typed-stale",
+      activityId: "activity-stale",
+      userTurnId: "typed-user-stale",
+      responseTurnId: "typed-response-stale",
+      expectedRevision: 599,
+      authorization: "explicit_user_instruction",
+      reason: "Stale revision test.",
+    });
+    assert.equal(stale.isError, true);
+    assert.equal(stale.structuredContent.code, "typed_exchange_revision_conflict");
+
+    const wrongReply = await callRaw(ownerClient, "delete_typed_practice_exchange", {
+      operationId: "delete-typed-wrong-reply",
+      activityId: "activity-stale",
+      userTurnId: "typed-user-stale",
+      responseTurnId: "typed-response-ready",
+      expectedRevision: 600,
+      authorization: "explicit_user_instruction",
+      reason: "Wrong reply identity test.",
+    });
+    assert.equal(wrongReply.isError, true);
+    assert.equal(wrongReply.structuredContent.code, "typed_exchange_reply_mismatch");
+
+    const anchored = await callRaw(ownerClient, "delete_typed_practice_exchange", {
+      operationId: "delete-typed-code-anchor",
+      activityId: "activity-code-anchor",
+      userTurnId: "typed-user-code",
+      responseTurnId: "typed-response-code",
+      expectedRevision: 600,
+      authorization: "explicit_user_instruction",
+      reason: "Dependent Code Attempt test.",
+    });
+    assert.equal(anchored.isError, true);
+    assert.equal(anchored.structuredContent.code, "typed_exchange_has_dependent_evidence");
+
+    const partial = await callRaw(ownerClient, "delete_typed_practice_exchange", {
+      operationId: "delete-typed-partial",
+      activityId: "activity-partial",
+      userTurnId: "typed-user-partial",
+      expectedRevision: 500,
+      authorization: "explicit_user_instruction",
+      reason: "Partial pair test.",
+    });
+    assert.equal(partial.isError, true);
+    assert.equal(partial.structuredContent.code, "typed_exchange_reply_mismatch");
+
+    const finalized = await callRaw(ownerClient, "delete_typed_practice_exchange", {
+      operationId: "delete-typed-ready",
+      activityId: "activity-ready",
+      userTurnId: "typed-user-ready",
+      responseTurnId: "typed-response-ready",
+      expectedRevision: 500,
+      authorization: "explicit_user_instruction",
+      reason: "Finalization guard test.",
+    });
+    assert.equal(finalized.isError, true);
+    assert.equal(finalized.structuredContent.code, "typed_exchange_has_dependent_evidence");
+
+    const crossOwner = await callRaw(otherClient, "delete_typed_practice_exchange", {
+      operationId: "delete-typed-cross-owner",
+      activityId: "activity-stale",
+      userTurnId: "typed-user-stale",
+      responseTurnId: "typed-response-stale",
+      expectedRevision: 600,
+      authorization: "explicit_user_instruction",
+      reason: "Owner boundary test.",
+    });
+    assert.equal(crossOwner.isError, true);
+    assert.equal(crossOwner.structuredContent.code, "typed_exchange_not_found");
+
+    await run(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", `
+      SELECT json_extract(
+        CASE WHEN
+          (SELECT count(*) FROM practice_transcript_turns WHERE owner_id='owner-typed-delete' AND activity_id='activity-delete') = 2
+          AND (SELECT count(*) FROM typed_practice_exchange_deletions WHERE owner_id='owner-typed-delete' AND activity_id='activity-delete') = 1
+          AND (SELECT count(*) FROM timers WHERE owner_id='owner-typed-delete' AND subject_id='activity-delete' AND revision=4) = 1
+          AND (SELECT count(*) FROM outcomes WHERE owner_id='owner-typed-delete' AND activity_id='activity-delete' AND outcome='failed' AND revision=2) = 1
+          AND (SELECT count(*) FROM practice_notes WHERE owner_id='owner-typed-delete' AND id='note-delete') = 1
+          AND (SELECT count(*) FROM leetcode_code_attempts WHERE owner_id='owner-typed-delete' AND id IN ('attempt-preserve','attempt-code-anchor')) = 2
+          AND (SELECT count(*) FROM practice_transcript_turns WHERE owner_id='owner-typed-delete' AND activity_id IN ('activity-code-anchor','activity-partial','activity-ready','activity-stale')) = 7
+          AND (SELECT count(*) FROM practice_transcript_turns WHERE owner_id='owner-typed-delete-other' AND activity_id='activity-delete') = 2
+        THEN '{"ok":1}' ELSE 'invalid' END,
+        '$.ok'
+      );
+    `]);
+  } finally {
+    await ownerClient?.close().catch(() => {});
+    await otherClient?.close().catch(() => {});
+    if (worker && worker.exitCode === null) worker.kill("SIGTERM");
+    if (persistence) await rm(persistence, { recursive: true, force: true });
+    await releaseIntegrationLock?.();
+  }
+});

@@ -900,9 +900,16 @@ test("Voice protocol v2 gates content behind an explicit per-capture decision", 
   assert.match(worker, /persistence child must copy those supplied fields verbatim/i);
   const typedExchangeSchema = worker.slice(
     worker.indexOf('"save_practice_exchange"'),
-    worker.indexOf('"resolve_voice_capture"'),
+    worker.indexOf('"delete_typed_practice_exchange"'),
   );
   assert.doesNotMatch(typedExchangeSchema, /expectedRevision/);
+  const typedExchangeDeletionSchema = worker.slice(
+    worker.indexOf('"delete_typed_practice_exchange"'),
+    worker.indexOf('"resolve_voice_capture"'),
+  );
+  assert.match(typedExchangeDeletionSchema, /expectedRevision: z\.number\(\)\.int\(\)\.nonnegative\(\)/);
+  assert.match(typedExchangeDeletionSchema, /authorization: z\.literal\("explicit_user_instruction"\)/);
+  assert.match(typedExchangeDeletionSchema, /destructiveHint: true/);
   const resultControlSchema = worker.slice(
     worker.indexOf('"set_practice_result"'),
     worker.indexOf('"get_today_practice"'),

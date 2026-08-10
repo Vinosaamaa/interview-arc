@@ -117,6 +117,18 @@ turn ID with changed identity or content is rejected rather than rewritten.
 `append_practice_transcript` remains available only for legacy recovery and
 imports.
 
+If the user explicitly authorizes removing one already-saved typed exchange,
+read `get_activity_practice_record` and select the exact entry from
+`typedExchanges`. Call `delete_typed_practice_exchange` with its activity,
+user/reply turn IDs and revision, one stable operation ID, the literal
+authorization, and a non-empty audit reason. The D1 transaction removes both
+typed turns or neither and stores an immutable tombstone in
+`typedExchangeDeletions`; exact retries return that receipt, while changed
+payloads or deleted stable-ID reuse conflict. A ready/published exchange or one
+that anchors Code Attempt, Voice, audio, or delivery evidence is ineligible.
+The operation never resets the whole transcript and never removes activity,
+timer, session, result, note, Code Attempt, Voice, or published state.
+
 For a related protocol-v2 Voice envelope, the persistence child calls
 `resolve_voice_capture_and_save_response`. That operation atomically marks the
 capture `activity_related` and reserves one canonical response linked through
