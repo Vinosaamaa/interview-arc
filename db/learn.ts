@@ -220,6 +220,9 @@ export async function reviseLearningCourseBlueprint(
     throw new LearningError("learning_blueprint_revision_conflict", "The Blueprint changed; reread it before retrying.");
   }
   const revision = input.expectedRevision + 1;
+  const courseState = input.blueprint.state === "draft" && current.state !== "draft"
+    ? current.state
+    : input.blueprint.state;
   const receipt = { status: "blueprint_revised" as const, courseId: input.courseId, blueprintRevision: revision };
   try {
     await db.batch([
@@ -240,7 +243,7 @@ export async function reviseLearningCourseBlueprint(
       }),
       db.update(learningCourses).set({
         currentBlueprintRevision: revision,
-        state: input.blueprint.state,
+        state: courseState,
         title: input.blueprint.title,
         updatedAt: nowMs,
       }).where(and(
@@ -1811,18 +1814,18 @@ export async function queryLearningWorkspace(ownerId: string, inputValue: unknow
   ).limit(100);
 
   const courses = await Promise.all(courseRows.map(async (course) => {
+    const enrollmentRows = await db.select().from(learningEnrollments).where(and(
+      eq(learningEnrollments.ownerId, ownerId),
+      eq(learningEnrollments.courseId, course.courseId),
+    )).limit(1);
     const blueprintRevision = input.courseId === course.courseId && input.blueprintRevision
       ? input.blueprintRevision
-      : course.currentBlueprintRevision;
-    const [blueprintRows, enrollmentRows, lessonRows] = await Promise.all([
+      : enrollmentRows[0]?.blueprintRevision ?? course.currentBlueprintRevision;
+    const [blueprintRows, lessonRows] = await Promise.all([
       db.select().from(learningCourseBlueprintRevisions).where(and(
         eq(learningCourseBlueprintRevisions.ownerId, ownerId),
         eq(learningCourseBlueprintRevisions.courseId, course.courseId),
         eq(learningCourseBlueprintRevisions.revision, blueprintRevision),
-      )).limit(1),
-      db.select().from(learningEnrollments).where(and(
-        eq(learningEnrollments.ownerId, ownerId),
-        eq(learningEnrollments.courseId, course.courseId),
       )).limit(1),
       db.select().from(learningLessons).where(and(
         eq(learningLessons.ownerId, ownerId),

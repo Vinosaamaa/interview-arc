@@ -229,6 +229,18 @@ test("Learn core preserves immutable owner-private Course, Enrollment, Lesson, a
     assert.equal(enrollment.currentModuleId, "request-paths");
     assert.equal(enrollment.currentLessonId, "trace-one-request");
     assert.equal((await call(client, "approve_learning_course_enrollment", enrollmentInput)).duplicate, true);
+    await call(client, "revise_learning_course_blueprint", {
+      operationId: "learn-course-revise-3",
+      courseId: revisedBlueprint.courseId,
+      expectedRevision: 2,
+      authorization: "learning_specialist",
+      blueprint: blueprint("A later draft must not retarget the existing Enrollment."),
+    });
+    const pinnedEnrollmentRead = await call(client, "query_learning_workspace", {
+      courseId: revisedBlueprint.courseId,
+    });
+    assert.equal(pinnedEnrollmentRead.courses[0].blueprint.revision, 2);
+    assert.equal(pinnedEnrollmentRead.courses[0].enrollment.blueprintRevision, 2);
     const changedEnrollment = await callRaw(client, "approve_learning_course_enrollment", {
       ...enrollmentInput,
       expectedBlueprintRevision: 1,
