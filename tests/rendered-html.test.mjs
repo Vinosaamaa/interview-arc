@@ -99,6 +99,11 @@ test("local development bypasses Access without weakening the production config"
   assert.match(packageJson.scripts["dev:prepare"], /content:import:local/);
 });
 
+test("the owner-private Loops route cannot be shared-cached", async () => {
+  const route = await readFile(new URL("../app/api/loops/route.ts", import.meta.url), "utf8");
+  assert.match(route, /"cache-control": "private, no-store"/);
+});
+
 test("the refined analytics and composer layouts keep their intended grouping", async () => {
   const css = await Promise.all([
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),

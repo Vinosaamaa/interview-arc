@@ -11,7 +11,10 @@ export async function GET(request: Request) {
       queryLoops(ownerId, { includeArchived }),
       queryRoleBriefMigrationInbox(ownerId, {}),
     ]);
-    return Response.json({ ...loops, migrationInbox: migrationInbox.items });
+    return Response.json(
+      { ...loops, migrationInbox: migrationInbox.items },
+      { headers: { "cache-control": "private, no-store" } },
+    );
   } catch (error) {
     return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 });
   }

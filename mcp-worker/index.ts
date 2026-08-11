@@ -2772,7 +2772,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "revise_loop",
     {
-      description: "Append one owner-authorized Loop revision for company/role metadata, arbitrary ordered stages or groups, explicit dates/statuses/outcomes, and concise debrief memory. Dates never infer completion or outcome. Only the Loop Recorder may mutate this administrative record.",
+      description: "Append one owner-authorized revision for Loop process metadata, arbitrary ordered stages or groups, explicit dates/statuses/outcomes, and concise debrief memory. The company-and-role identity remains stable; dates never infer completion or outcome. Only the Loop Recorder may mutate this administrative record.",
       inputSchema: reviseLoopSchema.shape,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },

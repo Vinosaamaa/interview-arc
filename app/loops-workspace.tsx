@@ -181,7 +181,7 @@ function StageTimeline({ stages, selected, onSelect }: {
       <StatusMark status={stage.status} />
       <strong>{stage.label}</strong>
       <span>{formatDate(stageDate(stage))}</span>
-      {stage.groupLabel ? <small>{stage.groupLabel}</small> : null}
+      {stage.groupLabel || stage.outcome ? <small>{[stage.groupLabel, stage.outcome ? sentenceId(stage.outcome) : ""].filter(Boolean).join(" · ")}</small> : null}
     </button>
   </li>)}</ol>;
 }
@@ -253,7 +253,7 @@ function RoleBriefPanel({ loop }: { loop: LoopProjection }) {
 function DebriefPanel({ stage }: { stage?: LoopStage }) {
   const debrief = stage?.debrief;
   return <section className="loop-debrief" aria-labelledby="loop-debrief-title">
-    <header><div><h2 id="loop-debrief-title">Round debrief</h2><span>{stage ? stage.label : "No round selected"}</span></div><small>{debrief ? `Captured ${formatDate(debrief.capturedAt)}` : "No debrief recorded"}</small></header>
+    <header><div><h2 id="loop-debrief-title">Round debrief</h2><span>{stage ? `${stage.label}${stage.outcome ? ` · ${sentenceId(stage.outcome)}` : ""}` : "No round selected"}</span></div><small>{debrief ? `Captured ${formatDate(debrief.capturedAt)}` : "No debrief recorded"}</small></header>
     {debrief ? <dl>
       <div><dt>Questions asked</dt><dd>{debrief.questions.length ? debrief.questions.map((question) => question.promptMemory ?? sentenceId(question.canonicalQuestionId ?? question.memoryId)).join(" · ") : "None recorded"}</dd></div>
       <div><dt>What I remember</dt><dd>{debrief.questions.find((question) => question.answerMemory)?.answerMemory ?? "No remembered answer recorded."}{debrief.questions.find((question) => question.answerConfidence) ? <small className={`memory-confidence ${debrief.questions.find((question) => question.answerConfidence)?.answerConfidence}`}>{sentenceId(debrief.questions.find((question) => question.answerConfidence)?.answerConfidence ?? "")}</small> : null}</dd></div>

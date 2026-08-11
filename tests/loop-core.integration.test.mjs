@@ -279,6 +279,15 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
       loop: revisedLoop,
     });
     assert.equal(revised.loopRevision, 2);
+    const changedIdentity = await callRaw(client, "revise_loop", {
+      operationId: "loop-revise-identity-conflict-1",
+      loopId: initialLoop.loopId,
+      expectedRevision: 2,
+      authorization: "loop_recorder",
+      loop: { ...revisedLoop, company: "A different company" },
+    });
+    assert.equal(changedIdentity.isError, true);
+    assert.equal(changedIdentity.structuredContent.code, "loop_identity_immutable");
     const current = await call(client, "query_loops", { loopId: initialLoop.loopId });
     assert.equal(current.loops[0].loop.revision, 2);
     const debrief = current.loops[0].loop.stages.find((stage) => stage.stageId === "onsite-coding").debrief;

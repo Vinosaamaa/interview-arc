@@ -30,8 +30,9 @@ revision.
 
 ## Identity And Revisions
 
-- One Loop is one company-and-role hiring process with a stable owner-scoped
-  `loopId`.
+- One Loop is one immutable company-and-role identity with a stable owner-scoped
+  `loopId`. A different company or role requires a separate Loop; later Loop
+  revisions may change process metadata, stages, dates, status, and outcome.
 - Loop creation atomically creates Loop revision 1 and its Loop-owned Role
   Brief revision 1. A Role Brief cannot exist independently in the forward
   model.

@@ -260,6 +260,12 @@ export async function reviseLoop(ownerId: string, inputValue: unknown, nowMs = D
   if (current.currentRevision !== input.expectedRevision) {
     throw new LoopError("loop_revision_conflict", "The Loop changed; reread it before retrying.");
   }
+  if (current.company !== input.loop.company || current.roleTitle !== input.loop.roleTitle) {
+    throw new LoopError(
+      "loop_identity_immutable",
+      "A Loop keeps one company-and-role identity. Create a separate Loop for a different hiring process.",
+    );
+  }
 
   const revision = input.expectedRevision + 1;
   const receipt = {
