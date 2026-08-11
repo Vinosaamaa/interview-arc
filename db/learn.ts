@@ -50,6 +50,7 @@ import {
   type SaveLearningLessonRevisionInput,
   type SetLearningHomeworkStateInput,
 } from "./learn-policy";
+import { foldElapsed, orderContiguousTurns } from "./timed-conversation";
 
 export {
   appendLearningTranscriptSchema,
@@ -651,11 +652,6 @@ export async function createLearningSession(ownerId: string, inputValue: unknown
   return { ...receipt, duplicate: false };
 }
 
-function elapsedSeconds(session: typeof learningSessions.$inferSelect, nowMs: number) {
-  if (session.state !== "running" || session.runningSince === null) return session.accumulatedSeconds;
-  return session.accumulatedSeconds + Math.max(0, Math.floor((nowMs - session.runningSince) / 1_000));
-}
-
 export async function controlLearningSession(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
   const input = controlLearningSessionSchema.parse(inputValue) as ControlLearningSessionInput;
   const db = getDb();
@@ -685,7 +681,11 @@ export async function controlLearningSession(ownerId: string, inputValue: unknow
   }
 
   const revision = current.revision + 1;
-  const accumulatedSeconds = elapsedSeconds(current, nowMs);
+  const accumulatedSeconds = foldElapsed(
+    current.accumulatedSeconds,
+    current.state === "running" ? current.runningSince : null,
+    nowMs,
+  );
   const nextState = input.action === "pause" ? "paused" as const : "running" as const;
   const nextRunningSince = nextState === "running" ? nowMs : null;
   const nextStartedAt = current.startedAt ?? nowMs;
@@ -775,13 +775,14 @@ export async function appendLearningTranscript(ownerId: string, inputValue: unkn
     eq(learningTranscriptTurns.sessionId, input.sessionId),
   )).orderBy(desc(learningTranscriptTurns.sequence)).limit(1);
   const expectedFirstSequence = (lastRows[0]?.sequence ?? -1) + 1;
-  const orderedTurns = [...input.turns].sort((left, right) => left.sequence - right.sequence);
-  if (orderedTurns[0].sequence !== expectedFirstSequence) {
+  const turnOrder = orderContiguousTurns(input.turns, expectedFirstSequence);
+  if (!turnOrder.contiguous) {
     throw new LearningError(
       "learning_transcript_sequence_conflict",
-      `The next transcript sequence must be ${expectedFirstSequence}.`,
+      `Transcript turns must be contiguous and the next sequence must be ${expectedFirstSequence}.`,
     );
   }
+  const orderedTurns = turnOrder.ordered;
   const transcriptRevision = input.expectedTranscriptRevision + 1;
   const receipt = {
     status: "transcript_appended" as const,
@@ -1202,7 +1203,11 @@ export async function finishLearningSession(ownerId: string, inputValue: unknown
     return { result, current, revision: (current?.currentRevision ?? 0) + 1 };
   }));
 
-  const accumulatedSeconds = elapsedSeconds(session, nowMs);
+  const accumulatedSeconds = foldElapsed(
+    session.accumulatedSeconds,
+    session.state === "running" ? session.runningSince : null,
+    nowMs,
+  );
   const revision = session.revision + 1;
   const finalizationRevision = session.finalizationRevision + 1;
   const finalizationSnapshot = {

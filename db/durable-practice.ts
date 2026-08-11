@@ -43,6 +43,7 @@ import {
   voiceResponseGroups,
   voiceSpecialistResponses,
 } from "./schema";
+import { orderContiguousTurns } from "./timed-conversation";
 import {
   canonicalVoiceBatchTurns,
   finishDispositionForVoiceStatus,
@@ -596,7 +597,11 @@ export async function appendTranscriptTurns(
   nowMs: number,
 ) {
   const db = getDb();
-  for (const turn of turns) {
+  const orderedTurns = orderContiguousTurns(turns);
+  if (!orderedTurns.contiguous) {
+    throw new Error("Transcript turn sequences must be unique, contiguous, and ordered by their stable sequence.");
+  }
+  for (const turn of orderedTurns.ordered) {
     const existing = (await db.select().from(practiceTranscriptTurns).where(and(
       eq(practiceTranscriptTurns.ownerId, ownerId),
       eq(practiceTranscriptTurns.activityId, activityId),
