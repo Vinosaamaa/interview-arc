@@ -132,6 +132,18 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
     client = await connectMcpClient(baseUrl, token, "loop-owner");
     otherClient = await connectMcpClient(baseUrl, otherToken, "loop-other");
 
+    await call(client, "register_specialist_task", {
+      specialty: "loop_recorder",
+      threadId: "task-loop-recorder",
+      hostId: "host-local-test",
+      title: "Interview Arc — Loop Recorder",
+    });
+    const specialistTasks = await call(client, "get_specialist_tasks", {});
+    assert.deepEqual(specialistTasks.tasks.map((task) => task.specialty), ["loop_recorder"]);
+    assert.equal(specialistTasks.tasks[0].threadId, "task-loop-recorder");
+    const isolatedTasks = await call(otherClient, "get_specialist_tasks", {});
+    assert.deepEqual(isolatedTasks.tasks, []);
+
     const createInput = {
       operationId: "loop-create-northstar-1",
       authorization: "loop_recorder",

@@ -58,7 +58,7 @@ Use the exact task names, first prompts, and one-time connection procedure in
 Task titles are used only to discover each specialist once; Interview Arc stores
 the durable task identifiers for coordinator routing afterward.
 
-Use four long-lived Codex tasks inside the same Interview Prep project: main/website, LeetCode, system design, and behavioral. They share this checkout and its files; they do not automatically share the private conversation history of another task.
+Use five long-lived Codex tasks inside the same Interview Prep project: coordinator, Loop Recorder, LeetCode, system design, and behavioral. They share this checkout and its files; they do not automatically share the private conversation history of another task. The Loop Recorder owns hiring-process administration and Role Brief revisions; the three practice specialists remain coaching owners.
 
 The outer workspace instructions route a task to the right guide even when every task starts from the same Interview Prep folder. The user does not need separate projects or worktrees.
 

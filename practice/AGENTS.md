@@ -14,6 +14,18 @@ Read these shared contracts only when the corresponding action is needed:
 - interaction-mode selection and completed-attempt classification:
   `../docs/contracts/practice-interaction-modes.md`;
 - artifact structure or reader changes: `../docs/contracts/reader-rendering.md`.
+- Loop-bound activity context or Role Brief consumption:
+  `../docs/contracts/interview-loops.md`.
+
+## Loop Context Boundary
+
+The Loop Recorder alone owns Loop and Role Brief mutations. A coding,
+system-design, or behavioral specialist may call `query_loops` to consume the
+display-safe Loop and exact Role Brief revision selected by the server. It may
+attach one optional Loop and Round context to an activity through the planning
+contract, but it must never call the Loop mutation tools, recreate a Role Brief
+as a Target Profile, infer a stage result, or copy private job-description text
+into practice evidence.
 
 ## Mandatory Last-Line Persistence Status
 
