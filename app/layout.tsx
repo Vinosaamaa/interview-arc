@@ -54,6 +54,15 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        {/*
+          THESIS: Interview preparation is a continuous record, not a pile of tools.
+          OWN WORLD: An incumbent editorial ledger extended by the approved Loop tracker.
+          STORY: Choose a workspace, follow one hiring process, inspect only recorded facts.
+          FIRST VIEWPORT: Workspace hierarchy, current company and role, then stage continuity.
+          FORM: Deep-teal rail, quiet paper surfaces, lime status, specialty accents.
+          FINISH: Responsive, keyboard-visible, reduced-motion safe, and explicit about missing data.
+          DESIGN SEED: approved-loop-continuity.
+        */}
         {children}
       </body>
     </html>

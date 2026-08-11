@@ -185,6 +185,15 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
 
     const isolatedRead = await call(otherClient, "query_loops", { loopId: initialLoop.loopId });
     assert.deepEqual(isolatedRead.loops, []);
+    assert.deepEqual(isolatedRead.facts, {
+      loopCount: 0,
+      activeLoopCount: 0,
+      stageCount: 0,
+      completedStageCount: 0,
+      scheduledStageCount: 0,
+      interviewDateCount: 0,
+      outcomes: { offer: 0, rejected: 0, withdrawn: 0, closed: 0, unresolved: 0 },
+    });
     const isolatedRevision = await callRaw(otherClient, "revise_loop_role_brief", {
       operationId: "loop-other-revise-role-brief",
       loopId: initialLoop.loopId,
@@ -402,6 +411,15 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
     ]);
     assert.equal(sharedQuestionLoops[0].loops[0].loop.stages[2].debrief.questions[0].canonicalQuestionId, "lru-cache");
     assert.equal(sharedQuestionLoops[1].loops[0].loop.stages[0].debrief.questions[0].canonicalQuestionId, "lru-cache");
+    assert.deepEqual(sharedQuestionLoops[0].facts, {
+      loopCount: 2,
+      activeLoopCount: 2,
+      stageCount: 5,
+      completedStageCount: 4,
+      scheduledStageCount: 0,
+      interviewDateCount: 4,
+      outcomes: { offer: 0, rejected: 0, withdrawn: 0, closed: 0, unresolved: 2 },
+    });
 
     await call(client, "upsert_behavioral_target_profile", {
       operationId: "standalone-target-archive-create-1",

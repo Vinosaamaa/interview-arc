@@ -2812,7 +2812,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "query_loops",
     {
-      description: "Read bounded owner-private Loops plus display-safe Role Brief revisions. Current and exact historical revisions preserve stage/debrief truth while excluding raw job descriptions and private Role Brief notes.",
+      description: "Read bounded owner-private Loops, display-safe Role Brief revisions, and factual Journey aggregates. Current and exact historical revisions preserve stage/debrief truth while excluding raw job descriptions and private Role Brief notes; aggregates count only explicit Loop, stage, date, and outcome records.",
       inputSchema: queryLoopsSchema.shape,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },

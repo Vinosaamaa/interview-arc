@@ -442,7 +442,7 @@ async function readLoopProjection(ownerId: string, input: {
   )).limit(1);
   const current = rows[0];
   if (!current || (!input.includeArchived && current.state === "archived")) return null;
-  const [loopRows, roleBriefRows, activityHistory] = await Promise.all([
+  const [loopRows, roleBriefRows, activityHistory, activityBindings] = await Promise.all([
     db.select().from(interviewLoopRevisions).where(and(
       eq(interviewLoopRevisions.ownerId, ownerId),
       eq(interviewLoopRevisions.loopId, input.loopId),
@@ -457,6 +457,21 @@ async function readLoopProjection(ownerId: string, input: {
       eq(loopActivityHistory.ownerId, ownerId),
       eq(loopActivityHistory.loopId, input.loopId),
     )).orderBy(desc(loopActivityHistory.completedAt), desc(loopActivityHistory.activityId)).limit(201),
+    db.select({
+      activityId: loopActivityBindings.activityId,
+      stageId: loopActivityBindings.stageId,
+      loopRevision: loopActivityBindings.loopRevision,
+      roleBriefRevision: loopActivityBindings.roleBriefRevision,
+      specialty: loopActivityBindings.specialty,
+      questionId: loopActivityBindings.questionId,
+      payload: extraActivities.payload,
+    }).from(loopActivityBindings).innerJoin(extraActivities, and(
+      eq(extraActivities.ownerId, loopActivityBindings.ownerId),
+      eq(extraActivities.id, loopActivityBindings.activityId),
+    )).where(and(
+      eq(loopActivityBindings.ownerId, ownerId),
+      eq(loopActivityBindings.loopId, input.loopId),
+    )),
   ]);
   if (!loopRows[0] || !roleBriefRows[0]) return null;
   return {
@@ -474,6 +489,16 @@ async function readLoopProjection(ownerId: string, input: {
       receipt: history.receipt,
     })),
     activityHistoryTruncated: activityHistory.length > 200,
+    activityBindings: activityBindings.map((binding) => ({
+      activityId: binding.activityId,
+      stageId: binding.stageId,
+      loopRevision: binding.loopRevision,
+      roleBriefRevision: binding.roleBriefRevision,
+      specialty: binding.specialty,
+      questionId: binding.questionId,
+      title: String((binding.payload as { title?: unknown }).title ?? binding.questionId),
+      completed: activityHistory.some((history) => history.activityId === binding.activityId),
+    })),
     current: {
       loopRevision: current.currentRevision,
       roleBriefRevision: current.currentRoleBriefRevision,
@@ -649,6 +674,7 @@ export async function bindPlannedActivityToLoop(
 
 export async function queryLoops(ownerId: string, inputValue: unknown) {
   const input = queryLoopsSchema.parse(inputValue);
+  const facts = await readLoopJourneyFacts(ownerId);
   if (input.loopId) {
     const projection = await readLoopProjection(ownerId, {
       loopId: input.loopId,
@@ -656,7 +682,7 @@ export async function queryLoops(ownerId: string, inputValue: unknown) {
       roleBriefRevision: input.roleBriefRevision,
       includeArchived: input.includeArchived,
     });
-    return { loops: projection ? [projection] : [], truncated: false };
+    return { loops: projection ? [projection] : [], truncated: false, facts };
   }
   const rows = await getDb().select({ loopId: interviewLoops.loopId }).from(interviewLoops).where(and(
     eq(interviewLoops.ownerId, ownerId),
@@ -666,7 +692,41 @@ export async function queryLoops(ownerId: string, inputValue: unknown) {
     loopId: row.loopId,
     includeArchived: input.includeArchived,
   })));
-  return { loops: projections.filter((projection) => projection !== null), truncated: rows.length > 50 };
+  return { loops: projections.filter((projection) => projection !== null), truncated: rows.length > 50, facts };
+}
+
+export async function readLoopJourneyFacts(ownerId: string) {
+  const rows = await getDb().select({
+    state: interviewLoops.state,
+    status: interviewLoops.status,
+    currentRevision: interviewLoops.currentRevision,
+    snapshot: interviewLoopRevisions.snapshot,
+  }).from(interviewLoops).innerJoin(interviewLoopRevisions, and(
+    eq(interviewLoopRevisions.ownerId, interviewLoops.ownerId),
+    eq(interviewLoopRevisions.loopId, interviewLoops.loopId),
+    eq(interviewLoopRevisions.revision, interviewLoops.currentRevision),
+  )).where(eq(interviewLoops.ownerId, ownerId));
+  const snapshots = rows.map((row) => loopSnapshotSchema.parse(row.snapshot));
+  const stages = snapshots.flatMap((loop) => loop.stages);
+  const datedStages = stages.filter((stage) => (
+    stage.scheduledAt || stage.startedAt || stage.completedAt || stage.cancelledAt
+  ));
+  const outcomes = { offer: 0, rejected: 0, withdrawn: 0, closed: 0, unresolved: 0 };
+  snapshots.forEach((loop) => {
+    if (loop.outcome) outcomes[loop.outcome] += 1;
+    else outcomes.unresolved += 1;
+  });
+  return {
+    loopCount: snapshots.length,
+    activeLoopCount: rows.filter((row) => row.state === "active" && row.status === "active").length,
+    stageCount: stages.length,
+    completedStageCount: stages.filter((stage) => stage.status === "completed").length,
+    scheduledStageCount: stages.filter((stage) => stage.status === "scheduled").length,
+    interviewDateCount: new Set(datedStages.map((stage) => (
+      stage.completedAt ?? stage.startedAt ?? stage.scheduledAt ?? stage.cancelledAt
+    ))).size,
+    outcomes,
+  };
 }
 
 async function readTargetRoleBrief(ownerId: string, targetId: string, targetRevision: number) {

@@ -214,4 +214,11 @@ continues across midnight so its complete activity count and elapsed time remain
 available for session analytics. Only one activity and one parent session run at
 a time; pausing or finishing the parent pauses its running child.
 
-The site presents these sources in Problem Banks. Past is the completed-work reading log. Journey is an interactive practice atlas with a 365-day heatmap, streak and momentum measures, coding outcome rates, difficulty and topic coverage, pace controls, and an elapsed-time-versus-outcome map. Every point opens or filters to the records behind it; unsupported mastery or productivity claims are intentionally excluded.
+The shared shell exposes Interview and Journey as workspace peers. Interview
+owns Today, Loops, Reviews, Past, and Banks; Learn and Engineering are named but
+remain unavailable until their own bounded implementation work begins. Loops
+tracks one company-and-role process at a time with flexible ordered stages,
+immutable Loop-owned Role Brief revisions, exact/reconstructed interview
+memory, linked practice, and automatic completed-activity history.
+
+The site presents practice sources in Banks. Past is the completed-work reading log. Journey is an interactive practice atlas with a 365-day heatmap, streak and momentum measures, coding outcome rates, difficulty and topic coverage, pace controls, and an elapsed-time-versus-outcome map. It also reports factual Loop, stage, date, and outcome aggregates from explicit Loop records. Every point opens or filters to the records behind it; unsupported mastery or productivity claims are intentionally excluded.

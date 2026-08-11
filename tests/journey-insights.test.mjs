@@ -81,6 +81,7 @@ test("Workspace routes keep every primary surface visible in the URL and clear s
   assert.equal(readPastReaderState("https://example.test/?view=past&attempt=%20"), null);
   assert.equal(readWorkspaceRouteView("https://example.test/?view=unknown"), null);
   assert.equal(readWorkspaceRouteView("https://example.test/?view=reviews"), "reviews");
+  assert.equal(readWorkspaceRouteView("https://example.test/?view=loops"), "loops");
 });
 
 test("Problem Bank URLs preserve stable problem and nested attempt identity", () => {

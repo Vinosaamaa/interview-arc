@@ -18,7 +18,9 @@ Role Brief mutation. A practice specialist may call it only after an explicit
 owner instruction and only before the activity starts.
 
 The three practice specialists may call `query_loops`. It returns only the
-display-safe Role Brief projection: responsibilities, qualifications,
+display-safe Role Brief projection, bounded activity history, planned bindings,
+and factual Journey aggregates from explicit Loop, stage, date, and outcome
+records. The Role Brief projection includes responsibilities, qualifications,
 competency signals, seniority indicators, vocabulary, verified company
 signals, unresolved ambiguities, and a source fingerprint/locator. Raw job
 description text and owner-private notes never leave the Loop Recorder write
