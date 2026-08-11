@@ -312,11 +312,62 @@ test("Learn core preserves immutable owner-private Course, Enrollment, Lesson, a
     });
     assert.equal(quick.scope.kind, "quick_study");
     assert.equal(quick.blueprintRevision, null);
+    await call(client, "create_learning_session", {
+      operationId: "learn-quick-session-create-1",
+      sessionId: "quick-study-record-shapes-session-1",
+      authorization: "learning_specialist",
+      scope: { kind: "quick_study" },
+      lessonId: quickLesson.lessonId,
+      lessonRevision: 1,
+    });
+    await call(client, "control_learning_session", {
+      operationId: "learn-quick-session-start-1",
+      sessionId: "quick-study-record-shapes-session-1",
+      expectedRevision: 0,
+      action: "start",
+      authorization: "explicit_user_instruction",
+    });
+    await call(client, "append_learning_transcript", {
+      operationId: "learn-quick-transcript-1",
+      sessionId: "quick-study-record-shapes-session-1",
+      expectedTranscriptRevision: 0,
+      writer: "learning_specialist",
+      turns: [{
+        turnId: "quick-study-turn-0",
+        sequence: 0,
+        speaker: "learner",
+        source: "typed",
+        body: "A Java record is nominal while a TypeScript object type is structurally compatible.",
+        occurredAt: 1_786_400_010_000,
+      }],
+    });
+    const quickFinished = await call(client, "finish_learning_session", {
+      operationId: "learn-quick-session-finish-1",
+      sessionId: "quick-study-record-shapes-session-1",
+      expectedRevision: 1,
+      expectedTranscriptRevision: 1,
+      authorization: "explicit_user_instruction",
+      finalization: {
+        recap: "The standalone study compared nominal and structural type models.",
+        unresolvedQuestions: [],
+        recommendedNextAction: "Apply the comparison to one API boundary.",
+        checkpointResults: [{
+          checkpointId: "explain-retry-boundary",
+          status: "demonstrated",
+          rationale: "The exact learner turn states the core distinction.",
+          evidence: [{ kind: "transcript_turn", turnId: "quick-study-turn-0" }],
+        }],
+      },
+    });
+    assert.equal(quickFinished.lessonCompletion.completed, true);
+    assert.equal(quickFinished.lessonCompletion.courseCompleted, false);
     const finalRead = await call(client, "query_learning_workspace", {});
     assert.equal(finalRead.courses[0].enrollment.blueprintRevision, 2);
     assert.equal(finalRead.courses[0].lessons[0].current.revision, 2);
     assert.equal(finalRead.quickStudies.length, 1);
     assert.equal(finalRead.quickStudies[0].lesson.courseId, null);
+    assert.equal(finalRead.quickStudies[0].lesson.state, "completed");
+    assert.equal(finalRead.quickStudies[0].current.revision, 2);
     assert.deepEqual(finalRead.facts, {
       courseCount: 1,
       draftCourseCount: 0,
@@ -326,13 +377,13 @@ test("Learn core preserves immutable owner-private Course, Enrollment, Lesson, a
       lessonCount: 1,
       completedLessonCount: 0,
       quickStudyCount: 1,
-      sessionCount: 0,
-      completedSessionCount: 0,
+      sessionCount: 1,
+      completedSessionCount: 1,
       recordedLearningSeconds: 0,
       homeworkCount: 2,
       completedHomeworkCount: 0,
-      checkpointResultCount: 0,
-      demonstratedCheckpointCount: 0,
+      checkpointResultCount: 1,
+      demonstratedCheckpointCount: 1,
       needsAnotherPassCheckpointCount: 0,
     });
     assert.doesNotMatch(JSON.stringify(finalRead), /mastery|readiness|productivity|retentionScore/);

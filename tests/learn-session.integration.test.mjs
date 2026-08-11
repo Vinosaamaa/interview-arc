@@ -293,6 +293,21 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     });
     assert.equal(paused.state, "paused");
     assert.ok(paused.accumulatedSeconds >= 1);
+    await client.close();
+    client = await connectMcpClient(baseUrl, token, "learning-session-owner-reconnected");
+    const reconnected = await call(client, "query_learning_sessions", { sessionId: createSessionInput.sessionId });
+    assert.equal(reconnected.sessions[0].session.state, "paused");
+    assert.equal(reconnected.sessions[0].session.revision, 2);
+    assert.equal(reconnected.sessions[0].session.transcriptRevision, 2);
+    const staleResume = await callRaw(client, "control_learning_session", {
+      operationId: "learning-session-stale-resume",
+      sessionId: createSessionInput.sessionId,
+      expectedRevision: 1,
+      action: "resume",
+      authorization: "explicit_user_instruction",
+    });
+    assert.equal(staleResume.isError, true);
+    assert.equal(staleResume.structuredContent.code, "learning_session_revision_conflict");
     const resumed = await call(client, "control_learning_session", {
       operationId: "learning-session-resume-3",
       sessionId: createSessionInput.sessionId,
