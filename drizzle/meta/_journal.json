@@ -253,6 +253,13 @@
       "when": 1786467140043,
       "tag": "0035_perpetual_mephistopheles",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1786468292938,
+      "tag": "0036_amused_red_ghost",
+      "breakpoints": true
     }
   ]
 }

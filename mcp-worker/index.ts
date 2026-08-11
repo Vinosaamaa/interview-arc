@@ -44,6 +44,8 @@ import {
 } from "../db/behavioral-target-profile";
 import {
   LoopError,
+  bindPlannedActivitySchema,
+  bindPlannedActivityToLoop,
   captureLoopPacket,
   captureLoopPacketSchema,
   createLoop,
@@ -921,6 +923,10 @@ const planningSelectionSchema = z.discriminatedUnion("kind", [
     prompt: z.string().max(20_000).optional(),
     minutes: z.number().int().min(1).max(720),
     topics: z.array(z.string().min(1).max(120)).max(50).optional(),
+    loopContext: z.object({
+      loopId: z.string().min(1),
+      stageId: z.string().min(1).optional(),
+    }).strict().optional(),
   }),
   z.object({
     kind: z.literal("focus"),
@@ -2844,6 +2850,26 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   );
 
   server.registerTool(
+    "bind_planned_activity_to_loop",
+    {
+      description: "Bind one owner-private, unstarted planned activity to one Loop and optional Round. The server validates identity and snapshots the exact display-safe Role Brief revision; exact operation retries are idempotent and changed retries fail closed.",
+      inputSchema: bindPlannedActivitySchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await bindPlannedActivityToLoop(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
     "migrate_target_profile_to_loop",
     {
       description: "Apply one explicit migration-inbox decision for an exact standalone Target Profile revision: create a new Loop atomically, attach it as a new immutable Role Brief revision to an existing Loop, or archive it from the inbox. Only the Loop Recorder may call this tool.",
@@ -3589,6 +3615,10 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
         selections: z.array(z.object({
           specialty: z.enum(planningSpecialties),
           questionId: z.string().min(1),
+          loopContext: z.object({
+            loopId: z.string().min(1),
+            stageId: z.string().min(1).optional(),
+          }).strict().optional(),
         })).min(1).max(30).optional(),
         specialty: z.enum(planningSpecialties).optional(),
         count: z.number().int().min(1).max(30).optional(),
@@ -3598,6 +3628,10 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
         attention: z.array(z.enum(["due", "needs_review", "solved", "helped", "failed", "todo"])).max(6).optional(),
         sort: z.enum(["frequency", "recent", "acceptance"]).optional(),
         direction: z.enum(["asc", "desc"]).optional(),
+        loopContext: z.object({
+          loopId: z.string().min(1),
+          stageId: z.string().min(1).optional(),
+        }).strict().optional(),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
@@ -3653,7 +3687,10 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
               pageSize: 100,
             }, context);
             const item = (payload.catalog as { items: unknown[] }).items[0];
-            return planningSelectionFromCatalogItem(selection.specialty, item);
+            return {
+              ...planningSelectionFromCatalogItem(selection.specialty, item),
+              ...(selection.loopContext ? { loopContext: selection.loopContext } : {}),
+            } as PlanningSelection;
           }));
         } else {
           if (!input.specialty || !input.count) {
@@ -3696,7 +3733,10 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
             direction: input.direction,
             levels: input.difficulty?.length ? new Set(input.difficulty) : undefined,
           });
-          selections = chosen.map((item) => planningSelectionFromCatalogItem(input.specialty!, item));
+          selections = chosen.map((item) => ({
+            ...planningSelectionFromCatalogItem(input.specialty!, item),
+            ...(input.loopContext ? { loopContext: input.loopContext } : {}),
+          } as PlanningSelection));
         }
         const response = await voicePlanningMutation(ownerId, new Request(
           "https://interview-arc.local/voice/planning/mutations",

@@ -13,6 +13,10 @@ coding, system-design, or behavioral specialist.
 `authorization: "loop_recorder"`; that value records the authority used but
 does not replace the owner's explicit request.
 
+`bind_planned_activity_to_loop` is a planning-context operation, not a Loop or
+Role Brief mutation. A practice specialist may call it only after an explicit
+owner instruction and only before the activity starts.
+
 The three practice specialists may call `query_loops`. It returns only the
 display-safe Role Brief projection: responsibilities, qualifications,
 competency signals, seniority indicators, vocabulary, verified company

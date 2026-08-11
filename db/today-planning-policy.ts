@@ -1,5 +1,6 @@
 import type { QuestionBankItem } from "../app/content-types";
 import type { ReviewReason } from "./review-cadence";
+import type { LoopActivityContextProjection, LoopActivityContextRequest } from "./loop-policy";
 
 export type PlanningSpecialty = "leetcode" | "system_design" | "behavioral";
 export type PlanningSort = "frequency" | "recent" | "acceptance";
@@ -246,6 +247,7 @@ export type PlanningSelection =
       topics?: string[];
       reviewOfActivityId?: string;
       reviewReason?: ReviewReason;
+      loopContext?: LoopActivityContextRequest | LoopActivityContextProjection;
     }
   | {
       kind: "focus";
@@ -318,6 +320,7 @@ export function buildPlanningBatch(input: BuildPlanningBatchInput) {
       status: "planned",
       ...(selection.reviewOfActivityId ? { reviewOfActivityId: selection.reviewOfActivityId } : {}),
       ...(selection.reviewReason ? { reviewReason: selection.reviewReason } : {}),
+      ...(selection.loopContext ? { loopContext: selection.loopContext } : {}),
       ...((selection.topics?.length ?? 0) > 0
         ? { notes: selection.topics!.join(", ") }
         : {}),

@@ -2,6 +2,7 @@
 // (`app/home-client.tsx`), and the Git-to-D1 import script.
 
 import type { BehavioralPracticeScenario } from "../db/behavioral-practice-scenario";
+import type { LoopActivityContextProjection, LoopActivityContextRequest } from "../db/loop-policy";
 
 export type JournalActivity = {
   schemaVersion: number;
@@ -30,6 +31,7 @@ export type JournalActivity = {
   reviewReason?: "failed" | "full_walkthrough" | "approach_review" | "manual" | "successful_recall";
   vocabularyPackIds?: string[];
   speechTerms?: string[];
+  loopContext?: LoopActivityContextRequest | LoopActivityContextProjection;
 };
 
 export type TimerGroup = {

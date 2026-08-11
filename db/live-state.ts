@@ -10,6 +10,7 @@ import {
   leetcodeCodeAttempts,
   liveMutationReceipts,
   liveSessions,
+  loopActivityBindings,
   outcomes,
   practiceFocus,
   practiceWorkbenches,
@@ -1539,6 +1540,7 @@ export async function removeExtraActivity(ownerId: string, id: string) {
           AND ${liveMutationReceipts.activityId} = ${id}
       )
     `),
+    db.delete(loopActivityBindings).where(and(eq(loopActivityBindings.ownerId, ownerId), eq(loopActivityBindings.activityId, id))),
     db.delete(extraActivities).where(and(eq(extraActivities.ownerId, ownerId), eq(extraActivities.id, id))),
     db.delete(outcomes).where(and(eq(outcomes.ownerId, ownerId), eq(outcomes.activityId, id))),
     db.delete(publicationStatuses).where(and(eq(publicationStatuses.ownerId, ownerId), eq(publicationStatuses.activityId, id))),

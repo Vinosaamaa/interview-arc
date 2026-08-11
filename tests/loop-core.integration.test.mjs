@@ -124,7 +124,10 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
         (token_hash,owner_id,label,created_at,last_used_at,revoked_at)
         VALUES
           ('${sha256(token)}','owner-loop','Loop owner',1,NULL,NULL),
-          ('${sha256(otherToken)}','other-loop','Other Loop owner',1,NULL,NULL);`,
+          ('${sha256(otherToken)}','other-loop','Other Loop owner',1,NULL,NULL);
+        INSERT INTO content_bank (category,id,ord,payload,updated_at) VALUES
+          ('leetcode','two-sum',0,'{"id":"two-sum","title":"Two Sum","difficulty":"easy","topics":["arrays"],"targetMinutes":25,"active":true}',1),
+          ('leetcode','course-schedule',1,'{"id":"course-schedule","title":"Course Schedule","difficulty":"medium","topics":["graphs"],"targetMinutes":35,"active":true}',1);`,
     ], project);
     const started = startMcpWorker({ wrangler, config, persistence, project, port });
     worker = started.child;
@@ -241,7 +244,7 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
             {
               memoryId: "memory-lru",
               specialty: "leetcode",
-              canonicalQuestionId: "146-lru-cache",
+              canonicalQuestionId: "lru-cache",
               promptMemory: "Implement an LRU cache",
               promptConfidence: "exact",
               answerMemory: "Used a hash map and doubly linked list.",
@@ -354,6 +357,51 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
     assert.equal(migrationCreatedLoop.roleBriefRevision, 1);
     const migratedLoopRead = await call(client, "query_loops", { loopId: "loop-acme-data-2026" });
     assert.equal(migratedLoopRead.loops[0].roleBrief.company, "Acme");
+    const acmeCurrent = migratedLoopRead.loops[0].loop;
+    const acmeLoopSnapshot = {
+      loopId: acmeCurrent.loopId,
+      state: acmeCurrent.state,
+      company: acmeCurrent.company,
+      roleTitle: acmeCurrent.roleTitle,
+      status: acmeCurrent.status,
+      openedAt: acmeCurrent.openedAt,
+      outcome: acmeCurrent.outcome,
+      ...(acmeCurrent.jobReference ? { jobReference: acmeCurrent.jobReference } : {}),
+      ...(acmeCurrent.location ? { location: acmeCurrent.location } : {}),
+      ...(acmeCurrent.closedAt ? { closedAt: acmeCurrent.closedAt } : {}),
+      stages: acmeCurrent.stages,
+    };
+    await call(client, "revise_loop", {
+      operationId: "loop-acme-link-shared-question-2",
+      loopId: "loop-acme-data-2026",
+      expectedRevision: 1,
+      authorization: "loop_recorder",
+      loop: {
+        ...acmeLoopSnapshot,
+        stages: [{
+          stageId: "coding",
+          label: "Coding",
+          order: 0,
+          status: "completed",
+          completedAt: 1_787_000_000_000,
+          debrief: {
+            capturedAt: 1_787_000_001_000,
+            questions: [{
+              memoryId: "memory-acme-lru",
+              specialty: "leetcode",
+              canonicalQuestionId: "lru-cache",
+              promptConfidence: "exact",
+            }],
+          },
+        }],
+      },
+    });
+    const sharedQuestionLoops = await Promise.all([
+      call(client, "query_loops", { loopId: initialLoop.loopId }),
+      call(client, "query_loops", { loopId: "loop-acme-data-2026" }),
+    ]);
+    assert.equal(sharedQuestionLoops[0].loops[0].loop.stages[2].debrief.questions[0].canonicalQuestionId, "lru-cache");
+    assert.equal(sharedQuestionLoops[1].loops[0].loop.stages[0].debrief.questions[0].canonicalQuestionId, "lru-cache");
 
     await call(client, "upsert_behavioral_target_profile", {
       operationId: "standalone-target-archive-create-1",
@@ -451,6 +499,158 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
     const loopAfterImport = await call(client, "query_loops", { loopId: initialLoop.loopId });
     assert.equal(loopAfterImport.loops[0].loop.revision, 3);
     assert.equal(loopAfterImport.loops[0].loop.stages.at(-1).stageId, "onsite-behavioral");
+
+    const catalog = await call(client, "query_practice_catalog", {
+      specialty: "leetcode",
+      questionId: "course-schedule",
+    });
+    const workbenchId = catalog.workbench.id;
+    const atomicPlanInput = {
+      mode: "exact_selection",
+      expectedWorkbenchId: workbenchId,
+      mutationId: "loop-plan-two-sum-atomic",
+      destination: "standalone",
+      selections: [{
+        specialty: "leetcode",
+        questionId: "two-sum",
+        loopContext: { loopId: initialLoop.loopId, stageId: "onsite-coding" },
+      }],
+    };
+    const atomicallyPlanned = await call(client, "plan_today_practice", atomicPlanInput);
+    assert.equal(atomicallyPlanned.duplicate, false);
+    const atomicPlanRetry = await call(client, "plan_today_practice", atomicPlanInput);
+    assert.equal(atomicPlanRetry.duplicate, true);
+    const changedAtomicPlanRetry = await callRaw(client, "plan_today_practice", {
+      ...atomicPlanInput,
+      selections: [{
+        specialty: "leetcode",
+        questionId: "two-sum",
+        loopContext: { loopId: initialLoop.loopId, stageId: "recruiter" },
+      }],
+    });
+    assert.equal(changedAtomicPlanRetry.isError, true);
+    assert.equal(changedAtomicPlanRetry.structuredContent.code, "planning_mutation_identity_conflict");
+    const todayAfterAtomicPlan = await call(client, "get_today_practice", {});
+    const atomicallyBoundActivity = todayAfterAtomicPlan.activities.find(
+      (activity) => activity.id === atomicallyPlanned.result.activityIds[0],
+    );
+    assert.equal(atomicallyBoundActivity.loopContext.roleBriefRevision, 3);
+    assert.equal(atomicallyBoundActivity.loopContext.stageId, "onsite-coding");
+    const planned = await call(client, "plan_today_practice", {
+      mode: "exact_selection",
+      expectedWorkbenchId: workbenchId,
+      mutationId: "loop-plan-course-schedule",
+      destination: "standalone",
+      selections: [{ specialty: "leetcode", questionId: "course-schedule" }],
+    });
+    const activityId = planned.result.activityIds[0];
+    const bound = await call(client, "bind_planned_activity_to_loop", {
+      operationId: "loop-bind-course-schedule",
+      activityId,
+      expectedActivityRevision: 1,
+      loopId: initialLoop.loopId,
+      stageId: "onsite-system-design",
+      authorization: "explicit_user_instruction",
+    });
+    assert.equal(bound.roleBriefRevision, 3);
+    assert.equal(bound.bindingRevision, 1);
+    const bindingRetry = await call(client, "bind_planned_activity_to_loop", {
+      operationId: "loop-bind-course-schedule",
+      activityId,
+      expectedActivityRevision: 1,
+      loopId: initialLoop.loopId,
+      stageId: "onsite-system-design",
+      authorization: "explicit_user_instruction",
+    });
+    assert.equal(bindingRetry.duplicate, true);
+    const changedBindingRetry = await callRaw(client, "bind_planned_activity_to_loop", {
+      operationId: "loop-bind-course-schedule",
+      activityId,
+      expectedActivityRevision: 1,
+      loopId: initialLoop.loopId,
+      stageId: "recruiter",
+      authorization: "explicit_user_instruction",
+    });
+    assert.equal(changedBindingRetry.isError, true);
+    assert.equal(changedBindingRetry.structuredContent.code, "loop_activity_binding_operation_conflict");
+
+    const todayAfterBinding = await call(client, "get_today_practice", {});
+    const boundActivity = todayAfterBinding.activities.find((activity) => activity.id === activityId);
+    assert.deepEqual(boundActivity.loopContext, {
+      loopId: initialLoop.loopId,
+      stageId: "onsite-system-design",
+      loopRevision: 3,
+      roleBriefRevision: 3,
+      company: "Northstar",
+      roleTitle: "Backend Engineer",
+    });
+    await call(client, "set_practice_result", {
+      expectedWorkbenchId: workbenchId,
+      mutationId: "loop-course-schedule-result",
+      activityId,
+      expectedRevision: 0,
+      result: "solved",
+      authorization: "explicit_user_instruction",
+    });
+    await call(client, "control_practice_timer", {
+      expectedWorkbenchId: workbenchId,
+      mutationId: "loop-course-schedule-start",
+      activityId,
+      expectedRevision: 0,
+      action: "start",
+      authorization: "explicit_user_instruction",
+    });
+    const lateRebind = await callRaw(client, "bind_planned_activity_to_loop", {
+      operationId: "loop-bind-course-schedule-late",
+      activityId,
+      expectedActivityRevision: 2,
+      loopId: initialLoop.loopId,
+      stageId: "recruiter",
+      authorization: "explicit_user_instruction",
+    });
+    assert.equal(lateRebind.isError, true);
+    assert.equal(lateRebind.structuredContent.code, "loop_activity_already_started");
+    const finished = await call(client, "control_practice_timer", {
+      expectedWorkbenchId: workbenchId,
+      mutationId: "loop-course-schedule-finish",
+      activityId,
+      expectedRevision: 1,
+      action: "finish",
+      authorization: "explicit_user_instruction",
+    });
+    assert.equal(finished.duplicate, false);
+    const finishRetry = await call(client, "control_practice_timer", {
+      expectedWorkbenchId: workbenchId,
+      mutationId: "loop-course-schedule-finish",
+      activityId,
+      expectedRevision: 1,
+      action: "finish",
+      authorization: "explicit_user_instruction",
+    });
+    assert.equal(finishRetry.duplicate, true);
+    const withHistory = await call(client, "query_loops", { loopId: initialLoop.loopId });
+    assert.equal(withHistory.loops[0].activityHistory.length, 1);
+    assert.deepEqual(withHistory.loops[0].activityHistory[0], {
+      activityId,
+      loopId: initialLoop.loopId,
+      stageId: "onsite-system-design",
+      roleBriefRevision: 3,
+      specialty: "leetcode",
+      questionId: "course-schedule",
+      result: "solved",
+      completedAt: withHistory.loops[0].activityHistory[0].completedAt,
+      receipt: {
+        schemaVersion: 1,
+        source: "authoritative_timer_completion",
+        activityId,
+        timerRevision: 2,
+        outcomeRevision: 1,
+        completedAt: withHistory.loops[0].activityHistory[0].completedAt,
+      },
+    });
+    assert.doesNotMatch(JSON.stringify(withHistory.loops[0].activityHistory), /transcript|jdText|Private owner note/);
+    const isolatedHistory = await call(otherClient, "query_loops", { loopId: initialLoop.loopId });
+    assert.deepEqual(isolatedHistory.loops, []);
   } finally {
     await client?.close().catch(() => {});
     await otherClient?.close().catch(() => {});

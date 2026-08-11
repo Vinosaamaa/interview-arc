@@ -15,6 +15,10 @@ LeetCode, infer outcomes, or replace the website and Voice interfaces.
 - `plan_today_practice` adds an exact authoritative selection as standalone
   work or one session. Its filtered-session mode requires an exact count and
   fails with `insufficient_eligible_questions` instead of relaxing filters.
+- An exact selection, or every activity in a filtered session, may name one
+  `loopContext` with a stable Loop ID and optional Round ID. The server rejects
+  cross-owner or missing identities and snapshots the current immutable,
+  display-safe Role Brief revision into each created activity binding.
 - `remove_today_practice_activities` removes one or more exact untouched plan
   rows after an explicit user instruction. It requires the current workbench
   revision, preserves every durable row, and returns deleted and rejected IDs
@@ -58,6 +62,12 @@ The server rejects a stale workbench or timer revision. Reusing a mutation ID
 with changed content is an identity conflict. Reusing it with identical content
 returns the saved receipt and a fresh authoritative D1 read-back without
 applying the mutation twice.
+
+`bind_planned_activity_to_loop` provides the same context contract for one
+already-created, owner-private planned activity. It requires the exact activity
+revision and a stable operation ID. Once the activity timer starts, its Loop,
+Round, and Role Brief revision are immutable. Finishing the timer projects one
+transcript-free authoritative receipt into Loop history exactly once.
 
 Starting an activity nested in a session is one guarded D1 mutation. The
 parent session, requested child, competing-stopwatch pauses, focus state, and

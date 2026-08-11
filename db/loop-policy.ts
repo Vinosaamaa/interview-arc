@@ -17,6 +17,27 @@ const optionalText = (max: number) => boundedText(max).optional();
 export const loopMemoryConfidenceSchema = z.enum(["exact", "reconstructed"]);
 export const loopSpecialtySchema = z.enum(["leetcode", "system_design", "behavioral"]);
 
+export const loopActivityContextRequestSchema = z.object({
+  loopId: loopStableIdSchema,
+  stageId: loopStableIdSchema.optional(),
+}).strict();
+
+export const loopActivityContextProjectionSchema = loopActivityContextRequestSchema.extend({
+  loopRevision: z.number().int().positive(),
+  roleBriefRevision: z.number().int().positive(),
+  company: boundedText(240),
+  roleTitle: boundedText(240),
+}).strict();
+
+export const bindPlannedActivitySchema = z.object({
+  loopId: loopStableIdSchema,
+  stageId: loopStableIdSchema.optional(),
+  operationId: loopStableIdSchema,
+  activityId: loopStableIdSchema,
+  expectedActivityRevision: z.number().int().positive(),
+  authorization: z.literal("explicit_user_instruction"),
+}).strict();
+
 export const loopQuestionMemorySchema = z.object({
   memoryId: loopStableIdSchema,
   specialty: loopSpecialtySchema,
@@ -240,3 +261,6 @@ export type TargetProfileMigrationInput = z.infer<typeof targetProfileMigrationS
 export type LoopCapturePacketSnapshot = z.infer<typeof loopCapturePacketSnapshotSchema>;
 export type CaptureLoopPacketInput = z.infer<typeof captureLoopPacketSchema>;
 export type ImportLoopCapturePacketInput = z.infer<typeof importLoopCapturePacketSchema>;
+export type LoopActivityContextRequest = z.infer<typeof loopActivityContextRequestSchema>;
+export type LoopActivityContextProjection = z.infer<typeof loopActivityContextProjectionSchema>;
+export type BindPlannedActivityInput = z.infer<typeof bindPlannedActivitySchema>;

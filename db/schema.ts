@@ -1047,6 +1047,71 @@ export const loopRoleBriefRevisions = sqliteTable(
   ],
 );
 
+// Planned practice can carry at most one Loop and optional Round. The server
+// snapshots the exact display-safe Role Brief revision; clients never supply
+// or persist raw job-description text in activity context.
+export const loopActivityBindings = sqliteTable(
+  "loop_activity_bindings",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    loopId: text("loop_id").notNull(),
+    stageId: text("stage_id"),
+    loopRevision: integer("loop_revision").notNull(),
+    roleBriefRevision: integer("role_brief_revision").notNull(),
+    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
+    questionId: text("question_id").notNull(),
+    roleBriefDisplaySnapshot: text("role_brief_display_snapshot", { mode: "json" }).notNull(),
+    bindingRevision: integer("binding_revision").notNull().default(1),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.activityId] }),
+    index("loop_activity_bindings_loop_idx").on(table.ownerId, table.loopId, table.stageId),
+  ],
+);
+
+// Direct re-binding of an untouched planned activity is identity-idempotent.
+// The immutable operation receipt prevents changed retries from silently
+// moving an activity to a different hiring process.
+export const loopActivityBindingOperations = sqliteTable(
+  "loop_activity_binding_operations",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    activityId: text("activity_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.operationId] })],
+);
+
+// Timer completion projects one immutable, transcript-free receipt into Loop
+// history. A database trigger owns this projection so website, MCP, Voice, and
+// session finishes cannot diverge.
+export const loopActivityHistory = sqliteTable(
+  "loop_activity_history",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    loopId: text("loop_id").notNull(),
+    stageId: text("stage_id"),
+    roleBriefRevision: integer("role_brief_revision").notNull(),
+    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
+    questionId: text("question_id").notNull(),
+    result: text("result", { enum: ["solved", "solved_after_reviewing_approach", "failed"] }).notNull(),
+    completedAt: integer("completed_at").notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.activityId] }),
+    index("loop_activity_history_loop_idx").on(table.ownerId, table.loopId, table.completedAt),
+  ],
+);
+
 export const interviewLoopOperations = sqliteTable(
   "interview_loop_operations",
   {
@@ -1758,6 +1823,8 @@ export type ActivityFinalizationRow = typeof activityFinalizations.$inferSelect;
 export type BehavioralFinalAnswerSnapshotRow = typeof behavioralFinalAnswerSnapshots.$inferSelect;
 export type ReviewScheduleRow = typeof reviewSchedules.$inferSelect;
 export type SpecialistTaskRow = typeof specialistTasks.$inferSelect;
+export type LoopActivityBindingRow = typeof loopActivityBindings.$inferSelect;
+export type LoopActivityHistoryRow = typeof loopActivityHistory.$inferSelect;
 export type ActivityAudioClipRow = typeof activityAudioClips.$inferSelect;
 export type ActivityDeliveryAnalysisRow = typeof activityDeliveryAnalyses.$inferSelect;
 export type ProblemPreferenceRow = typeof problemPreferences.$inferSelect;
