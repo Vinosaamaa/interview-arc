@@ -148,7 +148,7 @@ test("Review Queue keeps filters in the menu, branches each row, and joins its f
   assert.equal(folioRules.some((rule) => rule.declarations.bottom === "78px"), false);
 });
 
-test("responsive shell separates the top workspace selector from the Interview dock", async () => {
+test("responsive shell keeps exactly three workspaces and an Interview-local Journey", async () => {
   const [source, globals, css] = await Promise.all([
     load("../app/home-client.tsx"),
     load("../app/globals.css"),
@@ -157,6 +157,36 @@ test("responsive shell separates the top workspace selector from the Interview d
   const file = parseTsx(source);
   const literals = stringLiterals(file);
   const rules = parseCss(`${globals}\n${css}`);
+  const workspaceNav = visit(file, (node) => ts.isJsxElement(node)
+    && node.openingElement.attributes.properties.some((attribute) => ts.isJsxAttribute(attribute)
+      && attribute.name.getText(file) === "className"
+      && attribute.initializer?.getText(file) === '"workspace-nav"'))[0];
+  assert.ok(workspaceNav);
+  const workspaceLabels = visit(workspaceNav, (node) => ts.isJsxText(node))
+    .map((node) => node.text.trim())
+    .filter((value) => ["Interview", "Learn", "Engineering", "Journey"].includes(value));
+  assert.deepEqual(workspaceLabels, ["Interview", "Learn", "Engineering"]);
+  const interviewNav = visit(file, (node) => ts.isVariableDeclaration(node)
+    && ts.isIdentifier(node.name)
+    && node.name.text === "INTERVIEW_NAV_ITEMS")[0];
+  assert.ok(interviewNav?.initializer && ts.isArrayLiteralExpression(interviewNav.initializer));
+  const interviewNavItems = interviewNav.initializer.elements.map((element) => {
+    assert.ok(ts.isArrayLiteralExpression(element));
+    return element.elements.map((item) => {
+      assert.ok(ts.isStringLiteral(item));
+      return item.text;
+    });
+  });
+  assert.deepEqual(interviewNavItems, [
+    ["today", "Today"],
+    ["loops", "Loops"],
+    ["reviews", "Reviews"],
+    ["library", "Past"],
+    ["banks", "Banks"],
+    ["journey", "Journey"],
+  ]);
+  assert.match(source, /view === "journey" \? "Interview · Journey"/);
+  assert.doesNotMatch(source, /view !== "journey" && <nav className="mobile-interview-nav"/);
   assert.equal(literals.has("Statistics"), false);
   assert.equal(literals.has("Recall schedule"), false);
   assert.ok(cssRules(rules, ".brand-mark").some((rule) => rule.declarations.background?.includes('/favicon.svg')));
@@ -168,7 +198,7 @@ test("responsive shell separates the top workspace selector from the Interview d
   const interviewDock = cssRules(rules, ".mobile-interview-nav", "max-width: 900px").at(-1).declarations;
   assert.equal(interviewDock.position, "fixed");
   assert.equal(interviewDock.display, "grid");
-  assert.equal(interviewDock["grid-template-columns"], "repeat(5, 1fr)");
+  assert.equal(interviewDock["grid-template-columns"], "repeat(6, 1fr)");
   assert.ok(cssRules(rules, ".topbar > div:last-child").some((rule) => rule.declarations["flex-wrap"] === "nowrap"));
   assert.equal(cssRules(rules, ".topbar .secondary-action", "max-width: 900px").at(-1).declarations.display, "none");
 });
