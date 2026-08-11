@@ -13,14 +13,16 @@ Owning Learn MVP issue: [#250](https://github.com/Vinosaamaa/interview-arc/issue
 Build Learn as an owner-private interactive tutoring workspace, not a static
 course marketplace and not an Interview-practice subtype.
 
-The primary reusable artifact is a versioned **Lesson Sheet**. The live teaching
-experience is a timed, conversational **Learning Session**. The exact transcript
-is preserved privately in History, but it is not treated as the course article.
+The primary reusable artifact is versioned **Lesson content**, presented in the
+Course workspace as **Current lesson**. The live teaching experience is a timed,
+conversational **Learning Session** with the local Learning Specialist in Codex.
+The exact transcript is preserved privately in History, but the website does
+not host a second tutor or chat runtime.
 
 The MVP includes:
 
 - Course Blueprints and lesson outlines;
-- just-in-time Lesson Sheets;
+- just-in-time Lesson revisions;
 - Quick Study;
 - timed conversational tutoring;
 - transcript-only Arc Voice;
@@ -41,17 +43,18 @@ A versioned syllabus containing the goal, prerequisites, source set, module and
 lesson outline, dependency order, and intended outcome. It plans the Course
 without pre-generating every lesson article.
 
-### Lesson Sheet
+### Lesson revision
 
-The versioned durable teaching material for one Lesson. It contains the
+The versioned durable teaching material for one Lesson. The product labels this
+surface **Current lesson**. It contains the
 objective, prerequisite concepts, concise main explanation, examples or
 diagrams, exact source references, exercises, optional homework, and checkpoint
 definitions.
 
-The Sheet is generated or opened immediately before its Lesson starts. It is
+The revision is generated or opened immediately before its Lesson starts. It is
 the default surface the learner revisits. A specialist may propose a small
 explicit revision after a Session, but must never silently regenerate the whole
-Sheet from conversation text.
+Lesson from conversation text.
 
 ### Learning Session
 
@@ -63,7 +66,7 @@ Finishing a Session does not necessarily complete its Lesson.
 
 ### Quick Study
 
-A standalone Lesson Sheet and one or more Learning Sessions without a Course
+A standalone Lesson revision and one or more Learning Sessions without a Course
 Blueprint. Quick Study supports genuine learning that does not need an
 artificial curriculum. It may later be linked into a Course through an explicit
 operation.
@@ -97,8 +100,8 @@ time, and optional sources. The Learning Specialist proposes a Course Blueprint
 for review. Approval creates the enrollment; it does not generate the full
 course corpus.
 
-Structural changes create a new Blueprint revision. Existing Lesson Sheets and
-Sessions retain the revision they used.
+Structural changes create a new Blueprint revision. Existing Lesson revisions
+and Sessions retain the revision they used.
 
 ### Lesson start
 
@@ -106,8 +109,8 @@ Before starting the timer, the specialist:
 
 1. resolves the current Course, Blueprint revision, Module, and Lesson;
 2. loads exact source revisions;
-3. creates or opens the Lesson Sheet;
-4. renders the Sheet so the learner can see the teaching material;
+3. creates or opens the exact Lesson revision;
+4. renders the Course workspace with Module path and Current lesson visible;
 5. starts or resumes the Learning Session only after the surface is available.
 
 This preserves the existing product principle that the useful working surface
@@ -115,8 +118,8 @@ appears before time begins.
 
 ### Conversational teaching
 
-The specialist treats the Lesson Sheet as shared teaching material rather than
-copying it into chat. Teaching proceeds in short adaptive cycles:
+The local specialist treats Current lesson as shared teaching material rather
+than copying it into every response. Teaching proceeds in short adaptive cycles:
 
 1. establish the learner's current model;
 2. explain one bounded concept;
@@ -142,15 +145,16 @@ Finish saves:
 - unresolved questions;
 - checkpoint evidence/results;
 - recommended next action;
-- exact Course Blueprint and Lesson Sheet revisions.
+- exact Course Blueprint and Lesson revisions.
 
 Finish never claims durable mastery. A Session may be complete while the Lesson
 remains in progress.
 
 ### Looking back
 
-The Course opens the curated Lesson Sheet by default. History provides the exact
-conversation and artifacts when the owner needs the original context.
+The Course opens its persistent Module path with Current lesson selected by
+default. History provides the exact conversation and artifacts when the owner
+needs the original context.
 
 The system never publishes a raw transcript as course material. Public course
 publication is outside the MVP.
@@ -171,19 +175,23 @@ Course navigation:
 - Homework
 - Analytics
 
-Desktop Lesson layout uses two coordinated surfaces:
+Desktop Course layout preserves the curriculum and the selected lesson:
 
     ┌──────────────────────────┬──────────────────────────┐
-    │ Lesson Sheet             │ Tutor conversation       │
+    │ Module path              │ Current lesson           │
     │                          │                          │
-    │ explanation              │ adaptive teaching        │
-    │ diagrams and examples    │ learner questions        │
-    │ sources                  │ guided exercises         │
-    │ homework/checkpoints     │ corrections and recap    │
+    │ modules and lessons      │ objective and explanation│
+    │ completion state         │ diagrams and examples    │
+    │ dependency order         │ sources and exercises    │
+    │ locked/next lessons      │ homework/checkpoints     │
     └──────────────────────────┴──────────────────────────┘
 
-Mobile uses an accessible Lesson/Conversation switcher and preserves the timer,
-Session identity, draft text, and reading position when switching surfaces.
+An active Session adds a compact timer, pause/resume control, and Finish session
+action without replacing the Course layout. The website has no tutor input or
+live chat panel; teaching remains in the local Codex specialist thread.
+
+Mobile uses an accessible Module path/Current lesson switcher and preserves the
+timer, Session identity, and reading position when switching surfaces.
 
 ## Shared Timed-Conversation Module
 
@@ -242,7 +250,7 @@ D1 owns owner-private mutable Learn state:
 
 - Course and Blueprint revisions;
 - Enrollment and current position;
-- Lesson Sheet revisions;
+- Lesson revisions;
 - Learning Sessions and timer intervals;
 - transcript turns;
 - checkpoint definitions/results/evidence references;
@@ -257,7 +265,7 @@ contracts, templates, and any explicitly reviewed reusable curriculum. A
 personal generated Course does not enter Git automatically.
 
 Journey reads compact factual events and identifiers. It never copies
-transcripts or Lesson Sheet bodies.
+transcripts or Lesson bodies.
 
 ## Checkpoint Invariants
 
@@ -329,9 +337,9 @@ Track sub-stories as an issue checklist and meaningful commits:
 1. domain contracts, additive migration, public interfaces, and focused D1
    tests;
 2. shared timed-conversation transcript-only policy and persistence tests;
-3. Learning Specialist workflow, Lesson Sheets, checkpoints, homework, and
+3. Learning Specialist workflow, Lesson revisions, checkpoints, homework, and
    focused tests;
-4. responsive Today, Courses, History, Analytics, and Lesson/Conversation UI;
+4. responsive Today, Courses, History, Analytics, and Module/Current lesson UI;
 5. Journey projection, documentation, and final parity/regression corrections.
 
 Each commit includes its narrow behavioral test. The completed PR runs the
@@ -371,7 +379,7 @@ Voice artifact verification for the paired native change.
 ### Benefits
 
 - Conversational tutoring remains natural.
-- The Course stays readable because Lesson Sheets, not transcripts, are the
+- The Course stays readable because curated Lesson content, not transcripts, is the
   primary material.
 - History remains exact when the owner needs the original exchange.
 - Interview and Learn reuse timer/transcript infrastructure without sharing
@@ -385,7 +393,7 @@ Voice artifact verification for the paired native change.
 - The shared session Module must be deep enough to prevent Interview and Learn
   policies from drifting.
 - Voice requires an explicit transcript-only route and native release.
-- Generated Lesson Sheets need revision/source discipline to avoid stale or
+- Generated Lesson revisions need source discipline to avoid stale or
   hallucinated teaching material.
 - A large workspace PR requires disciplined commits and continuous focused tests
   to remain reviewable.
