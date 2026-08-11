@@ -76,8 +76,11 @@ in a Learning transcript.
 
 ## Evidence, Homework, And Finish
 
-- Use `attach_learning_artifact` for immutable artifact identity and integrity
-  metadata. Never expose or repeat a private backing-store locator.
+- Use `attach_learning_artifact` to durably save bounded text evidence in the
+  owner-private artifact store; the service computes and verifies immutable
+  identity and integrity metadata. Never invent, expose, or repeat a private
+  backing-store locator. Binary evidence is uploaded through the authenticated
+  Learn artifact route and follows the same verified storage contract.
 - Use `set_learning_homework_state` only after explicit owner instruction. A
   completed assignment is a fact, not automatic checkpoint evidence.
 - Checkpoint results are exactly Not attempted, Needs another pass, or

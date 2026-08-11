@@ -326,9 +326,7 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
       kind: "trace",
       label: "Learning Session boundary trace",
       mediaType: "text/markdown",
-      sizeBytes: 512,
-      contentHash: sha256("public-safe learning session boundary trace"),
-      privateLocator: "r2://learning-artifacts-private/session-boundary-trace",
+      content: "public-safe learning session boundary trace",
       authorization: "learning_specialist",
     });
     assert.equal(artifact.artifactId, "session-boundary-trace");
@@ -341,11 +339,23 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
       kind: "trace",
       label: "Learning Session boundary trace",
       mediaType: "text/markdown",
-      sizeBytes: 512,
-      contentHash: sha256("public-safe learning session boundary trace"),
-      privateLocator: "r2://learning-artifacts-private/session-boundary-trace",
+      content: "public-safe learning session boundary trace",
       authorization: "learning_specialist",
     })).duplicate, true);
+    const changedArtifactRetry = await callRaw(client, "attach_learning_artifact", {
+      operationId: "learning-artifact-attach-1",
+      artifactId: "session-boundary-trace",
+      lessonId: lesson.lessonId,
+      sessionId: createSessionInput.sessionId,
+      homeworkId: "trace-session-boundary",
+      kind: "trace",
+      label: "Learning Session boundary trace",
+      mediaType: "text/markdown",
+      content: "changed retry must not overwrite immutable evidence",
+      authorization: "learning_specialist",
+    });
+    assert.equal(changedArtifactRetry.isError, true);
+    assert.equal(changedArtifactRetry.structuredContent.code, "learning_operation_conflict");
 
     const homework = await call(client, "set_learning_homework_state", {
       operationId: "learning-homework-complete-1",
@@ -441,6 +451,7 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     assert.equal(evidence.homework[0].revision, 2);
     assert.deepEqual(evidence.homeworkHistory.map((event) => event.state), ["open", "completed"]);
     assert.equal(evidence.artifacts[0].contentHash, sha256("public-safe learning session boundary trace"));
+    assert.equal(evidence.artifacts[0].sizeBytes, Buffer.byteLength("public-safe learning session boundary trace"));
     assert.equal(evidence.finalizations[0].revision, 1);
     assert.doesNotMatch(JSON.stringify(evidence), /learning-artifacts-private|privateLocator/);
     const otherEvidence = await call(otherClient, "query_learning_evidence", {});

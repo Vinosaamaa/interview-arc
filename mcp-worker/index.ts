@@ -69,8 +69,6 @@ import {
   LearningError,
   appendLearningTranscript,
   appendLearningTranscriptSchema,
-  attachLearningArtifact,
-  attachLearningArtifactSchema,
   approveLearningEnrollment,
   approveLearningEnrollmentSchema,
   assertLearningAudioForbidden,
@@ -96,9 +94,11 @@ import {
   reviseLearningCourseBlueprintSchema,
   saveLearningLessonRevision,
   saveLearningLessonRevisionSchema,
+  saveLearningArtifactTextSchema,
   setLearningHomeworkState,
   setLearningHomeworkStateSchema,
 } from "../db/learn";
+import { persistLearningArtifactText } from "../db/learning-artifact-storage";
 import {
   behavioralPracticePreflightInputSchema,
   readBehavioralPracticePreflight,
@@ -3176,13 +3176,13 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "attach_learning_artifact",
     {
-      description: "Attach immutable integrity metadata for one owner-private Learning artifact. The backing-store locator remains server-private and is never returned by Learn reads.",
-      inputSchema: attachLearningArtifactSchema.shape,
+      description: "Durably save one bounded text Learning artifact in owner-private storage, verify its byte count and SHA-256 integrity, and attach immutable display-safe metadata. No backing-store locator is accepted or returned.",
+      inputSchema: saveLearningArtifactTextSchema.shape,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async (input) => {
       try {
-        const result = await attachLearningArtifact(ownerId, input);
+        const result = await persistLearningArtifactText(ownerId, input, env.AUDIO);
         return {
           content: [{ type: "text", text: `Learning artifact ${result.artifactId} is attached to Lesson ${result.lessonId}.` }],
           structuredContent: result,

@@ -252,7 +252,7 @@ export const finishLearningSessionSchema = z.object({
   }
 });
 
-export const attachLearningArtifactSchema = z.object({
+const learningArtifactIdentitySchema = z.object({
   operationId: learningStableIdSchema,
   artifactId: learningStableIdSchema,
   lessonId: learningStableIdSchema,
@@ -260,11 +260,36 @@ export const attachLearningArtifactSchema = z.object({
   homeworkId: learningStableIdSchema.optional(),
   kind: z.enum(["code", "diagram", "trace", "written", "link"]),
   label: boundedText(300),
-  mediaType: boundedText(200),
-  sizeBytes: z.number().int().nonnegative().max(1_000_000_000),
+}).strict();
+
+export const saveLearningArtifactTextSchema = learningArtifactIdentitySchema.extend({
+  mediaType: z.enum(["text/plain", "text/markdown", "text/csv", "application/json", "image/svg+xml"]),
+  content: z.string().min(1).max(1_000_000),
+  authorization: z.literal("learning_specialist"),
+}).strict();
+
+export const learningArtifactUploadMetadataSchema = learningArtifactIdentitySchema.extend({
+  mediaType: z.enum([
+    "text/plain",
+    "text/markdown",
+    "text/csv",
+    "application/json",
+    "application/pdf",
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "image/svg+xml",
+  ]),
+  authorization: z.enum(["learning_specialist", "explicit_user_instruction"]),
+}).strict();
+
+// This server-internal contract is populated only after the private object has
+// been written and verified. Public tools and routes never accept a locator,
+// caller-supplied digest, or caller-supplied byte count.
+export const attachLearningArtifactSchema = learningArtifactUploadMetadataSchema.extend({
+  sizeBytes: z.number().int().positive().max(25 * 1024 * 1024),
   contentHash: z.string().trim().regex(/^[0-9a-f]{64}$/i),
   privateLocator: boundedText(2_000),
-  authorization: z.literal("learning_specialist"),
 }).strict();
 
 export const setLearningHomeworkStateSchema = z.object({

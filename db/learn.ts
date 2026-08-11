@@ -60,6 +60,7 @@ export {
   createLearningCourseBlueprintSchema,
   createLearningSessionSchema,
   finishLearningSessionSchema,
+  learningArtifactUploadMetadataSchema,
   queryLearningEvidenceSchema,
   queryLearningAnalyticsSchema,
   queryLearningJourneySchema,
@@ -67,6 +68,7 @@ export {
   queryLearningWorkspaceSchema,
   reviseLearningCourseBlueprintSchema,
   saveLearningLessonRevisionSchema,
+  saveLearningArtifactTextSchema,
   setLearningHomeworkStateSchema,
 } from "./learn-policy";
 
@@ -836,12 +838,8 @@ export async function appendLearningTranscript(ownerId: string, inputValue: unkn
   return { ...receipt, duplicate: false };
 }
 
-export async function attachLearningArtifact(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
-  const input = attachLearningArtifactSchema.parse(inputValue) as AttachLearningArtifactInput;
+async function validateLearningArtifactScope(ownerId: string, input: AttachLearningArtifactInput) {
   const db = getDb();
-  const requestFingerprint = await fingerprint(input);
-  const replay = await replayLearningOperation(ownerId, input.operationId, requestFingerprint);
-  if (replay) return replay;
   const lessons = await db.select().from(learningLessons).where(and(
     eq(learningLessons.ownerId, ownerId),
     eq(learningLessons.lessonId, input.lessonId),
@@ -863,6 +861,29 @@ export async function attachLearningArtifact(ownerId: string, inputValue: unknow
     )).limit(1);
     if (!homework[0]) throw new LearningError("learning_homework_not_found", "That owner-private homework item is unavailable.");
   }
+}
+
+export async function prepareLearningArtifactAttachment(ownerId: string, inputValue: unknown) {
+  const input = attachLearningArtifactSchema.parse(inputValue) as AttachLearningArtifactInput;
+  const requestFingerprint = await fingerprint(input);
+  const replay = await replayLearningOperation(ownerId, input.operationId, requestFingerprint);
+  if (replay) return { duplicate: true as const, receipt: replay };
+  const existing = await getDb().select({ artifactId: learningArtifacts.artifactId }).from(learningArtifacts).where(and(
+    eq(learningArtifacts.ownerId, ownerId),
+    eq(learningArtifacts.artifactId, input.artifactId),
+  )).limit(1);
+  if (existing[0]) throw new LearningError("learning_artifact_exists", "That Learning artifact already exists.");
+  await validateLearningArtifactScope(ownerId, input);
+  return { duplicate: false as const };
+}
+
+export async function attachLearningArtifact(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
+  const input = attachLearningArtifactSchema.parse(inputValue) as AttachLearningArtifactInput;
+  const db = getDb();
+  const requestFingerprint = await fingerprint(input);
+  const replay = await replayLearningOperation(ownerId, input.operationId, requestFingerprint);
+  if (replay) return replay;
+  await validateLearningArtifactScope(ownerId, input);
   const receipt = {
     status: "artifact_attached" as const,
     artifactId: input.artifactId,
@@ -918,6 +939,15 @@ export async function attachLearningArtifact(ownerId: string, inputValue: unknow
     throw error;
   }
   return { ...receipt, duplicate: false };
+}
+
+export async function readPrivateLearningArtifact(ownerId: string, artifactId: string) {
+  if (!/^[a-z0-9][a-z0-9._-]{0,199}$/.test(artifactId)) return null;
+  const rows = await getDb().select().from(learningArtifacts).where(and(
+    eq(learningArtifacts.ownerId, ownerId),
+    eq(learningArtifacts.artifactId, artifactId),
+  )).limit(1);
+  return rows[0] ?? null;
 }
 
 export async function setLearningHomeworkState(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
