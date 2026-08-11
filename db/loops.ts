@@ -2,33 +2,56 @@ import { and, desc, eq, sql } from "drizzle-orm";
 
 import { d1TransactionalInvariantGuard } from "./d1-transactional-guard";
 import { getDb } from "./index";
+import { behavioralTargetProfileInputSchema } from "./behavioral-target-profile-policy";
+import { readBehavioralTargetRevision } from "./behavioral-target-profile";
 import {
+  behavioralTargetProfileRevisions,
+  behavioralTargetProfiles,
   interviewLoopOperations,
   interviewLoopRevisions,
   interviewLoops,
+  loopCapturePacketOperations,
+  loopCapturePackets,
   loopRoleBriefRevisions,
+  loopTargetProfileMigrations,
 } from "./schema";
 import {
+  captureLoopPacketSchema,
   createLoopSchema,
+  importLoopCapturePacketSchema,
+  loopCapturePacketSnapshotSchema,
   loopRoleBriefDisplaySnapshotSchema,
+  loopRoleBriefInputSchema,
   loopSnapshotSchema,
+  queryLoopCapturePacketsSchema,
   queryLoopsSchema,
+  queryRoleBriefMigrationInboxSchema,
   reviseLoopRoleBriefSchema,
   reviseLoopSchema,
+  targetProfileMigrationSchema,
+  type CaptureLoopPacketInput,
   type CreateLoopInput,
   type DisplaySafeLoopRoleBriefRevision,
+  type ImportLoopCapturePacketInput,
+  type LoopCapturePacketSnapshot,
   type LoopRoleBriefDisplaySnapshot,
   type LoopRoleBriefInput,
   type LoopSnapshot,
   type ReviseLoopInput,
   type ReviseLoopRoleBriefInput,
+  type TargetProfileMigrationInput,
 } from "./loop-policy";
 
 export {
   createLoopSchema,
+  captureLoopPacketSchema,
+  importLoopCapturePacketSchema,
+  queryLoopCapturePacketsSchema,
   queryLoopsSchema,
+  queryRoleBriefMigrationInboxSchema,
   reviseLoopRoleBriefSchema,
   reviseLoopSchema,
+  targetProfileMigrationSchema,
 } from "./loop-policy";
 
 export class LoopError extends Error {
@@ -451,4 +474,504 @@ export async function queryLoops(ownerId: string, inputValue: unknown) {
     includeArchived: input.includeArchived,
   })));
   return { loops: projections.filter((projection) => projection !== null), truncated: rows.length > 50 };
+}
+
+async function readTargetRoleBrief(ownerId: string, targetId: string, targetRevision: number) {
+  const rows = await getDb().select({
+    currentRevision: behavioralTargetProfiles.currentRevision,
+    privateSnapshot: behavioralTargetProfileRevisions.privateSnapshot,
+  }).from(behavioralTargetProfiles).innerJoin(
+    behavioralTargetProfileRevisions,
+    and(
+      eq(behavioralTargetProfileRevisions.ownerId, behavioralTargetProfiles.ownerId),
+      eq(behavioralTargetProfileRevisions.targetId, behavioralTargetProfiles.targetId),
+      eq(behavioralTargetProfileRevisions.revision, targetRevision),
+    ),
+  ).where(and(
+    eq(behavioralTargetProfiles.ownerId, ownerId),
+    eq(behavioralTargetProfiles.targetId, targetId),
+  )).limit(1);
+  const row = rows[0];
+  if (!row) throw new LoopError("role_brief_migration_target_not_found", "That owner-private Target Profile revision is unavailable.");
+  if (row.currentRevision !== targetRevision) {
+    throw new LoopError("role_brief_migration_target_revision_conflict", "The Target Profile changed; reread the migration inbox before retrying.");
+  }
+  const target = behavioralTargetProfileInputSchema.parse(row.privateSnapshot);
+  return loopRoleBriefInputSchema.parse(Object.fromEntries(
+    Object.entries(target).filter(([key]) => key !== "targetId"),
+  ));
+}
+
+async function replayTargetMigration(ownerId: string, operationId: string, requestFingerprint: string) {
+  const rows = await getDb().select().from(loopTargetProfileMigrations).where(and(
+    eq(loopTargetProfileMigrations.ownerId, ownerId),
+    eq(loopTargetProfileMigrations.operationId, operationId),
+  )).limit(1);
+  const migration = rows[0];
+  if (!migration) return null;
+  if (migration.requestFingerprint !== requestFingerprint) {
+    throw new LoopError("role_brief_migration_operation_conflict", "This migration operation ID already belongs to a different request.");
+  }
+  return { ...(migration.receipt as object), duplicate: true };
+}
+
+export async function migrateTargetProfile(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
+  const input = targetProfileMigrationSchema.parse(inputValue) as TargetProfileMigrationInput;
+  const db = getDb();
+  const requestFingerprint = await fingerprint(input);
+  const replay = await replayTargetMigration(ownerId, input.operationId, requestFingerprint);
+  if (replay) return replay;
+  const prior = await db.select().from(loopTargetProfileMigrations).where(and(
+    eq(loopTargetProfileMigrations.ownerId, ownerId),
+    eq(loopTargetProfileMigrations.targetId, input.targetId),
+  )).limit(1);
+  if (prior[0]) throw new LoopError("role_brief_migration_already_decided", "This standalone Target Profile already has an explicit migration decision.");
+  const roleBrief = await readTargetRoleBrief(ownerId, input.targetId, input.targetRevision);
+  const sourceFingerprint = await sha256(roleBrief.source.jdText.trim());
+
+  if (input.action === "archive") {
+    const receipt = {
+      status: "decided" as const,
+      action: input.action,
+      targetId: input.targetId,
+      targetRevision: input.targetRevision,
+      loopId: null,
+      roleBriefRevision: null,
+    };
+    try {
+      await db.insert(loopTargetProfileMigrations).values({
+        ownerId,
+        targetId: input.targetId,
+        targetRevision: input.targetRevision,
+        operationId: input.operationId,
+        requestFingerprint,
+        action: input.action,
+        loopId: null,
+        roleBriefRevision: null,
+        receipt,
+        createdAt: nowMs,
+      });
+    } catch {
+      const raced = await replayTargetMigration(ownerId, input.operationId, requestFingerprint);
+      if (raced) return raced;
+      throw new LoopError("role_brief_migration_already_decided", "This standalone Target Profile already has an explicit migration decision.");
+    }
+    return { ...receipt, duplicate: false };
+  }
+
+  if (input.action === "create_loop") {
+    assertRoleBriefIdentity(input.loop, roleBrief);
+    const receipt = {
+      status: "migrated" as const,
+      action: input.action,
+      targetId: input.targetId,
+      targetRevision: input.targetRevision,
+      loopId: input.loop.loopId,
+      loopRevision: 1,
+      roleBriefRevision: 1,
+    };
+    const absent = sql`NOT EXISTS (
+      SELECT 1 FROM ${interviewLoops}
+      WHERE ${interviewLoops.ownerId} = ${ownerId}
+        AND ${interviewLoops.loopId} = ${input.loop.loopId}
+    ) AND NOT EXISTS (
+      SELECT 1 FROM ${loopTargetProfileMigrations}
+      WHERE ${loopTargetProfileMigrations.ownerId} = ${ownerId}
+        AND ${loopTargetProfileMigrations.targetId} = ${input.targetId}
+    )`;
+    try {
+      await db.batch([
+        d1TransactionalInvariantGuard(db, absent),
+        db.insert(interviewLoopRevisions).values({
+          ownerId,
+          loopId: input.loop.loopId,
+          revision: 1,
+          operationId: input.operationId,
+          requestFingerprint,
+          snapshot: input.loop,
+          createdAt: nowMs,
+        }),
+        db.insert(loopRoleBriefRevisions).values({
+          ownerId,
+          loopId: input.loop.loopId,
+          revision: 1,
+          operationId: input.operationId,
+          requestFingerprint,
+          sourceFingerprint,
+          displaySnapshot: roleBriefDisplaySnapshot(roleBrief),
+          privateSnapshot: roleBrief,
+          createdAt: nowMs,
+        }),
+        db.insert(interviewLoops).values({
+          ownerId,
+          loopId: input.loop.loopId,
+          currentRevision: 1,
+          currentRoleBriefRevision: 1,
+          state: input.loop.state,
+          company: input.loop.company,
+          roleTitle: input.loop.roleTitle,
+          status: input.loop.status,
+          createdAt: nowMs,
+          updatedAt: nowMs,
+        }),
+        db.insert(interviewLoopOperations).values({
+          ownerId,
+          operationId: input.operationId,
+          loopId: input.loop.loopId,
+          action: "create",
+          requestFingerprint,
+          loopRevision: 1,
+          roleBriefRevision: 1,
+          receipt,
+          createdAt: nowMs,
+        }),
+        db.insert(loopTargetProfileMigrations).values({
+          ownerId,
+          targetId: input.targetId,
+          targetRevision: input.targetRevision,
+          operationId: input.operationId,
+          requestFingerprint,
+          action: input.action,
+          loopId: input.loop.loopId,
+          roleBriefRevision: 1,
+          receipt,
+          createdAt: nowMs,
+        }),
+      ]);
+    } catch (error) {
+      const raced = await replayTargetMigration(ownerId, input.operationId, requestFingerprint);
+      if (raced) return raced;
+      const existingLoop = await db.select({ id: interviewLoops.loopId }).from(interviewLoops).where(and(
+        eq(interviewLoops.ownerId, ownerId),
+        eq(interviewLoops.loopId, input.loop.loopId),
+      )).limit(1);
+      if (existingLoop[0]) throw new LoopError("loop_revision_conflict", "The destination Loop already exists; reread before retrying.");
+      throw error;
+    }
+    return { ...receipt, duplicate: false };
+  }
+
+  const loopRows = await db.select().from(interviewLoops).where(and(
+    eq(interviewLoops.ownerId, ownerId),
+    eq(interviewLoops.loopId, input.loopId),
+  )).limit(1);
+  const loop = loopRows[0];
+  if (!loop) throw new LoopError("loop_not_found", "That owner-private Loop is unavailable.");
+  if (loop.currentRoleBriefRevision !== input.expectedRoleBriefRevision) {
+    throw new LoopError("loop_role_brief_revision_conflict", "The Role Brief changed; reread it before retrying.");
+  }
+  assertRoleBriefIdentity({
+    loopId: loop.loopId,
+    state: loop.state,
+    company: loop.company,
+    roleTitle: loop.roleTitle,
+    status: loop.status,
+    openedAt: loop.createdAt,
+    outcome: null,
+    stages: [],
+  }, roleBrief);
+  const roleBriefRevision = input.expectedRoleBriefRevision + 1;
+  const receipt = {
+    status: "migrated" as const,
+    action: input.action,
+    targetId: input.targetId,
+    targetRevision: input.targetRevision,
+    loopId: input.loopId,
+    loopRevision: loop.currentRevision,
+    roleBriefRevision,
+  };
+  try {
+    await db.batch([
+      d1TransactionalInvariantGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${interviewLoops}
+        WHERE ${interviewLoops.ownerId} = ${ownerId}
+          AND ${interviewLoops.loopId} = ${input.loopId}
+          AND ${interviewLoops.currentRoleBriefRevision} = ${input.expectedRoleBriefRevision}
+      ) AND NOT EXISTS (
+        SELECT 1 FROM ${loopTargetProfileMigrations}
+        WHERE ${loopTargetProfileMigrations.ownerId} = ${ownerId}
+          AND ${loopTargetProfileMigrations.targetId} = ${input.targetId}
+      )`),
+      db.insert(loopRoleBriefRevisions).values({
+        ownerId,
+        loopId: input.loopId,
+        revision: roleBriefRevision,
+        operationId: input.operationId,
+        requestFingerprint,
+        sourceFingerprint,
+        displaySnapshot: roleBriefDisplaySnapshot(roleBrief),
+        privateSnapshot: roleBrief,
+        createdAt: nowMs,
+      }),
+      db.update(interviewLoops).set({ currentRoleBriefRevision: roleBriefRevision, updatedAt: nowMs }).where(and(
+        eq(interviewLoops.ownerId, ownerId),
+        eq(interviewLoops.loopId, input.loopId),
+        eq(interviewLoops.currentRoleBriefRevision, input.expectedRoleBriefRevision),
+      )),
+      db.insert(interviewLoopOperations).values({
+        ownerId,
+        operationId: input.operationId,
+        loopId: input.loopId,
+        action: "revise_role_brief",
+        requestFingerprint,
+        loopRevision: loop.currentRevision,
+        roleBriefRevision,
+        receipt,
+        createdAt: nowMs,
+      }),
+      db.insert(loopTargetProfileMigrations).values({
+        ownerId,
+        targetId: input.targetId,
+        targetRevision: input.targetRevision,
+        operationId: input.operationId,
+        requestFingerprint,
+        action: input.action,
+        loopId: input.loopId,
+        roleBriefRevision,
+        receipt,
+        createdAt: nowMs,
+      }),
+    ]);
+  } catch {
+    const raced = await replayTargetMigration(ownerId, input.operationId, requestFingerprint);
+    if (raced) return raced;
+    throw new LoopError("loop_role_brief_revision_conflict", "The Role Brief or migration decision changed; reread before retrying.");
+  }
+  return { ...receipt, duplicate: false };
+}
+
+export async function queryRoleBriefMigrationInbox(ownerId: string, inputValue: unknown) {
+  const input = queryRoleBriefMigrationInboxSchema.parse(inputValue);
+  const targets = await getDb().select({
+    targetId: behavioralTargetProfiles.targetId,
+    targetRevision: behavioralTargetProfiles.currentRevision,
+    state: behavioralTargetProfiles.state,
+    label: behavioralTargetProfiles.label,
+    updatedAt: behavioralTargetProfiles.updatedAt,
+  }).from(behavioralTargetProfiles).where(and(
+    eq(behavioralTargetProfiles.ownerId, ownerId),
+    input.includeArchivedTargets ? undefined : eq(behavioralTargetProfiles.state, "active"),
+  )).orderBy(desc(behavioralTargetProfiles.updatedAt)).limit(101);
+  const decisions = await getDb().select().from(loopTargetProfileMigrations).where(
+    eq(loopTargetProfileMigrations.ownerId, ownerId),
+  );
+  const decisionsByTarget = new Map(decisions.map((decision) => [decision.targetId, decision]));
+  const items = (await Promise.all(targets.map(async (target) => {
+    const decision = decisionsByTarget.get(target.targetId);
+    if (decision && !input.includeDecided) return null;
+    const revision = await readBehavioralTargetRevision(ownerId, target.targetId, target.targetRevision);
+    if (!revision) return null;
+    return {
+      target: revision,
+      decision: decision ? {
+        action: decision.action,
+        loopId: decision.loopId,
+        roleBriefRevision: decision.roleBriefRevision,
+        decidedAt: decision.createdAt,
+      } : null,
+    };
+  }))).filter((item) => item !== null);
+  return { items: items.slice(0, 100), truncated: targets.length > 100 };
+}
+
+async function replayCaptureOperation(ownerId: string, operationId: string, requestFingerprint: string) {
+  const rows = await getDb().select().from(loopCapturePacketOperations).where(and(
+    eq(loopCapturePacketOperations.ownerId, ownerId),
+    eq(loopCapturePacketOperations.operationId, operationId),
+  )).limit(1);
+  const operation = rows[0];
+  if (!operation) return null;
+  if (operation.requestFingerprint !== requestFingerprint) {
+    throw new LoopError("loop_capture_operation_conflict", "This Loop capture operation ID already belongs to a different request.");
+  }
+  return { ...(operation.receipt as object), duplicate: true };
+}
+
+export async function captureLoopPacket(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
+  const input = captureLoopPacketSchema.parse(inputValue) as CaptureLoopPacketInput;
+  const db = getDb();
+  const requestFingerprint = await fingerprint(input);
+  const replay = await replayCaptureOperation(ownerId, input.operationId, requestFingerprint);
+  if (replay) return replay;
+  const receipt = {
+    status: "captured" as const,
+    packetId: input.packet.packetId,
+    capturedAt: input.packet.capturedAt,
+    backfilledAt: null,
+    loopId: null,
+  };
+  try {
+    await db.batch([
+      d1TransactionalInvariantGuard(db, sql`NOT EXISTS (
+        SELECT 1 FROM ${loopCapturePackets}
+        WHERE ${loopCapturePackets.ownerId} = ${ownerId}
+          AND ${loopCapturePackets.packetId} = ${input.packet.packetId}
+      )`),
+      db.insert(loopCapturePackets).values({
+        ownerId,
+        packetId: input.packet.packetId,
+        operationId: input.operationId,
+        requestFingerprint,
+        privateSnapshot: input.packet,
+        status: "captured",
+        capturedAt: input.packet.capturedAt,
+        backfilledAt: null,
+        loopId: null,
+        createdAt: nowMs,
+        updatedAt: nowMs,
+      }),
+      db.insert(loopCapturePacketOperations).values({
+        ownerId,
+        operationId: input.operationId,
+        packetId: input.packet.packetId,
+        action: "capture",
+        requestFingerprint,
+        receipt,
+        createdAt: nowMs,
+      }),
+    ]);
+  } catch {
+    const raced = await replayCaptureOperation(ownerId, input.operationId, requestFingerprint);
+    if (raced) return raced;
+    throw new LoopError("loop_capture_packet_conflict", "That capture packet already exists; reread before retrying.");
+  }
+  return { ...receipt, duplicate: false };
+}
+
+export async function queryLoopCapturePackets(ownerId: string, inputValue: unknown) {
+  const input = queryLoopCapturePacketsSchema.parse(inputValue);
+  const rows = await getDb().select().from(loopCapturePackets).where(and(
+    eq(loopCapturePackets.ownerId, ownerId),
+    input.packetId ? eq(loopCapturePackets.packetId, input.packetId) : undefined,
+    input.includeImported ? undefined : eq(loopCapturePackets.status, "captured"),
+  )).orderBy(desc(loopCapturePackets.capturedAt)).limit(101);
+  return {
+    packets: rows.slice(0, 100).map((row) => ({
+      packet: loopCapturePacketSnapshotSchema.parse(row.privateSnapshot),
+      status: row.status,
+      capturedAt: row.capturedAt,
+      backfilledAt: row.backfilledAt,
+      loopId: row.loopId,
+    })),
+    truncated: rows.length > 100,
+  };
+}
+
+export async function importLoopCapturePacket(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
+  const input = importLoopCapturePacketSchema.parse(inputValue) as ImportLoopCapturePacketInput;
+  const db = getDb();
+  const requestFingerprint = await fingerprint(input);
+  const replay = await replayCaptureOperation(ownerId, input.operationId, requestFingerprint);
+  if (replay) return replay;
+  const [packetRows, loopRows] = await Promise.all([
+    db.select().from(loopCapturePackets).where(and(
+      eq(loopCapturePackets.ownerId, ownerId),
+      eq(loopCapturePackets.packetId, input.packetId),
+    )).limit(1),
+    db.select().from(interviewLoops).where(and(
+      eq(interviewLoops.ownerId, ownerId),
+      eq(interviewLoops.loopId, input.loopId),
+    )).limit(1),
+  ]);
+  const packetRow = packetRows[0];
+  const loop = loopRows[0];
+  if (!packetRow) throw new LoopError("loop_capture_packet_not_found", "That owner-private capture packet is unavailable.");
+  if (!loop) throw new LoopError("loop_not_found", "That owner-private Loop is unavailable.");
+  if (packetRow.status !== "captured") throw new LoopError("loop_capture_packet_already_imported", "That capture packet was already imported.");
+  if (input.backfilledAt < packetRow.capturedAt) {
+    throw new LoopError("loop_capture_backfilled_before_capture", "Backfilled time cannot precede the original capture time.");
+  }
+  if (loop.currentRevision !== input.expectedLoopRevision) {
+    throw new LoopError("loop_revision_conflict", "The Loop changed; reread it before importing the capture packet.");
+  }
+  const revisionRows = await db.select().from(interviewLoopRevisions).where(and(
+    eq(interviewLoopRevisions.ownerId, ownerId),
+    eq(interviewLoopRevisions.loopId, input.loopId),
+    eq(interviewLoopRevisions.revision, input.expectedLoopRevision),
+  )).limit(1);
+  const currentSnapshot = loopSnapshotSchema.parse(revisionRows[0]?.snapshot);
+  const packet = loopCapturePacketSnapshotSchema.parse(packetRow.privateSnapshot) as LoopCapturePacketSnapshot;
+  if (packet.company !== currentSnapshot.company || packet.roleTitle !== currentSnapshot.roleTitle) {
+    throw new LoopError("loop_capture_identity_mismatch", "The capture packet must describe the same company and role as its Loop.");
+  }
+  if (currentSnapshot.stages.some((stage) => stage.stageId === packet.stage.stageId)) {
+    throw new LoopError("loop_capture_stage_conflict", "That Loop already contains the captured stage identity.");
+  }
+  const revisedSnapshot = loopSnapshotSchema.parse({
+    ...currentSnapshot,
+    stages: [...currentSnapshot.stages, packet.stage],
+  });
+  const revision = input.expectedLoopRevision + 1;
+  const receipt = {
+    status: "imported" as const,
+    packetId: input.packetId,
+    capturedAt: packetRow.capturedAt,
+    backfilledAt: input.backfilledAt,
+    loopId: input.loopId,
+    loopRevision: revision,
+  };
+  try {
+    await db.batch([
+      d1TransactionalInvariantGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${interviewLoops}
+        WHERE ${interviewLoops.ownerId} = ${ownerId}
+          AND ${interviewLoops.loopId} = ${input.loopId}
+          AND ${interviewLoops.currentRevision} = ${input.expectedLoopRevision}
+      ) AND EXISTS (
+        SELECT 1 FROM ${loopCapturePackets}
+        WHERE ${loopCapturePackets.ownerId} = ${ownerId}
+          AND ${loopCapturePackets.packetId} = ${input.packetId}
+          AND ${loopCapturePackets.status} = 'captured'
+      )`),
+      db.insert(interviewLoopRevisions).values({
+        ownerId,
+        loopId: input.loopId,
+        revision,
+        operationId: input.operationId,
+        requestFingerprint,
+        snapshot: revisedSnapshot,
+        createdAt: nowMs,
+      }),
+      db.update(interviewLoops).set({ currentRevision: revision, updatedAt: nowMs }).where(and(
+        eq(interviewLoops.ownerId, ownerId),
+        eq(interviewLoops.loopId, input.loopId),
+        eq(interviewLoops.currentRevision, input.expectedLoopRevision),
+      )),
+      db.update(loopCapturePackets).set({
+        status: "imported",
+        backfilledAt: input.backfilledAt,
+        loopId: input.loopId,
+        updatedAt: nowMs,
+      }).where(and(
+        eq(loopCapturePackets.ownerId, ownerId),
+        eq(loopCapturePackets.packetId, input.packetId),
+        eq(loopCapturePackets.status, "captured"),
+      )),
+      db.insert(interviewLoopOperations).values({
+        ownerId,
+        operationId: input.operationId,
+        loopId: input.loopId,
+        action: "revise",
+        requestFingerprint,
+        loopRevision: revision,
+        roleBriefRevision: loop.currentRoleBriefRevision,
+        receipt,
+        createdAt: nowMs,
+      }),
+      db.insert(loopCapturePacketOperations).values({
+        ownerId,
+        operationId: input.operationId,
+        packetId: input.packetId,
+        action: "import",
+        requestFingerprint,
+        receipt,
+        createdAt: nowMs,
+      }),
+    ]);
+  } catch {
+    const raced = await replayCaptureOperation(ownerId, input.operationId, requestFingerprint);
+    if (raced) return raced;
+    throw new LoopError("loop_capture_import_conflict", "The Loop or capture packet changed; reread before retrying.");
+  }
+  return { ...receipt, duplicate: false };
 }

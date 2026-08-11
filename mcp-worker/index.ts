@@ -44,14 +44,24 @@ import {
 } from "../db/behavioral-target-profile";
 import {
   LoopError,
+  captureLoopPacket,
+  captureLoopPacketSchema,
   createLoop,
   createLoopSchema,
+  importLoopCapturePacket,
+  importLoopCapturePacketSchema,
+  migrateTargetProfile,
+  queryLoopCapturePackets,
+  queryLoopCapturePacketsSchema,
   queryLoops,
   queryLoopsSchema,
+  queryRoleBriefMigrationInbox,
+  queryRoleBriefMigrationInboxSchema,
   reviseLoop,
   reviseLoopRoleBrief,
   reviseLoopRoleBriefSchema,
   reviseLoopSchema,
+  targetProfileMigrationSchema,
 } from "../db/loops";
 import {
   behavioralPracticePreflightInputSchema,
@@ -2805,6 +2815,115 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
         const result = await queryLoops(ownerId, input);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_role_brief_migration_inbox",
+    {
+      description: "Read the explicit owner-private migration inbox for standalone Target Profiles. Pending rows require Create Loop, Attach to existing Loop, or Archive; the tool never guesses, deletes, or mutates historical profiles.",
+      inputSchema: queryRoleBriefMigrationInboxSchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryRoleBriefMigrationInbox(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "migrate_target_profile_to_loop",
+    {
+      description: "Apply one explicit migration-inbox decision for an exact standalone Target Profile revision: create a new Loop atomically, attach it as a new immutable Role Brief revision to an existing Loop, or archive it from the inbox. Only the Loop Recorder may call this tool.",
+      inputSchema: {
+        operationId: behavioralStableIdSchema,
+        targetId: behavioralStableIdSchema,
+        targetRevision: z.number().int().positive(),
+        authorization: z.literal("loop_recorder"),
+        action: z.enum(["create_loop", "attach_existing_loop", "archive"]),
+        loop: createLoopSchema.shape.loop.optional(),
+        loopId: behavioralStableIdSchema.optional(),
+        expectedRoleBriefRevision: z.number().int().positive().optional(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await migrateTargetProfile(ownerId, targetProfileMigrationSchema.parse(input));
+        return {
+          content: [{ type: "text", text: `Target Profile ${result.targetId} migration decision ${result.action} is saved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "capture_loop_packet",
+    {
+      description: "Privately capture one recent real interview round before the Loop UI is available. Preserve explicit captured-at time plus exact/reconstructed question and answer memory; do not claim the packet is already imported into Loop history.",
+      inputSchema: captureLoopPacketSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await captureLoopPacket(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Private Loop capture packet ${result.packetId} is preserved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_loop_capture_packets",
+    {
+      description: "Read bounded owner-private recent-interview capture packets. Exact remembered text is returned only to the authenticated Loop Recorder; imported and captured timestamps remain distinct.",
+      inputSchema: queryLoopCapturePacketsSchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryLoopCapturePackets(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "import_loop_capture_packet",
+    {
+      description: "Import one exact private capture packet into an existing Loop as a new immutable Loop revision. Preserve its original captured-at time and record a separate later backfilled-at time. Exact retries are idempotent.",
+      inputSchema: importLoopCapturePacketSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await importLoopCapturePacket(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Capture packet ${result.packetId} is imported into Loop ${result.loopId}.` }],
           structuredContent: result,
         };
       } catch (error) {

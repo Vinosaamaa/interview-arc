@@ -1110,6 +1110,20 @@ export const loopCapturePackets = sqliteTable(
   ],
 );
 
+export const loopCapturePacketOperations = sqliteTable(
+  "loop_capture_packet_operations",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    packetId: text("packet_id").notNull(),
+    action: text("action", { enum: ["capture", "import"] }).notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.operationId] })],
+);
+
 // Resume source bytes stay owner-private in R2. D1 records only immutable
 // revision identity, integrity metadata, and the current pointer; object keys,
 // provider locators, local paths, and document content are deliberately absent.

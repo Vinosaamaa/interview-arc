@@ -166,6 +166,69 @@ export const queryLoopsSchema = z.object({
   }
 });
 
+const targetProfileMigrationBaseSchema = z.object({
+  operationId: loopStableIdSchema,
+  targetId: loopStableIdSchema,
+  targetRevision: z.number().int().positive(),
+  authorization: z.literal("loop_recorder"),
+});
+
+export const targetProfileMigrationSchema = z.discriminatedUnion("action", [
+  targetProfileMigrationBaseSchema.extend({
+    action: z.literal("create_loop"),
+    loop: loopSnapshotSchema,
+  }).strict(),
+  targetProfileMigrationBaseSchema.extend({
+    action: z.literal("attach_existing_loop"),
+    loopId: loopStableIdSchema,
+    expectedRoleBriefRevision: z.number().int().positive(),
+  }).strict(),
+  targetProfileMigrationBaseSchema.extend({
+    action: z.literal("archive"),
+  }).strict(),
+]);
+
+export const queryRoleBriefMigrationInboxSchema = z.object({
+  includeDecided: z.boolean().optional(),
+  includeArchivedTargets: z.boolean().optional(),
+}).strict();
+
+export const loopCapturePacketSnapshotSchema = z.object({
+  packetId: loopStableIdSchema,
+  company: boundedText(240),
+  roleTitle: boundedText(240),
+  jobReference: optionalText(240),
+  capturedAt: z.number().int().positive(),
+  stage: loopStageSchema,
+}).strict().superRefine((packet, context) => {
+  if (!packet.stage.debrief) {
+    context.addIssue({ code: "custom", path: ["stage", "debrief"], message: "A capture packet requires the remembered round debrief." });
+  }
+});
+
+export const captureLoopPacketSchema = z.object({
+  operationId: loopStableIdSchema,
+  authorization: z.literal("loop_recorder"),
+  packet: loopCapturePacketSnapshotSchema,
+}).strict();
+
+export const queryLoopCapturePacketsSchema = z.object({
+  packetId: loopStableIdSchema.optional(),
+  includeImported: z.boolean().optional(),
+}).strict();
+
+export const importLoopCapturePacketSchema = z.object({
+  operationId: loopStableIdSchema,
+  packetId: loopStableIdSchema,
+  loopId: loopStableIdSchema,
+  expectedLoopRevision: z.number().int().positive(),
+  backfilledAt: z.number().int().positive(),
+  authorization: z.literal("loop_recorder"),
+}).strict().refine((input) => input.backfilledAt > 0, {
+  path: ["backfilledAt"],
+  message: "Backfilled time must be explicit.",
+});
+
 export type LoopSnapshot = z.infer<typeof loopSnapshotSchema>;
 export type LoopRoleBriefInput = z.infer<typeof loopRoleBriefInputSchema>;
 export type LoopRoleBriefDisplaySnapshot = z.infer<typeof loopRoleBriefDisplaySnapshotSchema>;
@@ -173,3 +236,7 @@ export type CreateLoopInput = z.infer<typeof createLoopSchema>;
 export type ReviseLoopInput = z.infer<typeof reviseLoopSchema>;
 export type ReviseLoopRoleBriefInput = z.infer<typeof reviseLoopRoleBriefSchema>;
 export type DisplaySafeLoopRoleBriefRevision = z.infer<typeof displaySafeLoopRoleBriefRevisionSchema>;
+export type TargetProfileMigrationInput = z.infer<typeof targetProfileMigrationSchema>;
+export type LoopCapturePacketSnapshot = z.infer<typeof loopCapturePacketSnapshotSchema>;
+export type CaptureLoopPacketInput = z.infer<typeof captureLoopPacketSchema>;
+export type ImportLoopCapturePacketInput = z.infer<typeof importLoopCapturePacketSchema>;
