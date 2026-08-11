@@ -72,7 +72,10 @@ const lesson = {
   }],
   examples: [],
   exercises: [{ exerciseId: "trace-timer", prompt: "Trace one exact timer retry." }],
-  homework: [],
+  homework: [{
+    homeworkId: "trace-session-boundary",
+    prompt: "Write one trace showing why Learning Session finalization is separate from Interview outcomes.",
+  }],
   checkpoints: [{
     checkpointId: "explain-session-state",
     label: "Explain Session state",
@@ -164,7 +167,7 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     assert.equal(startedSession.state, "running");
     assert.equal(startedSession.revision, 1);
     assert.equal((await call(client, "control_learning_session", startInput)).duplicate, true);
-    const changedStart = await callRaw(client, "control_learning_session", { ...startInput, action: "finish" });
+    const changedStart = await callRaw(client, "control_learning_session", { ...startInput, action: "pause" });
     assert.equal(changedStart.isError, true);
     assert.equal(changedStart.structuredContent.code, "learning_operation_conflict");
 
@@ -268,22 +271,88 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
       authorization: "explicit_user_instruction",
     });
     assert.equal(resumed.state, "running");
+
+    const artifact = await call(client, "attach_learning_artifact", {
+      operationId: "learning-artifact-attach-1",
+      artifactId: "session-boundary-trace",
+      lessonId: lesson.lessonId,
+      sessionId: createSessionInput.sessionId,
+      homeworkId: "trace-session-boundary",
+      kind: "trace",
+      label: "Learning Session boundary trace",
+      mediaType: "text/markdown",
+      sizeBytes: 512,
+      contentHash: sha256("public-safe learning session boundary trace"),
+      privateLocator: "r2://learning-artifacts-private/session-boundary-trace",
+      authorization: "learning_specialist",
+    });
+    assert.equal(artifact.artifactId, "session-boundary-trace");
+    assert.equal((await call(client, "attach_learning_artifact", {
+      operationId: "learning-artifact-attach-1",
+      artifactId: "session-boundary-trace",
+      lessonId: lesson.lessonId,
+      sessionId: createSessionInput.sessionId,
+      homeworkId: "trace-session-boundary",
+      kind: "trace",
+      label: "Learning Session boundary trace",
+      mediaType: "text/markdown",
+      sizeBytes: 512,
+      contentHash: sha256("public-safe learning session boundary trace"),
+      privateLocator: "r2://learning-artifacts-private/session-boundary-trace",
+      authorization: "learning_specialist",
+    })).duplicate, true);
+
+    const homework = await call(client, "set_learning_homework_state", {
+      operationId: "learning-homework-complete-1",
+      lessonId: lesson.lessonId,
+      homeworkId: "trace-session-boundary",
+      expectedRevision: 1,
+      state: "completed",
+      authorization: "explicit_user_instruction",
+    });
+    assert.equal(homework.state, "completed");
+    assert.equal(homework.revision, 2);
+
     const finishInput = {
       operationId: "learning-session-finish-4",
       sessionId: createSessionInput.sessionId,
       expectedRevision: 3,
-      action: "finish",
+      expectedTranscriptRevision: 2,
       authorization: "explicit_user_instruction",
+      finalization: {
+        recap: "Learning Sessions own their timer, transcript, evidence, and permanent Finish lock.",
+        unresolvedQuestions: [],
+        recommendedNextAction: "Trace one stale Session retry against its expected revision.",
+        checkpointResults: [{
+          checkpointId: "explain-session-state",
+          status: "demonstrated",
+          rationale: "The exact transcript, trace artifact, and completed homework show the boundary.",
+          evidence: [
+            { kind: "transcript_turn", turnId: "learner-turn-0" },
+            { kind: "artifact", artifactId: "session-boundary-trace" },
+            { kind: "homework", homeworkId: "trace-session-boundary", revision: 2 },
+          ],
+        }],
+      },
     };
-    const finished = await call(client, "control_learning_session", finishInput);
+    const finished = await call(client, "finish_learning_session", finishInput);
     assert.equal(finished.state, "completed");
     assert.equal(finished.revision, 4);
-    assert.equal((await call(client, "control_learning_session", finishInput)).duplicate, true);
-    const resumeFinished = await callRaw(client, "control_learning_session", {
+    assert.equal(finished.finalizationRevision, 1);
+    assert.equal(finished.checkpointResults[0].status, "demonstrated");
+    assert.equal((await call(client, "finish_learning_session", finishInput)).duplicate, true);
+    const changedFinish = await callRaw(client, "finish_learning_session", {
       ...finishInput,
+      finalization: { ...finishInput.finalization, recap: "Changed retry must fail closed." },
+    });
+    assert.equal(changedFinish.isError, true);
+    assert.equal(changedFinish.structuredContent.code, "learning_operation_conflict");
+    const resumeFinished = await callRaw(client, "control_learning_session", {
       operationId: "learning-session-resume-after-finish",
+      sessionId: createSessionInput.sessionId,
       expectedRevision: 4,
       action: "resume",
+      authorization: "explicit_user_instruction",
     });
     assert.equal(resumeFinished.isError, true);
     assert.equal(resumeFinished.structuredContent.code, "learning_session_completed");
@@ -316,10 +385,100 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     assert.equal(read.sessions[0].intervals.length, 2);
     assert.ok(read.sessions[0].intervals.every((interval) => interval.endedAt !== null));
     assert.doesNotMatch(JSON.stringify(read), /audioClip|objectKey|deliveryAnalysis|finishBlocker/);
+    const evidence = await call(client, "query_learning_evidence", {
+      lessonId: lesson.lessonId,
+      sessionId: createSessionInput.sessionId,
+    });
+    assert.equal(evidence.checkpointStates[0].status, "demonstrated");
+    assert.equal(evidence.checkpointHistory.length, 1);
+    assert.equal(evidence.checkpointHistory[0].evidence.length, 3);
+    assert.equal(evidence.homework[0].revision, 2);
+    assert.deepEqual(evidence.homeworkHistory.map((event) => event.state), ["open", "completed"]);
+    assert.equal(evidence.artifacts[0].contentHash, sha256("public-safe learning session boundary trace"));
+    assert.equal(evidence.finalizations[0].revision, 1);
+    assert.doesNotMatch(JSON.stringify(evidence), /learning-artifacts-private|privateLocator/);
+    const otherEvidence = await call(otherClient, "query_learning_evidence", {});
+    assert.deepEqual(otherEvidence.checkpointStates, []);
+    assert.deepEqual(otherEvidence.artifacts, []);
+
+    await call(client, "create_learning_session", {
+      operationId: "learning-session-create-2",
+      sessionId: "learning-session-reliability-2",
+      authorization: "learning_specialist",
+      scope,
+      lessonId: lesson.lessonId,
+      lessonRevision: 1,
+    });
+    await call(client, "control_learning_session", {
+      operationId: "learning-session-start-2",
+      sessionId: "learning-session-reliability-2",
+      expectedRevision: 0,
+      action: "start",
+      authorization: "explicit_user_instruction",
+    });
+    await call(client, "append_learning_transcript", {
+      operationId: "learning-transcript-correction-2",
+      sessionId: "learning-session-reliability-2",
+      expectedTranscriptRevision: 0,
+      writer: "learning_specialist",
+      turns: [{
+        turnId: "learner-correction-turn-0",
+        sequence: 0,
+        speaker: "learner",
+        source: "typed",
+        body: "The Session revision serializes timer state while transcriptRevision serializes exact turns.",
+        occurredAt: 1_786_400_005_000,
+      }],
+    });
+    const correctionFinalization = {
+      recap: "A second exact Session supplies correction evidence without rewriting the prior result.",
+      unresolvedQuestions: [],
+      recommendedNextAction: "Compare both immutable checkpoint result revisions.",
+      checkpointResults: [{
+        checkpointId: "explain-session-state",
+        status: "demonstrated",
+        rationale: "The second transcript states both independent revision boundaries precisely.",
+        evidence: [{ kind: "transcript_turn", turnId: "learner-correction-turn-0" }],
+      }],
+    };
+    const missingSupersession = await callRaw(client, "finish_learning_session", {
+      operationId: "learning-session-finish-2-missing-supersession",
+      sessionId: "learning-session-reliability-2",
+      expectedRevision: 1,
+      expectedTranscriptRevision: 1,
+      authorization: "explicit_user_instruction",
+      finalization: correctionFinalization,
+    });
+    assert.equal(missingSupersession.isError, true);
+    assert.equal(missingSupersession.structuredContent.code, "learning_checkpoint_revision_conflict");
+    const corrected = await call(client, "finish_learning_session", {
+      operationId: "learning-session-finish-2",
+      sessionId: "learning-session-reliability-2",
+      expectedRevision: 1,
+      expectedTranscriptRevision: 1,
+      authorization: "explicit_user_instruction",
+      finalization: {
+        ...correctionFinalization,
+        checkpointResults: [{
+          ...correctionFinalization.checkpointResults[0],
+          supersedesRevision: 1,
+        }],
+      },
+    });
+    assert.equal(corrected.checkpointResults[0].revision, 2);
+    const correctedEvidence = await call(client, "query_learning_evidence", { lessonId: lesson.lessonId });
+    assert.equal(correctedEvidence.checkpointStates[0].currentRevision, 2);
+    assert.deepEqual(correctedEvidence.checkpointHistory.map((event) => event.revision), [1, 2]);
+    assert.equal(correctedEvidence.checkpointHistory[1].supersedesRevision, 1);
+
     const workspace = await call(client, "query_learning_workspace", {});
-    assert.equal(workspace.facts.sessionCount, 1);
-    assert.equal(workspace.facts.completedSessionCount, 1);
+    assert.equal(workspace.facts.sessionCount, 2);
+    assert.equal(workspace.facts.completedSessionCount, 2);
     assert.ok(workspace.facts.recordedLearningSeconds >= 1);
+    assert.equal(workspace.facts.homeworkCount, 1);
+    assert.equal(workspace.facts.completedHomeworkCount, 1);
+    assert.equal(workspace.facts.checkpointResultCount, 1);
+    assert.equal(workspace.facts.demonstratedCheckpointCount, 1);
   } finally {
     await client?.close().catch(() => {});
     await otherClient?.close().catch(() => {});

@@ -200,8 +200,85 @@ export const controlLearningSessionSchema = z.object({
   operationId: learningStableIdSchema,
   sessionId: learningStableIdSchema,
   expectedRevision: z.number().int().nonnegative(),
-  action: z.enum(["start", "pause", "resume", "finish"]),
+  action: z.enum(["start", "pause", "resume"]),
   authorization: z.literal("explicit_user_instruction"),
+}).strict();
+
+export const learningEvidenceReferenceSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("transcript_turn"), turnId: learningStableIdSchema }).strict(),
+  z.object({ kind: z.literal("artifact"), artifactId: learningStableIdSchema }).strict(),
+  z.object({
+    kind: z.literal("homework"),
+    homeworkId: learningStableIdSchema,
+    revision: z.number().int().positive(),
+  }).strict(),
+]);
+
+export const learningCheckpointResultSchema = z.object({
+  checkpointId: learningStableIdSchema,
+  status: z.enum(["not_attempted", "needs_another_pass", "demonstrated"]),
+  rationale: boundedText(4_000),
+  evidence: z.array(learningEvidenceReferenceSchema).max(50).default([]),
+  supersedesRevision: z.number().int().positive().optional(),
+}).strict().superRefine((result, context) => {
+  if (result.status === "demonstrated" && result.evidence.length === 0) {
+    context.addIssue({
+      code: "custom",
+      message: "Demonstrated requires at least one exact transcript, artifact, or homework evidence reference.",
+      path: ["evidence"],
+    });
+  }
+});
+
+export const finishLearningSessionSchema = z.object({
+  operationId: learningStableIdSchema,
+  sessionId: learningStableIdSchema,
+  expectedRevision: z.number().int().positive(),
+  expectedTranscriptRevision: z.number().int().nonnegative(),
+  authorization: z.literal("explicit_user_instruction"),
+  finalization: z.object({
+    recap: boundedText(10_000),
+    unresolvedQuestions: z.array(boundedText(2_000)).max(50).default([]),
+    recommendedNextAction: boundedText(2_000),
+    checkpointResults: z.array(learningCheckpointResultSchema).max(3).default([]),
+  }).strict(),
+}).strict().superRefine((input, context) => {
+  if (!uniqueBy(input.finalization.checkpointResults, (result) => result.checkpointId)) {
+    context.addIssue({
+      code: "custom",
+      message: "A Session finalization may record each checkpoint at most once.",
+      path: ["finalization", "checkpointResults"],
+    });
+  }
+});
+
+export const attachLearningArtifactSchema = z.object({
+  operationId: learningStableIdSchema,
+  artifactId: learningStableIdSchema,
+  lessonId: learningStableIdSchema,
+  sessionId: learningStableIdSchema.optional(),
+  homeworkId: learningStableIdSchema.optional(),
+  kind: z.enum(["code", "diagram", "trace", "written", "link"]),
+  label: boundedText(300),
+  mediaType: boundedText(200),
+  sizeBytes: z.number().int().nonnegative().max(1_000_000_000),
+  contentHash: z.string().trim().regex(/^[0-9a-f]{64}$/i),
+  privateLocator: boundedText(2_000),
+  authorization: z.literal("learning_specialist"),
+}).strict();
+
+export const setLearningHomeworkStateSchema = z.object({
+  operationId: learningStableIdSchema,
+  lessonId: learningStableIdSchema,
+  homeworkId: learningStableIdSchema,
+  expectedRevision: z.number().int().positive(),
+  state: z.enum(["open", "completed"]),
+  authorization: z.literal("explicit_user_instruction"),
+}).strict();
+
+export const queryLearningEvidenceSchema = z.object({
+  lessonId: learningStableIdSchema.optional(),
+  sessionId: learningStableIdSchema.optional(),
 }).strict();
 
 export const learningTranscriptTurnSchema = z.object({
@@ -265,3 +342,6 @@ export type SaveLearningLessonRevisionInput = z.infer<typeof saveLearningLessonR
 export type CreateLearningSessionInput = z.infer<typeof createLearningSessionSchema>;
 export type ControlLearningSessionInput = z.infer<typeof controlLearningSessionSchema>;
 export type AppendLearningTranscriptInput = z.infer<typeof appendLearningTranscriptSchema>;
+export type FinishLearningSessionInput = z.infer<typeof finishLearningSessionSchema>;
+export type AttachLearningArtifactInput = z.infer<typeof attachLearningArtifactSchema>;
+export type SetLearningHomeworkStateInput = z.infer<typeof setLearningHomeworkStateSchema>;

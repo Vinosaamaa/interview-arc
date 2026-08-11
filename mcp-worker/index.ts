@@ -69,6 +69,8 @@ import {
   LearningError,
   appendLearningTranscript,
   appendLearningTranscriptSchema,
+  attachLearningArtifact,
+  attachLearningArtifactSchema,
   approveLearningEnrollment,
   approveLearningEnrollmentSchema,
   assertLearningAudioForbidden,
@@ -78,6 +80,10 @@ import {
   createLearningCourseBlueprintSchema,
   createLearningSession,
   createLearningSessionSchema,
+  finishLearningSession,
+  finishLearningSessionSchema,
+  queryLearningEvidence,
+  queryLearningEvidenceSchema,
   queryLearningSessions,
   queryLearningSessionsSchema,
   queryLearningWorkspace,
@@ -86,6 +92,8 @@ import {
   reviseLearningCourseBlueprintSchema,
   saveLearningLessonRevision,
   saveLearningLessonRevisionSchema,
+  setLearningHomeworkState,
+  setLearningHomeworkStateSchema,
 } from "../db/learn";
 import {
   behavioralPracticePreflightInputSchema,
@@ -3104,7 +3112,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "control_learning_session",
     {
-      description: "Execute an explicitly authorized start, pause, resume, or finish command on the separate Learning Session timer. Expected revisions and stable operation IDs provide exact retry behavior; Finish never waits for audio evidence.",
+      description: "Execute an explicitly authorized start, pause, or resume command on the separate Learning Session timer. Expected revisions and stable operation IDs provide exact retry behavior.",
       inputSchema: controlLearningSessionSchema.shape,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
@@ -3151,6 +3159,86 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
     async (input) => {
       try {
         const result = await queryLearningSessions(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "attach_learning_artifact",
+    {
+      description: "Attach immutable integrity metadata for one owner-private Learning artifact. The backing-store locator remains server-private and is never returned by Learn reads.",
+      inputSchema: attachLearningArtifactSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await attachLearningArtifact(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Learning artifact ${result.artifactId} is attached to Lesson ${result.lessonId}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "set_learning_homework_state",
+    {
+      description: "Append an explicitly authorized open or completed state revision for one exact owner-private homework item. Completion remains a fact and never implies checkpoint demonstration.",
+      inputSchema: setLearningHomeworkStateSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await setLearningHomeworkState(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Homework ${result.homeworkId} revision ${result.revision} is ${result.state}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "finish_learning_session",
+    {
+      description: "Finish and permanently lock one Learning Session while appending an immutable recap and evidence-bearing checkpoint results. Demonstrated requires exact transcript, artifact, or homework references; audio is never a Finish gate.",
+      inputSchema: finishLearningSessionSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await finishLearningSession(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Learning Session ${result.sessionId} is completed at finalization revision ${result.finalizationRevision}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_learning_evidence",
+    {
+      description: "Read bounded owner-private checkpoint, homework, artifact, and Session-finalization history. Artifact integrity metadata is display-safe; private backing-store locators are omitted.",
+      inputSchema: queryLearningEvidenceSchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryLearningEvidence(ownerId, input);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           structuredContent: result,

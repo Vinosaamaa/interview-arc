@@ -5,46 +5,64 @@ import { getDb } from "./index";
 import {
   learningCourseBlueprintRevisions,
   learningCourses,
+  learningArtifacts,
+  learningCheckpointResultEvents,
+  learningCheckpointStates,
   learningEnrollments,
+  learningHomework,
+  learningHomeworkStateEvents,
   learningLessonRevisions,
   learningLessons,
   learningOperations,
   learningSessionIntervals,
+  learningSessionFinalizationRevisions,
   learningSessions,
   learningTranscriptTurns,
 } from "./schema";
 import {
   appendLearningTranscriptSchema,
+  attachLearningArtifactSchema,
   approveLearningEnrollmentSchema,
   controlLearningSessionSchema,
   createLearningCourseBlueprintSchema,
   createLearningSessionSchema,
+  finishLearningSessionSchema,
   learningCourseBlueprintSchema,
   learningLessonSnapshotSchema,
   queryLearningWorkspaceSchema,
   queryLearningSessionsSchema,
+  queryLearningEvidenceSchema,
   reviseLearningCourseBlueprintSchema,
   saveLearningLessonRevisionSchema,
+  setLearningHomeworkStateSchema,
   type ApproveLearningEnrollmentInput,
   type AppendLearningTranscriptInput,
+  type AttachLearningArtifactInput,
   type ControlLearningSessionInput,
   type CreateLearningCourseBlueprintInput,
   type CreateLearningSessionInput,
+  type FinishLearningSessionInput,
   type LearningCourseBlueprint,
+  type LearningLessonSnapshot,
   type ReviseLearningCourseBlueprintInput,
   type SaveLearningLessonRevisionInput,
+  type SetLearningHomeworkStateInput,
 } from "./learn-policy";
 
 export {
   appendLearningTranscriptSchema,
+  attachLearningArtifactSchema,
   approveLearningEnrollmentSchema,
   controlLearningSessionSchema,
   createLearningCourseBlueprintSchema,
   createLearningSessionSchema,
+  finishLearningSessionSchema,
+  queryLearningEvidenceSchema,
   queryLearningSessionsSchema,
   queryLearningWorkspaceSchema,
   reviseLearningCourseBlueprintSchema,
   saveLearningLessonRevisionSchema,
+  setLearningHomeworkStateSchema,
 } from "./learn-policy";
 
 export class LearningError extends Error {
@@ -471,6 +489,27 @@ export async function saveLearningLessonRevision(
       createdAt: nowMs,
       updatedAt: nowMs,
     })]),
+    ...(!current ? input.lesson.homework.map((homework) => db.insert(learningHomework).values({
+      ownerId,
+      lessonId: input.lesson.lessonId,
+      homeworkId: homework.homeworkId,
+      lessonRevision: revision,
+      prompt: homework.prompt,
+      state: "open",
+      revision: 1,
+      completedAt: null,
+      updatedAt: nowMs,
+    })) : []),
+    ...(!current ? input.lesson.homework.map((homework) => db.insert(learningHomeworkStateEvents).values({
+      ownerId,
+      lessonId: input.lesson.lessonId,
+      homeworkId: homework.homeworkId,
+      revision: 1,
+      operationId: input.operationId,
+      state: "open",
+      completedAt: null,
+      createdAt: nowMs,
+    })) : []),
     db.insert(learningOperations).values({
       ownerId,
       operationId: input.operationId,
@@ -552,6 +591,7 @@ export async function createLearningSession(ownerId: string, inputValue: unknown
     blueprintRevision: input.scope.kind === "course" ? input.scope.blueprintRevision : null,
     revision: 0,
     transcriptRevision: 0,
+    finalizationRevision: 0,
   };
   try {
     await db.batch([
@@ -576,6 +616,7 @@ export async function createLearningSession(ownerId: string, inputValue: unknown
         completedAt: null,
         revision: 0,
         transcriptRevision: 0,
+        finalizationRevision: 0,
         createdAt: nowMs,
         updatedAt: nowMs,
       }),
@@ -628,8 +669,7 @@ export async function controlLearningSession(ownerId: string, inputValue: unknow
   }
   const valid = (input.action === "start" && current.state === "planned")
     || (input.action === "pause" && current.state === "running")
-    || (input.action === "resume" && current.state === "paused")
-    || (input.action === "finish" && (current.state === "running" || current.state === "paused"));
+    || (input.action === "resume" && current.state === "paused");
   if (!valid) {
     throw new LearningError(
       "learning_session_transition_invalid",
@@ -639,14 +679,10 @@ export async function controlLearningSession(ownerId: string, inputValue: unknow
 
   const revision = current.revision + 1;
   const accumulatedSeconds = elapsedSeconds(current, nowMs);
-  const nextState = input.action === "finish"
-    ? "completed" as const
-    : input.action === "pause"
-      ? "paused" as const
-      : "running" as const;
+  const nextState = input.action === "pause" ? "paused" as const : "running" as const;
   const nextRunningSince = nextState === "running" ? nowMs : null;
   const nextStartedAt = current.startedAt ?? nowMs;
-  const completedAt = nextState === "completed" ? nowMs : null;
+  const completedAt = null;
   const receipt = {
     status: "session_controlled" as const,
     sessionId: input.sessionId,
@@ -792,6 +828,455 @@ export async function appendLearningTranscript(ownerId: string, inputValue: unkn
   return { ...receipt, duplicate: false };
 }
 
+export async function attachLearningArtifact(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
+  const input = attachLearningArtifactSchema.parse(inputValue) as AttachLearningArtifactInput;
+  const db = getDb();
+  const requestFingerprint = await fingerprint(input);
+  const replay = await replayLearningOperation(ownerId, input.operationId, requestFingerprint);
+  if (replay) return replay;
+  const lessons = await db.select().from(learningLessons).where(and(
+    eq(learningLessons.ownerId, ownerId),
+    eq(learningLessons.lessonId, input.lessonId),
+  )).limit(1);
+  if (!lessons[0]) throw new LearningError("learning_lesson_not_found", "That owner-private Lesson is unavailable.");
+  if (input.sessionId) {
+    const sessions = await db.select().from(learningSessions).where(and(
+      eq(learningSessions.ownerId, ownerId),
+      eq(learningSessions.sessionId, input.sessionId),
+      eq(learningSessions.lessonId, input.lessonId),
+    )).limit(1);
+    if (!sessions[0]) throw new LearningError("learning_session_not_found", "That owner-private Learning Session is unavailable.");
+  }
+  if (input.homeworkId) {
+    const homework = await db.select().from(learningHomework).where(and(
+      eq(learningHomework.ownerId, ownerId),
+      eq(learningHomework.lessonId, input.lessonId),
+      eq(learningHomework.homeworkId, input.homeworkId),
+    )).limit(1);
+    if (!homework[0]) throw new LearningError("learning_homework_not_found", "That owner-private homework item is unavailable.");
+  }
+  const receipt = {
+    status: "artifact_attached" as const,
+    artifactId: input.artifactId,
+    lessonId: input.lessonId,
+    sessionId: input.sessionId ?? null,
+    homeworkId: input.homeworkId ?? null,
+    kind: input.kind,
+    label: input.label,
+    mediaType: input.mediaType,
+    sizeBytes: input.sizeBytes,
+    contentHash: input.contentHash,
+  };
+  try {
+    await db.batch([
+      d1TransactionalInvariantGuard(db, sql`NOT EXISTS (
+        SELECT 1 FROM ${learningArtifacts}
+        WHERE ${learningArtifacts.ownerId} = ${ownerId}
+          AND ${learningArtifacts.artifactId} = ${input.artifactId}
+      )`),
+      db.insert(learningArtifacts).values({
+        ownerId,
+        artifactId: input.artifactId,
+        lessonId: input.lessonId,
+        sessionId: input.sessionId ?? null,
+        homeworkId: input.homeworkId ?? null,
+        kind: input.kind,
+        label: input.label,
+        mediaType: input.mediaType,
+        sizeBytes: input.sizeBytes,
+        contentHash: input.contentHash.toLowerCase(),
+        privateLocator: input.privateLocator,
+        createdAt: nowMs,
+      }),
+      db.insert(learningOperations).values({
+        ownerId,
+        operationId: input.operationId,
+        aggregateType: "lesson",
+        aggregateId: input.lessonId,
+        action: "attach_artifact",
+        requestFingerprint,
+        receipt,
+        createdAt: nowMs,
+      }),
+    ]);
+  } catch (error) {
+    const racedReplay = await replayLearningOperation(ownerId, input.operationId, requestFingerprint);
+    if (racedReplay) return racedReplay;
+    const existing = await db.select({ artifactId: learningArtifacts.artifactId }).from(learningArtifacts).where(and(
+      eq(learningArtifacts.ownerId, ownerId),
+      eq(learningArtifacts.artifactId, input.artifactId),
+    )).limit(1);
+    if (existing[0]) throw new LearningError("learning_artifact_exists", "That Learning artifact already exists.");
+    throw error;
+  }
+  return { ...receipt, duplicate: false };
+}
+
+export async function setLearningHomeworkState(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
+  const input = setLearningHomeworkStateSchema.parse(inputValue) as SetLearningHomeworkStateInput;
+  const db = getDb();
+  const requestFingerprint = await fingerprint(input);
+  const replay = await replayLearningOperation(ownerId, input.operationId, requestFingerprint);
+  if (replay) return replay;
+  const rows = await db.select().from(learningHomework).where(and(
+    eq(learningHomework.ownerId, ownerId),
+    eq(learningHomework.lessonId, input.lessonId),
+    eq(learningHomework.homeworkId, input.homeworkId),
+  )).limit(1);
+  const current = rows[0];
+  if (!current) throw new LearningError("learning_homework_not_found", "That owner-private homework item is unavailable.");
+  if (current.revision !== input.expectedRevision) {
+    throw new LearningError("learning_homework_revision_conflict", "The homework state changed; reread it before retrying.");
+  }
+  const revision = current.revision + 1;
+  const receipt = {
+    status: "homework_updated" as const,
+    lessonId: input.lessonId,
+    homeworkId: input.homeworkId,
+    state: input.state,
+    revision,
+    completedAt: input.state === "completed" ? nowMs : null,
+  };
+  try {
+    await db.batch([
+      d1TransactionalInvariantGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${learningHomework}
+        WHERE ${learningHomework.ownerId} = ${ownerId}
+          AND ${learningHomework.lessonId} = ${input.lessonId}
+          AND ${learningHomework.homeworkId} = ${input.homeworkId}
+          AND ${learningHomework.revision} = ${input.expectedRevision}
+      )`),
+      db.update(learningHomework).set({
+        state: input.state,
+        revision,
+        completedAt: input.state === "completed" ? nowMs : null,
+        updatedAt: nowMs,
+      }).where(and(
+        eq(learningHomework.ownerId, ownerId),
+        eq(learningHomework.lessonId, input.lessonId),
+        eq(learningHomework.homeworkId, input.homeworkId),
+        eq(learningHomework.revision, input.expectedRevision),
+      )),
+      db.insert(learningHomeworkStateEvents).values({
+        ownerId,
+        lessonId: input.lessonId,
+        homeworkId: input.homeworkId,
+        revision,
+        operationId: input.operationId,
+        state: input.state,
+        completedAt: input.state === "completed" ? nowMs : null,
+        createdAt: nowMs,
+      }),
+      db.insert(learningOperations).values({
+        ownerId,
+        operationId: input.operationId,
+        aggregateType: "lesson",
+        aggregateId: input.lessonId,
+        action: "set_homework",
+        requestFingerprint,
+        receipt,
+        createdAt: nowMs,
+      }),
+    ]);
+  } catch {
+    const racedReplay = await replayLearningOperation(ownerId, input.operationId, requestFingerprint);
+    if (racedReplay) return racedReplay;
+    throw new LearningError("learning_homework_revision_conflict", "The homework state changed; reread it before retrying.");
+  }
+  return { ...receipt, duplicate: false };
+}
+
+async function validateLearningEvidence(
+  ownerId: string,
+  session: typeof learningSessions.$inferSelect,
+  input: FinishLearningSessionInput,
+  lesson: LearningLessonSnapshot,
+) {
+  const checkpointIds = new Set(lesson.checkpoints.map((checkpoint) => checkpoint.checkpointId));
+  for (const result of input.finalization.checkpointResults) {
+    if (!checkpointIds.has(result.checkpointId)) {
+      throw new LearningError(
+        "learning_checkpoint_not_found",
+        "Every checkpoint result must belong to the exact Lesson revision used by the Session.",
+      );
+    }
+    for (const evidence of result.evidence) {
+      if (evidence.kind === "transcript_turn") {
+        const rows = await getDb().select({ turnId: learningTranscriptTurns.turnId }).from(learningTranscriptTurns).where(and(
+          eq(learningTranscriptTurns.ownerId, ownerId),
+          eq(learningTranscriptTurns.sessionId, session.sessionId),
+          eq(learningTranscriptTurns.turnId, evidence.turnId),
+        )).limit(1);
+        if (!rows[0]) throw new LearningError("learning_evidence_not_found", "Transcript evidence must name an exact Session turn.");
+      } else if (evidence.kind === "artifact") {
+        const rows = await getDb().select({ artifactId: learningArtifacts.artifactId }).from(learningArtifacts).where(and(
+          eq(learningArtifacts.ownerId, ownerId),
+          eq(learningArtifacts.lessonId, session.lessonId),
+          eq(learningArtifacts.artifactId, evidence.artifactId),
+        )).limit(1);
+        if (!rows[0]) throw new LearningError("learning_evidence_not_found", "Artifact evidence must name an exact owner-private Lesson artifact.");
+      } else {
+        const rows = await getDb().select({ homeworkId: learningHomeworkStateEvents.homeworkId })
+          .from(learningHomeworkStateEvents).where(and(
+          eq(learningHomeworkStateEvents.ownerId, ownerId),
+          eq(learningHomeworkStateEvents.lessonId, session.lessonId),
+          eq(learningHomeworkStateEvents.homeworkId, evidence.homeworkId),
+          eq(learningHomeworkStateEvents.revision, evidence.revision),
+        )).limit(1);
+        if (!rows[0]) {
+          throw new LearningError(
+            "learning_evidence_not_found",
+            "Homework evidence must name an exact immutable assignment state revision.",
+          );
+        }
+      }
+    }
+  }
+}
+
+export async function finishLearningSession(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
+  const input = finishLearningSessionSchema.parse(inputValue) as FinishLearningSessionInput;
+  const db = getDb();
+  const requestFingerprint = await fingerprint(input);
+  const replay = await replayLearningOperation(ownerId, input.operationId, requestFingerprint);
+  if (replay) return replay;
+  const sessionRows = await db.select().from(learningSessions).where(and(
+    eq(learningSessions.ownerId, ownerId),
+    eq(learningSessions.sessionId, input.sessionId),
+  )).limit(1);
+  const session = sessionRows[0];
+  if (!session) throw new LearningError("learning_session_not_found", "That owner-private Learning Session is unavailable.");
+  if (session.state === "completed") throw new LearningError("learning_session_completed", "A completed Learning Session is permanently locked.");
+  if (session.state !== "running" && session.state !== "paused") {
+    throw new LearningError("learning_session_transition_invalid", "Start the Learning Session before finishing it.");
+  }
+  if (session.revision !== input.expectedRevision) {
+    throw new LearningError("learning_session_revision_conflict", "The Learning Session changed; reread it before retrying.");
+  }
+  if (session.transcriptRevision !== input.expectedTranscriptRevision) {
+    throw new LearningError("learning_transcript_revision_conflict", "The transcript changed; reread it before finishing.");
+  }
+  const lessonRows = await db.select().from(learningLessonRevisions).where(and(
+    eq(learningLessonRevisions.ownerId, ownerId),
+    eq(learningLessonRevisions.lessonId, session.lessonId),
+    eq(learningLessonRevisions.revision, session.lessonRevision),
+  )).limit(1);
+  const lesson = learningLessonSnapshotSchema.parse(lessonRows[0]?.snapshot);
+  await validateLearningEvidence(ownerId, session, input, lesson);
+
+  const currentStates = await Promise.all(input.finalization.checkpointResults.map(async (result) => {
+    const rows = await db.select().from(learningCheckpointStates).where(and(
+      eq(learningCheckpointStates.ownerId, ownerId),
+      eq(learningCheckpointStates.lessonId, session.lessonId),
+      eq(learningCheckpointStates.checkpointId, result.checkpointId),
+    )).limit(1);
+    const current = rows[0] ?? null;
+    if (current && result.supersedesRevision !== current.currentRevision) {
+      throw new LearningError(
+        "learning_checkpoint_revision_conflict",
+        "A checkpoint correction must name the exact current revision it supersedes.",
+      );
+    }
+    if (!current && result.supersedesRevision !== undefined) {
+      throw new LearningError("learning_checkpoint_revision_conflict", "The checkpoint has no prior result to supersede.");
+    }
+    return { result, current, revision: (current?.currentRevision ?? 0) + 1 };
+  }));
+
+  const accumulatedSeconds = elapsedSeconds(session, nowMs);
+  const revision = session.revision + 1;
+  const finalizationRevision = session.finalizationRevision + 1;
+  const finalizationSnapshot = {
+    schemaVersion: 1 as const,
+    ...input.finalization,
+    lessonId: session.lessonId,
+    lessonRevision: session.lessonRevision,
+    blueprintRevision: session.blueprintRevision,
+    completedAt: nowMs,
+  };
+  const receipt = {
+    status: "session_finished" as const,
+    sessionId: session.sessionId,
+    state: "completed" as const,
+    revision,
+    transcriptRevision: session.transcriptRevision,
+    finalizationRevision,
+    accumulatedSeconds,
+    completedAt: nowMs,
+    checkpointResults: currentStates.map(({ result, revision: checkpointRevision }) => ({
+      checkpointId: result.checkpointId,
+      status: result.status,
+      revision: checkpointRevision,
+    })),
+  };
+  const closeInterval = session.runningSince !== null
+    ? db.update(learningSessionIntervals).set({ endedAt: nowMs }).where(and(
+      eq(learningSessionIntervals.ownerId, ownerId),
+      eq(learningSessionIntervals.sessionId, session.sessionId),
+      eq(learningSessionIntervals.startedAt, session.runningSince),
+    ))
+    : null;
+  const checkpointStatements = currentStates.flatMap(({ result, current, revision: checkpointRevision }) => [
+    d1TransactionalInvariantGuard(db, current
+      ? sql`EXISTS (
+          SELECT 1 FROM ${learningCheckpointStates}
+          WHERE ${learningCheckpointStates.ownerId} = ${ownerId}
+            AND ${learningCheckpointStates.lessonId} = ${session.lessonId}
+            AND ${learningCheckpointStates.checkpointId} = ${result.checkpointId}
+            AND ${learningCheckpointStates.currentRevision} = ${current.currentRevision}
+        )`
+      : sql`NOT EXISTS (
+          SELECT 1 FROM ${learningCheckpointStates}
+          WHERE ${learningCheckpointStates.ownerId} = ${ownerId}
+            AND ${learningCheckpointStates.lessonId} = ${session.lessonId}
+            AND ${learningCheckpointStates.checkpointId} = ${result.checkpointId}
+        )`),
+    db.insert(learningCheckpointResultEvents).values({
+      ownerId,
+      lessonId: session.lessonId,
+      checkpointId: result.checkpointId,
+      revision: checkpointRevision,
+      sessionId: session.sessionId,
+      operationId: input.operationId,
+      status: result.status,
+      rationale: result.rationale,
+      evidence: result.evidence,
+      supersedesRevision: result.supersedesRevision ?? null,
+      createdAt: nowMs,
+    }),
+    current
+      ? db.update(learningCheckpointStates).set({
+        currentRevision: checkpointRevision,
+        status: result.status,
+        updatedAt: nowMs,
+      }).where(and(
+        eq(learningCheckpointStates.ownerId, ownerId),
+        eq(learningCheckpointStates.lessonId, session.lessonId),
+        eq(learningCheckpointStates.checkpointId, result.checkpointId),
+        eq(learningCheckpointStates.currentRevision, current.currentRevision),
+      ))
+      : db.insert(learningCheckpointStates).values({
+        ownerId,
+        lessonId: session.lessonId,
+        checkpointId: result.checkpointId,
+        currentRevision: checkpointRevision,
+        status: result.status,
+        updatedAt: nowMs,
+      }),
+  ]);
+  const statements = [
+    d1TransactionalInvariantGuard(db, sql`EXISTS (
+      SELECT 1 FROM ${learningSessions}
+      WHERE ${learningSessions.ownerId} = ${ownerId}
+        AND ${learningSessions.sessionId} = ${session.sessionId}
+        AND ${learningSessions.revision} = ${input.expectedRevision}
+        AND ${learningSessions.transcriptRevision} = ${input.expectedTranscriptRevision}
+        AND ${learningSessions.state} != 'completed'
+    )`),
+    db.insert(learningSessionFinalizationRevisions).values({
+      ownerId,
+      sessionId: session.sessionId,
+      revision: finalizationRevision,
+      operationId: input.operationId,
+      requestFingerprint,
+      snapshot: finalizationSnapshot,
+      createdAt: nowMs,
+    }),
+    ...checkpointStatements,
+    ...(closeInterval ? [closeInterval] : []),
+    db.update(learningSessions).set({
+      state: "completed",
+      accumulatedSeconds,
+      runningSince: null,
+      completedAt: nowMs,
+      revision,
+      finalizationRevision,
+      updatedAt: nowMs,
+    }).where(and(
+      eq(learningSessions.ownerId, ownerId),
+      eq(learningSessions.sessionId, session.sessionId),
+      eq(learningSessions.revision, input.expectedRevision),
+    )),
+    db.insert(learningOperations).values({
+      ownerId,
+      operationId: input.operationId,
+      aggregateType: "session",
+      aggregateId: session.sessionId,
+      action: "finish_session",
+      requestFingerprint,
+      receipt,
+      createdAt: nowMs,
+    }),
+  ];
+  try {
+    await db.batch(statements as unknown as Parameters<typeof db.batch>[0]);
+  } catch {
+    const racedReplay = await replayLearningOperation(ownerId, input.operationId, requestFingerprint);
+    if (racedReplay) return racedReplay;
+    throw new LearningError("learning_session_revision_conflict", "The Learning Session changed; reread it before retrying.");
+  }
+  return { ...receipt, duplicate: false };
+}
+
+function displayArtifact(row: typeof learningArtifacts.$inferSelect) {
+  return {
+    ownerId: row.ownerId,
+    artifactId: row.artifactId,
+    lessonId: row.lessonId,
+    sessionId: row.sessionId,
+    homeworkId: row.homeworkId,
+    kind: row.kind,
+    label: row.label,
+    mediaType: row.mediaType,
+    sizeBytes: row.sizeBytes,
+    contentHash: row.contentHash,
+    createdAt: row.createdAt,
+  };
+}
+
+export async function queryLearningEvidence(ownerId: string, inputValue: unknown = {}) {
+  const input = queryLearningEvidenceSchema.parse(inputValue);
+  const db = getDb();
+  const [states, events, homework, homeworkHistory, artifacts, finalizations] = await Promise.all([
+    db.select().from(learningCheckpointStates).where(and(
+      eq(learningCheckpointStates.ownerId, ownerId),
+      input.lessonId ? eq(learningCheckpointStates.lessonId, input.lessonId) : undefined,
+    )),
+    db.select().from(learningCheckpointResultEvents).where(and(
+      eq(learningCheckpointResultEvents.ownerId, ownerId),
+      input.lessonId ? eq(learningCheckpointResultEvents.lessonId, input.lessonId) : undefined,
+      input.sessionId ? eq(learningCheckpointResultEvents.sessionId, input.sessionId) : undefined,
+    )).orderBy(asc(learningCheckpointResultEvents.createdAt)),
+    db.select().from(learningHomework).where(and(
+      eq(learningHomework.ownerId, ownerId),
+      input.lessonId ? eq(learningHomework.lessonId, input.lessonId) : undefined,
+    )),
+    db.select().from(learningHomeworkStateEvents).where(and(
+      eq(learningHomeworkStateEvents.ownerId, ownerId),
+      input.lessonId ? eq(learningHomeworkStateEvents.lessonId, input.lessonId) : undefined,
+    )).orderBy(asc(learningHomeworkStateEvents.createdAt)),
+    db.select().from(learningArtifacts).where(and(
+      eq(learningArtifacts.ownerId, ownerId),
+      input.lessonId ? eq(learningArtifacts.lessonId, input.lessonId) : undefined,
+      input.sessionId ? eq(learningArtifacts.sessionId, input.sessionId) : undefined,
+    )).orderBy(asc(learningArtifacts.createdAt)),
+    input.sessionId
+      ? db.select().from(learningSessionFinalizationRevisions).where(and(
+        eq(learningSessionFinalizationRevisions.ownerId, ownerId),
+        eq(learningSessionFinalizationRevisions.sessionId, input.sessionId),
+      )).orderBy(asc(learningSessionFinalizationRevisions.revision))
+      : Promise.resolve([]),
+  ]);
+  return {
+    checkpointStates: states,
+    checkpointHistory: events,
+    homework,
+    homeworkHistory,
+    artifacts: artifacts.map(displayArtifact),
+    finalizations,
+  };
+}
+
 export async function queryLearningSessions(ownerId: string, inputValue: unknown = {}) {
   const input = queryLearningSessionsSchema.parse(inputValue);
   const db = getDb();
@@ -913,7 +1398,7 @@ export async function queryLearningWorkspace(ownerId: string, inputValue: unknow
     return { lesson, current: rows[0] ? displayLesson(rows[0]) : null };
   }));
 
-  const [allCourses, allLessons, activeEnrollments, allSessions] = await Promise.all([
+  const [allCourses, allLessons, activeEnrollments, allSessions, allHomework, checkpointStates] = await Promise.all([
     db.select({ state: learningCourses.state }).from(learningCourses).where(eq(learningCourses.ownerId, ownerId)),
     db.select({ scopeType: learningLessons.scopeType, state: learningLessons.state }).from(learningLessons).where(
       eq(learningLessons.ownerId, ownerId),
@@ -924,6 +1409,10 @@ export async function queryLearningWorkspace(ownerId: string, inputValue: unknow
     )),
     db.select({ state: learningSessions.state, accumulatedSeconds: learningSessions.accumulatedSeconds })
       .from(learningSessions).where(eq(learningSessions.ownerId, ownerId)),
+    db.select({ state: learningHomework.state }).from(learningHomework).where(eq(learningHomework.ownerId, ownerId)),
+    db.select({ status: learningCheckpointStates.status }).from(learningCheckpointStates).where(
+      eq(learningCheckpointStates.ownerId, ownerId),
+    ),
   ]);
   return {
     courses,
@@ -940,6 +1429,13 @@ export async function queryLearningWorkspace(ownerId: string, inputValue: unknow
       sessionCount: allSessions.length,
       completedSessionCount: allSessions.filter((session) => session.state === "completed").length,
       recordedLearningSeconds: allSessions.reduce((total, session) => total + session.accumulatedSeconds, 0),
+      homeworkCount: allHomework.length,
+      completedHomeworkCount: allHomework.filter((homework) => homework.state === "completed").length,
+      checkpointResultCount: checkpointStates.length,
+      demonstratedCheckpointCount: checkpointStates.filter((checkpoint) => checkpoint.status === "demonstrated").length,
+      needsAnotherPassCheckpointCount: checkpointStates.filter(
+        (checkpoint) => checkpoint.status === "needs_another_pass",
+      ).length,
     },
     truncated: courseRows.length === 100 || quickRows.length === 100,
   };

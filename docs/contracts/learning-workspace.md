@@ -32,12 +32,20 @@ evidence semantics as a shortcut.
   historical revisions and factual aggregate counts.
 - `create_learning_session` opens a planned Session pinned to the exact Current
   lesson and enrolled Blueprint revision before timing begins.
-- `control_learning_session` owns explicit start, pause, resume, and permanently
-  locked Finish transitions with exact timer intervals.
+- `control_learning_session` owns explicit start, pause, and resume transitions
+  with exact timer intervals.
 - `append_learning_transcript` saves contiguous, revision-guarded typed,
   dictation, or transcript-only Voice turns with stable identities.
 - `query_learning_sessions` reads owner-private Session, interval, and exact
   transcript history without audio metadata.
+- `attach_learning_artifact` stores immutable artifact integrity metadata while
+  keeping its owner-private backing-store locator out of every read.
+- `set_learning_homework_state` appends an exact open or completed state event;
+  completion is factual evidence and never independently implies mastery.
+- `finish_learning_session` atomically closes the timer, locks the transcript,
+  appends a recap, and records evidence-bearing checkpoint events.
+- `query_learning_evidence` reads checkpoint, homework, artifact, and immutable
+  finalization history without private storage locators.
 
 Every write uses one stable operation ID. An exact retry returns the original
 receipt with `duplicate: true`; a changed retry fails closed. Expected-revision
