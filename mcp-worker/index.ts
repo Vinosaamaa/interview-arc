@@ -43,6 +43,17 @@ import {
   upsertBehavioralTargetProfile,
 } from "../db/behavioral-target-profile";
 import {
+  LoopError,
+  createLoop,
+  createLoopSchema,
+  queryLoops,
+  queryLoopsSchema,
+  reviseLoop,
+  reviseLoopRoleBrief,
+  reviseLoopRoleBriefSchema,
+  reviseLoopSchema,
+} from "../db/loops";
+import {
   behavioralPracticePreflightInputSchema,
   readBehavioralPracticePreflight,
 } from "../db/behavioral-practice-preflight";
@@ -1814,6 +1825,7 @@ function specialistToolFailure(error: unknown) {
     || error instanceof BehavioralEvidenceError
     || error instanceof BehavioralFinalAnswerError
     || error instanceof BehavioralTargetProfileError
+    || error instanceof LoopError
     || error instanceof BehavioralStoryError
     || error instanceof TypedExchangeDeletionError
     || error instanceof InteractionModeError
@@ -2711,6 +2723,86 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
     async () => {
       try {
         const result = await getBehavioralFoundationStatus(ownerId);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "create_loop",
+    {
+      description: "Create one owner-private company-and-role Loop and immutable Role Brief revision 1 atomically. Only the durable Loop Recorder may call this after an explicit owner instruction. Exact operation retries are idempotent; changed retries fail closed; raw job-description text is never returned.",
+      inputSchema: createLoopSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await createLoop(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Loop ${result.loopId} and Role Brief revision ${result.roleBriefRevision} are saved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "revise_loop",
+    {
+      description: "Append one owner-authorized Loop revision for company/role metadata, arbitrary ordered stages or groups, explicit dates/statuses/outcomes, and concise debrief memory. Dates never infer completion or outcome. Only the Loop Recorder may mutate this administrative record.",
+      inputSchema: reviseLoopSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await reviseLoop(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Loop ${result.loopId} revision ${result.loopRevision} is saved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "revise_loop_role_brief",
+    {
+      description: "Append one immutable owner-private Role Brief revision under an existing Loop. Only the durable Loop Recorder may derive this revision from the supplied job description. Subject specialists must use query_loops instead and cannot create competing profiles.",
+      inputSchema: reviseLoopRoleBriefSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await reviseLoopRoleBrief(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Loop ${result.loopId} Role Brief revision ${result.roleBriefRevision} is saved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_loops",
+    {
+      description: "Read bounded owner-private Loops plus display-safe Role Brief revisions. Current and exact historical revisions preserve stage/debrief truth while excluding raw job descriptions and private Role Brief notes.",
+      inputSchema: queryLoopsSchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryLoops(ownerId, input);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           structuredContent: result,

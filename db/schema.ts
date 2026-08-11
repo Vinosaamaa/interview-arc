@@ -988,6 +988,128 @@ export const behavioralTargetBindingMutations = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.mutationId] })],
 );
 
+// A Loop is one owner-private company-and-role hiring process. Its stable row
+// contains current pointers only; append-only snapshots preserve every stage,
+// debrief, and Role Brief revision without silently rewriting history.
+export const interviewLoops = sqliteTable(
+  "interview_loops",
+  {
+    ownerId,
+    loopId: text("loop_id").notNull(),
+    currentRevision: integer("current_revision").notNull(),
+    currentRoleBriefRevision: integer("current_role_brief_revision").notNull(),
+    state: text("state", { enum: ["active", "archived"] }).notNull(),
+    company: text("company").notNull(),
+    roleTitle: text("role_title").notNull(),
+    status: text("status", { enum: ["active", "paused", "completed", "withdrawn"] }).notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.loopId] }),
+    index("interview_loops_owner_state_idx").on(table.ownerId, table.state, table.updatedAt),
+  ],
+);
+
+export const interviewLoopRevisions = sqliteTable(
+  "interview_loop_revisions",
+  {
+    ownerId,
+    loopId: text("loop_id").notNull(),
+    revision: integer("revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    snapshot: text("snapshot", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.loopId, table.revision] }),
+    uniqueIndex("interview_loop_revisions_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
+export const loopRoleBriefRevisions = sqliteTable(
+  "loop_role_brief_revisions",
+  {
+    ownerId,
+    loopId: text("loop_id").notNull(),
+    revision: integer("revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    sourceFingerprint: text("source_fingerprint").notNull(),
+    displaySnapshot: text("display_snapshot", { mode: "json" }).notNull(),
+    privateSnapshot: text("private_snapshot", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.loopId, table.revision] }),
+    uniqueIndex("loop_role_brief_revisions_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
+export const interviewLoopOperations = sqliteTable(
+  "interview_loop_operations",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    loopId: text("loop_id").notNull(),
+    action: text("action", { enum: ["create", "revise", "revise_role_brief"] }).notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    loopRevision: integer("loop_revision").notNull(),
+    roleBriefRevision: integer("role_brief_revision").notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.operationId] })],
+);
+
+// Existing standalone Target Profiles remain untouched. One explicit decision
+// removes a profile revision from the migration inbox by creating a Loop,
+// attaching it to a Loop, or archiving it; no inference or deletion is allowed.
+export const loopTargetProfileMigrations = sqliteTable(
+  "loop_target_profile_migrations",
+  {
+    ownerId,
+    targetId: text("target_id").notNull(),
+    targetRevision: integer("target_revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    action: text("action", { enum: ["create_loop", "attach_existing_loop", "archive"] }).notNull(),
+    loopId: text("loop_id"),
+    roleBriefRevision: integer("role_brief_revision"),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.targetId] }),
+    uniqueIndex("loop_target_profile_migrations_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
+// Recent interview capture packets are owner-private staging records. Import
+// adds a separate backfilled timestamp; it never changes what was captured.
+export const loopCapturePackets = sqliteTable(
+  "loop_capture_packets",
+  {
+    ownerId,
+    packetId: text("packet_id").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    privateSnapshot: text("private_snapshot", { mode: "json" }).notNull(),
+    status: text("status", { enum: ["captured", "imported"] }).notNull(),
+    capturedAt: integer("captured_at").notNull(),
+    backfilledAt: integer("backfilled_at"),
+    loopId: text("loop_id"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.packetId] }),
+    uniqueIndex("loop_capture_packets_operation_idx").on(table.ownerId, table.operationId),
+    index("loop_capture_packets_owner_status_idx").on(table.ownerId, table.status, table.capturedAt),
+  ],
+);
+
 // Resume source bytes stay owner-private in R2. D1 records only immutable
 // revision identity, integrity metadata, and the current pointer; object keys,
 // provider locators, local paths, and document content are deliberately absent.
