@@ -139,6 +139,7 @@ import {
 } from "./activity-resume-context";
 
 export type Specialty = "leetcode" | "system_design" | "behavioral";
+export type SpecialistTaskType = Specialty | "loop_recorder";
 export type NoteKind = "remember" | "insight" | "mistake" | "pattern" | "question";
 export type TranscriptSpeaker = "user" | "specialist";
 export type TranscriptSource = "codex" | "dictation" | "audio_transcript";
@@ -4565,7 +4566,7 @@ export async function clearActivityReviewSchedules(ownerId: string, activityId: 
 
 export async function registerSpecialistTask(
   ownerId: string,
-  input: { specialty: Specialty; threadId: string; hostId?: string; title: string },
+  input: { specialty: SpecialistTaskType; threadId: string; hostId?: string; title: string },
   nowMs: number,
 ) {
   const db = getDb();

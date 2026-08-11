@@ -10,6 +10,7 @@ import {
   leetcodeCodeAttempts,
   liveMutationReceipts,
   liveSessions,
+  loopActivityBindings,
   outcomes,
   practiceFocus,
   practiceNotes,
@@ -22,6 +23,7 @@ import {
   todayPlanningMutations,
   voiceCaptureIntents,
 } from "./schema";
+import { resolveLoopActivityContext } from "./loops";
 import { ensureOpenWorkbench } from "./live-state";
 import {
   d1TransactionalInvariantGuard,
@@ -193,7 +195,23 @@ export async function applyPlanningSelection(
     }
   }
 
-  const built = buildPlanningBatch(input);
+  const resolvedSelections = await Promise.all(input.selections.map(async (selection) => {
+    if (selection.kind !== "practice" || !selection.loopContext) {
+      return { selection, binding: null };
+    }
+    const binding = await resolveLoopActivityContext(ownerId, selection.loopContext);
+    return {
+      selection: { ...selection, loopContext: binding.loopContext },
+      binding,
+    };
+  }));
+  const built = buildPlanningBatch({
+    ...input,
+    selections: resolvedSelections.map(({ selection }) => selection),
+  });
+  const practiceBindings = resolvedSelections
+    .filter(({ selection }) => selection.kind === "practice")
+    .map(({ binding }) => binding);
   const resultingWorkbenchRevision = nextWorkbenchRevision(workbench.revision, now);
   const response = {
     mutationId: input.mutationId,
@@ -223,6 +241,24 @@ export async function applyPlanningSelection(
       revision: 1,
       updatedAt: now,
     }).onConflictDoNothing()),
+    ...built.activities.flatMap((activity, index) => {
+      const binding = practiceBindings[index];
+      if (!binding) return [];
+      return [db.insert(loopActivityBindings).values({
+        ownerId,
+        activityId: activity.id,
+        loopId: binding.loopContext.loopId,
+        stageId: binding.loopContext.stageId ?? null,
+        loopRevision: binding.loopContext.loopRevision,
+        roleBriefRevision: binding.loopContext.roleBriefRevision,
+        specialty: String(activity.type) as "leetcode" | "system_design" | "behavioral",
+        questionId: String(activity.questionId),
+        roleBriefDisplaySnapshot: binding.roleBriefDisplaySnapshot,
+        bindingRevision: 1,
+        createdAt: now,
+        updatedAt: now,
+      }).onConflictDoNothing()];
+    }),
     ...built.focusBlocks.map((block) => db.insert(focusBlocks).values({
       ownerId,
       id: block.id,
@@ -582,6 +618,10 @@ export async function removePlannedActivities(
       eq(liveSessions.id, row.id),
       eq(liveSessions.revision, row.revision),
     ))),
+    db.delete(loopActivityBindings).where(and(
+      eq(loopActivityBindings.ownerId, ownerId),
+      inArray(loopActivityBindings.activityId, deletedIds),
+    )),
     db.delete(extraActivities).where(and(
       eq(extraActivities.ownerId, ownerId),
       eq(extraActivities.workbenchId, workbench.id),

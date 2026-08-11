@@ -26,7 +26,9 @@ test("the Cloudflare build contains the Interview Arc dashboard", async () => {
   assert.match(bundle, /Shape the session you need/);
   assert.match(bundle, /SESSION COUNTDOWN/);
   assert.match(bundle, /Add activities/);
-  assert.match(bundle, /Problem banks/);
+  assert.match(bundle, /Banks/);
+  assert.match(bundle, /Hiring Loop/);
+  assert.match(bundle, /Loop-owned Role Brief/);
   assert.match(bundle, /BEHAVIORAL FOUNDATION/);
   assert.match(bundle, /Build answers on a truthful record/);
   assert.match(bundle, /Source registration is not shipped yet/);
@@ -95,6 +97,11 @@ test("local development bypasses Access without weakening the production config"
   assert.match(packageJson.scripts.dev, /pnpm dev:prepare/);
   assert.match(packageJson.scripts["dev:prepare"], /db:migrate:local/);
   assert.match(packageJson.scripts["dev:prepare"], /content:import:local/);
+});
+
+test("the owner-private Loops route cannot be shared-cached", async () => {
+  const route = await readFile(new URL("../app/api/loops/route.ts", import.meta.url), "utf8");
+  assert.match(route, /"cache-control": "private, no-store"/);
 });
 
 test("the refined analytics and composer layouts keep their intended grouping", async () => {

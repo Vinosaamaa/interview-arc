@@ -87,6 +87,7 @@ import {
   PRACTICE_TIME_ZONE,
 } from "./practice-time";
 import ReviewQueueView from "./review-queue-view";
+import { LoopJourneyFactsPanel, LoopsWorkspace } from "./loops-workspace";
 import {
   buildReviewQueue,
   reviewStreakDays,
@@ -99,7 +100,7 @@ import type { BehavioralAttemptAnalysisProjection } from "../db/behavioral-attem
 import type { ActivityResumeContext } from "../db/activity-resume-context";
 import type { InteractionModeClassification } from "../db/interaction-mode-classification";
 
-type View = "today" | "journey" | "reviews" | "library" | "banks";
+type View = "today" | "loops" | "journey" | "reviews" | "library" | "banks";
 type ComposerMode = "session" | "activity";
 type JourneyRange = 30 | 90 | 365 | "all";
 type JourneyMetric = "activities" | "time";
@@ -1895,7 +1896,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         return;
       }
       const stored = window.sessionStorage.getItem("interview-arc-active-view");
-      if (stored === "journey" || stored === "reviews" || stored === "library" || stored === "banks") setView(stored);
+      if (stored === "loops" || stored === "journey" || stored === "reviews" || stored === "library" || stored === "banks") setView(stored);
       setViewMemoryReady(true);
     });
     return () => window.cancelAnimationFrame(frame);
@@ -4921,6 +4922,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           <article className="stat-block time-stat"><span>Recorded time</span><strong>{formatDuration(totalRecordedSeconds)}</strong><small>from completed activity timers</small></article>
         </div>
 
+        <LoopJourneyFactsPanel />
+
         <div className="journey-pulse" aria-label="Practice consistency summary">
           <article><span>Current streak</span><strong>{streaks.current}</strong><small>day{streaks.current === 1 ? "" : "s"}</small></article>
           <article><span>Longest streak</span><strong>{streaks.longest}</strong><small>consecutive days</small></article>
@@ -6343,15 +6346,22 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       <a className="skip-link" href="#practice-content">Skip to practice</a>
       <aside className="sidebar">
         <button className="brand" onClick={() => navigateToPrimaryView("today")}><span className="brand-mark" aria-hidden="true" /><span>Interview Arc</span></button>
-        <nav className="primary-nav" aria-label="Primary navigation">{([[
-          "today", "Today"], ["journey", "Journey"], ["reviews", "Reviews"], ["library", "Past"], ["banks", "Problem banks"]] as [View, string][]).map(([id, label], index) => <button key={id} className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
+        <nav className="workspace-nav" aria-label="Workspaces">
+          <button type="button" className={view !== "journey" ? "active" : ""} aria-current={view !== "journey" ? "page" : undefined} onClick={() => navigateToPrimaryView("today")}><span aria-hidden="true">I</span><strong>Interview</strong></button>
+          <button type="button" disabled title="Learn workspace is coming later"><span aria-hidden="true">L</span><strong>Learn</strong><small>Later</small></button>
+          <button type="button" disabled title="Engineering workspace is coming later"><span aria-hidden="true">E</span><strong>Engineering</strong><small>Later</small></button>
+          <button type="button" className={view === "journey" ? "active" : ""} aria-current={view === "journey" ? "page" : undefined} onClick={() => navigateToPrimaryView("journey")}><span aria-hidden="true">J</span><strong>Journey</strong></button>
+        </nav>
+        <div className="local-nav-label"><span>Interview</span><small>Workspace</small></div>
+        <nav className="primary-nav" aria-label="Interview navigation">{([[
+          "today", "Today"], ["loops", "Loops"], ["reviews", "Reviews"], ["library", "Past"], ["banks", "Banks"]] as [View, string][]).map(([id, label], index) => <button key={id} className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
         <div className="sidebar-status"><span className={[...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "live" : ""} /><div><strong>{[...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "Timer running" : hydrated ? "Draft saved locally" : "Loading draft"}</strong><small>Session countdown + one activity stopwatch</small></div></div>
-        <div className="profile"><span>WX</span><div><strong>Wenk Xu</strong><small>Interview journey · 2026</small></div></div>
+        <div className="profile"><span>IA</span><div><strong>Interview Arc owner</strong><small>Private preparation record</small></div></div>
       </aside>
 
       <section className="main-column">
         <header className="topbar">
-          <div><span>{readableDate(journal.date)}</span></div>
+          <div><span>{readableDate(journal.date)}</span><strong>{view === "loops" ? "Interview · Loops" : view === "journey" ? "Journey" : view === "library" ? "Interview · Past" : view === "banks" ? "Interview · Banks" : view === "reviews" ? "Interview · Reviews" : "Interview · Today"}</strong></div>
           <div>
             <div className={`music-dock ${ambientPlaying ? "active" : ""}`}>
               <button onClick={toggleAmbientSound} aria-pressed={ambientPlaying} title={ambientPlaying ? "Pause music" : "Play music"}><span aria-hidden="true">{ambientPlaying ? "Ⅱ" : "▶"}</span><i><small>{ambientPlaying ? "PLAYING" : "PAUSED"}</small><strong>{trackName}</strong></i></button>
@@ -6366,8 +6376,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             <button className="secondary-action" onClick={() => void exportDraft()}>Export today</button>
           </div>
         </header>
-        <div className="page-content" id="practice-content">{view === "today" && renderToday()}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
+        <div className="page-content" id="practice-content">{view === "today" && renderToday()}{view === "loops" && <LoopsWorkspace />}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
       </section>
+
+      {view !== "journey" && <nav className="mobile-interview-nav" aria-label="Interview navigation">{([[
+        "today", "Today"], ["loops", "Loops"], ["reviews", "Reviews"], ["library", "Past"], ["banks", "Banks"]] as [View, string][]).map(([id, label]) => <button key={id} type="button" className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}>{label}</button>)}</nav>}
 
       {composer.open && <div className={`modal-backdrop ${composerClosing ? "closing" : ""}`} role="presentation" onMouseDown={closeComposer} onAnimationEnd={finishComposerClose}>
         <section className={`composer ${composer.mode === "activity" && !composer.editingId ? "activity-composer-dialog" : ""} ${composerClosing ? "closing" : ""}`} role="dialog" aria-modal="true" aria-labelledby="composer-title" onMouseDown={(event) => event.stopPropagation()}>

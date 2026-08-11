@@ -129,7 +129,17 @@ The website must not imply that browser draft state has already been published t
   preferences locally, and disable motion for `prefers-reduced-motion`.
 - Lead with today's practice and progress, then history and review queues.
 - Favor a focused journal/dashboard over contest theater.
-- Provide Today, Journey, Review Queue, Past, and Problem Banks views without placing every raw log on one page.
+- Use the shared Interview/Learn/Engineering/Journey shell. Interview owns
+  Today, Loops, Reviews, Past, and Banks. Keep Learn and Engineering visibly
+  unavailable until their separately authorized work begins.
+- Provide Today, Loops, Reviews, Past, Banks, and Journey views without placing
+  every raw log on one page.
+- Loops is an owner-private, responsive company-and-role tracker. Render only
+  current explicit stage dates, statuses, outcomes, concise debriefs,
+  exact/reconstructed memory labels, display-safe Role Brief revisions,
+  planned bindings, and automatically projected completed activity history.
+  The website reads these records; only the durable Loop Recorder creates or
+  revises a Loop-owned Role Brief.
 - Activity detail should lead with summary, outcome, approach, lessons, and feedback; keep full transcript or code expandable.
 - Treat activity detail as a case file: pinned notes first, then facts, review
   date, summary/solution, review, transcript/code, and references. A linked
@@ -181,7 +191,7 @@ The website must not imply that browser draft state has already been published t
   story variants. Its transcript remains exclusively on the dated Past attempt.
 - For imported system-design questions, show the source question link, listed complexity, and whether reference solutions are available.
 - For imported behavioral questions, show the expected answer format, frequency, and whether the Bugfree.ai reference may require sign-in. Link to the canonical answer page without copying third-party answer text into the site.
-- Journey owns cumulative totals and interactive analytics for coding, system design, behavioral, outcomes, elapsed time, consistency, difficulty, and bank-linked topic coverage. Its separate Career Work panel joins Interview Arc focus time with the privacy-minimized, read-only Job Journey v1 API without copying job records into Interview Arc D1.
+- Journey owns cumulative totals and interactive analytics for coding, system design, behavioral, outcomes, elapsed time, consistency, difficulty, bank-linked topic coverage, and factual Loop/stage/date/outcome counts. Its separate Career Work panel joins Interview Arc focus time with the privacy-minimized, read-only Job Journey v1 API without copying job records into Interview Arc D1.
 - A new session places up to two due reviews ahead of new questions when the
   configured category slots permit it. Failed/full-walkthrough work is due in 4
   days; approach-review work in 7; successful recalls advance to 21 then 60.

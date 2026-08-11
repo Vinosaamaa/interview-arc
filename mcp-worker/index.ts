@@ -43,6 +43,29 @@ import {
   upsertBehavioralTargetProfile,
 } from "../db/behavioral-target-profile";
 import {
+  LoopError,
+  bindPlannedActivitySchema,
+  bindPlannedActivityToLoop,
+  captureLoopPacket,
+  captureLoopPacketSchema,
+  createLoop,
+  createLoopSchema,
+  importLoopCapturePacket,
+  importLoopCapturePacketSchema,
+  migrateTargetProfile,
+  queryLoopCapturePackets,
+  queryLoopCapturePacketsSchema,
+  queryLoops,
+  queryLoopsSchema,
+  queryRoleBriefMigrationInbox,
+  queryRoleBriefMigrationInboxSchema,
+  reviseLoop,
+  reviseLoopRoleBrief,
+  reviseLoopRoleBriefSchema,
+  reviseLoopSchema,
+  targetProfileMigrationSchema,
+} from "../db/loops";
+import {
   behavioralPracticePreflightInputSchema,
   readBehavioralPracticePreflight,
 } from "../db/behavioral-practice-preflight";
@@ -900,6 +923,10 @@ const planningSelectionSchema = z.discriminatedUnion("kind", [
     prompt: z.string().max(20_000).optional(),
     minutes: z.number().int().min(1).max(720),
     topics: z.array(z.string().min(1).max(120)).max(50).optional(),
+    loopContext: z.object({
+      loopId: z.string().min(1),
+      stageId: z.string().min(1).optional(),
+    }).strict().optional(),
   }),
   z.object({
     kind: z.literal("focus"),
@@ -1814,6 +1841,7 @@ function specialistToolFailure(error: unknown) {
     || error instanceof BehavioralEvidenceError
     || error instanceof BehavioralFinalAnswerError
     || error instanceof BehavioralTargetProfileError
+    || error instanceof LoopError
     || error instanceof BehavioralStoryError
     || error instanceof TypedExchangeDeletionError
     || error instanceof InteractionModeError
@@ -2722,6 +2750,215 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   );
 
   server.registerTool(
+    "create_loop",
+    {
+      description: "Create one owner-private company-and-role Loop and immutable Role Brief revision 1 atomically. Only the durable Loop Recorder may call this after an explicit owner instruction. Exact operation retries are idempotent; changed retries fail closed; raw job-description text is never returned.",
+      inputSchema: createLoopSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await createLoop(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Loop ${result.loopId} and Role Brief revision ${result.roleBriefRevision} are saved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "revise_loop",
+    {
+      description: "Append one owner-authorized revision for Loop process metadata, arbitrary ordered stages or groups, explicit dates/statuses/outcomes, and concise debrief memory. The company-and-role identity remains stable; dates never infer completion or outcome. Only the Loop Recorder may mutate this administrative record.",
+      inputSchema: reviseLoopSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await reviseLoop(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Loop ${result.loopId} revision ${result.loopRevision} is saved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "revise_loop_role_brief",
+    {
+      description: "Append one immutable owner-private Role Brief revision under an existing Loop. Only the durable Loop Recorder may derive this revision from the supplied job description. Subject specialists must use query_loops instead and cannot create competing profiles.",
+      inputSchema: reviseLoopRoleBriefSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await reviseLoopRoleBrief(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Loop ${result.loopId} Role Brief revision ${result.roleBriefRevision} is saved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_loops",
+    {
+      description: "Read bounded owner-private Loops, display-safe Role Brief revisions, and factual Journey aggregates. Current and exact historical revisions preserve stage/debrief truth while excluding raw job descriptions and private Role Brief notes; aggregates count only explicit Loop, stage, date, and outcome records.",
+      inputSchema: queryLoopsSchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryLoops(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_role_brief_migration_inbox",
+    {
+      description: "Read the explicit owner-private migration inbox for standalone Target Profiles. Pending rows require Create Loop, Attach to existing Loop, or Archive; the tool never guesses, deletes, or mutates historical profiles.",
+      inputSchema: queryRoleBriefMigrationInboxSchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryRoleBriefMigrationInbox(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "bind_planned_activity_to_loop",
+    {
+      description: "Bind one owner-private, unstarted planned activity to one Loop and optional Round. The server validates identity and snapshots the exact display-safe Role Brief revision; exact operation retries are idempotent and changed retries fail closed.",
+      inputSchema: bindPlannedActivitySchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await bindPlannedActivityToLoop(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "migrate_target_profile_to_loop",
+    {
+      description: "Apply one explicit migration-inbox decision for an exact standalone Target Profile revision: create a new Loop atomically, attach it as a new immutable Role Brief revision to an existing Loop, or archive it from the inbox. Only the Loop Recorder may call this tool.",
+      inputSchema: {
+        operationId: behavioralStableIdSchema,
+        targetId: behavioralStableIdSchema,
+        targetRevision: z.number().int().positive(),
+        authorization: z.literal("loop_recorder"),
+        action: z.enum(["create_loop", "attach_existing_loop", "archive"]),
+        loop: createLoopSchema.shape.loop.optional(),
+        loopId: behavioralStableIdSchema.optional(),
+        expectedRoleBriefRevision: z.number().int().positive().optional(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await migrateTargetProfile(ownerId, targetProfileMigrationSchema.parse(input));
+        return {
+          content: [{ type: "text", text: `Target Profile ${result.targetId} migration decision ${result.action} is saved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "capture_loop_packet",
+    {
+      description: "Privately capture one recent real interview round before the Loop UI is available. Preserve explicit captured-at time plus exact/reconstructed question and answer memory; do not claim the packet is already imported into Loop history.",
+      inputSchema: captureLoopPacketSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await captureLoopPacket(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Private Loop capture packet ${result.packetId} is preserved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_loop_capture_packets",
+    {
+      description: "Read bounded owner-private recent-interview capture packets. Exact remembered text is returned only to the authenticated Loop Recorder; imported and captured timestamps remain distinct.",
+      inputSchema: queryLoopCapturePacketsSchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryLoopCapturePackets(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "import_loop_capture_packet",
+    {
+      description: "Import one exact private capture packet into an existing Loop as a new immutable Loop revision. Preserve its original captured-at time and record a separate later backfilled-at time. Exact retries are idempotent.",
+      inputSchema: importLoopCapturePacketSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await importLoopCapturePacket(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Capture packet ${result.packetId} is imported into Loop ${result.loopId}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
     "upsert_behavioral_target_profile",
     {
       description: "Create or revise one owner-private pasted-JD Target Profile. Use expectedRevision=0 for creation and the exact current revision for every update, including archive/reactivate. Reuse an identical stable operationId after transport uncertainty. The raw JD remains private and is never returned, logged, published, or treated as candidate evidence.",
@@ -3245,7 +3482,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
     {
       description: "Register the stable Codex task ID for one specialist so the coordinator can reuse it without asking the user for IDs.",
       inputSchema: {
-        specialty: z.enum(["leetcode", "system_design", "behavioral"]),
+        specialty: z.enum(["leetcode", "system_design", "behavioral", "loop_recorder"]),
         threadId: z.string().min(1),
         hostId: z.string().min(1).optional(),
         title: z.string().min(1),
@@ -3378,6 +3615,10 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
         selections: z.array(z.object({
           specialty: z.enum(planningSpecialties),
           questionId: z.string().min(1),
+          loopContext: z.object({
+            loopId: z.string().min(1),
+            stageId: z.string().min(1).optional(),
+          }).strict().optional(),
         })).min(1).max(30).optional(),
         specialty: z.enum(planningSpecialties).optional(),
         count: z.number().int().min(1).max(30).optional(),
@@ -3387,6 +3628,10 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
         attention: z.array(z.enum(["due", "needs_review", "solved", "helped", "failed", "todo"])).max(6).optional(),
         sort: z.enum(["frequency", "recent", "acceptance"]).optional(),
         direction: z.enum(["asc", "desc"]).optional(),
+        loopContext: z.object({
+          loopId: z.string().min(1),
+          stageId: z.string().min(1).optional(),
+        }).strict().optional(),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
@@ -3442,7 +3687,10 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
               pageSize: 100,
             }, context);
             const item = (payload.catalog as { items: unknown[] }).items[0];
-            return planningSelectionFromCatalogItem(selection.specialty, item);
+            return {
+              ...planningSelectionFromCatalogItem(selection.specialty, item),
+              ...(selection.loopContext ? { loopContext: selection.loopContext } : {}),
+            } as PlanningSelection;
           }));
         } else {
           if (!input.specialty || !input.count) {
@@ -3485,7 +3733,10 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
             direction: input.direction,
             levels: input.difficulty?.length ? new Set(input.difficulty) : undefined,
           });
-          selections = chosen.map((item) => planningSelectionFromCatalogItem(input.specialty!, item));
+          selections = chosen.map((item) => ({
+            ...planningSelectionFromCatalogItem(input.specialty!, item),
+            ...(input.loopContext ? { loopContext: input.loopContext } : {}),
+          } as PlanningSelection));
         }
         const response = await voicePlanningMutation(ownerId, new Request(
           "https://interview-arc.local/voice/planning/mutations",
