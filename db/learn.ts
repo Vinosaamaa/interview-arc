@@ -1036,6 +1036,117 @@ async function validateLearningEvidence(
   }
 }
 
+async function deriveLearningCompletion(
+  ownerId: string,
+  session: typeof learningSessions.$inferSelect,
+  lesson: LearningLessonSnapshot,
+  input: FinishLearningSessionInput,
+) {
+  const db = getDb();
+  const pointerRows = await db.select().from(learningLessons).where(and(
+    eq(learningLessons.ownerId, ownerId),
+    eq(learningLessons.lessonId, session.lessonId),
+  )).limit(1);
+  const pointer = pointerRows[0];
+  if (!pointer || pointer.state === "completed" || pointer.currentRevision !== session.lessonRevision) return null;
+  const checkpointRows = await db.select().from(learningCheckpointStates).where(and(
+    eq(learningCheckpointStates.ownerId, ownerId),
+    eq(learningCheckpointStates.lessonId, session.lessonId),
+  ));
+  const statusById = new Map(checkpointRows.map((state) => [state.checkpointId, state.status]));
+  input.finalization.checkpointResults.forEach((result) => statusById.set(result.checkpointId, result.status));
+  const requiredIds = lesson.checkpoints.filter((checkpoint) => checkpoint.required)
+    .map((checkpoint) => checkpoint.checkpointId);
+  if (!requiredIds.every((checkpointId) => statusById.get(checkpointId) === "demonstrated")) return null;
+  const writtenCheckpointIds = new Set(input.finalization.checkpointResults.map((result) => result.checkpointId));
+  const checkpointGuards = requiredIds.filter((checkpointId) => !writtenCheckpointIds.has(checkpointId)).map(
+    (checkpointId) => {
+      const state = checkpointRows.find((candidate) => candidate.checkpointId === checkpointId);
+      if (!state) throw new LearningError("learning_checkpoint_revision_conflict", "Required checkpoint state changed before Lesson completion.");
+      return d1TransactionalInvariantGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${learningCheckpointStates}
+        WHERE ${learningCheckpointStates.ownerId} = ${ownerId}
+          AND ${learningCheckpointStates.lessonId} = ${session.lessonId}
+          AND ${learningCheckpointStates.checkpointId} = ${checkpointId}
+          AND ${learningCheckpointStates.currentRevision} = ${state.currentRevision}
+          AND ${learningCheckpointStates.status} = 'demonstrated'
+      )`);
+    },
+  );
+  if (session.scopeType === "quick_study") {
+    return {
+      checkpointGuards,
+      pointer,
+      enrollment: null,
+      courseLessonGuards: [],
+      nextLesson: null,
+      courseCompleted: false,
+    };
+  }
+  if (!session.courseId || !session.enrollmentId || !session.blueprintRevision) {
+    throw new LearningError("learning_session_scope_mismatch", "The Course Session is missing its exact Enrollment scope.");
+  }
+  const [enrollmentRows, blueprintRows, courseLessonRows] = await Promise.all([
+    db.select().from(learningEnrollments).where(and(
+      eq(learningEnrollments.ownerId, ownerId),
+      eq(learningEnrollments.enrollmentId, session.enrollmentId),
+      eq(learningEnrollments.courseId, session.courseId),
+    )).limit(1),
+    db.select().from(learningCourseBlueprintRevisions).where(and(
+      eq(learningCourseBlueprintRevisions.ownerId, ownerId),
+      eq(learningCourseBlueprintRevisions.courseId, session.courseId),
+      eq(learningCourseBlueprintRevisions.revision, session.blueprintRevision),
+    )).limit(1),
+    db.select().from(learningLessons).where(and(
+      eq(learningLessons.ownerId, ownerId),
+      eq(learningLessons.courseId, session.courseId),
+      eq(learningLessons.enrollmentId, session.enrollmentId),
+    )),
+  ]);
+  const enrollment = enrollmentRows[0];
+  if (!enrollment || enrollment.state !== "active" || enrollment.blueprintRevision !== session.blueprintRevision) {
+    throw new LearningError("learning_enrollment_not_found", "The exact active Enrollment is unavailable for Lesson completion.");
+  }
+  const blueprint = orderedBlueprint(learningCourseBlueprintSchema.parse(blueprintRows[0]?.snapshot));
+  const orderedLessons = blueprint.modules.flatMap((module) => module.lessons.map((candidate) => ({
+    lessonId: candidate.lessonId,
+    moduleId: module.moduleId,
+  })));
+  if (!orderedLessons.some((candidate) => candidate.lessonId === session.lessonId)) {
+    throw new LearningError("learning_lesson_not_in_blueprint", "The Session Lesson is absent from its pinned Blueprint revision.");
+  }
+  const rowByLessonId = new Map(courseLessonRows.map((candidate) => [candidate.lessonId, candidate]));
+  const incomplete = orderedLessons.filter((candidate) => candidate.lessonId !== session.lessonId)
+    .find((candidate) => rowByLessonId.get(candidate.lessonId)?.state !== "completed");
+  const courseCompleted = !incomplete;
+  const courseLessonGuards = orderedLessons.filter((candidate) => candidate.lessonId !== session.lessonId).map(
+    (candidate) => {
+      const row = rowByLessonId.get(candidate.lessonId);
+      return row
+        ? d1TransactionalInvariantGuard(db, sql`EXISTS (
+            SELECT 1 FROM ${learningLessons}
+            WHERE ${learningLessons.ownerId} = ${ownerId}
+              AND ${learningLessons.lessonId} = ${candidate.lessonId}
+              AND ${learningLessons.currentRevision} = ${row.currentRevision}
+              AND ${learningLessons.state} = ${row.state}
+          )`)
+        : d1TransactionalInvariantGuard(db, sql`NOT EXISTS (
+            SELECT 1 FROM ${learningLessons}
+            WHERE ${learningLessons.ownerId} = ${ownerId}
+              AND ${learningLessons.lessonId} = ${candidate.lessonId}
+          )`);
+    },
+  );
+  return {
+    checkpointGuards,
+    pointer,
+    enrollment,
+    courseLessonGuards,
+    nextLesson: incomplete ?? null,
+    courseCompleted,
+  };
+}
+
 export async function finishLearningSession(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
   const input = finishLearningSessionSchema.parse(inputValue) as FinishLearningSessionInput;
   const db = getDb();
@@ -1065,6 +1176,7 @@ export async function finishLearningSession(ownerId: string, inputValue: unknown
   )).limit(1);
   const lesson = learningLessonSnapshotSchema.parse(lessonRows[0]?.snapshot);
   await validateLearningEvidence(ownerId, session, input, lesson);
+  const completion = await deriveLearningCompletion(ownerId, session, lesson, input);
 
   const currentStates = await Promise.all(input.finalization.checkpointResults.map(async (result) => {
     const rows = await db.select().from(learningCheckpointStates).where(and(
@@ -1110,6 +1222,19 @@ export async function finishLearningSession(ownerId: string, inputValue: unknown
       status: result.status,
       revision: checkpointRevision,
     })),
+    lessonCompletion: completion ? {
+      completed: true as const,
+      lessonId: session.lessonId,
+      lessonRevision: completion.pointer.currentRevision + 1,
+      nextLessonId: completion.nextLesson?.lessonId ?? null,
+      courseCompleted: completion.courseCompleted,
+    } : {
+      completed: false as const,
+      lessonId: session.lessonId,
+      lessonRevision: session.lessonRevision,
+      nextLessonId: null,
+      courseCompleted: false,
+    },
   };
   const closeInterval = session.runningSince !== null
     ? db.update(learningSessionIntervals).set({ endedAt: nowMs }).where(and(
@@ -1175,6 +1300,24 @@ export async function finishLearningSession(ownerId: string, inputValue: unknown
         AND ${learningSessions.transcriptRevision} = ${input.expectedTranscriptRevision}
         AND ${learningSessions.state} != 'completed'
     )`),
+    ...(completion ? [
+      d1TransactionalInvariantGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${learningLessons}
+        WHERE ${learningLessons.ownerId} = ${ownerId}
+          AND ${learningLessons.lessonId} = ${session.lessonId}
+          AND ${learningLessons.currentRevision} = ${session.lessonRevision}
+          AND ${learningLessons.state} != 'completed'
+      )`),
+      ...completion.checkpointGuards,
+      ...completion.courseLessonGuards,
+      ...(completion.enrollment ? [d1TransactionalInvariantGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${learningEnrollments}
+        WHERE ${learningEnrollments.ownerId} = ${ownerId}
+          AND ${learningEnrollments.enrollmentId} = ${completion.enrollment.enrollmentId}
+          AND ${learningEnrollments.revision} = ${completion.enrollment.revision}
+          AND ${learningEnrollments.state} = 'active'
+      )`)] : []),
+    ] : []),
     db.insert(learningSessionFinalizationRevisions).values({
       ownerId,
       sessionId: session.sessionId,
@@ -1185,6 +1328,46 @@ export async function finishLearningSession(ownerId: string, inputValue: unknown
       createdAt: nowMs,
     }),
     ...checkpointStatements,
+    ...(completion ? [
+      db.insert(learningLessonRevisions).values({
+        ownerId,
+        lessonId: session.lessonId,
+        revision: completion.pointer.currentRevision + 1,
+        operationId: input.operationId,
+        requestFingerprint,
+        blueprintRevision: session.blueprintRevision,
+        snapshot: { ...lesson, state: "completed" },
+        createdAt: nowMs,
+      }),
+      db.update(learningLessons).set({
+        currentRevision: completion.pointer.currentRevision + 1,
+        state: "completed",
+        updatedAt: nowMs,
+      }).where(and(
+        eq(learningLessons.ownerId, ownerId),
+        eq(learningLessons.lessonId, session.lessonId),
+        eq(learningLessons.currentRevision, completion.pointer.currentRevision),
+      )),
+      ...(completion.enrollment ? [db.update(learningEnrollments).set({
+        state: completion.courseCompleted ? "completed" : "active",
+        currentModuleId: completion.nextLesson?.moduleId ?? completion.enrollment.currentModuleId,
+        currentLessonId: completion.nextLesson?.lessonId ?? completion.enrollment.currentLessonId,
+        revision: completion.enrollment.revision + 1,
+        completedAt: completion.courseCompleted ? nowMs : null,
+        updatedAt: nowMs,
+      }).where(and(
+        eq(learningEnrollments.ownerId, ownerId),
+        eq(learningEnrollments.enrollmentId, completion.enrollment.enrollmentId),
+        eq(learningEnrollments.revision, completion.enrollment.revision),
+      ))] : []),
+      ...(completion.courseCompleted && session.courseId ? [db.update(learningCourses).set({
+        state: "completed",
+        updatedAt: nowMs,
+      }).where(and(
+        eq(learningCourses.ownerId, ownerId),
+        eq(learningCourses.courseId, session.courseId),
+      ))] : []),
+    ] : []),
     ...(closeInterval ? [closeInterval] : []),
     db.update(learningSessions).set({
       state: "completed",
@@ -1282,15 +1465,16 @@ export async function queryLearningEvidence(ownerId: string, inputValue: unknown
 export async function queryLearningJourney(ownerId: string, inputValue: unknown = {}) {
   const input = queryLearningJourneySchema.parse(inputValue);
   const db = getDb();
-  const [courses, courseRevisions, lessons, lessonRevisions, sessions, checkpoints, homework] = await Promise.all([
+  const [courses, enrollments, lessons, lessonRevisions, sessions, checkpoints, homework] = await Promise.all([
     db.select().from(learningCourses).where(and(
       eq(learningCourses.ownerId, ownerId),
       input.courseId ? eq(learningCourses.courseId, input.courseId) : undefined,
     )),
-    db.select().from(learningCourseBlueprintRevisions).where(and(
-      eq(learningCourseBlueprintRevisions.ownerId, ownerId),
-      input.courseId ? eq(learningCourseBlueprintRevisions.courseId, input.courseId) : undefined,
-    )).orderBy(asc(learningCourseBlueprintRevisions.revision)),
+    db.select().from(learningEnrollments).where(and(
+      eq(learningEnrollments.ownerId, ownerId),
+      input.courseId ? eq(learningEnrollments.courseId, input.courseId) : undefined,
+      eq(learningEnrollments.state, "completed"),
+    )),
     db.select().from(learningLessons).where(and(
       eq(learningLessons.ownerId, ownerId),
       input.courseId ? eq(learningLessons.courseId, input.courseId) : undefined,
@@ -1314,13 +1498,6 @@ export async function queryLearningJourney(ownerId: string, inputValue: unknown 
   const courseById = new Map(courses.map((course) => [course.courseId, course]));
   const lessonById = new Map(lessons.map((lesson) => [lesson.lessonId, lesson]));
   const allowedLessonIds = new Set(lessons.map((lesson) => lesson.lessonId));
-  const firstCourseCompletion = new Map<string, { revision: number; createdAt: number }>();
-  courseRevisions.forEach((row) => {
-    const snapshot = learningCourseBlueprintSchema.parse(row.snapshot);
-    if (snapshot.state === "completed" && !firstCourseCompletion.has(row.courseId)) {
-      firstCourseCompletion.set(row.courseId, { revision: row.revision, createdAt: row.createdAt });
-    }
-  });
   const firstLessonCompletion = new Map<string, { revision: number; createdAt: number }>();
   lessonRevisions.forEach((row) => {
     if (!allowedLessonIds.has(row.lessonId)) return;
@@ -1330,13 +1507,13 @@ export async function queryLearningJourney(ownerId: string, inputValue: unknown 
     }
   });
   const events = [
-    ...[...firstCourseCompletion.entries()].map(([courseId, completion]) => ({
-      eventId: `course:${courseId}:${completion.revision}`,
+    ...enrollments.map((enrollment) => ({
+      eventId: `course:${enrollment.courseId}:${enrollment.revision}`,
       kind: "course_completed" as const,
-      occurredAt: completion.createdAt,
-      courseId,
-      title: courseById.get(courseId)?.title ?? courseId,
-      revision: completion.revision,
+      occurredAt: enrollment.completedAt as number,
+      courseId: enrollment.courseId,
+      title: courseById.get(enrollment.courseId)?.title ?? enrollment.courseId,
+      revision: enrollment.revision,
     })),
     ...[...firstLessonCompletion.entries()].map(([lessonId, completion]) => {
       const lesson = lessonById.get(lessonId);

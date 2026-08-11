@@ -55,6 +55,13 @@ const courseBlueprint = {
       kind: "lesson",
       objective: "Explain start, pause, resume, Finish, and transcript identity.",
       prerequisites: [],
+    }, {
+      lessonId: "session-completion-boundary",
+      title: "Session and Course completion",
+      order: 1,
+      kind: "lesson",
+      objective: "Explain why one finished Session does not prematurely complete a multi-Lesson Course.",
+      prerequisites: ["session-state-machine"],
     }],
   }],
 };
@@ -80,6 +87,29 @@ const lesson = {
     checkpointId: "explain-session-state",
     label: "Explain Session state",
     description: "Name the authoritative revisions and permanent Finish lock.",
+    required: true,
+  }],
+  sourcePins: [],
+};
+
+const completionLesson = {
+  lessonId: "session-completion-boundary",
+  state: "active",
+  title: "Session and Course completion",
+  objective: "Explain checkpoint-gated Lesson and Course completion.",
+  prerequisites: ["session-state-machine"],
+  sections: [{
+    sectionId: "completion-transitions",
+    heading: "Completion transitions",
+    body: "A Session may finish while a Lesson remains active; all pinned Blueprint lessons must complete before the Course does.",
+  }],
+  examples: [],
+  exercises: [],
+  homework: [],
+  checkpoints: [{
+    checkpointId: "explain-course-completion",
+    label: "Explain Course completion",
+    description: "Distinguish Session, Lesson, Enrollment, and Course completion.",
     required: true,
   }],
   sourcePins: [],
@@ -325,8 +355,8 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
         recommendedNextAction: "Trace one stale Session retry against its expected revision.",
         checkpointResults: [{
           checkpointId: "explain-session-state",
-          status: "demonstrated",
-          rationale: "The exact transcript, trace artifact, and completed homework show the boundary.",
+          status: "needs_another_pass",
+          rationale: "The evidence identifies the boundary but needs a more precise explanation of both revisions.",
           evidence: [
             { kind: "transcript_turn", turnId: "learner-turn-0" },
             { kind: "artifact", artifactId: "session-boundary-trace" },
@@ -339,7 +369,8 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     assert.equal(finished.state, "completed");
     assert.equal(finished.revision, 4);
     assert.equal(finished.finalizationRevision, 1);
-    assert.equal(finished.checkpointResults[0].status, "demonstrated");
+    assert.equal(finished.checkpointResults[0].status, "needs_another_pass");
+    assert.equal(finished.lessonCompletion.completed, false);
     assert.equal((await call(client, "finish_learning_session", finishInput)).duplicate, true);
     const changedFinish = await callRaw(client, "finish_learning_session", {
       ...finishInput,
@@ -389,7 +420,7 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
       lessonId: lesson.lessonId,
       sessionId: createSessionInput.sessionId,
     });
-    assert.equal(evidence.checkpointStates[0].status, "demonstrated");
+    assert.equal(evidence.checkpointStates[0].status, "needs_another_pass");
     assert.equal(evidence.checkpointHistory.length, 1);
     assert.equal(evidence.checkpointHistory[0].evidence.length, 3);
     assert.equal(evidence.homework[0].revision, 2);
@@ -466,25 +497,73 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
       },
     });
     assert.equal(corrected.checkpointResults[0].revision, 2);
+    assert.equal(corrected.lessonCompletion.completed, true);
+    assert.equal(corrected.lessonCompletion.lessonRevision, 2);
+    assert.equal(corrected.lessonCompletion.courseCompleted, false);
+    assert.equal(corrected.lessonCompletion.nextLessonId, completionLesson.lessonId);
     const correctedEvidence = await call(client, "query_learning_evidence", { lessonId: lesson.lessonId });
     assert.equal(correctedEvidence.checkpointStates[0].currentRevision, 2);
     assert.deepEqual(correctedEvidence.checkpointHistory.map((event) => event.revision), [1, 2]);
     assert.equal(correctedEvidence.checkpointHistory[1].supersedesRevision, 1);
 
     await call(client, "save_learning_lesson_revision", {
-      operationId: "session-lesson-complete-2",
-      expectedRevision: 1,
+      operationId: "completion-lesson-create-1",
+      expectedRevision: 0,
       authorization: "learning_specialist",
       scope,
-      lesson: { ...lesson, state: "completed" },
+      lesson: completionLesson,
     });
-    await call(client, "revise_learning_course_blueprint", {
-      operationId: "session-course-complete-2",
-      courseId: courseBlueprint.courseId,
-      expectedRevision: 1,
+    await call(client, "create_learning_session", {
+      operationId: "completion-session-create-1",
+      sessionId: "learning-session-completion-1",
       authorization: "learning_specialist",
-      blueprint: { ...courseBlueprint, state: "completed" },
+      scope,
+      lessonId: completionLesson.lessonId,
+      lessonRevision: 1,
     });
+    await call(client, "control_learning_session", {
+      operationId: "completion-session-start-1",
+      sessionId: "learning-session-completion-1",
+      expectedRevision: 0,
+      action: "start",
+      authorization: "explicit_user_instruction",
+    });
+    await call(client, "append_learning_transcript", {
+      operationId: "completion-transcript-1",
+      sessionId: "learning-session-completion-1",
+      expectedTranscriptRevision: 0,
+      writer: "learning_specialist",
+      turns: [{
+        turnId: "completion-turn-0",
+        sequence: 0,
+        speaker: "learner",
+        source: "typed",
+        body: "Session Finish locks one conversation; demonstrated required checkpoints complete its Lesson; every pinned Lesson completes the Course.",
+        occurredAt: 1_786_400_006_000,
+      }],
+    });
+    const courseCompleted = await call(client, "finish_learning_session", {
+      operationId: "completion-session-finish-1",
+      sessionId: "learning-session-completion-1",
+      expectedRevision: 1,
+      expectedTranscriptRevision: 1,
+      authorization: "explicit_user_instruction",
+      finalization: {
+        recap: "The final pinned Lesson now has exact checkpoint evidence.",
+        unresolvedQuestions: [],
+        recommendedNextAction: "Review the immutable Course chronology.",
+        checkpointResults: [{
+          checkpointId: "explain-course-completion",
+          status: "demonstrated",
+          rationale: "The exact learner turn distinguishes all four completion boundaries.",
+          evidence: [{ kind: "transcript_turn", turnId: "completion-turn-0" }],
+        }],
+      },
+    });
+    assert.equal(courseCompleted.lessonCompletion.completed, true);
+    assert.equal(courseCompleted.lessonCompletion.courseCompleted, true);
+    assert.equal(courseCompleted.lessonCompletion.nextLessonId, null);
+
     const journey = await call(client, "query_learning_journey", {});
     assert.deepEqual(new Set(journey.events.map((event) => event.kind)), new Set([
       "course_completed",
@@ -493,7 +572,7 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
       "checkpoint_demonstrated",
       "homework_completed",
     ]));
-    assert.equal(journey.events.filter((event) => event.kind === "session_finished").length, 2);
+    assert.equal(journey.events.filter((event) => event.kind === "session_finished").length, 3);
     assert.equal(journey.events.filter((event) => event.kind === "checkpoint_demonstrated").length, 2);
     assert.equal(journey.evidencePolicy, "factual_events_only");
     assert.doesNotMatch(JSON.stringify(journey), /The Learning Session is separate|learner-turn|sections|recap/);
@@ -503,13 +582,13 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     assert.deepEqual((await call(otherClient, "query_learning_journey", {})).events, []);
 
     const workspace = await call(client, "query_learning_workspace", {});
-    assert.equal(workspace.facts.sessionCount, 2);
-    assert.equal(workspace.facts.completedSessionCount, 2);
+    assert.equal(workspace.facts.sessionCount, 3);
+    assert.equal(workspace.facts.completedSessionCount, 3);
     assert.ok(workspace.facts.recordedLearningSeconds >= 1);
     assert.equal(workspace.facts.homeworkCount, 1);
     assert.equal(workspace.facts.completedHomeworkCount, 1);
-    assert.equal(workspace.facts.checkpointResultCount, 1);
-    assert.equal(workspace.facts.demonstratedCheckpointCount, 1);
+    assert.equal(workspace.facts.checkpointResultCount, 2);
+    assert.equal(workspace.facts.demonstratedCheckpointCount, 2);
   } finally {
     await client?.close().catch(() => {});
     await otherClient?.close().catch(() => {});
