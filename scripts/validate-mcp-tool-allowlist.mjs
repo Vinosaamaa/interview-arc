@@ -3,6 +3,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const CONTRACT_FILES = [
   "AGENTS.md",
+  "learn/AGENTS.md",
   "practice/leetcode/AGENTS.md",
   "practice/system-design/AGENTS.md",
   "practice/behavioral/AGENTS.md",

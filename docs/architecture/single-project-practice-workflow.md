@@ -6,7 +6,7 @@ Accepted on 2026-07-17.
 
 ## Decision
 
-Use one Codex project and one shared `interview-arc` checkout. Keep five long-lived tasks for the coordinator, Loop Recorder, LeetCode, system design, and behavioral practice. Do not create a separate project or Git worktree for each specialist. The Loop Recorder is an administrative specialist, not a fourth practice specialty.
+Use one Codex project and one shared `interview-arc` checkout. Keep six long-lived tasks for the coordinator, Loop Recorder, Learning Specialist, LeetCode, system design, and behavioral practice. Do not create a separate project or Git worktree for each specialist. The Loop Recorder is an administrative specialist, and the Learning Specialist owns tutoring; neither is an Interview practice specialty.
 
 Tasks share repository files but not hidden conversational context. Durable instructions live in `AGENTS.md`; durable session evidence lives in the activity and artifact files.
 

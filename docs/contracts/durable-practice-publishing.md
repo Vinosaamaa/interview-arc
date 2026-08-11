@@ -5,11 +5,13 @@ Interview Arc separates **draft capture**, **specialist finalization**, and
 versioned artifact and daily journal have been merged, imported, and marked in
 D1 by the coordinator.
 
-## Stable Tasks
+## Stable Task Registry
 
 Use these long-lived Codex task titles inside the same project:
 
 - `Interview Arc — Coordinator`
+- `Interview Arc — Loop Recorder`
+- `Interview Arc — Learning Specialist`
 - `Interview Arc — LeetCode`
 - `Interview Arc — System Design`
 - `Interview Arc — Behavioral`
@@ -18,6 +20,9 @@ Titles help discovery but do not grant hidden shared memory. The coordinator
 registers each specialist's task/thread identifier once with
 `register_specialist_task`. It then reuses `get_specialist_tasks` and the Codex
 task coordination tools; the user should not repeatedly paste task IDs.
+Practice publication contacts only the three Interview practice specialists.
+Loop Recorder and Learning Specialist registrations use the same durable
+routing mechanism for their own product workflows.
 
 ## Activity Resolution
 
