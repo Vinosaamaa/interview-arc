@@ -7,6 +7,7 @@ const CONTRACT_FILES = [
   "practice/system-design/AGENTS.md",
   "practice/behavioral/AGENTS.md",
   "docs/contracts/durable-practice-publishing.md",
+  "docs/contracts/learning-workspace.md",
   "docs/contracts/practice-interaction-modes.md",
   "docs/contracts/behavioral-evidence-domain.md",
   "docs/contracts/behavioral-target-profiles.md",

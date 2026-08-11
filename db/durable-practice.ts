@@ -139,7 +139,7 @@ import {
 } from "./activity-resume-context";
 
 export type Specialty = "leetcode" | "system_design" | "behavioral";
-export type SpecialistTaskType = Specialty | "loop_recorder";
+export type SpecialistTaskType = Specialty | "loop_recorder" | "learning_specialist";
 export type NoteKind = "remember" | "insight" | "mistake" | "pattern" | "question";
 export type TranscriptSpeaker = "user" | "specialist";
 export type TranscriptSource = "codex" | "dictation" | "audio_transcript";

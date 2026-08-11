@@ -66,6 +66,19 @@ import {
   targetProfileMigrationSchema,
 } from "../db/loops";
 import {
+  LearningError,
+  approveLearningEnrollment,
+  approveLearningEnrollmentSchema,
+  createLearningCourseBlueprint,
+  createLearningCourseBlueprintSchema,
+  queryLearningWorkspace,
+  queryLearningWorkspaceSchema,
+  reviseLearningCourseBlueprint,
+  reviseLearningCourseBlueprintSchema,
+  saveLearningLessonRevision,
+  saveLearningLessonRevisionSchema,
+} from "../db/learn";
+import {
   behavioralPracticePreflightInputSchema,
   readBehavioralPracticePreflight,
 } from "../db/behavioral-practice-preflight";
@@ -1842,6 +1855,7 @@ function specialistToolFailure(error: unknown) {
     || error instanceof BehavioralFinalAnswerError
     || error instanceof BehavioralTargetProfileError
     || error instanceof LoopError
+    || error instanceof LearningError
     || error instanceof BehavioralStoryError
     || error instanceof TypedExchangeDeletionError
     || error instanceof InteractionModeError
@@ -2959,6 +2973,106 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   );
 
   server.registerTool(
+    "create_learning_course_blueprint",
+    {
+      description: "Create one owner-private draft Course Blueprint revision 1. Only the Learning Specialist may propose curriculum; the Course remains unenrolled until the owner explicitly approves the exact revision. Exact retries replay the original receipt and changed retries fail closed.",
+      inputSchema: createLearningCourseBlueprintSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await createLearningCourseBlueprint(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Draft Course ${result.courseId} Blueprint revision ${result.blueprintRevision} is saved for review.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "revise_learning_course_blueprint",
+    {
+      description: "Append one immutable Course Blueprint revision using the exact expected revision. Existing Enrollment and Lesson history remain pinned to the revisions they used; only the Learning Specialist may revise curriculum.",
+      inputSchema: reviseLearningCourseBlueprintSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await reviseLearningCourseBlueprint(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Course ${result.courseId} Blueprint revision ${result.blueprintRevision} is saved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "approve_learning_course_enrollment",
+    {
+      description: "Enroll in one exact reviewed Course Blueprint revision after explicit owner approval. The resulting Enrollment remains pinned to that revision even when later Blueprint revisions are created.",
+      inputSchema: approveLearningEnrollmentSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await approveLearningEnrollment(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Enrollment ${result.enrollmentId} is active on Course ${result.courseId} Blueprint revision ${result.blueprintRevision}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "save_learning_lesson_revision",
+    {
+      description: "Create or append one immutable Current lesson revision for an active Course Enrollment or a separate Quick Study. Course Lessons must belong to the exact enrolled Blueprint; Quick Study never fabricates Course or Enrollment state.",
+      inputSchema: saveLearningLessonRevisionSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await saveLearningLessonRevision(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Learning Lesson ${result.lessonId} revision ${result.lessonRevision} is saved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_learning_workspace",
+    {
+      description: "Read bounded owner-private Courses, immutable Blueprint and Current lesson revisions, explicit Enrollments, separate Quick Studies, and factual Learn aggregates. It never returns inferred mastery, productivity, retention, or readiness.",
+      inputSchema: queryLearningWorkspaceSchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryLearningWorkspace(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
     "upsert_behavioral_target_profile",
     {
       description: "Create or revise one owner-private pasted-JD Target Profile. Use expectedRevision=0 for creation and the exact current revision for every update, including archive/reactivate. Reuse an identical stable operationId after transport uncertainty. The raw JD remains private and is never returned, logged, published, or treated as candidate evidence.",
@@ -3482,7 +3596,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
     {
       description: "Register the stable Codex task ID for one specialist so the coordinator can reuse it without asking the user for IDs.",
       inputSchema: {
-        specialty: z.enum(["leetcode", "system_design", "behavioral", "loop_recorder"]),
+        specialty: z.enum(["leetcode", "system_design", "behavioral", "loop_recorder", "learning_specialist"]),
         threadId: z.string().min(1),
         hostId: z.string().min(1).optional(),
         title: z.string().min(1),

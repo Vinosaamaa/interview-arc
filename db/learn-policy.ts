@@ -1,0 +1,203 @@
+import { z } from "zod";
+
+export const learningStableIdSchema = z.string()
+  .trim()
+  .min(1)
+  .max(200)
+  .regex(/^[a-z0-9][a-z0-9._-]*$/);
+
+const boundedText = (max: number) => z.string().trim().min(1).max(max);
+const optionalText = (max: number) => z.string().trim().min(1).max(max).optional();
+
+export const learningSourcePinSchema = z.object({
+  kind: z.enum(["web", "repository", "engineering_journal", "owner_provided"]),
+  title: boundedText(300),
+  url: z.string().url().max(2_000).optional(),
+  repository: optionalText(300),
+  commit: z.string().trim().regex(/^[0-9a-f]{7,64}$/i).optional(),
+  path: optionalText(1_000),
+  recordId: learningStableIdSchema.optional(),
+  recordRevision: z.number().int().positive().optional(),
+  symbols: z.array(boundedText(300)).max(100).default([]),
+}).strict().superRefine((source, context) => {
+  if (source.kind === "web" && !source.url) {
+    context.addIssue({ code: "custom", message: "A web source requires its exact URL.", path: ["url"] });
+  }
+  if (source.kind === "repository" && (!source.repository || !source.commit)) {
+    context.addIssue({
+      code: "custom",
+      message: "A repository source requires repository identity and an exact commit.",
+    });
+  }
+  if (source.kind === "engineering_journal" && (
+    !source.repository || !source.commit || !source.recordId || !source.recordRevision
+  )) {
+    context.addIssue({
+      code: "custom",
+      message: "Learn this requires the exact Journal record revision, repository, and commit.",
+    });
+  }
+});
+
+export const learningBlueprintLessonSchema = z.object({
+  lessonId: learningStableIdSchema,
+  title: boundedText(300),
+  order: z.number().int().nonnegative(),
+  kind: z.enum(["lesson", "lab"]),
+  objective: boundedText(2_000),
+  prerequisites: z.array(learningStableIdSchema).max(50).default([]),
+}).strict();
+
+export const learningBlueprintModuleSchema = z.object({
+  moduleId: learningStableIdSchema,
+  title: boundedText(300),
+  order: z.number().int().nonnegative(),
+  objective: boundedText(2_000),
+  lessons: z.array(learningBlueprintLessonSchema).min(1).max(100),
+}).strict();
+
+function uniqueBy<T>(items: T[], key: (item: T) => string | number) {
+  const values = items.map(key);
+  return new Set(values).size === values.length;
+}
+
+export const learningCourseBlueprintSchema = z.object({
+  courseId: learningStableIdSchema,
+  state: z.enum(["draft", "active", "completed", "archived"]),
+  title: boundedText(300),
+  goal: boundedText(4_000),
+  priorKnowledge: z.array(boundedText(1_000)).max(100).default([]),
+  intendedOutcome: boundedText(4_000),
+  sourcePins: z.array(learningSourcePinSchema).max(100).default([]),
+  modules: z.array(learningBlueprintModuleSchema).min(1).max(50),
+}).strict().superRefine((blueprint, context) => {
+  if (!uniqueBy(blueprint.modules, (module) => module.moduleId)) {
+    context.addIssue({ code: "custom", message: "Module IDs must be unique.", path: ["modules"] });
+  }
+  if (!uniqueBy(blueprint.modules, (module) => module.order)) {
+    context.addIssue({ code: "custom", message: "Module order values must be unique.", path: ["modules"] });
+  }
+  const lessonIds = blueprint.modules.flatMap((module) => module.lessons.map((lesson) => lesson.lessonId));
+  if (new Set(lessonIds).size !== lessonIds.length) {
+    context.addIssue({ code: "custom", message: "Lesson IDs must be unique across the Course.", path: ["modules"] });
+  }
+  blueprint.modules.forEach((module, moduleIndex) => {
+    if (!uniqueBy(module.lessons, (lesson) => lesson.order)) {
+      context.addIssue({
+        code: "custom",
+        message: "Lesson order values must be unique inside a Module.",
+        path: ["modules", moduleIndex, "lessons"],
+      });
+    }
+  });
+});
+
+export const learningCheckpointDefinitionSchema = z.object({
+  checkpointId: learningStableIdSchema,
+  label: boundedText(300),
+  description: boundedText(2_000),
+  required: z.boolean().default(true),
+}).strict();
+
+export const learningLessonSnapshotSchema = z.object({
+  lessonId: learningStableIdSchema,
+  state: z.enum(["active", "completed", "archived"]),
+  title: boundedText(300),
+  objective: boundedText(2_000),
+  prerequisites: z.array(boundedText(1_000)).max(50).default([]),
+  sections: z.array(z.object({
+    sectionId: learningStableIdSchema,
+    heading: boundedText(300),
+    body: boundedText(20_000),
+  }).strict()).min(1).max(50),
+  examples: z.array(z.object({
+    exampleId: learningStableIdSchema,
+    title: boundedText(300),
+    body: boundedText(20_000),
+    language: optionalText(100),
+  }).strict()).max(20).default([]),
+  exercises: z.array(z.object({
+    exerciseId: learningStableIdSchema,
+    prompt: boundedText(10_000),
+  }).strict()).max(20).default([]),
+  homework: z.array(z.object({
+    homeworkId: learningStableIdSchema,
+    prompt: boundedText(10_000),
+  }).strict()).max(20).default([]),
+  checkpoints: z.array(learningCheckpointDefinitionSchema).min(1).max(3),
+  sourcePins: z.array(learningSourcePinSchema).max(100).default([]),
+}).strict().superRefine((lesson, context) => {
+  for (const [path, items, key] of [
+    ["sections", lesson.sections, "sectionId"],
+    ["examples", lesson.examples, "exampleId"],
+    ["exercises", lesson.exercises, "exerciseId"],
+    ["homework", lesson.homework, "homeworkId"],
+    ["checkpoints", lesson.checkpoints, "checkpointId"],
+  ] as const) {
+    if (!uniqueBy(items as Array<Record<string, unknown>>, (item) => String(item[key]))) {
+      context.addIssue({ code: "custom", message: `${path} IDs must be unique.`, path: [path] });
+    }
+  }
+});
+
+export const learningLessonScopeSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("course"),
+    courseId: learningStableIdSchema,
+    enrollmentId: learningStableIdSchema,
+    moduleId: learningStableIdSchema,
+    blueprintRevision: z.number().int().positive(),
+  }).strict(),
+  z.object({
+    kind: z.literal("quick_study"),
+  }).strict(),
+]);
+
+export const createLearningCourseBlueprintSchema = z.object({
+  operationId: learningStableIdSchema,
+  authorization: z.literal("learning_specialist"),
+  blueprint: learningCourseBlueprintSchema,
+}).strict();
+
+export const reviseLearningCourseBlueprintSchema = z.object({
+  operationId: learningStableIdSchema,
+  courseId: learningStableIdSchema,
+  expectedRevision: z.number().int().positive(),
+  authorization: z.literal("learning_specialist"),
+  blueprint: learningCourseBlueprintSchema,
+}).strict().superRefine((input, context) => {
+  if (input.courseId !== input.blueprint.courseId) {
+    context.addIssue({ code: "custom", message: "Course identity cannot change across Blueprint revisions." });
+  }
+});
+
+export const approveLearningEnrollmentSchema = z.object({
+  operationId: learningStableIdSchema,
+  enrollmentId: learningStableIdSchema,
+  courseId: learningStableIdSchema,
+  expectedBlueprintRevision: z.number().int().positive(),
+  authorization: z.literal("explicit_user_instruction"),
+}).strict();
+
+export const saveLearningLessonRevisionSchema = z.object({
+  operationId: learningStableIdSchema,
+  expectedRevision: z.number().int().nonnegative(),
+  authorization: z.literal("learning_specialist"),
+  scope: learningLessonScopeSchema,
+  lesson: learningLessonSnapshotSchema,
+}).strict();
+
+export const queryLearningWorkspaceSchema = z.object({
+  courseId: learningStableIdSchema.optional(),
+  blueprintRevision: z.number().int().positive().optional(),
+  lessonId: learningStableIdSchema.optional(),
+  lessonRevision: z.number().int().positive().optional(),
+  includeArchived: z.boolean().default(false),
+}).strict();
+
+export type LearningCourseBlueprint = z.infer<typeof learningCourseBlueprintSchema>;
+export type LearningLessonSnapshot = z.infer<typeof learningLessonSnapshotSchema>;
+export type CreateLearningCourseBlueprintInput = z.infer<typeof createLearningCourseBlueprintSchema>;
+export type ReviseLearningCourseBlueprintInput = z.infer<typeof reviseLearningCourseBlueprintSchema>;
+export type ApproveLearningEnrollmentInput = z.infer<typeof approveLearningEnrollmentSchema>;
+export type SaveLearningLessonRevisionInput = z.infer<typeof saveLearningLessonRevisionSchema>;

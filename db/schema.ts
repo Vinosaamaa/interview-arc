@@ -577,7 +577,9 @@ export const specialistTasks = sqliteTable(
   "specialist_tasks",
   {
     ownerId,
-    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral", "loop_recorder"] }).notNull(),
+    specialty: text("specialty", {
+      enum: ["leetcode", "system_design", "behavioral", "loop_recorder", "learning_specialist"],
+    }).notNull(),
     threadId: text("thread_id").notNull(),
     hostId: text("host_id"),
     title: text("title").notNull(),
@@ -1182,6 +1184,128 @@ export const loopCapturePacketOperations = sqliteTable(
     operationId: text("operation_id").notNull(),
     packetId: text("packet_id").notNull(),
     action: text("action", { enum: ["capture", "import"] }).notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.operationId] })],
+);
+
+// Learn is a separate owner-private domain. Stable rows contain only current
+// pointers; append-only Blueprint and Lesson revisions preserve the exact
+// material selected by an Enrollment without rewriting prior learning history.
+export const learningCourses = sqliteTable(
+  "learning_courses",
+  {
+    ownerId,
+    courseId: text("course_id").notNull(),
+    currentBlueprintRevision: integer("current_blueprint_revision").notNull(),
+    state: text("state", { enum: ["draft", "active", "completed", "archived"] }).notNull(),
+    title: text("title").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.courseId] }),
+    index("learning_courses_owner_state_idx").on(table.ownerId, table.state, table.updatedAt),
+  ],
+);
+
+export const learningCourseBlueprintRevisions = sqliteTable(
+  "learning_course_blueprint_revisions",
+  {
+    ownerId,
+    courseId: text("course_id").notNull(),
+    revision: integer("revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    snapshot: text("snapshot", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.courseId, table.revision] }),
+    uniqueIndex("learning_blueprint_revisions_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
+// Enrollment is an explicit owner approval pinned to one exact Blueprint
+// revision. Later Blueprint edits never retarget an existing Enrollment.
+export const learningEnrollments = sqliteTable(
+  "learning_enrollments",
+  {
+    ownerId,
+    enrollmentId: text("enrollment_id").notNull(),
+    courseId: text("course_id").notNull(),
+    blueprintRevision: integer("blueprint_revision").notNull(),
+    state: text("state", { enum: ["active", "completed", "archived"] }).notNull(),
+    currentModuleId: text("current_module_id"),
+    currentLessonId: text("current_lesson_id"),
+    revision: integer("revision").notNull().default(1),
+    enrolledAt: integer("enrolled_at").notNull(),
+    completedAt: integer("completed_at"),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.enrollmentId] }),
+    uniqueIndex("learning_enrollments_owner_course_idx").on(table.ownerId, table.courseId),
+    index("learning_enrollments_owner_state_idx").on(table.ownerId, table.state, table.updatedAt),
+  ],
+);
+
+// Quick Study and Course Lessons share one revision model but retain an
+// immutable scope identity. A Quick Study never fabricates Course state.
+export const learningLessons = sqliteTable(
+  "learning_lessons",
+  {
+    ownerId,
+    lessonId: text("lesson_id").notNull(),
+    scopeType: text("scope_type", { enum: ["course", "quick_study"] }).notNull(),
+    courseId: text("course_id"),
+    enrollmentId: text("enrollment_id"),
+    moduleId: text("module_id"),
+    currentRevision: integer("current_revision").notNull(),
+    state: text("state", { enum: ["active", "completed", "archived"] }).notNull(),
+    title: text("title").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.lessonId] }),
+    index("learning_lessons_course_idx").on(table.ownerId, table.courseId, table.moduleId),
+    index("learning_lessons_scope_idx").on(table.ownerId, table.scopeType, table.state, table.updatedAt),
+  ],
+);
+
+export const learningLessonRevisions = sqliteTable(
+  "learning_lesson_revisions",
+  {
+    ownerId,
+    lessonId: text("lesson_id").notNull(),
+    revision: integer("revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    blueprintRevision: integer("blueprint_revision"),
+    snapshot: text("snapshot", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.lessonId, table.revision] }),
+    uniqueIndex("learning_lesson_revisions_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
+// One operation table gives every Learn mutation an immutable identity receipt.
+// Exact retries replay the receipt; changed retries fail without partial writes.
+export const learningOperations = sqliteTable(
+  "learning_operations",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    aggregateType: text("aggregate_type", { enum: ["course", "enrollment", "lesson"] }).notNull(),
+    aggregateId: text("aggregate_id").notNull(),
+    action: text("action", {
+      enum: ["create_blueprint", "revise_blueprint", "approve_enrollment", "create_lesson", "revise_lesson"],
+    }).notNull(),
     requestFingerprint: text("request_fingerprint").notNull(),
     receipt: text("receipt", { mode: "json" }).notNull(),
     createdAt: integer("created_at").notNull(),
@@ -1825,6 +1949,9 @@ export type ReviewScheduleRow = typeof reviewSchedules.$inferSelect;
 export type SpecialistTaskRow = typeof specialistTasks.$inferSelect;
 export type LoopActivityBindingRow = typeof loopActivityBindings.$inferSelect;
 export type LoopActivityHistoryRow = typeof loopActivityHistory.$inferSelect;
+export type LearningCourseRow = typeof learningCourses.$inferSelect;
+export type LearningEnrollmentRow = typeof learningEnrollments.$inferSelect;
+export type LearningLessonRow = typeof learningLessons.$inferSelect;
 export type ActivityAudioClipRow = typeof activityAudioClips.$inferSelect;
 export type ActivityDeliveryAnalysisRow = typeof activityDeliveryAnalyses.$inferSelect;
 export type ProblemPreferenceRow = typeof problemPreferences.$inferSelect;
