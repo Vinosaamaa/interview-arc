@@ -148,18 +148,27 @@ test("Review Queue keeps filters in the menu, branches each row, and joins its f
   assert.equal(folioRules.some((rule) => rule.declarations.bottom === "78px"), false);
 });
 
-test("responsive shell switches directly to the mobile dock and keeps one topbar row", async () => {
-  const [source, css] = await Promise.all([load("../app/home-client.tsx"), load("../app/interview-arc-v2.css")]);
+test("responsive shell separates the top workspace selector from the Interview dock", async () => {
+  const [source, globals, css] = await Promise.all([
+    load("../app/home-client.tsx"),
+    load("../app/globals.css"),
+    load("../app/interview-arc-v2.css"),
+  ]);
   const file = parseTsx(source);
   const literals = stringLiterals(file);
-  const rules = parseCss(css);
+  const rules = parseCss(`${globals}\n${css}`);
   assert.equal(literals.has("Statistics"), false);
   assert.equal(literals.has("Recall schedule"), false);
   assert.ok(cssRules(rules, ".brand-mark").some((rule) => rule.declarations.background?.includes('/favicon.svg')));
   const mobileSidebar = cssRules(rules, ".sidebar", "max-width: 900px").at(-1).declarations;
-  assert.equal(mobileSidebar.position, "fixed");
-  assert.equal(mobileSidebar.inset, "auto 10px 10px");
-  assert.equal(mobileSidebar["backdrop-filter"], "none");
+  assert.equal(mobileSidebar.position, "sticky");
+  assert.equal(mobileSidebar.inset, "auto");
+  assert.equal(mobileSidebar.top, "0");
+  assert.equal(mobileSidebar.width, "100%");
+  const interviewDock = cssRules(rules, ".mobile-interview-nav", "max-width: 900px").at(-1).declarations;
+  assert.equal(interviewDock.position, "fixed");
+  assert.equal(interviewDock.display, "grid");
+  assert.equal(interviewDock["grid-template-columns"], "repeat(5, 1fr)");
   assert.ok(cssRules(rules, ".topbar > div:last-child").some((rule) => rule.declarations["flex-wrap"] === "nowrap"));
-  assert.equal(cssRules(rules, ".topbar .secondary-action", "max-width: 900px").at(-1).declarations.display, "inline-flex");
+  assert.equal(cssRules(rules, ".topbar .secondary-action", "max-width: 900px").at(-1).declarations.display, "none");
 });
