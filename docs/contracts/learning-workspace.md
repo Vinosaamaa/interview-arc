@@ -46,6 +46,8 @@ evidence semantics as a shortcut.
   appends a recap, and records evidence-bearing checkpoint events.
 - `query_learning_evidence` reads checkpoint, homework, artifact, and immutable
   finalization history without private storage locators.
+- `query_learning_journey` returns compact factual chronology and stable
+  identities without transcript turns or Lesson bodies.
 
 Every write uses one stable operation ID. An exact retry returns the original
 receipt with `duplicate: true`; a changed retry fails closed. Expected-revision

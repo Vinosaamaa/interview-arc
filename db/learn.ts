@@ -32,6 +32,7 @@ import {
   queryLearningWorkspaceSchema,
   queryLearningSessionsSchema,
   queryLearningEvidenceSchema,
+  queryLearningJourneySchema,
   reviseLearningCourseBlueprintSchema,
   saveLearningLessonRevisionSchema,
   setLearningHomeworkStateSchema,
@@ -58,6 +59,7 @@ export {
   createLearningSessionSchema,
   finishLearningSessionSchema,
   queryLearningEvidenceSchema,
+  queryLearningJourneySchema,
   queryLearningSessionsSchema,
   queryLearningWorkspaceSchema,
   reviseLearningCourseBlueprintSchema,
@@ -1274,6 +1276,114 @@ export async function queryLearningEvidence(ownerId: string, inputValue: unknown
     homeworkHistory,
     artifacts: artifacts.map(displayArtifact),
     finalizations,
+  };
+}
+
+export async function queryLearningJourney(ownerId: string, inputValue: unknown = {}) {
+  const input = queryLearningJourneySchema.parse(inputValue);
+  const db = getDb();
+  const [courses, courseRevisions, lessons, lessonRevisions, sessions, checkpoints, homework] = await Promise.all([
+    db.select().from(learningCourses).where(and(
+      eq(learningCourses.ownerId, ownerId),
+      input.courseId ? eq(learningCourses.courseId, input.courseId) : undefined,
+    )),
+    db.select().from(learningCourseBlueprintRevisions).where(and(
+      eq(learningCourseBlueprintRevisions.ownerId, ownerId),
+      input.courseId ? eq(learningCourseBlueprintRevisions.courseId, input.courseId) : undefined,
+    )).orderBy(asc(learningCourseBlueprintRevisions.revision)),
+    db.select().from(learningLessons).where(and(
+      eq(learningLessons.ownerId, ownerId),
+      input.courseId ? eq(learningLessons.courseId, input.courseId) : undefined,
+    )),
+    db.select().from(learningLessonRevisions).where(eq(learningLessonRevisions.ownerId, ownerId))
+      .orderBy(asc(learningLessonRevisions.revision)),
+    db.select().from(learningSessions).where(and(
+      eq(learningSessions.ownerId, ownerId),
+      input.courseId ? eq(learningSessions.courseId, input.courseId) : undefined,
+      eq(learningSessions.state, "completed"),
+    )),
+    db.select().from(learningCheckpointResultEvents).where(and(
+      eq(learningCheckpointResultEvents.ownerId, ownerId),
+      eq(learningCheckpointResultEvents.status, "demonstrated"),
+    )),
+    db.select().from(learningHomeworkStateEvents).where(and(
+      eq(learningHomeworkStateEvents.ownerId, ownerId),
+      eq(learningHomeworkStateEvents.state, "completed"),
+    )),
+  ]);
+  const courseById = new Map(courses.map((course) => [course.courseId, course]));
+  const lessonById = new Map(lessons.map((lesson) => [lesson.lessonId, lesson]));
+  const allowedLessonIds = new Set(lessons.map((lesson) => lesson.lessonId));
+  const firstCourseCompletion = new Map<string, { revision: number; createdAt: number }>();
+  courseRevisions.forEach((row) => {
+    const snapshot = learningCourseBlueprintSchema.parse(row.snapshot);
+    if (snapshot.state === "completed" && !firstCourseCompletion.has(row.courseId)) {
+      firstCourseCompletion.set(row.courseId, { revision: row.revision, createdAt: row.createdAt });
+    }
+  });
+  const firstLessonCompletion = new Map<string, { revision: number; createdAt: number }>();
+  lessonRevisions.forEach((row) => {
+    if (!allowedLessonIds.has(row.lessonId)) return;
+    const snapshot = learningLessonSnapshotSchema.parse(row.snapshot);
+    if (snapshot.state === "completed" && !firstLessonCompletion.has(row.lessonId)) {
+      firstLessonCompletion.set(row.lessonId, { revision: row.revision, createdAt: row.createdAt });
+    }
+  });
+  const events = [
+    ...[...firstCourseCompletion.entries()].map(([courseId, completion]) => ({
+      eventId: `course:${courseId}:${completion.revision}`,
+      kind: "course_completed" as const,
+      occurredAt: completion.createdAt,
+      courseId,
+      title: courseById.get(courseId)?.title ?? courseId,
+      revision: completion.revision,
+    })),
+    ...[...firstLessonCompletion.entries()].map(([lessonId, completion]) => {
+      const lesson = lessonById.get(lessonId);
+      return {
+        eventId: `lesson:${lessonId}:${completion.revision}`,
+        kind: "lesson_completed" as const,
+        occurredAt: completion.createdAt,
+        courseId: lesson?.courseId ?? null,
+        lessonId,
+        title: lesson?.title ?? lessonId,
+        revision: completion.revision,
+      };
+    }),
+    ...sessions.map((session) => ({
+      eventId: `session:${session.sessionId}`,
+      kind: "session_finished" as const,
+      occurredAt: session.completedAt as number,
+      courseId: session.courseId,
+      lessonId: session.lessonId,
+      sessionId: session.sessionId,
+      recordedSeconds: session.accumulatedSeconds,
+    })),
+    ...checkpoints.filter((event) => allowedLessonIds.has(event.lessonId)).map((event) => ({
+      eventId: `checkpoint:${event.lessonId}:${event.checkpointId}:${event.revision}`,
+      kind: "checkpoint_demonstrated" as const,
+      occurredAt: event.createdAt,
+      courseId: lessonById.get(event.lessonId)?.courseId ?? null,
+      lessonId: event.lessonId,
+      sessionId: event.sessionId,
+      checkpointId: event.checkpointId,
+      revision: event.revision,
+      supersedesRevision: event.supersedesRevision,
+    })),
+    ...homework.filter((event) => allowedLessonIds.has(event.lessonId)).map((event) => ({
+      eventId: `homework:${event.lessonId}:${event.homeworkId}:${event.revision}`,
+      kind: "homework_completed" as const,
+      occurredAt: event.createdAt,
+      courseId: lessonById.get(event.lessonId)?.courseId ?? null,
+      lessonId: event.lessonId,
+      homeworkId: event.homeworkId,
+      revision: event.revision,
+    })),
+  ].sort((left, right) => right.occurredAt - left.occurredAt || left.eventId.localeCompare(right.eventId));
+  return {
+    events: events.slice(0, input.limit),
+    truncated: events.length > input.limit,
+    evidencePolicy: "factual_events_only" as const,
   };
 }
 

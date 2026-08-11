@@ -84,6 +84,8 @@ import {
   finishLearningSessionSchema,
   queryLearningEvidence,
   queryLearningEvidenceSchema,
+  queryLearningJourney,
+  queryLearningJourneySchema,
   queryLearningSessions,
   queryLearningSessionsSchema,
   queryLearningWorkspace,
@@ -3239,6 +3241,26 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
     async (input) => {
       try {
         const result = await queryLearningEvidence(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_learning_journey",
+    {
+      description: "Read compact owner-private Learn chronology for Session, Lesson, Course, checkpoint-demonstration, and homework-completion facts. It never copies transcripts or Lesson bodies and never infers mastery or productivity.",
+      inputSchema: queryLearningJourneySchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryLearningJourney(ownerId, input);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           structuredContent: result,

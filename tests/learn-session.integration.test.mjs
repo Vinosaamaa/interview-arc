@@ -471,6 +471,37 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     assert.deepEqual(correctedEvidence.checkpointHistory.map((event) => event.revision), [1, 2]);
     assert.equal(correctedEvidence.checkpointHistory[1].supersedesRevision, 1);
 
+    await call(client, "save_learning_lesson_revision", {
+      operationId: "session-lesson-complete-2",
+      expectedRevision: 1,
+      authorization: "learning_specialist",
+      scope,
+      lesson: { ...lesson, state: "completed" },
+    });
+    await call(client, "revise_learning_course_blueprint", {
+      operationId: "session-course-complete-2",
+      courseId: courseBlueprint.courseId,
+      expectedRevision: 1,
+      authorization: "learning_specialist",
+      blueprint: { ...courseBlueprint, state: "completed" },
+    });
+    const journey = await call(client, "query_learning_journey", {});
+    assert.deepEqual(new Set(journey.events.map((event) => event.kind)), new Set([
+      "course_completed",
+      "lesson_completed",
+      "session_finished",
+      "checkpoint_demonstrated",
+      "homework_completed",
+    ]));
+    assert.equal(journey.events.filter((event) => event.kind === "session_finished").length, 2);
+    assert.equal(journey.events.filter((event) => event.kind === "checkpoint_demonstrated").length, 2);
+    assert.equal(journey.evidencePolicy, "factual_events_only");
+    assert.doesNotMatch(JSON.stringify(journey), /The Learning Session is separate|learner-turn|sections|recap/);
+    const boundedJourney = await call(client, "query_learning_journey", { limit: 2 });
+    assert.equal(boundedJourney.events.length, 2);
+    assert.equal(boundedJourney.truncated, true);
+    assert.deepEqual((await call(otherClient, "query_learning_journey", {})).events, []);
+
     const workspace = await call(client, "query_learning_workspace", {});
     assert.equal(workspace.facts.sessionCount, 2);
     assert.equal(workspace.facts.completedSessionCount, 2);

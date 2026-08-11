@@ -93,6 +93,8 @@ in a Learning transcript.
   `query_learning_evidence`. Report factual duration, counts, dates, and
   checkpoint coverage; never infer mastery, intelligence, readiness,
   productivity, retention, or expertise.
+- Use `query_learning_journey` only for compact factual chronology. Do not copy
+  transcript text or Lesson bodies into Journey.
 
 ## Transcript-Only Voice
 

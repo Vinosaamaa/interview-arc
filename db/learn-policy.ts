@@ -281,6 +281,11 @@ export const queryLearningEvidenceSchema = z.object({
   sessionId: learningStableIdSchema.optional(),
 }).strict();
 
+export const queryLearningJourneySchema = z.object({
+  courseId: learningStableIdSchema.optional(),
+  limit: z.number().int().min(1).max(500).default(200),
+}).strict();
+
 export const learningTranscriptTurnSchema = z.object({
   turnId: learningStableIdSchema,
   sequence: z.number().int().nonnegative(),
