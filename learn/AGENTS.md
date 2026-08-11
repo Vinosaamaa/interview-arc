@@ -95,6 +95,8 @@ in a Learning transcript.
   productivity, retention, or expertise.
 - Use `query_learning_journey` only for compact factual chronology. Do not copy
   transcript text or Lesson bodies into Journey.
+- Use `query_learning_analytics` for observed Course and Learn-wide facts. Keep
+  checkpoint coverage as a numerator and denominator, never a mastery score.
 
 ## Transcript-Only Voice
 

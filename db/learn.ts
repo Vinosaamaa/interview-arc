@@ -32,6 +32,7 @@ import {
   queryLearningWorkspaceSchema,
   queryLearningSessionsSchema,
   queryLearningEvidenceSchema,
+  queryLearningAnalyticsSchema,
   queryLearningJourneySchema,
   reviseLearningCourseBlueprintSchema,
   saveLearningLessonRevisionSchema,
@@ -59,6 +60,7 @@ export {
   createLearningSessionSchema,
   finishLearningSessionSchema,
   queryLearningEvidenceSchema,
+  queryLearningAnalyticsSchema,
   queryLearningJourneySchema,
   queryLearningSessionsSchema,
   queryLearningWorkspaceSchema,
@@ -1561,6 +1563,186 @@ export async function queryLearningJourney(ownerId: string, inputValue: unknown 
     events: events.slice(0, input.limit),
     truncated: events.length > input.limit,
     evidencePolicy: "factual_events_only" as const,
+  };
+}
+
+const pacificDateFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/Los_Angeles",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function pacificDate(value: number) {
+  const parts = Object.fromEntries(pacificDateFormatter.formatToParts(new Date(value))
+    .filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function mondayForDate(date: string) {
+  const instant = new Date(`${date}T12:00:00Z`);
+  const offset = (instant.getUTCDay() + 6) % 7;
+  instant.setUTCDate(instant.getUTCDate() - offset);
+  return instant.toISOString().slice(0, 10);
+}
+
+function aggregateSessionTime(
+  sessions: Array<typeof learningSessions.$inferSelect>,
+  keyFor: (session: typeof learningSessions.$inferSelect) => string,
+) {
+  const values = new Map<string, { sessionCount: number; recordedSeconds: number }>();
+  sessions.forEach((session) => {
+    const key = keyFor(session);
+    const current = values.get(key) ?? { sessionCount: 0, recordedSeconds: 0 };
+    values.set(key, {
+      sessionCount: current.sessionCount + 1,
+      recordedSeconds: current.recordedSeconds + session.accumulatedSeconds,
+    });
+  });
+  return [...values.entries()].sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => ({ key, ...value }));
+}
+
+export async function queryLearningAnalytics(ownerId: string, inputValue: unknown = {}) {
+  const input = queryLearningAnalyticsSchema.parse(inputValue);
+  const db = getDb();
+  const [courses, enrollments, lessons, lessonRevisions, sessions, homework, checkpoints] = await Promise.all([
+    db.select().from(learningCourses).where(and(
+      eq(learningCourses.ownerId, ownerId),
+      input.courseId ? eq(learningCourses.courseId, input.courseId) : undefined,
+    )),
+    db.select().from(learningEnrollments).where(and(
+      eq(learningEnrollments.ownerId, ownerId),
+      input.courseId ? eq(learningEnrollments.courseId, input.courseId) : undefined,
+    )),
+    db.select().from(learningLessons).where(and(
+      eq(learningLessons.ownerId, ownerId),
+      input.courseId ? eq(learningLessons.courseId, input.courseId) : undefined,
+    )),
+    db.select().from(learningLessonRevisions).where(eq(learningLessonRevisions.ownerId, ownerId)),
+    db.select().from(learningSessions).where(and(
+      eq(learningSessions.ownerId, ownerId),
+      input.courseId ? eq(learningSessions.courseId, input.courseId) : undefined,
+    )),
+    db.select().from(learningHomework).where(eq(learningHomework.ownerId, ownerId)),
+    db.select().from(learningCheckpointStates).where(eq(learningCheckpointStates.ownerId, ownerId)),
+  ]);
+  const allowedLessonIds = new Set(lessons.map((lesson) => lesson.lessonId));
+  const revisionByLessonId = new Map(lessonRevisions.filter((revision) => {
+    const lesson = lessons.find((candidate) => candidate.lessonId === revision.lessonId);
+    return lesson?.currentRevision === revision.revision;
+  }).map((revision) => [revision.lessonId, learningLessonSnapshotSchema.parse(revision.snapshot)]));
+  const checkpointByLessonAndId = new Map(checkpoints.filter((state) => allowedLessonIds.has(state.lessonId))
+    .map((state) => [`${state.lessonId}:${state.checkpointId}`, state]));
+  const completedSessions = sessions.filter((session) => session.state === "completed" && session.completedAt !== null);
+  const relevantHomework = homework.filter((item) => allowedLessonIds.has(item.lessonId));
+  const allCheckpointDefinitions = lessons.flatMap((lesson) => (
+    revisionByLessonId.get(lesson.lessonId)?.checkpoints.map((checkpoint) => ({ lesson, checkpoint })) ?? []
+  ));
+  const requiredCheckpoints = allCheckpointDefinitions.filter(({ checkpoint }) => checkpoint.required);
+  const checkpointStatus = (lessonId: string, checkpointId: string) => (
+    checkpointByLessonAndId.get(`${lessonId}:${checkpointId}`)?.status ?? "not_attempted"
+  );
+  const byCourse = courses.map((course) => {
+    const courseLessons = lessons.filter((lesson) => lesson.courseId === course.courseId);
+    const courseLessonIds = new Set(courseLessons.map((lesson) => lesson.lessonId));
+    const courseSessions = sessions.filter((session) => session.courseId === course.courseId);
+    const courseCompletedSessions = completedSessions.filter((session) => session.courseId === course.courseId);
+    const courseHomework = relevantHomework.filter((item) => courseLessonIds.has(item.lessonId));
+    const definitions = requiredCheckpoints.filter(({ lesson }) => lesson.courseId === course.courseId);
+    const enrollment = enrollments.find((candidate) => candidate.courseId === course.courseId) ?? null;
+    const lastActivityAt = courseSessions.reduce<number | null>((latest, session) => (
+      latest === null || session.updatedAt > latest ? session.updatedAt : latest
+    ), null);
+    return {
+      courseId: course.courseId,
+      title: course.title,
+      state: course.state,
+      currentLessonId: enrollment?.currentLessonId ?? null,
+      currentModuleId: enrollment?.currentModuleId ?? null,
+      lastActivityAt,
+      sessionCount: courseSessions.length,
+      completedSessionCount: courseCompletedSessions.length,
+      recordedSeconds: courseSessions.reduce((total, session) => total + session.accumulatedSeconds, 0),
+      lessonCount: courseLessons.length,
+      completedLessonCount: courseLessons.filter((lesson) => lesson.state === "completed").length,
+      requiredCheckpointCount: definitions.length,
+      demonstratedCheckpointCount: definitions.filter(({ lesson, checkpoint }) => (
+        checkpointStatus(lesson.lessonId, checkpoint.checkpointId) === "demonstrated"
+      )).length,
+      needsAnotherPassCheckpointCount: definitions.filter(({ lesson, checkpoint }) => (
+        checkpointStatus(lesson.lessonId, checkpoint.checkpointId) === "needs_another_pass"
+      )).length,
+      openHomeworkCount: courseHomework.filter((item) => item.state === "open").length,
+      completedHomeworkCount: courseHomework.filter((item) => item.state === "completed").length,
+      timeByModule: aggregateSessionTime(courseSessions, (session) => (
+        lessons.find((lesson) => lesson.lessonId === session.lessonId)?.moduleId ?? "unassigned"
+      )),
+    };
+  });
+  const lessonTitleById = new Map(lessons.map((lesson) => [lesson.lessonId, lesson.title]));
+  const courseTitleById = new Map(courses.map((course) => [course.courseId, course.title]));
+  const recentTopics: Array<{ lessonId: string; courseId: string | null; title: string; lastActivityAt: number }> = [];
+  const seenTopics = new Set<string>();
+  [...completedSessions].sort((left, right) => (right.completedAt as number) - (left.completedAt as number))
+    .forEach((session) => {
+      if (seenTopics.has(session.lessonId) || recentTopics.length >= 12) return;
+      seenTopics.add(session.lessonId);
+      recentTopics.push({
+        lessonId: session.lessonId,
+        courseId: session.courseId,
+        title: lessonTitleById.get(session.lessonId) ?? session.lessonId,
+        lastActivityAt: session.completedAt as number,
+      });
+    });
+  const demonstratedRequired = requiredCheckpoints.filter(({ lesson, checkpoint }) => (
+    checkpointStatus(lesson.lessonId, checkpoint.checkpointId) === "demonstrated"
+  )).length;
+  return {
+    courses: byCourse,
+    overall: {
+      courseCount: courses.length,
+      activeCourseCount: courses.filter((course) => course.state === "active").length,
+      completedCourseCount: courses.filter((course) => course.state === "completed").length,
+      lessonCount: lessons.filter((lesson) => lesson.scopeType === "course").length,
+      completedLessonCount: lessons.filter(
+        (lesson) => lesson.scopeType === "course" && lesson.state === "completed",
+      ).length,
+      quickStudyCount: lessons.filter((lesson) => lesson.scopeType === "quick_study").length,
+      quickStudySessionCount: completedSessions.filter((session) => session.scopeType === "quick_study").length,
+      sessionCount: sessions.length,
+      completedSessionCount: completedSessions.length,
+      recordedSeconds: sessions.reduce((total, session) => total + session.accumulatedSeconds, 0),
+      activeLearningDays: new Set(completedSessions.map((session) => pacificDate(session.completedAt as number))).size,
+      requiredCheckpointCount: requiredCheckpoints.length,
+      demonstratedCheckpointCount: demonstratedRequired,
+      checkpointCoverage: requiredCheckpoints.length ? demonstratedRequired / requiredCheckpoints.length : null,
+      needsAnotherPassCheckpointCount: requiredCheckpoints.filter(({ lesson, checkpoint }) => (
+        checkpointStatus(lesson.lessonId, checkpoint.checkpointId) === "needs_another_pass"
+      )).length,
+      openHomeworkCount: relevantHomework.filter((item) => item.state === "open").length,
+      completedHomeworkCount: relevantHomework.filter((item) => item.state === "completed").length,
+    },
+    time: {
+      byDay: aggregateSessionTime(completedSessions, (session) => pacificDate(session.completedAt as number)),
+      byWeek: aggregateSessionTime(completedSessions, (session) => mondayForDate(pacificDate(session.completedAt as number))),
+      byMonth: aggregateSessionTime(completedSessions, (session) => pacificDate(session.completedAt as number).slice(0, 7)),
+      byCourse: aggregateSessionTime(sessions, (session) => session.courseId ?? "quick_study").map((item) => ({
+        ...item,
+        title: item.key === "quick_study" ? "Quick Study" : courseTitleById.get(item.key) ?? item.key,
+      })),
+    },
+    recentTopics,
+    sessionDurationTrend: completedSessions.sort(
+      (left, right) => (left.completedAt as number) - (right.completedAt as number),
+    ).map((session) => ({
+      sessionId: session.sessionId,
+      courseId: session.courseId,
+      lessonId: session.lessonId,
+      completedAt: session.completedAt,
+      recordedSeconds: session.accumulatedSeconds,
+    })),
+    evidencePolicy: "factual_analytics_only" as const,
   };
 }
 

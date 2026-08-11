@@ -48,6 +48,8 @@ evidence semantics as a shortcut.
   finalization history without private storage locators.
 - `query_learning_journey` returns compact factual chronology and stable
   identities without transcript turns or Lesson bodies.
+- `query_learning_analytics` returns Course and Learn-wide observed time,
+  Session, Lesson, homework, active-day, and required-checkpoint coverage facts.
 
 Every write uses one stable operation ID. An exact retry returns the original
 receipt with `duplicate: true`; a changed retry fails closed. Expected-revision

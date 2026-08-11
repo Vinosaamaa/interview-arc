@@ -84,6 +84,8 @@ import {
   finishLearningSessionSchema,
   queryLearningEvidence,
   queryLearningEvidenceSchema,
+  queryLearningAnalytics,
+  queryLearningAnalyticsSchema,
   queryLearningJourney,
   queryLearningJourneySchema,
   queryLearningSessions,
@@ -3261,6 +3263,26 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
     async (input) => {
       try {
         const result = await queryLearningJourney(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_learning_analytics",
+    {
+      description: "Read factual owner-private Course and Learn-wide Analytics: recorded time, Sessions, Lessons, required checkpoint coverage, homework, active days, recent topics, and duration trends. It never infers mastery, readiness, retention, or productivity.",
+      inputSchema: queryLearningAnalyticsSchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryLearningAnalytics(ownerId, input);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           structuredContent: result,

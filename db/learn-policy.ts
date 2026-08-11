@@ -286,6 +286,10 @@ export const queryLearningJourneySchema = z.object({
   limit: z.number().int().min(1).max(500).default(200),
 }).strict();
 
+export const queryLearningAnalyticsSchema = z.object({
+  courseId: learningStableIdSchema.optional(),
+}).strict();
+
 export const learningTranscriptTurnSchema = z.object({
   turnId: learningStableIdSchema,
   sequence: z.number().int().nonnegative(),

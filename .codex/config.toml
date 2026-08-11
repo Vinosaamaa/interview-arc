@@ -48,6 +48,7 @@ enabled_tools = [
   "finish_learning_session",
   "query_learning_evidence",
   "query_learning_journey",
+  "query_learning_analytics",
   "upsert_behavioral_target_profile",
   "query_behavioral_target_profiles",
   "set_behavioral_target_binding",
