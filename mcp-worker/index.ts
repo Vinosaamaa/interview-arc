@@ -67,10 +67,19 @@ import {
 } from "../db/loops";
 import {
   LearningError,
+  appendLearningTranscript,
+  appendLearningTranscriptSchema,
   approveLearningEnrollment,
   approveLearningEnrollmentSchema,
+  assertLearningAudioForbidden,
+  controlLearningSession,
+  controlLearningSessionSchema,
   createLearningCourseBlueprint,
   createLearningCourseBlueprintSchema,
+  createLearningSession,
+  createLearningSessionSchema,
+  queryLearningSessions,
+  queryLearningSessionsSchema,
   queryLearningWorkspace,
   queryLearningWorkspaceSchema,
   reviseLearningCourseBlueprint,
@@ -3073,6 +3082,86 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   );
 
   server.registerTool(
+    "create_learning_session",
+    {
+      description: "Open one planned owner-private Learning Session only after its exact Current lesson revision exists. The Session remains separate from Interview Activities and begins timing only through an explicit control operation.",
+      inputSchema: createLearningSessionSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await createLearningSession(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Learning Session ${result.sessionId} is ready on Lesson revision ${result.lessonRevision}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "control_learning_session",
+    {
+      description: "Execute an explicitly authorized start, pause, resume, or finish command on the separate Learning Session timer. Expected revisions and stable operation IDs provide exact retry behavior; Finish never waits for audio evidence.",
+      inputSchema: controlLearningSessionSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await controlLearningSession(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Learning Session ${result.sessionId} is ${result.state}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "append_learning_transcript",
+    {
+      description: "Append one contiguous batch of exact owner-private Learning transcript turns. Arc Voice may append text-only voice_transcript turns; the strict schema accepts no audio object, R2 key, delivery metadata, or Finish blocker.",
+      inputSchema: appendLearningTranscriptSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await appendLearningTranscript(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Learning transcript revision ${result.transcriptRevision} is saved for ${result.sessionId}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_learning_sessions",
+    {
+      description: "Read bounded owner-private Learning Session timers, exact transcript turns, and interval history. The response always reports transcript_only evidence policy and never includes audio metadata.",
+      inputSchema: queryLearningSessionsSchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryLearningSessions(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
     "upsert_behavioral_target_profile",
     {
       description: "Create or revise one owner-private pasted-JD Target Profile. Use expectedRevision=0 for creation and the exact current revision for every update, including archive/reactivate. Reuse an identical stable operationId after transport uncertainty. The raw JD remains private and is never returned, logged, published, or treated as candidate evidence.",
@@ -3647,6 +3736,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
     },
     async ({ clipId, ...input }) => {
       try {
+        await assertLearningAudioForbidden(ownerId, input.activityId);
         await registerActivityAudioClip(ownerId, { id: clipId, ...input }, Date.now());
         return {
           content: [{ type: "text", text: `Registered audio metadata for ${input.activityId}.` }],
@@ -3689,11 +3779,16 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async ({ analysisId, ...input }) => {
-      await saveActivityDeliveryAnalysis(ownerId, { id: analysisId, ...input }, Date.now());
-      return {
-        content: [{ type: "text", text: `Saved ${input.status} delivery analysis for ${input.activityId}.` }],
-        structuredContent: { analysisId, activityId: input.activityId, status: input.status },
-      };
+      try {
+        await assertLearningAudioForbidden(ownerId, input.activityId);
+        await saveActivityDeliveryAnalysis(ownerId, { id: analysisId, ...input }, Date.now());
+        return {
+          content: [{ type: "text", text: `Saved ${input.status} delivery analysis for ${input.activityId}.` }],
+          structuredContent: { analysisId, activityId: input.activityId, status: input.status },
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
     },
   );
 

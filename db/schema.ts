@@ -1294,6 +1294,67 @@ export const learningLessonRevisions = sqliteTable(
   ],
 );
 
+// Learning Sessions reuse timer and transcript concepts without becoming
+// Interview Activities. Their scope pins the exact Lesson and Blueprint used;
+// transcript-only Voice never creates an audio row or Finish blocker.
+export const learningSessions = sqliteTable(
+  "learning_sessions",
+  {
+    ownerId,
+    sessionId: text("session_id").notNull(),
+    scopeType: text("scope_type", { enum: ["course", "quick_study"] }).notNull(),
+    courseId: text("course_id"),
+    enrollmentId: text("enrollment_id"),
+    lessonId: text("lesson_id").notNull(),
+    blueprintRevision: integer("blueprint_revision"),
+    lessonRevision: integer("lesson_revision").notNull(),
+    state: text("state", { enum: ["planned", "running", "paused", "completed"] }).notNull(),
+    accumulatedSeconds: integer("accumulated_seconds").notNull().default(0),
+    startedAt: integer("started_at"),
+    runningSince: integer("running_since"),
+    completedAt: integer("completed_at"),
+    revision: integer("revision").notNull().default(0),
+    transcriptRevision: integer("transcript_revision").notNull().default(0),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.sessionId] }),
+    index("learning_sessions_lesson_idx").on(table.ownerId, table.lessonId, table.createdAt),
+    index("learning_sessions_state_idx").on(table.ownerId, table.state, table.updatedAt),
+  ],
+);
+
+export const learningSessionIntervals = sqliteTable(
+  "learning_session_intervals",
+  {
+    ownerId,
+    sessionId: text("session_id").notNull(),
+    startedAt: integer("started_at").notNull(),
+    endedAt: integer("ended_at"),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.sessionId, table.startedAt] })],
+);
+
+export const learningTranscriptTurns = sqliteTable(
+  "learning_transcript_turns",
+  {
+    ownerId,
+    sessionId: text("session_id").notNull(),
+    turnId: text("turn_id").notNull(),
+    sequence: integer("sequence").notNull(),
+    speaker: text("speaker", { enum: ["learner", "specialist"] }).notNull(),
+    source: text("source", { enum: ["typed", "dictation", "voice_transcript"] }).notNull(),
+    body: text("body").notNull(),
+    occurredAt: integer("occurred_at").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.sessionId, table.turnId] }),
+    uniqueIndex("learning_transcript_sequence_idx").on(table.ownerId, table.sessionId, table.sequence),
+  ],
+);
+
 // One operation table gives every Learn mutation an immutable identity receipt.
 // Exact retries replay the receipt; changed retries fail without partial writes.
 export const learningOperations = sqliteTable(
@@ -1301,10 +1362,19 @@ export const learningOperations = sqliteTable(
   {
     ownerId,
     operationId: text("operation_id").notNull(),
-    aggregateType: text("aggregate_type", { enum: ["course", "enrollment", "lesson"] }).notNull(),
+    aggregateType: text("aggregate_type", { enum: ["course", "enrollment", "lesson", "session"] }).notNull(),
     aggregateId: text("aggregate_id").notNull(),
     action: text("action", {
-      enum: ["create_blueprint", "revise_blueprint", "approve_enrollment", "create_lesson", "revise_lesson"],
+      enum: [
+        "create_blueprint",
+        "revise_blueprint",
+        "approve_enrollment",
+        "create_lesson",
+        "revise_lesson",
+        "create_session",
+        "control_session",
+        "append_transcript",
+      ],
     }).notNull(),
     requestFingerprint: text("request_fingerprint").notNull(),
     receipt: text("receipt", { mode: "json" }).notNull(),
@@ -1952,6 +2022,8 @@ export type LoopActivityHistoryRow = typeof loopActivityHistory.$inferSelect;
 export type LearningCourseRow = typeof learningCourses.$inferSelect;
 export type LearningEnrollmentRow = typeof learningEnrollments.$inferSelect;
 export type LearningLessonRow = typeof learningLessons.$inferSelect;
+export type LearningSessionRow = typeof learningSessions.$inferSelect;
+export type LearningTranscriptTurnRow = typeof learningTranscriptTurns.$inferSelect;
 export type ActivityAudioClipRow = typeof activityAudioClips.$inferSelect;
 export type ActivityDeliveryAnalysisRow = typeof activityDeliveryAnalyses.$inferSelect;
 export type ProblemPreferenceRow = typeof problemPreferences.$inferSelect;

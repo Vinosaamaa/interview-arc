@@ -177,6 +177,9 @@ test("Learn core preserves immutable owner-private Course, Enrollment, Lesson, a
       lessonCount: 0,
       completedLessonCount: 0,
       quickStudyCount: 0,
+      sessionCount: 0,
+      completedSessionCount: 0,
+      recordedLearningSeconds: 0,
     });
     const isolatedRead = await call(otherClient, "query_learning_workspace", {});
     assert.deepEqual(isolatedRead.courses, []);
@@ -306,6 +309,9 @@ test("Learn core preserves immutable owner-private Course, Enrollment, Lesson, a
       lessonCount: 1,
       completedLessonCount: 0,
       quickStudyCount: 1,
+      sessionCount: 0,
+      completedSessionCount: 0,
+      recordedLearningSeconds: 0,
     });
     assert.doesNotMatch(JSON.stringify(finalRead), /mastery|readiness|productivity|retentionScore/);
     assert.deepEqual((await call(otherClient, "query_learning_workspace", {})).quickStudies, []);

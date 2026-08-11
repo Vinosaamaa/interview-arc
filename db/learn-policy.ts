@@ -187,6 +187,67 @@ export const saveLearningLessonRevisionSchema = z.object({
   lesson: learningLessonSnapshotSchema,
 }).strict();
 
+export const createLearningSessionSchema = z.object({
+  operationId: learningStableIdSchema,
+  sessionId: learningStableIdSchema,
+  authorization: z.literal("learning_specialist"),
+  scope: learningLessonScopeSchema,
+  lessonId: learningStableIdSchema,
+  lessonRevision: z.number().int().positive(),
+}).strict();
+
+export const controlLearningSessionSchema = z.object({
+  operationId: learningStableIdSchema,
+  sessionId: learningStableIdSchema,
+  expectedRevision: z.number().int().nonnegative(),
+  action: z.enum(["start", "pause", "resume", "finish"]),
+  authorization: z.literal("explicit_user_instruction"),
+}).strict();
+
+export const learningTranscriptTurnSchema = z.object({
+  turnId: learningStableIdSchema,
+  sequence: z.number().int().nonnegative(),
+  speaker: z.enum(["learner", "specialist"]),
+  source: z.enum(["typed", "dictation", "voice_transcript"]),
+  body: boundedText(50_000),
+  occurredAt: z.number().int().positive(),
+}).strict();
+
+export const appendLearningTranscriptSchema = z.object({
+  operationId: learningStableIdSchema,
+  sessionId: learningStableIdSchema,
+  expectedTranscriptRevision: z.number().int().nonnegative(),
+  writer: z.enum(["learning_specialist", "arc_voice"]),
+  turns: z.array(learningTranscriptTurnSchema).min(1).max(20),
+}).strict().superRefine((input, context) => {
+  if (!uniqueBy(input.turns, (turn) => turn.turnId)) {
+    context.addIssue({ code: "custom", message: "Transcript turn IDs must be unique.", path: ["turns"] });
+  }
+  if (!uniqueBy(input.turns, (turn) => turn.sequence)) {
+    context.addIssue({ code: "custom", message: "Transcript sequence values must be unique.", path: ["turns"] });
+  }
+  const ordered = [...input.turns].sort((left, right) => left.sequence - right.sequence);
+  for (let index = 1; index < ordered.length; index += 1) {
+    if (ordered[index].sequence !== ordered[index - 1].sequence + 1) {
+      context.addIssue({ code: "custom", message: "Transcript turns must form one contiguous sequence.", path: ["turns"] });
+      break;
+    }
+  }
+  if (input.writer === "arc_voice" && input.turns.some((turn) => turn.source !== "voice_transcript")) {
+    context.addIssue({
+      code: "custom",
+      message: "Arc Voice may append transcript-only Voice turns and no other Learning evidence.",
+      path: ["turns"],
+    });
+  }
+});
+
+export const queryLearningSessionsSchema = z.object({
+  sessionId: learningStableIdSchema.optional(),
+  lessonId: learningStableIdSchema.optional(),
+  includeCompleted: z.boolean().default(true),
+}).strict();
+
 export const queryLearningWorkspaceSchema = z.object({
   courseId: learningStableIdSchema.optional(),
   blueprintRevision: z.number().int().positive().optional(),
@@ -201,3 +262,6 @@ export type CreateLearningCourseBlueprintInput = z.infer<typeof createLearningCo
 export type ReviseLearningCourseBlueprintInput = z.infer<typeof reviseLearningCourseBlueprintSchema>;
 export type ApproveLearningEnrollmentInput = z.infer<typeof approveLearningEnrollmentSchema>;
 export type SaveLearningLessonRevisionInput = z.infer<typeof saveLearningLessonRevisionSchema>;
+export type CreateLearningSessionInput = z.infer<typeof createLearningSessionSchema>;
+export type ControlLearningSessionInput = z.infer<typeof controlLearningSessionSchema>;
+export type AppendLearningTranscriptInput = z.infer<typeof appendLearningTranscriptSchema>;

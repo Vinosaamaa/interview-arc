@@ -30,6 +30,14 @@ evidence semantics as a shortcut.
   revision for either an active Course Enrollment or a Quick Study.
 - `query_learning_workspace` reads bounded owner-private current or exact
   historical revisions and factual aggregate counts.
+- `create_learning_session` opens a planned Session pinned to the exact Current
+  lesson and enrolled Blueprint revision before timing begins.
+- `control_learning_session` owns explicit start, pause, resume, and permanently
+  locked Finish transitions with exact timer intervals.
+- `append_learning_transcript` saves contiguous, revision-guarded typed,
+  dictation, or transcript-only Voice turns with stable identities.
+- `query_learning_sessions` reads owner-private Session, interval, and exact
+  transcript history without audio metadata.
 
 Every write uses one stable operation ID. An exact retry returns the original
 receipt with `duplicate: true`; a changed retry fails closed. Expected-revision
