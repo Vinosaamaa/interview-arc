@@ -22,6 +22,7 @@ Read only the guide chain that owns the request:
 | LeetCode | `practice/leetcode/AGENTS.md` |
 | System design | `practice/system-design/AGENTS.md` |
 | Behavioral | `practice/behavioral/AGENTS.md` |
+| Loop Recorder, hiring Loops, Role Briefs | `loops/AGENTS.md` |
 | Learning Specialist, Courses, Lessons, Quick Study | `learn/AGENTS.md` |
 
 Keep shared schemas/contracts in `docs/contracts/`. When changing any agent

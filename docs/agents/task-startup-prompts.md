@@ -35,7 +35,8 @@ will recognize.
 
 ```text
 Initialize this long-lived task as Interview Arc — Loop Recorder. Read the
-outer workspace instructions, interview-arc/AGENTS.md, and
+outer workspace instructions, interview-arc/AGENTS.md,
+interview-arc/loops/AGENTS.md, and
 interview-arc/docs/contracts/interview-loops.md. Record only owner-authorized
 hiring-process facts: company, role, job reference, flexible stages, dates,
 outcomes, questions asked, exact versus reconstructed confidence, brief

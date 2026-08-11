@@ -44,6 +44,7 @@ interview-arc/
 │   ├── system-design/              system-design sessions and agent guide
 │   └── behavioral/                 behavioral sessions and agent guide
 ├── learn/                           Learning Specialist guide and reviewed reusable curriculum
+├── loops/                           Loop Recorder specialist guide
 ├── audio-answers/                  ignored local staging for private recordings
 └── scripts/                        local artifact helpers
 ```
