@@ -183,6 +183,7 @@ import {
   registerActivityAudioClip,
   registerSpecialistTask,
   reportActivityAudioLost,
+  recoverLeetCodeCodeAttempt,
   resolveVoiceCaptureAndSaveResponse,
   resolveVoiceCaptureBatchAndSaveResponse,
   resolveVoiceCaptureIntent,
@@ -2019,6 +2020,20 @@ function activityPracticeRecordToolResult(
 }
 
 async function executeSpecialistWriteJob(job: SpecialistWriteJobRow) {
+  if (job.operation === "leetcode_code_attempt_recovery") {
+    const input = job.payload as Parameters<typeof recoverLeetCodeCodeAttempt>[1];
+    const saved = await recoverLeetCodeCodeAttempt(job.ownerId, input, Date.now());
+    return {
+      id: input.id,
+      activityId: input.activityId,
+      sequence: input.sequence,
+      language: input.language,
+      lineCount: codeLineCount(input.code),
+      status: saved.status,
+      reviewStatus: saved.reviewStatus,
+      recovery: saved.recovery,
+    };
+  }
   if (job.operation === "leetcode_code_attempt") {
     const input = job.payload as Parameters<typeof saveLeetCodeCodeAttempt>[1];
     const saved = await saveLeetCodeCodeAttempt(job.ownerId, input, Date.now());
@@ -3609,6 +3624,52 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
           content: [{ type: "text", text: receipt.status === "saved"
             ? `Code Attempt ${input.sequence} is durably saved.`
             : `Code Attempt ${input.sequence} is durably queued as ${operationId}; verify its receipt before finalization.` }],
+          structuredContent: receipt,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "recover_leetcode_code_attempt",
+    {
+      description: "Coordinator-audited recovery of one exact owner-provided LeetCode Code Attempt whose structured projection was missed before an existing ready finalization. The activity must still be unpublished; the immutable user source, complete visible specialist review, attempt timestamp, and review timestamp must all predate finalization. This append-only repair never rewrites transcript, code, review, finalization, or publication state. Reuse one stable operationId and identical payload after transport uncertainty, then inspect get_specialist_write_status until saved.",
+      inputSchema: {
+        operationId: z.string().min(1).max(200),
+        id: z.string().min(1),
+        activityId: z.string().min(1),
+        originatingTurnId: z.string().min(1),
+        sequence: z.number().int().positive(),
+        language: z.string().min(1).max(40),
+        code: z.string().min(1).max(300_000),
+        occurredAt: z.number().int().positive(),
+        review: codeAttemptReviewInputSchema,
+        reviewResponseTurnId: z.string().min(1),
+        observedCorrectness: z.enum(["not_verified", "appears_correct", "issues_found", "incomplete"]),
+        concreteFindings: z.array(z.string().max(2_000)).max(100),
+        edgeCases: z.array(z.string().max(2_000)).max(100),
+        complexity: z.object({ time: z.string().optional(), space: z.string().optional() }).optional(),
+        finalDeclaration: z.string().min(1).max(2_000),
+        authorization: z.literal("explicit_user_instruction"),
+        auditReason: z.string().min(1).max(2_000),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const { operationId, ...payload } = input;
+        const receipt = await enqueueSpecialistWriteJob(ownerId, {
+          jobId: operationId,
+          operation: "leetcode_code_attempt_recovery",
+          payload,
+        });
+        if (!["saved", "failed"].includes(receipt.status)) scheduleSpecialistWriteProcessing(ctx);
+        return {
+          content: [{ type: "text", text: receipt.status === "saved"
+            ? `Recovered Code Attempt ${input.sequence} is durably saved.`
+            : `Recovered Code Attempt ${input.sequence} is durably queued as ${operationId}; verify its receipt before publication.` }],
           structuredContent: receipt,
         };
       } catch (error) {

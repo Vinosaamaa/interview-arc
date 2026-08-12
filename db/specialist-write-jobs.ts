@@ -9,6 +9,7 @@ import {
 
 export type SpecialistWriteOperation =
   | "leetcode_code_attempt"
+  | "leetcode_code_attempt_recovery"
   | "personal_bank_question"
   | "behavioral_evidence_item"
   | "behavioral_claim_status"

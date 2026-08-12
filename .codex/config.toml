@@ -57,6 +57,7 @@ enabled_tools = [
   "backfill_activity_resume_context",
   "query_resume_reference_usage",
   "save_leetcode_code_attempt",
+  "recover_leetcode_code_attempt",
   "get_specialist_write_status",
   "retry_specialist_writes",
   "add_practice_note",

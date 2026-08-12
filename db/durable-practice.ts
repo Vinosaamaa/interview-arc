@@ -3251,6 +3251,11 @@ type SaveLeetCodeCodeAttemptInput = {
   finalDeclaration: string;
 };
 
+export type RecoverLeetCodeCodeAttemptInput = SaveLeetCodeCodeAttemptInput & {
+  authorization: "explicit_user_instruction";
+  auditReason: string;
+};
+
 type CodeAttemptProjectionInput = Omit<CodeAttemptReviewWrite, "review" | "reviewResponseTurnId" | "complexity"> & {
   review: unknown;
   reviewResponseTurnId?: string | null;
@@ -3374,7 +3379,7 @@ export async function saveLeetCodeCodeAttempt(
   const sequenceConflict = sequenceRows.find((row) => row.id !== incoming.id);
   if (sequenceConflict) throw new Error(`Code Attempt ${incoming.sequence} already belongs to another code version.`);
   const originatingTurn = originatingTurns[0];
-  if (!originatingTurn || originatingTurn.speaker !== "user") {
+  if (!originatingTurn || originatingTurn.specialty !== "leetcode" || originatingTurn.speaker !== "user") {
     const originSnapshots = await db.select({
       status: voiceCaptureIntents.status,
       transcriptSpeaker: practiceTranscriptTurns.speaker,
@@ -3501,6 +3506,150 @@ export async function saveLeetCodeCodeAttempt(
   }
   if (!updated.length) throw new Error("The Code Attempt changed during review completion; reread it and retry.");
   return { status: "updated" as const, reviewStatus: review.status };
+}
+
+export async function recoverLeetCodeCodeAttempt(
+  ownerId: string,
+  input: RecoverLeetCodeCodeAttemptInput,
+  nowMs: number,
+) {
+  if (input.authorization !== "explicit_user_instruction") {
+    throw new Error("Historical Code Attempt recovery requires explicit user authorization.");
+  }
+  if (!input.auditReason.trim()) {
+    throw new Error("Historical Code Attempt recovery requires a durable audit reason.");
+  }
+
+  const db = getDb();
+  const review = normalizeCodeAttemptReview(input.review);
+  if (!review || review.status !== "complete" || review.provenance !== "specialist_observed") {
+    throw new Error("Historical Code Attempt recovery requires a complete specialist-observed review.");
+  }
+  if (!input.reviewResponseTurnId?.trim()) {
+    throw new Error("Historical Code Attempt recovery requires its visible specialist review turn ID.");
+  }
+  const incoming = codeAttemptWrite({ ...input, review });
+  const [finalizationRows, existingRows, sequenceRows, originatingTurns, reviewTurns] = await Promise.all([
+    db.select().from(activityFinalizations).where(and(
+      eq(activityFinalizations.ownerId, ownerId),
+      eq(activityFinalizations.activityId, incoming.activityId),
+      eq(activityFinalizations.specialty, "leetcode"),
+    )),
+    db.select().from(leetcodeCodeAttempts).where(and(
+      eq(leetcodeCodeAttempts.ownerId, ownerId),
+      eq(leetcodeCodeAttempts.id, incoming.id),
+    )),
+    db.select({ id: leetcodeCodeAttempts.id }).from(leetcodeCodeAttempts).where(and(
+      eq(leetcodeCodeAttempts.ownerId, ownerId),
+      eq(leetcodeCodeAttempts.activityId, incoming.activityId),
+      eq(leetcodeCodeAttempts.sequence, incoming.sequence),
+    )),
+    db.select().from(practiceTranscriptTurns).where(and(
+      eq(practiceTranscriptTurns.ownerId, ownerId),
+      eq(practiceTranscriptTurns.activityId, incoming.activityId),
+      eq(practiceTranscriptTurns.turnId, incoming.originatingTurnId),
+    )),
+    db.select().from(practiceTranscriptTurns).where(and(
+      eq(practiceTranscriptTurns.ownerId, ownerId),
+      eq(practiceTranscriptTurns.activityId, incoming.activityId),
+      eq(practiceTranscriptTurns.turnId, incoming.reviewResponseTurnId!),
+    )),
+  ]);
+
+  const finalization = finalizationRows[0];
+  if (finalization?.status === "published" || typeof finalization?.publishedAt === "number") {
+    throw new Error("A published Code Attempt cannot be recovered.");
+  }
+  if (!finalization || finalization.status !== "ready" || finalization.finalizedAt === null) {
+    throw new Error("Historical Code Attempt recovery requires an existing owner-scoped ready finalization.");
+  }
+  if (incoming.occurredAt > finalization.finalizedAt || review.reviewedAt > finalization.finalizedAt) {
+    throw new Error("A recovered Code Attempt and review must predate the ready finalization.");
+  }
+
+  const sequenceConflict = sequenceRows.find((row) => row.id !== incoming.id);
+  if (sequenceConflict) throw new Error(`Code Attempt ${incoming.sequence} already belongs to another code version.`);
+  const originatingTurn = originatingTurns[0];
+  if (!originatingTurn || originatingTurn.speaker !== "user") {
+    throw new Error("The recovered Code Attempt origin is not an owner-scoped user turn in this activity.");
+  }
+  const reviewTurn = reviewTurns[0];
+  if (!reviewTurn || reviewTurn.specialty !== "leetcode" || reviewTurn.speaker !== "specialist") {
+    throw new Error("The recovered Code Attempt review is not an owner-scoped specialist turn in this activity.");
+  }
+  if (originatingTurn.occurredAt > finalization.finalizedAt || reviewTurn.occurredAt > finalization.finalizedAt) {
+    throw new Error("Recovered Code Attempt transcript evidence must predate the ready finalization.");
+  }
+  assertCodeAttemptReviewParity(review, reviewTurn.body, codeAttemptEvaluationEvidence(incoming));
+
+  const existing = existingRows[0] ?? null;
+  const plan = planCodeAttemptWrite(existing ? storedCodeAttemptWrite(existing) : null, incoming);
+  if (plan.kind === "duplicate") {
+    return { status: "duplicate" as const, reviewStatus: review.status, recovery: true as const };
+  }
+  if (plan.kind !== "insert") {
+    throw new Error("Historical Code Attempt recovery cannot rewrite an existing Code Attempt.");
+  }
+
+  const exactReadyFinalizationGuard = d1TransactionalInvariantGuard(db, exists(
+    db.select({ one: sql<number>`1` }).from(activityFinalizations).where(and(
+      eq(activityFinalizations.ownerId, ownerId),
+      eq(activityFinalizations.activityId, incoming.activityId),
+      eq(activityFinalizations.specialty, "leetcode"),
+      eq(activityFinalizations.status, "ready"),
+      isNull(activityFinalizations.publishedAt),
+      eq(activityFinalizations.finalizedAt, finalization.finalizedAt),
+      eq(activityFinalizations.revision, finalization.revision),
+      eq(activityFinalizations.updatedAt, finalization.updatedAt),
+    )),
+  ));
+  const exactTranscriptEvidenceGuard = d1TransactionalInvariantGuard(
+    db,
+    exactCodeAttemptTranscriptEvidenceCondition(db, ownerId, incoming, true),
+  );
+  try {
+    await db.batch([
+      exactReadyFinalizationGuard,
+      exactTranscriptEvidenceGuard,
+      db.insert(leetcodeCodeAttempts).values({
+        ownerId,
+        ...incoming,
+        lineCount: codeLineCount(incoming.code),
+        createdAt: nowMs,
+        updatedAt: nowMs,
+      }),
+    ]);
+  } catch (error) {
+    if (isD1TransactionalInvariantFailure(error)) {
+      const currentFinalization = (await db.select({
+        status: activityFinalizations.status,
+        publishedAt: activityFinalizations.publishedAt,
+      }).from(activityFinalizations).where(and(
+        eq(activityFinalizations.ownerId, ownerId),
+        eq(activityFinalizations.activityId, incoming.activityId),
+      )))[0];
+      if (currentFinalization?.status === "published" || typeof currentFinalization?.publishedAt === "number") {
+        throw new Error("A published Code Attempt cannot be recovered.");
+      }
+      throw new Error("The ready finalization or transcript evidence changed during Code Attempt recovery; reread the activity before retrying.");
+    }
+    if (String(error).toLowerCase().includes("unique constraint")) {
+      const settledRows = await db.select().from(leetcodeCodeAttempts).where(and(
+        eq(leetcodeCodeAttempts.ownerId, ownerId),
+        eq(leetcodeCodeAttempts.id, incoming.id),
+      ));
+      const settled = settledRows[0];
+      if (settled) {
+        const settledPlan = planCodeAttemptWrite(storedCodeAttemptWrite(settled), incoming);
+        if (settledPlan.kind === "duplicate") {
+          return { status: "duplicate" as const, reviewStatus: review.status, recovery: true as const };
+        }
+      }
+      throw new Error(`Code Attempt ${incoming.sequence} already belongs to another code version.`);
+    }
+    throw error;
+  }
+  return { status: "inserted" as const, reviewStatus: review.status, recovery: true as const };
 }
 
 export async function addPracticeNote(
