@@ -57,11 +57,11 @@ export default function BehavioralTargetDesk({ enabled = true }: { enabled?: boo
     {targets?.length === 0 && <div className="target-empty"><strong>No active standalone Target Profiles remain.</strong><span>New role context starts as a Loop-owned Role Brief.</span></div>}
     {targets && targets.length > 0 && <div className="target-card-grid">{targets.map((target) => {
       const shown = inspected[target.targetId] ?? target;
-      return <article className={`target-card ${target.state}`} key={target.targetId}>
-        <header><div><span>{target.state === "active" ? "Active legacy record" : "Archived legacy record"}</span>{target.source.kind === "public_posting" && <i className={sourceAgeState(target)}>{sourceAgeState(target)}</i>}</div><small>Revision {shown.revision} of {target.revision}</small></header>
-        <h3>{target.label}</h3>
+      return <article className={`target-card ${shown.state}`} key={target.targetId}>
+        <header><div><span>{shown.state === "active" ? "Active legacy record" : "Archived legacy record"}</span>{shown.source.kind === "public_posting" && <i className={sourceAgeState(shown)}>{sourceAgeState(shown)}</i>}</div><small>Revision {shown.revision} of {target.revision}</small></header>
+        <h3>{shown.label}</h3>
         <TargetRevision target={shown} />
-        {target.revision > 1 && <label className="target-revision-picker"><span>Inspect immutable revision</span><input type="number" inputMode="numeric" min={1} max={target.revision} value={requestedRevisions[target.targetId] ?? shown.revision} aria-label={`Inspect ${target.label} revision, from 1 to ${target.revision}`} onChange={(event) => { const revision = Number(event.target.value); if (Number.isInteger(revision) && revision >= 1 && revision <= target.revision) void inspectRevision(target, revision); }} /></label>}
+        {target.revision > 1 && <label className="target-revision-picker"><span>Inspect immutable revision</span><input type="number" inputMode="numeric" min={1} max={target.revision} value={requestedRevisions[target.targetId] ?? shown.revision} aria-label={`Inspect ${shown.label} revision, from 1 to ${target.revision}`} onChange={(event) => { const revision = Number(event.target.value); if (Number.isInteger(revision) && revision >= 1 && revision <= target.revision) void inspectRevision(target, revision); }} /></label>}
         <footer><span>Read-only historical record · Loop Recorder migration required</span></footer>
       </article>;
     })}</div>}

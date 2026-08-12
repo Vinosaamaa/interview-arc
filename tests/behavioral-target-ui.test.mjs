@@ -25,6 +25,7 @@ test("Behavioral Bank and Today keep Target Profiles migration-only", async () =
   assert.match(desk, /latestRevisionRequest\.current\[target\.targetId\] === revision/);
   assert.match(desk, /type="number"/);
   assert.doesNotMatch(desk, /Array\.from\(\{ length: target\.revision/);
+  assert.match(desk, /<h3>\{shown\.label\}<\/h3>/);
   assert.match(bindings, /Historical activity binding/);
   assert.match(bindings, /Historical session inheritance/);
   assert.match(bindings, /Loop context or universal practice/);
@@ -38,6 +39,7 @@ test("Behavioral Bank and Today keep Target Profiles migration-only", async () =
   assert.match(targetRoute, /behavioralTargetRouteError/);
   assert.match(bindingRoute, /behavioralTargetRouteError/);
   assert.match(routeError, /behavioral_target_migration_only/);
+  assert.match(routeError, /error\.code\.includes\("not_found"\)[\s\S]*\? 404/);
   for (const route of [targetRoute, bindingRoute]) {
     const post = route.slice(route.indexOf("export async function POST"));
     assert.ok(post.indexOf("resolveOwnerId(request)") < post.indexOf("rejectLegacyTargetProfileWrite()"));
@@ -49,4 +51,5 @@ test("Behavioral Bank and Today keep Target Profiles migration-only", async () =
   assert.match(css, /@media \(max-width: 760px\)/);
   assert.match(css, /prefers-reduced-motion/);
   assert.match(css, /:focus-visible/);
+
 });
