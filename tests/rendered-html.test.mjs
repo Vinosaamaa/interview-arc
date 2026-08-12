@@ -134,7 +134,7 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /function openEntrySolution\(entry: LogEntry\)/);
   assert.match(client, /setLibraryNestedProblem\(\{ type: entry\.type, question \}\)/);
   assert.match(client, /function openAttemptFromSolution\(entry: LibraryEntry\)/);
-  assert.match(client, /setBankNestedEntry\(exactEntry\)/);
+  assert.match(client, /setBankNestedEntry\(\(current\) => retainLoadedPastSnapshot\(current, exactEntry\)\)/);
   assert.match(client, /libraryNestedProblem \? renderSolutionReader\(\) : renderCaseReader\(\)/);
   assert.match(client, /bankNestedEntry \? renderCaseReader\(\) : renderSolutionReader\(\)/);
   assert.match(client, /const nestedReaderFocus = \(view === "library" && Boolean\(libraryNestedProblem\)\)/);
