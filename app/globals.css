@@ -2245,8 +2245,9 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .loop-stage-record > article { min-width: 0; border: 1px solid #c5d0c8; border-radius: 15px; background: #fff; overflow: hidden; }
 .loop-stage-record.compact > article { background: #f8faf7; }
 .loop-stage-record-header { min-height: 84px; padding: 17px 20px; display: flex; justify-content: space-between; align-items: center; gap: 24px; }
+.loop-stage-record-header > div { min-width: 0; }
 .loop-stage-record-header > div > span { color: #687a71; font-size: max(12px, .65rem); font-weight: 760; letter-spacing: .05em; text-transform: uppercase; }
-.loop-stage-record-header h2 { margin: 4px 0 0; font-family: var(--font-editorial); font-size: clamp(1.45rem, 2.8vw, 2.1rem); font-weight: 560; letter-spacing: -.02em; }
+.loop-stage-record-header h2 { margin: 4px 0 0; overflow-wrap: anywhere; font-family: var(--font-editorial); font-size: clamp(1.45rem, 2.8vw, 2.1rem); font-weight: 560; letter-spacing: -.02em; }
 .loop-stage-record-header dl { margin: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px 25px; }
 .loop-stage-record-header dl > div { display: grid; gap: 2px; }
 .loop-stage-record-header dt { color: #77847d; font-size: max(12px, .62rem); font-weight: 760; letter-spacing: .05em; text-transform: uppercase; }

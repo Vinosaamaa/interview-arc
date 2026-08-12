@@ -522,6 +522,8 @@ test("Loops presents one chronological record without the detached dashboard", a
   assert.equal(cssRules(rules, ".loop-stage-chronology")[0]?.declarations.display, "grid");
   assert.equal(cssRules(rules, ".loop-stage-chronology::before")[0]?.declarations.width, "1px");
   assert.equal(cssRules(rules, ".loop-preparation-list")[0]?.declarations["overflow-y"], "auto");
+  assert.equal(cssRules(rules, ".loop-stage-record-header > div")[0]?.declarations["min-width"], "0");
+  assert.equal(cssRules(rules, ".loop-stage-record-header h2")[0]?.declarations["overflow-wrap"], "anywhere");
   assert.equal(cssRules(rules, ".loop-stage-record-body")[0]?.declarations["font-size"], "max(14px, .84rem)");
   assert.equal(cssRules(rules, ".loop-support-band", "max-width: 900px").at(-1)?.declarations["grid-template-columns"], "1fr");
   assert.equal(cssRules(rules, ".loop-preparation-columns", "max-width: 680px").at(-1)?.declarations["grid-template-columns"], "1fr");
