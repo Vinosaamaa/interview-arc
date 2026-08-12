@@ -312,6 +312,8 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
       stages: initialLoop.stages.map((stage) => stage.stageId !== "onsite-coding" ? stage : {
         ...stage,
         status: "completed",
+        format: "Pair programming",
+        interviewers: ["Engineering manager", "Senior engineer"],
         completedAt: 1_787_936_400_000,
         outcome: "advanced",
         debrief: {
@@ -325,6 +327,10 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
               promptConfidence: "exact",
               answerMemory: "Used a hash map and doubly linked list.",
               answerConfidence: "reconstructed",
+              ownerReview: {
+                assessment: "strong",
+                summary: "The data-structure choice was clear; explain eviction order sooner.",
+              },
             },
             {
               memoryId: "memory-rate-limiter",
@@ -334,6 +340,7 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
             },
           ],
           selfAssessment: "Strong trade-off discussion; tighten complexity explanation.",
+          interviewerFeedback: "The interviewer explicitly said the solution was clear.",
           nextStep: "Practice distributed rate limiting edge cases.",
         },
       }),
@@ -346,6 +353,14 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
       loop: revisedLoop,
     });
     assert.equal(revised.loopRevision, 2);
+    const revisedRetry = await call(client, "revise_loop", {
+      operationId: "loop-revise-onsite-coding-2",
+      loopId: initialLoop.loopId,
+      expectedRevision: 1,
+      authorization: "loop_recorder",
+      loop: revisedLoop,
+    });
+    assert.equal(revisedRetry.duplicate, true);
     const changedIdentity = await callRaw(client, "revise_loop", {
       operationId: "loop-revise-identity-conflict-1",
       loopId: initialLoop.loopId,
@@ -358,8 +373,16 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
     const current = await call(client, "query_loops", { loopId: initialLoop.loopId });
     assert.equal(current.loops[0].loop.revision, 2);
     const debrief = current.loops[0].loop.stages.find((stage) => stage.stageId === "onsite-coding").debrief;
+    const revisedStage = current.loops[0].loop.stages.find((stage) => stage.stageId === "onsite-coding");
+    assert.equal(revisedStage.format, "Pair programming");
+    assert.deepEqual(revisedStage.interviewers, ["Engineering manager", "Senior engineer"]);
     assert.equal(debrief.questions[0].promptConfidence, "exact");
     assert.equal(debrief.questions[0].answerConfidence, "reconstructed");
+    assert.deepEqual(debrief.questions[0].ownerReview, {
+      assessment: "strong",
+      summary: "The data-structure choice was clear; explain eviction order sooner.",
+    });
+    assert.equal(debrief.interviewerFeedback, "The interviewer explicitly said the solution was clear.");
     assert.equal(debrief.questions[1].promptConfidence, "reconstructed");
     const historicalLoop = await call(client, "query_loops", {
       loopId: initialLoop.loopId,

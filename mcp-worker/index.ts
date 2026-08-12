@@ -2965,7 +2965,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "revise_loop",
     {
-      description: "Append one owner-authorized revision for Loop process metadata, arbitrary ordered stages or groups, explicit dates/statuses/outcomes, and concise debrief memory. The company-and-role identity remains stable; dates never infer completion or outcome. Only the Loop Recorder may mutate this administrative record.",
+      description: "Append one owner-authorized revision for Loop process metadata, arbitrary ordered stages or groups, explicit dates/statuses/outcomes, owner-provided format/interviewers, concise per-question owner review and stage self-assessment, and optional real interviewer feedback. Legacy exact/reconstructed memory remains parseable but must not be inferred. The company-and-role identity remains stable; dates never infer completion or outcome. Only the Loop Recorder may mutate this administrative record.",
       inputSchema: reviseLoopSchema.shape,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
@@ -3005,7 +3005,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "query_loops",
     {
-      description: "Read bounded owner-private Loops, display-safe Role Brief revisions, and factual Journey aggregates. Current and exact historical revisions preserve stage/debrief truth while excluding raw job descriptions and private Role Brief notes; aggregates count only explicit Loop, stage, date, and outcome records.",
+      description: "Read bounded owner-private Loops, display-safe Role Brief revisions, and factual Journey aggregates. Current and exact historical revisions preserve owner-authored stage context, per-question reviews, self-assessment, optional feedback, and legacy exact/reconstructed memory while excluding raw job descriptions and private Role Brief notes; aggregates count only explicit Loop, stage, date, and outcome records.",
       inputSchema: queryLoopsSchema.shape,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },

@@ -38,9 +38,11 @@ Initialize this long-lived task as Interview Arc — Loop Recorder. Read the
 outer workspace instructions, interview-arc/AGENTS.md, and
 interview-arc/docs/contracts/interview-loops.md. Record only owner-authorized
 hiring-process facts: company, role, job reference, flexible stages, dates,
-outcomes, questions asked, exact versus reconstructed confidence, brief
-remembered answers, and the owner's self-assessment. You alone may create or
-revise the Loop-owned Role Brief and source-backed Loop/Round interview
+outcomes, owner-provided format/interviewers, questions asked, concise
+per-question owner review/rating, stage self-assessment, and optional real
+interviewer feedback. Preserve legacy exact/reconstructed memory fields when
+present, but do not solicit a full answer reconstruction. You alone may create
+or revise the Loop-owned Role Brief and source-backed Loop/Round interview
 material when explicitly asked. Interview material is for a confirmed process
 and remains separate from resumes, cover letters, application tracking, the
 Role Brief, and the raw JD. Use immutable material revisions and verify every
@@ -49,10 +51,10 @@ already-completed practice activity only with
 `link_completed_activity_to_loop` after an explicit owner instruction. Never
 request or reproduce raw job-description source through MCP, or copy it into
 transcripts, history, logs, or publication artifacts. The full source is an
-authenticated website-only read. Do not coach practice, infer interviewer
-feedback, duplicate Bank questions, switch Git branches, or publish Git
-artifacts. Do not create a Loop yet. Confirm whether the MCP bridge is
-connected and summarize the Loop commands you will recognize.
+authenticated website-only read. Do not coach practice, infer format,
+interviewers, assessment, or feedback, duplicate Bank questions, switch Git
+branches, or publish Git artifacts. Do not create a Loop yet. Confirm whether
+the MCP bridge is connected and summarize the Loop commands you will recognize.
 ```
 
 ## Resume & Cover Letter First Prompt
