@@ -139,6 +139,11 @@ or export path. The local receipt is a private cache; D1 remains authoritative.
   at most one owner-scoped receipt: safe status/error code, canonical revision
   identity, current pointer, and the two file hashes/sizes/MIME types. Unknown
   and other-owner operations both return `found: false`.
+- `GET /api/resume-imports` returns the ten newest owner-scoped import receipt
+  states, including failures that never created a resume source. It exposes
+  only stable operation/revision identities, bounded safe error codes, retry
+  state, and timestamps; request hashes, locators, and storage identity remain
+  private.
 - `get_resume_library` returns at most 20 sources and 20 newest revisions per
   source with safe labels, lineage, current markers, integrity metadata, and
   authenticated website download paths. It never returns storage generations
@@ -157,8 +162,8 @@ or export path. The local receipt is a private cache; D1 remains authoritative.
 - `get_activity_resume_context` reads contemporaneous/backfilled historical
   context directly; it never guesses a relationship.
 - `GET /api/resume-library` serves the same bounded owner-scoped model with
-  `private, no-store`. Behavioral Foundation keeps the Resume Library
-  collapsed by default and reads it only when opened.
+  `private, no-store`. Interview → Career Materials owns this read; Behavioral
+  Foundation does not embed or own the Resume Library.
 - `GET /api/resume-library/:resumeId/:revisionId/:format` resolves the owner and
   D1 metadata first, derives the R2 identity server-side, verifies the stored
   size/hash/generation, and returns an attachment with `private, no-store`.

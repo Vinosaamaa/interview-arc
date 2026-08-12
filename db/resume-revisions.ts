@@ -897,6 +897,34 @@ export async function getResumeImportStatus(ownerId: string, operationId: string
   };
 }
 
+export async function getRecentResumeImports(ownerId: string) {
+  const limit = 10;
+  const rows = await getDb().select({
+    operationId: resumeImportOperations.operationId,
+    resumeId: resumeImportOperations.resumeId,
+    revisionId: resumeImportOperations.requestedRevisionId,
+    status: resumeImportOperations.status,
+    errorCode: resumeImportOperations.errorCode,
+    createdAt: resumeImportOperations.createdAt,
+    updatedAt: resumeImportOperations.updatedAt,
+    completedAt: resumeImportOperations.completedAt,
+  }).from(resumeImportOperations).where(
+    eq(resumeImportOperations.ownerId, ownerId),
+  ).orderBy(
+    desc(resumeImportOperations.updatedAt),
+    desc(resumeImportOperations.operationId),
+  ).limit(limit + 1);
+  return {
+    schemaVersion: 1 as const,
+    imports: rows.slice(0, limit).map((row) => ({
+      ...row,
+      retryable: row.status === "staging" || row.status === "retryable_failure",
+    })),
+    limit: 10 as const,
+    truncated: rows.length > limit,
+  };
+}
+
 interface ResumeLibraryRow {
   resumeId: string;
   sourceLabel: string;

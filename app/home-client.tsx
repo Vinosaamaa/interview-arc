@@ -73,6 +73,7 @@ import BehavioralFoundation from "./behavioral-foundation";
 import BehavioralTargetBindings from "./behavioral-target-bindings";
 import BehavioralTargetDesk from "./behavioral-target-desk";
 import BankDomainOverview from "./bank-domain-overview";
+import CareerMaterialsWorkspace from "./career-materials-workspace";
 import { activityLifecycleState } from "./activity-state";
 import {
   interactionModeClassificationLabel,
@@ -100,7 +101,7 @@ import type { BehavioralAttemptAnalysisProjection } from "../db/behavioral-attem
 import type { ActivityResumeContext } from "../db/activity-resume-context";
 import type { InteractionModeClassification } from "../db/interaction-mode-classification";
 
-type View = "today" | "loops" | "journey" | "reviews" | "library" | "banks";
+type View = "today" | "loops" | "journey" | "reviews" | "library" | "banks" | "materials";
 const INTERVIEW_NAV_ITEMS: ReadonlyArray<readonly [View, string]> = [
   ["today", "Today"],
   ["loops", "Loops"],
@@ -1900,12 +1901,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         return;
       }
       if (routeView) {
-        setView(routeView === "past" ? "library" : routeView);
+        setView(routeView === "past" ? "library" : routeView === "career-materials" ? "materials" : routeView);
         setViewMemoryReady(true);
         return;
       }
       const stored = window.sessionStorage.getItem("interview-arc-active-view");
-      if (stored === "loops" || stored === "journey" || stored === "reviews" || stored === "library" || stored === "banks") setView(stored);
+      if (stored === "loops" || stored === "journey" || stored === "reviews" || stored === "library" || stored === "banks" || stored === "materials") setView(stored);
       setViewMemoryReady(true);
     });
     return () => window.cancelAnimationFrame(frame);
@@ -4300,7 +4301,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function routeViewFor(nextView: View): WorkspaceRouteView {
-    return nextView === "library" ? "past" : nextView;
+    if (nextView === "library") return "past";
+    if (nextView === "materials") return "career-materials";
+    return nextView;
   }
 
   function navigateToPrimaryView(nextView: View) {
@@ -4683,7 +4686,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         setBankNestedEntry(null);
         setReaderNotFound("");
       }
-      setView(routeView === "past" ? "library" : routeView);
+      setView(routeView === "past" ? "library" : routeView === "career-materials" ? "materials" : routeView);
       if (routeView === "journey") {
         restorePageScroll(window.history.state?.interviewArcJourneyScrollY);
       }
@@ -6369,13 +6372,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         </nav>
         <div className="local-nav-label"><span>Interview</span><small>Workspace</small></div>
         <nav className="primary-nav" aria-label="Interview navigation">{INTERVIEW_NAV_ITEMS.map(([id, label], index) => <button key={id} className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
+        <nav className="materials-nav" aria-label="Career Materials navigation"><button type="button" className={view === "materials" ? "active" : ""} aria-current={view === "materials" ? "page" : undefined} onClick={() => navigateToPrimaryView("materials")}><span aria-hidden="true">CM</span><strong>Career Materials</strong><small>Private</small></button></nav>
         <div className="sidebar-status"><span className={[...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "live" : ""} /><div><strong>{[...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "Timer running" : hydrated ? "Draft saved locally" : "Loading draft"}</strong><small>Session countdown + one activity stopwatch</small></div></div>
         <div className="profile"><span>IA</span><div><strong>Interview Arc owner</strong><small>Private preparation record</small></div></div>
       </aside>
 
       <section className="main-column">
         <header className="topbar">
-          <div><span>{readableDate(journal.date)}</span><strong>{view === "loops" ? "Interview · Loops" : view === "journey" ? "Interview · Journey" : view === "library" ? "Interview · Past" : view === "banks" ? "Interview · Banks" : view === "reviews" ? "Interview · Reviews" : "Interview · Today"}</strong></div>
+          <div><span>{readableDate(journal.date)}</span><strong>{view === "loops" ? "Interview · Loops" : view === "journey" ? "Interview · Journey" : view === "library" ? "Interview · Past" : view === "banks" ? "Interview · Banks" : view === "reviews" ? "Interview · Reviews" : view === "materials" ? "Interview · Career Materials" : "Interview · Today"}</strong></div>
           <div>
             <div className={`music-dock ${ambientPlaying ? "active" : ""}`}>
               <button onClick={toggleAmbientSound} aria-pressed={ambientPlaying} title={ambientPlaying ? "Pause music" : "Play music"}><span aria-hidden="true">{ambientPlaying ? "Ⅱ" : "▶"}</span><i><small>{ambientPlaying ? "PLAYING" : "PAUSED"}</small><strong>{trackName}</strong></i></button>
@@ -6390,10 +6394,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             <button className="secondary-action" onClick={() => void exportDraft()}>Export today</button>
           </div>
         </header>
-        <div className="page-content" id="practice-content">{view === "today" && renderToday()}{view === "loops" && <LoopsWorkspace />}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
+        <div className="page-content" id="practice-content">{view === "today" && renderToday()}{view === "loops" && <LoopsWorkspace />}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}{view === "materials" && <CareerMaterialsWorkspace />}</div>
       </section>
 
-      <nav className="mobile-interview-nav" aria-label="Interview navigation">{INTERVIEW_NAV_ITEMS.map(([id, label]) => <button key={id} type="button" className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}>{label}</button>)}</nav>
+      <nav className="mobile-interview-nav" aria-label="Interview navigation">{INTERVIEW_NAV_ITEMS.map(([id, label]) => <button key={id} type="button" className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}>{label}</button>)}<button type="button" className={view === "materials" ? "active materials" : "materials"} aria-current={view === "materials" ? "page" : undefined} onClick={() => navigateToPrimaryView("materials")}>Materials</button></nav>
 
       {composer.open && <div className={`modal-backdrop ${composerClosing ? "closing" : ""}`} role="presentation" onMouseDown={closeComposer} onAnimationEnd={finishComposerClose}>
         <section className={`composer ${composer.mode === "activity" && !composer.editingId ? "activity-composer-dialog" : ""} ${composerClosing ? "closing" : ""}`} role="dialog" aria-modal="true" aria-labelledby="composer-title" onMouseDown={(event) => event.stopPropagation()}>

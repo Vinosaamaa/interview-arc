@@ -4,24 +4,38 @@ import test from "node:test";
 
 const load = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-test("Behavioral Foundation exposes a lazy default-collapsed Resume Library", async () => {
-  const [foundation, library, css, route] = await Promise.all([
+test("Career Materials owns the authenticated Resume Library outside Behavioral Foundation", async () => {
+  const [foundation, materials, home, css, route, importRoute, detailRoute, compareRoute] = await Promise.all([
     load("../app/behavioral-foundation.tsx"),
-    load("../app/resume-library.tsx"),
+    load("../app/career-materials-workspace.tsx"),
+    load("../app/home-client.tsx"),
     load("../app/globals.css"),
     load("../app/api/resume-library/route.ts"),
+    load("../app/api/resume-imports/route.ts"),
+    load("../app/api/resume-revisions/[resumeId]/[revisionId]/route.ts"),
+    load("../app/api/resume-revisions/[resumeId]/compare/route.ts"),
   ]);
-  assert.match(foundation, /<ResumeLibrary enabled=\{enabled\}/);
-  assert.match(library, /useState\(false\)/);
-  assert.match(library, /aria-expanded=\{open\}/);
-  assert.match(library, /inert=\{open \? undefined : true\}/);
-  assert.match(library, /if \(!enabled \|\| !open/);
-  assert.match(library, /href=\{file\.downloadPath\}/);
+  assert.doesNotMatch(foundation, /ResumeLibrary|resume-library/);
+  assert.match(home, /CareerMaterialsWorkspace/);
+  assert.match(home, /Interview · Career Materials/);
+  assert.match(home, /view === "materials"/);
+  assert.match(materials, /\/api\/resume-library/);
+  assert.match(materials, /\/api\/resume-revisions/);
+  assert.match(materials, /\/api\/resume-imports/);
+  assert.match(materials, /The exact import can be retried/);
+  assert.match(materials, /href=\{file\.downloadPath\}/);
+  assert.match(materials, /No résumé revision is stored yet/);
+  assert.match(materials, /No newer or neighboring revision was substituted/);
   assert.match(route, /resumeLibrarySchema\.parse\(await getResumeLibrary\(ownerId\)\)/);
   assert.match(route, /private, no-store/);
-  assert.match(css, /\.resume-library-panel \{[^}]*grid-template-rows: 0fr/s);
-  assert.match(css, /\.resume-library\.open \.resume-library-panel \{[^}]*grid-template-rows: 1fr/s);
-  assert.match(css, /@media \(max-width: 520px\)[\s\S]*\.resume-file-actions a \{[^}]*min-height: 44px/);
+  assert.match(importRoute, /getRecentResumeImports\(ownerId\)/);
+  assert.match(importRoute, /private, no-store/);
+  assert.match(detailRoute, /resolveOwnerId\(request\)/);
+  assert.match(detailRoute, /resumeRevisionResponseSchema\.parse\(result\)/);
+  assert.match(compareRoute, /compareResumeRevisions/);
+  assert.match(compareRoute, /resumeRevisionComparisonSchema\.parse\(result\)/);
+  assert.match(css, /\.materials-library-layout \{[^}]*grid-template-columns:/s);
+  assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.materials-library-layout \{[^}]*grid-template-columns: 1fr/s);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 });
 

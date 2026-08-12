@@ -48,7 +48,7 @@ export type BankReaderState = {
   attemptId: string;
 };
 
-export type WorkspaceRouteView = "today" | "loops" | "journey" | "reviews" | "past" | "banks";
+export type WorkspaceRouteView = "today" | "loops" | "journey" | "reviews" | "past" | "banks" | "career-materials";
 
 export type ReaderClosePlan = {
   view: "journey" | "past" | "banks";
@@ -287,5 +287,5 @@ export function readerClosePlan(currentHref: string): ReaderClosePlan | null {
 
 export function readWorkspaceRouteView(currentHref: string): WorkspaceRouteView | null {
   const view = new URL(currentHref).searchParams.get("view");
-  return view === "today" || view === "loops" || view === "journey" || view === "reviews" || view === "past" || view === "banks" ? view : null;
+  return view === "today" || view === "loops" || view === "journey" || view === "reviews" || view === "past" || view === "banks" || view === "career-materials" ? view : null;
 }
