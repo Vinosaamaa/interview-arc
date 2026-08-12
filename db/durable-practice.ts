@@ -4462,7 +4462,7 @@ export async function saveSpecialistFinalization(
       )`));
     }
   }
-  const finalizationStatements: unknown[] = [...finalizationGuards];
+  const finalizationStatements = [...finalizationGuards] as unknown[];
   if (interactionModeClassification) {
     finalizationStatements.push(d1TransactionalInvariantGuard(db, sql`(
       SELECT count(*) FROM ${practiceInteractionModeTransitions}
