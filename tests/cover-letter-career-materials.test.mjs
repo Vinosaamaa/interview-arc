@@ -288,5 +288,8 @@ test("specialist and Career Materials source stay read-only and controller-drive
   assert.doesNotMatch(controller, /save_practice_exchange|append_practice_transcript|create_loop/);
   assert.match(contract, /never an empty\s+history/);
   assert.equal(JSON.parse(packageJson).scripts["cover-letter:publish"], "node scripts/publish-cover-letter-to-job-journey.mjs");
+  assert.match(component, /Job Journey artifacts/);
+  assert.match(component, /Open private PDF in Job Journey/);
   assert.doesNotMatch(component, /cover-letter editor/i);
+  assert.doesNotMatch(component, /textarea|contentEditable/);
 });
