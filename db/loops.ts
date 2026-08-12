@@ -131,8 +131,12 @@ function displaySafeRoleBrief(row: {
 function boundRoleBriefDisplaySnapshot(value: unknown): LoopRoleBriefDisplaySnapshot {
   const revision = displaySafeLoopRoleBriefRevisionSchema.safeParse(value);
   if (!revision.success) return loopRoleBriefDisplaySnapshotSchema.parse(value);
-  const { revision: _revision, createdAt: _createdAt, source, ...snapshot } = revision.data;
-  const { fingerprint: _fingerprint, ...displaySource } = source;
+  const snapshot = Object.fromEntries(Object.entries(revision.data).filter(
+    ([key]) => key !== "revision" && key !== "createdAt" && key !== "source",
+  ));
+  const displaySource = Object.fromEntries(Object.entries(revision.data.source).filter(
+    ([key]) => key !== "fingerprint",
+  ));
   return loopRoleBriefDisplaySnapshotSchema.parse({
     ...snapshot,
     source: displaySource,

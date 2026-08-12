@@ -113,6 +113,11 @@ export async function readBehavioralPracticePreflight(
     : [];
   const currentTargetRevisions = new Map(targetRows.map((row) => [row.targetId, row.currentRevision]));
   const currentSolutionProfileRevision = solutionProfile.profile?.currentRevision ?? null;
+  const boundBehavioralLoop = boundLoop
+    && boundLoop.binding.specialty === "behavioral"
+    && boundLoop.binding.questionId === input.questionId
+    ? boundLoop
+    : null;
   const acceptedTargetVariants = legacyTargetSnapshots.map(({ row, snapshot }) => {
     const target = snapshot.target!;
     const finalization = row.finalization as { behavioralReview?: unknown } | null;
@@ -147,10 +152,10 @@ export async function readBehavioralPracticePreflight(
     const finalization = row.finalization as { behavioralReview?: unknown } | null;
     const reviewResult = behavioralTargetReviewSchema.safeParse(finalization?.behavioralReview);
     const staleReasons: string[] = [];
-    if (!boundLoop) staleReasons.push("loop_role_brief_unbound");
+    if (!boundBehavioralLoop) staleReasons.push("loop_role_brief_unbound");
     else {
-      if (boundLoop.binding.loopId !== roleBrief.loopId) staleReasons.push("loop_changed");
-      if (boundLoop.binding.roleBriefRevision !== roleBrief.revision) staleReasons.push("role_brief_revised");
+      if (boundBehavioralLoop.binding.loopId !== roleBrief.loopId) staleReasons.push("loop_changed");
+      if (boundBehavioralLoop.binding.roleBriefRevision !== roleBrief.revision) staleReasons.push("role_brief_revised");
     }
     if (currentSolutionProfileRevision !== snapshot.solutionProfile.revision) {
       staleReasons.push("solution_profile_revised");
@@ -184,20 +189,19 @@ export async function readBehavioralPracticePreflight(
         domainVocabulary: resolvedTarget.target.domainVocabulary,
       }
     : null;
-  const roleBriefContext = boundLoop && boundLoop.binding.specialty === "behavioral"
-    && boundLoop.binding.questionId === input.questionId
+  const roleBriefContext = boundBehavioralLoop
     ? {
-        loopId: boundLoop.binding.loopId,
-        loopRevision: boundLoop.binding.loopRevision,
-        roleBriefRevision: boundLoop.binding.roleBriefRevision,
-        stageId: boundLoop.binding.stageId,
-        label: boundLoop.roleBrief.label,
-        company: boundLoop.roleBrief.company,
-        roleTitle: boundLoop.roleBrief.roleTitle,
-        targetLevel: boundLoop.roleBrief.targetLevel,
-        competencySignals: boundLoop.roleBrief.competencySignals,
-        seniorityIndicators: boundLoop.roleBrief.seniorityIndicators,
-        domainVocabulary: boundLoop.roleBrief.domainVocabulary,
+        loopId: boundBehavioralLoop.binding.loopId,
+        loopRevision: boundBehavioralLoop.binding.loopRevision,
+        roleBriefRevision: boundBehavioralLoop.binding.roleBriefRevision,
+        stageId: boundBehavioralLoop.binding.stageId,
+        label: boundBehavioralLoop.roleBrief.label,
+        company: boundBehavioralLoop.roleBrief.company,
+        roleTitle: boundBehavioralLoop.roleBrief.roleTitle,
+        targetLevel: boundBehavioralLoop.roleBrief.targetLevel,
+        competencySignals: boundBehavioralLoop.roleBrief.competencySignals,
+        seniorityIndicators: boundBehavioralLoop.roleBrief.seniorityIndicators,
+        domainVocabulary: boundBehavioralLoop.roleBrief.domainVocabulary,
       }
     : null;
   return {
@@ -211,7 +215,7 @@ export async function readBehavioralPracticePreflight(
     },
     roleBriefResolution: {
       source: roleBriefContext ? "activity" as const : "none" as const,
-      binding: roleBriefContext ? boundLoop!.binding : null,
+      binding: roleBriefContext ? boundBehavioralLoop!.binding : null,
       roleBrief: roleBriefContext,
     },
     targeting: roleBriefContext

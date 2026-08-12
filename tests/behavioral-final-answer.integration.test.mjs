@@ -313,7 +313,18 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
          '{"modelAnswer":"A historical answer saved before snapshot v1."}',1786363100000,NULL,1,1786363100000);
       INSERT INTO extra_activities (owner_id,id,date,workbench_id,payload,revision,updated_at)
       VALUES ('owner-final-answer','${activityId}','2026-08-10',NULL,
-        '{"schemaVersion":2,"id":"${activityId}","questionId":"${questionId}","date":"2026-08-10","source":"extra","type":"behavioral","title":"Reliability improvement","allocatedSeconds":3600,"sessionId":"session-final-answer","timingSource":"website","status":"running"}',1,1);
+        '{"schemaVersion":2,"id":"${activityId}","questionId":"${questionId}","date":"2026-08-10","source":"extra","type":"behavioral","title":"Reliability improvement","allocatedSeconds":3600,"sessionId":"session-final-answer","timingSource":"website","status":"running"}',1,1),
+        ('owner-final-answer','activity-loop-behavioral-other','2026-08-10',NULL,
+        '{"schemaVersion":2,"id":"activity-loop-behavioral-other","questionId":"behavioral-other-question","date":"2026-08-10","source":"extra","type":"behavioral","title":"Different behavioral question","allocatedSeconds":1800,"timingSource":"website","status":"planned"}',1,1),
+        ('owner-final-answer','activity-loop-legacy-envelope','2026-08-10',NULL,
+        '{"schemaVersion":2,"id":"activity-loop-legacy-envelope","questionId":"${questionId}","date":"2026-08-10","source":"extra","type":"behavioral","title":"Legacy Role Brief envelope","allocatedSeconds":1800,"timingSource":"website","status":"planned"}',1,1);
+      INSERT INTO loop_activity_bindings
+        (owner_id,activity_id,loop_id,stage_id,loop_revision,role_brief_revision,specialty,question_id,
+         role_brief_display_snapshot,binding_revision,created_at,updated_at)
+      VALUES ('owner-final-answer','activity-loop-legacy-envelope','loop-legacy-envelope',NULL,1,1,
+        'behavioral','${questionId}',
+        '{"state":"active","label":"Legacy envelope company · Backend Engineer","company":"Legacy envelope company","roleTitle":"Backend Engineer","responsibilities":["Build reliable services"],"requiredQualifications":["Distributed systems"],"preferredQualifications":[],"competencySignals":["reliability"],"seniorityIndicators":[],"domainVocabulary":[],"verifiedCompanySignals":[],"unresolvedAmbiguities":[],"source":{"kind":"pasted_jd","displayLocator":"Owner-provided job description","capturedAt":1786363200000,"fingerprint":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},"revision":1,"createdAt":1786363200000}',
+        1,1,1);
       INSERT INTO live_sessions (owner_id,id,date,workbench_id,payload,revision,updated_at)
       VALUES ('owner-final-answer','session-final-answer','2026-08-10',NULL,
         '{"schemaVersion":1,"id":"session-final-answer","date":"2026-08-10","source":"extra","label":"Behavioral final answer","allocatedSeconds":3600,"activityIds":["${activityId}"]}',0,1);
@@ -331,6 +342,16 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     await sameOwnerClient.connect(new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), {
       requestInit: { headers: { authorization: `Bearer ${token}` } },
     }));
+
+    const legacyEnvelopePreflight = await call(client, "get_behavioral_practice_preflight", {
+      boundary: "reconnect_handoff",
+      questionId,
+      activityId: "activity-loop-legacy-envelope",
+    });
+    assert.equal(legacyEnvelopePreflight.roleBriefResolution.source, "activity");
+    assert.equal(legacyEnvelopePreflight.roleBriefResolution.roleBrief.loopId, "loop-legacy-envelope");
+    assert.equal(legacyEnvelopePreflight.roleBriefResolution.roleBrief.label, "Legacy envelope company · Backend Engineer");
+    assert.doesNotMatch(JSON.stringify(legacyEnvelopePreflight), /fingerprint|ownerNotes|jdText/);
 
     const story = await call(client, "upsert_behavioral_story", {
       operationId: "story-final-answer-create-1",
@@ -630,6 +651,20 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
       },
     });
     assert.equal(roleBriefCreated.roleBriefRevision, 1);
+    await call(client, "bind_planned_activity_to_loop", {
+      operationId: "loop-final-answer-bind-other-question-1",
+      activityId: "activity-loop-behavioral-other",
+      loopId,
+      expectedActivityRevision: 1,
+      authorization: "explicit_user_instruction",
+    });
+    const wrongSpecialtyPreflight = await call(client, "get_behavioral_practice_preflight", {
+      boundary: "finalization",
+      questionId,
+      activityId: "activity-loop-behavioral-other",
+    });
+    assert.equal(wrongSpecialtyPreflight.roleBriefResolution.source, "none");
+    assert.equal(wrongSpecialtyPreflight.targeting.mode, "universal");
     const roleBriefReference = {
       loopId,
       revision: 1,

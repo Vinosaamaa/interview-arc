@@ -55,7 +55,9 @@ const legacyTarget = (revision, jdText) => ({
 
 function revisionFixtureSql(revision, jdText) {
   const snapshot = legacyTarget(revision, jdText);
-  const { jdText: _jdText, ...displaySource } = snapshot.source;
+  const displaySource = Object.fromEntries(Object.entries(snapshot.source).filter(
+    ([key]) => key !== "jdText",
+  ));
   const display = { ...snapshot, source: displaySource };
   return `INSERT INTO behavioral_target_profile_revisions
     (owner_id,target_id,revision,operation_id,request_fingerprint,source_fingerprint,
