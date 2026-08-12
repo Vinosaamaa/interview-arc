@@ -4,7 +4,7 @@ import {
   behavioralTargetDisplaySourceSchema,
   behavioralTargetPastedSourceSchema,
   behavioralTargetProfileInputSchema,
-} from "./behavioral-target-profile-policy";
+} from "./behavioral-target-profile-policy.ts";
 
 export const loopStableIdSchema = z.string()
   .min(1)
@@ -16,6 +16,7 @@ const optionalText = (max: number) => boundedText(max).optional();
 
 export const loopMemoryConfidenceSchema = z.enum(["exact", "reconstructed"]);
 export const loopSpecialtySchema = z.enum(["leetcode", "system_design", "behavioral"]);
+export const loopOwnerAssessmentSchema = z.enum(["strong", "mixed", "needs_work"]);
 
 export const loopActivityContextRequestSchema = z.object({
   loopId: loopStableIdSchema,
@@ -56,6 +57,12 @@ export const loopQuestionMemorySchema = z.object({
   promptConfidence: loopMemoryConfidenceSchema,
   answerMemory: optionalText(5_000),
   answerConfidence: loopMemoryConfidenceSchema.optional(),
+  ownerReview: z.object({
+    assessment: loopOwnerAssessmentSchema.optional(),
+    summary: optionalText(5_000),
+  }).strict().refine((review) => Boolean(review.assessment || review.summary), {
+    message: "An owner review requires an explicit assessment or summary.",
+  }).optional(),
 }).strict().superRefine((memory, context) => {
   if (!memory.canonicalQuestionId && !memory.promptMemory) {
     context.addIssue({
@@ -84,6 +91,7 @@ export const loopRoundDebriefSchema = z.object({
   capturedAt: z.number().int().positive(),
   questions: z.array(loopQuestionMemorySchema).max(50),
   selfAssessment: optionalText(5_000),
+  interviewerFeedback: optionalText(5_000),
   nextStep: optionalText(5_000),
 }).strict();
 
@@ -94,6 +102,8 @@ export const loopStageSchema = z.object({
   groupLabel: optionalText(240),
   order: z.number().int().nonnegative().max(1_000),
   status: z.enum(["planned", "scheduled", "completed", "cancelled", "skipped"]),
+  format: optionalText(240),
+  interviewers: z.array(boundedText(240)).max(25).optional(),
   scheduledAt: z.number().int().positive().optional(),
   startedAt: z.number().int().positive().optional(),
   completedAt: z.number().int().positive().optional(),

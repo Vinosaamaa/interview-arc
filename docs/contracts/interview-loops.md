@@ -92,10 +92,16 @@ onsite or other multi-round structures without imposing a fixed process. Dates,
 status, and outcome are explicit owner-provided facts. Scheduled time may
 prompt, but never completes a stage or implies an outcome.
 
-A concise round debrief may contain questions asked, a brief remembered answer,
-the owner's self-assessment, and next step. Remembered prompts and answers are
-independently labelled `exact` or `reconstructed`. A canonical Bank question
-is linked by stable ID and may belong to many Loops; do not copy or fork the
+A stage may record an owner-provided format and interviewer names. A concise
+round debrief may contain questions asked, a bounded per-question owner review
+(`strong`, `mixed`, or `needs_work` and/or summary), the owner's stage
+self-assessment, optional real interviewer feedback, and next step. Never infer
+format, interviewers, assessment, or feedback.
+
+Legacy remembered prompts and answers remain readable and independently
+labelled `exact` or `reconstructed`; new UI and Loop Recorder guidance do not
+foreground or solicit an answer reconstruction. A canonical Bank question is
+linked by stable ID and may belong to many Loops; do not copy or fork the
 canonical question merely to add Loop context.
 
 ## Activity Context And History

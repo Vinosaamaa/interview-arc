@@ -497,3 +497,32 @@ test("Loops source dialog keeps a stable close callback for its focus and scroll
   assert.ok(onClose && ts.isJsxExpression(onClose.initializer));
   assert.equal(onClose.initializer.expression?.getText(file), "closeSourceDialog");
 });
+
+test("Loops presents one chronological record without the detached dashboard", async () => {
+  const [source, css] = await Promise.all([
+    load("../app/loops-workspace.tsx"),
+    load("../app/globals.css"),
+  ]);
+  const file = parseTsx(source);
+  const rules = parseCss(css);
+  assert.ok(hasJsxClass(file, "loop-support-band"));
+  assert.ok(hasJsxClass(file, "loop-preparation-columns"));
+  assert.ok(hasJsxClass(file, "loop-stage-chronology"));
+  assert.ok(hasJsxClass(file, "loop-stage-record"));
+  assert.ok(hasJsxClass(file, "loop-question-review"));
+  assert.equal(hasJsxClass(file, "loop-stage-track"), false);
+  assert.equal(hasJsxClass(file, "loop-detail-grid"), false);
+  assert.equal(hasJsxClass(file, "loop-history"), false);
+  assert.equal(hasJsxClass(file, "loop-debrief"), false);
+  assert.equal(stringLiterals(file).has("Reconstructed answer"), false);
+  assert.equal(stringLiterals(file).has("Activity history"), false);
+
+  assert.equal(cssRules(rules, ".loop-support-band")[0]?.declarations["grid-template-columns"], "minmax(0, .86fr) minmax(0, 1.14fr)");
+  assert.equal(cssRules(rules, ".loop-preparation-columns")[0]?.declarations["grid-template-columns"], "repeat(3, minmax(0, 1fr))");
+  assert.equal(cssRules(rules, ".loop-stage-chronology")[0]?.declarations.display, "grid");
+  assert.equal(cssRules(rules, ".loop-stage-chronology::before")[0]?.declarations.width, "1px");
+  assert.equal(cssRules(rules, ".loop-preparation-list")[0]?.declarations["overflow-y"], "auto");
+  assert.equal(cssRules(rules, ".loop-stage-record-body")[0]?.declarations["font-size"], "max(14px, .84rem)");
+  assert.equal(cssRules(rules, ".loop-support-band", "max-width: 900px").at(-1)?.declarations["grid-template-columns"], "1fr");
+  assert.equal(cssRules(rules, ".loop-preparation-columns", "max-width: 680px").at(-1)?.declarations["grid-template-columns"], "1fr");
+});
