@@ -78,6 +78,18 @@ test("Job Journey cover-letter projection is a strict privacy allowlist", () => 
     artifacts: [{ ...providerArtifact, sourceUrl: "http://localhost/private" }],
     page: { hasMore: false, nextCursor: null },
   }));
+  assert.throws(() => normalizeJobJourneyCoverLetterPage({
+    schemaVersion: 1,
+    generatedAt: "2026-08-12T11:00:02.000Z",
+    artifacts: [providerArtifact],
+    page: { hasMore: true, nextCursor: null },
+  }));
+  assert.throws(() => normalizeJobJourneyCoverLetterPage({
+    schemaVersion: 1,
+    generatedAt: "2026-08-12T11:00:02.000Z",
+    artifacts: [providerArtifact],
+    page: { hasMore: false, nextCursor: "unexpected-cursor" },
+  }));
 });
 
 test("cover-letter projection bounds provider bytes before JSON materialization", async () => {
@@ -142,6 +154,16 @@ test("Job Journey links are credential-free HTTPS URLs under the exact private a
     { JOB_JOURNEY_BASE_URL: "https://owner:secret@job-journey.example" },
     "/api/assets/cover-letters/artifact_0001",
   ));
+  for (const base of [
+    "https://job-journey.example/prefix",
+    "https://job-journey.example/?tenant=private",
+    "https://job-journey.example/#private",
+  ]) {
+    assert.throws(() => resolveJobJourneyDownloadUrl(
+      { JOB_JOURNEY_BASE_URL: base },
+      "/api/assets/cover-letters/artifact_0001",
+    ));
+  }
 });
 
 test("evidence preflight accepts verified support and fails closed on gaps or contrary evidence", () => {
@@ -239,6 +261,8 @@ test("controller verifies Arc state and advances one bounded receipt from pendin
   }).success, false);
   await writeFile(manifestPath, JSON.stringify(manifest));
   const requests = [];
+  let mutateArcDuringPublish = false;
+  let changedEvidenceReads = 0;
   const client = {
     async callTool({ name }) {
       if (name === "get_resume_revision") return {
@@ -255,7 +279,12 @@ test("controller verifies Arc state and advances one bounded receipt from pendin
           claims: [{ claimId: "claim-platform", status: "verified", evidenceIds: ["evidence-platform"], contraryEvidenceIds: [] }],
           supportingEvidence: [{ evidenceId: "evidence-platform" }],
           contraryEvidence: [],
-          gaps: [{ claimId: "claim-platform", text: "An outcome metric remains unresolved." }],
+          gaps: [{
+            claimId: "claim-platform",
+            text: mutateArcDuringPublish && ++changedEvidenceReads > 1
+              ? "The Arc generation changed during publication."
+              : "An outcome metric remains unresolved.",
+          }],
         },
       };
     },
@@ -325,7 +354,18 @@ test("controller verifies Arc state and advances one bounded receipt from pendin
     assert.equal("jobDescription" in persisted, false);
     assert.equal("pdfPath" in persisted, false);
     assert.equal(JSON.stringify(persisted).includes("An outcome metric remains unresolved"), false);
+    assert.match(persisted.arcGeneration, /^[a-f0-9]{64}$/);
     assert.equal(resolveArtifactIdentity(manifest, receipt.pdfSha256, receipt.jobDescriptionSha256).artifactId, receipt.artifactId);
+
+    mutateArcDuringPublish = true;
+    await assert.rejects(
+      publishCoverLetterManifest(manifestPath, options),
+      (error) => error instanceof CoverLetterPublishError
+        && error.code === "cover_letter_arc_generation_conflict"
+        && error.retryable === false,
+    );
+    const receiptAfterConflict = JSON.parse(await readFile(receiptPath, "utf8"));
+    assert.equal(receiptAfterConflict.arcGeneration, persisted.arcGeneration);
   } finally {
     await rm(directory, { recursive: true, force: true });
     if (receipt) {
@@ -385,6 +425,7 @@ test("specialist and Career Materials source stay read-only, targeted, and contr
   assert.match(route, /The Resume Library remains authoritative and usable/);
   assert.match(route, /getResumeRevisionReferences/);
   assert.doesNotMatch(route, /getResumeLibrary/);
+  assert.doesNotMatch(route, /getResumeRevisionReferences[\s\S]{0,240}\.catch/);
   assert.match(client, /MAX_CACHE_ENTRIES/);
   assert.match(client, /privateCoverLetterDownloadPathSchema/);
   assert.doesNotMatch(controller, /save_practice_exchange|append_practice_transcript|create_loop/);

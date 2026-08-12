@@ -15,6 +15,39 @@ const MAX_CACHE_ENTRIES = 100;
 const cache = new Map<string, { expiresAt: number; value: unknown }>();
 export type CachedJobJourneyValue<T> = { value: T; stale: boolean };
 
+async function readBoundedResponse(response: Response, maximumBytes: number) {
+  const contentLength = response.headers.get("content-length");
+  const declaredLength = contentLength === null ? null : Number(contentLength);
+  if (declaredLength !== null && Number.isFinite(declaredLength) && declaredLength > maximumBytes) {
+    throw new Error("Job Journey returned an oversized response.");
+  }
+  if (!response.body) return new Uint8Array();
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maximumBytes) {
+        await reader.cancel();
+        throw new Error("Job Journey returned an oversized response.");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
 async function readJson<T>(
   env: JobJourneyEnv,
   ownerId: string,
@@ -39,14 +72,7 @@ async function readJson<T>(
     if (!response.ok) throw new Error(`Job Journey returned ${response.status}.`);
     let responseValue: unknown;
     if (maximumResponseBytes) {
-      const declaredLength = Number(response.headers.get("content-length"));
-      if (Number.isFinite(declaredLength) && declaredLength > maximumResponseBytes) {
-        throw new Error("Job Journey returned an oversized response.");
-      }
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      if (bytes.byteLength > maximumResponseBytes) {
-        throw new Error("Job Journey returned an oversized response.");
-      }
+      const bytes = await readBoundedResponse(response, maximumResponseBytes);
       responseValue = JSON.parse(new TextDecoder().decode(bytes));
     } else {
       responseValue = await response.json();
@@ -120,10 +146,17 @@ function validateCoverLetterProviderBase(env: JobJourneyEnv): URL {
   const raw = env.JOB_JOURNEY_BASE_URL;
   if (!raw) throw new Error("Job Journey integration is not configured.");
   const base = new URL(raw);
-  if (base.protocol !== "https:" || base.username || base.password) {
-    throw new Error("Job Journey must use credential-free HTTPS.");
+  if (
+    base.protocol !== "https:"
+    || base.username
+    || base.password
+    || base.pathname !== "/"
+    || base.search
+    || base.hash
+  ) {
+    throw new Error("Job Journey must use a credential-free HTTPS origin.");
   }
-  return base;
+  return new URL(base.origin);
 }
 
 export function resolveJobJourneyDownloadUrl(

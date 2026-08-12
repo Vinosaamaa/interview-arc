@@ -47,14 +47,14 @@ export async function GET(request: Request) {
         resumeId: artifact.resumeId,
         revisionId: artifact.resumeRevisionId,
       })),
-    ).catch(() => null);
+    );
     const available = careerMaterialsCoverLetterResponseSchema.parse({
       schemaVersion: 1,
       status: "available",
       stale: provider.stale,
       generatedAt: provider.value.generatedAt,
       artifacts: provider.value.artifacts.map((artifact) => {
-        const resume = references?.get(`${artifact.resumeId}\u0000${artifact.resumeRevisionId}`);
+        const resume = references.get(`${artifact.resumeId}\u0000${artifact.resumeRevisionId}`);
         return {
           ...artifact,
           resumeLabel: resume?.label ?? null,

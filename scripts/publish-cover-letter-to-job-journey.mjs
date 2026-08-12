@@ -350,6 +350,13 @@ async function verifyArcState(client, manifest) {
     });
   }
   return {
+    generation: sha256(JSON.stringify({
+      resume,
+      evidenceReads: evidenceReads.map(({ check, preflight }) => ({
+        questionId: check.questionId,
+        preflight,
+      })),
+    })),
     resume: {
       resumeId: manifest.resumeId,
       revisionId: manifest.resumeRevisionId,
@@ -372,10 +379,35 @@ function providerHeaders(token) {
 
 async function readProviderJson(response) {
   try {
-    const declaredLength = Number(response.headers.get("content-length"));
-    if (Number.isFinite(declaredLength) && declaredLength > MAX_PROVIDER_RECEIPT_BYTES) throw new Error("oversized");
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength > MAX_PROVIDER_RECEIPT_BYTES) throw new Error("oversized");
+    const contentLength = response.headers.get("content-length");
+    const declaredLength = contentLength === null ? null : Number(contentLength);
+    if (declaredLength !== null && Number.isFinite(declaredLength) && declaredLength > MAX_PROVIDER_RECEIPT_BYTES) {
+      throw new Error("oversized");
+    }
+    if (!response.body) throw new Error("missing");
+    const reader = response.body.getReader();
+    const chunks = [];
+    let total = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > MAX_PROVIDER_RECEIPT_BYTES) {
+          await reader.cancel();
+          throw new Error("oversized");
+        }
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
     return JSON.parse(new TextDecoder().decode(bytes));
   } catch {
     throw new CoverLetterPublishError(
@@ -499,6 +531,7 @@ function boundedLocalReceipt({ identity, manifest, pdfSha256, jobDescriptionSha2
     resumeId: manifest.resumeId,
     resumeRevisionId: manifest.resumeRevisionId,
     resumeWasCurrentAtPublish: arc.resume.current,
+    arcGeneration: arc.generation,
     evidenceSummary: arc.evidenceSummary,
     pdfSha256,
     pdfSize: provider.artifact.pdfSize,
@@ -536,6 +569,7 @@ async function persistReceipt(receipt) {
       jobDescriptionSha256: candidate.jobDescriptionSha256,
       resumeId: candidate.resumeId,
       resumeRevisionId: candidate.resumeRevisionId,
+      arcGeneration: candidate.arcGeneration,
       evidenceSummary: candidate.evidenceSummary,
       pdfSha256: candidate.pdfSha256,
       pdfSize: candidate.pdfSize,
@@ -588,22 +622,30 @@ export async function publishCoverLetterManifest(manifestPath, {
   const providerBase = validateHttpsEndpoint(environment.JOB_JOURNEY_BASE_URL, "The Job Journey endpoint");
   const client = await connectArcImpl(mcpEndpoint, environment.INTERVIEW_ARC_MCP_TOKEN);
   let arc;
+  let provider;
   try {
     arc = await verifyArcState(client, manifest);
+    provider = await uploadProviderArtifact({
+      base: providerBase,
+      headers: providerHeaders(environment.JOB_JOURNEY_SITE_TOKEN),
+      identity,
+      manifest,
+      pdfBytes,
+      pdfSha256,
+      jobDescriptionSha256,
+      fetchImpl,
+    });
+    const confirmedArc = await verifyArcState(client, manifest);
+    if (confirmedArc.generation !== arc.generation) {
+      throw new CoverLetterPublishError(
+        "cover_letter_arc_generation_conflict",
+        "The resume or evidence changed during publication; no verified local receipt was recorded.",
+      );
+    }
+    arc = confirmedArc;
   } finally {
     await client.close().catch(() => undefined);
   }
-
-  const provider = await uploadProviderArtifact({
-    base: providerBase,
-    headers: providerHeaders(environment.JOB_JOURNEY_SITE_TOKEN),
-    identity,
-    manifest,
-    pdfBytes,
-    pdfSha256,
-    jobDescriptionSha256,
-    fetchImpl,
-  });
   const receipt = boundedLocalReceipt({
     identity,
     manifest,

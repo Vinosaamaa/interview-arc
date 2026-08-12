@@ -80,6 +80,12 @@ the private Sites service credential. Redirects fail closed. If delivery is
 uncertain or Job Journey returns a server failure, the controller reads the
 same operation identity rather than inventing a second artifact.
 
+The controller keeps the MCP session open across the provider command and
+fingerprints the exact resume/evidence read. It rereads that generation before
+accepting the provider result. A concurrent Arc change fails closed without
+recording a verified local receipt; rerun only after reading the authoritative
+Arc and provider state.
+
 Provider upload and operation receipts are byte-bounded and validated as the
 complete versioned create receipt before any state can be reported. Missing
 integrity, lineage, lifecycle, filename, application binding, or download
@@ -89,7 +95,8 @@ Only `ready` completes publication. Retry pending/uncertain work with the same
 manifest; changed content under the same identity conflicts. The bounded local
 receipt is stored only under ignored
 `private-sources/career-materials/cover-letters/`. It contains stable IDs,
-hashes, evidence IDs, gap fingerprints, timestamps, and state—not the JD,
+hashes, the Arc-generation fingerprint, evidence IDs, gap fingerprints,
+timestamps, and state—not the JD,
 evidence text, PDF bytes, provider object identity, credentials, or local paths.
 Interview Arc never copies final PDF bytes into Git, D1, R2, MCP, or browser
 JSON.

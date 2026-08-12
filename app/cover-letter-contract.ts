@@ -27,7 +27,15 @@ export const privateCoverLetterDownloadPathSchema = z.string().regex(/^\/api\/as
 const coverLetterPageCursorSchema = z.object({
   hasMore: z.boolean(),
   nextCursor: z.string().min(1).max(2_048).nullable(),
-}).strict();
+}).strict().superRefine((page, context) => {
+  if (page.hasMore !== (page.nextCursor !== null)) {
+    context.addIssue({
+      code: "custom",
+      path: ["nextCursor"],
+      message: "A continuation cursor is required exactly when more results exist.",
+    });
+  }
+});
 
 export const coverLetterArtifactStateSchema = z.enum([
   "pending",
