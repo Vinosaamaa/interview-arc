@@ -81,6 +81,49 @@ test("Today reads and mutates owner-scoped interaction modes through the authori
       INSERT INTO extra_activities (owner_id,id,date,workbench_id,payload,revision,updated_at) VALUES
         ('owner-mode','activity-mode','2026-08-10','workbench-mode','{"schemaVersion":2,"id":"activity-mode","date":"2026-08-10","source":"extra","type":"behavioral","title":"Mode tracer","allocatedSeconds":3600,"timerGroupId":"activity-mode","timingSource":"website","status":"planned"}',0,1),
         ('owner-other','activity-private','2026-08-10','workbench-other','{"schemaVersion":2,"id":"activity-private","date":"2026-08-10","source":"extra","type":"behavioral","title":"Private tracer","allocatedSeconds":3600,"timerGroupId":"activity-private","timingSource":"website","status":"planned"}',0,1);
+      WITH RECURSIVE seq(n) AS (
+        SELECT 0 UNION ALL SELECT n + 1 FROM seq WHERE n < 242
+      ), owners(owner_id,workbench_id,label) AS (
+        VALUES
+          ('owner-mode','workbench-mode','Primary'),
+          ('owner-other','workbench-other','Other')
+      )
+      INSERT INTO extra_activities (owner_id,id,date,workbench_id,payload,revision,updated_at)
+      SELECT owner_id,
+        printf('activity-%03d', n),
+        '2026-08-10',
+        workbench_id,
+        json_object(
+          'schemaVersion', 2,
+          'id', printf('activity-%03d', n),
+          'date', '2026-08-10',
+          'source', 'extra',
+          'type', 'behavioral',
+          'title', label || ' mode activity ' || printf('%03d', n),
+          'allocatedSeconds', 3600,
+          'timerGroupId', printf('activity-%03d', n),
+          'timingSource', 'website',
+          'status', 'planned'
+        ),
+        0,
+        n + 1
+      FROM seq CROSS JOIN owners;
+      WITH RECURSIVE seq(n) AS (
+        SELECT 0 UNION ALL SELECT n + 1 FROM seq WHERE n < 242
+      ), owners(owner_id,interaction_mode_id) AS (
+        VALUES ('owner-mode','mentor'), ('owner-other','grill')
+      )
+      INSERT INTO practice_interaction_mode_states
+        (owner_id,activity_id,interaction_mode_id,registry_version,revision,source,last_mutation_id,updated_at)
+      SELECT owner_id,
+        printf('activity-%03d', n),
+        interaction_mode_id,
+        '2026-08-10.1',
+        1,
+        'explicit_user_instruction',
+        printf('mode-%03d', n),
+        n + 1
+      FROM seq CROSS JOIN owners;
     `]);
     worker = spawn(wrangler, ["dev", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], { cwd: project, stdio: "ignore" });
     await waitForWorker(baseUrl, worker);
@@ -137,6 +180,11 @@ test("Today reads and mutates owner-scoped interaction modes through the authori
     const other = await state(baseUrl, "owner-other");
     assert.deepEqual(other.interactionModes["activity-private"], { state: "needs_selection", current: null });
     assert.equal(other.interactionModes["activity-mode"], undefined);
+    const expectedBacklogIds = Array.from({ length: 243 }, (_, index) => `activity-${String(index).padStart(3, "0")}`);
+    assert.deepEqual(Object.keys(initial.interactionModes).filter((id) => /^activity-\d{3}$/.test(id)).sort(), expectedBacklogIds);
+    assert.deepEqual(Object.keys(other.interactionModes).filter((id) => /^activity-\d{3}$/.test(id)).sort(), expectedBacklogIds);
+    assert.ok(expectedBacklogIds.every((id) => initial.interactionModes[id].current?.interactionModeId === "mentor"));
+    assert.ok(expectedBacklogIds.every((id) => other.interactionModes[id].current?.interactionModeId === "grill"));
   } finally {
     if (worker && worker.exitCode === null) {
       worker.kill("SIGTERM");

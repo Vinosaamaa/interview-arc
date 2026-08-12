@@ -79,11 +79,10 @@ export async function readPracticeInteractionModeSummaries(
   ownerId: string,
   activityIds: readonly string[],
 ): Promise<Record<string, InteractionModeSummary>> {
-  const batches = interactionModeActivityIdBatches(activityIds);
-  const ids = batches.flat();
+  const ids = [...new Set(activityIds.filter(Boolean))];
   if (ids.length === 0) return {};
   const rows: Array<typeof practiceInteractionModeStates.$inferSelect> = [];
-  for (const batch of batches) {
+  for (const batch of interactionModeActivityIdBatches(ids)) {
     rows.push(...await getDb().select().from(practiceInteractionModeStates).where(and(
       eq(practiceInteractionModeStates.ownerId, ownerId),
       inArray(practiceInteractionModeStates.activityId, batch),
