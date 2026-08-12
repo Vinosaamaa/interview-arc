@@ -38,6 +38,14 @@ export async function specialistWritePayloadDigest(value: unknown) {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+export async function specialistFinalizationJobId(operationId: string) {
+  const digest = await specialistWritePayloadDigest({
+    operation: "specialist_finalization",
+    operationId,
+  });
+  return `finalization-${digest}`;
+}
+
 export function specialistWriteRetryDelayMs(
   attempt: number,
   random: () => number = Math.random,

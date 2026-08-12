@@ -126,6 +126,38 @@ test("interaction mode MCP state is owner-private, atomic, idempotent, revision-
       activityRecord.turns.find((turn) => turn.turnId === "specialist-switch-turn").interactionMode,
       { interactionModeId: "grill", revision: 1, turnOverride: true },
     );
+
+    const largeTurns = Array.from({ length: 48 }, (_, index) => ({
+      turnId: `large-record-turn-${index}`,
+      speaker: index % 2 === 0 ? "user" : "specialist",
+      body: `large-record-${index}: ${"evidence ".repeat(1_250)}`,
+      source: index % 2 === 0 ? "audio_transcript" : "codex",
+      sequence: index + 3,
+      occurredAt: 1_000 + index,
+    }));
+    await call(ownerClient, "append_practice_transcript", {
+      activityId: "activity-mode",
+      specialty: "leetcode",
+      turns: largeTurns,
+    });
+    const largeRecordResult = await raw(ownerClient, "get_activity_practice_record", { activityId: "activity-mode" });
+    assert.equal(largeRecordResult.isError, undefined);
+    assert.deepEqual(largeRecordResult.structuredContent, {
+      activityId: "activity-mode",
+      delivery: "content_json",
+      turnCount: 50,
+      noteCount: 0,
+      audioClipCount: 0,
+      deliveryAnalysisCount: 0,
+      codeAttemptCount: 0,
+    });
+    assert.ok(
+      !largeRecordResult.content[0].text.includes("\n  \"turns\""),
+      "a large record uses one compact JSON representation rather than a second pretty-printed copy",
+    );
+    const largeRecord = JSON.parse(largeRecordResult.content[0].text);
+    assert.equal(largeRecord.turns.length, 50);
+    assert.equal(largeRecord.turns.at(-1).body, largeTurns.at(-1).body);
     const overrideRetry = await call(ownerClient, "set_practice_interaction_mode", turnOverrideInput);
     assert.equal(overrideRetry.duplicate, true);
     assert.equal(overrideRetry.current.interactionModeId, "mentor");

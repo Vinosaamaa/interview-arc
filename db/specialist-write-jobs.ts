@@ -11,7 +11,8 @@ export type SpecialistWriteOperation =
   | "leetcode_code_attempt"
   | "personal_bank_question"
   | "behavioral_evidence_item"
-  | "behavioral_claim_status";
+  | "behavioral_claim_status"
+  | "specialist_finalization";
 
 export type SpecialistWriteStatus = SpecialistWriteJobRow["status"];
 

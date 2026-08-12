@@ -293,7 +293,13 @@ specialist task—the specialist:
 3. consults the required question references;
 4. saves one complete bundle per activity with
    `save_specialist_finalization`;
-5. schedules review when warranted.
+5. polls the returned durable write receipt until `saved` or `failed`—a
+   `queued`, `processing`, or `retry_wait` receipt is not a completed
+   finalization. Poll at most five times after 1, 2, 4, 8, and 15 second waits.
+   If the receipt is still non-terminal after that 30-second budget, preserve
+   its job ID and exact payload, report it pending, and resume it on a later
+   specialist/coordinator turn instead of polling indefinitely;
+6. schedules review when warranted.
 
 The specialist does **not** edit Git, switch branches, commit, open a pull
 request, mark an activity published, or deploy.
@@ -419,6 +425,9 @@ for their matching activities. Never claim an inaccessible reference was read.
    `get_activity_practice_record`. If a specialist task is unavailable, use an
    already-complete D1 bundle. If neither exists, report the specific activity
    as blocked; never invent the missing transcript or review.
+   When the tool returns `delivery: content_json`, parse the complete compact
+   record from `content`; the bounded `structuredContent` object is only the
+   delivery receipt and deliberately does not duplicate a large transcript.
 5. Render the type-specific Markdown artifacts and daily journals from D1.
 6. Preserve exact Pacific start/end time, elapsed time, session membership,
    outcome, notes, transcript, review, and references.

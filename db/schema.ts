@@ -1723,6 +1723,7 @@ export const specialistWriteJobs = sqliteTable(
         "personal_bank_question",
         "behavioral_evidence_item",
         "behavioral_claim_status",
+        "specialist_finalization",
       ],
     }).notNull(),
     payloadHash: text("payload_hash").notNull(),
