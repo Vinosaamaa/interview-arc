@@ -63,7 +63,7 @@ test("stores all Bugfree.ai behavioral questions with canonical answer reference
   );
 });
 
-test("starts with no published practice records while preserving the TikTok solution in the bank", async () => {
+test("loads the first published practice backlog while preserving the TikTok solution in the bank", async () => {
   const bank = await readJson("practice/system-design/bank/questions.json");
   const question = bank.questions.find((candidate) => candidate.id === "design-tiktok-style-for-you-feed");
   assert.equal(question.solutionPath, "practice/system-design/solutions/design-tiktok-for-you-feed.md");
@@ -84,8 +84,26 @@ test("starts with no published practice records while preserving the TikTok solu
   const hydratedMarketplace = content.questionBanks.systemDesign.find(
     (candidate) => candidate.id === "build-a-marketplace-feature-for-facebook",
   );
-  assert.equal(content.journals.length, 0);
-  assert.equal(content.artifacts.length, 0);
+  assert.deepEqual(content.journals.map((journal) => journal.date), [
+    "2026-08-11",
+    "2026-08-07",
+    "2026-08-06",
+    "2026-08-05",
+    "2026-08-04",
+    "2026-08-03",
+  ]);
+  assert.equal(content.artifacts.length, 17);
+  assert.equal(new Set(content.artifacts.map((artifact) => artifact.activityId)).size, 17);
+  const publishedActivities = content.journals.flatMap((journal) => journal.activities);
+  assert.equal(publishedActivities.length, 17);
+  assert.deepEqual(
+    [...content.artifacts.map((artifact) => artifact.activityId)].sort(),
+    [...publishedActivities.map((activity) => activity.id)].sort(),
+  );
+  assert.ok(content.artifacts.some((artifact) =>
+    artifact.path === "practice/behavioral/sessions/2026-08-11-experience-map-vortexnettech-attempt-01.md"
+      && artifact.activityId === "2026-08-10-extra-voice-plan-resume-map-vortexnettech-2026-08-10-v1-0"
+  ));
   assert.ok(hydrated.solutionProfile.summary.length > 100);
   assert.ok(hydrated.solutionProfile.sections.some((section) => section.title === "Requirements"));
   assert.equal(hydratedCourseSchedule.solutionProfile, undefined);
