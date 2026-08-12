@@ -63,13 +63,12 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} antialiased`}
       >
         {/*
-          THESIS: Interview preparation is a continuous record, not a pile of tools.
-          OWN WORLD: An incumbent editorial ledger extended by the approved Loop tracker.
-          STORY: Choose a workspace, follow one hiring process, inspect only recorded facts.
-          FIRST VIEWPORT: Workspace hierarchy, current company and role, then stage continuity.
-          FORM: Deep-teal rail, quiet paper surfaces, lime status, specialty accents.
-          FINISH: Responsive, keyboard-visible, reduced-motion safe, and explicit about missing data.
-          DESIGN SEED: approved-loop-continuity.
+          THESIS: Engineering memory is an immutable evidence ledger, not a generic analytics dashboard.
+          OWN-WORLD: Deep-teal shell, pale-mint field, cream reader, lime signal, Geist workhorse type, selective Newsreader display, and flat bordered instruments.
+          STORY: Choose Engineering, find one exact record, verify its source and lineage, then move through factual views without losing context.
+          FIRST VIEWPORT: A compact workspace rail and six-item Engineering nav frame a two-pane Journal; the selected record opens with status, title, immutable lineage, and exact-source action before narrative detail.
+          FORM: Approved two-pane Continuity Ledger, direction 1 of 1; seed key continuity-ledger-engineering.
+          FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
         */}
         {children}
       </body>

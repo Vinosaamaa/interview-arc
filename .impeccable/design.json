@@ -1,0 +1,370 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-12T12:14:20Z",
+  "title": "Design System: Interview Arc",
+  "extensions": {
+    "colorMeta": {
+      "shell": {
+        "role": "neutral",
+        "displayName": "Deep Teal Shell",
+        "description": "Persistent workspace rail and dark code surfaces.",
+        "tonalRamp": ["oklch(15% 0.035 195.3)", "oklch(27% 0.035 195.3)", "oklch(39% 0.035 195.3)", "oklch(51% 0.035 195.3)", "oklch(63% 0.035 195.3)", "oklch(75% 0.035 195.3)", "oklch(87% 0.035 195.3)", "oklch(95% 0.035 195.3)"]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Mineral Canvas",
+        "description": "Primary application field behind operating surfaces.",
+        "tonalRamp": ["oklch(15% 0.007 174.4)", "oklch(27% 0.007 174.4)", "oklch(39% 0.007 174.4)", "oklch(51% 0.007 174.4)", "oklch(63% 0.007 174.4)", "oklch(75% 0.007 174.4)", "oklch(87% 0.007 174.4)", "oklch(95% 0.007 174.4)"]
+      },
+      "canvas-deep": {
+        "role": "neutral",
+        "displayName": "Deep Mineral Canvas",
+        "description": "Quieter canvas layer for tonal separation.",
+        "tonalRamp": ["oklch(15% 0.011 176.3)", "oklch(27% 0.011 176.3)", "oklch(39% 0.011 176.3)", "oklch(51% 0.011 176.3)", "oklch(63% 0.011 176.3)", "oklch(75% 0.011 176.3)", "oklch(87% 0.011 176.3)", "oklch(95% 0.011 176.3)"]
+      },
+      "sheet": {
+        "role": "neutral",
+        "displayName": "Working Paper",
+        "description": "Controls, factual blocks, and ordinary work surfaces.",
+        "tonalRamp": ["oklch(15% 0.003 128.5)", "oklch(27% 0.003 128.5)", "oklch(39% 0.003 128.5)", "oklch(51% 0.003 128.5)", "oklch(63% 0.003 128.5)", "oklch(75% 0.003 128.5)", "oklch(87% 0.003 128.5)", "oklch(95% 0.003 128.5)"]
+      },
+      "sheet-soft": {
+        "role": "neutral",
+        "displayName": "Soft Working Paper",
+        "description": "Low-emphasis control and index surface.",
+        "tonalRamp": ["oklch(15% 0.005 165.0)", "oklch(27% 0.005 165.0)", "oklch(39% 0.005 165.0)", "oklch(51% 0.005 165.0)", "oklch(63% 0.005 165.0)", "oklch(75% 0.005 165.0)", "oklch(87% 0.005 165.0)", "oklch(95% 0.005 165.0)"]
+      },
+      "reader-sheet": {
+        "role": "neutral",
+        "displayName": "Cream Reader Sheet",
+        "description": "Long-form records and evidence reading.",
+        "tonalRamp": ["oklch(15% 0.005 95.1)", "oklch(27% 0.005 95.1)", "oklch(39% 0.005 95.1)", "oklch(51% 0.005 95.1)", "oklch(63% 0.005 95.1)", "oklch(75% 0.005 95.1)", "oklch(87% 0.005 95.1)", "oklch(95% 0.005 95.1)"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Teal-Black Ink",
+        "description": "Primary text and deepest factual marks.",
+        "tonalRamp": ["oklch(15% 0.032 195.4)", "oklch(27% 0.032 195.4)", "oklch(39% 0.032 195.4)", "oklch(51% 0.032 195.4)", "oklch(63% 0.032 195.4)", "oklch(75% 0.032 195.4)", "oklch(87% 0.032 195.4)", "oklch(95% 0.032 195.4)"]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Evidence Ink",
+        "description": "Supporting copy and quiet record metadata.",
+        "tonalRamp": ["oklch(15% 0.023 181.2)", "oklch(27% 0.023 181.2)", "oklch(39% 0.023 181.2)", "oklch(51% 0.023 181.2)", "oklch(63% 0.023 181.2)", "oklch(75% 0.023 181.2)", "oklch(87% 0.023 181.2)", "oklch(95% 0.023 181.2)"]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Hairline Rule",
+        "description": "Structural borders and primary dividers.",
+        "tonalRamp": ["oklch(15% 0.019 175.2)", "oklch(27% 0.019 175.2)", "oklch(39% 0.019 175.2)", "oklch(51% 0.019 175.2)", "oklch(63% 0.019 175.2)", "oklch(75% 0.019 175.2)", "oklch(87% 0.019 175.2)", "oklch(95% 0.019 175.2)"]
+      },
+      "line-soft": {
+        "role": "neutral",
+        "displayName": "Soft Hairline Rule",
+        "description": "Low-emphasis dividers inside dense instruments.",
+        "tonalRamp": ["oklch(15% 0.012 170.3)", "oklch(27% 0.012 170.3)", "oklch(39% 0.012 170.3)", "oklch(51% 0.012 170.3)", "oklch(63% 0.012 170.3)", "oklch(75% 0.012 170.3)", "oklch(87% 0.012 170.3)", "oklch(95% 0.012 170.3)"]
+      },
+      "primary": {
+        "role": "primary",
+        "displayName": "Ledger Teal",
+        "description": "Focus, provenance, progress, and affirmative interaction.",
+        "tonalRamp": ["oklch(15% 0.104 184.7)", "oklch(27% 0.104 184.7)", "oklch(39% 0.104 184.7)", "oklch(51% 0.104 184.7)", "oklch(63% 0.104 184.7)", "oklch(75% 0.104 184.7)", "oklch(87% 0.104 184.7)", "oklch(95% 0.104 184.7)"]
+      },
+      "primary-deep": {
+        "role": "primary",
+        "displayName": "Deep Ledger Teal",
+        "description": "Primary actions and high-emphasis interactive text.",
+        "tonalRamp": ["oklch(15% 0.072 188.3)", "oklch(27% 0.072 188.3)", "oklch(39% 0.072 188.3)", "oklch(51% 0.072 188.3)", "oklch(63% 0.072 188.3)", "oklch(75% 0.072 188.3)", "oklch(87% 0.072 188.3)", "oklch(95% 0.072 188.3)"]
+      },
+      "signal": {
+        "role": "secondary",
+        "displayName": "Lime Signal",
+        "description": "Current, live, or unmistakably selected state.",
+        "tonalRamp": ["oklch(15% 0.162 122.2)", "oklch(27% 0.162 122.2)", "oklch(39% 0.162 122.2)", "oklch(51% 0.162 122.2)", "oklch(63% 0.162 122.2)", "oklch(75% 0.162 122.2)", "oklch(87% 0.162 122.2)", "oklch(95% 0.162 122.2)"]
+      },
+      "signal-dark": {
+        "role": "secondary",
+        "displayName": "Signal Ink",
+        "description": "Dark text and icons on lime surfaces.",
+        "tonalRamp": ["oklch(15% 0.087 125.9)", "oklch(27% 0.087 125.9)", "oklch(39% 0.087 125.9)", "oklch(51% 0.087 125.9)", "oklch(63% 0.087 125.9)", "oklch(75% 0.087 125.9)", "oklch(87% 0.087 125.9)", "oklch(95% 0.087 125.9)"]
+      },
+      "warm": {
+        "role": "secondary",
+        "displayName": "Warm Action",
+        "description": "Exceptional warm emphasis and selected chart state.",
+        "tonalRamp": ["oklch(15% 0.161 38.2)", "oklch(27% 0.161 38.2)", "oklch(39% 0.161 38.2)", "oklch(51% 0.161 38.2)", "oklch(63% 0.161 38.2)", "oklch(75% 0.161 38.2)", "oklch(87% 0.161 38.2)", "oklch(95% 0.161 38.2)"]
+      },
+      "coding": {
+        "role": "tertiary",
+        "displayName": "Coding Coral",
+        "description": "Coding-category identification with text reinforcement.",
+        "tonalRamp": ["oklch(15% 0.159 33.6)", "oklch(27% 0.159 33.6)", "oklch(39% 0.159 33.6)", "oklch(51% 0.159 33.6)", "oklch(63% 0.159 33.6)", "oklch(75% 0.159 33.6)", "oklch(87% 0.159 33.6)", "oklch(95% 0.159 33.6)"]
+      },
+      "coding-soft": {
+        "role": "tertiary",
+        "displayName": "Coding Wash",
+        "description": "Low-emphasis coding-category surface.",
+        "tonalRamp": ["oklch(15% 0.018 39.4)", "oklch(27% 0.018 39.4)", "oklch(39% 0.018 39.4)", "oklch(51% 0.018 39.4)", "oklch(63% 0.018 39.4)", "oklch(75% 0.018 39.4)", "oklch(87% 0.018 39.4)", "oklch(95% 0.018 39.4)"]
+      },
+      "system": {
+        "role": "tertiary",
+        "displayName": "System Indigo",
+        "description": "System-design category identification with text reinforcement.",
+        "tonalRamp": ["oklch(15% 0.149 273.1)", "oklch(27% 0.149 273.1)", "oklch(39% 0.149 273.1)", "oklch(51% 0.149 273.1)", "oklch(63% 0.149 273.1)", "oklch(75% 0.149 273.1)", "oklch(87% 0.149 273.1)", "oklch(95% 0.149 273.1)"]
+      },
+      "system-soft": {
+        "role": "tertiary",
+        "displayName": "System Wash",
+        "description": "Low-emphasis system-design category surface.",
+        "tonalRamp": ["oklch(15% 0.020 279.9)", "oklch(27% 0.020 279.9)", "oklch(39% 0.020 279.9)", "oklch(51% 0.020 279.9)", "oklch(63% 0.020 279.9)", "oklch(75% 0.020 279.9)", "oklch(87% 0.020 279.9)", "oklch(95% 0.020 279.9)"]
+      },
+      "behavior": {
+        "role": "tertiary",
+        "displayName": "Behavioral Violet",
+        "description": "Behavioral-category identification with text reinforcement.",
+        "tonalRamp": ["oklch(15% 0.129 313.0)", "oklch(27% 0.129 313.0)", "oklch(39% 0.129 313.0)", "oklch(51% 0.129 313.0)", "oklch(63% 0.129 313.0)", "oklch(75% 0.129 313.0)", "oklch(87% 0.129 313.0)", "oklch(95% 0.129 313.0)"]
+      },
+      "behavior-soft": {
+        "role": "tertiary",
+        "displayName": "Behavioral Wash",
+        "description": "Low-emphasis behavioral-category surface.",
+        "tonalRamp": ["oklch(15% 0.019 312.8)", "oklch(27% 0.019 312.8)", "oklch(39% 0.019 312.8)", "oklch(51% 0.019 312.8)", "oklch(63% 0.019 312.8)", "oklch(75% 0.019 312.8)", "oklch(87% 0.019 312.8)", "oklch(95% 0.019 312.8)"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Editorial Display",
+        "purpose": "Record titles and major Engineering view headings."
+      },
+      "headline": {
+        "displayName": "Reader Headline",
+        "purpose": "Durable reader sections and editorial subsections."
+      },
+      "title": {
+        "displayName": "Instrument Title",
+        "purpose": "Nested content headings and compact panel titles."
+      },
+      "body": {
+        "displayName": "Reading Body",
+        "purpose": "Long-form evidence and summaries, normally constrained to 72ch."
+      },
+      "label": {
+        "displayName": "Factual Label",
+        "purpose": "Immutable references, dates, paths, and compact metadata."
+      }
+    },
+    "shadows": [
+      {
+        "name": "whisper",
+        "value": "0 1px 2px rgba(16, 42, 42, .04)",
+        "purpose": "Tiny separation on compact controls or factual blocks."
+      },
+      {
+        "name": "ambient",
+        "value": "0 8px 22px rgba(16, 42, 42, .055)",
+        "purpose": "Sticky or grouped surfaces separated gently from the mineral canvas."
+      },
+      {
+        "name": "floating",
+        "value": "0 22px 54px rgba(16, 42, 42, .09)",
+        "purpose": "Menus, popovers, and modal-level surfaces only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "duration-fast",
+        "value": "180ms",
+        "purpose": "Compact navigation and direct hover feedback."
+      },
+      {
+        "name": "duration-standard",
+        "value": "200ms",
+        "purpose": "Default border, background, color, shadow, and transform transitions."
+      },
+      {
+        "name": "ease-standard",
+        "value": "ease",
+        "purpose": "Default state-change easing."
+      },
+      {
+        "name": "reduced-motion-duration",
+        "value": ".01ms",
+        "purpose": "Engineering transition duration under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "facts-compact",
+        "value": "1120px"
+      },
+      {
+        "name": "workspace-mobile",
+        "value": "900px"
+      },
+      {
+        "name": "master-detail",
+        "value": "760px"
+      },
+      {
+        "name": "compact-shell",
+        "value": "680px"
+      },
+      {
+        "name": "phone",
+        "value": "460px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Action",
+      "kind": "button",
+      "refersTo": "action-primary",
+      "description": "The shared affirmative action, used when one next step must carry clear weight.",
+      "html": "<button class='ds-action-primary' type='button'>Add session</button>",
+      "css": ".ds-action-primary { min-height: 42px; padding: 0 16px; border: 1px solid var(--primary-deep); border-radius: var(--radius-control); background: var(--primary-deep); color: #fff; font-family: var(--font-geist-sans), Arial, sans-serif; font-size: .8rem; font-weight: 730; cursor: pointer; box-shadow: var(--shadow-xs); transition: border-color .2s ease, background-color .2s ease, color .2s ease, box-shadow .2s ease, transform .2s ease; } .ds-action-primary:hover { background: #0b514d; transform: translateY(-2px); box-shadow: 0 10px 22px rgba(15,95,90,.18); } .ds-action-primary:focus-visible { outline: 3px solid rgba(13,148,136,.28); outline-offset: 3px; } .ds-action-primary:active { transform: translateY(0); }"
+    },
+    {
+      "name": "Secondary Action",
+      "kind": "button",
+      "refersTo": "action-secondary",
+      "description": "A quiet bordered action for supporting or reversible choices.",
+      "html": "<button class='ds-action-secondary' type='button'>Connect</button>",
+      "css": ".ds-action-secondary { min-height: 42px; padding: 0 16px; border: 1px solid #b9cec8; border-radius: var(--radius-control); background: rgba(251,252,250,.92); color: #31504c; font-family: var(--font-geist-sans), Arial, sans-serif; font-size: .8rem; font-weight: 730; cursor: pointer; transition: border-color .2s ease, background-color .2s ease, color .2s ease, transform .2s ease; } .ds-action-secondary:hover { border-color: var(--primary); background: #fff; color: var(--primary-deep); } .ds-action-secondary:focus-visible { outline: 3px solid rgba(13,148,136,.28); outline-offset: 3px; } .ds-action-secondary:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Engineering Local Navigation",
+      "kind": "nav",
+      "refersTo": "engineering-nav-item",
+      "description": "The compact Engineering destination rail; lime marks the current local view.",
+      "html": "<nav class='ds-engineering-nav' aria-label='Engineering preview navigation'><button class='ds-engineering-nav-item' type='button' aria-current='page'><span><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5.5 4.5h11a2 2 0 0 1 2 2v13h-11a2 2 0 0 1-2-2v-13Z'/><path d='M8.5 8h6M8.5 11.5h6M8.5 15h4'/></svg></span>Journal</button></nav>",
+      "css": ".ds-engineering-nav { width: min(230px, 100%); padding: 8px; background: #102d2d; } .ds-engineering-nav-item { width: 100%; min-height: 48px; padding: 0 12px; border: 1px solid rgba(91,232,215,.24); border-radius: 9px; background: var(--signal); color: #15362f; display: grid; grid-template-columns: 30px minmax(0,1fr); align-items: center; text-align: left; font-family: var(--font-geist-sans), Arial, sans-serif; font-size: .88rem; font-weight: 690; cursor: pointer; transition: border-color .18s ease, background .18s ease, transform .18s ease; } .ds-engineering-nav-item > span { display: grid; place-items: center; color: #3c5a2d; } .ds-engineering-nav-item svg { width: 17px; height: 17px; } .ds-engineering-nav-item:hover { transform: translateX(2px); } .ds-engineering-nav-item:focus-visible { outline: 3px solid rgba(13,148,136,.28); outline-offset: 3px; } .ds-engineering-nav-item:active { transform: none; }"
+    },
+    {
+      "name": "Engineering Search Field",
+      "kind": "input",
+      "refersTo": "search-field",
+      "description": "A single compact search instrument with one shared focus boundary.",
+      "html": "<label class='ds-engineering-search'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' aria-hidden='true'><circle cx='10.8' cy='10.8' r='6.3'/><path d='m15.5 15.5 4.2 4.2'/></svg><span class='ds-sr-only'>Search Engineering records</span><input type='search' placeholder='Search evidence, Module, issue…'></label>",
+      "css": ".ds-engineering-search { height: 42px; padding: 0 11px; border: 1px solid #b9cec8; border-radius: 9px; display: flex; align-items: center; gap: 8px; background: #fff; color: #5c7770; transition: border-color .2s ease, box-shadow .2s ease; } .ds-engineering-search:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(13,148,136,.12); } .ds-engineering-search svg { width: 18px; height: 18px; flex: 0 0 auto; } .ds-engineering-search input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: #173b37; font-family: var(--font-geist-sans), Arial, sans-serif; font-size: .875rem; } .ds-engineering-search input::placeholder { color: #6f837e; } .ds-engineering-search input:focus-visible { outline: 0; } .ds-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }"
+    },
+    {
+      "name": "Record Status Chip",
+      "kind": "chip",
+      "refersTo": "status-chip",
+      "description": "A text-first status marker with compact contextual color.",
+      "html": "<span class='ds-status-chip' data-status='accepted'>Accepted</span>",
+      "css": ".ds-status-chip { width: max-content; padding: 5px 8px; border-radius: 999px; display: inline-flex; align-items: center; background: #e5f0ec; color: #285c54; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: .75rem; font-style: normal; font-weight: 760; line-height: 1; } .ds-status-chip[data-status='amended'], .ds-status-chip[data-status='superseded'] { background: #f3eae3; color: #7b462e; } .ds-status-chip[data-status='reconstructed'] { background: #eeeafa; color: #5d4891; }"
+    },
+    {
+      "name": "Record Index Row",
+      "kind": "card",
+      "refersTo": "record-row",
+      "description": "A full-width factual row whose active state joins directly to the reader.",
+      "html": "<button class='ds-record-row' type='button' aria-current='true'><span class='ds-record-meta'><i>Architecture Review</i><time>YYYY-MM-DD</time></span><strong>Engineering Journal Module</strong><small>interview-arc · architecture-review-example@1</small><em>Accepted</em></button>",
+      "css": ".ds-record-row { position: relative; width: min(344px,100%); min-height: 138px; padding: 18px 20px 17px; border: 0; border-bottom: 1px solid #d1dedb; display: grid; align-content: start; gap: 8px; background: transparent; color: #173a35; text-align: left; font-family: var(--font-geist-sans), Arial, sans-serif; cursor: pointer; transition: background-color .2s ease, color .2s ease; } .ds-record-row:hover, .ds-record-row[aria-current='true'] { background: #fff; } .ds-record-row:focus-visible { outline: 3px solid rgba(13,148,136,.28); outline-offset: -3px; } .ds-record-row:active { background: #f7faf9; } .ds-record-meta { display: flex; justify-content: space-between; gap: 12px; color: #5d7770; font: 730 .75rem/1.2 var(--font-geist-mono), ui-monospace, monospace; } .ds-record-row i, .ds-record-row em { font-style: normal; } .ds-record-row strong { color: #0c6f66; font-size: .875rem; line-height: 1.38; } .ds-record-row small { color: #60756f; font: .75rem/1.45 var(--font-geist-mono), ui-monospace, monospace; overflow-wrap: anywhere; } .ds-record-row em { width: max-content; padding: 4px 7px; border-radius: 999px; background: #dfeee9; color: #245c54; font-size: .75rem; font-weight: 800; }"
+    },
+    {
+      "name": "Copy Control",
+      "kind": "button",
+      "refersTo": "action-secondary",
+      "description": "The compact utility action attached directly to an immutable value.",
+      "html": "<button class='ds-copy-control' type='button' aria-label='Copy record reference'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><rect x='8' y='8' width='11' height='11' rx='2'/><path d='M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2'/></svg><span>Copy</span></button>",
+      "css": ".ds-copy-control { min-width: 67px; min-height: 30px; padding: 0 7px; border: 1px solid #b5cbc5; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; background: transparent; color: #38655d; font-family: var(--font-geist-sans), Arial, sans-serif; font-size: .75rem; font-weight: 760; cursor: pointer; transition: border-color .2s ease, background-color .2s ease, color .2s ease, transform .2s ease; } .ds-copy-control svg { width: 14px; height: 14px; } .ds-copy-control:hover { border-color: #0d9488; background: #f1faf7; color: #0b6f66; } .ds-copy-control:focus-visible { outline: 3px solid rgba(13,148,136,.28); outline-offset: 3px; } .ds-copy-control:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Provenance Register",
+      "kind": "custom",
+      "description": "The signature source-truth component: node, immutable values, copy actions, and exact-source exit.",
+      "html": "<div class='ds-provenance'><span class='ds-provenance-node' aria-hidden='true'></span><dl><div><dt>Record</dt><dd><code>architecture-review-example@1</code><button type='button'>Copy</button></dd></div><div><dt>Commit</dt><dd><code>8a0bdbc7bc72a901…</code><button type='button'>Copy</button></dd></div><div><dt>Source path</dt><dd><code>docs/engineering/records/example.md</code><button type='button'>Copy</button></dd></div></dl><a href='#'>Exact source ↗</a></div>",
+      "css": ".ds-provenance { width: min(760px,100%); padding: 10px 0; border-block: 1px solid #bfd2cc; display: grid; grid-template-columns: 14px minmax(0,1fr) auto; align-items: center; gap: 12px; background: #fffefa; color: #19463f; font-family: var(--font-geist-sans), Arial, sans-serif; } .ds-provenance-node { width: 12px; height: 12px; border: 2px solid #fffefa; border-radius: 50%; background: #0d9488; box-shadow: 0 0 0 1px #0d9488; } .ds-provenance dl { min-width: 0; margin: 0; display: grid; } .ds-provenance dl > div { min-width: 0; padding: 5px 0; display: grid; grid-template-columns: 76px minmax(0,1fr); align-items: start; gap: 10px; } .ds-provenance dt { padding-top: 5px; color: #617771; font-size: .75rem; font-weight: 760; } .ds-provenance dd { min-width: 0; margin: 0; display: flex; align-items: flex-start; gap: 6px; } .ds-provenance code { min-width: 0; padding-top: 4px; color: #19463f; font: 700 .75rem/1.45 var(--font-geist-mono), ui-monospace, monospace; overflow-wrap: anywhere; } .ds-provenance button { min-height: 30px; padding: 0 7px; border: 1px solid #b5cbc5; border-radius: 7px; background: transparent; color: #38655d; font-size: .75rem; font-weight: 760; cursor: pointer; } .ds-provenance button:hover, .ds-provenance a:hover { border-color: #0d9488; background: #f1faf7; color: #0b6f66; } .ds-provenance button:focus-visible, .ds-provenance a:focus-visible { outline: 3px solid rgba(13,148,136,.28); outline-offset: 3px; } .ds-provenance button:active, .ds-provenance a:active { transform: translateY(1px); } .ds-provenance > a { min-height: 38px; padding: 0 11px; border: 1px solid #aac5be; border-radius: 8px; display: inline-flex; align-items: center; background: transparent; color: #215a51; font-size: .75rem; font-weight: 780; text-decoration: none; } @media (max-width: 620px) { .ds-provenance { grid-template-columns: 1fr; } .ds-provenance-node { display: none; } .ds-provenance dl > div { grid-template-columns: 1fr; gap: 2px; } .ds-provenance dd { flex-direction: column; } .ds-provenance > a { width: max-content; } }"
+    },
+    {
+      "name": "Record Reader Sheet",
+      "kind": "card",
+      "refersTo": "reader-sheet",
+      "description": "The cream editorial surface that joins classification, title, summary, and durable reading.",
+      "html": "<article class='ds-reader-sheet'><header><div class='ds-reader-classification'><span>Architecture Review</span><i>Accepted</i></div><h2>Engineering Journal Module</h2><p>One versioned interface preserves exact evidence while independent readers evolve without duplicating privacy or correction rules.</p></header><div class='ds-reader-body'><h3>Context</h3><p>Durable records stay readable, attributable, and connected to their immutable source.</p><code>architecture-review-example@1</code></div></article>",
+      "css": ".ds-reader-sheet { position: relative; width: min(720px,100%); border: 1px solid #b9cdc7; border-radius: var(--radius-panel); overflow: hidden; background: #fffefa; color: #304d48; font-family: var(--font-geist-sans), Arial, sans-serif; } .ds-reader-sheet header { position: relative; padding: 38px 42px 28px; border-bottom: 1px solid #d5e0dc; overflow: hidden; } .ds-reader-sheet header::after { content: ''; position: absolute; width: 160px; height: 160px; right: -82px; top: -86px; border: 28px solid rgba(13,148,136,.07); border-radius: 50%; } .ds-reader-classification { position: relative; z-index: 1; display: flex; align-items: center; gap: 8px; color: #55716a; font: 760 .75rem/1 var(--font-geist-mono), ui-monospace, monospace; } .ds-reader-classification i { padding: 5px 8px; border-radius: 999px; background: #e5f0ec; color: #285c54; font-style: normal; } .ds-reader-sheet h2 { position: relative; z-index: 1; max-width: 19ch; margin: 17px 0 14px; color: #112f2c; font-family: var(--font-newsreader), Georgia, serif; font-size: clamp(2.2rem,4.2vw,4.1rem); font-weight: 650; line-height: .98; letter-spacing: -.035em; } .ds-reader-sheet header p { position: relative; z-index: 1; max-width: 70ch; margin: 0; color: #526d67; font-size: 1rem; line-height: 1.65; } .ds-reader-body { max-width: 72ch; padding: 32px 42px 48px; font-size: 1rem; line-height: 1.75; } .ds-reader-body h3 { margin: 0 0 12px; color: #153a35; font-family: var(--font-newsreader), Georgia, serif; font-size: 2rem; line-height: 1.08; letter-spacing: -.025em; } .ds-reader-body p { margin: 0 0 17px; } .ds-reader-body code { padding: 2px 5px; border-radius: 5px; background: #eaf2ef; color: #214e47; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: .86em; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Continuity Ledger",
+    "overview": "Interview Arc is a calm, exact, evidence-first editorial instrument. It should feel like a durable ledger for consequential work: factual enough to trust, composed enough to read for long periods, and dense enough to keep related evidence visible without becoming a generic analytics dashboard.\n\nThe visual world moves from a deep-teal operating shell through a pale mineral field into cream reading sheets. Geist carries controls and prose, Geist Mono marks immutable references and compact facts, and Newsreader gives records and section headings an editorial voice. The system is predominantly flat: tonal layers, one-pixel rules, and typographic hierarchy establish structure before restrained shadows do.\n\nDesktop surfaces keep an index and its selected record in one continuous instrument. Smaller screens preserve the same hierarchy by switching explicitly between list and reader. Expression comes from exact alignment, warm paper, selective teal, and rare lime signal—not decorative card grids, glassy chrome, or contest theater.",
+    "keyCharacteristics": [
+      "Deep-teal shell framing a pale mineral canvas and cream reading sheets.",
+      "Newsreader editorial headings over Geist body copy with Geist Mono factual identifiers.",
+      "Flat bordered instruments with hairline rules as the primary structure.",
+      "Lime reserved for current state; teal reserved for action, focus, and provenance.",
+      "Dense desktop split views that become explicit list-or-reader flows on mobile."
+    ],
+    "rules": [
+      {
+        "name": "The Signal Rarity Rule",
+        "body": "Lime identifies current, live, or unmistakably selected state; it is not a general-purpose panel fill.",
+        "section": "colors"
+      },
+      {
+        "name": "The Evidence Color Rule",
+        "body": "Teal may signal action, focus, and provenance. Specialty colors identify practice categories only, always with text or icon reinforcement.",
+        "section": "colors"
+      },
+      {
+        "name": "The Paper Stack Rule",
+        "body": "Deep shell, mineral canvas, mint index, and cream reader form the normal tonal depth sequence.",
+        "section": "colors"
+      },
+      {
+        "name": "The Editorial Restraint Rule",
+        "body": "Newsreader belongs to record titles, section headings, large factual numerals, and selective long-form emphasis; controls and dense metadata remain Geist or Geist Mono.",
+        "section": "typography"
+      },
+      {
+        "name": "The Exactness Rule",
+        "body": "Immutable references, commits, paths, dates, and compact measurements use mono; paragraph text never does.",
+        "section": "typography"
+      },
+      {
+        "name": "The Ledger Pair Rule",
+        "body": "On desktop, the index and selected record remain two halves of one bordered instrument; do not split them into a card gallery.",
+        "section": "layout"
+      },
+      {
+        "name": "The Single-Task Mobile Rule",
+        "body": "Below the master-detail breakpoint, show the list or the reader at full width and preserve an explicit route back.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat Ledger Rule",
+        "body": "Operational surfaces rest on tone and one-pixel rules; shadows indicate real stacking, not component importance.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Border Before Shadow Rule",
+        "body": "Establish hierarchy with background tone, alignment, and a boundary before adding elevation.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Instrument Shape Rule",
+        "body": "Use the smallest radius that preserves comfort and grouping; never inflate dense evidence controls into oversized capsules.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do preserve the deep-shell → mineral-canvas → mint-index → cream-reader sequence.",
+      "Do reserve lime for current, live, or selected state and teal for action, focus, and provenance.",
+      "Do use one-pixel rules and aligned registers to organize dense factual material.",
+      "Do set immutable references, commits, paths, dates, and measurements in Geist Mono.",
+      "Do switch the Journal to an explicit list-or-reader flow below 760px.",
+      "Do keep visible focus states, text reinforcement for color, and reduced-motion behavior."
+    ],
+    "donts": [
+      "Don't turn the Engineering Journal into a generic card, bento, or analytics-dashboard grid.",
+      "Don't use lime as a decorative wash or as a practice-category color.",
+      "Don't add glassy, neumorphic, or ubiquitous shadow treatment to flat evidence surfaces.",
+      "Don't use Newsreader for controls, dense metadata, or long identifiers.",
+      "Don't hide exact source, revision lineage, or verification context behind decorative summary cards.",
+      "Don't rely on color alone to communicate category, status, verification, or selection."
+    ]
+  }
+}
