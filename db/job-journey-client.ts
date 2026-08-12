@@ -21,18 +21,42 @@ export type JobJourneyReadFailure = {
     | "provider_network_error"
     | "provider_unknown_error";
   status?: number;
+  detail?: string;
 };
 
 class JobJourneyReadError extends Error {
   readonly code: JobJourneyReadFailure["code"];
   readonly status?: number;
+  readonly detail?: string;
 
-  constructor(code: JobJourneyReadFailure["code"], status?: number) {
+  constructor(code: JobJourneyReadFailure["code"], status?: number, detail?: string) {
     super(code);
     this.name = "JobJourneyReadError";
     this.code = code;
     this.status = status;
+    this.detail = detail;
   }
+}
+
+function redactedNetworkDetail(error: unknown, env: JobJourneyEnv): string {
+  const name = error instanceof Error ? error.name : "NonError";
+  let message = error instanceof Error ? error.message : typeof error;
+  const privateValues = [env.JOB_JOURNEY_BASE_URL, env.JOB_JOURNEY_SITE_TOKEN];
+  try {
+    privateValues.push(env.JOB_JOURNEY_BASE_URL ? new URL(env.JOB_JOURNEY_BASE_URL).hostname : undefined);
+  } catch {}
+  for (const value of privateValues) {
+    if (value) message = message.replaceAll(value, "<redacted>");
+  }
+  message = message
+    .replace(/https?:\/\/[^\s"'<>]+/gi, "<url>")
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "<email>")
+    .replace(/\/(?:Users|home|private|tmp|var)\/[^\s"'<>]+/g, "<path>")
+    .replace(/\b[A-Za-z0-9_-]{24,}\b/g, "<opaque>")
+    .replace(/[\r\n\t]+/g, " ")
+    .trim()
+    .slice(0, 240);
+  return `${name}: ${message || "no message"}`;
 }
 
 const CACHE_TTL_MS = 5 * 60 * 1_000;
@@ -96,8 +120,12 @@ async function readJson<T>(
         cf: { cacheTtl: 0 },
         redirect: "error",
       });
-    } catch {
-      throw new JobJourneyReadError("provider_network_error");
+    } catch (error) {
+      throw new JobJourneyReadError(
+        "provider_network_error",
+        undefined,
+        redactedNetworkDetail(error, env),
+      );
     }
     if (!response.ok) throw new JobJourneyReadError("provider_http_error", response.status);
     let responseValue: unknown;
@@ -206,9 +234,11 @@ function validateCoverLetterProviderBase(env: JobJourneyEnv): URL {
 
 export function describeJobJourneyReadFailure(error: unknown): JobJourneyReadFailure {
   if (error instanceof JobJourneyReadError) {
-    return error.status === undefined
-      ? { code: error.code }
-      : { code: error.code, status: error.status };
+    return {
+      code: error.code,
+      ...(error.status === undefined ? {} : { status: error.status }),
+      ...(error.detail === undefined ? {} : { detail: error.detail }),
+    };
   }
   return { code: "provider_unknown_error" };
 }
