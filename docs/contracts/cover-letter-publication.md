@@ -78,11 +78,14 @@ the JD, evidence-generation, DOCX, and PDF fingerprints, and sends one bounded
 multipart request to Interview Arc with the existing owner integration token.
 The complete JD, evidence text, and local paths never cross that request.
 
-The Worker reserves one owner-scoped operation and immutable artifact ID in D1,
-stages both files under one opaque R2 storage generation, verifies their size
-and hashes, and commits the complete pair atomically. A partial R2 write is
-cleaned up and cannot become ready. If delivery or commit is uncertain, the
-controller reads the same operation identity; it never invents another ID.
+The Worker reserves one owner-scoped operation and immutable artifact ID in D1.
+That reservation grants one bounded storage lease: an exact concurrent retry
+reads the pending receipt without staging to the same R2 generation, while a
+stale lease is reclaimed with a new generation and its abandoned generation is
+removed. The lease owner stages both files, verifies their size and hashes, and
+commits the complete pair atomically. A partial R2 write is cleaned up and
+cannot become ready. If delivery or commit is uncertain, the controller reads
+the same operation identity; it never invents another ID.
 
 Only `saved` with artifact state `ready` completes storage. Retry pending or
 uncertain work with the same manifest. Changed document bytes, JD, résumé

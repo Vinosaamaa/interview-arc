@@ -1,4 +1,5 @@
 import {
+  abandonCoverLetterArtifactReservation,
   completeCoverLetterArtifact,
   CoverLetterArtifactError,
   reserveCoverLetterArtifact,
@@ -294,7 +295,20 @@ export async function ingestCoverLetterArtifact(ownerId: string, request: Reques
   const parsed = await parseImport(request);
   const reservation = await reserveCoverLetterArtifact(ownerId, parsed.input);
   if (reservation.row.state !== "pending") return { status: 200, body: reservation.receipt };
+  if (!reservation.ownsStorageLease) return { status: 200, body: reservation.receipt };
   const storageGeneration = reservation.row.storageGeneration;
+  const replacedStorageGeneration = reservation.replacedStorageGeneration;
+  if (replacedStorageGeneration) {
+    const replacedKeys = await Promise.all((["docx", "pdf"] as const).map((format) => (
+      privateCoverLetterObjectKey({
+        ownerId,
+        artifactId: parsed.input.artifactId,
+        storageGeneration: replacedStorageGeneration,
+        format,
+      })
+    )));
+    await Promise.allSettled(replacedKeys.map((key) => bucket.delete(key)));
+  }
   const keys = {
     docx: await privateCoverLetterObjectKey({ ownerId, artifactId: parsed.input.artifactId, storageGeneration, format: "docx" }),
     pdf: await privateCoverLetterObjectKey({ ownerId, artifactId: parsed.input.artifactId, storageGeneration, format: "pdf" }),
@@ -303,12 +317,15 @@ export async function ingestCoverLetterArtifact(ownerId: string, request: Reques
     { key: keys.docx, storageGeneration, ...parsed.docx },
     { key: keys.pdf, storageGeneration, ...parsed.pdf },
   ]);
-  if (!staged.complete) throw new CoverLetterArtifactError(
-    "cover_letter_storage_unavailable",
-    "The private DOCX/PDF pair was not fully staged. Retry the exact operation.",
-    503,
-    true,
-  );
+  if (!staged.complete) {
+    await abandonCoverLetterArtifactReservation(ownerId, parsed.input, storageGeneration);
+    throw new CoverLetterArtifactError(
+      "cover_letter_storage_unavailable",
+      "The private DOCX/PDF pair was not fully staged. Retry the exact operation.",
+      503,
+      true,
+    );
+  }
   try {
     const receipt = await completeCoverLetterArtifact(
       ownerId,
@@ -320,6 +337,7 @@ export async function ingestCoverLetterArtifact(ownerId: string, request: Reques
   } catch (error) {
     if (error instanceof CoverLetterArtifactError && !error.retryable) {
       await Promise.allSettled([bucket.delete(keys.docx), bucket.delete(keys.pdf)]);
+      await abandonCoverLetterArtifactReservation(ownerId, parsed.input, storageGeneration);
     }
     throw error;
   }

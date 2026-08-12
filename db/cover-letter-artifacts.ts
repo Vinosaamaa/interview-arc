@@ -48,6 +48,8 @@ type ArtifactRow = {
 
 type FileRow = CoverLetterFileIntegrity & { artifactId: string; createdAt: number };
 
+const STORAGE_LEASE_MS = 2 * 60 * 1_000;
+
 export class CoverLetterArtifactError extends Error {
   constructor(
     readonly code: string,
@@ -164,6 +166,57 @@ function projectArtifact(row: ArtifactRow, files: FileRow[]) {
   };
 }
 
+async function replayReservation(
+  ownerId: string,
+  input: CoverLetterArtifactInput,
+  replay: ArtifactRow,
+  nowMs: number,
+) {
+  assertExact(replay, input);
+  if (replay.state !== "pending" || replay.updatedAt > nowMs - STORAGE_LEASE_MS) {
+    return {
+      duplicate: true,
+      ownsStorageLease: false,
+      replacedStorageGeneration: null,
+      row: replay,
+      receipt: projectReceipt(replay, await filesForArtifact(ownerId, replay.artifactId)),
+    };
+  }
+
+  const nextStorageGeneration = crypto.randomUUID();
+  await d1().prepare(`UPDATE cover_letter_artifacts
+    SET storage_generation = ?, updated_at = ?
+    WHERE owner_id = ? AND artifact_id = ? AND operation_id = ?
+      AND request_fingerprint = ? AND storage_generation = ?
+      AND state = 'pending' AND updated_at = ?`)
+    .bind(
+      nextStorageGeneration,
+      nowMs,
+      ownerId,
+      input.artifactId,
+      input.operationId,
+      input.requestFingerprint,
+      replay.storageGeneration,
+      replay.updatedAt,
+    ).run();
+  const claimed = await artifactByOperation(ownerId, input.operationId);
+  if (!claimed) throw new CoverLetterArtifactError(
+    "cover_letter_reservation_uncertain",
+    "The cover-letter upload lease is not yet authoritative.",
+    503,
+    true,
+  );
+  assertExact(claimed, input);
+  const ownsStorageLease = claimed.storageGeneration === nextStorageGeneration;
+  return {
+    duplicate: true,
+    ownsStorageLease,
+    replacedStorageGeneration: ownsStorageLease ? replay.storageGeneration : null,
+    row: claimed,
+    receipt: projectReceipt(claimed, await filesForArtifact(ownerId, claimed.artifactId)),
+  };
+}
+
 export async function reserveCoverLetterArtifact(
   ownerId: string,
   input: CoverLetterArtifactInput,
@@ -171,8 +224,7 @@ export async function reserveCoverLetterArtifact(
 ) {
   const replay = await artifactByOperation(ownerId, input.operationId);
   if (replay) {
-    assertExact(replay, input);
-    return { duplicate: true, row: replay, receipt: projectReceipt(replay, await filesForArtifact(ownerId, replay.artifactId)) };
+    return replayReservation(ownerId, input, replay, nowMs);
   }
 
   if (await artifactById(ownerId, input.artifactId)) {
@@ -253,8 +305,7 @@ export async function reserveCoverLetterArtifact(
         false,
       );
     }
-    assertExact(raced, input);
-    return { duplicate: true, row: raced, receipt: projectReceipt(raced, await filesForArtifact(ownerId, raced.artifactId)) };
+    return replayReservation(ownerId, input, raced, nowMs);
   }
 
   const row = await artifactByOperation(ownerId, input.operationId);
@@ -264,7 +315,39 @@ export async function reserveCoverLetterArtifact(
     503,
     true,
   );
-  return { duplicate: false, row, receipt: projectReceipt(row, []) };
+  return {
+    duplicate: false,
+    ownsStorageLease: true,
+    replacedStorageGeneration: null,
+    row,
+    receipt: projectReceipt(row, []),
+  };
+}
+
+export async function abandonCoverLetterArtifactReservation(
+  ownerId: string,
+  input: CoverLetterArtifactInput,
+  storageGeneration: string,
+) {
+  await d1().prepare(`DELETE FROM cover_letter_artifacts
+    WHERE owner_id = ? AND artifact_id = ? AND operation_id = ?
+      AND request_fingerprint = ? AND storage_generation = ? AND state = 'pending'`)
+    .bind(
+      ownerId,
+      input.artifactId,
+      input.operationId,
+      input.requestFingerprint,
+      storageGeneration,
+    ).run();
+  const remaining = await artifactByOperation(ownerId, input.operationId);
+  if (remaining?.state === "pending" && remaining.storageGeneration === storageGeneration) {
+    throw new CoverLetterArtifactError(
+      "cover_letter_reservation_uncertain",
+      "The failed cover-letter upload lease could not be released authoritatively.",
+      503,
+      true,
+    );
+  }
 }
 
 export async function completeCoverLetterArtifact(

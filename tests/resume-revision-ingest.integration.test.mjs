@@ -275,6 +275,31 @@ test("an authenticated staged DOCX/PDF pair becomes one immutable current resume
     assert.deepEqual(coverCreated.body.artifact.files.map((file) => file.format), ["docx", "pdf"]);
     assert.equal(/objectKey|storageGeneration|"jobDescription":/.test(JSON.stringify(coverCreated.body)), false);
 
+    const concurrentOperation = {
+      operationId: "cover-letter-save-concurrent",
+      artifactId: "cover-letter-artifact-concurrent",
+      lineageId: "cover-letter-artifact-concurrent",
+    };
+    const concurrentCoverLetters = await Promise.all([
+      postCoverLetter(baseUrl, ownerToken, concurrentOperation),
+      postCoverLetter(baseUrl, ownerToken, concurrentOperation),
+    ]);
+    assert.equal(concurrentCoverLetters.some(({ response: concurrentResponse }) => concurrentResponse.status === 201), true);
+    assert.equal(concurrentCoverLetters.every(({ response: concurrentResponse, body }) => (
+      [200, 201].includes(concurrentResponse.status) && ["staging", "saved"].includes(body.status)
+    )), true);
+    const concurrentSettled = await postCoverLetter(baseUrl, ownerToken, concurrentOperation);
+    assert.equal(concurrentSettled.response.status, 200);
+    assert.equal(concurrentSettled.body.status, "saved");
+    assert.deepEqual(concurrentSettled.body.artifact.files.map((file) => file.format), ["docx", "pdf"]);
+    for (const [format, bytes] of [["docx", coverFiles.docxBytes], ["pdf", coverFiles.pdfBytes]]) {
+      const download = await fetch(`${baseUrl}/cover-letter/files/cover-letter-artifact-concurrent/${format}`, {
+        headers: { authorization: `Bearer ${ownerToken}` },
+      });
+      assert.equal(download.status, 200);
+      assert.deepEqual(new Uint8Array(await download.arrayBuffer()), bytes);
+    }
+
     const coverReplay = await postCoverLetter(baseUrl, ownerToken);
     assert.equal(coverReplay.response.status, 200);
     assert.deepEqual(coverReplay.body, coverCreated.body);
