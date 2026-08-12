@@ -366,8 +366,9 @@ test("undated get_publication_queue returns a deterministic, exact, owner-scoped
       cwd: project,
       stdio: ["ignore", "pipe", "pipe"],
     });
-    worker.stdout.on("data", (chunk) => { workerLog += chunk; });
-    worker.stderr.on("data", (chunk) => { workerLog += chunk; });
+    const appendWorkerLog = (chunk) => { workerLog = `${workerLog}${chunk}`.slice(-16_384); };
+    worker.stdout.on("data", appendWorkerLog);
+    worker.stderr.on("data", appendWorkerLog);
     await waitForWorker(baseUrl, worker);
 
     primaryClient = await connectClient(baseUrl, primaryToken, "publication-queue-primary-integration");

@@ -5,13 +5,11 @@ export const d1MaximumBoundParameters = 100;
 export const d1ReadReservedParameterCount = 20;
 export const d1SafeInClauseBatchSize = d1MaximumBoundParameters - d1ReadReservedParameterCount;
 
-export function d1SafeInClauseBatches(ids: readonly string[]) {
+export function* d1SafeInClauseBatches(ids: readonly string[]) {
   const uniqueIds = [...new Set(ids.filter(Boolean))];
-  const batches: string[][] = [];
   for (let index = 0; index < uniqueIds.length; index += d1SafeInClauseBatchSize) {
-    batches.push(uniqueIds.slice(index, index + d1SafeInClauseBatchSize));
+    yield uniqueIds.slice(index, index + d1SafeInClauseBatchSize);
   }
-  return batches;
 }
 
 export async function readD1RowsInBatches<Row>(
