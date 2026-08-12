@@ -255,8 +255,9 @@ function behavioralMissingRequirements(profile: SolutionProfileLike) {
     requireDetailedSection(missing, sections, "reference answer patterns", /reference answer patterns?|answer structure and sources/i, 30);
   }
 
+  const alternativeAnswerMinimumWords = profile.projectDeepDive ? 60 : 80;
   for (const [index, alternative] of (profile.behavioralAnswer?.alternatives ?? []).entries()) {
-    if (!hasWords(alternative.answer, 80)) missing.push(`behavioral alternative ${index + 1} detailed answer`);
+    if (!hasWords(alternative.answer, alternativeAnswerMinimumWords)) missing.push(`behavioral alternative ${index + 1} detailed answer`);
     if (!hasWords(alternative.whenToUse, 12)) missing.push(`behavioral alternative ${index + 1} when to use`);
     if (!(alternative.evidence?.length || alternative.evidenceGaps?.length)) {
       missing.push(`behavioral alternative ${index + 1} evidence or explicit gaps`);

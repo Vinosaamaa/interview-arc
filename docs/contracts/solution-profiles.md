@@ -117,6 +117,12 @@ Task, personally owned Actions and decisions, verified Result and unresolved
 metrics, Learning, likely follow-ups, gaps, and reusable answer structure. A
 short polished paragraph does not replace those analysis sections.
 
+For a Project Deep Dive, an optional alternative may be a concise focus pivot
+rather than a second full STAR story. It still needs an independently usable
+answer, when-to-use guidance, and accepted evidence or explicit gaps; its depth
+is evaluated together with the exact comprehensive keyed sections it selects
+from, not by forcing that pivot to repeat the entire project walkthrough.
+
 Project Deep Dives use their exact focus-specific stable section keys in
 contract order. Every keyed section must contain the actual project mechanics,
 evidence boundary, decisions, operations, results/gaps, walkthrough, or
