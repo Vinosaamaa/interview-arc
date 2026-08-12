@@ -10,74 +10,62 @@ import { execFileSync } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { readContent } from "./content-source.mjs";
+import { buildTableRefreshSql } from "./content-import-sql.mjs";
 
 const root = process.cwd();
 const remote = process.argv.includes("--remote");
 const now = Date.now();
-
-function sqlString(value) {
-  return `'${String(value).replace(/'/g, "''")}'`;
-}
-
-function sqlJson(value) {
-  return sqlString(JSON.stringify(value));
-}
-
-// Full-refresh a table. Rows are chunked into several INSERTs so no single
-// statement exceeds SQLite's size limit (SQLITE_TOOBIG on large banks).
-const CHUNK_SIZE = 25;
-function insert(table, columns, rows) {
-  const parts = [`DELETE FROM ${table};`];
-  for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
-    const chunk = rows.slice(i, i + CHUNK_SIZE);
-    const values = chunk.map((row) => `(${row.join(", ")})`).join(",\n");
-    parts.push(`INSERT INTO ${table} (${columns.join(", ")}) VALUES\n${values};`);
-  }
-  return parts.join("\n");
-}
 
 const { journals, artifacts, stories, questionBanks } = await readContent(root);
 
 const statements = [];
 
 statements.push(
-  insert(
+  buildTableRefreshSql(
     "content_journals",
     ["date", "payload", "updated_at"],
-    journals.map((journal) => [sqlString(journal.date), sqlJson(journal), now]),
+    journals.map((journal) => [journal.date, JSON.stringify(journal), now]),
+    { largeTextColumn: "payload", keyColumns: ["date"] },
   ),
 );
 
 statements.push(
-  insert(
+  buildTableRefreshSql(
     "content_artifacts",
     ["path", "type", "date", "title", "payload", "updated_at"],
     artifacts.map((artifact) => [
-      sqlString(artifact.path),
-      sqlString(artifact.type),
-      sqlString(artifact.date),
-      sqlString(artifact.title),
-      sqlJson(artifact),
+      artifact.path,
+      artifact.type,
+      artifact.date,
+      artifact.title,
+      JSON.stringify(artifact),
       now,
     ]),
+    { largeTextColumn: "payload", keyColumns: ["path"] },
   ),
 );
 
 statements.push(
-  insert(
+  buildTableRefreshSql(
     "content_stories",
     ["project_id", "ord", "payload", "updated_at"],
-    stories.map((story, index) => [sqlString(story.projectId), index, sqlJson(story), now]),
+    stories.map((story, index) => [story.projectId, index, JSON.stringify(story), now]),
+    { largeTextColumn: "payload", keyColumns: ["project_id", "ord"] },
   ),
 );
 
 const bankRows = [];
 for (const category of ["leetcode", "systemDesign", "behavioral"]) {
   questionBanks[category].forEach((question, index) => {
-    bankRows.push([sqlString(category), sqlString(question.id), index, sqlJson(question), now]);
+    bankRows.push([category, question.id, index, JSON.stringify(question), now]);
   });
 }
-statements.push(insert("content_bank", ["category", "id", "ord", "payload", "updated_at"], bankRows));
+statements.push(
+  buildTableRefreshSql("content_bank", ["category", "id", "ord", "payload", "updated_at"], bankRows, {
+    largeTextColumn: "payload",
+    keyColumns: ["category", "id"],
+  }),
+);
 
 const sql = statements.join("\n\n") + "\n";
 
