@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-08-07",
+  "practiceTimezone": "America/Los_Angeles",
+  "focus": "Basic Calculator IV, Concatenated Words, and Word Break II",
+  "sessions": [],
+  "timerGroups": [
+    {
+      "id": "2026-08-06-extra-basic-calculator-iv-msikcqrx-0",
+      "label": "Basic Calculator IV",
+      "allocatedSeconds": 2700,
+      "activityIds": [
+        "2026-08-06-extra-basic-calculator-iv-msikcqrx-0"
+      ]
+    },
+    {
+      "id": "2026-08-06-extra-concatenated-words-msikcqrx-1",
+      "label": "Concatenated Words",
+      "allocatedSeconds": 2700,
+      "activityIds": [
+        "2026-08-06-extra-concatenated-words-msikcqrx-1"
+      ]
+    },
+    {
+      "id": "2026-08-07-extra-word-break-ii-msjrhfhv-1",
+      "label": "Word Break II",
+      "allocatedSeconds": 2700,
+      "activityIds": [
+        "2026-08-07-extra-word-break-ii-msjrhfhv-1"
+      ]
+    }
+  ],
+  "activities": [
+    {
+      "schemaVersion": 2,
+      "id": "2026-08-06-extra-basic-calculator-iv-msikcqrx-0",
+      "questionId": "basic-calculator-iv",
+      "date": "2026-08-07",
+      "source": "extra",
+      "type": "leetcode",
+      "recordKind": "attempt",
+      "title": "Basic Calculator IV",
+      "url": "https://leetcode.com/problems/basic-calculator-iv/",
+      "allocatedSeconds": 2700,
+      "timerGroupId": "2026-08-06-extra-basic-calculator-iv-msikcqrx-0",
+      "timingSource": "website",
+      "startedAt": "2026-08-06T23:34:26.281-07:00",
+      "endedAt": "2026-08-07T01:19:22.590-07:00",
+      "elapsedSeconds": 3567,
+      "status": "completed",
+      "outcome": "failed",
+      "artifactPath": "practice/leetcode/attempts/2026-08-07-basic-calculator-iv.md",
+      "reviewDates": [
+        "2026-08-11"
+      ],
+      "reviewReason": "failed"
+    },
+    {
+      "schemaVersion": 2,
+      "id": "2026-08-06-extra-concatenated-words-msikcqrx-1",
+      "questionId": "concatenated-words",
+      "date": "2026-08-07",
+      "source": "extra",
+      "type": "leetcode",
+      "recordKind": "attempt",
+      "title": "Concatenated Words",
+      "url": "https://leetcode.com/problems/concatenated-words/",
+      "allocatedSeconds": 2700,
+      "timerGroupId": "2026-08-06-extra-concatenated-words-msikcqrx-1",
+      "timingSource": "website",
+      "startedAt": "2026-08-07T03:10:11.192-07:00",
+      "endedAt": "2026-08-07T04:20:43.024-07:00",
+      "elapsedSeconds": 4231,
+      "status": "completed",
+      "outcome": "solved_after_reviewing_approach",
+      "artifactPath": "practice/leetcode/attempts/2026-08-07-concatenated-words.md",
+      "reviewDates": [
+        "2026-08-14"
+      ],
+      "reviewReason": "approach_review"
+    },
+    {
+      "schemaVersion": 2,
+      "id": "2026-08-07-extra-word-break-ii-msjrhfhv-1",
+      "questionId": "word-break-ii",
+      "date": "2026-08-07",
+      "source": "extra",
+      "type": "leetcode",
+      "recordKind": "attempt",
+      "title": "Word Break II",
+      "url": "https://leetcode.com/problems/word-break-ii/",
+      "allocatedSeconds": 2700,
+      "timerGroupId": "2026-08-07-extra-word-break-ii-msjrhfhv-1",
+      "timingSource": "website",
+      "startedAt": "2026-08-07T19:39:42.493-07:00",
+      "endedAt": "2026-08-07T21:38:16.044-07:00",
+      "elapsedSeconds": 5842,
+      "status": "completed",
+      "outcome": "solved",
+      "artifactPath": "practice/leetcode/attempts/2026-08-07-word-break-ii.md"
+    }
+  ]
+}
