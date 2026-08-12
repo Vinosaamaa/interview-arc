@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 
 import { careerMaterialsCoverLetterResponseSchema } from "../../../cover-letter-contract";
 import {
+  describeJobJourneyReadFailure,
   fetchCoverLetters,
   resolveJobJourneyDownloadUrl,
 } from "../../../../db/job-journey-client";
@@ -28,7 +29,8 @@ export async function GET(request: Request) {
     let provider;
     try {
       provider = await fetchCoverLetters(env, ownerId, params);
-    } catch {
+    } catch (error) {
+      console.warn("cover_letter_provider_unavailable", describeJobJourneyReadFailure(error));
       const unavailable = careerMaterialsCoverLetterResponseSchema.parse({
         schemaVersion: 1,
         status: "unavailable",
