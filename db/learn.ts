@@ -54,6 +54,7 @@ import { foldElapsed, orderContiguousTurns } from "./timed-conversation";
 
 export {
   appendLearningTranscriptSchema,
+  appendLearningVoiceTranscriptSchema,
   attachLearningArtifactSchema,
   approveLearningEnrollmentSchema,
   controlLearningSessionSchema,
@@ -1807,6 +1808,75 @@ export async function queryLearningSessions(ownerId: string, inputValue: unknown
     return { session, intervals, turns, evidencePolicy: "transcript_only" as const };
   }));
   return { sessions, truncated: rows.length === 100 };
+}
+
+export async function readActiveLearningVoiceSessions(ownerId: string) {
+  const db = getDb();
+  const sessions = await db.select().from(learningSessions).where(and(
+    eq(learningSessions.ownerId, ownerId),
+    eq(learningSessions.state, "running"),
+  )).orderBy(desc(learningSessions.updatedAt)).limit(2);
+
+  return Promise.all(sessions.map(async (session) => {
+    const [lessonRows, lessonRevisionRows, courseRevisionRows, lastTurnRows] = await Promise.all([
+      db.select().from(learningLessons).where(and(
+        eq(learningLessons.ownerId, ownerId),
+        eq(learningLessons.lessonId, session.lessonId),
+      )).limit(1),
+      db.select().from(learningLessonRevisions).where(and(
+        eq(learningLessonRevisions.ownerId, ownerId),
+        eq(learningLessonRevisions.lessonId, session.lessonId),
+        eq(learningLessonRevisions.revision, session.lessonRevision),
+      )).limit(1),
+      session.courseId && session.blueprintRevision
+        ? db.select().from(learningCourseBlueprintRevisions).where(and(
+          eq(learningCourseBlueprintRevisions.ownerId, ownerId),
+          eq(learningCourseBlueprintRevisions.courseId, session.courseId),
+          eq(learningCourseBlueprintRevisions.revision, session.blueprintRevision),
+        )).limit(1)
+        : Promise.resolve([]),
+      db.select({ sequence: learningTranscriptTurns.sequence }).from(learningTranscriptTurns).where(and(
+        eq(learningTranscriptTurns.ownerId, ownerId),
+        eq(learningTranscriptTurns.sessionId, session.sessionId),
+      )).orderBy(desc(learningTranscriptTurns.sequence)).limit(1),
+    ]);
+    const lesson = lessonRows[0];
+    if (!lesson || !lessonRevisionRows[0]) {
+      throw new LearningError(
+        "learning_voice_context_incomplete",
+        "The active Learning Session is missing its exact Lesson revision.",
+      );
+    }
+    const lessonRevision = learningLessonSnapshotSchema.parse(lessonRevisionRows[0].snapshot);
+    if (session.courseId && !courseRevisionRows[0]) {
+      throw new LearningError(
+        "learning_voice_context_incomplete",
+        "The active Learning Session is missing its exact Course Blueprint revision.",
+      );
+    }
+    const blueprint = courseRevisionRows[0]
+      ? learningCourseBlueprintSchema.parse(courseRevisionRows[0].snapshot)
+      : null;
+    const courseModule = blueprint?.modules.find((candidate) => candidate.moduleId === lesson?.moduleId) ?? null;
+
+    return {
+      sessionId: session.sessionId,
+      scopeType: session.scopeType,
+      courseId: session.courseId,
+      courseTitle: blueprint?.title ?? null,
+      moduleId: lesson.moduleId,
+      moduleTitle: courseModule?.title ?? null,
+      lessonId: session.lessonId,
+      lessonRevision: session.lessonRevision,
+      lessonTitle: lessonRevision.title,
+      state: session.state,
+      transcriptRevision: session.transcriptRevision,
+      nextTranscriptSequence: (lastTurnRows[0]?.sequence ?? -1) + 1,
+      startedAt: session.startedAt,
+      runningSince: session.runningSince,
+      evidencePolicy: "transcript_only" as const,
+    };
+  }));
 }
 
 export async function assertLearningAudioForbidden(ownerId: string, subjectId: string) {

@@ -28,6 +28,17 @@ async function call(client, name, args) {
 
 const callRaw = (client, name, args) => client.callTool({ name, arguments: args });
 
+async function voiceRequest(baseUrl, token, path, init = {}) {
+  return fetch(`${baseUrl}${path}`, {
+    ...init,
+    headers: {
+      authorization: `Bearer ${token}`,
+      ...(init.body ? { "content-type": "application/json" } : {}),
+      ...init.headers,
+    },
+  });
+}
+
 const courseBlueprint = {
   courseId: "course-session-reliability",
   state: "draft",
@@ -145,6 +156,13 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     client = await connectMcpClient(baseUrl, token, "learning-session-owner");
     otherClient = await connectMcpClient(baseUrl, otherToken, "learning-session-other");
 
+    await call(client, "register_specialist_task", {
+      specialty: "learning_specialist",
+      threadId: "task-learning-session-specialist",
+      hostId: "host-local-test",
+      title: "Interview Arc — Learning Specialist",
+    });
+
     await call(client, "create_learning_course_blueprint", {
       operationId: "session-course-create-1",
       authorization: "learning_specialist",
@@ -200,6 +218,28 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     const changedStart = await callRaw(client, "control_learning_session", { ...startInput, action: "pause" });
     assert.equal(changedStart.isError, true);
     assert.equal(changedStart.structuredContent.code, "learning_operation_conflict");
+
+    const learningContextResponse = await voiceRequest(baseUrl, token, "/voice/context");
+    assert.equal(learningContextResponse.status, 200);
+    const learningContext = await learningContextResponse.json();
+    assert.equal(learningContext.captureTarget, "learning");
+    assert.equal(learningContext.focusedActivity, null);
+    assert.equal(learningContext.focusedLearningSession.sessionId, createSessionInput.sessionId);
+    assert.equal(learningContext.focusedLearningSession.courseId, courseBlueprint.courseId);
+    assert.equal(learningContext.focusedLearningSession.courseTitle, courseBlueprint.title);
+    assert.equal(learningContext.focusedLearningSession.moduleId, "session-core");
+    assert.equal(learningContext.focusedLearningSession.moduleTitle, "Session core");
+    assert.equal(learningContext.focusedLearningSession.lessonId, lesson.lessonId);
+    assert.equal(learningContext.focusedLearningSession.lessonRevision, 1);
+    assert.equal(learningContext.focusedLearningSession.lessonTitle, lesson.title);
+    assert.equal(learningContext.focusedLearningSession.transcriptRevision, 0);
+    assert.equal(learningContext.focusedLearningSession.nextTranscriptSequence, 0);
+    assert.equal(learningContext.focusedLearningSession.evidencePolicy, "transcript_only");
+    assert.equal(learningContext.specialist.specialty, "learning_specialist");
+
+    const otherLearningContext = await voiceRequest(baseUrl, otherToken, "/voice/context");
+    assert.equal(otherLearningContext.status, 200);
+    assert.equal((await otherLearningContext.json()).focusedLearningSession, null);
 
     const typedTurns = {
       operationId: "learning-transcript-typed-1",
@@ -473,14 +513,71 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
       action: "start",
       authorization: "explicit_user_instruction",
     });
+
+    const voiceHTTPInput = {
+      protocolVersion: 2,
+      operationId: "learning-voice-http-2",
+      sessionId: "learning-session-reliability-2",
+      expectedTranscriptRevision: 0,
+      turnId: "learner-voice-http-turn-0",
+      sequence: 0,
+      transcript: "Arc Voice persists this exact Learning turn without cloud audio.",
+      checksum: sha256("Arc Voice persists this exact Learning turn without cloud audio."),
+      occurredAt: 1_786_400_004_500,
+    };
+    const voiceHTTPResponse = await voiceRequest(baseUrl, token, "/voice/learning-transcripts", {
+      method: "POST",
+      body: JSON.stringify(voiceHTTPInput),
+    });
+    assert.equal(voiceHTTPResponse.status, 200);
+    const voiceHTTPReceipt = await voiceHTTPResponse.json();
+    assert.equal(voiceHTTPReceipt.protocolVersion, 2);
+    assert.equal(voiceHTTPReceipt.transcriptRevision, 1);
+    assert.deepEqual(voiceHTTPReceipt.turnIds, ["learner-voice-http-turn-0"]);
+    assert.equal(voiceHTTPReceipt.evidencePolicy, "transcript_only");
+    assert.equal(voiceHTTPReceipt.duplicate, false);
+
+    const exactVoiceHTTPRetry = await voiceRequest(baseUrl, token, "/voice/learning-transcripts", {
+      method: "POST",
+      body: JSON.stringify(voiceHTTPInput),
+    });
+    assert.equal(exactVoiceHTTPRetry.status, 200);
+    assert.equal((await exactVoiceHTTPRetry.json()).duplicate, true);
+
+    const changedVoiceHTTPRetry = await voiceRequest(baseUrl, token, "/voice/learning-transcripts", {
+      method: "POST",
+      body: JSON.stringify({ ...voiceHTTPInput, transcript: "Changed retries fail closed." }),
+    });
+    assert.equal(changedVoiceHTTPRetry.status, 409);
+    assert.equal((await changedVoiceHTTPRetry.json()).code, "learning_transcript_checksum_mismatch");
+
+    const changedVoiceHTTPIdentity = {
+      ...voiceHTTPInput,
+      transcript: "Changed retries with a matching checksum still fail closed.",
+      checksum: sha256("Changed retries with a matching checksum still fail closed."),
+    };
+    const changedVoiceHTTPIdentityRetry = await voiceRequest(baseUrl, token, "/voice/learning-transcripts", {
+      method: "POST",
+      body: JSON.stringify(changedVoiceHTTPIdentity),
+    });
+    assert.equal(changedVoiceHTTPIdentityRetry.status, 409);
+    assert.equal((await changedVoiceHTTPIdentityRetry.json()).code, "learning_operation_conflict");
+
+    const otherOwnerVoiceHTTPAttempt = await voiceRequest(baseUrl, otherToken, "/voice/learning-transcripts", {
+      method: "POST",
+      body: JSON.stringify(voiceHTTPInput),
+    });
+    assert.equal(otherOwnerVoiceHTTPAttempt.status, 409);
+    assert.equal((await otherOwnerVoiceHTTPAttempt.json()).code, "learning_session_not_found");
+
     await call(client, "append_learning_transcript", {
       operationId: "learning-transcript-correction-2",
       sessionId: "learning-session-reliability-2",
-      expectedTranscriptRevision: 0,
+      expectedTranscriptRevision: 1,
       writer: "learning_specialist",
       turns: [{
         turnId: "learner-correction-turn-0",
-        sequence: 0,
+        sequence: 1,
         speaker: "learner",
         source: "typed",
         body: "The Session revision serializes timer state while transcriptRevision serializes exact turns.",
@@ -502,7 +599,7 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
       operationId: "learning-session-finish-2-missing-supersession",
       sessionId: "learning-session-reliability-2",
       expectedRevision: 1,
-      expectedTranscriptRevision: 1,
+      expectedTranscriptRevision: 2,
       authorization: "explicit_user_instruction",
       finalization: correctionFinalization,
     });
@@ -512,7 +609,7 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
       operationId: "learning-session-finish-2",
       sessionId: "learning-session-reliability-2",
       expectedRevision: 1,
-      expectedTranscriptRevision: 1,
+      expectedTranscriptRevision: 2,
       authorization: "explicit_user_instruction",
       finalization: {
         ...correctionFinalization,

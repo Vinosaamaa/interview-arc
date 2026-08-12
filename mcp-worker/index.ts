@@ -69,6 +69,7 @@ import {
   LearningError,
   appendLearningTranscript,
   appendLearningTranscriptSchema,
+  appendLearningVoiceTranscriptSchema,
   approveLearningEnrollment,
   approveLearningEnrollmentSchema,
   assertLearningAudioForbidden,
@@ -90,6 +91,7 @@ import {
   queryLearningSessionsSchema,
   queryLearningWorkspace,
   queryLearningWorkspaceSchema,
+  readActiveLearningVoiceSessions,
   reviseLearningCourseBlueprint,
   reviseLearningCourseBlueprintSchema,
   saveLearningLessonRevision,
@@ -482,55 +484,83 @@ async function voiceContext(ownerId: string, request: Request) {
   // newly started stopwatch appear several seconds—or minutes—late. Resolve
   // the one running timer directly, and load richer metadata only when it exists.
   const date = dateInPracticeTimeZone();
-  const [activity, timerInstrument] = await Promise.all([
+  const [activity, timerInstrument, learningSessions] = await Promise.all([
     readActiveVoiceActivity(ownerId),
     readVoiceTimerInstrument(ownerId),
+    readActiveLearningVoiceSessions(ownerId),
   ]);
-  if (!activity) {
+  const learningSession = learningSessions.length === 1 ? learningSessions[0] : null;
+  const captureTarget = learningSessions.length > 1 || (activity && learningSession)
+    ? "ambiguous" as const
+    : learningSession
+      ? "learning" as const
+      : activity
+        ? "interview" as const
+        : null;
+  if (!activity && !learningSession && learningSessions.length === 0) {
     return json(request, {
       protocolVersion: VOICE_PROTOCOL_VERSION,
       date,
+      captureTarget,
       focusedActivity: null,
+      focusedLearningSession: null,
       timerInstrument,
       specialist: null,
-      message: "Start an activity stopwatch in Interview Arc before recording a linked answer.",
+      message: "Start an Interview activity or Learning Session before recording linked Voice text.",
     });
   }
   const [content, specialists] = await Promise.all([
-    loadContentIndex(),
+    activity ? loadContentIndex() : Promise.resolve(null),
     readSpecialistTasks(ownerId),
   ]);
-  const bank = activity.type === "system_design"
-    ? content.questionBanks.systemDesign
-    : activity.type === "behavioral"
-      ? content.questionBanks.behavioral
-      : content.questionBanks.leetcode;
-  const question = bank.find((candidate) => candidate.id === activity.questionId)
-    ?? bank.find((candidate) => activity.url && candidate.url === activity.url)
-    ?? null;
-  const specialist = specialists.find((candidate) => candidate.specialty === activity.type) ?? null;
+  const bank = activity && content
+    ? activity.type === "system_design"
+      ? content.questionBanks.systemDesign
+      : activity.type === "behavioral"
+        ? content.questionBanks.behavioral
+        : content.questionBanks.leetcode
+    : [];
+  const question = activity
+    ? bank.find((candidate) => candidate.id === activity.questionId)
+      ?? bank.find((candidate) => activity.url && candidate.url === activity.url)
+      ?? null
+    : null;
+  const specialistType = captureTarget === "learning"
+    ? "learning_specialist"
+    : captureTarget === "interview"
+      ? activity?.type
+      : null;
+  const specialist = specialistType
+    ? specialists.find((candidate) => candidate.specialty === specialistType) ?? null
+    : null;
+  const focusedActivity = activity ? {
+    activityId: activity.id,
+    workbenchId: typeof activity.workbenchId === "string"
+      ? activity.workbenchId
+      : timerInstrument.workbenchId,
+    questionId: activity.questionId ?? null,
+    specialty: voiceSpecialty(activity.type),
+    interviewArcSpecialty: activity.type,
+    title: activity.title,
+    prompt: activity.prompt ?? question?.prompt ?? null,
+    topics: question?.topics ?? [],
+    tags: [...new Set([...(question?.tags ?? []), ...(question?.companyTags ?? [])])],
+    companies: question?.companyTags ?? [],
+    projects: [],
+    vocabularyPackIds: activity.vocabularyPackIds ?? question?.vocabularyPackIds ?? [],
+    speechTerms: activity.speechTerms ?? question?.speechTerms ?? [],
+    startedAt: activity.timer.startedAt,
+    runningSince: activity.timer.runningSince,
+  } : null;
+  const ambiguityMessage = learningSessions.length > 1
+    ? "Pause all but one running Learning Session before recording linked Voice text."
+    : "An Interview activity and Learning Session are both running. Pause one before recording linked Voice text.";
   return json(request, {
     protocolVersion: VOICE_PROTOCOL_VERSION,
     date,
-    focusedActivity: {
-      activityId: activity.id,
-      workbenchId: typeof activity.workbenchId === "string"
-        ? activity.workbenchId
-        : timerInstrument.workbenchId,
-      questionId: activity.questionId ?? null,
-      specialty: voiceSpecialty(activity.type),
-      interviewArcSpecialty: activity.type,
-      title: activity.title,
-      prompt: activity.prompt ?? question?.prompt ?? null,
-      topics: question?.topics ?? [],
-      tags: [...new Set([...(question?.tags ?? []), ...(question?.companyTags ?? [])])],
-      companies: question?.companyTags ?? [],
-      projects: [],
-      vocabularyPackIds: activity.vocabularyPackIds ?? question?.vocabularyPackIds ?? [],
-      speechTerms: activity.speechTerms ?? question?.speechTerms ?? [],
-      startedAt: activity.timer.startedAt,
-      runningSince: activity.timer.runningSince,
-    },
+    captureTarget,
+    focusedActivity,
+    focusedLearningSession: learningSession,
     timerInstrument,
     specialist: specialist ? {
       specialty: specialist.specialty,
@@ -538,8 +568,82 @@ async function voiceContext(ownerId: string, request: Request) {
       hostId: specialist.hostId,
       title: specialist.title,
     } : null,
-    message: specialist ? null : `Connect the ${activity.type} specialist task before sending a recording.`,
+    message: captureTarget === "ambiguous"
+      ? ambiguityMessage
+      : specialist
+        ? null
+        : captureTarget === "learning"
+          ? "Connect the Learning Specialist task before sending Learning Voice text."
+          : `Connect the ${activity?.type} specialist task before sending a recording.`,
   });
+}
+
+async function voiceLearningTranscript(ownerId: string, request: Request, env: Env) {
+  try {
+    const contentLength = Number(request.headers.get("content-length") ?? 0);
+    if (Number.isFinite(contentLength) && contentLength > 64_000) {
+      return json(request, {
+        error: "The Learning Voice transcript request is too large.",
+        code: "learning_voice_payload_too_large",
+        retryable: false,
+      }, { status: 413 });
+    }
+    const text = await request.text();
+    if (new TextEncoder().encode(text).byteLength > 64_000) {
+      return json(request, {
+        error: "The Learning Voice transcript request is too large.",
+        code: "learning_voice_payload_too_large",
+        retryable: false,
+      }, { status: 413 });
+    }
+    const input = appendLearningVoiceTranscriptSchema.parse(JSON.parse(text));
+    const checksum = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input.transcript));
+    const actualChecksum = [...new Uint8Array(checksum)]
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+    if (actualChecksum !== input.checksum) {
+      throw new LearningError(
+        "learning_transcript_checksum_mismatch",
+        "The Learning Voice transcript does not match its stable checksum.",
+      );
+    }
+    const receipt = await appendLearningTranscript(ownerId, {
+      operationId: input.operationId,
+      sessionId: input.sessionId,
+      expectedTranscriptRevision: input.expectedTranscriptRevision,
+      writer: "arc_voice",
+      turns: [{
+        turnId: input.turnId,
+        sequence: input.sequence,
+        speaker: "learner",
+        source: "voice_transcript",
+        body: input.transcript,
+        occurredAt: input.occurredAt,
+      }],
+    });
+    await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "practice");
+    return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, ...receipt });
+  } catch (error) {
+    if (error instanceof LearningError) {
+      return json(request, {
+        error: error.message,
+        code: error.code,
+        retryable: error.retryable,
+      }, { status: 409 });
+    }
+    if (error instanceof z.ZodError || error instanceof SyntaxError) {
+      return json(request, {
+        error: "A valid Learning Voice transcript request is required.",
+        code: "learning_voice_request_invalid",
+        retryable: false,
+      }, { status: 400 });
+    }
+    return json(request, {
+      error: "The Learning Voice transcript could not be saved.",
+      code: "learning_voice_internal_error",
+      retryable: true,
+    }, { status: 500 });
+  }
 }
 
 async function scheduleCompletedVoiceActivity(
@@ -4394,6 +4498,9 @@ export default {
     }
     if (url.pathname === "/voice/context" && request.method === "GET") {
       return voiceContext(ownerId, request);
+    }
+    if (url.pathname === "/voice/learning-transcripts" && request.method === "POST") {
+      return voiceLearningTranscript(ownerId, request, env);
     }
     if (url.pathname === "/voice/timers" && request.method === "POST") {
       return voiceTimerMutation(ownerId, request, env);

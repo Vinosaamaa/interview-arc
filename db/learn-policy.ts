@@ -353,6 +353,23 @@ export const appendLearningTranscriptSchema = z.object({
   }
 });
 
+// Native Arc Voice uses a narrower public contract than the Learning
+// Specialist. It can contribute exactly one learner transcript turn and must
+// prove the local transcript checksum; the Worker supplies the immutable
+// writer, speaker, and evidence-source policy before calling the shared append
+// transaction.
+export const appendLearningVoiceTranscriptSchema = z.object({
+  protocolVersion: z.literal(2),
+  operationId: learningStableIdSchema,
+  sessionId: learningStableIdSchema,
+  expectedTranscriptRevision: z.number().int().nonnegative(),
+  turnId: learningStableIdSchema,
+  sequence: z.number().int().nonnegative(),
+  transcript: boundedText(50_000),
+  checksum: z.string().regex(/^[a-f0-9]{64}$/, "A lowercase SHA-256 checksum is required."),
+  occurredAt: z.number().int().positive(),
+}).strict();
+
 export const queryLearningSessionsSchema = z.object({
   sessionId: learningStableIdSchema.optional(),
   lessonId: learningStableIdSchema.optional(),
@@ -376,6 +393,7 @@ export type SaveLearningLessonRevisionInput = z.infer<typeof saveLearningLessonR
 export type CreateLearningSessionInput = z.infer<typeof createLearningSessionSchema>;
 export type ControlLearningSessionInput = z.infer<typeof controlLearningSessionSchema>;
 export type AppendLearningTranscriptInput = z.infer<typeof appendLearningTranscriptSchema>;
+export type AppendLearningVoiceTranscriptInput = z.infer<typeof appendLearningVoiceTranscriptSchema>;
 export type FinishLearningSessionInput = z.infer<typeof finishLearningSessionSchema>;
 export type AttachLearningArtifactInput = z.infer<typeof attachLearningArtifactSchema>;
 export type SetLearningHomeworkStateInput = z.infer<typeof setLearningHomeworkStateSchema>;

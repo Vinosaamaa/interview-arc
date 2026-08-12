@@ -78,6 +78,22 @@ analysis, creates an audio Finish blocker, or makes audio availability a Finish
 gate. Protected local recovery may retain a transient original only until
 transcription/insertion succeeds or the user resolves the recovery.
 
+The authenticated `GET /voice/context` seam declares one explicit
+`captureTarget`: `interview`, `learning`, `ambiguous`, or no target. A Learning
+target includes the exact Course, Module, Lesson revision, Session,
+transcript revision, and next sequence plus
+`evidencePolicy: "transcript_only"`. Multiple running Learning Sessions, or a simultaneous
+Interview activity and Learning Session, fail closed as ambiguous instead of
+guessing a destination.
+
+Arc Voice appends one checksum-bound learner turn through authenticated
+`POST /voice/learning-transcripts`. The Worker fixes its writer to `arc_voice`, its
+source to `voice_transcript`, and its speaker to `learner`, then delegates to
+the same D1 transaction as `append_learning_transcript`. Exact retries replay;
+changed operation identities, transcript revisions, sequences, checksums, and
+owners fail without a partial write. This route never accepts audio or delivery
+metadata.
+
 Native routing is owned by a paired `interview-arc-voice` issue and separate
 signed-application release.
 
