@@ -196,6 +196,13 @@ is derived separately. `publicationCandidates` remain explicit approved
 derivatives. Assign stable IDs to every material record and retain the project
 source revision in its project/source context.
 
+Every source must declare its exact `refreshMode`: `filesystem`, `remote`,
+`conversation`, or `blocked`. A filesystem locator identifies one real
+canonical source root or exact file; never put a logical subsection,
+repository description, placeholder, or stale path in that field. Remote and
+conversation provenance must use their explicit non-filesystem modes so the
+local controller never passes them to filesystem inspection.
+
 Do not use absolute paths in evidence intended for remote storage or
 publication.
 
@@ -479,7 +486,11 @@ schema. A D1 candidate links exactly one pending observation through
 content. Put claim text/scope/status in a linked `claims` record and
 provenance/grades/counterevidence in linked `evidence` records instead of
 duplicating those fields inside the candidate. New candidates remain pending
-review until the explicit owner-review workflow changes their state.
+review until the explicit owner-review workflow changes their state. Give
+every remote-safe pending observation one stable D1 candidate with genuinely
+relevant stable question links. If an observation must remain local, add one
+explicit `d1Exclusions` record with its evidence ID and reason. Never leave a
+pending observation without exactly one of those two dispositions.
 
 Never store verbatim implementation snippets.
 
@@ -613,6 +624,8 @@ Required invariants:
 
 - no raw code in evidence or publication records;
 - every evidence record belongs to a source snapshot;
+- every pending evidence record has exactly one D1 candidate or explicit
+  local-only exclusion;
 - publication candidates contain no private locator;
 - unconfirmed ownership blocks first-person publication;
 - metrics require provenance, timeframe, unit, and user approval;

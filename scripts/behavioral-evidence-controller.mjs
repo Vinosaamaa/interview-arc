@@ -123,9 +123,33 @@ async function inspectLocalSource(locator) {
   }
 }
 
-function filesystemLocator(recordDirectory, locator) {
-  if (typeof locator !== "string" || /^<[^>]+>$/.test(locator) || /^[a-z][a-z0-9+.-]*:/i.test(locator)) return null;
-  return path.isAbsolute(locator) ? locator : path.resolve(recordDirectory, locator);
+function filesystemLocator(source) {
+  return source.refreshMode === "filesystem" ? source.locator : null;
+}
+
+function candidateDispositionSummary(project) {
+  const pendingEvidenceIds = new Set(
+    project.record.evidence
+      .filter((item) => item.candidateState === "pending")
+      .map((item) => item.id),
+  );
+  const candidateEvidenceIds = new Set(
+    project.record.d1Candidates.map((candidate) => candidate.sourceEvidenceIds[0]),
+  );
+  const excludedEvidenceIds = new Set(
+    project.record.d1Exclusions.map((exclusion) => exclusion.sourceEvidenceId),
+  );
+  let uncoveredPendingEvidence = 0;
+  for (const evidenceId of pendingEvidenceIds) {
+    if (!candidateEvidenceIds.has(evidenceId) && !excludedEvidenceIds.has(evidenceId)) {
+      uncoveredPendingEvidence += 1;
+    }
+  }
+  return {
+    candidateCoveredEvidence: candidateEvidenceIds.size,
+    excludedEvidence: excludedEvidenceIds.size,
+    uncoveredPendingEvidence,
+  };
 }
 
 export function summarizeBehavioralEvidenceBundle(bundle) {
@@ -137,6 +161,9 @@ export function summarizeBehavioralEvidenceBundle(bundle) {
     evidence: 0,
     pendingEvidence: 0,
     remoteCandidates: 0,
+    candidateCoveredEvidence: 0,
+    excludedEvidence: 0,
+    uncoveredPendingEvidence: 0,
     publicationCandidates: 0,
   };
   for (const project of bundle.projects) {
@@ -145,7 +172,11 @@ export function summarizeBehavioralEvidenceBundle(bundle) {
     totals.blockedSources += project.record.sources.filter((source) => source.availability === "blocked").length;
     totals.evidence += project.record.evidence.length;
     totals.pendingEvidence += project.record.evidence.filter((item) => item.candidateState === "pending").length;
-    totals.remoteCandidates += (project.record.d1Candidates ?? []).length;
+    totals.remoteCandidates += project.record.d1Candidates.length;
+    const disposition = candidateDispositionSummary(project);
+    totals.candidateCoveredEvidence += disposition.candidateCoveredEvidence;
+    totals.excludedEvidence += disposition.excludedEvidence;
+    totals.uncoveredPendingEvidence += disposition.uncoveredPendingEvidence;
     totals.publicationCandidates += project.record.publicationCandidates.length;
   }
   return totals;
@@ -164,9 +195,17 @@ export async function refreshBehavioralEvidenceSources({ bundleRoot, now = new D
         projectChanged = true;
         continue;
       }
-      const locator = filesystemLocator(project.recordDirectory, source.locator);
+      if (source.refreshMode === "blocked") {
+        source.availability = "blocked";
+        source.refreshStatus = "blocked";
+        summary.blocked += 1;
+        projectChanged = true;
+        continue;
+      }
+      const locator = filesystemLocator(source);
       if (!locator) {
-        source.refreshStatus = source.availability === "available" ? "not_checked" : source.availability === "blocked" ? "blocked" : "unavailable";
+        if (["missing", "blocked"].includes(source.availability)) source.availability = "not_checked";
+        source.refreshStatus = "not_checked";
         summary.notChecked += 1;
         projectChanged = true;
         continue;
@@ -317,7 +356,17 @@ export async function prepareBehavioralEvidenceSyncPlan({ bundleRoot, now = new 
   const bundle = await validateBehavioralEvidenceBundle({ bundleRoot });
   const sources = [];
   const evidence = [];
+  let evidenceCandidates = 0;
+  let excludedEvidence = 0;
   for (const project of bundle.projects) {
+    const disposition = candidateDispositionSummary(project);
+    if (disposition.uncoveredPendingEvidence > 0) {
+      throw new Error(
+        `Project ${project.record.project.id} has ${disposition.uncoveredPendingEvidence} pending evidence records without a D1 candidate or explicit local-only exclusion.`,
+      );
+    }
+    evidenceCandidates += disposition.candidateCoveredEvidence;
+    excludedEvidence += disposition.excludedEvidence;
     const snapshots = project.record.sources.map((source) => projectSourceSnapshot(project, source));
     for (const source of snapshots) {
       const fingerprint = sha256(JSON.stringify(source));
@@ -340,7 +389,12 @@ export async function prepareBehavioralEvidenceSyncPlan({ bundleRoot, now = new 
     boundary: "sanitized_metadata_and_explicit_typed_candidates_only",
     sources,
     evidence,
-    summary: { sources: sources.length, evidenceWrites: evidence.length },
+    summary: {
+      sources: sources.length,
+      evidenceWrites: evidence.length,
+      evidenceCandidates,
+      excludedEvidence,
+    },
   };
   assertRemoteSafe(plan, "sync plan");
   const planPath = path.join(bundle.bundleRoot, "sync", "plan.json");

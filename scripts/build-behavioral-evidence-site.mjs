@@ -21,6 +21,7 @@ const EVIDENCE_GRADES = new Set(["E0", "E1", "E2", "E3"]);
 const ATTRIBUTION_GRADES = new Set(["A0", "A1", "A2", "A3"]);
 const CANDIDATE_STATES = new Set(["pending", "accepted", "rejected", "superseded"]);
 const VISIBILITIES = new Set(["local_only", "owner_private", "publication_safe"]);
+const SOURCE_REFRESH_MODES = new Set(["filesystem", "remote", "conversation", "blocked"]);
 const MAX_ASSET_COPY_CONCURRENCY = 8;
 const REMOTE_UNSAFE_PATTERNS = [
   { label: "home-relative path", pattern: /(?:^|[\s"'(])~[\\/]/m },
@@ -168,15 +169,29 @@ function indexProjectRecords(record, location) {
   const curriculum = uniqueIndex(record.curriculum, `${location}.curriculum`, globalIds);
   const diagrams = uniqueIndex(record.diagrams, `${location}.diagrams`, globalIds);
   uniqueIndex(record.sanitization, `${location}.sanitization`, globalIds);
-  const d1Candidates = uniqueIndex(record.d1Candidates ?? [], `${location}.d1Candidates`, globalIds);
+  const d1Candidates = uniqueIndex(record.d1Candidates, `${location}.d1Candidates`, globalIds);
+  const d1Exclusions = uniqueIndex(record.d1Exclusions, `${location}.d1Exclusions`, globalIds);
   const publicationCandidates = uniqueIndex(record.publicationCandidates, `${location}.publicationCandidates`, globalIds);
-  return { sources, evidence, claims, contradictions, storySeeds, curriculum, diagrams, d1Candidates, publicationCandidates };
+  return { sources, evidence, claims, contradictions, storySeeds, curriculum, diagrams, d1Candidates, d1Exclusions, publicationCandidates };
 }
 
 function validateSources(sources, location) {
   for (const [id, source] of sources) {
-    for (const key of ["kind", "label", "locator", "safeHint", "authorization", "sensitivity", "availability"]) {
+    for (const key of ["kind", "label", "locator", "refreshMode", "safeHint", "authorization", "sensitivity", "availability"]) {
       requireString(source[key], `${location}.sources.${id}.${key}`);
+    }
+    requireEnum(source.refreshMode, SOURCE_REFRESH_MODES, `${location}.sources.${id}.refreshMode`);
+    if (source.refreshMode === "filesystem" && !path.isAbsolute(source.locator)) {
+      fail(`${location}.sources.${id}.locator`, "filesystem refresh requires one absolute canonical source root or exact file");
+    }
+    if (source.refreshMode === "remote" && !/^[a-z][a-z0-9+.-]*:/i.test(source.locator)) {
+      fail(`${location}.sources.${id}.locator`, "remote refresh metadata requires an explicit non-filesystem URI");
+    }
+    if (source.refreshMode === "remote" && /^file:/i.test(source.locator)) {
+      fail(`${location}.sources.${id}.locator`, "remote refresh metadata cannot use a file URI");
+    }
+    if (source.refreshMode === "conversation" && !/^conversation:/i.test(source.locator)) {
+      fail(`${location}.sources.${id}.locator`, "conversation provenance requires a conversation: locator");
     }
     if (source.visibility !== "local_only") {
       fail(`${location}.sources.${id}.visibility`, "source locators must remain local_only");
@@ -280,7 +295,8 @@ async function validateDiagramAssets(diagrams, evidence, recordDirectory, locati
   return diagramAssets;
 }
 
-function validateCandidates(d1Candidates, publicationCandidates, evidence, location) {
+function validateCandidates(d1Candidates, d1Exclusions, publicationCandidates, evidence, location) {
+  const dispositions = new Map();
   for (const [id, candidate] of d1Candidates) {
     if (candidate.visibility !== "owner_private") fail(`${location}.d1Candidates.${id}.visibility`, "must be owner_private");
     requireKnownIds(candidate.sourceEvidenceIds, evidence, `${location}.d1Candidates.${id}.sourceEvidenceIds`);
@@ -288,6 +304,8 @@ function validateCandidates(d1Candidates, publicationCandidates, evidence, locat
     if (candidate.sourceEvidenceIds.length !== 1) fail(`${location}.d1Candidates.${id}.sourceEvidenceIds`, "an evidence candidate must project exactly one canonical evidence record");
     const sourceEvidence = evidence.get(candidate.sourceEvidenceIds[0]);
     if (sourceEvidence.candidateState !== "pending") fail(`${location}.d1Candidates.${id}`, "new remote evidence must remain pending until explicit owner review");
+    if (dispositions.has(sourceEvidence.id)) fail(`${location}.d1Candidates.${id}`, `evidence ${sourceEvidence.id} already has a D1 disposition`);
+    dispositions.set(sourceEvidence.id, "candidate");
     requireObject(candidate.content, `${location}.d1Candidates.${id}.content`);
     requireArray(candidate.content.questionLinks, `${location}.d1Candidates.${id}.content.questionLinks`);
     if (candidate.content.questionLinks.length === 0) fail(`${location}.d1Candidates.${id}.content.questionLinks`, "at least one question link is required");
@@ -300,6 +318,16 @@ function validateCandidates(d1Candidates, publicationCandidates, evidence, locat
       seenQuestions.add(link.questionId);
     }
     assertRemoteSafe(candidate, `${location}.d1Candidates.${id}`);
+  }
+  for (const [id, exclusion] of d1Exclusions) {
+    requireStableId(exclusion.sourceEvidenceId, `${location}.d1Exclusions.${id}.sourceEvidenceId`);
+    const sourceEvidence = evidence.get(exclusion.sourceEvidenceId);
+    if (!sourceEvidence) fail(`${location}.d1Exclusions.${id}.sourceEvidenceId`, `unknown reference ${exclusion.sourceEvidenceId}`);
+    if (sourceEvidence.candidateState !== "pending") fail(`${location}.d1Exclusions.${id}`, "only pending evidence may have a local-only sync exclusion");
+    if (exclusion.disposition !== "local_only") fail(`${location}.d1Exclusions.${id}.disposition`, "must be local_only");
+    requireString(exclusion.reason, `${location}.d1Exclusions.${id}.reason`);
+    if (dispositions.has(sourceEvidence.id)) fail(`${location}.d1Exclusions.${id}`, `evidence ${sourceEvidence.id} already has a D1 disposition`);
+    dispositions.set(sourceEvidence.id, "exclusion");
   }
   for (const [id, candidate] of publicationCandidates) {
     if (candidate.visibility !== "publication_safe") fail(`${location}.publicationCandidates.${id}.visibility`, "must be publication_safe");
@@ -331,7 +359,7 @@ async function validateProject(record, descriptor, recordPath, bundleRoot) {
     recordDirectory,
     location,
   );
-  validateCandidates(indexes.d1Candidates, indexes.publicationCandidates, indexes.evidence, location);
+  validateCandidates(indexes.d1Candidates, indexes.d1Exclusions, indexes.publicationCandidates, indexes.evidence, location);
 
   return {
     descriptor,

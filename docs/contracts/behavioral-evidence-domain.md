@@ -21,9 +21,12 @@ remain local and are never copied to R2.
 
 The controller supports `status`, `refresh`, `project`, and `prepare-sync`.
 `status` prints aggregate counts only. `refresh` inspects only `user_owned` or
-`user_authorized` filesystem sources, respects the 5,000-entry directory cap,
-and stores fingerprints and inspection state only in the ignored bundle.
-Unknown or authorization-required sources are blocked without inspection.
+`user_authorized` sources whose explicit `refreshMode` is `filesystem`,
+respects the 5,000-entry directory cap, and stores fingerprints and inspection
+state only in the ignored bundle. Filesystem locators name one real canonical
+root or exact file. Remote and conversation modes are never passed to
+filesystem inspection and report `not_checked`; blocked, unknown, or
+authorization-required sources are blocked without inspection.
 
 `prepare-sync` accepts only typed `kind: evidence` candidates. Each candidate
 projects exactly one canonical pending evidence record and one or more stable
@@ -32,6 +35,11 @@ that grade requires an exact D1 transcript attestation, rejects unsafe paths,
 URLs, identities, and credentials, and writes the plan only under the ignored
 bundle. Source registration is derived separately from display-safe source
 metadata. The plan is not proof of persistence.
+
+Before writing a plan, the controller requires every pending evidence record to
+have exactly one disposition: a typed D1 candidate or an explicit local-only
+exclusion. Status reports covered, excluded, and uncovered counts; exclusions
+and their reasons remain local and are never written to the plan or D1.
 
 ## Mutation flow
 

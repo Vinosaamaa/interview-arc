@@ -15,6 +15,8 @@
     "curriculum",
     "diagrams",
     "sanitization",
+    "d1Candidates",
+    "d1Exclusions",
     "publicationCandidates"
   ],
   "properties": {
@@ -55,6 +57,10 @@
     "d1Candidates": {
       "type": "array",
       "items": { "$ref": "#/$defs/remoteCandidate" }
+    },
+    "d1Exclusions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/remoteExclusion" }
     },
     "publicationCandidates": {
       "type": "array",
@@ -131,6 +137,7 @@
         "kind",
         "label",
         "locator",
+        "refreshMode",
         "safeHint",
         "authorization",
         "sensitivity",
@@ -146,6 +153,9 @@
         },
         "label": { "type": "string", "minLength": 1 },
         "locator": { "type": "string", "minLength": 1 },
+        "refreshMode": {
+          "enum": ["filesystem", "remote", "conversation", "blocked"]
+        },
         "safeHint": { "type": "string", "minLength": 1 },
         "authorization": {
           "enum": ["user_authorized", "user_owned", "authorization_required", "unknown"]
@@ -161,7 +171,21 @@
         "inspectedAt": { "type": "string", "format": "date-time" },
         "canSupport": { "$ref": "#/$defs/stringList" },
         "cannotSupport": { "$ref": "#/$defs/stringList" }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "refreshMode": { "const": "filesystem" } } },
+          "then": { "properties": { "locator": { "pattern": "^/" } } }
+        },
+        {
+          "if": { "properties": { "refreshMode": { "const": "remote" } } },
+          "then": { "properties": { "locator": { "pattern": "^(?!file:)[A-Za-z][A-Za-z0-9+.-]*:" } } }
+        },
+        {
+          "if": { "properties": { "refreshMode": { "const": "conversation" } } },
+          "then": { "properties": { "locator": { "pattern": "^conversation:" } } }
+        }
+      ]
     },
     "evidence": {
       "type": "object",
@@ -338,6 +362,17 @@
           }
         }
       ]
+    },
+    "remoteExclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "sourceEvidenceId", "disposition", "reason"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "sourceEvidenceId": { "$ref": "#/$defs/stableId" },
+        "disposition": { "const": "local_only" },
+        "reason": { "type": "string", "minLength": 1 }
+      }
     },
     "singleIdList": {
       "type": "array",

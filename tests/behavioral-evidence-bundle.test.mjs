@@ -40,13 +40,15 @@ function projectFixture() {
       id: "EX-SRC-001",
       kind: "repository",
       label: "Authorized local fixture",
-      locator: "<authorized-local-project>",
+      locator: "remote:authorized-local-project",
+      refreshMode: "remote",
       safeHint: "Authorized local project",
       authorization: "user_authorized",
       sensitivity: "private",
       availability: "available",
       visibility: "local_only",
       revision: "example-revision",
+      inspectedAt: "2026-08-09T10:00:00.000Z",
       canSupport: ["Scoped project behavior"],
       cannotSupport: ["Personal ownership or production impact"],
     }],
@@ -133,6 +135,12 @@ function projectFixture() {
       reviewStatus: "pending",
     }],
     d1Candidates: [],
+    d1Exclusions: [{
+      id: "EX-D1-EXCLUSION-001",
+      sourceEvidenceId: "EX-EV-001",
+      disposition: "local_only",
+      reason: "The base fixture exercises an explicit local-only disposition.",
+    }],
     publicationCandidates: [],
   };
 }
@@ -183,6 +191,7 @@ test("rejects verified personal claims without accepted A3 evidence", async (t) 
   record.claims[0].scope = "personal_contribution";
   record.claims[0].status = "verified";
   record.evidence[0].candidateState = "accepted";
+  record.d1Exclusions = [];
   await writeJson(recordPath, record);
   await assert.rejects(
     validateBehavioralEvidenceBundle({ bundleRoot: fixture.root }),
@@ -210,6 +219,7 @@ test("accepts verified project claims backed by accepted E3 evidence", async (t)
   const record = JSON.parse(await readFile(recordPath, "utf8"));
   record.claims[0].status = "verified";
   record.evidence[0].candidateState = "accepted";
+  record.d1Exclusions = [];
   await writeJson(recordPath, record);
 
   await validateBehavioralEvidenceBundle({ bundleRoot: fixture.root });
@@ -222,6 +232,20 @@ test("rejects a declared diagram asset that is no longer readable", async (t) =>
   await assert.rejects(
     validateBehavioralEvidenceBundle({ bundleRoot: fixture.root }),
     /cannot access the declared asset/,
+  );
+});
+
+test("rejects a logical description classified as a filesystem locator", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.sources[0].refreshMode = "filesystem";
+  record.sources[0].locator = "search and filtering implementation";
+  await writeJson(recordPath, record);
+
+  await assert.rejects(
+    validateBehavioralEvidenceBundle({ bundleRoot: fixture.root }),
+    /absolute canonical source root or exact file/,
   );
 });
 
@@ -300,6 +324,7 @@ test("candidate variants share one closed canonical schema core", async () => {
   }
   assert.equal(schema.$defs.remoteCandidate.allOf[1].properties.kind.const, "evidence");
   assert.equal(schema.$defs.remoteCandidate.allOf[1].properties.content.$ref, "#/$defs/remoteEvidenceContent");
+  assert.equal(schema.$defs.remoteExclusion.properties.disposition.const, "local_only");
 });
 
 test("local refresh prepares only typed remote-safe source and evidence operations", async (t) => {
@@ -307,6 +332,7 @@ test("local refresh prepares only typed remote-safe source and evidence operatio
   const recordPath = path.join(fixture.projectRoot, "project.json");
   const record = JSON.parse(await readFile(recordPath, "utf8"));
   record.sources[0].locator = fixture.projectRoot;
+  record.sources[0].refreshMode = "filesystem";
   record.d1Candidates = [{
     id: "EX-D1-001",
     kind: "evidence",
@@ -318,6 +344,7 @@ test("local refresh prepares only typed remote-safe source and evidence operatio
     transformations: ["Omitted the private locator and implementation detail."],
     limitations: ["The observation does not establish personal ownership."],
   }];
+  record.d1Exclusions = [];
   await writeJson(recordPath, record);
 
   const refreshed = await refreshBehavioralEvidenceSources({
@@ -329,7 +356,12 @@ test("local refresh prepares only typed remote-safe source and evidence operatio
     bundleRoot: fixture.root,
     now: new Date("2026-08-11T18:01:00.000Z"),
   });
-  assert.deepEqual(plan.summary, { sources: 1, evidenceWrites: 1 });
+  assert.deepEqual(plan.summary, {
+    sources: 1,
+    evidenceWrites: 1,
+    evidenceCandidates: 1,
+    excludedEvidence: 0,
+  });
   assert.equal(plan.sources[0].source.sourceId, "example-project.ex-src-001");
   assert.equal(plan.sources[0].expectedRevision, "read_current_registry_before_write");
   assert.equal(plan.evidence[0].input.evidence.candidateState, "pending");
@@ -348,8 +380,127 @@ test("local refresh prepares only typed remote-safe source and evidence operatio
     evidence: 1,
     pendingEvidence: 1,
     remoteCandidates: 1,
+    candidateCoveredEvidence: 1,
+    excludedEvidence: 0,
+    uncoveredPendingEvidence: 0,
     publicationCandidates: 0,
   });
+});
+
+test("refresh inspects only typed filesystem sources and never guesses from locator text", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.sources[0].locator = fixture.projectRoot;
+  record.sources[0].refreshMode = "filesystem";
+  record.sources.push(
+    {
+      ...record.sources[0],
+      id: "EX-SRC-REMOTE",
+      locator: "https://example.invalid/private-source",
+      refreshMode: "remote",
+      availability: "missing",
+    },
+    {
+      ...record.sources[0],
+      id: "EX-SRC-CONVERSATION",
+      kind: "user_statement",
+      locator: "conversation:example-project:owner-confirmation",
+      refreshMode: "conversation",
+      availability: "missing",
+    },
+    {
+      ...record.sources[0],
+      id: "EX-SRC-BLOCKED",
+      locator: "blocked:authorization-required",
+      refreshMode: "blocked",
+      authorization: "authorization_required",
+      availability: "not_checked",
+    },
+    {
+      ...record.sources[0],
+      id: "EX-SRC-STALE",
+      locator: path.join(fixture.root, "missing-source"),
+      refreshMode: "filesystem",
+      availability: "available",
+    },
+  );
+  await writeJson(recordPath, record);
+
+  const refreshed = await refreshBehavioralEvidenceSources({
+    bundleRoot: fixture.root,
+    now: new Date("2026-08-11T18:00:00.000Z"),
+  });
+  assert.deepEqual(refreshed, {
+    inspected: 1,
+    changed: 0,
+    missing: 1,
+    blocked: 1,
+    notChecked: 2,
+  });
+  const updated = JSON.parse(await readFile(recordPath, "utf8"));
+  assert.equal(updated.sources.find((source) => source.id === "EX-SRC-REMOTE").refreshStatus, "not_checked");
+  assert.equal(updated.sources.find((source) => source.id === "EX-SRC-REMOTE").availability, "not_checked");
+  assert.equal(updated.sources.find((source) => source.id === "EX-SRC-CONVERSATION").refreshStatus, "not_checked");
+  assert.equal(updated.sources.find((source) => source.id === "EX-SRC-STALE").availability, "missing");
+});
+
+test("sync preparation accepts an explicit local-only exclusion and reports it", async (t) => {
+  const fixture = await createFixture(t);
+  const { plan } = await prepareBehavioralEvidenceSyncPlan({ bundleRoot: fixture.root });
+  assert.deepEqual(plan.summary, {
+    sources: 1,
+    evidenceWrites: 0,
+    evidenceCandidates: 0,
+    excludedEvidence: 1,
+  });
+});
+
+test("sync preparation rejects a 168-pending zero-disposition bundle", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.evidence = Array.from({ length: 168 }, (_, index) => ({
+    ...record.evidence[0],
+    id: `EX-EV-${String(index + 1).padStart(3, "0")}`,
+  }));
+  record.d1Candidates = [];
+  record.d1Exclusions = [];
+  await writeJson(recordPath, record);
+
+  await assert.rejects(
+    prepareBehavioralEvidenceSyncPlan({ bundleRoot: fixture.root }),
+    /168 pending evidence records without a D1 candidate or explicit local-only exclusion/,
+  );
+  await assert.rejects(access(path.join(fixture.root, "sync", "plan.json")), { code: "ENOENT" });
+});
+
+test("one canonical source can support many independently reviewable D1 candidates", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.evidence = Array.from({ length: 3 }, (_, index) => ({
+    ...record.evidence[0],
+    id: `EX-EV-00${index + 1}`,
+  }));
+  record.d1Candidates = record.evidence.map((evidence, index) => ({
+    id: `EX-D1-00${index + 1}`,
+    kind: "evidence",
+    visibility: "owner_private",
+    content: {
+      questionLinks: [{ questionId: `QUESTION-EXAMPLE-${index + 1}`, relevance: "supporting" }],
+    },
+    sourceEvidenceIds: [evidence.id],
+    transformations: ["Generalized the observation for owner-private review."],
+    limitations: ["The observation does not establish personal ownership."],
+  }));
+  record.d1Exclusions = [];
+  await writeJson(recordPath, record);
+
+  const { plan } = await prepareBehavioralEvidenceSyncPlan({ bundleRoot: fixture.root });
+  assert.equal(plan.summary.evidenceCandidates, 3);
+  assert.equal(plan.summary.evidenceWrites, 3);
+  assert.equal(new Set(plan.evidence.map((write) => write.input.evidence.evidenceId)).size, 3);
 });
 
 test("sync preparation rejects untyped or unsafe remote candidates before writing a plan", async (t) => {
@@ -367,6 +518,7 @@ test("sync preparation rejects untyped or unsafe remote candidates before writin
     transformations: ["Retained src/private/implementation.ts"],
     limitations: ["Fixture only"],
   }];
+  record.d1Exclusions = [];
   await writeJson(recordPath, record);
 
   await assert.rejects(
@@ -387,4 +539,6 @@ test("the archaeology coordinator defines explicit coverage and output budgets",
   assert.match(prompt, /detailed critical-module cards: 12/);
   assert.match(prompt, /final handoff: 12,000 words/);
   assert.match(prompt, /sole record definitions/);
+  assert.match(prompt, /Every source must declare its exact `refreshMode`/);
+  assert.match(prompt, /explicit `d1Exclusions` record/);
 });

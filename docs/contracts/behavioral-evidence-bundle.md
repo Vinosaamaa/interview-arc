@@ -150,6 +150,13 @@ or more stable question/relevance links. Source metadata is projected directly
 from the source registry, not duplicated in a candidate. Claims and Story Bank
 records use their owning D1 workflows only after evidence review.
 
+Every source declares a `refreshMode`. `filesystem` means its private locator
+is one real canonical source root or exact file. `remote`, `conversation`, and
+`blocked` are non-filesystem modes and are never passed to `stat()`. Every
+pending evidence record has exactly one sync disposition: one `d1Candidates`
+record, or one `d1Exclusions` record explaining why it remains local-only.
+Exclusions are private control data and never enter the remote sync plan.
+
 Use `practice/behavioral/prompts/project-evidence-archaeology.md` only when the
 owner explicitly asks to add or re-audit a project or experience. Ordinary
 behavioral mocks must not load that long prompt.
@@ -169,8 +176,10 @@ Both commands default to `private-sources/behavioral-foundation`. Pass
 Build writes only beneath that bundle's `site/` directory.
 
 The controller commands use the same default bundle. `status` emits aggregate
-counts only. `refresh` updates ignored source fingerprints and refresh state
-without printing locators. `prepare-sync` writes an ignored `sync/plan.json`
+counts only, including candidate-covered, excluded, and uncovered pending
+evidence. `refresh` updates ignored source fingerprints and refresh state
+without printing locators. `prepare-sync` fails when any pending evidence is
+uncovered; otherwise it writes an ignored `sync/plan.json`
 containing only display-safe source snapshots and explicit typed candidate
 writes. It never calls MCP itself, uploads to R2, or treats a generated plan as
 a saved receipt.
