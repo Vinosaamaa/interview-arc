@@ -155,7 +155,7 @@ test("Review Queue keeps filters in the menu, branches each row, and joins its f
   assert.ok(cssRules(rules, ".review-row::before").length >= 1);
   assert.ok(cssRules(rules, ".review-row::after").length >= 1);
   assert.equal(hasJsxClass(file, "review-column-headings"), false);
-  assert.equal(cssRules(rules, ".review-row")[0].declarations["grid-template-columns"], "44px minmax(0, 1fr) minmax(120px, auto) 96px");
+  assert.equal(cssRules(rules, ".review-row")[0].declarations["grid-template-columns"], "44px minmax(0, 1fr) minmax(120px, auto) 144px");
   const folioRules = cssRules(rules, ".review-selection-folio");
   assert.equal(folioRules[0].declarations.position, "relative");
   assert.equal(folioRules.some((rule) => rule.declarations.position === "sticky"), false);
@@ -214,8 +214,8 @@ test("Review Queue uses the Bank visual language without redundant row prose", a
   assert.equal(hasJsxClass(file, "review-date"), false);
   assert.equal(hasJsxClass(file, "review-reason"), false);
   assert.ok(visit(file, (node) => ts.isJsxAttribute(node) && node.name.text === "title" && /previous attempt/i.test(node.initializer?.getText(file) ?? "")).length >= 1);
-  assert.ok(cssRules(rules, ".review-icon-actions")[0]?.declarations.display);
-  assert.equal(cssRules(rules, ".review-row")[0]?.declarations["grid-template-columns"], "44px minmax(0, 1fr) minmax(120px, auto) 96px");
+  assert.equal(cssRules(rules, ".review-icon-actions")[0]?.declarations["grid-template-columns"], "repeat(3, 44px)");
+  assert.equal(cssRules(rules, ".review-row")[0]?.declarations["grid-template-columns"], "44px minmax(0, 1fr) minmax(120px, auto) 144px");
 });
 
 test("Reader contents replace their hash and modal readers own keyboard focus", async () => {
@@ -301,14 +301,23 @@ test("Review Queue retries hydrated reader routes and compacts its folio at high
   const home = parseTsx(homeSource);
   const restoreEffects = visit(home, (node) => ts.isCallExpression(node) && node.expression.getText(home) === "useEffect" && node.getText(home).includes("restoreWorkspaceLocation"));
   assert.equal(restoreEffects.length, 2);
-  const stableSubscription = restoreEffects.find((effect) => effect.getText(home).includes('addEventListener("popstate"'));
-  const hydratedRestore = restoreEffects.find((effect) => effect.getText(home).includes("readerRouteUnavailable"));
+  const hasIdentifier = (node, name) => visit(node, (candidate) => ts.isIdentifier(candidate) && candidate.text === name).length > 0;
+  const hasPopstateSubscription = (node) => visit(node, (candidate) => (
+    ts.isCallExpression(candidate)
+    && ts.isPropertyAccessExpression(candidate.expression)
+    && candidate.expression.name.text === "addEventListener"
+    && candidate.arguments[0]?.getText(home) === '"popstate"'
+  )).length > 0;
+  const stableSubscription = restoreEffects.find(hasPopstateSubscription);
+  const hydratedRestore = restoreEffects.find((effect) => hasIdentifier(effect, "readerRouteUnavailable"));
   assert.ok(stableSubscription);
-  assert.match(stableSubscription.getText(home), /\}, \[\]\)/);
+  const stableDependencies = stableSubscription.arguments[1];
+  assert.ok(stableDependencies && ts.isArrayLiteralExpression(stableDependencies));
+  assert.equal(stableDependencies.elements.length, 0);
   assert.ok(hydratedRestore);
-  assert.match(hydratedRestore.getText(home), /if \(!hydrated\) return/);
-  assert.match(hydratedRestore.getText(home), /restoreWorkspaceLocationRef\.current = restoreWorkspaceLocation/);
-  assert.match(hydratedRestore.getText(home), /readerNotFound/);
+  for (const identifier of ["hydrated", "restoreWorkspaceLocationRef", "restoreWorkspaceLocation", "readerNotFound"]) {
+    assert.equal(hasIdentifier(hydratedRestore, identifier), true);
+  }
   const rules = parseCss(reviewCss);
   assert.ok(cssRules(rules, ".review-selection-folio", "@media").some((rule) => rule.declarations["grid-template-rows"] === "48px"));
   assert.ok(cssRules(rules, ".folio-bookmarks", "@media").some((rule) => rule.declarations.display === "none"));

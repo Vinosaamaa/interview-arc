@@ -44,6 +44,12 @@ const HORIZONS: Array<{ value: ReviewQueueHorizon; label: string; note: string }
   { value: "later", label: "Later", note: "Keep the next repetition visible." },
 ];
 
+const COMPACT_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
+
 function specialtyLabel(value: ReviewQueueSpecialty) {
   return SPECIALTIES.find((item) => item.value === value)?.label ?? value;
 }
@@ -56,8 +62,18 @@ function resultLabel(value: ReviewQueueItem["previousResult"]) {
 }
 
 function compactDate(value: string) {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
-    .format(new Date(`${value}T12:00:00Z`));
+  return COMPACT_DATE_FORMATTER.format(new Date(`${value}T12:00:00Z`));
+}
+
+function SpecialtyFilterButtons({ specialties, onClear, onToggle }: {
+  specialties: ReviewQueueSpecialty[];
+  onClear: () => void;
+  onToggle: (specialty: ReviewQueueSpecialty) => void;
+}) {
+  return <>
+    <button type="button" aria-pressed={specialties.length === 0} onClick={onClear}>All</button>
+    {SPECIALTIES.map((specialty) => <button type="button" key={specialty.value} aria-pressed={specialties.includes(specialty.value)} onClick={() => onToggle(specialty.value)}>{specialty.label}</button>)}
+  </>;
 }
 
 function identity(value: string) {
@@ -173,12 +189,11 @@ export default function ReviewQueueView({
 
       <div className="review-queue-controls">
         <div className="review-filter-rail" role="group" aria-label="Filter reviews by specialty">
-          <button type="button" aria-pressed={specialties.length === 0} onClick={() => setUiState((current) => ({ ...current, specialties: [] }))}>All</button>
-          {SPECIALTIES.map((specialty) => <button type="button" key={specialty.value} aria-pressed={specialties.includes(specialty.value)} onClick={() => toggleSpecialty(specialty.value)}>{specialty.label}</button>)}
+          <SpecialtyFilterButtons specialties={specialties} onClear={() => setUiState((current) => ({ ...current, specialties: [] }))} onToggle={toggleSpecialty} />
           <details className="review-expanded-controls control-menu">
             <summary aria-label={`More review filters, ${activeFilterCount} active`} title="More filters"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4" /></svg>{activeFilterCount > 0 && <i>{activeFilterCount}</i>}</summary>
             <div>
-            <fieldset className="review-specialty-menu"><legend>Specialty</legend><button type="button" aria-pressed={specialties.length === 0} onClick={() => setUiState((current) => ({ ...current, specialties: [] }))}>All</button>{SPECIALTIES.map((specialty) => <button type="button" key={specialty.value} aria-pressed={specialties.includes(specialty.value)} onClick={() => toggleSpecialty(specialty.value)}>{specialty.label}</button>)}</fieldset>
+            <fieldset className="review-specialty-menu"><legend>Specialty</legend><SpecialtyFilterButtons specialties={specialties} onClear={() => setUiState((current) => ({ ...current, specialties: [] }))} onToggle={toggleSpecialty} /></fieldset>
             <fieldset><legend>Due date</legend>{([['now', 'Due now'], ['week', '7 days'], ['month', '30 days'], ['all', 'Any']] as const).map(([value, label]) => <button type="button" key={value} aria-pressed={due === value} onClick={() => updateUiState("due", value)}>{label}</button>)}</fieldset>
             <fieldset><legend>Sort by</legend>{([['priority', 'Priority'], ['due', 'Due date'], ['review_time', 'Review time'], ['last_attempt', 'Last attempt']] as const).map(([value, label]) => <button type="button" key={value} aria-pressed={sort === value} onClick={() => updateUiState("sort", value)}>{label}</button>)}</fieldset>
             <footer><button type="button" onClick={resetFilters} disabled={activeFilterCount === 0}>Reset</button><span>{visibleItems.length} item{visibleItems.length === 1 ? "" : "s"}</span></footer>

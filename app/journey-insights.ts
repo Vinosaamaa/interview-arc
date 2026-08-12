@@ -212,13 +212,17 @@ export function reviewReaderHref(currentHref: string, attemptId: string) {
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
-export function readReviewReaderState(currentHref: string): ReviewReaderState | null {
+function readAttemptReaderState(currentHref: string, view: "reviews" | "past"): PastReaderState | null {
   const url = new URL(currentHref);
-  if (url.searchParams.get("view") !== "reviews") return null;
+  if (url.searchParams.get("view") !== view) return null;
   const attemptId = url.searchParams.get("attempt")?.trim() ?? "";
   const problemIdentity = readReaderProblemIdentity(url);
   if (!attemptId || !problemIdentity) return null;
   return { attemptId, ...problemIdentity };
+}
+
+export function readReviewReaderState(currentHref: string): ReviewReaderState | null {
+  return readAttemptReaderState(currentHref, "reviews");
 }
 
 export function reviewSolutionReaderHref(
@@ -234,15 +238,7 @@ export function reviewSolutionReaderHref(
 }
 
 export function readPastReaderState(currentHref: string): PastReaderState | null {
-  const url = new URL(currentHref);
-  if (url.searchParams.get("view") !== "past") return null;
-  const attemptId = url.searchParams.get("attempt")?.trim() ?? "";
-  const problemIdentity = readReaderProblemIdentity(url);
-  if (!attemptId || !problemIdentity) return null;
-  return {
-    attemptId,
-    ...problemIdentity,
-  };
+  return readAttemptReaderState(currentHref, "past");
 }
 
 export function pastSolutionReaderHref(
