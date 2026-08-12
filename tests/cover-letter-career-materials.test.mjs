@@ -6,7 +6,11 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { normalizeJobJourneyCoverLetterPage } from "../app/cover-letter-contract.ts";
-import { fetchCoverLetters, resolveJobJourneyDownloadUrl } from "../db/job-journey-client.ts";
+import {
+  describeJobJourneyReadFailure,
+  fetchCoverLetters,
+  resolveJobJourneyDownloadUrl,
+} from "../db/job-journey-client.ts";
 import {
   CoverLetterPublishError,
   coverLetterPublishManifestSchema,
@@ -103,7 +107,46 @@ test("cover-letter projection bounds provider bytes before JSON materialization"
         JOB_JOURNEY_BASE_URL: "https://job-journey.example",
         JOB_JOURNEY_SITE_TOKEN: "synthetic-job-token",
       }, "owner-cover-letter-bounds"),
-      /oversized response/,
+      (error) => describeJobJourneyReadFailure(error).code === "provider_response_too_large",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("cover-letter provider failures expose only bounded operational categories", async () => {
+  const originalFetch = globalThis.fetch;
+  const environment = {
+    JOB_JOURNEY_BASE_URL: "https://job-journey.example",
+    JOB_JOURNEY_SITE_TOKEN: "synthetic-job-token",
+  };
+  async function capture(ownerId, fetchImpl) {
+    globalThis.fetch = fetchImpl;
+    try {
+      await fetchCoverLetters(environment, ownerId);
+      assert.fail("Expected the provider read to fail.");
+    } catch (error) {
+      return describeJobJourneyReadFailure(error);
+    }
+  }
+  try {
+    assert.deepEqual(
+      await capture("owner-cover-letter-auth", async () => new Response("private provider detail", { status: 401 })),
+      { code: "provider_http_error", status: 401 },
+    );
+    assert.deepEqual(
+      await capture("owner-cover-letter-network", async () => {
+        throw new TypeError("request to https://private.example/?credential=secret failed");
+      }),
+      { code: "provider_network_error" },
+    );
+    assert.deepEqual(
+      await capture("owner-cover-letter-json", async () => new Response("not-json")),
+      { code: "provider_invalid_json" },
+    );
+    assert.deepEqual(
+      await capture("owner-cover-letter-contract", async () => Response.json({ privateObjectKey: "must-not-cross" })),
+      { code: "provider_contract_invalid" },
     );
   } finally {
     globalThis.fetch = originalFetch;

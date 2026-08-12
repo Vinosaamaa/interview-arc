@@ -10,6 +10,31 @@ type JobJourneyEnv = {
   JOB_JOURNEY_SITE_TOKEN?: string;
 };
 
+export type JobJourneyReadFailure = {
+  code:
+    | "not_configured"
+    | "invalid_provider_origin"
+    | "provider_http_error"
+    | "provider_response_too_large"
+    | "provider_invalid_json"
+    | "provider_contract_invalid"
+    | "provider_network_error"
+    | "provider_unknown_error";
+  status?: number;
+};
+
+class JobJourneyReadError extends Error {
+  readonly code: JobJourneyReadFailure["code"];
+  readonly status?: number;
+
+  constructor(code: JobJourneyReadFailure["code"], status?: number) {
+    super(code);
+    this.name = "JobJourneyReadError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
 const CACHE_TTL_MS = 5 * 60 * 1_000;
 const MAX_CACHE_ENTRIES = 100;
 const cache = new Map<string, { expiresAt: number; value: unknown }>();
@@ -19,7 +44,7 @@ async function readBoundedResponse(response: Response, maximumBytes: number) {
   const contentLength = response.headers.get("content-length");
   const declaredLength = contentLength === null ? null : Number(contentLength);
   if (declaredLength !== null && Number.isFinite(declaredLength) && declaredLength > maximumBytes) {
-    throw new Error("Job Journey returned an oversized response.");
+    throw new JobJourneyReadError("provider_response_too_large");
   }
   if (!response.body) return new Uint8Array();
   const reader = response.body.getReader();
@@ -32,7 +57,7 @@ async function readBoundedResponse(response: Response, maximumBytes: number) {
       total += value.byteLength;
       if (total > maximumBytes) {
         await reader.cancel();
-        throw new Error("Job Journey returned an oversized response.");
+        throw new JobJourneyReadError("provider_response_too_large");
       }
       chunks.push(value);
     }
@@ -59,25 +84,40 @@ async function readJson<T>(
 ): Promise<CachedJobJourneyValue<T>> {
   const baseUrl = env.JOB_JOURNEY_BASE_URL?.replace(/\/$/, "");
   const token = env.JOB_JOURNEY_SITE_TOKEN;
-  if (!baseUrl || !token) throw new Error("Job Journey integration is not configured.");
+  if (!baseUrl || !token) throw new JobJourneyReadError("not_configured");
   const cacheKey = `${ownerId}:v1:${path}?${params.toString()}`;
   const cached = cache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return { value: cached.value as T, stale: false };
   try {
-    const response = await fetch(`${baseUrl}${path}?${params.toString()}`, {
-      headers: { [authorizationHeader]: `Bearer ${token}`, accept: "application/json" },
-      cf: { cacheTtl: 0 },
-      redirect: "error",
-    });
-    if (!response.ok) throw new Error(`Job Journey returned ${response.status}.`);
-    let responseValue: unknown;
-    if (maximumResponseBytes) {
-      const bytes = await readBoundedResponse(response, maximumResponseBytes);
-      responseValue = JSON.parse(new TextDecoder().decode(bytes));
-    } else {
-      responseValue = await response.json();
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}${path}?${params.toString()}`, {
+        headers: { [authorizationHeader]: `Bearer ${token}`, accept: "application/json" },
+        cf: { cacheTtl: 0 },
+        redirect: "error",
+      });
+    } catch {
+      throw new JobJourneyReadError("provider_network_error");
     }
-    const value = normalize(responseValue);
+    if (!response.ok) throw new JobJourneyReadError("provider_http_error", response.status);
+    let responseValue: unknown;
+    try {
+      if (maximumResponseBytes) {
+        const bytes = await readBoundedResponse(response, maximumResponseBytes);
+        responseValue = JSON.parse(new TextDecoder().decode(bytes));
+      } else {
+        responseValue = await response.json();
+      }
+    } catch (error) {
+      if (error instanceof JobJourneyReadError) throw error;
+      throw new JobJourneyReadError("provider_invalid_json");
+    }
+    let value: T;
+    try {
+      value = normalize(responseValue);
+    } catch {
+      throw new JobJourneyReadError("provider_contract_invalid");
+    }
     const now = Date.now();
     for (const [key, entry] of cache) {
       if (key !== cacheKey && entry.expiresAt <= now) cache.delete(key);
@@ -144,8 +184,13 @@ export function fetchCoverLetters(
 
 function validateCoverLetterProviderBase(env: JobJourneyEnv): URL {
   const raw = env.JOB_JOURNEY_BASE_URL;
-  if (!raw) throw new Error("Job Journey integration is not configured.");
-  const base = new URL(raw);
+  if (!raw) throw new JobJourneyReadError("not_configured");
+  let base: URL;
+  try {
+    base = new URL(raw);
+  } catch {
+    throw new JobJourneyReadError("invalid_provider_origin");
+  }
   if (
     base.protocol !== "https:"
     || base.username
@@ -154,9 +199,18 @@ function validateCoverLetterProviderBase(env: JobJourneyEnv): URL {
     || base.search
     || base.hash
   ) {
-    throw new Error("Job Journey must use a credential-free HTTPS origin.");
+    throw new JobJourneyReadError("invalid_provider_origin");
   }
   return new URL(base.origin);
+}
+
+export function describeJobJourneyReadFailure(error: unknown): JobJourneyReadFailure {
+  if (error instanceof JobJourneyReadError) {
+    return error.status === undefined
+      ? { code: error.code }
+      : { code: error.code, status: error.status };
+  }
+  return { code: "provider_unknown_error" };
 }
 
 export function resolveJobJourneyDownloadUrl(
