@@ -19,7 +19,7 @@ The implementation coordinator owns the receipt as part of the pull request. The
 2. Add exactly one compact receipt at `docs/engineering/changes/pr-<number>.md`.
 3. Record a public-safe title and one factual summary paragraph of at most 280 characters.
 4. Classify a small or non-material pull request as `none` and leave `richRecordRefs` empty.
-5. For a material pull request, add the appropriate rich record and link its exact `id@revision` from `richRecordRefs`. A reviewed multi-PR case study may be shared by several receipts.
+5. For a material pull request, add the appropriate rich record or link an exact existing record that explicitly covers the same reviewed PR cluster. Put every linked `id@revision` in `richRecordRefs`; a reviewed multi-PR case study may be shared by several receipts.
 6. Let CI validate both layers. The deterministic build projects them into separate receipt and rich-record collections, search indexes, backlinks, Statistics, and standalone HTML.
 7. Merge and deploy through the repository's normal release workflow.
 
@@ -33,7 +33,7 @@ pnpm engineering:receipt:new -- \
   --classification none
 ```
 
-For a material pull request, select its rich classification and repeat `--rich-record-ref <id>@<revision>` for every exact record changed by that pull request. The non-interactive command makes no GitHub, D1, or network call; it derives only the canonical pull-request URL and evidence reference from `--pr`, leaves head/merge facts `null`, sorts rich references, and refuses invalid, unsafe, or existing targets.
+For a material pull request, select its rich classification and repeat `--rich-record-ref <id>@<revision>` for every exact record it links; every rich record changed by that pull request must be included. The non-interactive command makes no GitHub, D1, or network call; it derives only the canonical pull-request URL and evidence reference from `--pr`, leaves head/merge facts `null`, sorts rich references, and refuses invalid, unsafe, or existing targets.
 
 CI does not invent motivation, architecture, root cause, impact, or prose from a diff. The coordinator authors the factual receipt and any required rich record while it has the implementation context. After that authoring step, validation, projection, bundling, and deployment are automatic.
 
