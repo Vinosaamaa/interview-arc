@@ -21,15 +21,26 @@ const EVIDENCE_GRADES = new Set(["E0", "E1", "E2", "E3"]);
 const ATTRIBUTION_GRADES = new Set(["A0", "A1", "A2", "A3"]);
 const CANDIDATE_STATES = new Set(["pending", "accepted", "rejected", "superseded"]);
 const VISIBILITIES = new Set(["local_only", "owner_private", "publication_safe"]);
+const SOURCE_REFRESH_MODES = new Set(["filesystem", "remote", "conversation", "blocked"]);
 const MAX_ASSET_COPY_CONCURRENCY = 8;
 const REMOTE_UNSAFE_PATTERNS = [
-  { label: "absolute macOS path", pattern: /(?:^|[\s"'(])\/Users\/[A-Za-z0-9._-]+\//m },
-  { label: "absolute Linux home path", pattern: /(?:^|[\s"'(])\/home\/[A-Za-z0-9._-]+\//m },
-  { label: "absolute Windows user path", pattern: /[A-Za-z]:\\Users\\[^\\\s]+\\/i },
+  { label: "home-relative path", pattern: /(?:^|[\s"'(])~[\\/]/m },
+  { label: "relative filesystem path", pattern: /(?:^|[\s"'(])\.{1,2}[\\/][^\s"']+/m },
+  { label: "absolute filesystem path", pattern: /(?:^|[^A-Za-z0-9])\/(?!\/)[^\s"'<>]+/m },
+  { label: "absolute Windows path", pattern: /\b[A-Za-z]:\\[^\s"']+/m },
+  { label: "network filesystem path", pattern: /(?:^|[\s"'(])\\\\[^\\\s]+\\[^\s"']+/m },
+  { label: "repository-relative private locator", pattern: /(?:^|[\s"'(])(?:private-sources|sources?|documents?|repos?(?:itories)?|projects?|docs?|src|app|packages?)[\\/][^\s"']+/im },
+  { label: "file-like private locator", pattern: /\b[A-Z0-9._-]+(?:[\\/][A-Z0-9._-]+)+\.(?:json|md|txt|pdf|docx?|ya?ml|toml|swift|tsx?|jsx?|mjs|cjs|java|py|go|rs)\b/i },
   { label: "email address", pattern: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i },
   { label: "SSH Git remote", pattern: /\bgit@[A-Za-z0-9.-]+:/i },
   { label: "SSH URL", pattern: /\bssh:\/\//i },
+  { label: "file URL", pattern: /\bfile:\/\//i },
+  { label: "web URL", pattern: /\bhttps?:\/\//i },
   { label: "private key material", pattern: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/ },
+  { label: "bearer credential", pattern: /\bBearer\s+[A-Za-z0-9._~+\/-]+=*/i },
+  { label: "service credential", pattern: /\b(?:github_pat_|gh[pousr]_|sk-(?:proj-)?|xox[baprs]-)[A-Za-z0-9_-]{8,}\b/i },
+  { label: "cloud access key", pattern: /\bAKIA[0-9A-Z]{16}\b/ },
+  { label: "social-security identifier", pattern: /\b\d{3}-\d{2}-\d{4}\b/ },
 ];
 
 function fail(location, message) {
@@ -100,7 +111,7 @@ async function readJson(filePath, location) {
   try {
     source = await readFile(filePath, "utf8");
   } catch (error) {
-    fail(location, `cannot read ${filePath}: ${error.message}`);
+    fail(location, `cannot read the declared JSON file (${error?.code ?? "read failure"})`);
   }
   try {
     return JSON.parse(source);
@@ -158,21 +169,38 @@ function indexProjectRecords(record, location) {
   const curriculum = uniqueIndex(record.curriculum, `${location}.curriculum`, globalIds);
   const diagrams = uniqueIndex(record.diagrams, `${location}.diagrams`, globalIds);
   uniqueIndex(record.sanitization, `${location}.sanitization`, globalIds);
-  const d1Candidates = uniqueIndex(record.d1Candidates ?? [], `${location}.d1Candidates`, globalIds);
+  const d1Candidates = uniqueIndex(record.d1Candidates, `${location}.d1Candidates`, globalIds);
+  const d1Exclusions = uniqueIndex(record.d1Exclusions, `${location}.d1Exclusions`, globalIds);
   const publicationCandidates = uniqueIndex(record.publicationCandidates, `${location}.publicationCandidates`, globalIds);
-  return { sources, evidence, claims, contradictions, storySeeds, curriculum, diagrams, d1Candidates, publicationCandidates };
+  return { sources, evidence, claims, contradictions, storySeeds, curriculum, diagrams, d1Candidates, d1Exclusions, publicationCandidates };
 }
 
 function validateSources(sources, location) {
   for (const [id, source] of sources) {
-    for (const key of ["kind", "label", "locator", "safeHint", "authorization", "sensitivity", "availability"]) {
+    for (const key of ["kind", "label", "locator", "refreshMode", "safeHint", "authorization", "sensitivity", "availability"]) {
       requireString(source[key], `${location}.sources.${id}.${key}`);
+    }
+    requireEnum(source.refreshMode, SOURCE_REFRESH_MODES, `${location}.sources.${id}.refreshMode`);
+    if (source.refreshMode === "filesystem" && !path.isAbsolute(source.locator)) {
+      fail(`${location}.sources.${id}.locator`, "filesystem refresh requires one absolute canonical source root or exact file");
+    }
+    if (source.refreshMode === "remote" && !/^[a-z][a-z0-9+.-]*:/i.test(source.locator)) {
+      fail(`${location}.sources.${id}.locator`, "remote refresh metadata requires an explicit non-filesystem URI");
+    }
+    if (source.refreshMode === "remote" && /^file:/i.test(source.locator)) {
+      fail(`${location}.sources.${id}.locator`, "remote refresh metadata cannot use a file URI");
+    }
+    if (source.refreshMode === "conversation" && !/^conversation:/i.test(source.locator)) {
+      fail(`${location}.sources.${id}.locator`, "conversation provenance requires a conversation: locator");
     }
     if (source.visibility !== "local_only") {
       fail(`${location}.sources.${id}.visibility`, "source locators must remain local_only");
     }
     requireArray(source.canSupport, `${location}.sources.${id}.canSupport`);
     requireArray(source.cannotSupport, `${location}.sources.${id}.cannotSupport`);
+    if (source.refreshStatus !== undefined) {
+      requireEnum(source.refreshStatus, new Set(["current", "changed", "unavailable", "not_checked", "blocked"]), `${location}.sources.${id}.refreshStatus`);
+    }
   }
 }
 
@@ -267,11 +295,39 @@ async function validateDiagramAssets(diagrams, evidence, recordDirectory, locati
   return diagramAssets;
 }
 
-function validateCandidates(d1Candidates, publicationCandidates, evidence, location) {
+function validateCandidates(d1Candidates, d1Exclusions, publicationCandidates, evidence, location) {
+  const dispositions = new Map();
   for (const [id, candidate] of d1Candidates) {
     if (candidate.visibility !== "owner_private") fail(`${location}.d1Candidates.${id}.visibility`, "must be owner_private");
     requireKnownIds(candidate.sourceEvidenceIds, evidence, `${location}.d1Candidates.${id}.sourceEvidenceIds`);
+    if (candidate.kind !== "evidence") fail(`${location}.d1Candidates.${id}.kind`, "only typed evidence ingestion is currently supported");
+    if (candidate.sourceEvidenceIds.length !== 1) fail(`${location}.d1Candidates.${id}.sourceEvidenceIds`, "an evidence candidate must project exactly one canonical evidence record");
+    const sourceEvidence = evidence.get(candidate.sourceEvidenceIds[0]);
+    if (sourceEvidence.candidateState !== "pending") fail(`${location}.d1Candidates.${id}`, "new remote evidence must remain pending until explicit owner review");
+    if (dispositions.has(sourceEvidence.id)) fail(`${location}.d1Candidates.${id}`, `evidence ${sourceEvidence.id} already has a D1 disposition`);
+    dispositions.set(sourceEvidence.id, "candidate");
+    requireObject(candidate.content, `${location}.d1Candidates.${id}.content`);
+    requireArray(candidate.content.questionLinks, `${location}.d1Candidates.${id}.content.questionLinks`);
+    if (candidate.content.questionLinks.length === 0) fail(`${location}.d1Candidates.${id}.content.questionLinks`, "at least one question link is required");
+    const seenQuestions = new Set();
+    for (const [position, link] of candidate.content.questionLinks.entries()) {
+      requireObject(link, `${location}.d1Candidates.${id}.content.questionLinks[${position}]`);
+      requireStableId(link.questionId, `${location}.d1Candidates.${id}.content.questionLinks[${position}].questionId`);
+      requireEnum(link.relevance, new Set(["supporting", "contrary"]), `${location}.d1Candidates.${id}.content.questionLinks[${position}].relevance`);
+      if (seenQuestions.has(link.questionId)) fail(`${location}.d1Candidates.${id}.content.questionLinks`, `duplicate question ${link.questionId}`);
+      seenQuestions.add(link.questionId);
+    }
     assertRemoteSafe(candidate, `${location}.d1Candidates.${id}`);
+  }
+  for (const [id, exclusion] of d1Exclusions) {
+    requireStableId(exclusion.sourceEvidenceId, `${location}.d1Exclusions.${id}.sourceEvidenceId`);
+    const sourceEvidence = evidence.get(exclusion.sourceEvidenceId);
+    if (!sourceEvidence) fail(`${location}.d1Exclusions.${id}.sourceEvidenceId`, `unknown reference ${exclusion.sourceEvidenceId}`);
+    if (sourceEvidence.candidateState !== "pending") fail(`${location}.d1Exclusions.${id}`, "only pending evidence may have a local-only sync exclusion");
+    if (exclusion.disposition !== "local_only") fail(`${location}.d1Exclusions.${id}.disposition`, "must be local_only");
+    requireString(exclusion.reason, `${location}.d1Exclusions.${id}.reason`);
+    if (dispositions.has(sourceEvidence.id)) fail(`${location}.d1Exclusions.${id}`, `evidence ${sourceEvidence.id} already has a D1 disposition`);
+    dispositions.set(sourceEvidence.id, "exclusion");
   }
   for (const [id, candidate] of publicationCandidates) {
     if (candidate.visibility !== "publication_safe") fail(`${location}.publicationCandidates.${id}.visibility`, "must be publication_safe");
@@ -303,7 +359,7 @@ async function validateProject(record, descriptor, recordPath, bundleRoot) {
     recordDirectory,
     location,
   );
-  validateCandidates(indexes.d1Candidates, indexes.publicationCandidates, indexes.evidence, location);
+  validateCandidates(indexes.d1Candidates, indexes.d1Exclusions, indexes.publicationCandidates, indexes.evidence, location);
 
   return {
     descriptor,
@@ -622,9 +678,12 @@ async function main() {
     return;
   }
   const result = await buildBehavioralEvidenceSite({ bundleRoot, outputRoot: argumentValue("--output") });
-  console.log(`Behavioral evidence review generated at ${result.indexPath}`);
+  console.log(`Behavioral evidence review generated (${result.bundle.projects.length} projects).`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  await main();
+  await main().catch((error) => {
+    console.error(`Behavioral evidence command failed: ${error instanceof Error ? error.message : "unexpected failure"}`);
+    process.exitCode = 1;
+  });
 }

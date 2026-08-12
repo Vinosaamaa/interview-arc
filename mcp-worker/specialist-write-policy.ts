@@ -17,6 +17,9 @@ export function deterministicSpecialistWriteRepairable(job: {
 
 const SPECIALIST_WRITE_RETRY_DELAYS_MS = [1_000, 5_000, 15_000, 60_000, 300_000] as const;
 
+export const SPECIALIST_WRITE_REQUEST_DRAIN_LIMIT = 1;
+export const SPECIALIST_WRITE_SCHEDULED_DRAIN_LIMIT = 25;
+
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value && typeof value === "object") {
@@ -33,6 +36,14 @@ export async function specialistWritePayloadDigest(value: unknown) {
   const bytes = new TextEncoder().encode(canonicalJson(value));
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export async function specialistFinalizationJobId(operationId: string) {
+  const digest = await specialistWritePayloadDigest({
+    operation: "specialist_finalization",
+    operationId,
+  });
+  return `finalization-${digest}`;
 }
 
 export function specialistWriteRetryDelayMs(

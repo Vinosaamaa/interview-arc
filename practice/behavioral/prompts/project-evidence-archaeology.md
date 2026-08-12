@@ -189,9 +189,27 @@ Use the canonical project schema without inventing a combined evidence/claim
 record. `evidence` owns one transformed observation, provenance, grades,
 limitations, contrary-evidence links, visibility, and review state. `claims`
 owns claim text, scope, verification status, linked evidence, gaps, and safer
-wording. `d1Candidates` and `publicationCandidates` own derivative payloads and
-link back through `sourceEvidenceIds`. Assign stable IDs to every material
-record and retain the project source revision in its project/source context.
+wording. A `d1Candidates` entry uses `kind: evidence`, links exactly one pending
+canonical evidence record through `sourceEvidenceIds`, and contains only stable
+`content.questionLinks` with supporting/contrary relevance. Source registration
+is derived separately. `publicationCandidates` remain explicit approved
+derivatives. Assign stable IDs to every material record and retain the project
+source revision in its project/source context.
+
+Every source must declare its exact `refreshMode`: `filesystem`, `remote`,
+`conversation`, or `blocked`. A filesystem locator identifies one real
+canonical source root or exact file; never put a logical subsection,
+repository description, placeholder, or stale path in that field. Remote and
+conversation provenance must use their explicit non-filesystem modes so the
+local controller never passes them to filesystem inspection.
+
+After the owner confirms the final filesystem source list, run the controller's
+explicit `authorize-filesystem --confirm-owner-authorized-sources` operation.
+This creates the ignored local source policy that binds each source identity to
+its declared and canonical real path. Do not hand-edit, publish, sync, or quote
+that policy. If a locator or symlink target changes, stop and reauthorize the
+bounded source list before refresh; never bypass the policy or broaden it by
+guessing a parent directory.
 
 Do not use absolute paths in evidence intended for remote storage or
 publication.
@@ -471,13 +489,20 @@ Do not write first-person resume/profile wording until ownership is confirmed.
 ## Candidate evidence records
 
 Use only `d1Candidates` and `publicationCandidates` from the canonical project
-schema. Both carry the shared candidate core and link to accepted observations
-through `sourceEvidenceIds`; their variant-specific `kind`, `visibility`, and
-publication `approval` fields remain separate. Put claim text/scope/status in a
-linked `claims` record and provenance/grades/counterevidence in linked
-`evidence` records instead of duplicating those fields inside the candidate.
-New candidates remain pending review until the canonical review workflow
-changes their state.
+schema. A D1 candidate links exactly one pending observation through
+`sourceEvidenceIds`; `content.questionLinks` is the only remote-specific
+content. Put claim text/scope/status in a linked `claims` record and
+provenance/grades/counterevidence in linked `evidence` records instead of
+duplicating those fields inside the candidate. New candidates remain pending
+review until the explicit owner-review workflow changes their state. Give
+every remote-safe pending observation one stable D1 candidate with genuinely
+relevant stable question links. If an observation must remain local, add one
+explicit `d1Exclusions` record with its evidence ID and reason. Never leave a
+pending observation without exactly one of those two dispositions.
+Owner statements, resume claims, generated secondary material, and derived
+inferences cannot be projected to D1 above `E1`; keep an overstated local
+observation explicitly excluded until its grade is reviewed instead of
+silently rewriting it during sync preparation.
 
 Never store verbatim implementation snippets.
 
@@ -611,6 +636,8 @@ Required invariants:
 
 - no raw code in evidence or publication records;
 - every evidence record belongs to a source snapshot;
+- every pending evidence record has exactly one D1 candidate or explicit
+  local-only exclusion;
 - publication candidates contain no private locator;
 - unconfirmed ownership blocks first-person publication;
 - metrics require provenance, timeframe, unit, and user approval;

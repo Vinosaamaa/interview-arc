@@ -2,7 +2,10 @@ import { and, desc, eq, inArray, max, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { queryBehavioralEvidence } from "./behavioral-evidence";
-import { behavioralFinalAnswerSnapshotInputSchema } from "./behavioral-final-answer";
+import {
+  behavioralFinalAnswerSnapshotInputSchema,
+  type BehavioralFinalAnswerSnapshotInput,
+} from "./behavioral-final-answer";
 import {
   behavioralTargetReviewSchema,
   targetVariantStaleReasons,
@@ -11,6 +14,7 @@ import { resolveBehavioralTarget } from "./behavioral-target-profile";
 import { behavioralTargetStableIdSchema } from "./behavioral-target-profile-policy";
 import { readProblemSolutionProfile } from "./durable-practice";
 import { getDb } from "./index";
+import { readBoundLoopActivityContext } from "./loops";
 import {
   activityFinalizations,
   behavioralFinalAnswerSnapshots,
@@ -39,11 +43,43 @@ export type BehavioralPracticePreflightInput = z.infer<typeof behavioralPractice
 const VARIANT_LIMIT = 50;
 const VARIANT_SCAN_LIMIT = VARIANT_LIMIT + 1;
 
-export async function readBehavioralPracticePreflight(
-  ownerId: string,
-  inputValue: BehavioralPracticePreflightInput,
+type AcceptedVariantRow = {
+  activityId: string;
+  snapshotRevision: number;
+  finalizedAt: number;
+  finalization: unknown;
+};
+
+function projectAcceptedTailoredVariant(
+  row: AcceptedVariantRow,
+  snapshot: BehavioralFinalAnswerSnapshotInput,
+  context: { target: NonNullable<BehavioralFinalAnswerSnapshotInput["target"]> }
+    | { roleBrief: NonNullable<BehavioralFinalAnswerSnapshotInput["roleBrief"]> },
+  staleReasons: string[],
 ) {
-  const input = behavioralPracticePreflightInputSchema.parse(inputValue);
+  const finalization = row.finalization as { behavioralReview?: unknown } | null;
+  const reviewResult = behavioralTargetReviewSchema.safeParse(finalization?.behavioralReview);
+  return {
+    activityId: row.activityId,
+    snapshotRevision: row.snapshotRevision,
+    answer: snapshot.answer,
+    question: snapshot.question,
+    solutionProfile: snapshot.solutionProfile,
+    story: snapshot.story ?? null,
+    acceptedEvidenceIds: snapshot.acceptedEvidenceIds,
+    ...context,
+    review: reviewResult.success ? reviewResult.data : null,
+    finalizedAt: row.finalizedAt,
+    stale: staleReasons.length > 0,
+    staleReasons,
+  };
+}
+
+function readAcceptedTailoredVariantRows(
+  ownerId: string,
+  questionId: string,
+  context: "target" | "roleBrief",
+) {
   const db = getDb();
   const latestSnapshotRevisions = db.select({
     ownerId: behavioralFinalAnswerSnapshots.ownerId,
@@ -51,52 +87,72 @@ export async function readBehavioralPracticePreflight(
     latestSnapshotRevision: max(behavioralFinalAnswerSnapshots.snapshotRevision).as("latest_snapshot_revision"),
   }).from(behavioralFinalAnswerSnapshots).where(and(
     eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
-    sql`json_extract(${behavioralFinalAnswerSnapshots.snapshot}, '$.question.questionId') = ${input.questionId}`,
+    sql`json_extract(${behavioralFinalAnswerSnapshots.snapshot}, '$.question.questionId') = ${questionId}`,
   )).groupBy(
     behavioralFinalAnswerSnapshots.ownerId,
     behavioralFinalAnswerSnapshots.activityId,
   ).as("latest_behavioral_answer_revisions");
-  const [solutionProfile, evidence, resolvedTarget, rows] = await Promise.all([
+  const contextCondition = context === "target"
+    ? sql`json_type(${behavioralFinalAnswerSnapshots.snapshot}, '$.target') IS NOT NULL`
+    : sql`json_type(${behavioralFinalAnswerSnapshots.snapshot}, '$.roleBrief') IS NOT NULL`;
+  return db.select({
+    activityId: behavioralFinalAnswerSnapshots.activityId,
+    snapshotRevision: behavioralFinalAnswerSnapshots.snapshotRevision,
+    snapshot: behavioralFinalAnswerSnapshots.snapshot,
+    finalizedAt: behavioralFinalAnswerSnapshots.finalizedAt,
+    finalization: activityFinalizations.payload,
+  }).from(behavioralFinalAnswerSnapshots).innerJoin(
+    latestSnapshotRevisions,
+    and(
+      eq(latestSnapshotRevisions.ownerId, behavioralFinalAnswerSnapshots.ownerId),
+      eq(latestSnapshotRevisions.activityId, behavioralFinalAnswerSnapshots.activityId),
+      eq(latestSnapshotRevisions.latestSnapshotRevision, behavioralFinalAnswerSnapshots.snapshotRevision),
+    ),
+  ).leftJoin(
+    activityFinalizations,
+    and(
+      eq(activityFinalizations.ownerId, behavioralFinalAnswerSnapshots.ownerId),
+      eq(activityFinalizations.activityId, behavioralFinalAnswerSnapshots.activityId),
+    ),
+  ).where(and(
+    eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
+    sql`json_extract(${behavioralFinalAnswerSnapshots.snapshot}, '$.scope') = 'target_tailored'`,
+    contextCondition,
+  )).orderBy(
+    desc(behavioralFinalAnswerSnapshots.finalizedAt),
+    desc(behavioralFinalAnswerSnapshots.snapshotRevision),
+  ).limit(VARIANT_SCAN_LIMIT);
+}
+
+export async function readBehavioralPracticePreflight(
+  ownerId: string,
+  inputValue: BehavioralPracticePreflightInput,
+) {
+  const input = behavioralPracticePreflightInputSchema.parse(inputValue);
+  const db = getDb();
+  const [solutionProfile, evidence, resolvedTarget, boundLoop, legacyRows, roleBriefRows] = await Promise.all([
     readProblemSolutionProfile(ownerId, "behavioral", input.questionId, { revisionLimit: 1 }),
     queryBehavioralEvidence(ownerId, input.questionId),
     resolveBehavioralTarget(ownerId, {
       ...(input.activityId ? { activityId: input.activityId } : {}),
       ...(input.sessionId ? { sessionId: input.sessionId } : {}),
     }),
-    db.select({
-      activityId: behavioralFinalAnswerSnapshots.activityId,
-      snapshotRevision: behavioralFinalAnswerSnapshots.snapshotRevision,
-      snapshot: behavioralFinalAnswerSnapshots.snapshot,
-      finalizedAt: behavioralFinalAnswerSnapshots.finalizedAt,
-      finalization: activityFinalizations.payload,
-    }).from(behavioralFinalAnswerSnapshots).innerJoin(
-      latestSnapshotRevisions,
-      and(
-        eq(latestSnapshotRevisions.ownerId, behavioralFinalAnswerSnapshots.ownerId),
-        eq(latestSnapshotRevisions.activityId, behavioralFinalAnswerSnapshots.activityId),
-        eq(latestSnapshotRevisions.latestSnapshotRevision, behavioralFinalAnswerSnapshots.snapshotRevision),
-      ),
-    ).leftJoin(
-      activityFinalizations,
-      and(
-        eq(activityFinalizations.ownerId, behavioralFinalAnswerSnapshots.ownerId),
-        eq(activityFinalizations.activityId, behavioralFinalAnswerSnapshots.activityId),
-      ),
-    ).where(and(
-      eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
-      sql`json_extract(${behavioralFinalAnswerSnapshots.snapshot}, '$.scope') = 'target_tailored'`,
-    )).orderBy(
-      desc(behavioralFinalAnswerSnapshots.finalizedAt),
-      desc(behavioralFinalAnswerSnapshots.snapshotRevision),
-    ).limit(VARIANT_SCAN_LIMIT),
+    input.activityId ? readBoundLoopActivityContext(ownerId, input.activityId) : null,
+    readAcceptedTailoredVariantRows(ownerId, input.questionId, "target"),
+    readAcceptedTailoredVariantRows(ownerId, input.questionId, "roleBrief"),
   ]);
 
-  const allTargetSnapshots = rows.map((row) => ({
+  const allLegacyTargetSnapshots = legacyRows.map((row) => ({
     row,
     snapshot: behavioralFinalAnswerSnapshotInputSchema.parse(row.snapshot),
-  })).filter(({ snapshot }) => snapshot.scope === "target_tailored");
-  const snapshots = allTargetSnapshots.slice(0, VARIANT_LIMIT);
-  const targetIds = [...new Set(snapshots.flatMap(({ snapshot }) => snapshot.target?.targetId ?? []))];
+  })).filter(({ snapshot }) => snapshot.scope === "target_tailored" && Boolean(snapshot.target));
+  const allLoopRoleBriefSnapshots = roleBriefRows.map((row) => ({
+    row,
+    snapshot: behavioralFinalAnswerSnapshotInputSchema.parse(row.snapshot),
+  })).filter(({ snapshot }) => snapshot.scope === "target_tailored" && Boolean(snapshot.roleBrief));
+  const legacyTargetSnapshots = allLegacyTargetSnapshots.slice(0, VARIANT_LIMIT);
+  const loopRoleBriefSnapshots = allLoopRoleBriefSnapshots.slice(0, VARIANT_LIMIT);
+  const targetIds = [...new Set(legacyTargetSnapshots.flatMap(({ snapshot }) => snapshot.target?.targetId ?? []))];
   const targetRows = targetIds.length
     ? await db.select({
         targetId: behavioralTargetProfiles.targetId,
@@ -108,10 +164,13 @@ export async function readBehavioralPracticePreflight(
     : [];
   const currentTargetRevisions = new Map(targetRows.map((row) => [row.targetId, row.currentRevision]));
   const currentSolutionProfileRevision = solutionProfile.profile?.currentRevision ?? null;
-  const acceptedTargetVariants = snapshots.map(({ row, snapshot }) => {
+  const boundBehavioralLoop = boundLoop
+    && boundLoop.binding.specialty === "behavioral"
+    && boundLoop.binding.questionId === input.questionId
+    ? boundLoop
+    : null;
+  const acceptedTargetVariants = legacyTargetSnapshots.map(({ row, snapshot }) => {
     const target = snapshot.target!;
-    const finalization = row.finalization as { behavioralReview?: unknown } | null;
-    const reviewResult = behavioralTargetReviewSchema.safeParse(finalization?.behavioralReview);
     const staleReasons = targetVariantStaleReasons({
       targetId: target.targetId,
       targetRevision: target.revision,
@@ -122,20 +181,20 @@ export async function readBehavioralPracticePreflight(
       currentTargetRevision: currentTargetRevisions.get(target.targetId) ?? null,
       currentSolutionProfileRevision,
     });
-    return {
-      activityId: row.activityId,
-      snapshotRevision: row.snapshotRevision,
-      answer: snapshot.answer,
-      question: snapshot.question,
-      solutionProfile: snapshot.solutionProfile,
-      story: snapshot.story ?? null,
-      acceptedEvidenceIds: snapshot.acceptedEvidenceIds,
-      target,
-      review: reviewResult.success ? reviewResult.data : null,
-      finalizedAt: row.finalizedAt,
-      stale: staleReasons.length > 0,
-      staleReasons,
-    };
+    return projectAcceptedTailoredVariant(row, snapshot, { target }, staleReasons);
+  });
+  const acceptedRoleBriefVariants = loopRoleBriefSnapshots.map(({ row, snapshot }) => {
+    const roleBrief = snapshot.roleBrief!;
+    const staleReasons: string[] = [];
+    if (!boundBehavioralLoop) staleReasons.push("loop_role_brief_unbound");
+    else {
+      if (boundBehavioralLoop.binding.loopId !== roleBrief.loopId) staleReasons.push("loop_changed");
+      if (boundBehavioralLoop.binding.roleBriefRevision !== roleBrief.revision) staleReasons.push("role_brief_revised");
+    }
+    if (currentSolutionProfileRevision !== snapshot.solutionProfile.revision) {
+      staleReasons.push("solution_profile_revised");
+    }
+    return projectAcceptedTailoredVariant(row, snapshot, { roleBrief }, staleReasons);
   });
 
   const targetContext = resolvedTarget.target
@@ -151,6 +210,21 @@ export async function readBehavioralPracticePreflight(
         domainVocabulary: resolvedTarget.target.domainVocabulary,
       }
     : null;
+  const roleBriefContext = boundBehavioralLoop
+    ? {
+        loopId: boundBehavioralLoop.binding.loopId,
+        loopRevision: boundBehavioralLoop.binding.loopRevision,
+        roleBriefRevision: boundBehavioralLoop.binding.roleBriefRevision,
+        stageId: boundBehavioralLoop.binding.stageId,
+        label: boundBehavioralLoop.roleBrief.label,
+        company: boundBehavioralLoop.roleBrief.company,
+        roleTitle: boundBehavioralLoop.roleBrief.roleTitle,
+        targetLevel: boundBehavioralLoop.roleBrief.targetLevel,
+        competencySignals: boundBehavioralLoop.roleBrief.competencySignals,
+        seniorityIndicators: boundBehavioralLoop.roleBrief.seniorityIndicators,
+        domainVocabulary: boundBehavioralLoop.roleBrief.domainVocabulary,
+      }
+    : null;
   return {
     schemaVersion: 1 as const,
     boundary: input.boundary,
@@ -160,15 +234,30 @@ export async function readBehavioralPracticePreflight(
       binding: resolvedTarget.binding,
       target: targetContext,
     },
-    targeting: targetContext
+    roleBriefResolution: {
+      source: roleBriefContext ? "activity" as const : "none" as const,
+      binding: roleBriefContext ? boundBehavioralLoop!.binding : null,
+      roleBrief: roleBriefContext,
+    },
+    targeting: roleBriefContext
       ? {
           mode: "target_tailored" as const,
+          source: "loop_role_brief" as const,
+          competencySignals: roleBriefContext.competencySignals,
+          seniorityIndicators: roleBriefContext.seniorityIndicators,
+          domainVocabulary: roleBriefContext.domainVocabulary,
+        }
+      : targetContext
+      ? {
+          mode: "target_tailored" as const,
+          source: "legacy_target_profile" as const,
           competencySignals: targetContext.competencySignals,
           seniorityIndicators: targetContext.seniorityIndicators,
           domainVocabulary: targetContext.domainVocabulary,
         }
       : {
           mode: "universal" as const,
+          source: "none" as const,
           competencySignals: [],
           seniorityIndicators: [],
           domainVocabulary: [],
@@ -176,13 +265,15 @@ export async function readBehavioralPracticePreflight(
     solutionProfile,
     evidence,
     acceptedTargetVariants,
+    acceptedRoleBriefVariants,
     reviewContract: {
       schemaVersion: 1 as const,
       sections: ["universalQuality", "targetAlignment", "assistance", "evidenceGaps"] as const,
     },
-    limits: { acceptedTargetVariants: VARIANT_LIMIT },
+    limits: { acceptedTargetVariants: VARIANT_LIMIT, acceptedRoleBriefVariants: VARIANT_LIMIT },
     truncated: {
-      acceptedTargetVariants: allTargetSnapshots.length > VARIANT_LIMIT,
+      acceptedTargetVariants: allLegacyTargetSnapshots.length > VARIANT_LIMIT,
+      acceptedRoleBriefVariants: allLoopRoleBriefSnapshots.length > VARIANT_LIMIT,
     },
   };
 }

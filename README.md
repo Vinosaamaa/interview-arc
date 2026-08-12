@@ -60,7 +60,14 @@ Use the exact task names, first prompts, and one-time connection procedure in
 Task titles are used only to discover each specialist once; Interview Arc stores
 the durable task identifiers for coordinator routing afterward.
 
-Use six long-lived Codex tasks inside the same Interview Prep project: coordinator, Loop Recorder, Learning Specialist, LeetCode, system design, and behavioral. They share this checkout and its files; they do not automatically share the private conversation history of another task. The Loop Recorder owns hiring-process administration and Role Brief revisions; the Learning Specialist owns tutoring curriculum and evidence; the three practice specialists remain coaching owners.
+Use seven long-lived Codex tasks inside the same Interview Prep project:
+coordinator, Loop Recorder, Learning Specialist, Resume & Cover Letter,
+LeetCode, system design, and behavioral. They share this checkout and its files;
+they do not automatically share the private conversation history of another
+task. The Loop Recorder owns hiring-process administration and Role Brief
+revisions; the Learning Specialist owns tutoring curriculum and evidence;
+Resume & Cover Letter owns administrative Career Materials; and the three
+practice specialists remain coaching owners.
 
 The outer workspace instructions route a task to the right guide even when every task starts from the same Interview Prep folder. The user does not need separate projects or worktrees.
 
@@ -216,11 +223,13 @@ continues across midnight so its complete activity count and elapsed time remain
 available for session analytics. Only one activity and one parent session run at
 a time; pausing or finishing the parent pauses its running child.
 
-The shared shell exposes Interview and Journey as workspace peers. Interview
-owns Today, Loops, Reviews, Past, and Banks; Learn and Engineering are named but
-remain unavailable until their own bounded implementation work begins. Loops
+The shared shell exposes exactly three top-level workspaces: Interview, Learn,
+and Engineering. Interview owns Today, Loops, Reviews, Past, Banks, and its
+factual Journey; Learn and Engineering are named but remain unavailable until
+their own bounded implementation work begins, when each will own a separate
+local Statistics surface. Loops
 tracks one company-and-role process at a time with flexible ordered stages,
 immutable Loop-owned Role Brief revisions, exact/reconstructed interview
 memory, linked practice, and automatic completed-activity history.
 
-The site presents practice sources in Banks. Past is the completed-work reading log. Journey is an interactive practice atlas with a 365-day heatmap, streak and momentum measures, coding outcome rates, difficulty and topic coverage, pace controls, and an elapsed-time-versus-outcome map. It also reports factual Loop, stage, date, and outcome aggregates from explicit Loop records. Every point opens or filters to the records behind it; unsupported mastery or productivity claims are intentionally excluded.
+The site presents practice sources in Banks. Past is the completed-work reading log. Interview Journey is an interactive practice atlas with a 365-day heatmap, streak and momentum measures, coding outcome rates, difficulty and topic coverage, pace controls, and an elapsed-time-versus-outcome map. It also reports factual Loop, stage, date, and outcome aggregates from explicit Loop records. Every point opens or filters to the records behind it; unsupported mastery or productivity claims are intentionally excluded.

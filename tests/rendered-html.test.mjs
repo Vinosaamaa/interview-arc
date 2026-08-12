@@ -31,7 +31,8 @@ test("the Cloudflare build contains the Interview Arc dashboard", async () => {
   assert.match(bundle, /Loop-owned Role Brief/);
   assert.match(bundle, /BEHAVIORAL FOUNDATION/);
   assert.match(bundle, /Build answers on a truthful record/);
-  assert.match(bundle, /Source registration is not shipped yet/);
+  assert.match(bundle, /Registered private sources/);
+  assert.match(bundle, /Evidence waiting for your decision/);
   assert.match(bundle, /YESTERDAY/);
   assert.match(bundle, /365-DAY JOURNEY MAP/);
   assert.match(bundle, /CAREER WORK/);
@@ -120,11 +121,12 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(css, /\.past-control-deck \{[^}]*grid-template-columns: minmax\(0, 1fr\) 250px;/);
   assert.match(css, /\.case-title-row \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto;/);
   assert.match(css, /\.past-master-detail \{[^}]*grid-template-columns:/);
-  assert.match(css, /grid-template-columns: 525px 1200px/);
-  assert.match(css, /left: max\(calc\(50vw \+ var\(--sidebar-half\)/);
+  assert.match(css, /--reader-pane-width: 1200px/);
+  assert.match(css, /left: calc\(var\(--sidebar-size\) \+ \(100vw - var\(--sidebar-size\)\) \/ 2\)/);
+  assert.match(css, /transform: translateX\(-50%\)/);
   assert.match(css, /@keyframes master-detail-in/);
   assert.match(css, /@media \(max-width: 1976px\)/);
-  assert.match(css, /width: min\(525px, calc\(100vw - var\(--sidebar-size\) - 32px\)\)/);
+  assert.match(css, /width: min\(var\(--master-pane-width\), calc\(100% - 12px\)\)/);
   assert.match(client, /bank-master-detail \$\{masterPaneOpen \? "master-pane-open" : ""\}/);
   assert.match(client, /past-master-detail \$\{masterPaneOpen \? "master-pane-open" : ""\}/);
   assert.match(preferences, /interview-arc-master-pane-library-v1/);
@@ -132,7 +134,7 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /function openEntrySolution\(entry: LogEntry\)/);
   assert.match(client, /setLibraryNestedProblem\(\{ type: entry\.type, question \}\)/);
   assert.match(client, /function openAttemptFromSolution\(entry: LibraryEntry\)/);
-  assert.match(client, /setBankNestedEntry\(exactEntry\)/);
+  assert.match(client, /setBankNestedEntry\(\(current\) => retainLoadedPastSnapshot\(current, exactEntry\)\)/);
   assert.match(client, /libraryNestedProblem \? renderSolutionReader\(\) : renderCaseReader\(\)/);
   assert.match(client, /bankNestedEntry \? renderCaseReader\(\) : renderSolutionReader\(\)/);
   assert.match(client, /const nestedReaderFocus = \(view === "library" && Boolean\(libraryNestedProblem\)\)/);

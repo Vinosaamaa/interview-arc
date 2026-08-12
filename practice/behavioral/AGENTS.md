@@ -24,10 +24,22 @@ Load only what the current action needs:
   `../../docs/contracts/behavioral-evidence-domain.md`.
 - Story Bank write, revision, or question-scoped retrieval:
   `../../docs/contracts/behavioral-story-bank.md`.
-- explicit Target Profile write, binding, or authoritative target resolution:
+- historical Target Profile resolution or migration-boundary awareness:
   `../../docs/contracts/behavioral-target-profiles.md`.
 
 Never commit private sources or copy employer source code into D1/artifacts.
+
+For an explicit evidence-foundation refresh, use the local controller in this
+order: `status`, `refresh`, regenerate the private projection when useful, then
+`prepare-sync`. Read the ignored plan without printing it wholesale. Register
+sources only after reading their exact current D1 revisions; execute only its
+typed evidence writes, poll every durable receipt, and then present the pending
+candidate queue for explicit owner review. A prepared plan is not a saved
+receipt. Never upload the bundle, plan, source bytes, local locators, or review
+site to R2. Treat `uncoveredPendingEvidence > 0` as a sync-readiness blocker:
+repair the ignored bundle so every pending observation has exactly one typed
+D1 candidate or explicit local-only exclusion, and never report a source-only
+registry write as a completed evidence sync.
 
 ## Session Behavior
 
@@ -58,6 +70,14 @@ Use `upsert_personal_bank_question`, stable identities, priority ordering, and
 `resume-foundation` plus employer/project/competency tags. Prefer the
 highest-priority unfinished prerequisite unless the user overrides the
 curriculum. Ordinary Bugfree.ai practice follows the foundation.
+
+For project overview and résumé-bullet investigations, follow
+`../../docs/contracts/behavioral-project-deep-dives.md`. Resolve and persist the
+explicit stable project binding before preparing or revising the Solution
+Profile. Never use a title, employer string, or free-form tag as runtime
+binding authority. The Behavioral specialist owns these profiles; Resume &
+Cover Letter may supply exact claim identities and Learn may consume exact
+links, but neither creates a competing profile.
 
 ## Bugfree.ai Reference Policy
 
@@ -98,8 +118,11 @@ question-scoped preflight. Create a provisional profile only when none exists;
 the final personal answer still requires owner-confirmed facts.
 
 Treat new user facts as owner-attested evidence candidates and confirm their
-scope before acceptance; documentary proof is optional corroboration. An
-unknown stays a gap, and generated coaching is never evidence. Review and
+scope before acceptance; documentary proof is optional corroboration. Only an
+explicit owner action may accept, reject, or supersede a pending candidate;
+the specialist may prepare and present candidates but must not impersonate
+that decision. An unknown stays a gap, and generated coaching is never
+evidence. Review and
 persist items and claim checkpoints only through the MCP workflow in
 `docs/contracts/behavioral-evidence-domain.md`; that contract is authoritative
 for revisions, receipts, bounded polling, retries, provenance, identity, and
@@ -146,9 +169,11 @@ Every new completed behavioral finalization also saves the typed snapshot in
 byte-for-byte as `modelAnswer` and `finalAnswerSnapshot.answer`, bind the exact
 response turn/evidence/Profile revision, and reuse the same operation ID only
 for an exact retry. Never silently replace a saved attempt: use the explicit
-correction fields. For a target-tailored answer, resolve the authoritative
-activity/session binding and use its exact Target Profile revision; fail closed
-rather than guessing, stripping, or relabeling the target scope.
+correction fields. For a target-tailored answer, use the exact Loop-owned Role
+Brief revision from the authoritative activity binding. An already-bound
+historical activity may retain its exact Target Profile revision. Fail closed
+rather than creating a profile, guessing, stripping, or relabeling the target
+scope. Only the Loop Recorder may create or revise a Role Brief.
 When selecting a Story Bank story, use the `storyId` and `revision` returned by
 the current question preflight. D1 rejects a stale, archived, cross-owner, or
 question-mismatched story and requires its evidence IDs in the final snapshot.

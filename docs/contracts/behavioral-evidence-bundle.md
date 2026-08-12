@@ -20,14 +20,15 @@ Authorized local sources
         ↓ bounded inspection
 Ignored evidence bundle (canonical)
         ├─→ generated local HTML / diagrams
-        ├─→ reviewed owner-private D1 candidates (future)
+        ├─→ typed pending owner-private D1 candidates
         └─→ explicitly approved publication-safe derivatives (future)
 ```
 
 - **Persist** means update the ignored canonical bundle.
 - **Project** means regenerate a disposable local view from that bundle.
-- **Sync** means a future, explicit write of validated owner-private candidates
-  to D1.
+- **Sync** means an explicit specialist write of a validated owner-private
+  source snapshot or typed evidence candidate to D1, followed by receipt
+  verification.
 - **Publish** means an explicit owner-approved `publication_safe` derivative.
 
 Projection must be one-way. Editing generated HTML, SVG, or Markdown never
@@ -38,6 +39,7 @@ changes evidence identity, acceptance, visibility, or publication approval.
 ```text
 private-sources/behavioral-foundation/
 ├── manifest.json
+├── source-policy.json
 ├── projects/
 │   └── <project-id>/
 │       ├── project.json
@@ -143,6 +145,28 @@ common path, email, credential, and private-remote patterns.
 6. Supersede stale observations while preserving lineage.
 7. Regenerate projections. Do not infer D1 sync or publication from generation.
 
+Remote `d1Candidates` are deliberately narrow. Each has `kind: evidence`,
+references exactly one canonical pending evidence record, and contains only one
+or more stable question/relevance links. Source metadata is projected directly
+from the source registry, not duplicated in a candidate. Claims and Story Bank
+records use their owning D1 workflows only after evidence review.
+
+Every source declares a `refreshMode`. `filesystem` means its private locator
+is one real canonical source root or exact file. `remote`, `conversation`, and
+`blocked` are non-filesystem modes and are never passed to `stat()`. Every
+pending evidence record has exactly one sync disposition: one `d1Candidates`
+record, or one `d1Exclusions` record explaining why it remains local-only.
+Exclusions are private control data and never enter the remote sync plan.
+
+`source-policy.json` is a gitignored, owner-private authorization sidecar. It
+records each authorized filesystem source identity, its exact declared path,
+and its canonical real path at authorization time. Refresh preflights every
+filesystem source against that boundary before inspecting content and fails
+closed if a locator or symlink target changed. A newly available source that
+was missing during authorization must resolve directly to its declared path;
+otherwise it requires reauthorization. The policy never enters D1, R2, a sync
+plan, generated site, test fixture, log, or publication artifact.
+
 Use `practice/behavioral/prompts/project-evidence-archaeology.md` only when the
 owner explicitly asks to add or re-audit a project or experience. Ordinary
 behavioral mocks must not load that long prompt.
@@ -152,11 +176,29 @@ behavioral mocks must not load that long prompt.
 ```bash
 pnpm behavioral:evidence:validate
 pnpm behavioral:evidence:build
+pnpm behavioral:evidence:status
+pnpm behavioral:evidence:authorize-filesystem -- --confirm-owner-authorized-sources
+pnpm behavioral:evidence:refresh
+pnpm behavioral:evidence:prepare-sync
 ```
 
 Both commands default to `private-sources/behavioral-foundation`. Pass
 `--bundle <path>` for an isolated test or another explicitly selected bundle.
 Build writes only beneath that bundle's `site/` directory.
+
+The controller commands use the same default bundle. `status` emits aggregate
+counts only, including candidate-covered, excluded, and uncovered pending
+evidence. `authorize-filesystem` requires the explicit confirmation flag and
+writes only the ignored local source policy. Run it whenever the owner changes
+an authorized locator. `refresh` updates ignored source fingerprints and
+refresh state without printing locators; it leaves remote and conversation
+state to their owning connectors, and unchanged non-filesystem sources do not
+rewrite project or manifest timestamps. `prepare-sync` accepts a source
+revision only when its state is `available` and `current` or `changed`, and it
+fails when any pending evidence is uncovered; otherwise it writes an ignored `sync/plan.json`
+containing only display-safe source snapshots and explicit typed candidate
+writes. It never calls MCP itself, uploads to R2, or treats a generated plan as
+a saved receipt.
 
 The generated site must:
 
@@ -169,10 +211,10 @@ The generated site must:
 - identify itself as a local review projection, never as D1-synced or
   published content.
 
-## Future product boundary
+## Product boundary
 
-Issue #201 owns the later local connector, candidate-review writes, D1/MCP
-domain, Behavioral Foundation hub in the current Interview Arc website, typed
-Behavioral Attempt analysis, and Solution Profile integration. This local
-bundle does not mutate Today, a practice activity, transcript, result, timer,
-Story Bank, Solution Profile, D1, or publication state.
+The local bundle does not mutate Today, a practice activity, transcript,
+result, timer, Story Bank, Solution Profile, D1, R2, or publication state. The
+Behavioral specialist reads the prepared plan, performs exact owner-private MCP
+writes, verifies durable receipts, and presents pending candidates for explicit
+owner review.

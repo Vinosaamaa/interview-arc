@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { BEHAVIORAL_PROJECT_FOCUS_VALUES } from "./behavioral-project-deep-dive-policy";
 
 // Live practice state owned by the deployed website. Durable narrative content
 // (daily journals, attempt write-ups, transcripts) stays in Git; these tables
@@ -578,7 +579,7 @@ export const specialistTasks = sqliteTable(
   {
     ownerId,
     specialty: text("specialty", {
-      enum: ["leetcode", "system_design", "behavioral", "loop_recorder", "learning_specialist"],
+      enum: ["leetcode", "system_design", "behavioral", "loop_recorder", "learning_specialist", "resume_cover_letter"],
     }).notNull(),
     threadId: text("thread_id").notNull(),
     hostId: text("host_id"),
@@ -743,9 +744,149 @@ export const ownerBankQuestions = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.specialty, table.questionId] })],
 );
 
+// Project Deep Dive identity is explicit and owner-scoped. Question titles,
+// prompts, employers, and free-form tags are discovery metadata only; they are
+// never used as runtime binding authority. The current row is a pointer while
+// immutable revisions preserve every correction.
+export const behavioralProjectQuestionBindings = sqliteTable(
+  "behavioral_project_question_bindings",
+  {
+    ownerId,
+    questionId: text("question_id").notNull(),
+    currentRevision: integer("current_revision").notNull(),
+    projectId: text("project_id").notNull(),
+    focus: text("focus", { enum: BEHAVIORAL_PROJECT_FOCUS_VALUES }).notNull(),
+    sourceClaimId: text("source_claim_id"),
+    state: text("state", { enum: ["active", "archived"] }).notNull().default("active"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.questionId] }),
+    index("behavioral_project_bindings_project_idx").on(table.ownerId, table.projectId, table.focus, table.state),
+    uniqueIndex("behavioral_project_overview_unique")
+      .on(table.ownerId, table.projectId)
+      .where(sql`${table.state} = 'active' AND ${table.focus} = 'project_overview'`),
+    uniqueIndex("behavioral_project_resume_claim_unique")
+      .on(table.ownerId, table.projectId, table.sourceClaimId)
+      .where(sql`${table.state} = 'active' AND ${table.focus} = 'resume_claim'`),
+  ],
+);
+
+export const behavioralProjectQuestionBindingRevisions = sqliteTable(
+  "behavioral_project_question_binding_revisions",
+  {
+    ownerId,
+    questionId: text("question_id").notNull(),
+    revision: integer("revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    projectId: text("project_id").notNull(),
+    focus: text("focus", { enum: BEHAVIORAL_PROJECT_FOCUS_VALUES }).notNull(),
+    sourceClaimId: text("source_claim_id"),
+    state: text("state", { enum: ["active", "archived"] }).notNull(),
+    reason: text("reason").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.questionId, table.revision] }),
+    uniqueIndex("behavioral_project_binding_revision_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
+export const behavioralProjectActivityLinks = sqliteTable(
+  "behavioral_project_activity_links",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    questionId: text("question_id").notNull(),
+    bindingRevision: integer("binding_revision").notNull(),
+    projectId: text("project_id").notNull(),
+    focus: text("focus", { enum: BEHAVIORAL_PROJECT_FOCUS_VALUES }).notNull(),
+    sourceClaimId: text("source_claim_id"),
+    solutionRevision: integer("solution_revision"),
+    source: text("source", { enum: ["finalization", "completed_attempt_backfill"] }).notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    linkedAt: integer("linked_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.activityId] }),
+    uniqueIndex("behavioral_project_activity_link_operation_idx").on(table.ownerId, table.operationId),
+    index("behavioral_project_activity_link_project_idx").on(table.ownerId, table.projectId, table.linkedAt),
+  ],
+);
+
+export const behavioralProjectOperations = sqliteTable(
+  "behavioral_project_operations",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    action: text("action", { enum: ["set_question_binding", "link_completed_attempt"] }).notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.operationId] })],
+);
+
 // Behavioral evidence is sanitized before it reaches D1. These rows contain
 // no local source locator or raw source bytes; every relationship remains
 // owner-scoped so accepted evidence cannot cross account boundaries.
+export const behavioralEvidenceSources = sqliteTable(
+  "behavioral_evidence_sources",
+  {
+    ownerId,
+    sourceId: text("source_id").notNull(),
+    currentRevision: integer("current_revision").notNull(),
+    state: text("state", { enum: ["active", "archived"] }).notNull(),
+    projectKey: text("project_key").notNull(),
+    kind: text("kind").notNull(),
+    label: text("label").notNull(),
+    safeHint: text("safe_hint").notNull(),
+    availability: text("availability", { enum: ["available", "missing", "not_checked", "blocked"] }).notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.sourceId] }),
+    index("behavioral_evidence_sources_owner_state_idx").on(table.ownerId, table.state, table.updatedAt),
+    index("behavioral_evidence_sources_owner_project_idx").on(table.ownerId, table.projectKey),
+  ],
+);
+
+export const behavioralEvidenceSourceRevisions = sqliteTable(
+  "behavioral_evidence_source_revisions",
+  {
+    ownerId,
+    sourceId: text("source_id").notNull(),
+    revision: integer("revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    snapshot: text("snapshot", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.sourceId, table.revision] }),
+    uniqueIndex("behavioral_evidence_source_revisions_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
+export const behavioralEvidenceSourceOperations = sqliteTable(
+  "behavioral_evidence_source_operations",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    sourceId: text("source_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    sourceRevision: integer("source_revision").notNull(),
+    status: text("status", { enum: ["created", "revised", "unchanged"] }).notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.operationId] })],
+);
+
 export const behavioralEvidenceItems = sqliteTable(
   "behavioral_evidence_items",
   {
@@ -767,6 +908,7 @@ export const behavioralEvidenceItems = sqliteTable(
     limitations: text("limitations", { mode: "json" }).notNull(),
     tags: text("tags", { mode: "json" }).notNull(),
     ownerAttestation: text("owner_attestation", { mode: "json" }),
+    reviewRevision: integer("review_revision").notNull().default(1),
     createdAt: integer("created_at").notNull(),
     updatedAt,
   },
@@ -790,6 +932,37 @@ export const behavioralEvidenceQuestionLinks = sqliteTable(
   (table) => [
     primaryKey({ columns: [table.ownerId, table.questionId, table.evidenceId] }),
     index("behavioral_evidence_question_idx").on(table.ownerId, table.questionId, table.relevance),
+  ],
+);
+
+export const behavioralEvidenceReviewOperations = sqliteTable(
+  "behavioral_evidence_review_operations",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.operationId] })],
+);
+
+export const behavioralEvidenceReviewEvents = sqliteTable(
+  "behavioral_evidence_review_events",
+  {
+    ownerId,
+    evidenceId: text("evidence_id").notNull(),
+    revision: integer("revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    fromState: text("from_state", { enum: ["pending", "accepted", "rejected", "superseded"] }).notNull(),
+    toState: text("to_state", { enum: ["accepted", "rejected", "superseded"] }).notNull(),
+    reason: text("reason").notNull(),
+    replacementEvidenceId: text("replacement_evidence_id"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.evidenceId, table.revision] }),
+    index("behavioral_evidence_review_events_operation_idx").on(table.ownerId, table.operationId),
   ],
 );
 
@@ -1047,6 +1220,69 @@ export const loopRoleBriefRevisions = sqliteTable(
     primaryKey({ columns: [table.ownerId, table.loopId, table.revision] }),
     uniqueIndex("loop_role_brief_revisions_operation_idx").on(table.ownerId, table.operationId),
   ],
+);
+
+// Confirmed-interview preparation is a Loop-owned administrative artifact,
+// separate from Career Materials, the raw JD, and the immutable Role Brief.
+// The stable row keeps one current pointer per Loop/Round scope while every
+// content change appends an immutable revision.
+export const loopInterviewMaterials = sqliteTable(
+  "loop_interview_materials",
+  {
+    ownerId,
+    materialId: text("material_id").notNull(),
+    loopId: text("loop_id").notNull(),
+    stageId: text("stage_id"),
+    bindingKey: text("binding_key").notNull(),
+    kind: text("kind", { enum: ["interview_prep"] }).notNull(),
+    currentRevision: integer("current_revision").notNull(),
+    state: text("state", { enum: ["active", "archived"] }).notNull(),
+    label: text("label").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.materialId] }),
+    uniqueIndex("loop_interview_materials_scope_unique").on(
+      table.ownerId,
+      table.loopId,
+      table.bindingKey,
+      table.kind,
+    ),
+    index("loop_interview_materials_loop_idx").on(table.ownerId, table.loopId, table.stageId, table.state),
+  ],
+);
+
+export const loopInterviewMaterialRevisions = sqliteTable(
+  "loop_interview_material_revisions",
+  {
+    ownerId,
+    materialId: text("material_id").notNull(),
+    revision: integer("revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    snapshot: text("snapshot", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.materialId, table.revision] }),
+    uniqueIndex("loop_interview_material_revisions_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
+export const loopInterviewMaterialOperations = sqliteTable(
+  "loop_interview_material_operations",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    materialId: text("material_id").notNull(),
+    action: text("action", { enum: ["create", "revise"] }).notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    materialRevision: integer("material_revision").notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.operationId] })],
 );
 
 // Planned practice can carry at most one Loop and optional Round. The server
@@ -1525,6 +1761,10 @@ export const resumeRevisions = sqliteTable(
     revisionId: text("revision_id").notNull(),
     parentRevisionId: text("parent_revision_id"),
     sourceFingerprint: text("source_fingerprint").notNull(),
+    sourceProvider: text("source_provider", { enum: ["google_drive", "local_file"] }),
+    sourceRevisionFingerprint: text("source_revision_fingerprint"),
+    manifestFingerprint: text("manifest_fingerprint"),
+    extractionVersion: text("extraction_version"),
     importOperationId: text("import_operation_id").notNull(),
     storageGeneration: text("storage_generation").notNull(),
     visibility: text("visibility", { enum: ["owner_private"] }).notNull().default("owner_private"),
@@ -1537,6 +1777,86 @@ export const resumeRevisions = sqliteTable(
       table.resumeId,
       table.sourceFingerprint,
     ),
+  ],
+);
+
+// Extracted resume wording is bounded owner-private D1 data. It is useful for
+// exact revision comparison and semantic provenance, but it is never treated
+// as evidence by itself. Full DOCX/PDF bytes remain private R2 objects.
+export const resumeBulletOccurrences = sqliteTable(
+  "resume_bullet_occurrences",
+  {
+    ownerId,
+    resumeId: text("resume_id").notNull(),
+    revisionId: text("revision_id").notNull(),
+    occurrenceId: text("occurrence_id").notNull(),
+    sectionLabel: text("section_label").notNull(),
+    ordinal: integer("ordinal").notNull(),
+    text: text("text").notNull(),
+    contentFingerprint: text("content_fingerprint").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.resumeId, table.revisionId, table.occurrenceId] }),
+    uniqueIndex("resume_bullet_occurrences_order_idx").on(
+      table.ownerId,
+      table.resumeId,
+      table.revisionId,
+      table.ordinal,
+    ),
+    index("resume_bullet_occurrences_content_idx").on(table.ownerId, table.contentFingerprint),
+  ],
+);
+
+export const resumeBulletClaimLinks = sqliteTable(
+  "resume_bullet_claim_links",
+  {
+    ownerId,
+    resumeId: text("resume_id").notNull(),
+    revisionId: text("revision_id").notNull(),
+    occurrenceId: text("occurrence_id").notNull(),
+    referenceType: text("reference_type", { enum: ["claim", "evidence"] }).notNull(),
+    referenceId: text("reference_id").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [
+        table.ownerId,
+        table.resumeId,
+        table.revisionId,
+        table.occurrenceId,
+        table.referenceType,
+        table.referenceId,
+      ],
+    }),
+    index("resume_bullet_claim_links_reference_idx").on(
+      table.ownerId,
+      table.referenceType,
+      table.referenceId,
+    ),
+  ],
+);
+
+// A resume revision can flag an exact current Behavioral Solution Profile for
+// review when a claim it used changed. The profile itself remains immutable;
+// acknowledgement is a separate future owner action.
+export const resumeRevisionReviewImpacts = sqliteTable(
+  "resume_revision_review_impacts",
+  {
+    ownerId,
+    resumeId: text("resume_id").notNull(),
+    revisionId: text("revision_id").notNull(),
+    questionId: text("question_id").notNull(),
+    solutionProfileRevision: integer("solution_profile_revision").notNull(),
+    changedClaimIds: text("changed_claim_ids", { mode: "json" }).notNull(),
+    status: text("status", { enum: ["needs_review", "acknowledged"] }).notNull().default("needs_review"),
+    createdAt: integer("created_at").notNull(),
+    acknowledgedAt: integer("acknowledged_at"),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.resumeId, table.revisionId, table.questionId] }),
+    index("resume_revision_review_impacts_question_idx").on(table.ownerId, table.questionId, table.status),
   ],
 );
 
@@ -1555,6 +1875,36 @@ export const resumeRevisionFiles = sqliteTable(
   },
   (table) => [
     primaryKey({ columns: [table.ownerId, table.resumeId, table.revisionId, table.format] }),
+  ],
+);
+
+// Removing private resume bytes never rewrites the immutable revision. One
+// exact-retry tombstone owns the R2 pair lifecycle while integrity metadata,
+// extracted wording, semantic links, and downstream provenance remain intact.
+export const resumeRevisionFileDeletions = sqliteTable(
+  "resume_revision_file_deletions",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    resumeId: text("resume_id").notNull(),
+    revisionId: text("revision_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    status: text("status", { enum: ["deleting", "retryable_failure", "deleted"] }).notNull(),
+    errorCode: text("error_code"),
+    reason: text("reason").notNull(),
+    receipt: text("receipt", { mode: "json" }),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+    completedAt: integer("completed_at"),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.operationId] }),
+    uniqueIndex("resume_revision_file_deletions_target_unique").on(
+      table.ownerId,
+      table.resumeId,
+      table.revisionId,
+    ),
+    index("resume_revision_file_deletions_status_idx").on(table.ownerId, table.status, table.updatedAt),
   ],
 );
 
@@ -1577,6 +1927,40 @@ export const activityResumeContexts = sqliteTable(
     capturedAt: integer("captured_at").notNull(),
   },
   (table) => [primaryKey({ columns: [table.ownerId, table.activityId, table.snapshotRevision] })],
+);
+
+// Coordinator-only audit evidence for an owner-confirmed historical resume
+// relationship. The immutable activity snapshot and resume revision stay in
+// their owning tables; this row proves the exact loaded file identities and
+// makes retries conflict-safe without storing file bytes or private locators.
+export const activityResumeContextBackfills = sqliteTable(
+  "activity_resume_context_backfills",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    activityId: text("activity_id").notNull(),
+    snapshotRevision: integer("snapshot_revision").notNull(),
+    resumeId: text("resume_id").notNull(),
+    resumeRevisionId: text("resume_revision_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    sourceFingerprint: text("source_fingerprint").notNull(),
+    docxSha256: text("docx_sha256").notNull(),
+    pdfSha256: text("pdf_sha256").notNull(),
+    resumeImportedAt: integer("resume_imported_at").notNull(),
+    snapshotLoadedAt: integer("snapshot_loaded_at").notNull(),
+    ownerConfirmedAt: integer("owner_confirmed_at").notNull(),
+    reason: text("reason").notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.operationId] }),
+    uniqueIndex("activity_resume_context_backfills_target_unique").on(
+      table.ownerId,
+      table.activityId,
+      table.snapshotRevision,
+    ),
+  ],
 );
 
 // One stable operation id owns a single immutable request hash. The stored
@@ -1605,6 +1989,21 @@ export const resumeImportOperations = sqliteTable(
   ],
 );
 
+export const resumeCurrentRevisionOperations = sqliteTable(
+  "resume_current_revision_operations",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    resumeId: text("resume_id").notNull(),
+    revisionId: text("revision_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    priorRevisionId: text("prior_revision_id"),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.operationId] })],
+);
+
 // A short owner/resume lease serializes current-pointer changes while allowing
 // another request to recover a Worker invocation that disappeared mid-upload.
 export const resumeImportLocks = sqliteTable(
@@ -1621,6 +2020,60 @@ export const resumeImportLocks = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.resumeId] })],
 );
 
+// Cover letters are private Career Materials, not Job Journey application
+// records. D1 owns immutable revision/provenance metadata while the exact DOCX
+// and PDF pair lives in the same owner-private R2 boundary as résumé files.
+// Raw job descriptions, local paths, storage keys, and document bytes never
+// enter D1.
+export const coverLetterArtifacts = sqliteTable(
+  "cover_letter_artifacts",
+  {
+    ownerId,
+    artifactId: text("artifact_id").notNull(),
+    lineageId: text("lineage_id").notNull(),
+    parentRevisionId: text("parent_revision_id"),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    company: text("company").notNull(),
+    role: text("role").notNull(),
+    sourceUrl: text("source_url"),
+    jobDescriptionSha256: text("job_description_sha256").notNull(),
+    resumeId: text("resume_id").notNull(),
+    resumeRevisionId: text("resume_revision_id").notNull(),
+    evidenceFingerprint: text("evidence_fingerprint").notNull(),
+    storageGeneration: text("storage_generation").notNull(),
+    state: text("state", { enum: ["pending", "ready", "superseded"] }).notNull().default("pending"),
+    visibility: text("visibility", { enum: ["owner_private"] }).notNull().default("owner_private"),
+    createdAt: integer("created_at").notNull(),
+    readyAt: integer("ready_at"),
+    supersededAt: integer("superseded_at"),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.artifactId] }),
+    uniqueIndex("cover_letter_artifacts_operation_idx").on(table.ownerId, table.operationId),
+    uniqueIndex("cover_letter_artifacts_parent_idx").on(table.ownerId, table.parentRevisionId),
+    index("cover_letter_artifacts_lineage_idx").on(table.ownerId, table.lineageId, table.createdAt),
+    index("cover_letter_artifacts_state_idx").on(table.ownerId, table.state, table.createdAt),
+  ],
+);
+
+export const coverLetterArtifactFiles = sqliteTable(
+  "cover_letter_artifact_files",
+  {
+    ownerId,
+    artifactId: text("artifact_id").notNull(),
+    format: text("format", { enum: ["docx", "pdf"] }).notNull(),
+    sha256: text("sha256").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    mimeType: text("mime_type").notNull(),
+    filename: text("filename").notNull(),
+    visibility: text("visibility", { enum: ["owner_private"] }).notNull().default("owner_private"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.artifactId, table.format] })],
+);
+
 // Specialist writes first reserve a stable, owner-scoped operation receipt.
 // The MCP request only performs this small enqueue; a scheduled executor owns
 // the potentially expensive durable write and can reclaim an expired lease if
@@ -1633,9 +2086,11 @@ export const specialistWriteJobs = sqliteTable(
     operation: text("operation", {
       enum: [
         "leetcode_code_attempt",
+        "leetcode_code_attempt_recovery",
         "personal_bank_question",
         "behavioral_evidence_item",
         "behavioral_claim_status",
+        "specialist_finalization",
       ],
     }).notNull(),
     payloadHash: text("payload_hash").notNull(),
@@ -2152,8 +2607,17 @@ export type ProvisionalSolutionProfileRow = typeof provisionalSolutionProfiles.$
 export type ProblemSolutionRevisionRow = typeof problemSolutionRevisions.$inferSelect;
 export type ActivitySolutionLinkRow = typeof activitySolutionLinks.$inferSelect;
 export type OwnerBankQuestionRow = typeof ownerBankQuestions.$inferSelect;
+export type BehavioralProjectQuestionBindingRow = typeof behavioralProjectQuestionBindings.$inferSelect;
+export type BehavioralProjectQuestionBindingRevisionRow = typeof behavioralProjectQuestionBindingRevisions.$inferSelect;
+export type BehavioralProjectActivityLinkRow = typeof behavioralProjectActivityLinks.$inferSelect;
+export type BehavioralProjectOperationRow = typeof behavioralProjectOperations.$inferSelect;
+export type BehavioralEvidenceSourceRow = typeof behavioralEvidenceSources.$inferSelect;
+export type BehavioralEvidenceSourceRevisionRow = typeof behavioralEvidenceSourceRevisions.$inferSelect;
+export type BehavioralEvidenceSourceOperationRow = typeof behavioralEvidenceSourceOperations.$inferSelect;
 export type BehavioralEvidenceItemRow = typeof behavioralEvidenceItems.$inferSelect;
 export type BehavioralEvidenceQuestionLinkRow = typeof behavioralEvidenceQuestionLinks.$inferSelect;
+export type BehavioralEvidenceReviewOperationRow = typeof behavioralEvidenceReviewOperations.$inferSelect;
+export type BehavioralEvidenceReviewEventRow = typeof behavioralEvidenceReviewEvents.$inferSelect;
 export type BehavioralClaimRow = typeof behavioralClaims.$inferSelect;
 export type BehavioralClaimStatusEventRow = typeof behavioralClaimStatusEvents.$inferSelect;
 export type BehavioralStoryRow = typeof behavioralStories.$inferSelect;
@@ -2163,7 +2627,9 @@ export type BehavioralStoryQuestionLinkRow = typeof behavioralStoryQuestionLinks
 export type ResumeSourceRow = typeof resumeSources.$inferSelect;
 export type ResumeRevisionRow = typeof resumeRevisions.$inferSelect;
 export type ResumeRevisionFileRow = typeof resumeRevisionFiles.$inferSelect;
+export type ResumeRevisionFileDeletionRow = typeof resumeRevisionFileDeletions.$inferSelect;
 export type ActivityResumeContextRow = typeof activityResumeContexts.$inferSelect;
+export type ActivityResumeContextBackfillRow = typeof activityResumeContextBackfills.$inferSelect;
 export type ResumeImportOperationRow = typeof resumeImportOperations.$inferSelect;
 export type ResumeImportLockRow = typeof resumeImportLocks.$inferSelect;
 export type SpecialistWriteJobRow = typeof specialistWriteJobs.$inferSelect;

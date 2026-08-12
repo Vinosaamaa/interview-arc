@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -9,6 +9,12 @@ import {
   buildBehavioralEvidenceSite,
   validateBehavioralEvidenceBundle,
 } from "../scripts/build-behavioral-evidence-site.mjs";
+import {
+  authorizeBehavioralFilesystemSources,
+  prepareBehavioralEvidenceSyncPlan,
+  refreshBehavioralEvidenceSources,
+  summarizeBehavioralEvidenceBundle,
+} from "../scripts/behavioral-evidence-controller.mjs";
 
 async function writeJson(filePath, value) {
   await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -35,13 +41,15 @@ function projectFixture() {
       id: "EX-SRC-001",
       kind: "repository",
       label: "Authorized local fixture",
-      locator: "<authorized-local-project>",
+      locator: "remote:authorized-local-project",
+      refreshMode: "remote",
       safeHint: "Authorized local project",
       authorization: "user_authorized",
       sensitivity: "private",
       availability: "available",
       visibility: "local_only",
       revision: "example-revision",
+      inspectedAt: "2026-08-09T10:00:00.000Z",
       canSupport: ["Scoped project behavior"],
       cannotSupport: ["Personal ownership or production impact"],
     }],
@@ -128,6 +136,12 @@ function projectFixture() {
       reviewStatus: "pending",
     }],
     d1Candidates: [],
+    d1Exclusions: [{
+      id: "EX-D1-EXCLUSION-001",
+      sourceEvidenceId: "EX-EV-001",
+      disposition: "local_only",
+      reason: "The base fixture exercises an explicit local-only disposition.",
+    }],
     publicationCandidates: [],
   };
 }
@@ -178,6 +192,7 @@ test("rejects verified personal claims without accepted A3 evidence", async (t) 
   record.claims[0].scope = "personal_contribution";
   record.claims[0].status = "verified";
   record.evidence[0].candidateState = "accepted";
+  record.d1Exclusions = [];
   await writeJson(recordPath, record);
   await assert.rejects(
     validateBehavioralEvidenceBundle({ bundleRoot: fixture.root }),
@@ -205,6 +220,7 @@ test("accepts verified project claims backed by accepted E3 evidence", async (t)
   const record = JSON.parse(await readFile(recordPath, "utf8"));
   record.claims[0].status = "verified";
   record.evidence[0].candidateState = "accepted";
+  record.d1Exclusions = [];
   await writeJson(recordPath, record);
 
   await validateBehavioralEvidenceBundle({ bundleRoot: fixture.root });
@@ -220,11 +236,46 @@ test("rejects a declared diagram asset that is no longer readable", async (t) =>
   );
 });
 
+test("rejects a logical description classified as a filesystem locator", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.sources[0].refreshMode = "filesystem";
+  record.sources[0].locator = "search and filtering implementation";
+  await writeJson(recordPath, record);
+
+  await assert.rejects(
+    validateBehavioralEvidenceBundle({ bundleRoot: fixture.root }),
+    /absolute canonical source root or exact file/,
+  );
+});
+
+test("rejects file URI remote locators case-insensitively in schema and runtime contracts", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.sources[0].locator = "FILE:/private/example";
+  await writeJson(recordPath, record);
+
+  await assert.rejects(
+    validateBehavioralEvidenceBundle({ bundleRoot: fixture.root }),
+    /cannot use a file URI/,
+  );
+
+  const schema = JSON.parse(await readFile(new URL(
+    "../docs/contracts/behavioral-evidence-project.schema.json",
+    import.meta.url,
+  ), "utf8"));
+  const remotePattern = schema.$defs.source.allOf[1].then.properties.locator.pattern;
+  assert.equal(new RegExp(remotePattern).test("FILE:/private/example"), false);
+  assert.equal(new RegExp(remotePattern).test("https://example.invalid/source"), true);
+});
+
 test("rejects private locators and identities in remote-safe candidates", () => {
   const privateLocator = ["", "Users", "example", "private", "repository"].join("/");
   assert.throws(
     () => assertRemoteSafe({ content: { locator: privateLocator, contact: "person@example.test" } }),
-    /absolute macOS path/,
+    /absolute filesystem path/,
   );
 });
 
@@ -293,6 +344,354 @@ test("candidate variants share one closed canonical schema core", async () => {
     assert.equal(schema.$defs[variant].unevaluatedProperties, false);
     assert.equal(schema.$defs[variant].allOf[0].$ref, "#/$defs/candidateCore");
   }
+  assert.equal(schema.$defs.remoteCandidate.allOf[1].properties.kind.const, "evidence");
+  assert.equal(schema.$defs.remoteCandidate.allOf[1].properties.content.$ref, "#/$defs/remoteEvidenceContent");
+  assert.equal(schema.$defs.remoteExclusion.properties.disposition.const, "local_only");
+});
+
+test("local refresh prepares only typed remote-safe source and evidence operations", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.sources[0].locator = fixture.projectRoot;
+  record.sources[0].refreshMode = "filesystem";
+  record.d1Candidates = [{
+    id: "EX-D1-001",
+    kind: "evidence",
+    visibility: "owner_private",
+    content: {
+      questionLinks: [{ questionId: "QUESTION-EXAMPLE-1", relevance: "supporting" }],
+    },
+    sourceEvidenceIds: ["EX-EV-001"],
+    transformations: ["Omitted the private locator and implementation detail."],
+    limitations: ["The observation does not establish personal ownership."],
+  }];
+  record.d1Exclusions = [];
+  await writeJson(recordPath, record);
+  await authorizeBehavioralFilesystemSources({ bundleRoot: fixture.root });
+
+  const refreshed = await refreshBehavioralEvidenceSources({
+    bundleRoot: fixture.root,
+    now: new Date("2026-08-11T18:00:00.000Z"),
+  });
+  assert.equal(refreshed.inspected, 1);
+  const { plan, planPath } = await prepareBehavioralEvidenceSyncPlan({
+    bundleRoot: fixture.root,
+    now: new Date("2026-08-11T18:01:00.000Z"),
+  });
+  assert.deepEqual(plan.summary, {
+    sources: 1,
+    evidenceWrites: 1,
+    evidenceCandidates: 1,
+    excludedEvidence: 0,
+  });
+  assert.equal(plan.sources[0].source.sourceId, "example-project.ex-src-001");
+  assert.equal(plan.sources[0].expectedRevision, "read_current_registry_before_write");
+  assert.equal(plan.evidence[0].input.evidence.candidateState, "pending");
+  assert.equal(plan.evidence[0].input.questionLink.questionId, "question-example-1");
+  assert.equal(plan.evidence[0].input.evidence.safeProvenance[0].reference, "example-project.ex-src-001");
+  assert.doesNotMatch(JSON.stringify(plan), new RegExp(fixture.root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.doesNotMatch(JSON.stringify(plan), /"safeLocators"|"locator"/);
+  assert.equal(JSON.parse(await readFile(planPath, "utf8")).summary.evidenceWrites, 1);
+
+  const bundle = await validateBehavioralEvidenceBundle({ bundleRoot: fixture.root });
+  assert.deepEqual(summarizeBehavioralEvidenceBundle(bundle), {
+    projects: 1,
+    sources: 1,
+    availableSources: 1,
+    blockedSources: 0,
+    evidence: 1,
+    pendingEvidence: 1,
+    remoteCandidates: 1,
+    candidateCoveredEvidence: 1,
+    excludedEvidence: 0,
+    uncoveredPendingEvidence: 0,
+    publicationCandidates: 0,
+  });
+});
+
+test("refresh inspects only typed filesystem sources and never guesses from locator text", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.sources[0].locator = fixture.projectRoot;
+  record.sources[0].refreshMode = "filesystem";
+  record.sources.push(
+    {
+      ...record.sources[0],
+      id: "EX-SRC-REMOTE",
+      locator: "https://example.invalid/private-source",
+      refreshMode: "remote",
+      availability: "missing",
+    },
+    {
+      ...record.sources[0],
+      id: "EX-SRC-CONVERSATION",
+      kind: "user_statement",
+      locator: "conversation:example-project:owner-confirmation",
+      refreshMode: "conversation",
+      availability: "missing",
+    },
+    {
+      ...record.sources[0],
+      id: "EX-SRC-BLOCKED",
+      locator: "blocked:authorization-required",
+      refreshMode: "blocked",
+      authorization: "authorization_required",
+      availability: "not_checked",
+    },
+    {
+      ...record.sources[0],
+      id: "EX-SRC-STALE",
+      locator: path.join(fixture.root, "missing-source"),
+      refreshMode: "filesystem",
+      availability: "available",
+    },
+  );
+  await writeJson(recordPath, record);
+  await authorizeBehavioralFilesystemSources({ bundleRoot: fixture.root });
+
+  const refreshed = await refreshBehavioralEvidenceSources({
+    bundleRoot: fixture.root,
+    now: new Date("2026-08-11T18:00:00.000Z"),
+  });
+  assert.deepEqual(refreshed, {
+    inspected: 1,
+    changed: 0,
+    missing: 1,
+    blocked: 1,
+    notChecked: 2,
+  });
+  const updated = JSON.parse(await readFile(recordPath, "utf8"));
+  assert.equal(updated.sources.find((source) => source.id === "EX-SRC-REMOTE").refreshStatus, undefined);
+  assert.equal(updated.sources.find((source) => source.id === "EX-SRC-REMOTE").availability, "missing");
+  assert.equal(updated.sources.find((source) => source.id === "EX-SRC-CONVERSATION").refreshStatus, undefined);
+  assert.equal(updated.sources.find((source) => source.id === "EX-SRC-CONVERSATION").availability, "missing");
+  assert.equal(updated.sources.find((source) => source.id === "EX-SRC-STALE").availability, "missing");
+});
+
+test("filesystem refresh requires an exact owner-authorized source identity and locator", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.sources[0].locator = fixture.projectRoot;
+  record.sources[0].refreshMode = "filesystem";
+  await writeJson(recordPath, record);
+
+  await assert.rejects(
+    refreshBehavioralEvidenceSources({ bundleRoot: fixture.root }),
+    /outside the explicit owner authorization policy/,
+  );
+
+  await authorizeBehavioralFilesystemSources({ bundleRoot: fixture.root });
+  record.sources[0].locator = path.join(fixture.root, "different-source");
+  await mkdir(record.sources[0].locator);
+  await writeJson(recordPath, record);
+
+  await assert.rejects(
+    refreshBehavioralEvidenceSources({ bundleRoot: fixture.root }),
+    /outside the explicit owner authorization policy/,
+  );
+});
+
+test("filesystem refresh rejects a symlink target changed after owner authorization", async (t) => {
+  const fixture = await createFixture(t);
+  const firstTarget = path.join(fixture.root, "first-target");
+  const secondTarget = path.join(fixture.root, "second-target");
+  const sourceLink = path.join(fixture.root, "authorized-source");
+  await mkdir(firstTarget);
+  await mkdir(secondTarget);
+  await symlink(firstTarget, sourceLink, "dir");
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.sources[0].locator = sourceLink;
+  record.sources[0].refreshMode = "filesystem";
+  await writeJson(recordPath, record);
+  await authorizeBehavioralFilesystemSources({ bundleRoot: fixture.root });
+
+  await rm(sourceLink);
+  await symlink(secondTarget, sourceLink, "dir");
+
+  await assert.rejects(
+    refreshBehavioralEvidenceSources({ bundleRoot: fixture.root }),
+    /canonical path changed after owner authorization/,
+  );
+});
+
+test("filesystem refresh leaves non-filesystem connector state byte-identical", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const manifestPath = path.join(fixture.root, "manifest.json");
+  const initialProjectBytes = await readFile(recordPath, "utf8");
+  const initialManifestBytes = await readFile(manifestPath, "utf8");
+
+  const first = await refreshBehavioralEvidenceSources({
+    bundleRoot: fixture.root,
+    now: new Date("2026-08-11T18:00:00.000Z"),
+  });
+  assert.equal(first.notChecked, 1);
+  const firstProjectBytes = await readFile(recordPath, "utf8");
+  const firstManifestBytes = await readFile(manifestPath, "utf8");
+  assert.equal(firstProjectBytes, initialProjectBytes);
+  assert.equal(firstManifestBytes, initialManifestBytes);
+
+  const second = await refreshBehavioralEvidenceSources({
+    bundleRoot: fixture.root,
+    now: new Date("2026-08-11T19:00:00.000Z"),
+  });
+  assert.equal(second.notChecked, 1);
+  assert.equal(await readFile(recordPath, "utf8"), firstProjectBytes);
+  assert.equal(await readFile(manifestPath, "utf8"), firstManifestBytes);
+});
+
+test("repeated refresh leaves an unchanged blocked source byte-identical", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const manifestPath = path.join(fixture.root, "manifest.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.sources[0].refreshMode = "blocked";
+  record.sources[0].locator = "blocked:authorization-required";
+  record.sources[0].authorization = "authorization_required";
+  record.sources[0].availability = "blocked";
+  record.sources[0].refreshStatus = "blocked";
+  delete record.sources[0].revision;
+  delete record.sources[0].inspectedAt;
+  await writeJson(recordPath, record);
+  const initialProjectBytes = await readFile(recordPath, "utf8");
+  const initialManifestBytes = await readFile(manifestPath, "utf8");
+
+  const refreshed = await refreshBehavioralEvidenceSources({
+    bundleRoot: fixture.root,
+    now: new Date("2026-08-11T18:00:00.000Z"),
+  });
+
+  assert.equal(refreshed.blocked, 1);
+  assert.equal(await readFile(recordPath, "utf8"), initialProjectBytes);
+  assert.equal(await readFile(manifestPath, "utf8"), initialManifestBytes);
+});
+
+test("sync preparation rejects stale non-filesystem revisions before writing a plan", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.sources[0].refreshStatus = "not_checked";
+  await writeJson(recordPath, record);
+
+  await assert.rejects(
+    prepareBehavioralEvidenceSyncPlan({ bundleRoot: fixture.root }),
+    /must have a current or changed refresh status/,
+  );
+  await assert.rejects(access(path.join(fixture.root, "sync", "plan.json")), { code: "ENOENT" });
+});
+
+test("sync preparation accepts an explicit local-only exclusion and reports it", async (t) => {
+  const fixture = await createFixture(t);
+  const { plan } = await prepareBehavioralEvidenceSyncPlan({ bundleRoot: fixture.root });
+  assert.deepEqual(plan.summary, {
+    sources: 1,
+    evidenceWrites: 0,
+    evidenceCandidates: 0,
+    excludedEvidence: 1,
+  });
+});
+
+test("sync preparation rejects a 168-pending zero-disposition bundle", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.evidence = Array.from({ length: 168 }, (_, index) => ({
+    ...record.evidence[0],
+    id: `EX-EV-${String(index + 1).padStart(3, "0")}`,
+  }));
+  record.d1Candidates = [];
+  record.d1Exclusions = [];
+  await writeJson(recordPath, record);
+
+  await assert.rejects(
+    prepareBehavioralEvidenceSyncPlan({ bundleRoot: fixture.root }),
+    /168 pending evidence records without a D1 candidate or explicit local-only exclusion/,
+  );
+  await assert.rejects(access(path.join(fixture.root, "sync", "plan.json")), { code: "ENOENT" });
+});
+
+test("one canonical source can support many independently reviewable D1 candidates", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.evidence = Array.from({ length: 3 }, (_, index) => ({
+    ...record.evidence[0],
+    id: `EX-EV-00${index + 1}`,
+  }));
+  record.d1Candidates = record.evidence.map((evidence, index) => ({
+    id: `EX-D1-00${index + 1}`,
+    kind: "evidence",
+    visibility: "owner_private",
+    content: {
+      questionLinks: [{ questionId: `QUESTION-EXAMPLE-${index + 1}`, relevance: "supporting" }],
+    },
+    sourceEvidenceIds: [evidence.id],
+    transformations: ["Generalized the observation for owner-private review."],
+    limitations: ["The observation does not establish personal ownership."],
+  }));
+  record.d1Exclusions = [];
+  await writeJson(recordPath, record);
+
+  const { plan } = await prepareBehavioralEvidenceSyncPlan({ bundleRoot: fixture.root });
+  assert.equal(plan.summary.evidenceCandidates, 3);
+  assert.equal(plan.summary.evidenceWrites, 3);
+  assert.equal(new Set(plan.evidence.map((write) => write.input.evidence.evidenceId)).size, 3);
+});
+
+test("sync preparation rejects untyped or unsafe remote candidates before writing a plan", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.d1Candidates = [{
+    id: "EX-D1-UNSAFE",
+    kind: "evidence",
+    visibility: "owner_private",
+    content: {
+      questionLinks: [{ questionId: "QUESTION-EXAMPLE-1", relevance: "supporting" }],
+    },
+    sourceEvidenceIds: ["EX-EV-001"],
+    transformations: ["Retained src/private/implementation.ts"],
+    limitations: ["Fixture only"],
+  }];
+  record.d1Exclusions = [];
+  await writeJson(recordPath, record);
+
+  await assert.rejects(
+    prepareBehavioralEvidenceSyncPlan({ bundleRoot: fixture.root }),
+    /private locator/,
+  );
+  await assert.rejects(access(path.join(fixture.root, "sync", "plan.json")), { code: "ENOENT" });
+});
+
+test("sync preparation rejects a remote candidate whose generated evidence is graded above E1", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.evidence[0].origin = "generated_secondary";
+  record.evidence[0].evidenceGrade = "E2";
+  record.d1Candidates = [{
+    id: "EX-D1-OVERGRADED",
+    kind: "evidence",
+    visibility: "owner_private",
+    content: {
+      questionLinks: [{ questionId: "QUESTION-EXAMPLE-1", relevance: "supporting" }],
+    },
+    sourceEvidenceIds: ["EX-EV-001"],
+    transformations: ["Generalized the observation for owner-private review."],
+    limitations: ["Generated material remains pending review."],
+  }];
+  record.d1Exclusions = [];
+  await writeJson(recordPath, record);
+
+  await assert.rejects(
+    prepareBehavioralEvidenceSyncPlan({ bundleRoot: fixture.root }),
+    /cannot be prepared above E1 for D1 sync/,
+  );
+  await assert.rejects(access(path.join(fixture.root, "sync", "plan.json")), { code: "ENOENT" });
 });
 
 test("the archaeology coordinator defines explicit coverage and output budgets", async () => {
@@ -306,4 +705,6 @@ test("the archaeology coordinator defines explicit coverage and output budgets",
   assert.match(prompt, /detailed critical-module cards: 12/);
   assert.match(prompt, /final handoff: 12,000 words/);
   assert.match(prompt, /sole record definitions/);
+  assert.match(prompt, /Every source must declare its exact `refreshMode`/);
+  assert.match(prompt, /explicit `d1Exclusions` record/);
 });

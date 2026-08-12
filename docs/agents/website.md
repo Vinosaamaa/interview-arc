@@ -78,6 +78,11 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
 - A bank question may point to a durable `solutionPath`. The content importer
   hydrates that Markdown into its reusable Solution Profile without turning it
   into a dated Past attempt.
+- Follow `../contracts/behavioral-project-deep-dives.md` for owner-private
+  project grouping. Website and Learn surfaces consume the exact binding and
+  Solution Profile revision; they render the canonical profile through the
+  shared reader and never duplicate its body, infer identity from text, or
+  rewrite a Past attempt's immutable `projectDeepDiveLink`.
 - Treat `practice/*/sessions/*.md` and `audio-answers/*.md` as durable journal artifacts.
 - Use the contracts under `docs/contracts/` as the canonical field names.
 - Follow `../contracts/live-update-reliability.md` for website, Picture-in-
@@ -129,17 +134,20 @@ The website must not imply that browser draft state has already been published t
   preferences locally, and disable motion for `prefers-reduced-motion`.
 - Lead with today's practice and progress, then history and review queues.
 - Favor a focused journal/dashboard over contest theater.
-- Use the shared Interview/Learn/Engineering/Journey shell. Interview owns
-  Today, Loops, Reviews, Past, and Banks. Keep Learn and Engineering visibly
-  unavailable until their separately authorized work begins.
-- Provide Today, Loops, Reviews, Past, Banks, and Journey views without placing
-  every raw log on one page.
+- Use exactly three top-level workspaces: Interview, Learn, and Engineering.
+  Interview owns Today, Loops, Reviews, Past, Banks, and Journey. Keep Learn and
+  Engineering visibly unavailable until their separately authorized work
+  begins; each owns a separate local Statistics surface when implemented.
+- Provide Interview-local Today, Loops, Reviews, Past, Banks, and Journey views
+  without placing every raw log on one page.
 - Loops is an owner-private, responsive company-and-role tracker. Render only
   current explicit stage dates, statuses, outcomes, concise debriefs,
   exact/reconstructed memory labels, display-safe Role Brief revisions,
-  planned bindings, and automatically projected completed activity history.
-  The website reads these records; only the durable Loop Recorder creates or
-  revises a Loop-owned Role Brief.
+  Loop/Round interview-material revisions, planned bindings, and automatically
+  projected completed activity history. Keep interview material visibly
+  separate from Career Materials, the Role Brief, and the raw JD. The website
+  reads these records; only the durable Loop Recorder creates or revises a
+  Loop-owned Role Brief or interview material.
 - Activity detail should lead with summary, outcome, approach, lessons, and feedback; keep full transcript or code expandable.
 - Treat activity detail as a case file: pinned notes first, then facts, review
   date, summary/solution, review, transcript/code, and references. A linked

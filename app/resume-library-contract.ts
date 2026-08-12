@@ -1,15 +1,7 @@
 import { z } from "zod";
+import { resumeRevisionFileSchema, resumeStableIdSchema } from "./resume-revision-contract.ts";
 
-const stableId = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,199}$/);
-const sha256 = z.string().regex(/^[a-f0-9]{64}$/);
-
-const resumeFileSchema = z.object({
-  format: z.enum(["docx", "pdf"]),
-  sha256,
-  byteSize: z.number().int().positive(),
-  mimeType: z.string().min(1).max(120),
-  downloadPath: z.string().regex(/^\/api\/resume-library\/[a-z0-9][a-z0-9._-]{0,199}\/[a-z0-9][a-z0-9._-]{0,199}\/(?:docx|pdf)$/),
-}).strict();
+const stableId = resumeStableIdSchema;
 
 export const resumeLibrarySchema = z.object({
   schemaVersion: z.literal(1),
@@ -23,7 +15,7 @@ export const resumeLibrarySchema = z.object({
       parentRevisionId: stableId.nullable(),
       importedAt: z.number().int().positive(),
       current: z.boolean(),
-      files: z.array(resumeFileSchema).max(2),
+      files: z.array(resumeRevisionFileSchema).max(2),
     }).strict()).max(20),
   }).strict()).max(20),
   limits: z.object({

@@ -47,6 +47,7 @@
 .target-card.archived { background: #f4f4f1; color: #667068; }
 .target-card > header,
 .target-card > footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.target-card > footer > span { color: var(--muted); font-size: .74rem; line-height: 1.45; }
 .target-card > header > div { display: flex; align-items: center; gap: 7px; }
 .target-card > header span,
 .target-card > header i { padding: 4px 7px; border-radius: 99px; background: #f1e7f7; color: #75448f; font-size: .68rem; font-style: normal; font-weight: 800; text-transform: uppercase; }
@@ -65,7 +66,7 @@
 .target-source-summary code { width: fit-content; padding: 3px 5px; border-radius: 4px; background: #eff1ed; font-size: .7rem; }
 .target-signal-list ul { margin: 2px 0 0; padding-left: 18px; color: #566157; }
 .target-revision-picker { display: grid; gap: 6px; }
-.target-revision-picker select,
+.target-revision-picker input,
 .target-editor input,
 .target-editor textarea,
 .target-binding-row select { width: 100%; min-height: 44px; padding: 9px 11px; border: 1px solid #bfc8be; border-radius: 8px; background: white; color: var(--ink); font: inherit; }
@@ -88,7 +89,7 @@
 .behavioral-target-bindings { margin: 0 0 26px; }
 .behavioral-target-bindings > header > small { color: #75448f; font-weight: 800; white-space: nowrap; }
 .target-binding-list { border-top: 1px solid var(--line); }
-.target-binding-row { padding: 17px 22px; display: grid; grid-template-columns: minmax(220px, 1.1fr) minmax(180px, .8fr) minmax(230px, 1fr) auto; gap: 16px; align-items: center; border-bottom: 1px solid var(--line); }
+.target-binding-row { padding: 17px 22px; display: grid; grid-template-columns: minmax(220px, 1.1fr) minmax(220px, 1fr); gap: 16px; align-items: center; border-bottom: 1px solid var(--line); }
 .target-binding-row:last-child { border-bottom: 0; }
 .target-binding-row > div:first-child,
 .target-binding-status,
@@ -97,7 +98,7 @@
 .target-binding-status > span { color: #75448f; font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
 .target-binding-row small { color: var(--muted); }
 .target-binding-actions { display: flex; gap: 7px; }
-.target-binding-row > p { grid-column: 1 / -1; margin: 0; color: #8a4034; font-size: .82rem; }
+.target-binding-row > p { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: .82rem; line-height: 1.5; }
 @media (max-width: 1100px) {
   .target-binding-row { grid-template-columns: 1fr 1fr; }
   .target-binding-actions { justify-content: end; }

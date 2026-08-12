@@ -267,7 +267,13 @@ every sidecar conclusion, strength, issue, improvement, test result, edge case,
 next step, and alternative unchanged in the visible response. The child copies
 it mechanically; semantic paraphrases are rejected. Follow
 `code-attempt-reviews.md` for pending completion and exact rejection recovery.
-Historical backfill is coordinator-owned.
+Historical backfill is coordinator-owned. If an audit proves exact owner code
+and its complete visible review both predated an existing ready finalization
+but the Code Attempt projection is missing, only the coordinator may use
+`recover_leetcode_code_attempt` under the historical recovery contract in
+`code-attempt-reviews.md`. Specialists must not use that repair to infer code
+from walkthroughs, starter stubs, reference solutions, or incomplete
+transcript evidence.
 
 ## Finalization And Solution Profile
 
@@ -280,6 +286,15 @@ Historical backfill is coordinator-owned.
 - up to two meaningful alternatives;
 - only references actually consulted;
 - available Delivery Coach evidence (queued/failed analysis never blocks).
+
+Complete finalizations use the classification operation ID as a durable write
+identity. Poll `get_specialist_write_status` until the returned receipt is
+`saved` or `failed`; queued, processing, and retry-wait states do not authorize
+publication. Make at most five follow-up reads after 1, 2, 4, 8, and 15 second
+waits. If the receipt is still non-terminal after that 30-second budget, report
+it pending with its job ID, status, and next-attempt time; resume that same
+receipt later. Reuse the exact operation ID and byte-for-byte payload after an
+uncertain transport result, and never create a manual retry storm.
 
 For the shared interaction-mode sidecar, count only live problem-solving
 responses. Exclude harness setup, submission bookkeeping, post-submit review,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { subscribeToLiveUpdates } from "./live-event-policy";
 import {
@@ -19,18 +19,22 @@ export function useBehavioralTargetProfiles(enabled = true) {
   const [targets, setTargets] = useState<DisplaySafeBehavioralTargetRevision[]>();
   const [error, setError] = useState<string | null>(null);
   const [generation, setGeneration] = useState(0);
+  const latestRefreshRequest = useRef(0);
 
   const refresh = useCallback(async () => {
+    const request = ++latestRefreshRequest.current;
     if (!enabled) return false;
     try {
       const payload = behavioralTargetProfileListSchema.parse(
         await behavioralTargetRequest("/api/behavioral-targets?includeArchived=true"),
       );
+      if (request !== latestRefreshRequest.current) return false;
       setTargets(payload.targets);
       setError(null);
       setGeneration((value) => value + 1);
       return true;
     } catch (reason) {
+      if (request !== latestRefreshRequest.current) return false;
       setError(reason instanceof Error ? reason.message : "Target Profiles could not load.");
       return false;
     }
@@ -47,6 +51,7 @@ export function useBehavioralTargetProfiles(enabled = true) {
     });
     return () => {
       window.cancelAnimationFrame(frame);
+      latestRefreshRequest.current += 1;
       unsubscribe();
     };
   }, [enabled, refresh]);

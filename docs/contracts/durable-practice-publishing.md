@@ -12,12 +12,15 @@ Use these long-lived Codex task titles inside the same project:
 - `Interview Arc — Coordinator`
 - `Interview Arc — Loop Recorder`
 - `Interview Arc — Learning Specialist`
+- `Interview Arc — Resume & Cover Letter`
 - `Interview Arc — LeetCode`
 - `Interview Arc — System Design`
 - `Interview Arc — Behavioral`
 
-Titles help discovery but do not grant hidden shared memory. The coordinator
-registers each specialist's task/thread identifier once with
+Loop Recorder and Resume & Cover Letter are administrative specialists and do
+not participate in practice transcript, timer, finalization, review, or journal
+publication state. Titles help discovery but do not grant hidden shared memory.
+The coordinator registers each specialist's task/thread identifier once with
 `register_specialist_task`. It then reuses `get_specialist_tasks` and the Codex
 task coordination tools; the user should not repeatedly paste task IDs.
 Practice publication contacts only the three Interview practice specialists.
@@ -294,7 +297,13 @@ specialist task—the specialist:
 3. consults the required question references;
 4. saves one complete bundle per activity with
    `save_specialist_finalization`;
-5. schedules review when warranted.
+5. polls the returned durable write receipt until `saved` or `failed`—a
+   `queued`, `processing`, or `retry_wait` receipt is not a completed
+   finalization. Poll at most five times after 1, 2, 4, 8, and 15 second waits.
+   If the receipt is still non-terminal after that 30-second budget, preserve
+   its job ID and exact payload, report it pending, and resume it on a later
+   specialist/coordinator turn instead of polling indefinitely;
+6. schedules review when warranted.
 
 The specialist does **not** edit Git, switch branches, commit, open a pull
 request, mark an activity published, or deploy.
@@ -420,6 +429,9 @@ for their matching activities. Never claim an inaccessible reference was read.
    `get_activity_practice_record`. If a specialist task is unavailable, use an
    already-complete D1 bundle. If neither exists, report the specific activity
    as blocked; never invent the missing transcript or review.
+   When the tool returns `delivery: content_json`, parse the complete compact
+   record from `content`; the bounded `structuredContent` object is only the
+   delivery receipt and deliberately does not duplicate a large transcript.
 5. Render the type-specific Markdown artifacts and daily journals from D1.
 6. Preserve exact Pacific start/end time, elapsed time, session membership,
    outcome, notes, transcript, review, and references.
@@ -485,6 +497,14 @@ The web experience may replace item 5 with a stable link to the corresponding
 Problem Bank Solution Profile. This avoids duplicating the same canonical
 solution across repeated attempts while preserving the exact profile revision
 used for each attempt.
+
+Behavioral Project Deep Dives additionally follow
+`behavioral-project-deep-dives.md`. The publishing coordinator resolves the
+exact project binding and immutable Solution Profile revision, then renders
+that canonical profile; it never copies a Learn-owned body or publishes from a
+title/tag inference. Existing Past attempts require their audited additive
+project link before publication. Finalization and D1 linkage are readiness,
+not publication, and never authorize publishing a transcript by themselves.
 
 ## Audio
 

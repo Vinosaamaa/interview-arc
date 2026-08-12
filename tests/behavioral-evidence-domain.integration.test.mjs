@@ -17,6 +17,7 @@ const config = fileURLToPath(new URL("../wrangler.mcp.jsonc", import.meta.url));
 const project = fileURLToPath(new URL("..", import.meta.url));
 const sha256 = (text) => createHash("sha256").update(text).digest("hex");
 const MAX_WORKER_LOG_CHARS = 20_000;
+const RECOVERY_INTERVAL_POLLS = 10;
 
 function availablePort() {
   return new Promise((resolve, reject) => {
@@ -73,15 +74,26 @@ async function call(client, name, args) {
 
 const callRaw = (client, name, args) => client.callTool({ name, arguments: args });
 
-async function waitForJobs(client, jobIds) {
+async function waitForJobs(client, jobIds, recoveryBaseUrl = null) {
   let latest = [];
   for (let attempt = 0; attempt < 300; attempt += 1) {
+    // A scheduled drain may overlap a request-scoped drain that already owns
+    // the execution lease. Exercise recurring recovery at a bounded interval
+    // instead of assuming one cron invocation must acquire the lease.
+    if (recoveryBaseUrl && attempt % RECOVERY_INTERVAL_POLLS === 0) {
+      await runScheduledRecovery(recoveryBaseUrl);
+    }
     const result = await call(client, "get_specialist_write_status", { jobIds });
     latest = result.jobs;
     if (result.jobs.every((job) => job.status === "saved" || job.status === "failed")) return result.jobs;
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   throw new Error(`Behavioral evidence writes did not settle: ${JSON.stringify(latest)}`);
+}
+
+async function runScheduledRecovery(baseUrl) {
+  const response = await fetch(`${baseUrl}/__scheduled?cron=*+*+*+*+*`);
+  assert.equal(response.ok, true);
 }
 
 test("owner-private evidence and claim state survive reconnect into bounded behavioral preflight", { timeout: 90_000 }, async () => {
@@ -110,7 +122,7 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
         ('owner-behavioral-evidence','activity-behavioral-1','turn-behavioral-owner-1','behavioral','user','I personally designed the retry boundary for the project.','codex',1,1786291200000,1786291200000),
         ('other-behavioral-evidence','activity-behavioral-other','turn-behavioral-other-1','behavioral','user','I owned a different project decision.','codex',1,1786291201000,1786291201000);
     `]);
-    worker = spawn(wrangler, ["dev", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
+    worker = spawn(wrangler, ["dev", "--local", "--test-scheduled", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
       cwd: project,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -171,6 +183,7 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
       "upsert_behavioral_evidence_item",
       input,
     )));
+    await runScheduledRecovery(baseUrl);
     const concurrentReceipts = await waitForJobs(
       ownerClient,
       concurrentOperations.map((input) => input.operationId),
@@ -251,9 +264,29 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
     }]);
     assert.deepEqual(foundation.capabilities, {
       evidenceRead: "available",
-      sourceRegistry: "not_available",
+      sourceRegistry: "available",
+      candidateReview: "available",
       storyBank: "available",
       resumeLibrary: "available",
+    });
+    assert.deepEqual(foundation.sources, {
+      total: 0,
+      active: 0,
+      available: 0,
+      changed: 0,
+      blocked: 0,
+      revisions: 0,
+      recent: [],
+      lastUpdatedAt: null,
+      limit: 6,
+      truncated: false,
+    });
+    assert.deepEqual(foundation.candidates, {
+      pending: 0,
+      items: [],
+      lastUpdatedAt: null,
+      limit: 10,
+      truncated: false,
     });
     assert.deepEqual(foundation.stories, {
       total: 0,
@@ -362,10 +395,11 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
       questionLink: { questionId: "question-replay-trigger", relevance: "supporting" },
     };
     await call(ownerClient, "upsert_behavioral_evidence_item", replayTrigger);
+    await runScheduledRecovery(baseUrl);
     const [replayedOriginal, savedTrigger] = await waitForJobs(ownerClient, [
       claimInput.operationId,
       replayTrigger.operationId,
-    ]);
+    ], baseUrl);
     assert.equal(replayedOriginal.status, "saved");
     assert.equal(replayedOriginal.result.revision, 1);
     assert.equal(savedTrigger.status, "saved");
@@ -713,6 +747,7 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
         },
       }));
     await Promise.all(personalClaims.map((input) => call(ownerClient, "set_behavioral_claim_status", input)));
+    await runScheduledRecovery(baseUrl);
     const failedPersonalClaims = await waitForJobs(
       ownerClient,
       personalClaims.map((input) => input.operationId),
@@ -757,7 +792,11 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
         "upsert_behavioral_evidence_item",
         input,
       )));
-      const batchJobs = await waitForJobs(ownerClient, batch.map((input) => input.operationId));
+      const batchJobs = await waitForJobs(
+        ownerClient,
+        batch.map((input) => input.operationId),
+        baseUrl,
+      );
       assert.equal(batchJobs.every((job) => job.status === "saved"), true, workerLog);
     }
     const bounded = await call(ownerClient, "query_behavioral_evidence", {
@@ -787,7 +826,11 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
     for (let start = 0; start < boundedClaims.length; start += 5) {
       const batch = boundedClaims.slice(start, start + 5);
       await Promise.all(batch.map((input) => call(ownerClient, "set_behavioral_claim_status", input)));
-      const batchJobs = await waitForJobs(ownerClient, batch.map((input) => input.operationId));
+      const batchJobs = await waitForJobs(
+        ownerClient,
+        batch.map((input) => input.operationId),
+        baseUrl,
+      );
       assert.equal(batchJobs.every((job) => job.status === "saved"), true, workerLog);
     }
     const boundedClaimRead = await call(ownerClient, "query_behavioral_evidence", {

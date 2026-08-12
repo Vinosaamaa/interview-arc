@@ -40,6 +40,7 @@ test("specialist contract requirements are registered and exposed", async () => 
   assert.deepEqual(result.contracts.missingFromWorker, []);
   assert.deepEqual(result.contracts.missingFromAllowlist, []);
   assert.ok(result.contracts.required.includes("save_leetcode_code_attempt"));
+  assert.ok(result.contracts.required.includes("recover_leetcode_code_attempt"));
   assert.ok(result.contracts.required.includes("save_provisional_solution_profile"));
   assert.ok(result.contracts.required.includes("resolve_voice_capture"));
   assert.ok(result.contracts.required.includes("resolve_voice_capture_and_save_response"));
@@ -51,4 +52,7 @@ test("specialist contract requirements are registered and exposed", async () => 
   assert.ok(result.contracts.required.includes("get_behavioral_foundation_status"));
   assert.ok(result.contracts.required.includes("upsert_behavioral_story"));
   assert.ok(result.contracts.required.includes("query_behavioral_stories"));
+  assert.ok(result.contracts.required.includes("query_behavioral_project_deep_dives"));
+  assert.ok(result.contracts.required.includes("set_behavioral_project_binding"));
+  assert.ok(result.contracts.required.includes("link_completed_behavioral_project_attempt"));
 });

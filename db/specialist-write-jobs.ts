@@ -9,9 +9,11 @@ import {
 
 export type SpecialistWriteOperation =
   | "leetcode_code_attempt"
+  | "leetcode_code_attempt_recovery"
   | "personal_bank_question"
   | "behavioral_evidence_item"
-  | "behavioral_claim_status";
+  | "behavioral_claim_status"
+  | "specialist_finalization";
 
 export type SpecialistWriteStatus = SpecialistWriteJobRow["status"];
 
@@ -164,18 +166,27 @@ export async function retrySpecialistWriteJobs(
 }
 
 async function claimSpecialistWriteJob(nowMs: number, leaseMs: number) {
+  const noActiveLease = sql`not exists (
+    select 1
+    from specialist_write_jobs as active_specialist_write
+    where active_specialist_write.status = 'processing'
+      and active_specialist_write.lease_expires_at > ${nowMs}
+  )`;
   const candidates = await getDb().select({
     ownerId: specialistWriteJobs.ownerId,
     jobId: specialistWriteJobs.jobId,
-  }).from(specialistWriteJobs).where(or(
-    and(
-      inArray(specialistWriteJobs.status, ["queued", "retry_wait"]),
-      lte(specialistWriteJobs.nextAttemptAt, nowMs),
+  }).from(specialistWriteJobs).where(and(
+    or(
+      and(
+        inArray(specialistWriteJobs.status, ["queued", "retry_wait"]),
+        lte(specialistWriteJobs.nextAttemptAt, nowMs),
+      ),
+      and(
+        eq(specialistWriteJobs.status, "processing"),
+        lte(specialistWriteJobs.leaseExpiresAt, nowMs),
+      ),
     ),
-    and(
-      eq(specialistWriteJobs.status, "processing"),
-      lte(specialistWriteJobs.leaseExpiresAt, nowMs),
-    ),
+    noActiveLease,
   )).orderBy(asc(specialistWriteJobs.nextAttemptAt)).limit(1);
   const candidate = candidates[0];
   if (!candidate) return null;
@@ -198,6 +209,7 @@ async function claimSpecialistWriteJob(nowMs: number, leaseMs: number) {
         lte(specialistWriteJobs.leaseExpiresAt, nowMs),
       ),
     ),
+    noActiveLease,
   )).returning();
   return claimed[0] ?? null;
 }

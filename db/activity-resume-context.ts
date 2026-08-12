@@ -4,11 +4,38 @@ const stableIdSchema = z.string()
   .min(1)
   .max(200)
   .regex(/^[a-z0-9][a-z0-9._-]*$/, "Use a lowercase stable ID.");
+const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/, "Use a lowercase SHA-256 fingerprint.");
 
 export const resumeContextSelectionSchema = z.object({
   resumeId: stableIdSchema,
   revisionId: stableIdSchema,
 }).strict();
+
+export const backfillActivityResumeContextSchema = z.object({
+  operationId: stableIdSchema,
+  activityId: stableIdSchema,
+  snapshotRevision: z.number().int().positive(),
+  resumeId: stableIdSchema,
+  resumeRevisionId: stableIdSchema,
+  provenance: z.object({
+    sourceFingerprint: sha256Schema,
+    docxSha256: sha256Schema,
+    pdfSha256: sha256Schema,
+    resumeImportedAt: z.number().int().positive(),
+    snapshotLoadedAt: z.number().int().positive(),
+  }).strict(),
+  authorization: z.literal("explicit_user_instruction"),
+  ownerConfirmedAt: z.number().int().positive(),
+  reason: z.string().trim().min(1).max(1_000),
+}).strict().superRefine((input, context) => {
+  if (input.ownerConfirmedAt < input.provenance.snapshotLoadedAt) {
+    context.addIssue({
+      code: "custom",
+      path: ["ownerConfirmedAt"],
+      message: "Owner confirmation cannot predate loading the exact resume snapshot.",
+    });
+  }
+});
 
 export const storedActivityResumeContextSchema = z.object({
   schemaVersion: z.literal(1),
@@ -34,6 +61,7 @@ export const storedActivityResumeContextSchema = z.object({
 });
 
 export type ResumeContextSelection = z.infer<typeof resumeContextSelectionSchema>;
+export type BackfillActivityResumeContextInput = z.infer<typeof backfillActivityResumeContextSchema>;
 export type ActivityResumeContext = z.infer<typeof storedActivityResumeContextSchema>;
 
 export function renderActivityResumeContextMarkdown(context: ActivityResumeContext | null) {

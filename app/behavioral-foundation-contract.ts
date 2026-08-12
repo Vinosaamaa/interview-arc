@@ -3,7 +3,7 @@ import { z } from "zod";
 const count = z.number().int().nonnegative();
 
 export const behavioralFoundationStatusSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   evidence: z.object({
     total: count,
     accepted: count,
@@ -52,15 +52,79 @@ export const behavioralFoundationStatusSchema = z.object({
     limit: count,
     truncated: z.boolean(),
   }),
+  sources: z.object({
+    total: count,
+    active: count,
+    available: count,
+    changed: count,
+    blocked: count,
+    revisions: count,
+    recent: z.array(z.object({
+      sourceId: z.string().min(1),
+      revision: z.number().int().positive(),
+      state: z.enum(["active", "archived"]),
+      projectKey: z.string().min(1),
+      kind: z.string().min(1),
+      label: z.string().min(1),
+      safeHint: z.string().min(1),
+      authorization: z.enum(["user_authorized", "user_owned", "authorization_required", "unknown"]),
+      sensitivity: z.enum(["public", "private", "employer_confidential", "secret_adjacent", "unknown"]),
+      availability: z.enum(["available", "missing", "not_checked", "blocked"]),
+      refreshStatus: z.enum(["current", "changed", "unavailable", "not_checked", "blocked"]),
+      contentRevision: z.string().min(1).optional(),
+      lastInspectedAt: z.number().int().positive().optional(),
+      visibility: z.literal("owner_private"),
+      createdAt: z.number().int().positive(),
+    })),
+    lastUpdatedAt: z.number().int().positive().nullable(),
+    limit: count,
+    truncated: z.boolean(),
+  }),
+  candidates: z.object({
+    pending: count,
+    items: z.array(z.object({
+      evidenceId: z.string().min(1),
+      reviewRevision: z.number().int().positive(),
+      projectKey: z.string().min(1),
+      origin: z.string().min(1),
+      statement: z.string().min(1),
+      sourceRevision: z.string().min(1).nullable(),
+      evidenceGrade: z.enum(["E0", "E1", "E2", "E3"]),
+      attributionGrade: z.enum(["A0", "A1", "A2", "A3"]),
+      claimStrength: z.enum(["project_fact", "personal_contribution_candidate", "user_confirmation_required", "unsupported", "contradicted"]),
+      candidateState: z.literal("pending"),
+      supports: z.array(z.string()),
+      limitations: z.array(z.string()),
+      tags: z.array(z.string()),
+      questionLinks: z.array(z.object({
+        questionId: z.string().min(1),
+        relevance: z.enum(["supporting", "contrary"]),
+      })),
+      updatedAt: z.number().int().positive(),
+    })),
+    lastUpdatedAt: z.number().int().positive().nullable(),
+    limit: count,
+    truncated: z.boolean(),
+  }),
   capabilities: z.object({
     evidenceRead: z.literal("available"),
-    sourceRegistry: z.literal("not_available"),
+    sourceRegistry: z.literal("available"),
+    candidateReview: z.literal("available"),
     storyBank: z.literal("available"),
     resumeLibrary: z.literal("available"),
   }),
   lastUpdatedAt: z.number().int().positive().nullable(),
-  limits: z.object({ claimDetails: count, gaps: count, stories: count }),
-  truncated: z.object({ claimDetails: z.boolean(), gaps: z.boolean(), stories: z.boolean() }),
+  limits: z.object({ claimDetails: count, gaps: count, stories: count, sources: count, candidates: count }),
+  truncated: z.object({ claimDetails: z.boolean(), gaps: z.boolean(), stories: z.boolean(), sources: z.boolean(), candidates: z.boolean() }),
 });
 
 export type BehavioralFoundationStatus = z.infer<typeof behavioralFoundationStatusSchema>;
+
+export const behavioralFoundationReviewRequestSchema = z.object({
+  operationId: z.string().min(1).max(200).regex(/^[a-z0-9][a-z0-9._-]*$/),
+  decisions: z.array(z.object({
+    evidenceId: z.string().min(1).max(200).regex(/^[a-z0-9][a-z0-9._-]*$/),
+    expectedRevision: z.number().int().positive(),
+    decision: z.enum(["accept", "reject"]),
+  }).strict()).min(1).max(25),
+}).strict();

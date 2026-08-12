@@ -19,6 +19,17 @@ import {
   validateBehavioralEvidenceWrite,
 } from "../db/behavioral-evidence-policy";
 import {
+  behavioralEvidenceCandidateQuerySchema,
+  behavioralEvidenceCandidateReviewSchema,
+  behavioralEvidenceSourceQuerySchema,
+  behavioralEvidenceSourceWriteSchema,
+  BehavioralEvidenceReviewError,
+  queryBehavioralEvidenceCandidates,
+  queryBehavioralEvidenceSources,
+  reviewBehavioralEvidenceCandidates,
+  upsertBehavioralEvidenceSource,
+} from "../db/behavioral-evidence-review";
+import {
   BehavioralFinalAnswerError,
   behavioralFinalAnswerCorrectionSchema,
   behavioralFinalAnswerSnapshotInputSchema,
@@ -32,16 +43,26 @@ import {
   queryBehavioralStories,
   upsertBehavioralStory,
 } from "../db/behavioral-story";
-import { resumeContextSelectionSchema } from "../db/activity-resume-context";
+import {
+  backfillActivityResumeContextSchema,
+  resumeContextSelectionSchema,
+} from "../db/activity-resume-context";
 import {
   BehavioralTargetProfileError,
-  behavioralTargetBindingWriteSchema,
-  behavioralTargetProfileMcpWriteSchema,
   queryBehavioralTargetProfiles,
   resolveBehavioralTarget,
-  setBehavioralTargetBinding,
-  upsertBehavioralTargetProfile,
 } from "../db/behavioral-target-profile";
+import {
+  BehavioralProjectDeepDiveError,
+  behavioralProjectBindingWriteSchema,
+  behavioralProjectCompletedAttemptLinkSchema,
+  behavioralProjectProfileBindingSchema,
+  behavioralProjectQuerySchema,
+  linkCompletedBehavioralProjectAttempt,
+  queryBehavioralProjectDeepDives,
+  setBehavioralProjectQuestionBinding,
+} from "../db/behavioral-project-deep-dive";
+import { behavioralProjectSectionKeySchema } from "../db/behavioral-project-deep-dive-policy";
 import {
   LoopError,
   bindPlannedActivitySchema,
@@ -52,6 +73,8 @@ import {
   createLoopSchema,
   importLoopCapturePacket,
   importLoopCapturePacketSchema,
+  linkCompletedActivitySchema,
+  linkCompletedActivityToLoop,
   migrateTargetProfile,
   queryLoopCapturePackets,
   queryLoopCapturePacketsSchema,
@@ -102,13 +125,31 @@ import {
 } from "../db/learn";
 import { persistLearningArtifactText } from "../db/learning-artifact-storage";
 import {
+  createLoopInterviewMaterial,
+  createLoopInterviewMaterialSchema,
+  LoopMaterialError,
+  queryLoopInterviewMaterials,
+  queryLoopInterviewMaterialsSchema,
+  reviseLoopInterviewMaterial,
+  reviseLoopInterviewMaterialSchema,
+} from "../db/loop-materials";
+import {
   behavioralPracticePreflightInputSchema,
   readBehavioralPracticePreflight,
 } from "../db/behavioral-practice-preflight";
 import { behavioralTargetReviewSchema } from "../db/behavioral-practice-preflight-policy";
 import { loadContentIndex } from "../db/content";
 import { resolveIntegrationOwner } from "../db/integrations";
-import { getResumeImportStatus, getResumeLibrary } from "../db/resume-revisions";
+import {
+  backfillActivityResumeContext,
+  compareResumeRevisions,
+  getActivityResumeContext,
+  getResumeImportStatus,
+  getResumeLibrary,
+  getResumeRevision,
+  queryResumeReferenceUsage,
+  setCurrentResumeRevision,
+} from "../db/resume-revisions";
 import {
   applyFocusTimerAction,
   applyTimerAction,
@@ -178,6 +219,7 @@ import {
   registerActivityAudioClip,
   registerSpecialistTask,
   reportActivityAudioLost,
+  recoverLeetCodeCodeAttempt,
   resolveVoiceCaptureAndSaveResponse,
   resolveVoiceCaptureBatchAndSaveResponse,
   resolveVoiceCaptureIntent,
@@ -192,6 +234,7 @@ import {
   upsertOwnerBankQuestion,
   voiceFinishGuardMessage,
   VoiceResponseGroupConflictError,
+  type SpecialistFinalization,
 } from "../db/durable-practice";
 import { TypedExchangeDeletionError } from "../db/typed-exchange-deletion";
 import {
@@ -223,6 +266,11 @@ import {
   retrySpecialistWriteJobs,
   SpecialistWriteJobError,
 } from "../db/specialist-write-jobs";
+import {
+  SPECIALIST_WRITE_REQUEST_DRAIN_LIMIT,
+  SPECIALIST_WRITE_SCHEDULED_DRAIN_LIMIT,
+  specialistFinalizationJobId,
+} from "./specialist-write-policy";
 import type { SpecialistWriteJobRow } from "../db/schema";
 import {
   InteractionModeError,
@@ -271,6 +319,10 @@ import {
 import { requestVoiceDeliveryRetry } from "./voice-delivery-retry";
 import { ingestResumeRevision, ResumeImportError } from "./resume-revision-ingest";
 import { servePrivateResumeFile } from "./resume-library-download";
+import { deletePrivateResumeRevisionFiles } from "./resume-file-deletion";
+import { ingestCoverLetterArtifact } from "./cover-letter-artifact-ingest";
+import { servePrivateCoverLetterFile } from "./cover-letter-artifact-download";
+import { CoverLetterArtifactError, readCoverLetterOperation } from "../db/cover-letter-artifacts";
 import { routeLiveV1 } from "./live-v1";
 import { isLiveV1Path } from "./live-v1-path";
 
@@ -328,6 +380,35 @@ const behavioralClaimToolSchema = z.object({
     saferWording: z.string().trim().min(1).max(10_000).optional(),
     tags: z.array(z.string().trim().min(1).max(100)).max(32),
   }),
+});
+
+const specialistSolutionProfileSchema = z.object({
+  schemaVersion: z.literal(1),
+  summary: z.string().min(1),
+  sections: z.array(z.object({
+    sectionKey: behavioralProjectSectionKeySchema.optional(),
+    title: z.string().min(1),
+    body: z.string().min(1),
+  })).min(1),
+  tags: z.array(z.string().min(1)).max(32),
+  references: z.array(z.object({ title: z.string().min(1), url: z.string().url(), accessedAt: z.string().min(1) })),
+  behavioralAnswer: z.object({
+    preferred: z.object({
+      label: z.string().min(1),
+      answer: z.string().min(1),
+      evidence: z.array(z.string()),
+      evidenceGaps: z.array(z.string()),
+    }),
+    alternatives: z.array(z.object({
+      label: z.string().min(1),
+      answer: z.string().min(1),
+      whenToUse: z.string().optional(),
+      evidence: z.array(z.string()),
+      evidenceGaps: z.array(z.string()),
+    })).max(5),
+  }).optional(),
+  practiceScenarios: behavioralPracticeScenariosSchema.optional(),
+  projectDeepDive: behavioralProjectProfileBindingSchema.optional(),
 });
 
 const publishOwnerLiveUpdate = publishOwnerLiveUpdateRequest;
@@ -402,6 +483,58 @@ async function uploadResumeRevision(ownerId: string, request: Request, env: Env)
     return json(request, {
       error: "The private resume import could not be completed. Retry the exact operation after checking status.",
       code: "resume_import_unavailable",
+      retryable: true,
+    }, { status: 503 });
+  }
+}
+
+async function uploadCoverLetterArtifact(ownerId: string, request: Request, env: Env) {
+  try {
+    const result = await ingestCoverLetterArtifact(ownerId, request, env.AUDIO);
+    return json(request, result.body, { status: result.status });
+  } catch (error) {
+    if (error instanceof CoverLetterArtifactError) {
+      return json(request, {
+        error: error.message,
+        code: error.code,
+        retryable: error.retryable,
+      }, { status: error.status });
+    }
+    return json(request, {
+      error: "The private cover-letter import could not be completed. Retry the exact operation after checking status.",
+      code: "cover_letter_import_unavailable",
+      retryable: true,
+    }, { status: 503 });
+  }
+}
+
+async function deleteResumeRevisionFiles(
+  ownerId: string,
+  resumeId: string,
+  revisionId: string,
+  request: Request,
+  env: Env,
+) {
+  try {
+    const receipt = await deletePrivateResumeRevisionFiles(
+      ownerId,
+      resumeId,
+      revisionId,
+      request,
+      env.AUDIO,
+    );
+    return json(request, receipt, { status: 200 });
+  } catch (error) {
+    if (error instanceof ResumeImportError) {
+      return json(request, {
+        error: error.message,
+        code: error.code,
+        retryable: error.retryable,
+      }, { status: error.status });
+    }
+    return json(request, {
+      error: "The private resume file deletion could not be completed. Retry the exact operation receipt.",
+      code: "resume_file_deletion_unavailable",
       retryable: true,
     }, { status: 503 });
   }
@@ -1977,11 +2110,15 @@ function specialistToolFailure(error: unknown) {
     || error instanceof VoiceResponseGroupConflictError
     || error instanceof SpecialistWriteJobError
     || error instanceof BehavioralEvidenceError
+    || error instanceof BehavioralEvidenceReviewError
     || error instanceof BehavioralFinalAnswerError
     || error instanceof BehavioralTargetProfileError
+    || error instanceof BehavioralProjectDeepDiveError
     || error instanceof LoopError
     || error instanceof LearningError
+    || error instanceof LoopMaterialError
     || error instanceof BehavioralStoryError
+    || error instanceof ResumeImportError
     || error instanceof TypedExchangeDeletionError
     || error instanceof InteractionModeError
     || error instanceof InteractionModeFinalizationError
@@ -2017,7 +2154,48 @@ function specialistToolFailure(error: unknown) {
   throw error;
 }
 
+const MAX_DUPLICATED_ACTIVITY_RECORD_BYTES = 128 * 1_024;
+
+function activityPracticeRecordToolResult(
+  activityId: string,
+  record: Awaited<ReturnType<typeof readActivityPracticeRecord>>,
+) {
+  const compactRecord = JSON.stringify(record);
+  if (new TextEncoder().encode(compactRecord).byteLength > MAX_DUPLICATED_ACTIVITY_RECORD_BYTES) {
+    return {
+      content: [{ type: "text" as const, text: compactRecord }],
+      structuredContent: {
+        activityId,
+        delivery: "content_json" as const,
+        turnCount: record.turns.length,
+        noteCount: record.notes.length,
+        audioClipCount: record.audioClips.length,
+        deliveryAnalysisCount: record.deliveryAnalyses.length,
+        codeAttemptCount: record.codeAttempts.length,
+      },
+    };
+  }
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(record, null, 2) }],
+    structuredContent: { activityId, ...record },
+  };
+}
+
 async function executeSpecialistWriteJob(job: SpecialistWriteJobRow) {
+  if (job.operation === "leetcode_code_attempt_recovery") {
+    const input = job.payload as Parameters<typeof recoverLeetCodeCodeAttempt>[1];
+    const saved = await recoverLeetCodeCodeAttempt(job.ownerId, input, Date.now());
+    return {
+      id: input.id,
+      activityId: input.activityId,
+      sequence: input.sequence,
+      language: input.language,
+      lineCount: codeLineCount(input.code),
+      status: saved.status,
+      reviewStatus: saved.reviewStatus,
+      recovery: saved.recovery,
+    };
+  }
   if (job.operation === "leetcode_code_attempt") {
     const input = job.payload as Parameters<typeof saveLeetCodeCodeAttempt>[1];
     const saved = await saveLeetCodeCodeAttempt(job.ownerId, input, Date.now());
@@ -2053,6 +2231,39 @@ async function executeSpecialistWriteJob(job: SpecialistWriteJobRow) {
     const input = job.payload as Parameters<typeof setBehavioralClaimStatus>[2];
     return setBehavioralClaimStatus(job.ownerId, job.jobId, input, Date.now());
   }
+  if (job.operation === "specialist_finalization") {
+    const input = job.payload as {
+      activityId: string;
+      specialty: "leetcode" | "system_design" | "behavioral";
+      questionId: string | null;
+      finalization: SpecialistFinalization;
+    };
+    let result: Awaited<ReturnType<typeof saveSpecialistFinalization>>;
+    try {
+      result = await saveSpecialistFinalization(
+        job.ownerId,
+        input.activityId,
+        input.specialty,
+        input.questionId,
+        input.finalization,
+        Date.now(),
+      );
+    } catch (error) {
+      // Domain-level retryable errors require a reread and a newly prepared
+      // payload. Replaying this exact immutable job cannot resolve them.
+      if (error instanceof BehavioralFinalAnswerError && error.retryable) {
+        throw new SpecialistWriteJobError(error.code, error.message);
+      }
+      throw error;
+    }
+    return {
+      activityId: input.activityId,
+      specialty: input.specialty,
+      status: input.finalization.complete ? "ready" as const : "draft" as const,
+      finalAnswer: result.finalAnswer,
+      interactionModeClassification: result.interactionModeClassification,
+    };
+  }
   throw new SpecialistWriteJobError(
     "specialist_write_operation_unsupported",
     "The queued specialist write operation is not supported by this Worker version.",
@@ -2060,7 +2271,9 @@ async function executeSpecialistWriteJob(job: SpecialistWriteJobRow) {
 }
 
 function scheduleSpecialistWriteProcessing(ctx: ExecutionContext) {
-  ctx.waitUntil(processSpecialistWriteJobs(executeSpecialistWriteJob));
+  ctx.waitUntil(processSpecialistWriteJobs(executeSpecialistWriteJob, {
+    maxJobs: SPECIALIST_WRITE_REQUEST_DRAIN_LIMIT,
+  }));
 }
 
 type SpecialistTimerMutationInput = {
@@ -2753,6 +2966,46 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   );
 
   server.registerTool(
+    "upsert_behavioral_evidence_source",
+    {
+      description: "Append one display-safe owner-private source snapshot produced by the bounded local evidence connector. The payload never contains a local locator or raw source bytes. Exact operation retries are idempotent; changed retries and stale expected revisions fail closed.",
+      inputSchema: behavioralEvidenceSourceWriteSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await upsertBehavioralEvidenceSource(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Evidence source ${result.sourceId} revision ${result.revision} is saved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_behavioral_evidence_registry",
+    {
+      description: "Read bounded owner-private display-safe source snapshots and exact historical revisions. This registry never returns local paths, raw documents, source code, private remotes, credentials, or source excerpts.",
+      inputSchema: behavioralEvidenceSourceQuerySchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryBehavioralEvidenceSources(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
     "upsert_behavioral_evidence_item",
     {
       description: "Durably enqueue one already-sanitized owner-private behavioral evidence item and one question relevance link. Provenance references must be opaque stable IDs; non-conversation evidence requires a source revision and matching provenance kind. Reuse the exact stable operationId after transport uncertainty and inspect get_specialist_write_status until saved. Candidate supersession is not supported in this slice. This tool never reads a local source, publishes evidence, or verifies a claim.",
@@ -2773,6 +3026,46 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
             ? `Behavioral evidence ${payload.evidence.evidenceId} is durably saved.`
             : `Behavioral evidence ${payload.evidence.evidenceId} is durably queued as ${operationId}; verify its receipt before reuse.` }],
           structuredContent: receipt,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_behavioral_evidence_candidates",
+    {
+      description: "Read a bounded owner-private queue of sanitized evidence candidates with exact review revisions and question links. Pending is the default; raw source contents and private locators are never returned.",
+      inputSchema: behavioralEvidenceCandidateQuerySchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryBehavioralEvidenceCandidates(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "review_behavioral_evidence_candidates",
+    {
+      description: "Apply one explicit owner review batch to sanitized candidates. Decisions are accept, reject, or supersede; every candidate uses its exact review revision, the batch is atomic, and exact operation retries return the durable receipt.",
+      inputSchema: behavioralEvidenceCandidateReviewSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await reviewBehavioralEvidenceCandidates(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Reviewed ${result.decisions.length} behavioral evidence candidate${result.decisions.length === 1 ? "" : "s"}.` }],
+          structuredContent: result,
         };
       } catch (error) {
         return specialistToolFailure(error);
@@ -2911,7 +3204,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "revise_loop",
     {
-      description: "Append one owner-authorized revision for Loop process metadata, arbitrary ordered stages or groups, explicit dates/statuses/outcomes, and concise debrief memory. The company-and-role identity remains stable; dates never infer completion or outcome. Only the Loop Recorder may mutate this administrative record.",
+      description: "Append one owner-authorized revision for Loop process metadata, arbitrary ordered stages or groups, explicit dates/statuses/outcomes, owner-provided format/interviewers, concise per-question owner review and stage self-assessment, and optional real interviewer feedback. Legacy exact/reconstructed memory remains parseable but must not be inferred. The company-and-role identity remains stable; dates never infer completion or outcome. Only the Loop Recorder may mutate this administrative record.",
       inputSchema: reviseLoopSchema.shape,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
@@ -2951,13 +3244,73 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "query_loops",
     {
-      description: "Read bounded owner-private Loops, display-safe Role Brief revisions, and factual Journey aggregates. Current and exact historical revisions preserve stage/debrief truth while excluding raw job descriptions and private Role Brief notes; aggregates count only explicit Loop, stage, date, and outcome records.",
+      description: "Read bounded owner-private Loops, display-safe Role Brief revisions, and factual Journey aggregates. Current and exact historical revisions preserve owner-authored stage context, per-question reviews, self-assessment, optional feedback, and legacy exact/reconstructed memory while excluding raw job descriptions and private Role Brief notes; aggregates count only explicit Loop, stage, date, and outcome records.",
       inputSchema: queryLoopsSchema.shape,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (input) => {
       try {
         const result = await queryLoops(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "create_loop_interview_material",
+    {
+      description: "Create one owner-private immutable interview-prep material revision for an active Loop and optional explicitly scheduled or completed Round. Only the durable Loop Recorder may write it. The record pins an exact Role Brief revision and validates every activity provenance ID against the same Loop/Round; one material per scope prevents duplicates.",
+      inputSchema: createLoopInterviewMaterialSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await createLoopInterviewMaterial(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Interview material ${result.materialId} revision ${result.materialRevision} is saved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "revise_loop_interview_material",
+    {
+      description: "Append one immutable revision to existing Loop/Round interview-prep material. Only the durable Loop Recorder may revise it; Loop, Round, kind, and material identity cannot change. Exact retries are idempotent and stale or changed retries fail closed.",
+      inputSchema: reviseLoopInterviewMaterialSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await reviseLoopInterviewMaterial(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Interview material ${result.materialId} revision ${result.materialRevision} is saved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_loop_interview_materials",
+    {
+      description: "Read bounded owner-private current or exact historical Loop/Round interview-prep material with immutable revision, provenance, and timestamps. This never returns the raw JD, Role Brief private notes, transcripts, resumes, or cover letters.",
+      inputSchema: queryLoopInterviewMaterialsSchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryLoopInterviewMaterials(ownerId, input);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           structuredContent: result,
@@ -3000,6 +3353,26 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
         const result = await bindPlannedActivityToLoop(ownerId, input);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "link_completed_activity_to_loop",
+    {
+      description: "Link one exact already-completed owner-private practice activity to one Loop and optional Round after an explicit owner instruction. This backfills only immutable Loop context and transcript-free history; it never rewrites the timer, result, transcript, finalization, or Role Brief. Exact retries are idempotent and an activity can never be moved between Loops.",
+      inputSchema: linkCompletedActivitySchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await linkCompletedActivityToLoop(ownerId, input);
+        return {
+          content: [{ type: "text", text: "The completed activity is linked to the requested Loop." }],
           structuredContent: result,
         };
       } catch (error) {
@@ -3398,17 +3771,57 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   );
 
   server.registerTool(
-    "upsert_behavioral_target_profile",
+    "query_behavioral_project_deep_dives",
     {
-      description: "Create or revise one owner-private pasted-JD Target Profile. Use expectedRevision=0 for creation and the exact current revision for every update, including archive/reactivate. Reuse an identical stable operationId after transport uncertainty. The raw JD remains private and is never returned, logged, published, or treated as candidate evidence.",
-      inputSchema: behavioralTargetProfileMcpWriteSchema.shape,
+      description: "Read owner-scoped Project Deep Dive registry, exact question bindings, immutable Past-attempt links, link-only Learn projection, and optionally deterministic legacy migration review. Titles and free-form tags are never runtime binding authority.",
+      inputSchema: behavioralProjectQuerySchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryBehavioralProjectDeepDives(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "set_behavioral_project_binding",
+    {
+      description: "Create, correct, or archive one Behavioral Problem Bank question's explicit Project Deep Dive binding. Only the Behavioral specialist may use this contract. Exact operation retries replay; changed retries, stale revisions, unknown projects, cross-owner claims, and duplicate overview/claim scopes fail closed.",
+      inputSchema: behavioralProjectBindingWriteSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async (input) => {
       try {
-        const result = await upsertBehavioralTargetProfile(ownerId, input);
+        const result = await setBehavioralProjectQuestionBinding(ownerId, input);
         return {
-          content: [{ type: "text", text: `Target Profile ${result.targetId} revision ${result.revision} is saved.` }],
+          content: [{ type: "text", text: `Project Deep Dive binding ${result.status} for ${result.questionId}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "link_completed_behavioral_project_attempt",
+    {
+      description: "Attach one exact completed Behavioral Past attempt to an immutable Project Deep Dive binding revision. This additive operation preserves the attempt transcript, timer, result, final answer, and Solution Profile bytes. Exact retries are idempotent and an existing different link cannot be moved.",
+      inputSchema: behavioralProjectCompletedAttemptLinkSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await linkCompletedBehavioralProjectAttempt(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Completed attempt ${result.activityId} is ${result.status} to project ${result.projectId}.` }],
           structuredContent: result,
         };
       } catch (error) {
@@ -3433,26 +3846,6 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
         const result = await queryBehavioralTargetProfiles(ownerId, input);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-          structuredContent: result,
-        };
-      } catch (error) {
-        return specialistToolFailure(error);
-      }
-    },
-  );
-
-  server.registerTool(
-    "set_behavioral_target_binding",
-    {
-      description: "Set or clear one explicit owner-private session or behavioral-activity Target Profile binding. The exact active target revision is retained historically. Use the current binding revision, one stable mutationId, and the explicit authorization literal; merely mentioning a company must never call this tool.",
-      inputSchema: behavioralTargetBindingWriteSchema.shape,
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-    },
-    async (input) => {
-      try {
-        const result = await setBehavioralTargetBinding(ownerId, input);
-        return {
-          content: [{ type: "text", text: `Behavioral target binding ${result.status} at revision ${result.binding.revision}.` }],
           structuredContent: result,
         };
       } catch (error) {
@@ -3487,7 +3880,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "get_behavioral_practice_preflight",
     {
-      description: "Load one deterministic owner-private behavioral preflight at start/resume, new-question, post-mutation, reconnect/handoff, or finalization. It presents the current Solution Profile read, accepted evidence and gaps, authoritative Target Profile resolution, target grading signals, and bounded accepted target-tailored answer snapshots with source-revision staleness. It never returns raw job descriptions or private target analysis.",
+      description: "Load one deterministic owner-private behavioral preflight at start/resume, new-question, post-mutation, reconnect/handoff, or finalization. It presents the current Solution Profile, accepted evidence and gaps, the activity's exact Loop-owned Role Brief when bound, historical Target Profile resolution only for compatibility, target grading signals, and bounded accepted tailored-answer snapshots with revision staleness. It never returns raw job descriptions or private target analysis.",
       inputSchema: behavioralPracticePreflightInputSchema.shape,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
@@ -3537,6 +3930,127 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   );
 
   server.registerTool(
+    "get_resume_revision",
+    {
+      description: "Read one exact owner-private resume revision, including bounded extracted bullet wording, stable claim/evidence links, file integrity, lineage, and review impacts. It never returns raw DOCX/PDF bytes, Drive or local locators, R2 identity, or another owner's state.",
+      inputSchema: {
+        resumeId: behavioralStableIdSchema,
+        revisionId: behavioralStableIdSchema.optional(),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ resumeId, revisionId }) => {
+      const result = await getResumeRevision(ownerId, resumeId, revisionId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "compare_resume_revisions",
+    {
+      description: "Compare two exact immutable revisions of one owner-private resume. The bounded semantic/textual diff reports occurrence, wording, order, claim, and evidence-link changes without reading raw files or changing either revision.",
+      inputSchema: {
+        resumeId: behavioralStableIdSchema,
+        fromRevisionId: behavioralStableIdSchema,
+        toRevisionId: behavioralStableIdSchema,
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ resumeId, fromRevisionId, toRevisionId }) => {
+      const result = await compareResumeRevisions(ownerId, resumeId, fromRevisionId, toRevisionId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "set_current_resume_revision",
+    {
+      description: "Select one exact immutable owner-private resume revision as current after an explicit owner instruction. Stable operation IDs make exact retries idempotent; changed retries and concurrent pointer changes fail closed. No revision, file, attempt, or application material is rewritten.",
+      inputSchema: {
+        operationId: behavioralStableIdSchema,
+        resumeId: behavioralStableIdSchema,
+        revisionId: behavioralStableIdSchema,
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await setCurrentResumeRevision(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Resume ${result.resumeId} current revision is ${result.currentRevisionId}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_activity_resume_context",
+    {
+      description: "Read bounded immutable resume context captured on one exact owner-private behavioral activity. The result preserves contemporaneous versus backfilled provenance and never infers a historical link from dates or the newest resume.",
+      inputSchema: {
+        activityId: behavioralStableIdSchema,
+        snapshotRevision: z.number().int().positive().optional(),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ activityId, snapshotRevision }) => {
+      const result = await getActivityResumeContext(ownerId, activityId, snapshotRevision);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "backfill_activity_resume_context",
+    {
+      description: "Coordinator-only: append one owner-confirmed historical resume relationship to an exact immutable behavioral snapshot. The request must prove the loaded source/DOCX/PDF fingerprints, preserves the attempt and resume revision unchanged, labels the link backfilled, and makes exact retries idempotent. Missing provenance remains legacy unversioned.",
+      inputSchema: backfillActivityResumeContextSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await backfillActivityResumeContext(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Historical resume context is ${result.state} for activity ${result.activityId} snapshot ${result.snapshotRevision}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_resume_reference_usage",
+    {
+      description: "Search one stable claim or accepted-evidence identity across owner-private resume revisions and exact historical activity resume contexts. Results span older revisions without copying resume content into attempts or profiles.",
+      inputSchema: {
+        referenceType: z.enum(["claim", "evidence"]),
+        referenceId: behavioralStableIdSchema,
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ referenceType, referenceId }) => {
+      const result = await queryResumeReferenceUsage(ownerId, referenceType, referenceId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
     "save_leetcode_code_attempt",
     {
       description: "Durably enqueue an exact owner-provided LeetCode attempt after an explicit attempt boundary. Reuse one stable operationId and identical payload after transport uncertainty, then inspect get_specialist_write_status until saved. Use a pending review while evaluation runs, then a new operationId to complete that same immutable attempt. For a complete review, draft the structured fields once and render every summary, finding, testing-evidence, and next-step string unchanged in the referenced visible specialist review; semantic paraphrases are rejected. A persistence child must copy those supplied fields verbatim and never synthesize review wording. Ordinary snippets and generated reference solutions must not use this tool.",
@@ -3572,6 +4086,52 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
           content: [{ type: "text", text: receipt.status === "saved"
             ? `Code Attempt ${input.sequence} is durably saved.`
             : `Code Attempt ${input.sequence} is durably queued as ${operationId}; verify its receipt before finalization.` }],
+          structuredContent: receipt,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "recover_leetcode_code_attempt",
+    {
+      description: "Coordinator-audited recovery of one exact owner-provided LeetCode Code Attempt whose structured projection was missed before an existing ready finalization. The activity must still be unpublished; the immutable user source, complete visible specialist review, attempt timestamp, and review timestamp must all predate finalization. This append-only repair never rewrites transcript, code, review, finalization, or publication state. Reuse one stable operationId and identical payload after transport uncertainty, then inspect get_specialist_write_status until saved.",
+      inputSchema: {
+        operationId: z.string().min(1).max(200),
+        id: z.string().min(1),
+        activityId: z.string().min(1),
+        originatingTurnId: z.string().min(1),
+        sequence: z.number().int().positive(),
+        language: z.string().min(1).max(40),
+        code: z.string().min(1).max(300_000),
+        occurredAt: z.number().int().positive(),
+        review: codeAttemptReviewInputSchema,
+        reviewResponseTurnId: z.string().min(1),
+        observedCorrectness: z.enum(["not_verified", "appears_correct", "issues_found", "incomplete"]),
+        concreteFindings: z.array(z.string().max(2_000)).max(100),
+        edgeCases: z.array(z.string().max(2_000)).max(100),
+        complexity: z.object({ time: z.string().optional(), space: z.string().optional() }).optional(),
+        finalDeclaration: z.string().min(1).max(2_000),
+        authorization: z.literal("explicit_user_instruction"),
+        auditReason: z.string().min(1).max(2_000),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const { operationId, ...payload } = input;
+        const receipt = await enqueueSpecialistWriteJob(ownerId, {
+          jobId: operationId,
+          operation: "leetcode_code_attempt_recovery",
+          payload,
+        });
+        if (!["saved", "failed"].includes(receipt.status)) scheduleSpecialistWriteProcessing(ctx);
+        return {
+          content: [{ type: "text", text: receipt.status === "saved"
+            ? `Recovered Code Attempt ${input.sequence} is durably saved.`
+            : `Recovered Code Attempt ${input.sequence} is durably queued as ${operationId}; verify its receipt before publication.` }],
           structuredContent: receipt,
         };
       } catch (error) {
@@ -3652,7 +4212,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "save_specialist_finalization",
     {
-      description: "Save a specialist finalization bundle and immutable interaction-mode classification in D1. This does not publish Git artifacts, open a PR, or deploy.",
+      description: "Durably serialize a complete specialist finalization bundle and immutable interaction-mode classification in D1. Reuse the exact classification operation ID after transport uncertainty. A queued or retry_wait receipt is not proof of finalization; poll get_specialist_write_status until saved. Drafts remain synchronous. This does not publish Git artifacts, open a PR, or deploy.",
       inputSchema: z.object({
         activityId: z.string().min(1),
         specialty: z.enum(["leetcode", "system_design", "behavioral"]),
@@ -3699,29 +4259,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
             researchPerformed: z.boolean(),
             sourcesChecked: z.array(z.string()),
           }).optional(),
-          solutionProfile: z.object({
-            schemaVersion: z.literal(1),
-            summary: z.string().min(1),
-            sections: z.array(z.object({ title: z.string().min(1), body: z.string().min(1) })).min(1),
-            tags: z.array(z.string().min(1)).max(32),
-            references: z.array(z.object({ title: z.string().min(1), url: z.string().url(), accessedAt: z.string().min(1) })),
-            behavioralAnswer: z.object({
-              preferred: z.object({
-                label: z.string().min(1),
-                answer: z.string().min(1),
-                evidence: z.array(z.string()),
-                evidenceGaps: z.array(z.string()),
-              }),
-              alternatives: z.array(z.object({
-                label: z.string().min(1),
-                answer: z.string().min(1),
-                whenToUse: z.string().optional(),
-                evidence: z.array(z.string()),
-                evidenceGaps: z.array(z.string()),
-              })).max(5),
-            }).optional(),
-            practiceScenarios: behavioralPracticeScenariosSchema.optional(),
-          }).optional(),
+          solutionProfile: specialistSolutionProfileSchema.optional(),
         }),
       }).superRefine((input, context) => {
         if (input.specialty !== "leetcode" && input.finalization.questionMetadata) {
@@ -3731,11 +4269,80 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
             message: "questionMetadata is supported only for LeetCode finalizations.",
           });
         }
+        if (input.specialty !== "behavioral" && input.finalization.solutionProfile?.projectDeepDive) {
+          context.addIssue({
+            code: "custom",
+            path: ["finalization", "solutionProfile", "projectDeepDive"],
+            message: "Project Deep Dive metadata is supported only for behavioral finalizations.",
+          });
+        }
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async ({ activityId, specialty, questionId, finalization }) => {
       try {
+        if (finalization.complete && finalization.interactionModeClassificationOperationId) {
+          const jobId = await specialistFinalizationJobId(
+            finalization.interactionModeClassificationOperationId,
+          );
+          const enqueued = await enqueueSpecialistWriteJob(ownerId, {
+            jobId,
+            operation: "specialist_finalization",
+            payload: {
+              activityId,
+              specialty,
+              questionId: questionId ?? null,
+              finalization,
+            },
+          });
+          if (!["saved", "failed"].includes(enqueued.status)) {
+            await processSpecialistWriteJobs(executeSpecialistWriteJob, {
+              maxJobs: SPECIALIST_WRITE_REQUEST_DRAIN_LIMIT,
+            });
+          }
+          let receipt = (await readSpecialistWriteJobs(ownerId, [jobId]))[0];
+          receipt = { ...receipt, duplicate: enqueued.duplicate };
+          if (!["saved", "failed"].includes(receipt.status)) {
+            scheduleSpecialistWriteProcessing(ctx);
+          }
+          if (receipt.status === "failed") {
+            return {
+              isError: true,
+              content: [{ type: "text" as const, text: receipt.failure?.message ?? "The durable finalization failed." }],
+              structuredContent: {
+                error: receipt.failure?.message ?? "The durable finalization failed.",
+                code: receipt.failure?.code ?? "specialist_write_rejected",
+                retryable: receipt.failure?.retryable ?? false,
+                writeReceipt: receipt,
+              },
+            };
+          }
+          if (receipt.status === "saved") {
+            const result = receipt.result as {
+              activityId: string;
+              specialty: "leetcode" | "system_design" | "behavioral";
+              status: "ready" | "draft";
+              finalAnswer: unknown;
+              interactionModeClassification: unknown;
+            };
+            return {
+              content: [{ type: "text" as const, text: `${activityId} specialist bundle saved as ready.` }],
+              structuredContent: { ...result, writeReceipt: receipt },
+            };
+          }
+          return {
+            content: [{
+              type: "text" as const,
+              text: `${activityId} specialist bundle is durably ${receipt.status} as ${jobId}; verify its receipt before publication.`,
+            }],
+            structuredContent: {
+              activityId,
+              specialty,
+              status: receipt.status,
+              writeReceipt: receipt,
+            },
+          };
+        }
         const result = await saveSpecialistFinalization(
           ownerId,
           activityId,
@@ -3775,29 +4382,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
           researchPerformed: z.boolean(),
           sourcesChecked: z.array(z.string()),
         }).optional(),
-        profile: z.object({
-          schemaVersion: z.literal(1),
-          summary: z.string().min(1),
-          sections: z.array(z.object({ title: z.string().min(1), body: z.string().min(1) })).min(1),
-          tags: z.array(z.string().min(1)).max(32),
-          references: z.array(z.object({ title: z.string().min(1), url: z.string().url(), accessedAt: z.string().min(1) })),
-          behavioralAnswer: z.object({
-            preferred: z.object({
-              label: z.string().min(1),
-              answer: z.string().min(1),
-              evidence: z.array(z.string()),
-              evidenceGaps: z.array(z.string()),
-            }),
-            alternatives: z.array(z.object({
-              label: z.string().min(1),
-              answer: z.string().min(1),
-              whenToUse: z.string().optional(),
-              evidence: z.array(z.string()),
-              evidenceGaps: z.array(z.string()),
-            })).max(5),
-          }).optional(),
-          practiceScenarios: behavioralPracticeScenariosSchema.optional(),
-        }),
+        profile: specialistSolutionProfileSchema,
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
@@ -3840,16 +4425,13 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "get_activity_practice_record",
     {
-      description: "Read one activity's ordered transcript, pinned notes, specialist finalization, review schedule, and audio metadata.",
+      description: "Read one activity's ordered transcript, pinned notes, specialist finalization, review schedule, and audio metadata. Large records are returned once as compact JSON in content with a bounded structuredContent receipt; parse content when delivery=content_json.",
       inputSchema: { activityId: z.string().min(1) },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async ({ activityId }) => {
       const record = await readActivityPracticeRecord(ownerId, activityId);
-      return {
-        content: [{ type: "text", text: JSON.stringify(record, null, 2) }],
-        structuredContent: { activityId, ...record },
-      };
+      return activityPracticeRecordToolResult(activityId, record);
     },
   );
 
@@ -3921,7 +4503,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
     {
       description: "Register the stable Codex task ID for one specialist so the coordinator can reuse it without asking the user for IDs.",
       inputSchema: {
-        specialty: z.enum(["leetcode", "system_design", "behavioral", "loop_recorder", "learning_specialist"]),
+        specialty: z.enum(["leetcode", "system_design", "behavioral", "loop_recorder", "learning_specialist", "resume_cover_letter"]),
         threadId: z.string().min(1),
         hostId: z.string().min(1).optional(),
         title: z.string().min(1),
@@ -4486,6 +5068,25 @@ export default {
     if (url.pathname === "/resume/imports" && request.method === "POST") {
       return uploadResumeRevision(ownerId, request, env);
     }
+    if (url.pathname === "/cover-letter/imports" && request.method === "POST") {
+      return uploadCoverLetterArtifact(ownerId, request, env);
+    }
+    const coverLetterOperation = url.pathname.match(/^\/cover-letter\/operations\/([^/]+)$/);
+    if (coverLetterOperation && request.method === "GET") {
+      const receipt = await readCoverLetterOperation(ownerId, decodeURIComponent(coverLetterOperation[1]));
+      return receipt
+        ? json(request, receipt)
+        : json(request, { error: "Cover-letter operation not found.", code: "cover_letter_operation_not_found", retryable: false }, { status: 404 });
+    }
+    const coverLetterFile = url.pathname.match(/^\/cover-letter\/files\/([^/]+)\/(docx|pdf)$/);
+    if (coverLetterFile && request.method === "GET") {
+      return servePrivateCoverLetterFile(
+        ownerId,
+        decodeURIComponent(coverLetterFile[1]),
+        coverLetterFile[2],
+        env.AUDIO,
+      );
+    }
     const resumeFile = url.pathname.match(/^\/resume\/files\/([^/]+)\/([^/]+)\/(docx|pdf)$/);
     if (resumeFile && request.method === "GET") {
       return servePrivateResumeFile(
@@ -4494,6 +5095,16 @@ export default {
         decodeURIComponent(resumeFile[2]),
         resumeFile[3],
         env.AUDIO,
+      );
+    }
+    const resumeFilePair = url.pathname.match(/^\/resume\/files\/([^/]+)\/([^/]+)$/);
+    if (resumeFilePair && request.method === "DELETE") {
+      return deleteResumeRevisionFiles(
+        ownerId,
+        decodeURIComponent(resumeFilePair[1]),
+        decodeURIComponent(resumeFilePair[2]),
+        request,
+        env,
       );
     }
     if (url.pathname === "/voice/context" && request.method === "GET") {
@@ -4560,6 +5171,8 @@ export default {
     return json(request, { error: "Not found" }, { status: 404 });
   },
   async scheduled(_controller: ScheduledController, _env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(processSpecialistWriteJobs(executeSpecialistWriteJob, { maxJobs: 25 }));
+    ctx.waitUntil(processSpecialistWriteJobs(executeSpecialistWriteJob, {
+      maxJobs: SPECIALIST_WRITE_SCHEDULED_DRAIN_LIMIT,
+    }));
   },
 } satisfies ExportedHandler<Env>;

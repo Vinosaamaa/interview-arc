@@ -57,6 +57,22 @@ const roleBrief = (
   ownerNotes: ["Private owner note"],
 });
 
+const sqlText = (value) => String(value).replaceAll("'", "''");
+function legacyTargetFixtureSql(targetId, brief, sequence) {
+  const target = { targetId, ...brief };
+  const { jdText, ...displaySource } = target.source;
+  const display = { ...target, source: displaySource };
+  return `INSERT INTO behavioral_target_profiles
+      (owner_id,target_id,current_revision,state,label,created_at,updated_at)
+    VALUES ('owner-loop','${targetId}',1,'active','${sqlText(target.label)}',${sequence},${sequence});
+    INSERT INTO behavioral_target_profile_revisions
+      (owner_id,target_id,revision,operation_id,request_fingerprint,source_fingerprint,
+       display_snapshot,private_snapshot,created_at)
+    VALUES ('owner-loop','${targetId}',1,'legacy-fixture-${sequence}',
+      '${sha256(JSON.stringify(target))}','${sha256(jdText)}',
+      '${sqlText(JSON.stringify(display))}','${sqlText(JSON.stringify(target))}',${sequence});`;
+}
+
 const initialLoop = {
   loopId: "loop-northstar-backend-2026",
   state: "active",
@@ -102,6 +118,10 @@ const initialLoop = {
   ],
 };
 
+const historicalBehavioralActivityId = "historical-behavioral-attempt";
+const historicalBehavioralCompletedAt = 1_787_900_000_000;
+const changedResultActivityId = "historical-result-changed-after-completion";
+
 test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, then preserves exact revisions", { timeout: 180_000 }, async () => {
   const token = "ia_loop_owner_integration_token_2026";
   const otherToken = "ia_loop_other_integration_token_2026";
@@ -127,7 +147,38 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
           ('${sha256(otherToken)}','other-loop','Other Loop owner',1,NULL,NULL);
         INSERT INTO content_bank (category,id,ord,payload,updated_at) VALUES
           ('leetcode','two-sum',0,'{"id":"two-sum","title":"Two Sum","difficulty":"easy","topics":["arrays"],"targetMinutes":25,"active":true}',1),
-          ('leetcode','course-schedule',1,'{"id":"course-schedule","title":"Course Schedule","difficulty":"medium","topics":["graphs"],"targetMinutes":35,"active":true}',1);`,
+          ('leetcode','course-schedule',1,'{"id":"course-schedule","title":"Course Schedule","difficulty":"medium","topics":["graphs"],"targetMinutes":35,"active":true}',1);
+        INSERT INTO extra_activities (owner_id,id,date,workbench_id,payload,revision,updated_at)
+          VALUES ('owner-loop','${historicalBehavioralActivityId}','2026-08-10',NULL,
+            '{"id":"${historicalBehavioralActivityId}","type":"behavioral","questionId":"tell-me-about-yourself","title":"Tell me about yourself","status":"completed","plannedSeconds":2700}',5,${historicalBehavioralCompletedAt});
+        INSERT INTO timers
+          (owner_id,subject_id,kind,accumulated_seconds,started_at,running_since,completed,completed_at,revision,updated_at)
+          VALUES ('owner-loop','${historicalBehavioralActivityId}','activity',2700,${historicalBehavioralCompletedAt - 2_700_000},NULL,1,${historicalBehavioralCompletedAt},2,${historicalBehavioralCompletedAt});
+        INSERT INTO outcomes (owner_id,activity_id,outcome,revision,updated_at)
+          VALUES ('owner-loop','${historicalBehavioralActivityId}','solved',1,${historicalBehavioralCompletedAt});
+        INSERT INTO extra_activities (owner_id,id,date,workbench_id,payload,revision,updated_at)
+          VALUES ('owner-loop','${changedResultActivityId}','2026-08-10',NULL,
+            '{"id":"${changedResultActivityId}","type":"behavioral","questionId":"changed-result","title":"Changed result","status":"completed","plannedSeconds":1800}',2,${historicalBehavioralCompletedAt + 1});
+        INSERT INTO timers
+          (owner_id,subject_id,kind,accumulated_seconds,started_at,running_since,completed,completed_at,revision,updated_at)
+          VALUES ('owner-loop','${changedResultActivityId}','activity',1800,${historicalBehavioralCompletedAt - 1_800_000},NULL,1,${historicalBehavioralCompletedAt},2,${historicalBehavioralCompletedAt});
+        INSERT INTO outcomes (owner_id,activity_id,outcome,revision,updated_at)
+          VALUES ('owner-loop','${changedResultActivityId}','failed',2,${historicalBehavioralCompletedAt + 1});
+        ${legacyTargetFixtureSql(
+          "target-northstar-backend-legacy",
+          roleBrief("Operate reliable backend services for Northstar."),
+          10,
+        )}
+        ${legacyTargetFixtureSql(
+          "target-acme-data-legacy",
+          roleBrief("Build data systems for Acme.", ["data systems"], "Acme", "Data Engineer"),
+          11,
+        )}
+        ${legacyTargetFixtureSql(
+          "target-archive-legacy",
+          roleBrief("Archive-only legacy target."),
+          12,
+        )}`,
     ], project);
     const started = startMcpWorker({ wrangler, config, persistence, project, port });
     worker = started.child;
@@ -141,9 +192,25 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
       hostId: "host-local-test",
       title: "Interview Arc — Loop Recorder",
     });
+    await call(client, "register_specialist_task", {
+      specialty: "resume_cover_letter",
+      threadId: "task-resume-cover-letter",
+      hostId: "host-local-test",
+      title: "Interview Arc — Resume & Cover Letter",
+    });
     const specialistTasks = await call(client, "get_specialist_tasks", {});
-    assert.deepEqual(specialistTasks.tasks.map((task) => task.specialty), ["loop_recorder"]);
-    assert.equal(specialistTasks.tasks[0].threadId, "task-loop-recorder");
+    assert.deepEqual(
+      specialistTasks.tasks.map((task) => task.specialty).sort(),
+      ["loop_recorder", "resume_cover_letter"],
+    );
+    assert.equal(
+      specialistTasks.tasks.find((task) => task.specialty === "loop_recorder").threadId,
+      "task-loop-recorder",
+    );
+    assert.equal(
+      specialistTasks.tasks.find((task) => task.specialty === "resume_cover_letter").threadId,
+      "task-resume-cover-letter",
+    );
     const isolatedTasks = await call(otherClient, "get_specialist_tasks", {});
     assert.deepEqual(isolatedTasks.tasks, []);
 
@@ -245,6 +312,8 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
       stages: initialLoop.stages.map((stage) => stage.stageId !== "onsite-coding" ? stage : {
         ...stage,
         status: "completed",
+        format: "Pair programming",
+        interviewers: ["Engineering manager", "Senior engineer"],
         completedAt: 1_787_936_400_000,
         outcome: "advanced",
         debrief: {
@@ -258,6 +327,10 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
               promptConfidence: "exact",
               answerMemory: "Used a hash map and doubly linked list.",
               answerConfidence: "reconstructed",
+              ownerReview: {
+                assessment: "strong",
+                summary: "The data-structure choice was clear; explain eviction order sooner.",
+              },
             },
             {
               memoryId: "memory-rate-limiter",
@@ -267,6 +340,7 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
             },
           ],
           selfAssessment: "Strong trade-off discussion; tighten complexity explanation.",
+          interviewerFeedback: "The interviewer explicitly said the solution was clear.",
           nextStep: "Practice distributed rate limiting edge cases.",
         },
       }),
@@ -279,6 +353,14 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
       loop: revisedLoop,
     });
     assert.equal(revised.loopRevision, 2);
+    const revisedRetry = await call(client, "revise_loop", {
+      operationId: "loop-revise-onsite-coding-2",
+      loopId: initialLoop.loopId,
+      expectedRevision: 1,
+      authorization: "loop_recorder",
+      loop: revisedLoop,
+    });
+    assert.equal(revisedRetry.duplicate, true);
     const changedIdentity = await callRaw(client, "revise_loop", {
       operationId: "loop-revise-identity-conflict-1",
       loopId: initialLoop.loopId,
@@ -291,8 +373,16 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
     const current = await call(client, "query_loops", { loopId: initialLoop.loopId });
     assert.equal(current.loops[0].loop.revision, 2);
     const debrief = current.loops[0].loop.stages.find((stage) => stage.stageId === "onsite-coding").debrief;
+    const revisedStage = current.loops[0].loop.stages.find((stage) => stage.stageId === "onsite-coding");
+    assert.equal(revisedStage.format, "Pair programming");
+    assert.deepEqual(revisedStage.interviewers, ["Engineering manager", "Senior engineer"]);
     assert.equal(debrief.questions[0].promptConfidence, "exact");
     assert.equal(debrief.questions[0].answerConfidence, "reconstructed");
+    assert.deepEqual(debrief.questions[0].ownerReview, {
+      assessment: "strong",
+      summary: "The data-structure choice was clear; explain eviction order sooner.",
+    });
+    assert.equal(debrief.interviewerFeedback, "The interviewer explicitly said the solution was clear.");
     assert.equal(debrief.questions[1].promptConfidence, "reconstructed");
     const historicalLoop = await call(client, "query_loops", {
       loopId: initialLoop.loopId,
@@ -301,20 +391,12 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
     });
     assert.equal(historicalLoop.loops[0].loop.stages[2].status, "scheduled");
 
-    const standaloneRoleBrief = roleBrief("Operate reliable backend services for Northstar.");
-    const standaloneTarget = await call(client, "upsert_behavioral_target_profile", {
-      operationId: "standalone-target-create-1",
-      expectedRevision: 0,
-      target: {
-        targetId: "target-northstar-backend-legacy",
-        ...standaloneRoleBrief,
-      },
-    });
-    assert.equal(standaloneTarget.revision, 1);
     const inbox = await call(client, "query_role_brief_migration_inbox", {});
-    assert.equal(inbox.items.length, 1);
-    assert.equal(inbox.items[0].target.targetId, "target-northstar-backend-legacy");
-    assert.equal(inbox.items[0].decision, null);
+    assert.equal(inbox.items.length, 3);
+    const northstarMigrationItem = inbox.items.find((item) => (
+      item.target.targetId === "target-northstar-backend-legacy"
+    ));
+    assert.equal(northstarMigrationItem.decision, null);
     assert.doesNotMatch(JSON.stringify(inbox), /Operate reliable backend services|jdText/);
 
     const migrated = await call(client, "migrate_target_profile_to_loop", {
@@ -338,22 +420,17 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
     });
     assert.equal(migrationRetry.duplicate, true);
     const pendingAfterMigration = await call(client, "query_role_brief_migration_inbox", {});
-    assert.deepEqual(pendingAfterMigration.items, []);
+    assert.equal(pendingAfterMigration.items.length, 2);
+    assert.equal(pendingAfterMigration.items.some((item) => (
+      item.target.targetId === "target-northstar-backend-legacy"
+    )), false);
     const decidedInbox = await call(client, "query_role_brief_migration_inbox", { includeDecided: true });
-    assert.equal(decidedInbox.items[0].decision.action, "attach_existing_loop");
-    assert.equal(decidedInbox.items[0].decision.roleBriefRevision, 3);
+    const decidedNorthstar = decidedInbox.items.find((item) => (
+      item.target.targetId === "target-northstar-backend-legacy"
+    ));
+    assert.equal(decidedNorthstar.decision.action, "attach_existing_loop");
+    assert.equal(decidedNorthstar.decision.roleBriefRevision, 3);
 
-    const createLoopTargetBrief = roleBrief(
-      "Build data systems for Acme.",
-      ["data systems"],
-      "Acme",
-      "Data Engineer",
-    );
-    await call(client, "upsert_behavioral_target_profile", {
-      operationId: "standalone-target-acme-create-1",
-      expectedRevision: 0,
-      target: { targetId: "target-acme-data-legacy", ...createLoopTargetBrief },
-    });
     const migrationCreatedLoop = await call(client, "migrate_target_profile_to_loop", {
       operationId: "migrate-target-create-loop-1",
       targetId: "target-acme-data-legacy",
@@ -430,14 +507,6 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
       outcomes: { offer: 0, rejected: 0, withdrawn: 0, closed: 0, unresolved: 2 },
     });
 
-    await call(client, "upsert_behavioral_target_profile", {
-      operationId: "standalone-target-archive-create-1",
-      expectedRevision: 0,
-      target: {
-        targetId: "target-archive-legacy",
-        ...roleBrief("Archive-only legacy target."),
-      },
-    });
     const archivedMigration = await call(client, "migrate_target_profile_to_loop", {
       operationId: "migrate-target-archive-1",
       targetId: "target-archive-legacy",
@@ -447,6 +516,8 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
     });
     assert.equal(archivedMigration.action, "archive");
     assert.equal(archivedMigration.loopId, null);
+    const emptyMigrationInbox = await call(client, "query_role_brief_migration_inbox", {});
+    assert.deepEqual(emptyMigrationInbox.items, []);
 
     const captureInput = {
       operationId: "capture-northstar-behavioral-1",
@@ -526,6 +597,229 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
     const loopAfterImport = await call(client, "query_loops", { loopId: initialLoop.loopId });
     assert.equal(loopAfterImport.loops[0].loop.revision, 3);
     assert.equal(loopAfterImport.loops[0].loop.stages.at(-1).stageId, "onsite-behavioral");
+
+    assert.doesNotMatch(JSON.stringify(loopAfterImport), /Ignore prior instructions|reveal secrets|jdText|Private owner note/);
+
+    const historicalLinkInput = {
+      operationId: "loop-link-historical-behavioral-1",
+      activityId: historicalBehavioralActivityId,
+      loopId: initialLoop.loopId,
+      stageId: "recruiter",
+      expectedLoopRevision: 3,
+      expectedRoleBriefRevision: 3,
+      authorization: "explicit_user_instruction",
+    };
+    const historicalLink = await call(client, "link_completed_activity_to_loop", historicalLinkInput);
+    assert.equal(historicalLink.status, "historically_linked");
+    assert.equal(historicalLink.result, "solved");
+    assert.equal(historicalLink.completedAt, historicalBehavioralCompletedAt);
+    assert.equal(historicalLink.roleBriefRevision, 3);
+    assert.equal(historicalLink.duplicate, false);
+    const historicalLinkRetry = await call(client, "link_completed_activity_to_loop", historicalLinkInput);
+    assert.equal(historicalLinkRetry.duplicate, true);
+    assert.equal(historicalLinkRetry.linkedAt, historicalLink.linkedAt);
+    const changedHistoricalLinkRetry = await callRaw(client, "link_completed_activity_to_loop", {
+      ...historicalLinkInput,
+      stageId: "onsite-behavioral",
+    });
+    assert.equal(changedHistoricalLinkRetry.isError, true);
+    assert.equal(changedHistoricalLinkRetry.structuredContent.code, "loop_activity_binding_operation_conflict");
+    const isolatedHistoricalLink = await callRaw(otherClient, "link_completed_activity_to_loop", {
+      ...historicalLinkInput,
+      operationId: "loop-link-isolated-behavioral-1",
+    });
+    assert.equal(isolatedHistoricalLink.isError, true);
+    assert.equal(isolatedHistoricalLink.structuredContent.code, "loop_activity_not_found");
+    const changedResultLink = await callRaw(client, "link_completed_activity_to_loop", {
+      ...historicalLinkInput,
+      operationId: "loop-link-changed-result-1",
+      activityId: changedResultActivityId,
+    });
+    assert.equal(changedResultLink.isError, true);
+    assert.equal(
+      changedResultLink.structuredContent.code,
+      "loop_activity_result_changed_after_completion",
+    );
+    const afterHistoricalLink = await call(client, "query_loops", { loopId: initialLoop.loopId });
+    assert.equal(afterHistoricalLink.loops[0].activityHistory.length, 1);
+    assert.deepEqual(afterHistoricalLink.loops[0].activityHistory[0].receipt, {
+      schemaVersion: 1,
+      source: "explicit_completed_activity_link",
+      activityId: historicalBehavioralActivityId,
+      timerRevision: 2,
+      outcomeRevision: 1,
+      outcomeUpdatedAt: historicalBehavioralCompletedAt,
+      completedAt: historicalBehavioralCompletedAt,
+      linkedAt: historicalLink.linkedAt,
+    });
+    assert.doesNotMatch(JSON.stringify(afterHistoricalLink.loops[0].activityHistory), /transcript|jdText|Private owner note/);
+
+    const materialInput = {
+      operationId: "loop-material-recruiter-create-1",
+      authorization: "loop_recorder",
+      expectedLoopRevision: 3,
+      expectedRoleBriefRevision: 3,
+      material: {
+        materialId: "material-northstar-recruiter-prep",
+        loopId: initialLoop.loopId,
+        stageId: "recruiter",
+        kind: "interview_prep",
+        state: "active",
+        label: "Recruiter conversation preparation",
+        summary: "Source-backed preparation for one confirmed Round.",
+        sections: [{
+          sectionId: "role-focus",
+          title: "Role focus",
+          body: "Connect the role requirements to verified preparation without copying the raw job description.",
+          bullets: ["Reliability", "API design"],
+        }],
+        provenance: {
+          kind: "owner_authorized_synthesis",
+          roleBriefRevision: 3,
+          activityIds: [historicalBehavioralActivityId],
+          sourceLabel: "Exact Role Brief and linked owner activity",
+          preparedAt: 1_787_960_000_000,
+        },
+      },
+    };
+    const materialCreated = await call(client, "create_loop_interview_material", materialInput);
+    assert.deepEqual(materialCreated, {
+      status: "created",
+      materialId: materialInput.material.materialId,
+      loopId: initialLoop.loopId,
+      stageId: "recruiter",
+      materialRevision: 1,
+      duplicate: false,
+    });
+    const materialRetry = await call(client, "create_loop_interview_material", materialInput);
+    assert.equal(materialRetry.duplicate, true);
+    const materialChangedRetry = await callRaw(client, "create_loop_interview_material", {
+      ...materialInput,
+      material: { ...materialInput.material, label: "Changed retry" },
+    });
+    assert.equal(materialChangedRetry.isError, true);
+    assert.equal(materialChangedRetry.structuredContent.code, "loop_material_operation_conflict");
+    const duplicateScope = await callRaw(client, "create_loop_interview_material", {
+      ...materialInput,
+      operationId: "loop-material-recruiter-duplicate-scope",
+      material: { ...materialInput.material, materialId: "material-northstar-recruiter-duplicate" },
+    });
+    assert.equal(duplicateScope.isError, true);
+    assert.equal(duplicateScope.structuredContent.code, "loop_material_scope_conflict");
+    const unconfirmedRound = await callRaw(client, "create_loop_interview_material", {
+      ...materialInput,
+      operationId: "loop-material-unconfirmed-round",
+      material: {
+        ...materialInput.material,
+        materialId: "material-northstar-unconfirmed",
+        stageId: "onsite-system-design",
+        provenance: { ...materialInput.material.provenance, activityIds: [] },
+      },
+    });
+    assert.equal(unconfirmedRound.isError, true);
+    assert.equal(unconfirmedRound.structuredContent.code, "loop_material_stage_not_confirmed");
+    const wrongSource = await callRaw(client, "create_loop_interview_material", {
+      ...materialInput,
+      operationId: "loop-material-wrong-source",
+      material: {
+        ...materialInput.material,
+        materialId: "material-northstar-wrong-source",
+        stageId: "onsite-behavioral",
+      },
+    });
+    assert.equal(wrongSource.isError, true);
+    assert.equal(wrongSource.structuredContent.code, "loop_material_activity_source_conflict");
+    const materialRead = await call(client, "query_loop_interview_materials", {
+      loopId: initialLoop.loopId,
+      stageId: "recruiter",
+    });
+    assert.equal(materialRead.materials.length, 1);
+    assert.equal(materialRead.materials[0].revision, 1);
+    assert.equal(materialRead.materials[0].provenance.roleBriefRevision, 3);
+    const projectedMaterial = await call(client, "query_loops", { loopId: initialLoop.loopId });
+    assert.equal(projectedMaterial.loops[0].interviewMaterials[0].materialId, materialInput.material.materialId);
+    assert.doesNotMatch(JSON.stringify(projectedMaterial), /jdText|Private owner note|transcript/);
+    const isolatedMaterialRead = await call(otherClient, "query_loop_interview_materials", {
+      materialId: materialInput.material.materialId,
+    });
+    assert.deepEqual(isolatedMaterialRead.materials, []);
+    const isolatedMaterialRevision = await callRaw(otherClient, "revise_loop_interview_material", {
+      operationId: "loop-material-isolated-revise",
+      materialId: materialInput.material.materialId,
+      expectedRevision: 1,
+      authorization: "loop_recorder",
+      expectedLoopRevision: 3,
+      expectedRoleBriefRevision: 3,
+      material: materialInput.material,
+    });
+    assert.equal(isolatedMaterialRevision.isError, true);
+    assert.equal(isolatedMaterialRevision.structuredContent.code, "loop_material_not_found");
+    const revisedMaterialInput = {
+      operationId: "loop-material-recruiter-revise-2",
+      materialId: materialInput.material.materialId,
+      expectedRevision: 1,
+      authorization: "loop_recorder",
+      expectedLoopRevision: 3,
+      expectedRoleBriefRevision: 3,
+      material: {
+        ...materialInput.material,
+        label: "Recruiter conversation preparation · reviewed",
+        sections: [...materialInput.material.sections, {
+          sectionId: "questions",
+          title: "Questions to clarify",
+          bullets: ["Team scope", "Next-round format"],
+        }],
+        provenance: { ...materialInput.material.provenance, preparedAt: 1_787_961_000_000 },
+      },
+    };
+    const materialRevised = await call(client, "revise_loop_interview_material", revisedMaterialInput);
+    assert.equal(materialRevised.materialRevision, 2);
+    assert.equal(materialRevised.duplicate, false);
+    const materialRevisionRetry = await call(client, "revise_loop_interview_material", revisedMaterialInput);
+    assert.equal(materialRevisionRetry.duplicate, true);
+    const historicalMaterial = await call(client, "query_loop_interview_materials", {
+      materialId: materialInput.material.materialId,
+      revision: 1,
+    });
+    assert.equal(historicalMaterial.materials[0].label, materialInput.material.label);
+    const currentMaterial = await call(client, "query_loop_interview_materials", {
+      materialId: materialInput.material.materialId,
+    });
+    assert.equal(currentMaterial.materials[0].revision, 2);
+    assert.equal(currentMaterial.materials[0].sections.length, 2);
+    const staleMaterialRevision = await callRaw(client, "revise_loop_interview_material", {
+      ...revisedMaterialInput,
+      operationId: "loop-material-recruiter-stale",
+    });
+    assert.equal(staleMaterialRevision.isError, true);
+    assert.equal(staleMaterialRevision.structuredContent.code, "loop_material_revision_conflict");
+    const movedMaterial = await callRaw(client, "revise_loop_interview_material", {
+      ...revisedMaterialInput,
+      operationId: "loop-material-recruiter-move",
+      expectedRevision: 2,
+      material: { ...revisedMaterialInput.material, stageId: "onsite-behavioral" },
+    });
+    assert.equal(movedMaterial.isError, true);
+    assert.equal(movedMaterial.structuredContent.code, "loop_material_identity_immutable");
+    const materialArchived = await call(client, "revise_loop_interview_material", {
+      ...revisedMaterialInput,
+      operationId: "loop-material-recruiter-archive",
+      expectedRevision: 2,
+      material: { ...revisedMaterialInput.material, state: "archived" },
+    });
+    assert.equal(materialArchived.materialRevision, 3);
+    const hiddenArchivedMaterial = await call(client, "query_loop_interview_materials", {
+      materialId: materialInput.material.materialId,
+    });
+    assert.deepEqual(hiddenArchivedMaterial.materials, []);
+    const explicitArchivedMaterial = await call(client, "query_loop_interview_materials", {
+      materialId: materialInput.material.materialId,
+      includeArchived: true,
+    });
+    assert.equal(explicitArchivedMaterial.materials[0].revision, 3);
+    assert.equal(explicitArchivedMaterial.materials[0].state, "archived");
+    const projectionWithoutArchivedMaterial = await call(client, "query_loops", { loopId: initialLoop.loopId });
+    assert.deepEqual(projectionWithoutArchivedMaterial.loops[0].interviewMaterials, []);
 
     const catalog = await call(client, "query_practice_catalog", {
       specialty: "leetcode",
@@ -656,8 +950,21 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
     });
     assert.equal(finishRetry.duplicate, true);
     const withHistory = await call(client, "query_loops", { loopId: initialLoop.loopId });
-    assert.equal(withHistory.loops[0].activityHistory.length, 1);
-    assert.deepEqual(withHistory.loops[0].activityHistory[0], {
+    assert.equal(withHistory.loops[0].activityHistory.length, 2);
+    const automaticallyProjectedHistory = withHistory.loops[0].activityHistory.find(
+      (history) => history.activityId === activityId,
+    );
+    const authoritativeFinishedActivity = finished.authoritative.snapshot.activities.find(
+      (activity) => activity.id === activityId,
+    );
+    const authoritativeCompletedAt = authoritativeFinishedActivity.timer.completedAt;
+    assert.ok(Number.isInteger(authoritativeCompletedAt));
+    assert.equal(automaticallyProjectedHistory.completedAt, authoritativeCompletedAt);
+    assert.equal(
+      automaticallyProjectedHistory.receipt.completedAt,
+      authoritativeCompletedAt,
+    );
+    assert.deepEqual(automaticallyProjectedHistory, {
       activityId,
       loopId: initialLoop.loopId,
       stageId: "onsite-system-design",
@@ -665,14 +972,14 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
       specialty: "leetcode",
       questionId: "course-schedule",
       result: "solved",
-      completedAt: withHistory.loops[0].activityHistory[0].completedAt,
+      completedAt: authoritativeCompletedAt,
       receipt: {
         schemaVersion: 1,
         source: "authoritative_timer_completion",
         activityId,
         timerRevision: 2,
         outcomeRevision: 1,
-        completedAt: withHistory.loops[0].activityHistory[0].completedAt,
+        completedAt: authoritativeCompletedAt,
       },
     });
     assert.doesNotMatch(JSON.stringify(withHistory.loops[0].activityHistory), /transcript|jdText|Private owner note/);

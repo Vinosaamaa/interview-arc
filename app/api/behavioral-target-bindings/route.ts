@@ -1,16 +1,13 @@
-import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import {
-  BehavioralTargetProfileError,
   readBehavioralTargetBinding,
+  rejectLegacyTargetProfileWrite,
   resolveBehavioralTarget,
-  setBehavioralTargetBinding,
 } from "../../../db/behavioral-target-profile";
 import { behavioralTargetStableIdSchema } from "../../../db/behavioral-target-profile-policy";
 import { resolveOwnerId } from "../../../db/owner";
-import { publishOwnerLiveUpdate } from "../../../worker/live-update-hub";
-import { readBoundedJson, RouteBodyTooLargeError, toRouteErrorMessage } from "../route-helpers";
+import { behavioralTargetRouteError } from "../behavioral-target-route-error";
 
 const scopeQuerySchema = z.object({
   scopeType: z.enum(["session", "activity"]),
@@ -51,17 +48,6 @@ function safeResolution(resolution: Awaited<ReturnType<typeof resolveBehavioralT
   };
 }
 
-function targetError(error: unknown) {
-  if (error instanceof BehavioralTargetProfileError) {
-    const status = error.code.includes("conflict") || error.code.includes("not_found") ? 409 : 400;
-    return Response.json({ error: error.message, code: error.code, retryable: error.retryable }, { status });
-  }
-  if (error instanceof z.ZodError) return Response.json({ error: "The target-binding request is invalid.", retryable: false }, { status: 400 });
-  if (error instanceof RouteBodyTooLargeError) return Response.json({ error: error.message, retryable: false }, { status: 413 });
-  if (error instanceof SyntaxError) return Response.json({ error: "The target-binding request is not valid JSON.", retryable: false }, { status: 400 });
-  return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 });
-}
-
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -81,19 +67,15 @@ export async function GET(request: Request) {
       headers: { "cache-control": "private, no-store" },
     });
   } catch (error) {
-    return targetError(error);
+    return behavioralTargetRouteError(error, "The target-binding request is invalid.");
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const ownerId = await resolveOwnerId(request);
-    const result = await setBehavioralTargetBinding(ownerId, await readBoundedJson(request, 8_192));
-    if (!("duplicate" in result) || result.duplicate !== true) {
-      await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "behavioral_target");
-    }
-    return Response.json(result, { headers: { "cache-control": "private, no-store" } });
+    await resolveOwnerId(request);
+    rejectLegacyTargetProfileWrite();
   } catch (error) {
-    return targetError(error);
+    return behavioralTargetRouteError(error, "The target-binding request is invalid.");
   }
 }

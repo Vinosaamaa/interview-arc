@@ -95,6 +95,28 @@ The shared Code Attempt component is used both inline in Conversation and in
 User Code Attempts, so both surfaces present the same normalized object. The
 layout collapses to one column on narrow screens.
 
+## Missed historical projection recovery
+
+`recover_leetcode_code_attempt` is a coordinator-audited, append-only repair
+for exact owner code that predates an existing ready finalization but was never
+projected into `leetcode_code_attempts`. It is not a general specialist write
+mode and does not weaken `save_leetcode_code_attempt`.
+
+Recovery requires the literal `explicit_user_instruction`, a non-empty audit
+reason, one stable operation ID, the exact canonical owner/activity-scoped user
+turn, and an exact complete `specialist_observed` review whose visible
+specialist turn and timestamps predate finalization. Existing parity,
+evaluation-evidence, typed-deletion, attempt-ID, and activity-sequence guards
+all apply. Only a ready and still-unpublished LeetCode activity is eligible.
+
+The D1 transaction inserts only the missing Code Attempt row after rechecking
+the unchanged ready finalization and undeleted transcript identities. It never
+updates transcript, timer, result, review, finalization, Solution Profile, or
+publication state. Exact retries return a duplicate; changed payloads,
+cross-owner evidence, deleted evidence, sequence conflicts, races with changed
+state, and every published activity fail closed. Keep exact private source,
+turn identities, owner identity, and the audit payload out of Git and GitHub.
+
 ## Historical evidence backfill
 
 Backfill is a coordinator operation, not a specialist MCP write. Run the

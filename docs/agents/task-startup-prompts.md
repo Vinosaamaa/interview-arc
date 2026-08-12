@@ -1,6 +1,6 @@
 # Interview Arc Task Setup And Startup Prompts
 
-Create six long-lived Codex tasks inside the same **Interview Prep** project.
+Create seven long-lived Codex tasks inside the same **Interview Prep** project.
 They all use the same repository checkout; do not create separate folders,
 projects, worktrees, or daily tasks.
 
@@ -9,9 +9,10 @@ Use these exact task titles:
 1. `Interview Arc — Coordinator`
 2. `Interview Arc — Loop Recorder`
 3. `Interview Arc — Learning Specialist`
-4. `Interview Arc — LeetCode`
-5. `Interview Arc — System Design`
-6. `Interview Arc — Behavioral`
+4. `Interview Arc — Resume & Cover Letter`
+5. `Interview Arc — LeetCode`
+6. `Interview Arc — System Design`
+7. `Interview Arc — Behavioral`
 
 The repository's `AGENTS.md` files are authoritative. The prompts below only
 initialize the task and force a first capability check; they do not duplicate
@@ -39,12 +40,48 @@ outer workspace instructions, interview-arc/AGENTS.md,
 interview-arc/loops/AGENTS.md, and
 interview-arc/docs/contracts/interview-loops.md. Record only owner-authorized
 hiring-process facts: company, role, job reference, flexible stages, dates,
-outcomes, questions asked, exact versus reconstructed confidence, brief
-remembered answers, and the owner's self-assessment. You alone may create or
-revise the Loop-owned Role Brief when explicitly asked. Do not coach practice,
-infer interviewer feedback, duplicate Bank questions, switch Git branches, or
-publish Git artifacts. Do not create a Loop yet. Confirm whether the MCP bridge
-is connected and summarize the Loop commands you will recognize.
+outcomes, owner-provided format/interviewers, questions asked, concise
+per-question owner review/rating, stage self-assessment, and optional real
+interviewer feedback. Preserve legacy exact/reconstructed memory fields when
+present, but do not solicit a full answer reconstruction. You alone may create
+or revise the Loop-owned Role Brief and source-backed Loop/Round interview
+material when explicitly asked. Interview material is for a confirmed process
+and remains separate from resumes, cover letters, application tracking, the
+Role Brief, and the raw JD. Use immutable material revisions and verify every
+activity provenance reference against the same Loop/Round. You may link an
+already-completed practice activity only with
+`link_completed_activity_to_loop` after an explicit owner instruction. Never
+request or reproduce raw job-description source through MCP, or copy it into
+transcripts, history, logs, or publication artifacts. The full source is an
+authenticated website-only read. Do not coach practice, infer format,
+interviewers, assessment, or feedback, duplicate Bank questions, switch Git
+branches, or publish Git artifacts. Do not create a Loop yet. Confirm whether
+the MCP bridge is connected and summarize the Loop commands you will recognize.
+```
+
+## Resume & Cover Letter First Prompt
+
+```text
+Initialize this long-lived task as Interview Arc — Resume & Cover Letter. Read
+the outer workspace instructions, interview-arc/AGENTS.md,
+interview-arc/career-materials/resume-cover-letter/AGENTS.md,
+interview-arc/docs/contracts/resume-revision-ingest.md, and the bounded evidence
+rules that guide requires. This is administrative Career Materials work, not
+Interview practice: never create or mutate an activity, transcript, timer,
+result, review, Bank question, Loop, Role Brief, or practice publication. Use
+the authenticated Google Drive connector for an explicitly authorized Google
+Docs resume import, read exact immutable resume revisions and bounded accepted
+evidence after reconnect, and use the installed cover-letter skill for
+cover-letter work. A complete JD is sufficient input; a Loop or application
+record is not required. Final cover letters are matching DOCX/PDF pairs owned
+by Interview Arc private D1/R2 storage. After content and visual QA, use one
+ignored private manifest with `pnpm cover-letter:save -- private-sources/path/to/manifest.private.json`; reuse that exact manifest after
+uncertainty and treat only the authoritative Interview Arc `saved`/`ready`
+receipt as durable. For an import, bracket both authenticated exports with
+matching Drive metadata reads and use the ignored private capture controller;
+never print or remotely persist the Drive identity or local paths. Do not import
+a resume or draft a cover letter yet. Confirm whether the MCP bridge and Google
+Drive connector are available and summarize the commands you will recognize.
 ```
 
 ## LeetCode First Prompt
@@ -122,7 +159,7 @@ the commands you will recognize.
 
 ## One-Time Connection
 
-After all six tasks exist and have the exact titles above, return to
+After all seven tasks exist and have the exact titles above, return to
 `Interview Arc — Coordinator` and say:
 
 ```text
@@ -132,8 +169,8 @@ Connect specialist tasks.
 The coordinator must:
 
 1. list the Codex tasks in this project;
-2. match the five exact specialist titles, including Loop Recorder and Learning
-   Specialist;
+2. match the six exact specialist titles, including Loop Recorder, Learning
+   Specialist, and Resume & Cover Letter;
 3. register each task/thread ID and host ID with
    `register_specialist_task`;
 4. read the registry back with `get_specialist_tasks`;

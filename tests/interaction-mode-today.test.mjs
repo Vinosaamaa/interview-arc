@@ -107,7 +107,7 @@ test("hydration preserves only queued optimistic interaction-mode summaries", ()
 
 test("interaction-mode state reads partition large workbenches into bounded batches", () => {
   const ids = Array.from({ length: interactionModeReadBatchSize * 2 + 1 }, (_, index) => `activity-${index}`);
-  const batches = interactionModeActivityIdBatches([...ids, ids[0]]);
+  const batches = [...interactionModeActivityIdBatches([...ids, ids[0]])];
   assert.deepEqual(batches.map((batch) => batch.length), [interactionModeReadBatchSize, interactionModeReadBatchSize, 1]);
   assert.equal(batches.flat().length, ids.length);
 });

@@ -6,6 +6,8 @@ import {
   behavioralClaimStatusEvents,
   behavioralEvidenceItems,
   behavioralEvidenceQuestionLinks,
+  behavioralEvidenceSourceRevisions,
+  behavioralEvidenceSources,
   practiceTranscriptTurns,
   type BehavioralClaimRow,
   type BehavioralEvidenceItemRow,
@@ -23,6 +25,10 @@ import {
   validateBehavioralEvidenceWrite,
 } from "./behavioral-evidence-policy";
 import {
+  queryBehavioralEvidenceCandidates,
+  queryBehavioralEvidenceSources,
+} from "./behavioral-evidence-review";
+import {
   getBehavioralStoryFoundationSummary,
   queryBehavioralStories,
 } from "./behavioral-story";
@@ -39,7 +45,6 @@ function evidenceIdentityMatches(row: BehavioralEvidenceItemRow, input: Behavior
     && row.evidenceGrade === input.evidenceGrade
     && row.attributionGrade === input.attributionGrade
     && row.claimStrength === input.claimStrength
-    && row.candidateState === input.candidateState
     && row.visibility === "owner_private"
     && jsonEqual(row.safeProvenance, input.safeProvenance)
     && jsonEqual(row.supports, input.supports)
@@ -94,7 +99,13 @@ export async function upsertBehavioralEvidenceItem(
   if (existing && !evidenceIdentityMatches(existing, evidence)) {
     throw new BehavioralEvidenceError(
       "behavioral_evidence_identity_conflict",
-      "That evidence ID already belongs to different immutable content; supersession belongs to the later candidate-review slice.",
+      "That evidence ID already belongs to different immutable content; create a replacement and use the explicit review workflow.",
+    );
+  }
+  if (existing && existing.candidateState !== evidence.candidateState) {
+    throw new BehavioralEvidenceError(
+      "behavioral_evidence_review_required",
+      "Evidence candidate state changes require an explicit revision-guarded owner review.",
     );
   }
   if (evidence.ownerAttestation) {
@@ -169,7 +180,13 @@ export async function upsertBehavioralEvidenceItem(
       if (!evidenceIdentityMatches(authoritativeEvidence, evidence)) {
         throw new BehavioralEvidenceError(
           "behavioral_evidence_identity_conflict",
-          "That evidence ID already belongs to different immutable content; supersession belongs to the later candidate-review slice.",
+          "That evidence ID already belongs to different immutable content; create a replacement and use the explicit review workflow.",
+        );
+      }
+      if (authoritativeEvidence.candidateState !== evidence.candidateState) {
+        throw new BehavioralEvidenceError(
+          "behavioral_evidence_review_required",
+          "Evidence candidate state changes require an explicit revision-guarded owner review.",
         );
       }
       let authoritativeLink = await readEvidenceLink(ownerId, questionLink.questionId, evidence.evidenceId);
@@ -574,7 +591,17 @@ const BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT = 50;
 
 export async function getBehavioralFoundationStatus(ownerId: string) {
   const db = getDb();
-  const [evidenceSummaryRows, claimSummaryRows, questionCoverageRows, claimDetailRows, storySummary] = await Promise.all([
+  const [
+    evidenceSummaryRows,
+    claimSummaryRows,
+    questionCoverageRows,
+    claimDetailRows,
+    storySummary,
+    sourceSummaryRows,
+    sourceRevisionSummaryRows,
+    sourceResult,
+    candidateResult,
+  ] = await Promise.all([
     db.select({
       total: sql<number>`count(*)`,
       accepted: sql<number>`sum(case when ${behavioralEvidenceItems.candidateState} = 'accepted' then 1 else 0 end)`,
@@ -615,6 +642,23 @@ export async function getBehavioralFoundationStatus(ownerId: string) {
       .orderBy(desc(behavioralClaims.updatedAt), asc(behavioralClaims.claimId))
       .limit(BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT + 1),
     getBehavioralStoryFoundationSummary(ownerId),
+    db.select({
+      total: sql<number>`count(*)`,
+      active: sql<number>`sum(case when ${behavioralEvidenceSources.state} = 'active' then 1 else 0 end)`,
+      available: sql<number>`sum(case when ${behavioralEvidenceSources.availability} = 'available' then 1 else 0 end)`,
+      changed: sql<number>`sum(case when json_extract(${behavioralEvidenceSourceRevisions.snapshot}, '$.refreshStatus') = 'changed' then 1 else 0 end)`,
+      blocked: sql<number>`sum(case when ${behavioralEvidenceSources.availability} = 'blocked' then 1 else 0 end)`,
+      latestUpdatedAt: sql<number | null>`max(${behavioralEvidenceSources.updatedAt})`,
+    }).from(behavioralEvidenceSources).innerJoin(behavioralEvidenceSourceRevisions, and(
+      eq(behavioralEvidenceSourceRevisions.ownerId, behavioralEvidenceSources.ownerId),
+      eq(behavioralEvidenceSourceRevisions.sourceId, behavioralEvidenceSources.sourceId),
+      eq(behavioralEvidenceSourceRevisions.revision, behavioralEvidenceSources.currentRevision),
+    )).where(eq(behavioralEvidenceSources.ownerId, ownerId)),
+    db.select({
+      revisions: sql<number>`count(*)`,
+    }).from(behavioralEvidenceSourceRevisions).where(eq(behavioralEvidenceSourceRevisions.ownerId, ownerId)),
+    queryBehavioralEvidenceSources(ownerId, { limit: 6 }),
+    queryBehavioralEvidenceCandidates(ownerId, { state: "pending", limit: 10 }),
   ]);
 
   const evidenceSummary = evidenceSummaryRows[0] ?? {
@@ -637,6 +681,36 @@ export async function getBehavioralFoundationStatus(ownerId: string) {
     latestUpdatedAt: null,
   };
   const visibleClaimRows = claimDetailRows.slice(0, BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT);
+  const sourceSummary = sourceSummaryRows[0] ?? {
+    total: 0,
+    active: 0,
+    available: 0,
+    changed: 0,
+    blocked: 0,
+    latestUpdatedAt: null,
+  };
+  const sourceRevisions = Number(sourceRevisionSummaryRows[0]?.revisions ?? 0);
+  const recentSources = sourceResult.sources.map((source) => ({
+    sourceId: source.sourceId,
+    revision: source.revision,
+    state: source.state,
+    projectKey: source.projectKey,
+    kind: source.kind,
+    label: source.label,
+    safeHint: source.safeHint,
+    authorization: source.authorization,
+    sensitivity: source.sensitivity,
+    availability: source.availability,
+    refreshStatus: source.refreshStatus,
+    ...(source.contentRevision ? { contentRevision: source.contentRevision } : {}),
+    ...(source.lastInspectedAt ? { lastInspectedAt: source.lastInspectedAt } : {}),
+    visibility: source.visibility,
+    createdAt: source.createdAt,
+  }));
+  const pendingCandidates = candidateResult.candidates.map((candidate) => ({
+    ...candidate,
+    candidateState: "pending" as const,
+  }));
   const allGaps: Array<{ claimId: string; questionId: string; text: string }> = [];
   for (const claim of visibleClaimRows) {
     const claimGaps = claim.gaps as string[];
@@ -649,7 +723,7 @@ export async function getBehavioralFoundationStatus(ownerId: string) {
   }
 
   return {
-    schemaVersion: 1 as const,
+    schemaVersion: 2 as const,
     evidence: {
       total: Number(evidenceSummary.total),
       accepted: Number(evidenceSummary.accepted ?? 0),
@@ -676,9 +750,29 @@ export async function getBehavioralFoundationStatus(ownerId: string) {
     })),
     gaps: allGaps.slice(0, BEHAVIORAL_GAP_LIMIT),
     stories: storySummary,
+    sources: {
+      total: Number(sourceSummary.total),
+      active: Number(sourceSummary.active ?? 0),
+      available: Number(sourceSummary.available ?? 0),
+      changed: Number(sourceSummary.changed ?? 0),
+      blocked: Number(sourceSummary.blocked ?? 0),
+      revisions: sourceRevisions,
+      recent: recentSources,
+      lastUpdatedAt: Number(sourceSummary.latestUpdatedAt ?? 0) || null,
+      limit: sourceResult.limit,
+      truncated: sourceResult.truncated,
+    },
+    candidates: {
+      pending: Number(evidenceSummary.pending ?? 0),
+      items: pendingCandidates,
+      lastUpdatedAt: Math.max(...pendingCandidates.map((candidate) => candidate.updatedAt), 0) || null,
+      limit: candidateResult.limit,
+      truncated: candidateResult.truncated,
+    },
     capabilities: {
       evidenceRead: "available" as const,
-      sourceRegistry: "not_available" as const,
+      sourceRegistry: "available" as const,
+      candidateReview: "available" as const,
       storyBank: "available" as const,
       resumeLibrary: "available" as const,
     },
@@ -686,16 +780,22 @@ export async function getBehavioralFoundationStatus(ownerId: string) {
       Number(evidenceSummary.latestUpdatedAt ?? 0),
       Number(claimSummary.latestUpdatedAt ?? 0),
       Number(storySummary.lastUpdatedAt ?? 0),
+      Number(sourceSummary.latestUpdatedAt ?? 0),
+      ...pendingCandidates.map((candidate) => candidate.updatedAt),
     ) || null,
     limits: {
       claimDetails: BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT,
       gaps: BEHAVIORAL_GAP_LIMIT,
       stories: storySummary.limit,
+      sources: sourceResult.limit,
+      candidates: candidateResult.limit,
     },
     truncated: {
       claimDetails: claimDetailRows.length > BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT,
       gaps: claimDetailRows.length > BEHAVIORAL_FOUNDATION_CLAIM_DETAIL_LIMIT || allGaps.length > BEHAVIORAL_GAP_LIMIT,
       stories: storySummary.truncated,
+      sources: sourceResult.truncated,
+      candidates: candidateResult.truncated,
     },
   };
 }
