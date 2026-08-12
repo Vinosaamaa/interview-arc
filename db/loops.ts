@@ -62,7 +62,6 @@ export {
   loopActivityContextRequestSchema,
   createLoopSchema,
   captureLoopPacketSchema,
-  getLoopRoleBriefSourceSchema,
   importLoopCapturePacketSchema,
   linkCompletedActivitySchema,
   queryLoopCapturePacketsSchema,
@@ -541,12 +540,15 @@ export async function readLoopRoleBriefSource(ownerId: string, inputValue: unkno
   const db = getDb();
   const loopRows = await db.select({
     currentRoleBriefRevision: interviewLoops.currentRoleBriefRevision,
+    state: interviewLoops.state,
   }).from(interviewLoops).where(and(
     eq(interviewLoops.ownerId, ownerId),
     eq(interviewLoops.loopId, input.loopId),
   )).limit(1);
   const loop = loopRows[0];
-  if (!loop) throw new LoopError("loop_not_found", "That owner-private Loop is unavailable.");
+  if (!loop || (loop.state === "archived" && !input.includeArchived)) {
+    throw new LoopError("loop_not_found", "That owner-private Loop is unavailable.");
+  }
   const revision = input.roleBriefRevision ?? loop.currentRoleBriefRevision;
   const revisionRows = await db.select().from(loopRoleBriefRevisions).where(and(
     eq(loopRoleBriefRevisions.ownerId, ownerId),
@@ -808,6 +810,12 @@ async function readCompletedActivityLinkCandidate(ownerId: string, input: LinkCo
       "Historical linking requires an authoritative completed timer and explicit activity result.",
     );
   }
+  if (outcome.updatedAt > timer.completedAt) {
+    throw new LoopError(
+      "loop_activity_result_changed_after_completion",
+      "The activity result changed after completion, so its completion-time result cannot be reconstructed safely.",
+    );
+  }
   if (currentBindings[0] || currentHistory[0]) {
     throw new LoopError("loop_activity_already_bound", "That activity already belongs to a Loop and cannot be moved.");
   }
@@ -887,6 +895,7 @@ export async function linkCompletedActivityToLoop(
     activityId: input.activityId,
     timerRevision: timer.revision,
     outcomeRevision: outcome.revision,
+    outcomeUpdatedAt: outcome.updatedAt,
     completedAt: timer.completedAt,
     linkedAt: nowMs,
   };
@@ -919,6 +928,8 @@ export async function linkCompletedActivityToLoop(
       AND ${outcomes.activityId} = ${input.activityId}
       AND ${outcomes.outcome} = ${outcome.outcome}
       AND ${outcomes.revision} = ${outcome.revision}
+      AND ${outcomes.updatedAt} = ${outcome.updatedAt}
+      AND ${outcomes.updatedAt} <= ${timer.completedAt}
   ) AND EXISTS (
     SELECT 1 FROM ${interviewLoops}
     WHERE ${interviewLoops.ownerId} = ${ownerId}

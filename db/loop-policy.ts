@@ -45,7 +45,7 @@ export const linkCompletedActivitySchema = z.object({
   activityId: loopStableIdSchema,
   expectedLoopRevision: z.number().int().positive(),
   expectedRoleBriefRevision: z.number().int().positive(),
-  authorization: z.literal("loop_recorder"),
+  authorization: z.literal("explicit_user_instruction"),
 }).strict();
 
 export const loopQuestionMemorySchema = z.object({
@@ -200,10 +200,7 @@ export const queryLoopsSchema = z.object({
 export const queryLoopRoleBriefSourceSchema = z.object({
   loopId: loopStableIdSchema,
   roleBriefRevision: z.number().int().positive().optional(),
-}).strict();
-
-export const getLoopRoleBriefSourceSchema = queryLoopRoleBriefSourceSchema.extend({
-  authorization: z.literal("loop_recorder"),
+  includeArchived: z.boolean().optional(),
 }).strict();
 
 const targetProfileMigrationBaseSchema = z.object({

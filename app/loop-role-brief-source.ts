@@ -19,6 +19,27 @@ export type JobDescriptionBlock =
   | { type: "paragraph"; text: string }
   | { type: "list"; items: string[] };
 
+export async function fetchRoleBriefSource(
+  loopId: string,
+  revision: number,
+  includeArchived: boolean,
+  signal?: AbortSignal,
+  fetcher: typeof fetch = fetch,
+) {
+  const parameters = new URLSearchParams({
+    loopId,
+    roleBriefRevision: String(revision),
+    includeArchived: String(includeArchived),
+  });
+  const response = await fetcher(`/api/loops/role-brief-source?${parameters}`, {
+    cache: "no-store",
+    signal,
+  });
+  const body = await response.json() as RoleBriefSourcePayload & { error?: string };
+  if (!response.ok) throw new Error(body.error || "The full job description is unavailable.");
+  return body;
+}
+
 export function parseJobDescription(value: string): JobDescriptionBlock[] {
   const blocks: JobDescriptionBlock[] = [];
   let paragraph: string[] = [];

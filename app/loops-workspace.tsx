@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { parseJobDescription, type RoleBriefSourcePayload } from "./loop-role-brief-source";
+import {
+  fetchRoleBriefSource,
+  parseJobDescription,
+  type RoleBriefSourcePayload,
+} from "./loop-role-brief-source";
 
 type Specialty = "leetcode" | "system_design" | "behavioral";
 type MemoryConfidence = "exact" | "reconstructed";
@@ -120,14 +124,6 @@ async function fetchLoopPayload(includeArchived: boolean, signal?: AbortSignal) 
   const response = await fetch(`/api/loops?includeArchived=${includeArchived}`, { cache: "no-store", signal });
   const body = await response.json() as LoopPayload & { error?: string };
   if (!response.ok) throw new Error(body.error || "Loop state is unavailable.");
-  return body;
-}
-
-async function fetchRoleBriefSource(loopId: string, revision: number, signal?: AbortSignal) {
-  const parameters = new URLSearchParams({ loopId, roleBriefRevision: String(revision) });
-  const response = await fetch(`/api/loops/role-brief-source?${parameters}`, { cache: "no-store", signal });
-  const body = await response.json() as RoleBriefSourcePayload & { error?: string };
-  if (!response.ok) throw new Error(body.error || "The full job description is unavailable.");
   return body;
 }
 
@@ -287,7 +283,12 @@ function RoleBriefPanel({ loop }: { loop: LoopProjection }) {
   useEffect(() => {
     if (!showSource || source) return;
     const controller = new AbortController();
-    void fetchRoleBriefSource(loop.loop.loopId, loop.roleBrief.revision, controller.signal).then(
+    void fetchRoleBriefSource(
+      loop.loop.loopId,
+      loop.roleBrief.revision,
+      loop.loop.state === "archived",
+      controller.signal,
+    ).then(
       (payload) => {
         setSourceResult({ requestKey: sourceRequestKey, source: payload, error: "" });
       },
@@ -301,7 +302,7 @@ function RoleBriefPanel({ loop }: { loop: LoopProjection }) {
       },
     );
     return () => controller.abort();
-  }, [loop.loop.loopId, loop.roleBrief.revision, showSource, source, sourceRequestKey]);
+  }, [loop.loop.loopId, loop.loop.state, loop.roleBrief.revision, showSource, source, sourceRequestKey]);
   const toggleSource = () => {
     setShowSource((current) => !current);
   };

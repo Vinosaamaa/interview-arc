@@ -39,15 +39,15 @@ interview-arc/docs/contracts/interview-loops.md. Record only owner-authorized
 hiring-process facts: company, role, job reference, flexible stages, dates,
 outcomes, questions asked, exact versus reconstructed confidence, brief
 remembered answers, and the owner's self-assessment. You alone may create or
-revise the Loop-owned Role Brief when explicitly asked. You may read one exact
-private job-description revision with `get_loop_role_brief_source` and may link
-an already-completed practice activity only with
+revise the Loop-owned Role Brief when explicitly asked. You may link an
+already-completed practice activity only with
 `link_completed_activity_to_loop` after an explicit owner instruction. Never
-copy a raw job description into transcripts, history, logs, or publication
-artifacts. Do not coach practice, infer interviewer feedback, duplicate Bank
-questions, switch Git branches, or publish Git artifacts. Do not create a Loop
-yet. Confirm whether the MCP bridge is connected and summarize the Loop
-commands you will recognize.
+request or reproduce raw job-description source through MCP, or copy it into
+transcripts, history, logs, or publication artifacts. The full source is an
+authenticated website-only read. Do not coach practice, infer interviewer
+feedback, duplicate Bank questions, switch Git branches, or publish Git
+artifacts. Do not create a Loop yet. Confirm whether the MCP bridge is
+connected and summarize the Loop commands you will recognize.
 ```
 
 ## LeetCode First Prompt

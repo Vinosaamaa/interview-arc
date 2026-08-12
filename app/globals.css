@@ -2161,7 +2161,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .loop-jd-state.error p { margin: 0; }
 .loop-jd-state button { min-height: 36px; padding: 0 12px; border: 1px solid #87483c; border-radius: 8px; background: #fff; color: #73382e; font-weight: 740; cursor: pointer; }
 .loop-jd-document { max-height: min(68vh, 760px); padding: 10px clamp(22px, 5vw, 48px) 42px; overflow: auto; color: #33423b; font-size: .82rem; line-height: 1.72; scrollbar-color: #aebbb1 transparent; }
-.loop-jd-document > * { max-width: 72ch; margin-left: auto; margin-right: auto; }
+.loop-jd-document > * { max-width: 72ch; margin-left: auto; margin-right: auto; overflow-wrap: anywhere; }
 .loop-jd-document h3 { margin-top: 32px; margin-bottom: 12px; color: #163d34; font-family: var(--font-editorial); font-size: 1.65rem; font-weight: 560; letter-spacing: -.025em; line-height: 1.16; }
 .loop-jd-document h4 { margin-top: 30px; margin-bottom: 9px; color: #1b4339; font-size: 1rem; letter-spacing: -.02em; }
 .loop-jd-document h5 { margin-top: 23px; margin-bottom: 7px; color: #36554c; font-size: .8rem; }

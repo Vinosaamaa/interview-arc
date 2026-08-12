@@ -57,7 +57,6 @@ import {
   captureLoopPacketSchema,
   createLoop,
   createLoopSchema,
-  getLoopRoleBriefSourceSchema,
   importLoopCapturePacket,
   importLoopCapturePacketSchema,
   linkCompletedActivitySchema,
@@ -69,7 +68,6 @@ import {
   queryLoopsSchema,
   queryRoleBriefMigrationInbox,
   queryRoleBriefMigrationInboxSchema,
-  readLoopRoleBriefSource,
   reviseLoop,
   reviseLoopRoleBrief,
   reviseLoopRoleBriefSchema,
@@ -2942,29 +2940,6 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   );
 
   server.registerTool(
-    "get_loop_role_brief_source",
-    {
-      description: "Read the exact private job-description source for one owner-private immutable Role Brief revision. Only the Loop Recorder may request this source; subject specialists must use query_loops and its display-safe projection. The response is private and must never be copied into transcripts, logs, or publication artifacts.",
-      inputSchema: getLoopRoleBriefSourceSchema.shape,
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-    },
-    async (input) => {
-      try {
-        const result = await readLoopRoleBriefSource(ownerId, {
-          loopId: input.loopId,
-          ...(input.roleBriefRevision ? { roleBriefRevision: input.roleBriefRevision } : {}),
-        });
-        return {
-          content: [{ type: "text", text: `Loaded private job-description source for Role Brief revision ${result.roleBriefRevision}.` }],
-          structuredContent: result,
-        };
-      } catch (error) {
-        return specialistToolFailure(error);
-      }
-    },
-  );
-
-  server.registerTool(
     "bind_planned_activity_to_loop",
     {
       description: "Bind one owner-private, unstarted planned activity to one Loop and optional Round. The server validates identity and snapshots the exact display-safe Role Brief revision; exact operation retries are idempotent and changed retries fail closed.",
@@ -2987,7 +2962,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "link_completed_activity_to_loop",
     {
-      description: "Link one exact already-completed owner-private practice activity to one Loop and optional Round after an explicit owner instruction. This backfills only immutable Loop context and transcript-free history; it never rewrites the timer, result, transcript, finalization, or Role Brief. Only the Loop Recorder may call it. Exact retries are idempotent and an activity can never be moved between Loops.",
+      description: "Link one exact already-completed owner-private practice activity to one Loop and optional Round after an explicit owner instruction. This backfills only immutable Loop context and transcript-free history; it never rewrites the timer, result, transcript, finalization, or Role Brief. Exact retries are idempotent and an activity can never be moved between Loops.",
       inputSchema: linkCompletedActivitySchema.shape,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
@@ -2995,7 +2970,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
       try {
         const result = await linkCompletedActivityToLoop(ownerId, input);
         return {
-          content: [{ type: "text", text: `Completed activity ${result.activityId} is linked to Loop ${result.loopId}.` }],
+          content: [{ type: "text", text: "The completed activity is linked to the requested Loop." }],
           structuredContent: result,
         };
       } catch (error) {

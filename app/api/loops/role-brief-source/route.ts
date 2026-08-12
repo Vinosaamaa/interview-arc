@@ -1,4 +1,8 @@
-import { LoopError, readLoopRoleBriefSource } from "../../../../db/loops";
+import {
+  LoopError,
+  queryLoopRoleBriefSourceSchema,
+  readLoopRoleBriefSource,
+} from "../../../../db/loops";
 import { resolveOwnerId } from "../../../../db/owner";
 import { toRouteErrorMessage } from "../../route-helpers";
 
@@ -13,20 +17,20 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const loopId = url.searchParams.get("loopId")?.trim();
     const revisionText = url.searchParams.get("roleBriefRevision")?.trim();
-    if (!loopId) {
-      return Response.json({ error: "Choose a Loop before opening its job description." }, {
-        status: 400,
-        headers: privateHeaders,
-      });
-    }
+    const includeArchivedText = url.searchParams.get("includeArchived")?.trim();
     const roleBriefRevision = revisionText ? Number(revisionText) : undefined;
-    if (revisionText && (!Number.isInteger(roleBriefRevision) || Number(roleBriefRevision) <= 0)) {
-      return Response.json({ error: "The Role Brief revision must be a positive integer." }, {
+    const parsed = queryLoopRoleBriefSourceSchema.safeParse({
+      loopId,
+      roleBriefRevision,
+      includeArchived: includeArchivedText === "true",
+    });
+    if (!parsed.success || (includeArchivedText && !["true", "false"].includes(includeArchivedText))) {
+      return Response.json({ error: "Choose a valid Loop and Role Brief revision." }, {
         status: 400,
         headers: privateHeaders,
       });
     }
-    const source = await readLoopRoleBriefSource(ownerId, { loopId, roleBriefRevision });
+    const source = await readLoopRoleBriefSource(ownerId, parsed.data);
     return Response.json(source, { headers: privateHeaders });
   } catch (error) {
     const status = error instanceof LoopError && ["loop_not_found", "loop_role_brief_not_found"].includes(error.code)

@@ -33,7 +33,6 @@ enabled_tools = [
   "revise_loop_role_brief",
   "query_loops",
   "query_role_brief_migration_inbox",
-  "get_loop_role_brief_source",
   "bind_planned_activity_to_loop",
   "link_completed_activity_to_loop",
   "migrate_target_profile_to_loop",
