@@ -399,7 +399,7 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
     const [replayedOriginal, savedTrigger] = await waitForJobs(ownerClient, [
       claimInput.operationId,
       replayTrigger.operationId,
-    ]);
+    ], baseUrl);
     assert.equal(replayedOriginal.status, "saved");
     assert.equal(replayedOriginal.result.revision, 1);
     assert.equal(savedTrigger.status, "saved");
