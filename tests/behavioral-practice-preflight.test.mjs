@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -56,4 +57,14 @@ test("accepted target variants become stale when either exact source revision ch
     currentTargetRevision: 2,
     currentSolutionProfileRevision: 4,
   }), ["target_not_resolved"]);
+});
+
+test("preflight bounds legacy and Role Brief accepted variants independently", async () => {
+  const source = await readFile(new URL("../db/behavioral-practice-preflight.ts", import.meta.url), "utf8");
+  assert.match(source, /VARIANT_SCAN_LIMIT = VARIANT_LIMIT \+ 1/);
+  assert.match(source, /readAcceptedTailoredVariantRows\(ownerId, input\.questionId, "target"\)/);
+  assert.match(source, /readAcceptedTailoredVariantRows\(ownerId, input\.questionId, "roleBrief"\)/);
+  assert.match(source, /json_type\([^\n]+ '\$\.target'\) IS NOT NULL/);
+  assert.match(source, /json_type\([^\n]+ '\$\.roleBrief'\) IS NOT NULL/);
+  assert.doesNotMatch(source, /VARIANT_LIMIT \* 2/);
 });

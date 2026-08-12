@@ -30,6 +30,9 @@ test("Behavioral Bank and Today keep Target Profiles migration-only", async () =
   assert.match(bindings, /Historical session inheritance/);
   assert.match(bindings, /Loop context or universal practice/);
   assert.doesNotMatch(bindings, /<select|Set exact revision|Clear override|Clear target/);
+  assert.match(bindings, /BINDING_READ_LIMIT = 50/);
+  assert.match(bindings, /scopes\.slice\(index \* BINDING_READ_LIMIT/);
+  assert.match(bindings, /payloads\.flatMap\(\(payload\) => payload\.bindings\)/);
   const displayRenderer = desk.slice(desk.indexOf("function TargetRevision"), desk.indexOf("export default function"));
   assert.doesNotMatch(displayRenderer, /jdText/);
   assert.doesNotMatch(bindings, /jdText/);

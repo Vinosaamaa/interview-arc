@@ -41,7 +41,7 @@ export const behavioralPracticePreflightInputSchema = z.object({
 export type BehavioralPracticePreflightInput = z.infer<typeof behavioralPracticePreflightInputSchema>;
 
 const VARIANT_LIMIT = 50;
-const VARIANT_SCAN_LIMIT = VARIANT_LIMIT * 2 + 1;
+const VARIANT_SCAN_LIMIT = VARIANT_LIMIT + 1;
 
 type AcceptedVariantRow = {
   activityId: string;
@@ -75,11 +75,11 @@ function projectAcceptedTailoredVariant(
   };
 }
 
-export async function readBehavioralPracticePreflight(
+function readAcceptedTailoredVariantRows(
   ownerId: string,
-  inputValue: BehavioralPracticePreflightInput,
+  questionId: string,
+  context: "target" | "roleBrief",
 ) {
-  const input = behavioralPracticePreflightInputSchema.parse(inputValue);
   const db = getDb();
   const latestSnapshotRevisions = db.select({
     ownerId: behavioralFinalAnswerSnapshots.ownerId,
@@ -87,12 +87,50 @@ export async function readBehavioralPracticePreflight(
     latestSnapshotRevision: max(behavioralFinalAnswerSnapshots.snapshotRevision).as("latest_snapshot_revision"),
   }).from(behavioralFinalAnswerSnapshots).where(and(
     eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
-    sql`json_extract(${behavioralFinalAnswerSnapshots.snapshot}, '$.question.questionId') = ${input.questionId}`,
+    sql`json_extract(${behavioralFinalAnswerSnapshots.snapshot}, '$.question.questionId') = ${questionId}`,
   )).groupBy(
     behavioralFinalAnswerSnapshots.ownerId,
     behavioralFinalAnswerSnapshots.activityId,
   ).as("latest_behavioral_answer_revisions");
-  const [solutionProfile, evidence, resolvedTarget, boundLoop, rows] = await Promise.all([
+  const contextCondition = context === "target"
+    ? sql`json_type(${behavioralFinalAnswerSnapshots.snapshot}, '$.target') IS NOT NULL`
+    : sql`json_type(${behavioralFinalAnswerSnapshots.snapshot}, '$.roleBrief') IS NOT NULL`;
+  return db.select({
+    activityId: behavioralFinalAnswerSnapshots.activityId,
+    snapshotRevision: behavioralFinalAnswerSnapshots.snapshotRevision,
+    snapshot: behavioralFinalAnswerSnapshots.snapshot,
+    finalizedAt: behavioralFinalAnswerSnapshots.finalizedAt,
+    finalization: activityFinalizations.payload,
+  }).from(behavioralFinalAnswerSnapshots).innerJoin(
+    latestSnapshotRevisions,
+    and(
+      eq(latestSnapshotRevisions.ownerId, behavioralFinalAnswerSnapshots.ownerId),
+      eq(latestSnapshotRevisions.activityId, behavioralFinalAnswerSnapshots.activityId),
+      eq(latestSnapshotRevisions.latestSnapshotRevision, behavioralFinalAnswerSnapshots.snapshotRevision),
+    ),
+  ).leftJoin(
+    activityFinalizations,
+    and(
+      eq(activityFinalizations.ownerId, behavioralFinalAnswerSnapshots.ownerId),
+      eq(activityFinalizations.activityId, behavioralFinalAnswerSnapshots.activityId),
+    ),
+  ).where(and(
+    eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
+    sql`json_extract(${behavioralFinalAnswerSnapshots.snapshot}, '$.scope') = 'target_tailored'`,
+    contextCondition,
+  )).orderBy(
+    desc(behavioralFinalAnswerSnapshots.finalizedAt),
+    desc(behavioralFinalAnswerSnapshots.snapshotRevision),
+  ).limit(VARIANT_SCAN_LIMIT);
+}
+
+export async function readBehavioralPracticePreflight(
+  ownerId: string,
+  inputValue: BehavioralPracticePreflightInput,
+) {
+  const input = behavioralPracticePreflightInputSchema.parse(inputValue);
+  const db = getDb();
+  const [solutionProfile, evidence, resolvedTarget, boundLoop, legacyRows, roleBriefRows] = await Promise.all([
     readProblemSolutionProfile(ownerId, "behavioral", input.questionId, { revisionLimit: 1 }),
     queryBehavioralEvidence(ownerId, input.questionId),
     resolveBehavioralTarget(ownerId, {
@@ -100,40 +138,18 @@ export async function readBehavioralPracticePreflight(
       ...(input.sessionId ? { sessionId: input.sessionId } : {}),
     }),
     input.activityId ? readBoundLoopActivityContext(ownerId, input.activityId) : null,
-    db.select({
-      activityId: behavioralFinalAnswerSnapshots.activityId,
-      snapshotRevision: behavioralFinalAnswerSnapshots.snapshotRevision,
-      snapshot: behavioralFinalAnswerSnapshots.snapshot,
-      finalizedAt: behavioralFinalAnswerSnapshots.finalizedAt,
-      finalization: activityFinalizations.payload,
-    }).from(behavioralFinalAnswerSnapshots).innerJoin(
-      latestSnapshotRevisions,
-      and(
-        eq(latestSnapshotRevisions.ownerId, behavioralFinalAnswerSnapshots.ownerId),
-        eq(latestSnapshotRevisions.activityId, behavioralFinalAnswerSnapshots.activityId),
-        eq(latestSnapshotRevisions.latestSnapshotRevision, behavioralFinalAnswerSnapshots.snapshotRevision),
-      ),
-    ).leftJoin(
-      activityFinalizations,
-      and(
-        eq(activityFinalizations.ownerId, behavioralFinalAnswerSnapshots.ownerId),
-        eq(activityFinalizations.activityId, behavioralFinalAnswerSnapshots.activityId),
-      ),
-    ).where(and(
-      eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
-      sql`json_extract(${behavioralFinalAnswerSnapshots.snapshot}, '$.scope') = 'target_tailored'`,
-    )).orderBy(
-      desc(behavioralFinalAnswerSnapshots.finalizedAt),
-      desc(behavioralFinalAnswerSnapshots.snapshotRevision),
-    ).limit(VARIANT_SCAN_LIMIT),
+    readAcceptedTailoredVariantRows(ownerId, input.questionId, "target"),
+    readAcceptedTailoredVariantRows(ownerId, input.questionId, "roleBrief"),
   ]);
 
-  const allTailoredSnapshots = rows.map((row) => ({
+  const allLegacyTargetSnapshots = legacyRows.map((row) => ({
     row,
     snapshot: behavioralFinalAnswerSnapshotInputSchema.parse(row.snapshot),
-  })).filter(({ snapshot }) => snapshot.scope === "target_tailored");
-  const allLegacyTargetSnapshots = allTailoredSnapshots.filter(({ snapshot }) => Boolean(snapshot.target));
-  const allLoopRoleBriefSnapshots = allTailoredSnapshots.filter(({ snapshot }) => Boolean(snapshot.roleBrief));
+  })).filter(({ snapshot }) => snapshot.scope === "target_tailored" && Boolean(snapshot.target));
+  const allLoopRoleBriefSnapshots = roleBriefRows.map((row) => ({
+    row,
+    snapshot: behavioralFinalAnswerSnapshotInputSchema.parse(row.snapshot),
+  })).filter(({ snapshot }) => snapshot.scope === "target_tailored" && Boolean(snapshot.roleBrief));
   const legacyTargetSnapshots = allLegacyTargetSnapshots.slice(0, VARIANT_LIMIT);
   const loopRoleBriefSnapshots = allLoopRoleBriefSnapshots.slice(0, VARIANT_LIMIT);
   const targetIds = [...new Set(legacyTargetSnapshots.flatMap(({ snapshot }) => snapshot.target?.targetId ?? []))];

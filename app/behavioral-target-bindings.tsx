@@ -10,6 +10,7 @@ import {
 import { behavioralTargetRequest } from "./behavioral-target-client";
 
 type Scope = { type: "session" | "activity"; id: string; label: string; detail: string };
+const BINDING_READ_LIMIT = 50;
 
 function LegacyBindingRow({ scope, state }: { scope: Scope; state?: BehavioralTargetBindingRead }) {
   const sourceLabel = !state
@@ -55,13 +56,19 @@ export default function BehavioralTargetBindings({
   const [bindingError, setBindingError] = useState<string | null>(null);
   const readBindings = useCallback(async () => {
     if (!scopes.length) return;
-    const params = new URLSearchParams();
-    for (const scope of scopes) params.append("scope", `${scope.type}:${scope.id}`);
     try {
-      const payload = behavioralTargetBindingBatchReadSchema.parse(
-        await behavioralTargetRequest(`/api/behavioral-target-bindings?${params}`),
+      const batches = Array.from(
+        { length: Math.ceil(scopes.length / BINDING_READ_LIMIT) },
+        (_, index) => scopes.slice(index * BINDING_READ_LIMIT, (index + 1) * BINDING_READ_LIMIT),
       );
-      setBindings(Object.fromEntries(payload.bindings.map((item) => [
+      const payloads = await Promise.all(batches.map(async (batch) => {
+        const params = new URLSearchParams();
+        for (const scope of batch) params.append("scope", `${scope.type}:${scope.id}`);
+        return behavioralTargetBindingBatchReadSchema.parse(
+          await behavioralTargetRequest(`/api/behavioral-target-bindings?${params}`),
+        );
+      }));
+      setBindings(Object.fromEntries(payloads.flatMap((payload) => payload.bindings).map((item) => [
         `${item.scope.type}:${item.scope.id}`,
         { directBinding: item.directBinding, resolution: item.resolution },
       ])));
