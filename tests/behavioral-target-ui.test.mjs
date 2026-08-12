@@ -5,10 +5,11 @@ import test from "node:test";
 const load = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 test("Behavioral Bank and Today keep Target Profiles migration-only", async () => {
-  const [home, desk, bindings, contract, targetRoute, bindingRoute, routeError, worker, css] = await Promise.all([
+  const [home, desk, bindings, client, contract, targetRoute, bindingRoute, routeError, worker, css] = await Promise.all([
     load("../app/home-client.tsx"),
     load("../app/behavioral-target-desk.tsx"),
     load("../app/behavioral-target-bindings.tsx"),
+    load("../app/behavioral-target-client.ts"),
     load("../app/behavioral-target-contract.ts"),
     load("../app/api/behavioral-targets/route.ts"),
     load("../app/api/behavioral-target-bindings/route.ts"),
@@ -33,6 +34,9 @@ test("Behavioral Bank and Today keep Target Profiles migration-only", async () =
   assert.match(bindings, /BINDING_READ_LIMIT = 50/);
   assert.match(bindings, /scopes\.slice\(index \* BINDING_READ_LIMIT/);
   assert.match(bindings, /payloads\.flatMap\(\(payload\) => payload\.bindings\)/);
+  assert.match(bindings, /request !== latestBindingRequest\.current/);
+  assert.match(client, /request !== latestRefreshRequest\.current/);
+  assert.match(client, /latestRefreshRequest\.current \+= 1/);
   const displayRenderer = desk.slice(desk.indexOf("function TargetRevision"), desk.indexOf("export default function"));
   assert.doesNotMatch(displayRenderer, /jdText/);
   assert.doesNotMatch(bindings, /jdText/);

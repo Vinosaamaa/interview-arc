@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ExtraActivity, LocalSession } from "./live-types";
 import {
@@ -54,8 +54,14 @@ export default function BehavioralTargetBindings({
   ], [behavioralActivities, behavioralIds, sessions]);
   const [bindings, setBindings] = useState<Record<string, BehavioralTargetBindingRead>>({});
   const [bindingError, setBindingError] = useState<string | null>(null);
+  const latestBindingRequest = useRef(0);
   const readBindings = useCallback(async () => {
-    if (!scopes.length) return;
+    const request = ++latestBindingRequest.current;
+    if (!scopes.length) {
+      setBindings({});
+      setBindingError(null);
+      return;
+    }
     try {
       const batches = Array.from(
         { length: Math.ceil(scopes.length / BINDING_READ_LIMIT) },
@@ -68,18 +74,23 @@ export default function BehavioralTargetBindings({
           await behavioralTargetRequest(`/api/behavioral-target-bindings?${params}`),
         );
       }));
+      if (request !== latestBindingRequest.current) return;
       setBindings(Object.fromEntries(payloads.flatMap((payload) => payload.bindings).map((item) => [
         `${item.scope.type}:${item.scope.id}`,
         { directBinding: item.directBinding, resolution: item.resolution },
       ])));
       setBindingError(null);
     } catch (reason) {
+      if (request !== latestBindingRequest.current) return;
       setBindingError(reason instanceof Error ? reason.message : "Historical Target Profile bindings are unavailable.");
     }
   }, [scopes]);
   useEffect(() => {
     const refreshTimer = window.setTimeout(() => void readBindings(), 0);
-    return () => window.clearTimeout(refreshTimer);
+    return () => {
+      window.clearTimeout(refreshTimer);
+      latestBindingRequest.current += 1;
+    };
   }, [readBindings]);
   if (scopes.length === 0) return null;
   return <section className="behavioral-target-bindings" aria-labelledby="behavioral-target-bindings-title">
