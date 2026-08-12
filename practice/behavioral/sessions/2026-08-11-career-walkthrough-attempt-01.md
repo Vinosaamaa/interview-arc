@@ -93,11 +93,11 @@ Target context: T-Mobile · Platform Engineering & Applied AI, Role Brief revisi
 ### Specialist · 2026-08-08T19:22:09.701-07:00
 
 > Preflight complete. We’ll use your current résumé as provisional evidence, but we won’t treat its claims, metrics, transition reasons, or ownership details as fully verified until you establish them.
-> 
+>
 > **Primary interview question**
-> 
+>
 > “Tell me about yourself. Walk me through your career from your independent contracting work through Expedia, eBay, and VortexNetTech, and finish with what you’re looking for next.”
-> 
+>
 > Answer as if this were the real interview. Aim for two to three minutes. I’ll listen without interrupting and wait until you finish before coaching.
 
 ### User · 2026-08-10T00:01:33.000-07:00
@@ -107,59 +107,59 @@ Target context: T-Mobile · Platform Engineering & Applied AI, Role Brief revisi
 ### Specialist · 2026-08-10T00:06:48.768-07:00
 
 > The interview portion is complete. I’m switching to mentor mode.
-> 
+>
 > Your opening had the right raw material: five-plus years of backend experience, Java and Spring Boot, Expedia search and filtering, and a recent move toward RAG and LLM orchestration. The main problem was structure. It turned into a long technology inventory, then stopped before establishing your career progression or explaining why this T-Mobile role fits.
-> 
+>
 > For this job, organize the introduction around three signals:
-> 
+>
 > - **Platform foundation:** Java, Spring Boot, cloud-native services, distributed systems, and modernization.
 > - **Operational engineering:** observability, testing, production support, automation, and developer productivity.
 > - **Applied AI direction:** RAG, LLM orchestration, MCP, and practical AI-assisted engineering workflows.
-> 
+>
 > A stronger first draft is:
-> 
+>
 > > Hi, I’m Wenkang Xu. I’m a backend and platform-focused software engineer with more than five years of experience building Java and Spring Boot services across travel and e-commerce. Most of my work has involved distributed systems, cloud-native applications, platform modernization, and production observability.
 > >
 > > At Expedia, I worked on search and filtering services, where I contributed to platform modernization, event-driven data flows, and production reliability. At eBay, I worked on international shipping systems, with an emphasis on observability, testing, and Spring Boot modernization. More recently, at VortexNetTech, I’ve been extending that backend foundation into applied AI through RAG pipelines, LLM orchestration, MCP integrations, and AI-assisted workflows.
 > >
 > > The common thread in my experience is that I enjoy making complex systems more reliable and maintainable, then improving the engineering workflow around them through automation and better tooling. That is why this T-Mobile Platform Engineering and Applied AI role is especially interesting to me: it combines cloud-native services, platform modernization, developer productivity, and practical AI, which is exactly the direction I want to continue developing.
-> 
+>
 > I intentionally left out metrics and strong ownership verbs such as “led” because we have not yet confirmed which Expedia claims you can defend end-to-end.
-> 
+>
 > Which one Expedia accomplishment can you personally defend in detail: platform modernization, filter synchronization, observability, or another feature?
 
 ### User · 2026-08-10T00:06:40.000-07:00
 
 > also we should notice, what this interview loop is about from the hr, yes, this is an hr round:
-> 
+>
 > Not video.
-> 
+>
 > Using Teams for teleconference only.
-> 
+>
 > This initial call is more of a “get to know you” call.  We’ll talk a little bit about your background and experience, interest in the role, a couple of “HR” questions and some experiential questions (“tell me about a time when”), etc.  Pretty simple to start.
-> 
+>
 > Thanks!
-> 
+>
 > Graham
 
 ### Specialist · 2026-08-10T00:06:41.000-07:00
 
 > Yes—this materially changes the calibration. This is a recruiter/HR screen, not a technical interview. Your opening should sound warm and clear, stay around 60–75 seconds, and explain your career arc and interest in T-Mobile without listing every technology.
-> 
+>
 > Use this version:
-> 
+>
 > > Hi Graham, thanks for taking the time to speak with me. I’m Wenkang Xu, a backend software engineer with more than five years of experience, primarily building Java and Spring Boot services. I’ve worked across travel and e-commerce, including Expedia, where I worked on search and filtering systems, and eBay, where I worked on international shipping services. More recently, at VortexNetTech, I’ve been expanding into applied AI through RAG, LLM orchestration, and MCP-based workflows. Across these roles, the common thread has been building reliable services, improving observability and automation, and collaborating across teams to solve practical engineering problems. I’m interested in this T-Mobile role because it combines platform modernization, cloud-native engineering, developer productivity, and applied AI—which fits both my background and where I want to grow next.
-> 
+>
 > Because this is audio-only, keep five cue words in front of you—**backend, Expedia, eBay, AI, T-Mobile**—and speak from them instead of reading the paragraph. Pause briefly between the career-history section and the T-Mobile motivation.
-> 
+>
 > Based on Graham’s note, we should prepare five areas:
-> 
+>
 > - Your 60–75 second introduction
 > - Why T-Mobile and why this role
 > - Why you are looking now
 > - Two or three experiential stories: collaboration, a difficult problem or incident, and learning or ambiguity
 > - Recruiter logistics: location, travel, work authorization, compensation, and timing
-> 
+>
 > Before we finalize the introduction, give me your honest one- or two-sentence reason for wanting this T-Mobile role now. I’ll use that to make the ending sound personal instead of copied from the job description.
 
 ### User · 2026-08-10T00:08:38.000-07:00
@@ -173,19 +173,19 @@ Target context: T-Mobile · Platform Engineering & Applied AI, Role Brief revisi
 ### Specialist · 2026-08-10T00:37:05.000-07:00
 
 > We’re back in **Mentor mode** on *Career Walkthrough: Tell me about yourself*. Your first take is preserved, the activity is still running, and the Solution Profile is still provisional—so this revised answer is the draft we should now rehearse and improve.
-> 
+>
 > For Graham’s audio-only HR screen, use this 75–85 second version:
-> 
+>
 > > Hi Graham, thanks for taking the time to speak with me. I’m Wenkang Xu, a backend software engineer with more than five years of experience, primarily building Java and Spring Boot services. I started through independent contracting across several domains, which gave me a broad foundation in backend development and experience working with different teams. I then moved to Expedia, where I worked on search and filtering services and strengthened my experience with distributed systems, observability, and production support. After that, at eBay, I worked on international shipping services, with a focus on service modernization, testing, and operational visibility. More recently, at VortexNetTech, I’ve been expanding into applied AI through RAG, LLM orchestration, and MCP-based workflows. The common thread across my experience is that I enjoy building reliable systems and improving engineering workflows through automation. That’s what interested me in this T-Mobile role: it combines backend and platform engineering, cloud modernization, developer productivity, and practical applied AI. I’d be excited to bring my backend experience while continuing to grow in that direction.
-> 
+>
 > This is stronger because it has one clean arc: **backend identity → career progression → applied AI → T-Mobile fit**. It avoids unsupported metrics and strong ownership claims. Your earlier recorded take lasted about 160 seconds and included several long pauses and restarts; for this version, do not try to speak faster. Use shorter sentences and reduce the searching pauses.
-> 
+>
 > Keep only these five cues in front of you:
-> 
+>
 > **Backend → Independent → Expedia/eBay → Applied AI → T-Mobile**
-> 
+>
 > One remaining gap is that the T-Mobile ending still reflects role alignment more than your personal motivation. We can make it more personal after you tell me your honest reason for wanting this role.
-> 
+>
 > Now give me your next take without reading the paragraph word for word.
 
 ### User · 2026-08-10T00:49:31.000-07:00
@@ -195,14 +195,14 @@ Target context: T-Mobile · Platform Engineering & Applied AI, Role Brief revisi
 ### Specialist · 2026-08-10T00:50:00.000-07:00
 
 > That was a major improvement. Structurally, it is already strong enough for an initial HR screen:
-> 
+>
 > - You completed the answer without abandoning it or criticizing yourself mid-response.
 > - The chronology was clear: independent work → Expedia → eBay → VortexNetTech → T-Mobile.
 > - You avoided a long technology list and unsupported metrics.
 > - You ended with a direct connection to the role.
-> 
+>
 > The remaining work is mostly sentence-level polish. The transcript may have misheard some terms, so articulate these carefully rather than assuming every item reflects your pronunciation:
-> 
+>
 > - **“Wenkang Xu”**, not “Wenkong Zou.”
 > - **“more than five years of experience.”**
 > - **“Java and Spring Boot services.”**
@@ -211,11 +211,11 @@ Target context: T-Mobile · Platform Engineering & Applied AI, Role Brief revisi
 > - **“RAG, LLM orchestration, and MCP-based workflows.”**
 > - **“practical applied AI.”**
 > - **“while continuing to grow in that direction.”**
-> 
+>
 > Here is your same answer with only those improvements:
-> 
+>
 > > Hi Graham, thanks for taking the time to speak with me. I’m Wenkang Xu, a backend software engineer with more than five years of experience, primarily building Java and Spring Boot services. I started with independent contracting across several domains, which gave me a broad foundation in backend development and taught me how to adapt to different teams and business problems. I then moved to Expedia, where I worked on search and filtering services and strengthened my experience with distributed systems, observability, and production support. After that, at eBay, I worked on international shipping services, focusing on service modernization, testing, and operational visibility. More recently, at VortexNetTech, I’ve been expanding into applied AI through RAG, LLM orchestration, and MCP-based workflows. The common thread across my experience is that I enjoy building reliable systems and improving engineering workflows through automation. That’s what interests me about this T-Mobile role: it combines backend and platform engineering, cloud modernization, developer productivity, and practical applied AI. I’d be excited to bring my backend experience while continuing to grow in that direction.
-> 
+>
 > Do one more take from the five cue words instead of reading the paragraph. Pause only after the independent-work section, after eBay, and before the T-Mobile connection. If one word comes out wrong, finish the sentence and continue—do not restart the entire answer.
 
 ### User · 2026-08-10T00:55:08.000-07:00
@@ -225,24 +225,24 @@ Target context: T-Mobile · Platform Engineering & Applied AI, Role Brief revisi
 ### Specialist · 2026-08-10T00:55:00.000-07:00
 
 > The delivery analysis has **not arrived yet**. I checked the authoritative activity record:
-> 
+>
 > - The recording is safely available.
 > - The full clip is 136 seconds.
 > - Delivery analysis status is `queued`.
 > - There is no analysis payload and no error yet.
-> 
+>
 > So I cannot honestly give you measured pace, pitch, pause, or filler conclusions from that take yet.
-> 
+>
 > Your own observation is still important—and yes, if you were reading the polished paragraph word for word, an HR interviewer may hear that it sounds scripted. The problem is not that the content is too good. It is that the sentences have uniform length, dense parallel structure, and a cadence people rarely use spontaneously.
-> 
+>
 > The fix is to memorize the **message**, not the wording. Keep the same facts, but make the delivery more conversational:
-> 
+>
 > > Sure. I’m a backend software engineer with a little over five years of experience, mostly working with Java and Spring Boot. I started out doing independent contract work across a few domains, which gave me a broad foundation and taught me how to adapt quickly. The biggest part of my recent background was at Expedia, where I worked on search and filtering services and got deeper into distributed systems, observability, and production support. After that, I worked at eBay on international shipping services, especially modernization, testing, and operational visibility. More recently, at VortexNetTech, I’ve been exploring applied AI—things like RAG, LLM orchestration, and MCP-based workflows. The common thread is that I like building reliable backend systems and improving how engineers work through automation. That’s why this T-Mobile role stood out to me: it brings together platform engineering, modernization, developer productivity, and applied AI.
-> 
+>
 > For the next take, do **not** display that paragraph. Display only:
-> 
+>
 > **Backend → Independent → Expedia → eBay → AI → T-Mobile**
-> 
+>
 > Speak to Graham as if you were explaining your background to one person—not presenting a résumé. It is fine if the exact sentence changes between takes. That variation is evidence that you own the story rather than reciting it.
 
 ### User · 2026-08-10T00:58:26.000-07:00
@@ -252,25 +252,25 @@ Target context: T-Mobile · Platform Engineering & Applied AI, Role Brief revisi
 ### Specialist · 2026-08-10T01:00:00.000-07:00
 
 > You’re right. I was giving you something that reads well, but does not necessarily sound natural when spoken. From now on, I’ll write rehearsal answers as **short spoken beats**, with blank lines showing where one thought ends and the next begins.
-> 
+>
 > Here is the same introduction in that format:
-> 
+>
 > > Sure. I’m a backend software engineer.
-> > 
+> >
 > > I’ve been doing this for a little over five years, mostly with Java and Spring Boot.
-> > 
+> >
 > > I started out doing independent contract work across a few different industries. That gave me a broad backend foundation and taught me how to get up to speed with different teams and business problems.
-> > 
+> >
 > > After that, I spent most of my recent career at Expedia, working on search and filtering services. That’s where I got much deeper into distributed systems, observability, and supporting services in production.
-> > 
+> >
 > > Then I worked at eBay on international shipping services. A lot of that work was around modernization, testing, and making the service easier to operate.
-> > 
+> >
 > > More recently, at VortexNetTech, I’ve been moving into applied AI—RAG, LLM orchestration, and MCP-based workflows.
-> > 
+> >
 > > So, if I had to sum it up, I like building reliable backend systems and finding ways to make engineering work smoother through automation.
-> > 
+> >
 > > That’s why this T-Mobile role stood out to me. It brings together platform engineering, modernization, developer productivity, and applied AI, which is pretty much the direction I want to keep growing in.
-> 
+>
 > Each blank line is a **thought boundary**, not a required dramatic pause. Glance at one section, say it naturally, and move on. You do not need to reproduce the exact wording.
 
 ### User · 2026-08-10T01:00:01.000-07:00
@@ -280,43 +280,43 @@ Target context: T-Mobile · Platform Engineering & Applied AI, Role Brief revisi
 ### Specialist · 2026-08-10T01:05:00.000-07:00
 
 > This sounded **much more human**. You solved the robotic-script problem. The next problem is boundaries: the answer started as an introduction, then turned into a separate discussion about AI, replacement, system design, and scalability.
-> 
+>
 > The latest audio has not reached the authoritative activity record yet, so this is content feedback only—not a measured delivery analysis.
-> 
+>
 > **Keep:**
-> 
+>
 > - The natural chronological flow
 > - Saying Expedia was an important learning experience
 > - Your genuine interest in how AI is changing engineering work
 > - The idea that reliable systems and automation connect your career
-> 
+>
 > **Cut or tighten:**
-> 
+>
 > - Repeating “mainly” and “related” in the opening
 > - Listing banks and social-networking domains during the introduction
 > - Saying you were at eBay “for a short time”—save that explanation for a follow-up
 > - The long argument about what AI can or cannot replace
 > - “Because why not?” and “for a final word to sum everything up”
 > - “This job stands for me”; say **“this role stood out to me”**
-> 
+>
 > Also, the transcript again rendered the AI terms incorrectly. The intended terms are **RAG, LLM orchestration, and MCP-based workflows**. Articulate those slowly, but do not restart the answer if transcription misses one.
-> 
+>
 > Here is the balanced version—conversational, but still controlled:
-> 
+>
 > > Sure. I’m a backend software engineer with a little over five years of experience, mostly in Java and Spring Boot.
-> > 
+> >
 > > I started with independent contract projects across a few different domains. That gave me a broad foundation and taught me how to adapt quickly to different teams and business problems.
-> > 
+> >
 > > Then I spent almost two years at Expedia, working on search and filtering services. That was an important experience for me because I got much deeper into distributed systems, observability, and supporting services in production.
-> > 
+> >
 > > After Expedia, I worked at eBay on international shipping services. The work there focused more on modernization, testing, and making the service easier to operate.
-> > 
+> >
 > > More recently, at VortexNetTech, I’ve been moving into applied AI—especially RAG, LLM orchestration, and MCP-based workflows. I’ve found it really interesting to see how AI can improve engineering workflows, while still depending on good system design and reliable systems.
-> > 
+> >
 > > That’s really what ties my background together: building reliable backend systems and making engineering work smoother through automation.
-> > 
+> >
 > > This T-Mobile role stood out to me because it brings those areas together—platform engineering, modernization, developer productivity, and applied AI. It feels like a strong fit for what I’ve done and where I want to grow.
-> 
+>
 > For your next take, give yourself **one sentence only** for the broader AI observation. Once that sentence ends, move directly to why T-Mobile.
 
 ### User · 2026-08-10T01:16:24.000-07:00
@@ -330,31 +330,31 @@ Target context: T-Mobile · Platform Engineering & Applied AI, Role Brief revisi
 ### Specialist · 2026-08-10T01:15:00.000-07:00
 
 > Yes—those two captures are the **same interaction**, and I’m treating them as one final take.
-> 
+>
 > My decision: this was your best balance so far between conversational and structured. The career arc was clear, the Expedia section sounded personal, and you kept the broader AI observation much shorter. I would lock the **structure**, but not the transcript’s exact wording.
-> 
+>
 > Before calling it final, remove three sources of risk:
-> 
+>
 > - Do not use **seller preference team** until we confirm that exact team name. The transcript also changed “shipping” to “streaming,” so use the safer verified phrase **international shipping services**.
 > - Do not list RAG, LLM orchestration, and MCP in the HR introduction until we complete the résumé deep dive. Those terms caused repeated restarts and transcription errors.
 > - End with a clean statement. Drop “yeah,” “right,” and “it’s really a good thing for me to grow.”
-> 
+>
 > This is the version I would lock **for now**:
-> 
+>
 > > Sure. I’m a backend software engineer with a little over five years of experience, mostly working with Java and Spring Boot.
-> > 
+> >
 > > I started with independent contract projects across a few different domains. That gave me a broad backend foundation and taught me how to adapt quickly to different teams and business problems.
-> > 
+> >
 > > Then I spent almost two years at Expedia, working on search and filtering services. I really enjoyed my time there, and it helped me get much deeper into distributed systems, observability, and supporting services in production.
-> > 
+> >
 > > After Expedia, I worked at eBay on international shipping services. The work there focused more on modernization, testing, and making the service easier to operate.
-> > 
+> >
 > > More recently, at VortexNetTech, I’ve been working more with applied AI and engineering automation. What I find interesting is how AI can improve engineering workflows while still depending on good system design and reliable systems.
-> > 
+> >
 > > That’s really what ties my background together: building reliable backend systems and making engineering work smoother through automation.
-> > 
+> >
 > > This T-Mobile role stood out to me because it brings those areas together—platform engineering, modernization, developer productivity, and applied AI. It feels like a strong fit for what I’ve done and where I want to grow next.
-> 
+>
 > I would stop rehearsing here. Listen back to your take for naturalness, keep this structure as the current answer, and revisit it after the VortexNetTech résumé deep dive gives you stronger command of the AI terminology.
 
 ### User · 2026-08-10T01:23:07.000-07:00
@@ -380,13 +380,13 @@ Target context: T-Mobile · Platform Engineering & Applied AI, Role Brief revisi
 ### Specialist · 2026-08-10T01:31:05.000-07:00
 
 > Yes — **Seller Preference team** is the exact eBay team name I’ll use. I’ll treat that as owner-confirmed. That confirms your team membership; it does not automatically prove ownership of every service the team operated.
-> 
+>
 > The main fix: **do not memorize or recite the whole introduction word for word.** Your content is workable; the current problem is that you’re trying to remember polished wording, generate the next idea, and judge your delivery at the same time.
-> 
+>
 > Use **progressive chaining**: make one short section natural, then attach the next section.
-> 
+>
 > Your cue card should contain only these anchors:
-> 
+>
 > 1. Backend — 5+ years — Java/Spring Boot
 > 2. Independent work — broad domains — adaptability
 > 3. Expedia — search/filter — distributed systems, observability, production
@@ -394,23 +394,23 @@ Target context: T-Mobile · Platform Engineering & Applied AI, Role Brief revisi
 > 5. Vortex — applied AI and engineering automation
 > 6. Summary — reliable backend systems + smoother engineering work
 > 7. T-Mobile — combines what you’ve done with where you want to grow
-> 
+>
 > Your preferred summary is better and more natural:
-> 
+>
 > > If I had to sum it up, I like building reliable backend systems and finding ways to make engineering work smoother through automation.
-> 
+>
 > If you stumble, don’t restart the whole answer. Pause and use:
-> 
+>
 > > Let me put that more simply.
-> 
+>
 > Then continue from the current cue. Also, the Voice transcript mangling your name is not proof that you pronounced it incorrectly; delivery analysis is what can establish that.
-> 
+>
 > For the next attempt, practice only these first two beats:
-> 
+>
 > > Sure. I’m a backend software engineer with a little over five years of experience, mostly working with Java and Spring Boot.
 > >
 > > I started with independent contract work across a few different domains. That gave me a broad foundation and taught me how to adapt quickly.
-> 
+>
 > Stop there. Once those two beats feel natural, we’ll add Expedia. No full run yet.
 
 ### User · 2026-08-10T01:38:55.000-07:00
@@ -420,9 +420,9 @@ Target context: T-Mobile · Platform Engineering & Applied AI, Role Brief revisi
 ### Specialist · 2026-08-10T01:39:56.892-07:00
 
 > The introduction timer is already paused, and I would **not** mark the activity finished yet.
-> 
+>
 > For this attempt, I would publish the following as the standalone **T-Mobile HR version**. It is tailored to this job and sits separately from the full transcript:
-> 
+>
 > > Sure. I’m Wenkang, and I’m a backend software engineer with a little over five years of experience, mostly working with Java and Spring Boot.
 > >
 > > I started with independent contract work across a few different domains. That gave me a broad backend foundation and taught me how to adapt to different teams and business problems.
@@ -436,7 +436,7 @@ Target context: T-Mobile · Platform Engineering & Applied AI, Role Brief revisi
 > > If I had to sum it up, I like building reliable backend systems and finding ways to make engineering work smoother through automation.
 > >
 > > That’s why this T-Mobile role caught my attention. It brings together backend engineering, platform modernization, automation, and applied AI. It feels like a strong match for what I’ve done and where I want to keep growing.
-> 
+>
 > That is the content I would preserve. When we return, the remaining work is delivery practice—not another rewrite unless verified evidence or the target changes.
 
 ### User · 2026-08-10T01:42:41.000-07:00
@@ -446,31 +446,31 @@ Target context: T-Mobile · Platform Engineering & Applied AI, Role Brief revisi
 ### Specialist · 2026-08-10T01:43:52.479-07:00
 
 > Yes. As the HR screener, I’m grading more than fluency. I’m listening for:
-> 
+>
 > - a coherent career story;
 > - specific, credible substance behind each claim;
 > - understandable reasons for each transition;
 > - a believable connection to this role; and
 > - risk signals such as vague scope, unclear employment arrangements, short tenures, or unexplained AI terminology.
-> 
+>
 > Your introduction has a clear structure, but every section creates a follow-up hook. The **highest-risk hook is currently VortexNetTech**: “applied AI and engineering automation” sounds relevant, but it is still abstract, and the introduction does not explain what VortexNetTech is.
-> 
+>
 > In Grill mode, I won’t dump ten questions on you. We’ll resolve the highest-risk branch first.
-> 
+>
 > **Grill question 1:**
-> 
+>
 > > You mentioned that you’re currently working at VortexNetTech. What exactly is VortexNetTech, and what is your formal relationship to the company?
-> 
+>
 > A strong answer must establish, truthfully:
-> 
+>
 > 1. whether it is an employer, your own company, a contract arrangement, or something else;
 > 2. what the company actually does; and
 > 3. why this work belongs in your professional career narrative.
-> 
+>
 > Recommended answer framework:
-> 
+>
 > > VortexNetTech is **[truthful company description]**. My relationship to it is **[exact employment or ownership relationship]**. My current work there focuses on **[one plain-language product area]**, which is relevant to my career because **[honest connection to backend, platform, automation, or applied AI work]**.
-> 
+>
 > I’m leaving those fields blank because their contents must come from you or verified evidence. Answer the question as if Graham asked it live. After your answer, I’ll press the next branch.
 
 ### User · 2026-08-10T02:22:27.819-07:00
@@ -480,21 +480,21 @@ Target context: T-Mobile · Platform Engineering & Applied AI, Role Brief revisi
 ### Specialist · 2026-08-10T02:22:28.819-07:00
 
 > Grill mode is active. The current provisional profile supports your career chronology, but it still flags **VortexNetTech’s exact status and scope as unconfirmed**.
-> 
+>
 > **Grill question 1:**
-> 
+>
 > > You said you’re currently working at VortexNetTech. What exactly is VortexNetTech, and what is your formal relationship to it?
-> 
+>
 > Answer as if Graham asked you live. Keep it to 30–45 seconds, and do not jump into the AI projects yet. I want three precise facts:
-> 
+>
 > 1. What kind of entity VortexNetTech is.
 > 2. Whether you are an employee, founder, owner, contractor, or something else.
 > 3. Whether the work is paid client work, an internal company product, or another arrangement.
-> 
+>
 > Recommended structure:
-> 
+>
 > > VortexNetTech is **[truthful description]**. My formal relationship to it is **[truthful relationship]**. In practice, the company is currently focused on **[truthful business or product scope]**.
-> 
+>
 > Only fill those fields with facts you can defend. Once this branch is clear, I’ll ask what you personally built there.
 
 ### User · 2026-08-10T02:23:51.000-07:00
@@ -504,33 +504,33 @@ Target context: T-Mobile · Platform Engineering & Applied AI, Role Brief revisi
 ### Specialist · 2026-08-10T02:30:06.444-07:00
 
 > Good — the core facts are now clear. Your live answer has a **delivery problem**, not a substance problem.
-> 
+>
 > **Owner-confirmed facts:**
-> 
+>
 > - VortexNetTech is a California-based consulting company.
 > - It provides software solutions to clients across different industries and company sizes.
 > - You work there as an **independent consultant**, not a full-time employee.
 > - Your work is paid client work.
 > - Teams are organized around individual client projects.
-> 
+>
 > **Still unconfirmed:** the exact size of your current team. You said five, then questioned it, so I will use “a small project team” until you confirm the number.
-> 
+>
 > The main delivery issue was repetition. You defined the company several times, corrected your employment relationship late, and repeated “paid client work.” HR needs one clean explanation.
-> 
+>
 > **Recommended answer:**
-> 
+>
 > > VortexNetTech is a California-based consulting company that provides software solutions to clients across different industries and company sizes. I work there as an independent consultant on paid client projects. Teams are organized around each client engagement, and I’m currently part of a small project team.
-> 
+>
 > That is enough for an HR screen. Do not list medical, financial, large, and small clients unless Graham asks for examples.
-> 
+>
 > **Grill question 2:**
-> 
+>
 > > Choose one paid client project you worked on through VortexNetTech. What business problem was the client experiencing before your team became involved?
-> 
+>
 > Stay on the **business problem** for 45–60 seconds. Do not explain your implementation or personal ownership yet; those are the next branches.
-> 
+>
 > Recommended structure:
-> 
+>
 > > The client was **[industry and safe company description]**. They were struggling with **[specific business or user problem]**, which caused **[observable consequence]**. Our team was brought in to **[project objective]**.
 
 ### User · 2026-08-10T02:32:19.000-07:00
@@ -1387,4 +1387,3 @@ The 10.56-second request was delivered at a measured 108 words per minute and wa
 ## References
 
 No external references were consulted.
-
