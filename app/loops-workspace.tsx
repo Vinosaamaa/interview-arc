@@ -495,6 +495,7 @@ export function LoopsWorkspace({ onOpenActivity }: { onOpenActivity: (activityId
     typeof window === "undefined" ? "" : readLoopWorkspaceState(window.location.href)?.stageId ?? ""
   ));
   const [sourceDialog, setSourceDialog] = useState<{ loop: LoopProjection; opener: HTMLButtonElement } | null>(null);
+  const closeSourceDialog = useCallback(() => setSourceDialog(null), []);
   const loops = payload?.loops ?? [];
   const selectedLoop = loops.find((loop) => loop.loop.loopId === selectedLoopId) ?? loops[0];
   const preferredStage = selectedLoop?.loop.stages.find((stage) => stage.status === "scheduled")
@@ -548,7 +549,7 @@ export function LoopsWorkspace({ onOpenActivity }: { onOpenActivity: (activityId
       <div className="loop-context-column"><RoleBriefPanel loop={selectedLoop} onOpenSource={(opener) => setSourceDialog({ loop: selectedLoop, opener })} /><DebriefPanel stage={selectedStage} /></div>
     </div>
     <ActivityHistory loop={selectedLoop} onOpenActivity={onOpenActivity} />
-  </section>{sourceDialog ? <JobDescriptionDialog loop={sourceDialog.loop} opener={sourceDialog.opener} onClose={() => setSourceDialog(null)} /> : null}</>;
+  </section>{sourceDialog ? <JobDescriptionDialog loop={sourceDialog.loop} opener={sourceDialog.opener} onClose={closeSourceDialog} /> : null}</>;
 }
 
 export function LoopJourneyFactsPanel() {

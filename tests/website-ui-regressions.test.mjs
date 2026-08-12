@@ -323,16 +323,40 @@ test("responsive shell keeps the workspace selector above the seven-item Intervi
 });
 
 test("workspace header stacks the active tab above the Pacific date at every width", async () => {
-  const { source, rules } = await loadResponsiveShell();
-  assert.match(source, /<div className="topbar-context"><strong>/);
-  assert.match(source, /<\/strong><span>\{readableDate\(journal\.date\)\}<\/span><\/div>/);
-
-  const context = cssRules(rules, ".topbar > div:first-child")
-    .find((rule) => rule.declarations["align-content"] === "center")?.declarations;
+  const { file, rules } = await loadResponsiveShell();
+  const context = visit(file, (node) => ts.isJsxElement(node)
+    && node.openingElement.attributes.properties.some((attribute) => ts.isJsxAttribute(attribute)
+      && attribute.name.getText(file) === "className"
+      && attribute.initializer?.getText(file) === '"topbar-context"'))[0];
   assert.ok(context);
-  assert.equal(context.display, "grid");
-  assert.equal(context["align-content"], "center");
+  const elements = context.children.filter(ts.isJsxElement);
+  assert.deepEqual(elements.map((element) => element.openingElement.tagName.getText(file)), ["strong", "span"]);
+  assert.equal(elements[0].children[0]?.getText(file), "{INTERVIEW_VIEW_TITLES[view]}");
+  assert.equal(elements[1].children[0]?.getText(file), "{readableDate(journal.date)}");
+
+  const contextStyle = cssRules(rules, ".topbar > div:first-child")
+    .find((rule) => rule.declarations["align-content"] === "center")?.declarations;
+  assert.ok(contextStyle);
+  assert.equal(contextStyle.display, "grid");
+  assert.equal(contextStyle["align-content"], "center");
 
   const narrowDate = cssRules(rules, ".topbar > div:first-child span", "max-width: 680px").at(-1).declarations;
   assert.notEqual(narrowDate.display, "none");
+});
+
+test("Loops source dialog keeps a stable close callback for its focus and scroll-lock lifecycle", async () => {
+  const file = parseTsx(await load("../app/loops-workspace.tsx"));
+  const callback = visit(file, (node) => ts.isVariableDeclaration(node)
+    && ts.isIdentifier(node.name)
+    && node.name.text === "closeSourceDialog")[0];
+  assert.ok(callback?.initializer && ts.isCallExpression(callback.initializer));
+  assert.equal(callback.initializer.expression.getText(file), "useCallback");
+
+  const dialog = visit(file, (node) => ts.isJsxSelfClosingElement(node)
+    && node.tagName.getText(file) === "JobDescriptionDialog")[0];
+  assert.ok(dialog);
+  const onClose = dialog.attributes.properties.find((attribute) => ts.isJsxAttribute(attribute)
+    && attribute.name.getText(file) === "onClose");
+  assert.ok(onClose && ts.isJsxExpression(onClose.initializer));
+  assert.equal(onClose.initializer.expression?.getText(file), "closeSourceDialog");
 });
