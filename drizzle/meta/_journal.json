@@ -267,6 +267,34 @@
       "when": 1786496681777,
       "tag": "0037_parched_prodigy",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1786505882625,
+      "tag": "0038_sturdy_brother_voodoo",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "6",
+      "when": 1786509014352,
+      "tag": "0039_pink_sinister_six",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1786511070904,
+      "tag": "0040_cynical_robbie_robertson",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1786518351857,
+      "tag": "0041_adorable_lake",
+      "breakpoints": true
     }
   ]
 }

@@ -160,6 +160,108 @@ export const displaySafeLoopRoleBriefRevisionSchema = loopRoleBriefDisplaySnapsh
   createdAt: z.number().int().positive(),
 });
 
+export const loopInterviewMaterialSectionSchema = z.object({
+  sectionId: loopStableIdSchema,
+  title: boundedText(240),
+  body: optionalText(10_000),
+  bullets: z.array(boundedText(2_000)).max(100),
+}).strict().superRefine((section, context) => {
+  if (!section.body && section.bullets.length === 0) {
+    context.addIssue({
+      code: "custom",
+      path: ["body"],
+      message: "An interview-material section requires prose or at least one bullet.",
+    });
+  }
+});
+
+export const loopInterviewMaterialSnapshotSchema = z.object({
+  materialId: loopStableIdSchema,
+  loopId: loopStableIdSchema,
+  stageId: loopStableIdSchema.optional(),
+  kind: z.literal("interview_prep"),
+  state: z.enum(["active", "archived"]),
+  label: boundedText(240),
+  summary: optionalText(2_000),
+  sections: z.array(loopInterviewMaterialSectionSchema).min(1).max(50),
+  provenance: z.object({
+    kind: z.literal("owner_authorized_synthesis"),
+    roleBriefRevision: z.number().int().positive(),
+    activityIds: z.array(loopStableIdSchema).max(100),
+    sourceLabel: boundedText(240),
+    preparedAt: z.number().int().positive(),
+  }).strict(),
+}).strict().superRefine((material, context) => {
+  const sectionIds = new Set<string>();
+  material.sections.forEach((section, index) => {
+    if (sectionIds.has(section.sectionId)) {
+      context.addIssue({
+        code: "custom",
+        path: ["sections", index, "sectionId"],
+        message: "Material section IDs must be unique within one revision.",
+      });
+    }
+    sectionIds.add(section.sectionId);
+  });
+  const activityIds = new Set(material.provenance.activityIds);
+  if (activityIds.size !== material.provenance.activityIds.length) {
+    context.addIssue({
+      code: "custom",
+      path: ["provenance", "activityIds"],
+      message: "Material provenance cannot repeat one activity identity.",
+    });
+  }
+});
+
+const loopInterviewMaterialWriteBaseSchema = z.object({
+  operationId: loopStableIdSchema,
+  authorization: z.literal("loop_recorder"),
+  expectedLoopRevision: z.number().int().positive(),
+  expectedRoleBriefRevision: z.number().int().positive(),
+  material: loopInterviewMaterialSnapshotSchema,
+});
+
+export const createLoopInterviewMaterialSchema = loopInterviewMaterialWriteBaseSchema.strict()
+  .refine((input) => input.material.provenance.roleBriefRevision === input.expectedRoleBriefRevision, {
+    path: ["material", "provenance", "roleBriefRevision"],
+    message: "Material provenance must pin the expected Role Brief revision.",
+  });
+
+export const reviseLoopInterviewMaterialSchema = loopInterviewMaterialWriteBaseSchema.extend({
+  materialId: loopStableIdSchema,
+  expectedRevision: z.number().int().positive(),
+}).strict().superRefine((input, context) => {
+  if (input.materialId !== input.material.materialId) {
+    context.addIssue({
+      code: "custom",
+      path: ["material", "materialId"],
+      message: "Interview material identity cannot change during revision.",
+    });
+  }
+  if (input.material.provenance.roleBriefRevision !== input.expectedRoleBriefRevision) {
+    context.addIssue({
+      code: "custom",
+      path: ["material", "provenance", "roleBriefRevision"],
+      message: "Material provenance must pin the expected Role Brief revision.",
+    });
+  }
+});
+
+export const queryLoopInterviewMaterialsSchema = z.object({
+  loopId: loopStableIdSchema.optional(),
+  stageId: loopStableIdSchema.optional(),
+  materialId: loopStableIdSchema.optional(),
+  revision: z.number().int().positive().optional(),
+  includeArchived: z.boolean().optional(),
+}).strict().superRefine((input, context) => {
+  if (input.stageId && !input.loopId) {
+    context.addIssue({ code: "custom", path: ["loopId"], message: "Round filtering requires one Loop." });
+  }
+  if (input.revision && !input.materialId) {
+    context.addIssue({ code: "custom", path: ["materialId"], message: "Historical material reads require one material ID." });
+  }
+});
+
 export const createLoopSchema = z.object({
   operationId: loopStableIdSchema,
   authorization: z.literal("loop_recorder"),
@@ -269,6 +371,9 @@ export const importLoopCapturePacketSchema = z.object({
 export type LoopSnapshot = z.infer<typeof loopSnapshotSchema>;
 export type LoopRoleBriefInput = z.infer<typeof loopRoleBriefInputSchema>;
 export type LoopRoleBriefDisplaySnapshot = z.infer<typeof loopRoleBriefDisplaySnapshotSchema>;
+export type LoopInterviewMaterialSnapshot = z.infer<typeof loopInterviewMaterialSnapshotSchema>;
+export type CreateLoopInterviewMaterialInput = z.infer<typeof createLoopInterviewMaterialSchema>;
+export type ReviseLoopInterviewMaterialInput = z.infer<typeof reviseLoopInterviewMaterialSchema>;
 export type CreateLoopInput = z.infer<typeof createLoopSchema>;
 export type ReviseLoopInput = z.infer<typeof reviseLoopSchema>;
 export type ReviseLoopRoleBriefInput = z.infer<typeof reviseLoopRoleBriefSchema>;

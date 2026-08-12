@@ -10,12 +10,16 @@ D1 by the coordinator.
 Use these long-lived Codex task titles inside the same project:
 
 - `Interview Arc — Coordinator`
+- `Interview Arc — Loop Recorder`
+- `Interview Arc — Resume & Cover Letter`
 - `Interview Arc — LeetCode`
 - `Interview Arc — System Design`
 - `Interview Arc — Behavioral`
 
-Titles help discovery but do not grant hidden shared memory. The coordinator
-registers each specialist's task/thread identifier once with
+Loop Recorder and Resume & Cover Letter are administrative specialists and do
+not participate in practice transcript, timer, finalization, review, or journal
+publication state. Titles help discovery but do not grant hidden shared memory.
+The coordinator registers each specialist's task/thread identifier once with
 `register_specialist_task`. It then reuses `get_specialist_tasks` and the Codex
 task coordination tools; the user should not repeatedly paste task IDs.
 

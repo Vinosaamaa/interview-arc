@@ -161,6 +161,107 @@ test("Review Queue keeps filters in the menu, branches each row, and joins its f
   assert.equal(folioRules.some((rule) => rule.declarations.bottom === "78px"), false);
 });
 
+test("Review Queue cards select from the whole surface and reserve navigation for its action", async () => {
+  const [source, css] = await Promise.all([load("../app/review-queue-view.tsx"), load("../app/review-queue.css")]);
+  const file = parseTsx(source);
+  const rules = parseCss(css);
+  assert.equal(hasJsxClass(file, "review-row-select-surface"), false);
+  assert.ok(hasJsxClass(file, "review-select"));
+  assert.ok(hasJsxAttribute(file, "aria-label", "Select"));
+  const cardTarget = cssRules(rules, ".review-select")[0].declarations;
+  assert.equal(cardTarget.position, "absolute");
+  assert.equal(cardTarget.inset, "0");
+  assert.equal(cardTarget.cursor, "pointer");
+  assert.ok(cssRules(rules, ".review-row:hover").length >= 1);
+  assert.ok(cssRules(rules, ".review-row:focus-within").length >= 1);
+  const action = cssRules(rules, ".review-actions button")[0].declarations;
+  assert.notEqual(action.border, "0");
+  assert.equal(action.cursor, "pointer");
+  assert.ok(cssRules(rules, ".review-row-static").some((rule) => rule.declarations["pointer-events"] === "none"));
+});
+
+test("Review Queue responds to its panel width and never outgrows the owning sheet", async () => {
+  const rules = parseCss(await load("../app/review-queue.css"));
+  const container = cssRules(rules, ".review-queue-container")[0].declarations;
+  const page = cssRules(rules, ".review-queue-page")[0].declarations;
+  assert.equal(container["container-type"], "inline-size");
+  assert.equal(page["max-width"], "100%");
+  for (const selector of [".review-queue-sheet", ".recall-spine", ".recall-group", ".recall-rows", ".review-row"]) {
+    assert.ok(cssRules(rules, selector).some((rule) => rule.declarations["min-width"] === "0"));
+    assert.ok(cssRules(rules, selector).some((rule) => rule.declarations["max-width"] === "100%"));
+  }
+  assert.ok(cssRules(rules, ".review-queue-page", "@container").length >= 2);
+});
+
+test("Past, Banks, and Journey share a centered bounded scrollable reader shell", async () => {
+  const [source, css] = await Promise.all([load("../app/home-client.tsx"), load("../app/interview-arc-v2.css")]);
+  const file = parseTsx(source);
+  const rules = parseCss(css);
+  assert.ok(hasJsxClass(file, "journey-reader-detail reader-workspace focused-attempt-workspace"));
+  assert.ok(hasJsxAttribute(file, "aria-modal", "true"));
+  for (const backdrop of [
+    ".library-page.has-open-entry::before",
+    ".banks-page.has-open-solution::before",
+    ".journey-page.has-open-reader::before",
+  ]) {
+    const declarations = cssRules(rules, backdrop)[0]?.declarations;
+    assert.ok(declarations, `${backdrop} must cover its owning workspace`);
+    assert.equal(declarations.background, "var(--canvas)");
+  }
+
+  const pastShell = cssRules(rules, ".library-page.has-open-entry .past-master-detail")
+    .find((rule) => rule.declarations.width === "min(var(--reader-pane-width), calc(100vw - var(--sidebar-size) - 32px))")?.declarations;
+  const bankShell = cssRules(rules, ".banks-page.has-open-solution .bank-master-detail")
+    .find((rule) => rule.declarations.width === "min(var(--reader-pane-width), calc(100vw - var(--sidebar-size) - 32px))")?.declarations;
+  for (const shell of [pastShell, bankShell]) {
+    assert.ok(shell);
+    assert.equal(shell.width, "min(var(--reader-pane-width), calc(100vw - var(--sidebar-size) - 32px))");
+    assert.equal(shell.left, "calc(var(--sidebar-size) + (100vw - var(--sidebar-size)) / 2)");
+    assert.equal(shell.transform, "translateX(-50%)");
+  }
+  for (const frame of ["from", "to"]) {
+    const declarations = cssRules(rules, frame, "@keyframes master-detail-in")[0]?.declarations;
+    assert.ok(declarations, `master-detail-in ${frame} frame is required`);
+    assert.equal(declarations.transform, undefined, "entry motion must not replace horizontal centering");
+    assert.match(declarations.translate, /^0 /);
+  }
+  const widePast = cssRules(rules, ".library-page.has-open-entry .past-master-detail.master-pane-open", "min-width: 1977px")[0].declarations;
+  assert.equal(widePast.left, undefined);
+  assert.equal(widePast.transform, undefined);
+
+  const mobilePast = cssRules(rules, ".library-page.has-open-entry .past-master-detail", "max-width: 760px").at(-1).declarations;
+  const mobileBank = cssRules(rules, ".banks-page.has-open-solution .bank-master-detail", "max-width: 760px").at(-1).declarations;
+  for (const shell of [mobilePast, mobileBank]) {
+    assert.equal(shell.width, "100%");
+    assert.equal(shell.inset, "66px 0 72px");
+    assert.equal(shell.transform, "none");
+  }
+
+  const scroller = cssRules(rules, ".workspace-reader-scroll.case-document")
+    .find((rule) => rule.declarations["min-height"])?.declarations;
+  assert.ok(scroller);
+  assert.equal(scroller["min-height"], "0");
+  assert.equal(scroller["overflow-y"], "auto");
+});
+
+test("Past hides unknown practice mode and keeps recorded mode in the case header", async () => {
+  const source = await load("../app/home-client.tsx");
+  const file = parseTsx(source);
+  const reader = functionNamed(file, "renderCaseReader");
+  assert.ok(reader);
+  const readerSource = reader.getText(file);
+  assert.doesNotMatch(readerSource, /PracticeModeCard|case-practice-mode/);
+  assert.match(readerSource, /CaseModeTags/);
+});
+
+test("Reader contents reveal collapsed sections before navigating", async () => {
+  const file = parseTsx(await load("../app/home-client.tsx"));
+  const reveal = functionNamed(file, "revealReaderOutlineTarget");
+  assert.ok(reveal);
+  assert.match(reveal.getText(file), /closest<.*HTMLDetailsElement.*>\("details\.reader-group"\)/s);
+  assert.match(reveal.getText(file), /group\.open = true/);
+});
+
 test("workspace selector contains exactly Interview, Learn, and Engineering", async () => {
   const { file, rules } = await loadResponsiveShell();
   const literals = stringLiterals(file);
@@ -203,7 +304,7 @@ test("Interview navigation uses one shared local model with Journey last", async
   assert.doesNotMatch(source, /view !== "journey" && <nav className="mobile-interview-nav"/);
 });
 
-test("responsive shell keeps the workspace selector above a six-item Interview dock", async () => {
+test("responsive shell keeps the workspace selector above the seven-item Interview dock", async () => {
   const { rules } = await loadResponsiveShell();
   const mobileSidebar = cssRules(rules, ".sidebar", "max-width: 900px").at(-1).declarations;
   assert.equal(mobileSidebar.position, "sticky");
@@ -213,10 +314,10 @@ test("responsive shell keeps the workspace selector above a six-item Interview d
   const interviewDock = cssRules(rules, ".mobile-interview-nav", "max-width: 900px").at(-1).declarations;
   assert.equal(interviewDock.position, "fixed");
   assert.equal(interviewDock.display, "grid");
-  assert.equal(interviewDock["grid-template-columns"], "repeat(6, 1fr)");
+  assert.equal(interviewDock["grid-template-columns"], "repeat(7, 1fr)");
   const compactDock = cssRules(rules, ".mobile-interview-nav", "max-width: 360px").at(-1).declarations;
   assert.equal(compactDock["grid-template-columns"], "repeat(3, minmax(0, 1fr))");
-  assert.equal(cssRules(rules, ".mobile-interview-nav button", "max-width: 360px").at(-1).declarations["min-height"], "44px");
+  assert.equal(cssRules(rules, ".mobile-interview-nav button", "max-width: 420px").at(-1).declarations["min-height"], "44px");
   assert.ok(cssRules(rules, ".topbar > div:last-child").some((rule) => rule.declarations["flex-wrap"] === "nowrap"));
   assert.equal(cssRules(rules, ".topbar .secondary-action", "max-width: 900px").at(-1).declarations.display, "none");
 });

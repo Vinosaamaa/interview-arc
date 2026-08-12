@@ -11,6 +11,10 @@ import {
 } from "../db/resume-revisions";
 import { privateResumeObjectKey } from "../db/private-resume-object";
 import { isDisplaySafeResumeSourceLabel } from "../db/resume-revision-policy";
+import {
+  validateResumeRevisionManifest,
+  type ResumeRevisionManifest,
+} from "../db/resume-revision-manifest";
 import { stagePrivateResumePair } from "./private-resume-storage";
 
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -28,6 +32,8 @@ interface ParsedResumeImport {
   revisionId: string;
   sourceLabel: string;
   sourceFingerprint: string;
+  manifest: ResumeRevisionManifest | null;
+  manifestFingerprint: string | null;
   docx: { bytes: ArrayBuffer; integrity: ResumeFileIntegrity };
   pdf: { bytes: ArrayBuffer; integrity: ResumeFileIntegrity };
   requestHash: string;
@@ -198,6 +204,31 @@ async function parseResumeImport(request: Request): Promise<ParsedResumeImport> 
       false,
     );
   }
+  let manifest: ResumeRevisionManifest | null = null;
+  let manifestFingerprint: string | null = null;
+  const manifestValue = form.get("manifest");
+  if (manifestValue !== null) {
+    if (typeof manifestValue !== "string" || manifestValue.length === 0 || manifestValue.length > 500_000) {
+      throw new ResumeImportError(
+        "resume_import_invalid_manifest",
+        "The bounded resume revision manifest is invalid.",
+        400,
+        false,
+      );
+    }
+    try {
+      const validated = await validateResumeRevisionManifest(JSON.parse(manifestValue));
+      manifest = validated.manifest;
+      manifestFingerprint = validated.manifestFingerprint;
+    } catch {
+      throw new ResumeImportError(
+        "resume_import_invalid_manifest",
+        "The bounded resume revision manifest is invalid or its bullet fingerprints do not match.",
+        400,
+        false,
+      );
+    }
+  }
   const docx = await parsePrivateFile(form, "docx", DOCX_MIME);
   const pdf = await parsePrivateFile(form, "pdf", PDF_MIME);
   const requestHash = await sha256Hex(JSON.stringify({
@@ -206,6 +237,7 @@ async function parseResumeImport(request: Request): Promise<ParsedResumeImport> 
     revisionId,
     sourceLabel,
     sourceFingerprint,
+    manifestFingerprint,
     docx: docx.integrity,
     pdf: pdf.integrity,
   }));
@@ -215,6 +247,8 @@ async function parseResumeImport(request: Request): Promise<ParsedResumeImport> 
     revisionId,
     sourceLabel,
     sourceFingerprint,
+    manifest,
+    manifestFingerprint,
     docx,
     pdf,
     requestHash,
@@ -280,6 +314,21 @@ export async function ingestResumeRevision(
       input.sourceFingerprint,
     );
     if (canonical) {
+      if (canonical.retention.state !== "retained") {
+        await failResumeImport(
+          ownerId,
+          identity,
+          reservation.leaseToken,
+          "resume_import_source_files_retired",
+          false,
+        );
+        throw new ResumeImportError(
+          "resume_import_source_files_retired",
+          "That immutable source revision was previously retired and cannot be silently recreated.",
+          409,
+          false,
+        );
+      }
       const requestedFiles = new Map([
         ["docx", input.docx.integrity],
         ["pdf", input.pdf.integrity],
@@ -306,10 +355,35 @@ export async function ingestResumeRevision(
           false,
         );
       }
+      if (
+        (canonical.revision.manifestFingerprint ?? null) !== input.manifestFingerprint
+        || (canonical.revision.sourceProvider ?? null) !== (input.manifest?.sourceProvider ?? null)
+        || (canonical.revision.sourceRevisionFingerprint ?? null) !== (input.manifest?.sourceRevisionFingerprint ?? null)
+        || (canonical.revision.extractionVersion ?? null) !== (input.manifest?.extractionVersion ?? null)
+      ) {
+        await failResumeImport(
+          ownerId,
+          identity,
+          reservation.leaseToken,
+          "resume_import_manifest_conflict",
+          false,
+        );
+        throw new ResumeImportError(
+          "resume_import_manifest_conflict",
+          "That source revision already belongs to different immutable extraction metadata.",
+          409,
+          false,
+        );
+      }
       const unchanged = await completeUnchangedResumeImport(ownerId, identity, reservation.leaseToken, {
         revisionId: canonical.revision.revisionId,
         parentRevisionId: canonical.revision.parentRevisionId,
         sourceFingerprint: canonical.revision.sourceFingerprint,
+        sourceProvider: canonical.revision.sourceProvider,
+        sourceRevisionFingerprint: canonical.revision.sourceRevisionFingerprint,
+        manifestFingerprint: canonical.revision.manifestFingerprint,
+        extractionVersion: canonical.revision.extractionVersion,
+        bulletCount: canonical.bulletCount,
         importedAt: canonical.revision.importedAt,
         files: canonical.files as [ResumeFileIntegrity, ResumeFileIntegrity],
       });
@@ -342,6 +416,8 @@ export async function ingestResumeRevision(
         ...identity,
         sourceLabel: input.sourceLabel,
         sourceFingerprint: input.sourceFingerprint,
+        manifest: input.manifest,
+        manifestFingerprint: input.manifestFingerprint,
         storageGeneration: reservation.leaseToken,
         files: [input.docx.integrity, input.pdf.integrity],
       }, reservation.leaseToken);

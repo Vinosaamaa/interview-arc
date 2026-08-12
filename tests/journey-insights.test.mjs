@@ -5,11 +5,13 @@ import {
   bankReaderHref,
   journeyHrefWithoutReader,
   journeyReaderHref,
+  loopWorkspaceHref,
   pastReaderHref,
   pastSolutionReaderHref,
   readerDepthAfterNestedClose,
   readerClosePlan,
   readJourneyReaderState,
+  readLoopWorkspaceState,
   readBankReaderState,
   readPastReaderState,
   readWorkspaceRouteView,
@@ -82,6 +84,25 @@ test("Workspace routes keep every primary surface visible in the URL and clear s
   assert.equal(readWorkspaceRouteView("https://example.test/?view=unknown"), null);
   assert.equal(readWorkspaceRouteView("https://example.test/?view=reviews"), "reviews");
   assert.equal(readWorkspaceRouteView("https://example.test/?view=loops"), "loops");
+  assert.equal(readWorkspaceRouteView("https://example.test/?view=career-materials"), "career-materials");
+});
+
+test("Loop routes preserve exact Loop and round selection while Past links retain their origin", () => {
+  const loopHref = loopWorkspaceHref("https://example.test/practice?keep=yes&attempt=old", {
+    loopId: "loop-example-platform",
+    stageId: "round-recruiter",
+  });
+  assert.equal(loopHref, "/practice?keep=yes&view=loops&loop=loop-example-platform&round=round-recruiter");
+  assert.deepEqual(readLoopWorkspaceState(`https://example.test${loopHref}`), {
+    loopId: "loop-example-platform",
+    stageId: "round-recruiter",
+  });
+  const pastHref = pastReaderHref(`https://example.test${loopHref}`, "attempt-exact");
+  assert.equal(
+    pastHref,
+    "/practice?keep=yes&view=past&loop=loop-example-platform&round=round-recruiter&attempt=attempt-exact",
+  );
+  assert.equal(readLoopWorkspaceState(`https://example.test${pastHref}`), null);
 });
 
 test("Problem Bank URLs preserve stable problem and nested attempt identity", () => {

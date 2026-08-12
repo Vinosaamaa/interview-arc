@@ -6,10 +6,12 @@ const CONTRACT_FILES = [
   "practice/leetcode/AGENTS.md",
   "practice/system-design/AGENTS.md",
   "practice/behavioral/AGENTS.md",
+  "career-materials/resume-cover-letter/AGENTS.md",
   "docs/contracts/durable-practice-publishing.md",
   "docs/contracts/practice-interaction-modes.md",
   "docs/contracts/behavioral-evidence-domain.md",
   "docs/contracts/behavioral-target-profiles.md",
+  "docs/contracts/interview-loops.md",
   "docs/contracts/resume-revision-ingest.md",
 ];
 

@@ -4,6 +4,7 @@ import { d1TransactionalInvariantGuard } from "./d1-transactional-guard";
 import { getDb } from "./index";
 import { behavioralTargetProfileInputSchema } from "./behavioral-target-profile-policy";
 import { readBehavioralTargetRevision } from "./behavioral-target-profile";
+import { queryCurrentLoopMaterialsForProjection } from "./loop-materials";
 import {
   behavioralTargetProfileRevisions,
   behavioralTargetProfiles,
@@ -471,7 +472,7 @@ async function readLoopProjection(ownerId: string, input: {
   )).limit(1);
   const current = rows[0];
   if (!current || (!input.includeArchived && current.state === "archived")) return null;
-  const [loopRows, roleBriefRows, activityHistory, activityBindings] = await Promise.all([
+  const [loopRows, roleBriefRows, activityHistory, activityBindings, interviewMaterials] = await Promise.all([
     db.select().from(interviewLoopRevisions).where(and(
       eq(interviewLoopRevisions.ownerId, ownerId),
       eq(interviewLoopRevisions.loopId, input.loopId),
@@ -501,6 +502,7 @@ async function readLoopProjection(ownerId: string, input: {
       eq(loopActivityBindings.ownerId, ownerId),
       eq(loopActivityBindings.loopId, input.loopId),
     )),
+    queryCurrentLoopMaterialsForProjection(ownerId, input.loopId, input.includeArchived),
   ]);
   if (!loopRows[0] || !roleBriefRows[0]) return null;
   return {
@@ -528,6 +530,7 @@ async function readLoopProjection(ownerId: string, input: {
       title: String((binding.payload as { title?: unknown }).title ?? binding.questionId),
       completed: activityHistory.some((history) => history.activityId === binding.activityId),
     })),
+    interviewMaterials,
     current: {
       loopRevision: current.currentRevision,
       roleBriefRevision: current.currentRoleBriefRevision,
