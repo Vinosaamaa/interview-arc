@@ -145,12 +145,20 @@ export async function buildPublicationQueue(ownerId: string, requestedDate?: str
       ...(timer?.completedAt ? { endedAt: new Date(timer.completedAt).toISOString() } : {}),
       ...(timer ? { elapsedSeconds: timer.accumulatedSeconds } : {}),
     } satisfies ConnectedActivity];
-  }).sort((left, right) => (
-    left.practiceDate.localeCompare(right.practiceDate)
-    || (left.timer?.completedAt ?? 0) - (right.timer?.completedAt ?? 0)
-    || (left.timer?.startedAt ?? 0) - (right.timer?.startedAt ?? 0)
-    || left.id.localeCompare(right.id)
-  ));
+  }).sort((left, right) => {
+    const timestamp = (value?: string) => {
+      const parsed = value ? Date.parse(value) : Number.NaN;
+      return Number.isFinite(parsed) ? parsed : undefined;
+    };
+    const leftStartedAt = left.timer?.startedAt ?? timestamp(left.startedAt);
+    const rightStartedAt = right.timer?.startedAt ?? timestamp(right.startedAt);
+    const leftCompletedAt = left.timer?.completedAt ?? timestamp(left.endedAt) ?? leftStartedAt;
+    const rightCompletedAt = right.timer?.completedAt ?? timestamp(right.endedAt) ?? rightStartedAt;
+    return left.practiceDate.localeCompare(right.practiceDate)
+      || (leftCompletedAt ?? Number.MAX_SAFE_INTEGER) - (rightCompletedAt ?? Number.MAX_SAFE_INTEGER)
+      || (leftStartedAt ?? Number.MAX_SAFE_INTEGER) - (rightStartedAt ?? Number.MAX_SAFE_INTEGER)
+      || left.id.localeCompare(right.id);
+  });
   const evidence = await readPublicationEvidenceState(ownerId, candidates.map((activity) => activity.id));
   const blockersByActivity = new Map<string, typeof evidence.blockers>();
   evidence.blockers.forEach((blocker) => blockersByActivity.set(

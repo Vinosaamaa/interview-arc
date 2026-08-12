@@ -165,9 +165,14 @@ function fixtureSql(primaryTokenHash, otherTokenHash) {
         timerGroupId: id,
         timingSource: "website",
         status: "completed",
+        ...(index === 2 ? {
+          startedAt: new Date(startedAt).toISOString(),
+          endedAt: new Date(completedAt).toISOString(),
+          elapsedSeconds: 600,
+        } : {}),
       };
       extraActivities.push([ownerId, id, date, `workbench-${ownerLabel.toLowerCase()}`, JSON.stringify(activity), 1, completedAt]);
-      timers.push([ownerId, id, "activity", 600, startedAt, null, 1, completedAt, 1, completedAt]);
+      if (index !== 2) timers.push([ownerId, id, "activity", 600, startedAt, null, 1, completedAt, 1, completedAt]);
       outcomes.push([ownerId, id, outcome, 1, completedAt]);
       interactionModes.push([
         ownerId,
