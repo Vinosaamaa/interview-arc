@@ -106,7 +106,11 @@ save_leetcode_code_attempt and upsert_personal_bank_question, supply one stable
 operationId per logical write. For save_specialist_finalization, use the stable
 interactionModeClassificationOperationId as the immutable finalization
 identity. Then call get_specialist_write_status until every returned receipt is
-saved or failed. A queued receipt is not a saved result. Do not
+saved or failed. Make at most five follow-up reads, waiting 1, 2, 4, 8, and 15
+seconds before them. If a receipt is still non-terminal after that 30-second
+budget, return it as pending with jobId, status, and nextAttemptAt so the parent
+or coordinator can resume from the same durable identity later. A queued
+receipt is not a saved result. Do not
 research, coach, rewrite content, infer missing fields, summarize or paraphrase
 a complete Code Attempt review, use a browser, submit
 code, mutate timers/results, publish, edit files, or perform Git work. Retry an

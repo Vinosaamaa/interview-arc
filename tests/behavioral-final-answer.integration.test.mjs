@@ -442,9 +442,12 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     ]);
     assert.ok(concurrentFirst.every((result) => result.writeReceipt?.operation === "specialist_finalization"));
     assert.equal(new Set(concurrentFirst.map((result) => result.writeReceipt.jobId)).size, 1);
-    assert.deepEqual(concurrentFirst.map((result) => result.finalAnswer.status), ["created", "created"]);
     assert.deepEqual(concurrentFirst.map((result) => result.writeReceipt.duplicate).sort(), [false, true]);
-    const first = concurrentFirst[0];
+    const [settledFirst] = (await call(client, "get_specialist_write_status", {
+      jobIds: [concurrentFirst[0].writeReceipt.jobId],
+    })).jobs;
+    assert.equal(settledFirst.status, "saved");
+    const first = settledFirst.result;
     assert.equal(first.finalAnswer.snapshotRevision, 1);
     assert.equal(first.interactionModeClassification.primaryPracticeModeId, "interviewer");
     assert.equal(first.interactionModeClassification.method, "active_timer_seconds");

@@ -284,7 +284,10 @@ Historical backfill is coordinator-owned.
 Complete finalizations use the classification operation ID as a durable write
 identity. Poll `get_specialist_write_status` until the returned receipt is
 `saved` or `failed`; queued, processing, and retry-wait states do not authorize
-publication. Reuse the exact operation ID and byte-for-byte payload after an
+publication. Make at most five follow-up reads after 1, 2, 4, 8, and 15 second
+waits. If the receipt is still non-terminal after that 30-second budget, report
+it pending with its job ID, status, and next-attempt time; resume that same
+receipt later. Reuse the exact operation ID and byte-for-byte payload after an
 uncertain transport result, and never create a manual retry storm.
 
 For the shared interaction-mode sidecar, count only live problem-solving

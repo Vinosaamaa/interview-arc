@@ -3778,12 +3778,6 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
             });
           }
           let receipt = (await readSpecialistWriteJobs(ownerId, [jobId]))[0];
-          if (receipt.status === "processing") {
-            for (let attempt = 0; attempt < 40 && receipt.status === "processing"; attempt += 1) {
-              await new Promise((resolve) => setTimeout(resolve, 25));
-              receipt = (await readSpecialistWriteJobs(ownerId, [jobId]))[0];
-            }
-          }
           receipt = { ...receipt, duplicate: enqueued.duplicate };
           if (!["saved", "failed"].includes(receipt.status)) {
             scheduleSpecialistWriteProcessing(ctx);

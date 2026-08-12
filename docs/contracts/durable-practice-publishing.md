@@ -295,7 +295,10 @@ specialist task—the specialist:
    `save_specialist_finalization`;
 5. polls the returned durable write receipt until `saved` or `failed`—a
    `queued`, `processing`, or `retry_wait` receipt is not a completed
-   finalization;
+   finalization. Poll at most five times after 1, 2, 4, 8, and 15 second waits.
+   If the receipt is still non-terminal after that 30-second budget, preserve
+   its job ID and exact payload, report it pending, and resume it on a later
+   specialist/coordinator turn instead of polling indefinitely;
 6. schedules review when warranted.
 
 The specialist does **not** edit Git, switch branches, commit, open a pull
