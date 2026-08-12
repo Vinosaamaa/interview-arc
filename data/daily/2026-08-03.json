@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-08-03",
+  "practiceTimezone": "America/Los_Angeles",
+  "focus": "Serialize and Deserialize Binary Tree",
+  "sessions": [
+    {
+      "id": "2026-08-01-session-voice-plan-20-hard-most-frequent-2026-08-01-9c5b59ce",
+      "label": "Practice session",
+      "source": "extra",
+      "allocatedSeconds": 2700,
+      "activityIds": [
+        "2026-08-01-extra-voice-plan-20-hard-most-frequent-2026-08-01-9c5b59ce-18"
+      ]
+    }
+  ],
+  "timerGroups": [
+    {
+      "id": "2026-08-01-session-voice-plan-20-hard-most-frequent-2026-08-01-9c5b59ce",
+      "label": "Practice session",
+      "allocatedSeconds": 2700,
+      "activityIds": [
+        "2026-08-01-extra-voice-plan-20-hard-most-frequent-2026-08-01-9c5b59ce-18"
+      ]
+    }
+  ],
+  "activities": [
+    {
+      "schemaVersion": 2,
+      "id": "2026-08-01-extra-voice-plan-20-hard-most-frequent-2026-08-01-9c5b59ce-18",
+      "questionId": "serialize-and-deserialize-binary-tree",
+      "date": "2026-08-03",
+      "source": "extra",
+      "type": "leetcode",
+      "recordKind": "attempt",
+      "title": "Serialize and Deserialize Binary Tree",
+      "url": "https://leetcode.com/problems/serialize-and-deserialize-binary-tree/",
+      "allocatedSeconds": 2700,
+      "sessionId": "2026-08-01-session-voice-plan-20-hard-most-frequent-2026-08-01-9c5b59ce",
+      "timerGroupId": "2026-08-01-session-voice-plan-20-hard-most-frequent-2026-08-01-9c5b59ce",
+      "timingSource": "website",
+      "startedAt": "2026-08-02T16:45:32.908-07:00",
+      "endedAt": "2026-08-03T02:37:19.782-07:00",
+      "elapsedSeconds": 35506,
+      "status": "completed",
+      "outcome": "solved_after_reviewing_approach",
+      "artifactPath": "practice/leetcode/attempts/2026-08-03-serialize-and-deserialize-binary-tree.md",
+      "reviewDates": [
+        "2026-08-10"
+      ],
+      "reviewReason": "approach_review"
+    }
+  ]
+}
