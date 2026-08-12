@@ -631,6 +631,173 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
     });
     assert.doesNotMatch(JSON.stringify(afterHistoricalLink.loops[0].activityHistory), /transcript|jdText|Private owner note/);
 
+    const materialInput = {
+      operationId: "loop-material-recruiter-create-1",
+      authorization: "loop_recorder",
+      expectedLoopRevision: 3,
+      expectedRoleBriefRevision: 3,
+      material: {
+        materialId: "material-northstar-recruiter-prep",
+        loopId: initialLoop.loopId,
+        stageId: "recruiter",
+        kind: "interview_prep",
+        state: "active",
+        label: "Recruiter conversation preparation",
+        summary: "Source-backed preparation for one confirmed Round.",
+        sections: [{
+          sectionId: "role-focus",
+          title: "Role focus",
+          body: "Connect the role requirements to verified preparation without copying the raw job description.",
+          bullets: ["Reliability", "API design"],
+        }],
+        provenance: {
+          kind: "owner_authorized_synthesis",
+          roleBriefRevision: 3,
+          activityIds: [historicalBehavioralActivityId],
+          sourceLabel: "Exact Role Brief and linked owner activity",
+          preparedAt: 1_787_960_000_000,
+        },
+      },
+    };
+    const materialCreated = await call(client, "create_loop_interview_material", materialInput);
+    assert.deepEqual(materialCreated, {
+      status: "created",
+      materialId: materialInput.material.materialId,
+      loopId: initialLoop.loopId,
+      stageId: "recruiter",
+      materialRevision: 1,
+      duplicate: false,
+    });
+    const materialRetry = await call(client, "create_loop_interview_material", materialInput);
+    assert.equal(materialRetry.duplicate, true);
+    const materialChangedRetry = await callRaw(client, "create_loop_interview_material", {
+      ...materialInput,
+      material: { ...materialInput.material, label: "Changed retry" },
+    });
+    assert.equal(materialChangedRetry.isError, true);
+    assert.equal(materialChangedRetry.structuredContent.code, "loop_material_operation_conflict");
+    const duplicateScope = await callRaw(client, "create_loop_interview_material", {
+      ...materialInput,
+      operationId: "loop-material-recruiter-duplicate-scope",
+      material: { ...materialInput.material, materialId: "material-northstar-recruiter-duplicate" },
+    });
+    assert.equal(duplicateScope.isError, true);
+    assert.equal(duplicateScope.structuredContent.code, "loop_material_scope_conflict");
+    const unconfirmedRound = await callRaw(client, "create_loop_interview_material", {
+      ...materialInput,
+      operationId: "loop-material-unconfirmed-round",
+      material: {
+        ...materialInput.material,
+        materialId: "material-northstar-unconfirmed",
+        stageId: "onsite-system-design",
+        provenance: { ...materialInput.material.provenance, activityIds: [] },
+      },
+    });
+    assert.equal(unconfirmedRound.isError, true);
+    assert.equal(unconfirmedRound.structuredContent.code, "loop_material_stage_not_confirmed");
+    const wrongSource = await callRaw(client, "create_loop_interview_material", {
+      ...materialInput,
+      operationId: "loop-material-wrong-source",
+      material: {
+        ...materialInput.material,
+        materialId: "material-northstar-wrong-source",
+        stageId: "onsite-behavioral",
+      },
+    });
+    assert.equal(wrongSource.isError, true);
+    assert.equal(wrongSource.structuredContent.code, "loop_material_activity_source_conflict");
+    const materialRead = await call(client, "query_loop_interview_materials", {
+      loopId: initialLoop.loopId,
+      stageId: "recruiter",
+    });
+    assert.equal(materialRead.materials.length, 1);
+    assert.equal(materialRead.materials[0].revision, 1);
+    assert.equal(materialRead.materials[0].provenance.roleBriefRevision, 3);
+    const projectedMaterial = await call(client, "query_loops", { loopId: initialLoop.loopId });
+    assert.equal(projectedMaterial.loops[0].interviewMaterials[0].materialId, materialInput.material.materialId);
+    assert.doesNotMatch(JSON.stringify(projectedMaterial), /jdText|Private owner note|transcript/);
+    const isolatedMaterialRead = await call(otherClient, "query_loop_interview_materials", {
+      materialId: materialInput.material.materialId,
+    });
+    assert.deepEqual(isolatedMaterialRead.materials, []);
+    const isolatedMaterialRevision = await callRaw(otherClient, "revise_loop_interview_material", {
+      operationId: "loop-material-isolated-revise",
+      materialId: materialInput.material.materialId,
+      expectedRevision: 1,
+      authorization: "loop_recorder",
+      expectedLoopRevision: 3,
+      expectedRoleBriefRevision: 3,
+      material: materialInput.material,
+    });
+    assert.equal(isolatedMaterialRevision.isError, true);
+    assert.equal(isolatedMaterialRevision.structuredContent.code, "loop_material_not_found");
+    const revisedMaterialInput = {
+      operationId: "loop-material-recruiter-revise-2",
+      materialId: materialInput.material.materialId,
+      expectedRevision: 1,
+      authorization: "loop_recorder",
+      expectedLoopRevision: 3,
+      expectedRoleBriefRevision: 3,
+      material: {
+        ...materialInput.material,
+        label: "Recruiter conversation preparation · reviewed",
+        sections: [...materialInput.material.sections, {
+          sectionId: "questions",
+          title: "Questions to clarify",
+          bullets: ["Team scope", "Next-round format"],
+        }],
+        provenance: { ...materialInput.material.provenance, preparedAt: 1_787_961_000_000 },
+      },
+    };
+    const materialRevised = await call(client, "revise_loop_interview_material", revisedMaterialInput);
+    assert.equal(materialRevised.materialRevision, 2);
+    assert.equal(materialRevised.duplicate, false);
+    const materialRevisionRetry = await call(client, "revise_loop_interview_material", revisedMaterialInput);
+    assert.equal(materialRevisionRetry.duplicate, true);
+    const historicalMaterial = await call(client, "query_loop_interview_materials", {
+      materialId: materialInput.material.materialId,
+      revision: 1,
+    });
+    assert.equal(historicalMaterial.materials[0].label, materialInput.material.label);
+    const currentMaterial = await call(client, "query_loop_interview_materials", {
+      materialId: materialInput.material.materialId,
+    });
+    assert.equal(currentMaterial.materials[0].revision, 2);
+    assert.equal(currentMaterial.materials[0].sections.length, 2);
+    const staleMaterialRevision = await callRaw(client, "revise_loop_interview_material", {
+      ...revisedMaterialInput,
+      operationId: "loop-material-recruiter-stale",
+    });
+    assert.equal(staleMaterialRevision.isError, true);
+    assert.equal(staleMaterialRevision.structuredContent.code, "loop_material_revision_conflict");
+    const movedMaterial = await callRaw(client, "revise_loop_interview_material", {
+      ...revisedMaterialInput,
+      operationId: "loop-material-recruiter-move",
+      expectedRevision: 2,
+      material: { ...revisedMaterialInput.material, stageId: "onsite-behavioral" },
+    });
+    assert.equal(movedMaterial.isError, true);
+    assert.equal(movedMaterial.structuredContent.code, "loop_material_identity_immutable");
+    const materialArchived = await call(client, "revise_loop_interview_material", {
+      ...revisedMaterialInput,
+      operationId: "loop-material-recruiter-archive",
+      expectedRevision: 2,
+      material: { ...revisedMaterialInput.material, state: "archived" },
+    });
+    assert.equal(materialArchived.materialRevision, 3);
+    const hiddenArchivedMaterial = await call(client, "query_loop_interview_materials", {
+      materialId: materialInput.material.materialId,
+    });
+    assert.deepEqual(hiddenArchivedMaterial.materials, []);
+    const explicitArchivedMaterial = await call(client, "query_loop_interview_materials", {
+      materialId: materialInput.material.materialId,
+      includeArchived: true,
+    });
+    assert.equal(explicitArchivedMaterial.materials[0].revision, 3);
+    assert.equal(explicitArchivedMaterial.materials[0].state, "archived");
+    const projectionWithoutArchivedMaterial = await call(client, "query_loops", { loopId: initialLoop.loopId });
+    assert.deepEqual(projectionWithoutArchivedMaterial.loops[0].interviewMaterials, []);
+
     const catalog = await call(client, "query_practice_catalog", {
       specialty: "leetcode",
       questionId: "course-schedule",

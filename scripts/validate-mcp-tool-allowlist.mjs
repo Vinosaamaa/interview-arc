@@ -11,6 +11,7 @@ const CONTRACT_FILES = [
   "docs/contracts/practice-interaction-modes.md",
   "docs/contracts/behavioral-evidence-domain.md",
   "docs/contracts/behavioral-target-profiles.md",
+  "docs/contracts/interview-loops.md",
   "docs/contracts/resume-revision-ingest.md",
 ];
 

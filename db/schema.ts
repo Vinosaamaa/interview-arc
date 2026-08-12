@@ -1133,6 +1133,69 @@ export const loopRoleBriefRevisions = sqliteTable(
   ],
 );
 
+// Confirmed-interview preparation is a Loop-owned administrative artifact,
+// separate from Career Materials, the raw JD, and the immutable Role Brief.
+// The stable row keeps one current pointer per Loop/Round scope while every
+// content change appends an immutable revision.
+export const loopInterviewMaterials = sqliteTable(
+  "loop_interview_materials",
+  {
+    ownerId,
+    materialId: text("material_id").notNull(),
+    loopId: text("loop_id").notNull(),
+    stageId: text("stage_id"),
+    bindingKey: text("binding_key").notNull(),
+    kind: text("kind", { enum: ["interview_prep"] }).notNull(),
+    currentRevision: integer("current_revision").notNull(),
+    state: text("state", { enum: ["active", "archived"] }).notNull(),
+    label: text("label").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.materialId] }),
+    uniqueIndex("loop_interview_materials_scope_unique").on(
+      table.ownerId,
+      table.loopId,
+      table.bindingKey,
+      table.kind,
+    ),
+    index("loop_interview_materials_loop_idx").on(table.ownerId, table.loopId, table.stageId, table.state),
+  ],
+);
+
+export const loopInterviewMaterialRevisions = sqliteTable(
+  "loop_interview_material_revisions",
+  {
+    ownerId,
+    materialId: text("material_id").notNull(),
+    revision: integer("revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    snapshot: text("snapshot", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.materialId, table.revision] }),
+    uniqueIndex("loop_interview_material_revisions_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
+export const loopInterviewMaterialOperations = sqliteTable(
+  "loop_interview_material_operations",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    materialId: text("material_id").notNull(),
+    action: text("action", { enum: ["create", "revise"] }).notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    materialRevision: integer("material_revision").notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.operationId] })],
+);
+
 // Planned practice can carry at most one Loop and optional Round. The server
 // snapshots the exact display-safe Role Brief revision; clients never supply
 // or persist raw job-description text in activity context.

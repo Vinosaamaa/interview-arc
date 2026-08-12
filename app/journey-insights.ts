@@ -42,6 +42,11 @@ export type PastReaderState = {
   problemId?: string;
 };
 
+export type LoopWorkspaceState = {
+  loopId: string;
+  stageId: string;
+};
+
 export type BankReaderState = {
   specialty: ReaderSpecialty;
   problemId: string;
@@ -56,6 +61,7 @@ export type ReaderClosePlan = {
 };
 
 const READER_QUERY_KEYS = ["attempt", "range", "metric", "heatmap", "day", "topic", "specialty", "problem"] as const;
+const LOOP_QUERY_KEYS = ["loop", "round"] as const;
 const READER_SPECIALTIES = ["leetcode", "system_design", "behavioral"] as const;
 
 function clearReaderQuery(url: URL) {
@@ -215,6 +221,24 @@ export function pastSolutionReaderHref(
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
+export function loopWorkspaceHref(currentHref: string, state: LoopWorkspaceState) {
+  const url = new URL(currentHref);
+  clearReaderQuery(url);
+  url.searchParams.set("view", "loops");
+  if (state.loopId) url.searchParams.set("loop", state.loopId); else url.searchParams.delete("loop");
+  if (state.stageId) url.searchParams.set("round", state.stageId); else url.searchParams.delete("round");
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+export function readLoopWorkspaceState(currentHref: string): LoopWorkspaceState | null {
+  const url = new URL(currentHref);
+  if (url.searchParams.get("view") !== "loops") return null;
+  return {
+    loopId: url.searchParams.get("loop")?.trim() ?? "",
+    stageId: url.searchParams.get("round")?.trim() ?? "",
+  };
+}
+
 export function bankReaderHref(
   currentHref: string,
   specialty: BankReaderState["specialty"],
@@ -242,6 +266,7 @@ export function readBankReaderState(currentHref: string): BankReaderState | null
 export function workspaceViewHref(currentHref: string, view: WorkspaceRouteView) {
   const url = new URL(currentHref);
   clearReaderQuery(url);
+  if (view !== "loops") LOOP_QUERY_KEYS.forEach((key) => url.searchParams.delete(key));
   url.searchParams.set("view", view);
   return `${url.pathname}${url.search}${url.hash}`;
 }

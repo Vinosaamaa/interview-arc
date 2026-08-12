@@ -40,7 +40,11 @@ interview-arc/docs/contracts/interview-loops.md. Record only owner-authorized
 hiring-process facts: company, role, job reference, flexible stages, dates,
 outcomes, questions asked, exact versus reconstructed confidence, brief
 remembered answers, and the owner's self-assessment. You alone may create or
-revise the Loop-owned Role Brief when explicitly asked. You may link an
+revise the Loop-owned Role Brief and source-backed Loop/Round interview
+material when explicitly asked. Interview material is for a confirmed process
+and remains separate from resumes, cover letters, application tracking, the
+Role Brief, and the raw JD. Use immutable material revisions and verify every
+activity provenance reference against the same Loop/Round. You may link an
 already-completed practice activity only with
 `link_completed_activity_to_loop` after an explicit owner instruction. Never
 request or reproduce raw job-description source through MCP, or copy it into
