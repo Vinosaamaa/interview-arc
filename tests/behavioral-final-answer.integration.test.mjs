@@ -68,6 +68,7 @@ async function call(client, name, args) {
 }
 
 const callRaw = (client, name, args) => client.callTool({ name, arguments: args });
+const fixtureProse = (topic, count) => Array.from({ length: count }, (_, index) => `${topic}${index + 1}`).join(" ");
 
 function finalization({
   activityId,
@@ -108,6 +109,7 @@ function finalization({
   const selectedStory = story === undefined && questionId === "behavioral-reliability-1"
     ? { storyId: "story-retry-boundary", revision: 1 }
     : story;
+  const profileAnswer = `${answer} ${fixtureProse("verifiedAnswerDetail", 85)}`;
   return {
     activityId,
     specialty: "behavioral",
@@ -179,14 +181,23 @@ function finalization({
       solutionProfileAction: "create_or_revise",
       solutionProfile: {
         schemaVersion: 1,
-        summary: "Retry safety and evidence boundaries.",
-        sections: [{ title: "Answer", body: answer }],
+        summary: fixtureProse("retrySummary", 20),
+        sections: [
+          { title: "Interview signal", body: fixtureProse("signal", 35) },
+          { title: "Truthful Situation", body: fixtureProse("situation", 40) },
+          { title: "Truthful Task", body: fixtureProse("task", 35) },
+          { title: "Truthful Actions and ownership", body: fixtureProse("action", 65) },
+          { title: "Verified Result and evidence gaps", body: fixtureProse("result", 40) },
+          { title: "Learning", body: fixtureProse("learning", 35) },
+          { title: "Likely follow-ups and evidence gaps", body: fixtureProse("followup", 35) },
+          { title: "Reference answer patterns", body: fixtureProse("pattern", 35) },
+        ],
         tags: ["reliability"],
         references: [],
         behavioralAnswer: {
           preferred: {
             label: "Universal",
-            answer,
+            answer: profileAnswer,
             evidence: ["evidence-retry-boundary"],
             evidenceGaps: ["Production impact is not independently measured."],
           },
@@ -428,6 +439,35 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     }));
     assert.equal(staleResumeContext.isError, true);
     assert.equal(staleResumeContext.structuredContent.code, "behavioral_resume_context_mismatch");
+
+    const shallowProfilePayload = finalization({
+      activityId,
+      questionId,
+      operationId: "final-answer-operation-shallow-profile",
+      answer,
+      responseTurnId,
+    });
+    shallowProfilePayload.finalization.solutionProfile = {
+      ...shallowProfilePayload.finalization.solutionProfile,
+      summary: "A tiny profile.",
+      sections: [{ title: "Answer", body: "Situation task action result." }],
+      behavioralAnswer: {
+        preferred: {
+          label: "Universal",
+          answer: "A tiny STAR answer.",
+          evidence: [],
+          evidenceGaps: [],
+        },
+        alternatives: [],
+      },
+    };
+    const shallowProfile = await callRaw(client, "save_specialist_finalization", shallowProfilePayload);
+    assert.equal(shallowProfile.isError, true);
+    assert.match(JSON.stringify(shallowProfile.structuredContent), /reusable Solution Profile|substantive summary|detailed preferred personal answer/);
+    const recordAfterShallowProfile = await call(client, "get_activity_practice_record", { activityId });
+    assert.equal(recordAfterShallowProfile.finalization, null);
+    const profileAfterShallowProfile = await call(client, "get_problem_solution_profile", { specialty: "behavioral", questionId });
+    assert.equal(profileAfterShallowProfile.profile, null);
 
     const firstPayload = finalization({
       activityId,

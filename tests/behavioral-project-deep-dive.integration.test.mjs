@@ -19,6 +19,7 @@ const project = fileURLToPath(new URL("..", import.meta.url));
 const wrangler = fileURLToPath(new URL("../node_modules/.bin/wrangler", import.meta.url));
 const config = fileURLToPath(new URL("../wrangler.mcp.jsonc", import.meta.url));
 const sha256 = (text) => createHash("sha256").update(text).digest("hex");
+const profileProse = (topic, count) => Array.from({ length: count }, (_, index) => `${topic}${index + 1}`).join(" ");
 
 async function call(client, name, args) {
   const result = await client.callTool({ name, arguments: args });
@@ -38,19 +39,23 @@ const overviewSections = [
   "results_and_gaps",
   "interview_walkthrough",
   "likely_follow_ups",
-].map((sectionKey) => ({ sectionKey, title: sectionKey.replaceAll("_", " "), body: `Verified ${sectionKey} notes.` }));
+].map((sectionKey) => ({
+  sectionKey,
+  title: sectionKey.replaceAll("_", " "),
+  body: `Verified ${sectionKey} boundaries. ${profileProse(sectionKey, 70)}`,
+}));
 
 const overviewProfile = {
   schemaVersion: 1,
-  summary: "A factual overview of the sample platform project.",
+  summary: profileProse("projectSummary", 20),
   sections: overviewSections,
   tags: ["project-deep-dive", "sample-platform"],
   references: [],
   behavioralAnswer: {
     preferred: {
       label: "Project walkthrough",
-      answer: "I can explain the verified project boundaries and keep unresolved results visible.",
-      evidence: [],
+      answer: profileProse("projectAnswer", 90),
+      evidence: ["owner-confirmed project boundary"],
       evidenceGaps: ["The exact outcome metric remains unresolved."],
     },
     alternatives: [],
@@ -109,7 +114,7 @@ function finalization(activityId, questionId, responseTurnId) {
       solutionProfile: {
         ...overviewProfile,
         behavioralAnswer: {
-          preferred: { ...overviewProfile.behavioralAnswer.preferred, answer },
+          preferred: overviewProfile.behavioralAnswer.preferred,
           alternatives: [],
         },
       },

@@ -244,5 +244,10 @@ The website must not imply that browser draft state has already been published t
   D1-backed case files, push, and open the journal PR. Never treat “behind main”
   as a conflict by itself. Mark D1 records published only after their artifacts
   exist and are importable.
+- Treat the pinned Solution Profile revision as a full-fidelity publication
+  source. Preserve every ordered section, implementation, meaningful
+  alternative, diagram/API/data artifact, evidence gap, and scenario label.
+  Reject a summary-only or shortened rendering even when D1 finalization is
+  ready; publication must never make the durable solution less useful.
 - The old OpenAI Sites project remains a temporary fallback. Do not deploy to
   or retire it unless the user explicitly asks.

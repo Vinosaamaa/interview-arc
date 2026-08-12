@@ -374,6 +374,10 @@ must include a capture time and every source actually consulted.
   plausibly stale field, a disputed value, or an explicit refresh request.
 
 Follow `solution-profiles.md` for the specialty-specific structure and tags.
+Its completeness policy is a mutation gate, not optional coaching guidance.
+The specialist must correct every reported missing requirement before marking a
+finalization complete; the coordinator must leave the activity blocked rather
+than invent or compress missing profile content.
 
 System-design and behavioral bundles use `transcript_scope: full_activity` and
 include the complete two-sided activity transcript. LeetCode uses
@@ -433,6 +437,9 @@ for their matching activities. Never claim an inaccessible reference was read.
    record from `content`; the bounded `structuredContent` object is only the
    delivery receipt and deliberately does not duplicate a large transcript.
 5. Render the type-specific Markdown artifacts and daily journals from D1.
+   Render every section, code block, alternative, diagram/reference, evidence
+   gap, and practice-scenario label from the exact pinned Solution Profile
+   revision. A summary-only or lossy paraphrase artifact is not publishable.
 6. Preserve exact Pacific start/end time, elapsed time, session membership,
    outcome, notes, transcript, review, and references.
 7. Use the guarded journal checkpoint workflow for each Pacific date, then push
@@ -440,6 +447,13 @@ for their matching activities. Never claim an inaccessible reference was read.
    deploy.
 8. Only after the artifact exists and is merged/importable, call
    `mark_activities_published`.
+
+Before opening the journal PR, compare the rendered solution artifact with the
+authoritative pinned profile revision. Every canonical section must appear once
+and in order; every LeetCode alternative must retain its complete runnable code;
+every System Design API/data/diagram artifact must remain present; every
+Behavioral evidence gap and fictional/hypothetical label must remain visible.
+Any omission blocks publication even when the activity otherwise appears ready.
 
 The command is a checkpoint over every still-unpublished ready activity, not
 merely the current Pacific day. It can be run after midnight without losing the

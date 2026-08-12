@@ -14,6 +14,8 @@ Read these shared contracts only when the corresponding action is needed:
 - interaction-mode selection and completed-attempt classification:
   `../docs/contracts/practice-interaction-modes.md`;
 - artifact structure or reader changes: `../docs/contracts/reader-rendering.md`.
+- Solution Profile creation, revision, reuse, or publication:
+  `../docs/contracts/solution-profiles.md`;
 - Loop-bound activity context or Role Brief consumption:
   `../docs/contracts/interview-loops.md`.
 
@@ -82,6 +84,17 @@ behavior to one response, save that response first, then call the same setter
 with `scope: turn_override`, its exact specialist response-turn ID, the current
 unchanged revision, and the triggering owner turn when available. Read back the
 override; never fabricate a switch-away/switch-back pair.
+
+## Solution Profile Quality Gate
+
+Every new or revised Solution Profile is a complete durable reference, not a
+chat summary. Every section must be as detailed as the subject and verified
+evidence permit: concrete, substantive, distinct, and independently useful to a
+reader who cannot reopen this task. Headings, keywords, one-sentence
+name-drops, repeated filler, pseudocode fragments, or generic prose do not
+count. Follow the specialty guide for the exact required sections and
+artifacts. Correct every executable-policy failure before a complete
+finalization; never fabricate content merely to make a profile pass.
 
 ## Typed Exchange Remediation
 
