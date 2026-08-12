@@ -92,14 +92,21 @@ test("loads the first published practice backlog while preserving the TikTok sol
     "2026-08-04",
     "2026-08-03",
   ]);
-  assert.equal(content.artifacts.length, 17);
-  assert.equal(new Set(content.artifacts.map((artifact) => artifact.activityId)).size, 17);
+  assert.equal(content.artifacts.length, 18);
+  const attemptArtifacts = content.artifacts.filter((artifact) => artifact.activityId);
+  assert.equal(attemptArtifacts.length, 17);
+  assert.equal(new Set(attemptArtifacts.map((artifact) => artifact.activityId)).size, 17);
   const publishedActivities = content.journals.flatMap((journal) => journal.activities);
   assert.equal(publishedActivities.length, 17);
   assert.deepEqual(
-    [...content.artifacts.map((artifact) => artifact.activityId)].sort(),
+    [...attemptArtifacts.map((artifact) => artifact.activityId)].sort(),
     [...publishedActivities.map((activity) => activity.id)].sort(),
   );
+  assert.ok(content.artifacts.some((artifact) =>
+    artifact.path === "practice/behavioral/sessions/2026-08-12-experience-map-vortexnettech-solution-profile-revision-02.md"
+      && artifact.activityId === ""
+      && artifact.title === "Experience Map: VortexNetTech — Solution Profile revision 2"
+  ));
   assert.ok(content.artifacts.some((artifact) =>
     artifact.path === "practice/behavioral/sessions/2026-08-11-experience-map-vortexnettech-attempt-01.md"
       && artifact.activityId === "2026-08-10-extra-voice-plan-resume-map-vortexnettech-2026-08-10-v1-0"
