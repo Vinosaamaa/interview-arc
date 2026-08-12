@@ -10,7 +10,7 @@
     "content:import:remote": "node scripts/import-content.mjs --remote",
     "dev": "pnpm dev:prepare && WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
     "dev:prepare": "WRANGLER_LOG_PATH=.wrangler/wrangler.log pnpm db:migrate:local && WRANGLER_LOG_PATH=.wrangler/wrangler.log pnpm content:import:local",
-    "build": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
+    "build": "pnpm engineering:journal:check && WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "test": "pnpm run build && node --experimental-strip-types --test --test-concurrency=1 tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
@@ -27,6 +27,8 @@
     "code-attempt-review:backfill": "node --experimental-strip-types scripts/backfill-code-attempt-review.mjs",
     "leetcode:browser": "node scripts/leetcode-playwright-controller.mjs",
     "journal:checkpoint": "node scripts/journal-branch.mjs checkpoint",
+    "engineering:journal:build": "node --experimental-strip-types scripts/build-engineering-journal.mjs",
+    "engineering:journal:check": "node --experimental-strip-types scripts/build-engineering-journal.mjs --check",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote"

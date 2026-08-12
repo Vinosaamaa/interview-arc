@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "repositories": [
+    {
+      "repository": "interview-arc",
+      "owner": "Vinosaamaa",
+      "canonicalPath": "docs/engineering/records",
+      "localRoot": "."
+    }
+  ]
+}
