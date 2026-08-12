@@ -118,6 +118,18 @@ async function postResumeImport(baseUrl, token, overrides = {}) {
   return { response, body: await response.json() };
 }
 
+async function deleteResumeFiles(baseUrl, token, resumeId, revisionId, body) {
+  const response = await fetch(`${baseUrl}/resume/files/${resumeId}/${revisionId}`, {
+    method: "DELETE",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  return { response, body: await response.json() };
+}
+
 test("an authenticated staged DOCX/PDF pair becomes one immutable current resume revision", { timeout: 180_000 }, async () => {
   const ownerToken = "ia_resume_revision_owner_integration_token";
   let releaseIntegrationLock;
@@ -304,6 +316,121 @@ test("an authenticated staged DOCX/PDF pair becomes one immutable current resume
 
     const isolatedLibrary = await call(otherClient, "get_resume_library", {});
     assert.deepEqual(isolatedLibrary.sources, []);
+
+    const deletionRequest = {
+      operationId: "resume-file-delete-primary-r1",
+      authorization: "explicit_user_instruction",
+      reason: "Synthetic owner-requested retention test.",
+    };
+    const currentDeletion = await deleteResumeFiles(
+      baseUrl,
+      ownerToken,
+      "primary-resume",
+      "resume-revision-3",
+      { ...deletionRequest, operationId: "resume-file-delete-current" },
+    );
+    assert.equal(currentDeletion.response.status, 409);
+    assert.equal(currentDeletion.body.code, "resume_current_revision_files_protected");
+
+    await run(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", `
+      CREATE TRIGGER fail_resume_file_deletion_receipt
+      BEFORE UPDATE ON resume_revision_file_deletions
+      WHEN NEW.status = 'deleted' AND NEW.revision_id = 'resume-revision-1'
+      BEGIN
+        SELECT RAISE(FAIL, 'synthetic deletion receipt failure');
+      END;
+    `]);
+    const uncertainDeletion = await deleteResumeFiles(
+      baseUrl,
+      ownerToken,
+      "primary-resume",
+      "resume-revision-1",
+      deletionRequest,
+    );
+    assert.equal(uncertainDeletion.response.status, 503);
+    assert.equal(uncertainDeletion.body.code, "resume_file_deletion_commit_unavailable");
+    assert.equal(uncertainDeletion.body.retryable, true);
+    const deletingRevision = await call(client, "get_resume_revision", {
+      resumeId: "primary-resume",
+      revisionId: "resume-revision-1",
+    });
+    assert.equal(deletingRevision.revision.files.every((file) => file.downloadPath === null), true);
+    assert.equal(deletingRevision.revision.files.every((file) => file.retention.state === "retryable_failure"), true);
+    const deletionInProgressDownload = await fetch(`${baseUrl}/resume/files/primary-resume/resume-revision-1/pdf`, {
+      headers: { authorization: `Bearer ${ownerToken}` },
+    });
+    assert.equal(deletionInProgressDownload.status, 503);
+
+    await run(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", "DROP TRIGGER fail_resume_file_deletion_receipt;"]);
+    const deleted = await deleteResumeFiles(
+      baseUrl,
+      ownerToken,
+      "primary-resume",
+      "resume-revision-1",
+      deletionRequest,
+    );
+    assert.equal(deleted.response.status, 200, JSON.stringify(deleted.body));
+    assert.equal(deleted.body.status, "deleted");
+    assert.deepEqual(deleted.body.deletedFormats, ["docx", "pdf"]);
+    assert.equal(deleted.body.duplicate, false);
+    assert.deepEqual(deleted.body.preserved, ["revision", "integrity", "wording", "semantic_links", "activity_context"]);
+
+    const deletionRetry = await deleteResumeFiles(
+      baseUrl,
+      ownerToken,
+      "primary-resume",
+      "resume-revision-1",
+      deletionRequest,
+    );
+    assert.equal(deletionRetry.response.status, 200);
+    assert.equal(deletionRetry.body.duplicate, true);
+    assert.equal(deletionRetry.body.deletedAt, deleted.body.deletedAt);
+    const changedDeletionRetry = await deleteResumeFiles(
+      baseUrl,
+      ownerToken,
+      "primary-resume",
+      "resume-revision-1",
+      { ...deletionRequest, reason: "Changed destructive request." },
+    );
+    assert.equal(changedDeletionRetry.response.status, 409);
+    assert.equal(changedDeletionRetry.body.code, "resume_file_deletion_operation_conflict");
+
+    const deletedRevision = await call(client, "get_resume_revision", {
+      resumeId: "primary-resume",
+      revisionId: "resume-revision-1",
+    });
+    assert.equal(deletedRevision.revision.bullets[0].text, "Designed and operated a reliable service.");
+    assert.equal(deletedRevision.revision.files.every((file) => file.downloadPath === null), true);
+    assert.equal(deletedRevision.revision.files.every((file) => file.retention.state === "deleted"), true);
+    assert.equal(deletedRevision.revision.files.every((file) => file.retention.deletedAt === deleted.body.deletedAt), true);
+    const deletedDownload = await fetch(`${baseUrl}/resume/files/primary-resume/resume-revision-1/pdf`, {
+      headers: { authorization: `Bearer ${ownerToken}` },
+    });
+    assert.equal(deletedDownload.status, 404);
+    const isolatedDeletion = await deleteResumeFiles(
+      baseUrl,
+      otherToken,
+      "primary-resume",
+      "resume-revision-1",
+      deletionRequest,
+    );
+    assert.equal(isolatedDeletion.response.status, 404);
+    const selectDeleted = await client.callTool({
+      name: "set_current_resume_revision",
+      arguments: {
+        operationId: "select-deleted-primary-r1",
+        resumeId: "primary-resume",
+        revisionId: "resume-revision-1",
+      },
+    });
+    assert.equal(selectDeleted.isError, true);
+    assert.equal(selectDeleted.structuredContent.code, "resume_revision_files_unavailable");
+    const reimportDeletedSource = await postResumeImport(baseUrl, ownerToken, {
+      operationId: "resume-import-retired-source",
+      revisionId: "resume-revision-restored",
+    });
+    assert.equal(reimportDeletedSource.response.status, 409);
+    assert.equal(reimportDeletedSource.body.code, "resume_import_source_files_retired");
 
     await run(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", `
       INSERT INTO behavioral_evidence_items

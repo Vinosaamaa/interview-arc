@@ -1416,6 +1416,36 @@ export const resumeRevisionFiles = sqliteTable(
   ],
 );
 
+// Removing private resume bytes never rewrites the immutable revision. One
+// exact-retry tombstone owns the R2 pair lifecycle while integrity metadata,
+// extracted wording, semantic links, and downstream provenance remain intact.
+export const resumeRevisionFileDeletions = sqliteTable(
+  "resume_revision_file_deletions",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    resumeId: text("resume_id").notNull(),
+    revisionId: text("revision_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    status: text("status", { enum: ["deleting", "retryable_failure", "deleted"] }).notNull(),
+    errorCode: text("error_code"),
+    reason: text("reason").notNull(),
+    receipt: text("receipt", { mode: "json" }),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+    completedAt: integer("completed_at"),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.operationId] }),
+    uniqueIndex("resume_revision_file_deletions_target_unique").on(
+      table.ownerId,
+      table.resumeId,
+      table.revisionId,
+    ),
+    index("resume_revision_file_deletions_status_idx").on(table.ownerId, table.status, table.updatedAt),
+  ],
+);
+
 // Immutable, owner-private provenance for the exact resume revision that was
 // current when one behavioral final-answer snapshot was completed. Raw resume
 // content, object keys, and provider locators never enter this table.
@@ -2034,6 +2064,7 @@ export type BehavioralStoryQuestionLinkRow = typeof behavioralStoryQuestionLinks
 export type ResumeSourceRow = typeof resumeSources.$inferSelect;
 export type ResumeRevisionRow = typeof resumeRevisions.$inferSelect;
 export type ResumeRevisionFileRow = typeof resumeRevisionFiles.$inferSelect;
+export type ResumeRevisionFileDeletionRow = typeof resumeRevisionFileDeletions.$inferSelect;
 export type ActivityResumeContextRow = typeof activityResumeContexts.$inferSelect;
 export type ResumeImportOperationRow = typeof resumeImportOperations.$inferSelect;
 export type ResumeImportLockRow = typeof resumeImportLocks.$inferSelect;

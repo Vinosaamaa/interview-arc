@@ -8,8 +8,25 @@ export const resumeRevisionFileSchema = z.object({
   sha256,
   byteSize: z.number().int().positive(),
   mimeType: z.string().min(1).max(120),
-  downloadPath: z.string().regex(/^\/api\/resume-library\/[a-z0-9][a-z0-9._-]{0,199}\/[a-z0-9][a-z0-9._-]{0,199}\/(?:docx|pdf)$/),
-}).strict();
+  downloadPath: z.string().regex(/^\/api\/resume-library\/[a-z0-9][a-z0-9._-]{0,199}\/[a-z0-9][a-z0-9._-]{0,199}\/(?:docx|pdf)$/).nullable(),
+  retention: z.object({
+    state: z.enum(["retained", "deleting", "retryable_failure", "deleted"]),
+    operationId: resumeStableIdSchema.nullable(),
+    errorCode: z.string().regex(/^resume_file_deletion_[a-z0-9_]{1,100}$/).nullable(),
+    updatedAt: z.number().int().positive().nullable(),
+    deletedAt: z.number().int().positive().nullable(),
+  }).strict(),
+}).strict().superRefine((file, context) => {
+  if (file.retention.state === "retained" && file.downloadPath === null) {
+    context.addIssue({ code: "custom", path: ["downloadPath"], message: "Retained files require a private download path." });
+  }
+  if (file.retention.state !== "retained" && file.downloadPath !== null) {
+    context.addIssue({ code: "custom", path: ["downloadPath"], message: "Deleting or deleted files cannot expose a download path." });
+  }
+  if (file.retention.state === "deleted" && file.retention.deletedAt === null) {
+    context.addIssue({ code: "custom", path: ["retention", "deletedAt"], message: "Deleted files require a deletion timestamp." });
+  }
+});
 
 export const resumeBulletSchema = z.object({
   occurrenceId: resumeStableIdSchema,

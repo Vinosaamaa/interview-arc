@@ -13,6 +13,7 @@ import {
   type ResumeRevisionComparison,
   type ResumeRevisionResponse,
 } from "./resume-revision-contract";
+import { resumeFileDeletionReceiptSchema } from "../db/resume-file-deletion-contract";
 
 type Selection = { resumeId: string; revisionId: string };
 
@@ -99,10 +100,19 @@ function RevisionDelta({ comparison }: { comparison: ResumeRevisionComparison | 
   </section>;
 }
 
-function RevisionDetail({ selection }: { selection: Selection }) {
+function RevisionDetail({
+  selection,
+  onLibraryChanged,
+}: {
+  selection: Selection;
+  onLibraryChanged: () => void;
+}) {
   const [detail, setDetail] = useState<ResumeRevisionResponse | null>();
   const [comparison, setComparison] = useState<ResumeRevisionComparison | null>();
   const [requestKey, setRequestKey] = useState(0);
+  const [confirmingDeletion, setConfirmingDeletion] = useState(false);
+  const [deletionMessage, setDeletionMessage] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -135,8 +145,59 @@ function RevisionDetail({ selection }: { selection: Selection }) {
   if (detail === null) return <section className="materials-detail-state error" role="alert"><strong>This revision could not be opened.</strong><span>No newer or neighboring revision was substituted.</span><button type="button" onClick={() => { setDetail(undefined); setComparison(undefined); setRequestKey((value) => value + 1); }}>Retry exact revision</button></section>;
 
   const revision = detail.revision;
+  const retention = revision.files[0]?.retention ?? {
+    state: "deleted" as const,
+    operationId: null,
+    errorCode: null,
+    updatedAt: null,
+    deletedAt: null,
+  };
   const claimCount = new Set(revision.bullets.flatMap((bullet) => bullet.claimIds)).size;
   const evidenceCount = new Set(revision.bullets.flatMap((bullet) => bullet.evidenceIds)).size;
+
+  async function removePrivateFiles(operationId?: string | null) {
+    const storageKey = `interview-arc-resume-file-deletion:${selection.resumeId}:${selection.revisionId}`;
+    const exactOperationId = operationId
+      ?? window.sessionStorage.getItem(storageKey)
+      ?? `resume-file-delete-${crypto.randomUUID()}`;
+    window.sessionStorage.setItem(storageKey, exactOperationId);
+    setDeleting(true);
+    setDeletionMessage(null);
+    try {
+      const response = await fetch(`/api/resume-revisions/${encodeURIComponent(selection.resumeId)}/${encodeURIComponent(selection.revisionId)}/files`, {
+        method: "DELETE",
+        cache: "no-store",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operationId: exactOperationId,
+          authorization: "explicit_user_instruction",
+          reason: "Owner requested permanent removal from Career Materials.",
+        }),
+      });
+      const value = await response.json() as unknown;
+      if (!response.ok) {
+        const message = value && typeof value === "object" && "error" in value && typeof value.error === "string"
+          ? value.error
+          : "The private files were not fully removed. Retry this exact operation.";
+        setConfirmingDeletion(false);
+        setDeletionMessage(message);
+        return;
+      }
+      resumeFileDeletionReceiptSchema.parse(value);
+      window.sessionStorage.removeItem(storageKey);
+      setConfirmingDeletion(false);
+      setDetail(undefined);
+      setComparison(undefined);
+      setRequestKey((value) => value + 1);
+      onLibraryChanged();
+    } catch {
+      setConfirmingDeletion(false);
+      setDeletionMessage("The deletion receipt is uncertain. Retry this exact operation; do not start a different deletion.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return <article className="materials-revision" aria-labelledby="materials-revision-title">
     <header className="materials-revision-heading">
       <div>
@@ -145,7 +206,8 @@ function RevisionDetail({ selection }: { selection: Selection }) {
         <p>{providerLabel(revision.sourceProvider)} · Imported {readableDate(revision.importedAt, true)}</p>
       </div>
       <div className="materials-downloads" aria-label="Private resume downloads">
-        {revision.files.map((file) => <a href={file.downloadPath} download key={file.format}><strong>{file.format.toUpperCase()}</strong><span>{readableSize(file.byteSize)}</span></a>)}
+        {revision.files.filter((file) => file.downloadPath !== null).map((file) => <a href={file.downloadPath!} download key={file.format}><strong>{file.format.toUpperCase()}</strong><span>{readableSize(file.byteSize)}</span></a>)}
+        {retention.state !== "retained" && <span className="materials-files-unavailable">Private files unavailable</span>}
       </div>
     </header>
 
@@ -155,6 +217,23 @@ function RevisionDetail({ selection }: { selection: Selection }) {
       <div><dt>Extraction</dt><dd>{revision.extractionVersion ?? "Legacy · no semantic manifest"}</dd></div>
       <div><dt>Grounding</dt><dd>{claimCount} claims · {evidenceCount} evidence links</dd></div>
     </dl>
+
+    <section className={`materials-retention ${retention.state}`} aria-labelledby="materials-retention-title">
+      <div>
+        <h3 id="materials-retention-title">Private-file retention</h3>
+        {retention.state === "retained" && <p>{revision.current ? "Current revision files are retained and protected from deletion." : "DOCX and PDF are retained indefinitely until you explicitly remove this historical pair."}</p>}
+        {retention.state === "deleting" && <p>The pair is being removed. Retry the exact operation if this state remains after refresh.</p>}
+        {retention.state === "retryable_failure" && <p>The prior removal did not settle. The same operation must be retried; a new operation would be rejected.</p>}
+        {retention.state === "deleted" && <p>DOCX and PDF were permanently removed{retention.deletedAt ? ` on ${readableDate(retention.deletedAt, true)}` : ""}. Integrity metadata, wording, semantic links, and activity provenance remain immutable.</p>}
+        {deletionMessage && <span role="alert">{deletionMessage}</span>}
+      </div>
+      {retention.state === "retained" && !revision.current && !confirmingDeletion && <button type="button" className="danger" onClick={() => setConfirmingDeletion(true)}>Remove private files</button>}
+      {(retention.state === "deleting" || retention.state === "retryable_failure") && retention.operationId && <button type="button" className="danger" disabled={deleting} onClick={() => void removePrivateFiles(retention.operationId)}>{deleting ? "Retrying exact removal…" : "Retry exact removal"}</button>}
+      {deletionMessage && retention.state === "retained" && <button type="button" className="danger" disabled={deleting} onClick={() => void removePrivateFiles()}>{deleting ? "Retrying exact removal…" : "Retry exact removal"}</button>}
+      {confirmingDeletion && retention.state === "retained" && <div className="materials-delete-confirm" role="group" aria-label="Confirm permanent private file removal">
+        <strong>This cannot be undone.</strong><span>The immutable revision record stays, but its DOCX and PDF can never be downloaded or silently re-imported.</span><div><button type="button" onClick={() => setConfirmingDeletion(false)} disabled={deleting}>Keep files</button><button type="button" className="danger" onClick={() => void removePrivateFiles()} disabled={deleting}>{deleting ? "Removing exact pair…" : "Permanently remove files"}</button></div>
+      </div>}
+    </section>
 
     <section className="materials-bullets" aria-labelledby="materials-bullets-title">
       <header><div><h3 id="materials-bullets-title">Extracted résumé wording</h3><p>Private, revision-specific text. Links identify accepted evidence; wording never verifies itself.</p></div><span>{revision.bullets.length} bullets</span></header>
@@ -266,7 +345,7 @@ export default function CareerMaterialsWorkspace() {
         </section>)}
         {(library.truncated.sources || library.truncated.revisions) && <p className="materials-bounded-note">The newest bounded history is shown. The specialist can retrieve an exact older revision.</p>}
       </aside>
-      <RevisionDetail key={`${currentSelection.resumeId}:${currentSelection.revisionId}`} selection={currentSelection} />
+      <RevisionDetail key={`${currentSelection.resumeId}:${currentSelection.revisionId}`} selection={currentSelection} onLibraryChanged={() => setRequestKey((value) => value + 1)} />
     </div>}
 
     <section className="materials-specialist-handoff" aria-labelledby="materials-specialist-title">

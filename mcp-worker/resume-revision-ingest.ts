@@ -314,6 +314,21 @@ export async function ingestResumeRevision(
       input.sourceFingerprint,
     );
     if (canonical) {
+      if (canonical.retention.state !== "retained") {
+        await failResumeImport(
+          ownerId,
+          identity,
+          reservation.leaseToken,
+          "resume_import_source_files_retired",
+          false,
+        );
+        throw new ResumeImportError(
+          "resume_import_source_files_retired",
+          "That immutable source revision was previously retired and cannot be silently recreated.",
+          409,
+          false,
+        );
+      }
       const requestedFiles = new Map([
         ["docx", input.docx.integrity],
         ["pdf", input.pdf.integrity],

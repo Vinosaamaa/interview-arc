@@ -16,6 +16,7 @@ import {
   resumeImportLocks,
   resumeImportOperations,
   resumeRevisionReviewImpacts,
+  resumeRevisionFileDeletions,
   resumeRevisionFiles,
   resumeRevisions,
   resumeSources,
@@ -57,6 +58,24 @@ interface ResumeCurrentRevisionReceipt {
   priorRevisionId: string | null;
   currentRevisionId: string;
   selectedAt: number;
+}
+
+export interface ResumeFileDeletionReceipt {
+  operationId: string;
+  status: "deleted";
+  resumeId: string;
+  revisionId: string;
+  deletedFormats: ["docx", "pdf"];
+  preserved: ["revision", "integrity", "wording", "semantic_links", "activity_context"];
+  deletedAt: number;
+}
+
+export interface ResumeFileDeletionInput {
+  operationId: string;
+  resumeId: string;
+  revisionId: string;
+  authorization: "explicit_user_instruction";
+  reason: string;
 }
 
 export class ResumeImportError extends Error {
@@ -230,6 +249,23 @@ async function readOperation(ownerId: string, operationId: string) {
   const rows = await getDb().select().from(resumeImportOperations).where(and(
     eq(resumeImportOperations.ownerId, ownerId),
     eq(resumeImportOperations.operationId, operationId),
+  )).limit(1);
+  return rows[0] ?? null;
+}
+
+async function readResumeFileDeletionOperation(ownerId: string, operationId: string) {
+  const rows = await getDb().select().from(resumeRevisionFileDeletions).where(and(
+    eq(resumeRevisionFileDeletions.ownerId, ownerId),
+    eq(resumeRevisionFileDeletions.operationId, operationId),
+  )).limit(1);
+  return rows[0] ?? null;
+}
+
+async function readResumeFileDeletionTarget(ownerId: string, resumeId: string, revisionId: string) {
+  const rows = await getDb().select().from(resumeRevisionFileDeletions).where(and(
+    eq(resumeRevisionFileDeletions.ownerId, ownerId),
+    eq(resumeRevisionFileDeletions.resumeId, resumeId),
+    eq(resumeRevisionFileDeletions.revisionId, revisionId),
   )).limit(1);
   return rows[0] ?? null;
 }
@@ -445,7 +481,8 @@ export async function findResumeRevisionByFingerprint(
       eq(resumeBulletOccurrences.resumeId, resumeId),
       eq(resumeBulletOccurrences.revisionId, revision.revisionId),
     ));
-  return { revision, files, bulletCount: Number(bulletCountRows[0]?.count ?? 0) };
+  const retention = await getResumeFileRetention(ownerId, resumeId, revision.revisionId);
+  return { revision, files, retention, bulletCount: Number(bulletCountRows[0]?.count ?? 0) };
 }
 
 export async function findResumeRevision(
@@ -925,6 +962,289 @@ export async function getRecentResumeImports(ownerId: string) {
   };
 }
 
+function storedResumeFileDeletionReceipt(
+  row: typeof resumeRevisionFileDeletions.$inferSelect,
+  duplicate: boolean,
+) {
+  if (row.status !== "deleted" || !row.receipt) return null;
+  return {
+    ...(row.receipt as ResumeFileDeletionReceipt),
+    duplicate,
+  };
+}
+
+async function readResumeFileDeletionScope(ownerId: string, resumeId: string, revisionId: string) {
+  const [source, revision, files] = await Promise.all([
+    readSource(ownerId, resumeId),
+    findResumeRevision(ownerId, resumeId, revisionId),
+    getDb().select({
+      format: resumeRevisionFiles.format,
+      sha256: resumeRevisionFiles.sha256,
+      byteSize: resumeRevisionFiles.byteSize,
+      mimeType: resumeRevisionFiles.mimeType,
+    }).from(resumeRevisionFiles).where(and(
+      eq(resumeRevisionFiles.ownerId, ownerId),
+      eq(resumeRevisionFiles.resumeId, resumeId),
+      eq(resumeRevisionFiles.revisionId, revisionId),
+    )).orderBy(asc(resumeRevisionFiles.format)).limit(2),
+  ]);
+  if (!source || !revision || files.length !== 2
+      || files[0].format !== "docx" || files[1].format !== "pdf") {
+    throw new ResumeImportError(
+      "resume_revision_files_not_found",
+      "That complete owner-private resume file pair is unavailable.",
+      404,
+      false,
+    );
+  }
+  if (source.currentRevisionId === revisionId) {
+    throw new ResumeImportError(
+      "resume_current_revision_files_protected",
+      "Select another current resume revision before removing this private file pair.",
+      409,
+      false,
+    );
+  }
+  return {
+    storageGeneration: revision.storageGeneration,
+    files: files as [ResumeFileIntegrity, ResumeFileIntegrity],
+  };
+}
+
+export async function getResumeFileRetention(ownerId: string, resumeId: string, revisionId: string) {
+  const deletion = await readResumeFileDeletionTarget(ownerId, resumeId, revisionId);
+  if (!deletion) {
+    return {
+      state: "retained" as const,
+      operationId: null,
+      errorCode: null,
+      updatedAt: null,
+      deletedAt: null,
+    };
+  }
+  return {
+    state: deletion.status,
+    operationId: deletion.operationId,
+    errorCode: deletion.errorCode,
+    updatedAt: deletion.updatedAt,
+    deletedAt: deletion.status === "deleted" ? deletion.completedAt : null,
+  };
+}
+
+export async function reserveResumeRevisionFileDeletion(
+  ownerId: string,
+  input: ResumeFileDeletionInput,
+  nowMs = Date.now(),
+) {
+  if (input.authorization !== "explicit_user_instruction") {
+    throw new ResumeImportError(
+      "resume_file_deletion_authorization_required",
+      "Private resume file deletion requires explicit owner instruction.",
+      400,
+      false,
+    );
+  }
+  const reason = input.reason.normalize("NFKC").trim();
+  if (!reason || reason.length > 2_000) {
+    throw new ResumeImportError(
+      "resume_file_deletion_reason_required",
+      "Private resume file deletion requires a bounded audit reason.",
+      400,
+      false,
+    );
+  }
+  const requestFingerprint = await resumeSha256Hex(JSON.stringify({ ...input, reason }));
+  const existing = await readResumeFileDeletionOperation(ownerId, input.operationId);
+  if (existing) {
+    if (existing.requestFingerprint !== requestFingerprint
+        || existing.resumeId !== input.resumeId
+        || existing.revisionId !== input.revisionId) {
+      throw new ResumeImportError(
+        "resume_file_deletion_operation_conflict",
+        "That deletion operation ID already belongs to a different immutable request.",
+        409,
+        false,
+      );
+    }
+    const receipt = storedResumeFileDeletionReceipt(existing, true);
+    if (receipt) return { duplicate: true as const, receipt };
+    return {
+      duplicate: false as const,
+      requestFingerprint,
+      ...(await readResumeFileDeletionScope(ownerId, input.resumeId, input.revisionId)),
+    };
+  }
+  const priorTarget = await readResumeFileDeletionTarget(ownerId, input.resumeId, input.revisionId);
+  if (priorTarget) {
+    throw new ResumeImportError(
+      "resume_file_deletion_already_registered",
+      "That revision already has a private-file deletion operation; retry its original stable receipt.",
+      409,
+      false,
+    );
+  }
+  const scope = await readResumeFileDeletionScope(ownerId, input.resumeId, input.revisionId);
+  try {
+    await getDb().batch([
+      d1TransactionalInvariantGuard(getDb(), sql`
+        EXISTS (
+          SELECT 1 FROM ${resumeSources}
+          WHERE ${resumeSources.ownerId} = ${ownerId}
+            AND ${resumeSources.resumeId} = ${input.resumeId}
+            AND COALESCE(${resumeSources.currentRevisionId}, '') <> ${input.revisionId}
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM ${resumeRevisionFileDeletions}
+          WHERE ${resumeRevisionFileDeletions.ownerId} = ${ownerId}
+            AND ${resumeRevisionFileDeletions.resumeId} = ${input.resumeId}
+            AND ${resumeRevisionFileDeletions.revisionId} = ${input.revisionId}
+        )
+      `),
+      getDb().insert(resumeRevisionFileDeletions).values({
+        ownerId,
+        operationId: input.operationId,
+        resumeId: input.resumeId,
+        revisionId: input.revisionId,
+        requestFingerprint,
+        status: "deleting",
+        errorCode: null,
+        reason,
+        receipt: null,
+        createdAt: nowMs,
+        updatedAt: nowMs,
+        completedAt: null,
+      }),
+    ]);
+  } catch (error) {
+    const racedOperation = await readResumeFileDeletionOperation(ownerId, input.operationId);
+    if (racedOperation?.requestFingerprint === requestFingerprint) {
+      const receipt = storedResumeFileDeletionReceipt(racedOperation, true);
+      if (receipt) return { duplicate: true as const, receipt };
+      return { duplicate: false as const, requestFingerprint, ...scope };
+    }
+    if (await readResumeFileDeletionTarget(ownerId, input.resumeId, input.revisionId)) {
+      throw new ResumeImportError(
+        "resume_file_deletion_already_registered",
+        "That revision already has a private-file deletion operation; retry its original stable receipt.",
+        409,
+        false,
+      );
+    }
+    const source = await readSource(ownerId, input.resumeId);
+    if (source?.currentRevisionId === input.revisionId) {
+      throw new ResumeImportError(
+        "resume_current_revision_files_protected",
+        "Select another current resume revision before removing this private file pair.",
+        409,
+        false,
+      );
+    }
+    throw error;
+  }
+  return { duplicate: false as const, requestFingerprint, ...scope };
+}
+
+export async function failResumeRevisionFileDeletion(
+  ownerId: string,
+  operationId: string,
+  requestFingerprint: string,
+  errorCode: string,
+  nowMs = Date.now(),
+) {
+  await getDb().update(resumeRevisionFileDeletions).set({
+    status: "retryable_failure",
+    errorCode,
+    updatedAt: nowMs,
+  }).where(and(
+    eq(resumeRevisionFileDeletions.ownerId, ownerId),
+    eq(resumeRevisionFileDeletions.operationId, operationId),
+    eq(resumeRevisionFileDeletions.requestFingerprint, requestFingerprint),
+    sql`${resumeRevisionFileDeletions.status} <> 'deleted'`,
+  ));
+}
+
+export async function completeResumeRevisionFileDeletion(
+  ownerId: string,
+  input: ResumeFileDeletionInput,
+  requestFingerprint: string,
+  nowMs = Date.now(),
+) {
+  const existing = await readResumeFileDeletionOperation(ownerId, input.operationId);
+  if (!existing || existing.requestFingerprint !== requestFingerprint
+      || existing.resumeId !== input.resumeId || existing.revisionId !== input.revisionId) {
+    throw new ResumeImportError(
+      "resume_file_deletion_operation_conflict",
+      "The private-file deletion receipt no longer matches this exact request.",
+      409,
+      false,
+    );
+  }
+  const replay = storedResumeFileDeletionReceipt(existing, true);
+  if (replay) return replay;
+  const receipt: ResumeFileDeletionReceipt = {
+    operationId: input.operationId,
+    status: "deleted",
+    resumeId: input.resumeId,
+    revisionId: input.revisionId,
+    deletedFormats: ["docx", "pdf"],
+    preserved: ["revision", "integrity", "wording", "semantic_links", "activity_context"],
+    deletedAt: nowMs,
+  };
+  const invariant = sql`
+    EXISTS (
+      SELECT 1 FROM ${resumeRevisionFileDeletions}
+      WHERE ${resumeRevisionFileDeletions.ownerId} = ${ownerId}
+        AND ${resumeRevisionFileDeletions.operationId} = ${input.operationId}
+        AND ${resumeRevisionFileDeletions.requestFingerprint} = ${requestFingerprint}
+        AND ${resumeRevisionFileDeletions.resumeId} = ${input.resumeId}
+        AND ${resumeRevisionFileDeletions.revisionId} = ${input.revisionId}
+        AND ${resumeRevisionFileDeletions.status} IN ('deleting', 'retryable_failure')
+    )
+    AND EXISTS (
+      SELECT 1 FROM ${resumeSources}
+      WHERE ${resumeSources.ownerId} = ${ownerId}
+        AND ${resumeSources.resumeId} = ${input.resumeId}
+        AND COALESCE(${resumeSources.currentRevisionId}, '') <> ${input.revisionId}
+    )
+    AND 2 = (
+      SELECT COUNT(*) FROM ${resumeRevisionFiles}
+      WHERE ${resumeRevisionFiles.ownerId} = ${ownerId}
+        AND ${resumeRevisionFiles.resumeId} = ${input.resumeId}
+        AND ${resumeRevisionFiles.revisionId} = ${input.revisionId}
+    )
+  `;
+  try {
+    await getDb().batch([
+      d1TransactionalInvariantGuard(getDb(), invariant),
+      getDb().update(resumeRevisionFileDeletions).set({
+        status: "deleted",
+        errorCode: null,
+        receipt,
+        updatedAt: nowMs,
+        completedAt: nowMs,
+      }).where(and(
+        eq(resumeRevisionFileDeletions.ownerId, ownerId),
+        eq(resumeRevisionFileDeletions.operationId, input.operationId),
+        eq(resumeRevisionFileDeletions.requestFingerprint, requestFingerprint),
+      )),
+    ]);
+  } catch (error) {
+    const raced = await readResumeFileDeletionOperation(ownerId, input.operationId);
+    const racedReceipt = raced ? storedResumeFileDeletionReceipt(raced, true) : null;
+    if (racedReceipt) return racedReceipt;
+    if (isD1TransactionalInvariantFailure(error)) {
+      throw new ResumeImportError(
+        "resume_file_deletion_commit_conflict",
+        "The resume current pointer changed before the private-file deletion receipt committed.",
+        409,
+        false,
+      );
+    }
+    throw error;
+  }
+  return { ...receipt, duplicate: false as const };
+}
+
 interface ResumeLibraryRow {
   resumeId: string;
   sourceLabel: string;
@@ -938,6 +1258,11 @@ interface ResumeLibraryRow {
   sha256: string | null;
   byteSize: number | null;
   mimeType: string | null;
+  deletionOperationId: string | null;
+  deletionStatus: "deleting" | "retryable_failure" | "deleted" | null;
+  deletionErrorCode: string | null;
+  deletionUpdatedAt: number | null;
+  deletionCompletedAt: number | null;
 }
 
 export async function getResumeLibrary(ownerId: string) {
@@ -972,7 +1297,12 @@ export async function getResumeLibrary(ownerId: string) {
       file.format AS format,
       file.sha256 AS sha256,
       file.byte_size AS byteSize,
-      file.mime_type AS mimeType
+      file.mime_type AS mimeType,
+      deletion.operation_id AS deletionOperationId,
+      deletion.status AS deletionStatus,
+      deletion.error_code AS deletionErrorCode,
+      deletion.updated_at AS deletionUpdatedAt,
+      deletion.completed_at AS deletionCompletedAt
     FROM bounded_sources source
     LEFT JOIN ranked_revisions revision
       ON revision.owner_id = source.owner_id
@@ -982,6 +1312,10 @@ export async function getResumeLibrary(ownerId: string) {
       ON file.owner_id = revision.owner_id
      AND file.resume_id = revision.resume_id
      AND file.revision_id = revision.revision_id
+    LEFT JOIN resume_revision_file_deletions deletion
+      ON deletion.owner_id = revision.owner_id
+     AND deletion.resume_id = revision.resume_id
+     AND deletion.revision_id = revision.revision_id
     ORDER BY
       source.updated_at DESC,
       source.resume_id ASC,
@@ -1009,7 +1343,14 @@ export async function getResumeLibrary(ownerId: string) {
         sha256: string;
         byteSize: number;
         mimeType: string;
-        downloadPath: string;
+        downloadPath: string | null;
+        retention: {
+          state: "retained" | "deleting" | "retryable_failure" | "deleted";
+          operationId: string | null;
+          errorCode: string | null;
+          updatedAt: number | null;
+          deletedAt: number | null;
+        };
       }>;
     }>;
   }>();
@@ -1048,7 +1389,16 @@ export async function getResumeLibrary(ownerId: string) {
         sha256: row.sha256,
         byteSize: row.byteSize,
         mimeType: row.mimeType,
-        downloadPath: `/api/resume-library/${row.resumeId}/${row.revisionId}/${row.format}`,
+        downloadPath: row.deletionStatus
+          ? null
+          : `/api/resume-library/${row.resumeId}/${row.revisionId}/${row.format}`,
+        retention: {
+          state: row.deletionStatus ?? "retained",
+          operationId: row.deletionOperationId,
+          errorCode: row.deletionErrorCode,
+          updatedAt: row.deletionUpdatedAt,
+          deletedAt: row.deletionStatus === "deleted" ? row.deletionCompletedAt : null,
+        },
       });
     }
   }
@@ -1090,7 +1440,7 @@ export async function getResumeRevision(
   )).limit(1);
   const revision = revisionRows[0];
   if (!revision) return { found: false as const };
-  const [files, bullets, links, impacts] = await Promise.all([
+  const [files, bullets, links, impacts, retention] = await Promise.all([
     getDb().select({
       format: resumeRevisionFiles.format,
       sha256: resumeRevisionFiles.sha256,
@@ -1133,6 +1483,7 @@ export async function getResumeRevision(
       eq(resumeRevisionReviewImpacts.resumeId, resumeId),
       eq(resumeRevisionReviewImpacts.revisionId, selectedRevisionId),
     )).orderBy(asc(resumeRevisionReviewImpacts.questionId)).limit(101),
+    getResumeFileRetention(ownerId, resumeId, selectedRevisionId),
   ]);
   const references = new Map<string, { claimIds: string[]; evidenceIds: string[] }>();
   for (const link of links.slice(0, 400)) {
@@ -1161,7 +1512,10 @@ export async function getResumeRevision(
       importedAt: revision.importedAt,
       files: files.map((file) => ({
         ...file,
-        downloadPath: revisionDownloadPath(resumeId, revision.revisionId, file.format),
+        downloadPath: retention.state === "retained"
+          ? revisionDownloadPath(resumeId, revision.revisionId, file.format)
+          : null,
+        retention,
       })),
       bullets: bullets.slice(0, 240).map((bullet) => ({
         ...bullet,
@@ -1273,15 +1627,24 @@ export async function setCurrentResumeRevision(
     }
     return { ...(existing.receipt as ResumeCurrentRevisionReceipt), duplicate: true as const };
   }
-  const [source, revision] = await Promise.all([
+  const [source, revision, retention] = await Promise.all([
     readSource(ownerId, input.resumeId),
     findResumeRevision(ownerId, input.resumeId, input.revisionId),
+    getResumeFileRetention(ownerId, input.resumeId, input.revisionId),
   ]);
   if (!source || !revision) {
     throw new ResumeImportError(
       "resume_revision_not_found",
       "That owner-private resume revision is unavailable.",
       404,
+      false,
+    );
+  }
+  if (retention.state !== "retained") {
+    throw new ResumeImportError(
+      "resume_revision_files_unavailable",
+      "A resume revision with deleting or deleted private files cannot become current.",
+      409,
       false,
     );
   }
@@ -1307,6 +1670,12 @@ export async function setCurrentResumeRevision(
       WHERE ${resumeRevisions.ownerId} = ${ownerId}
         AND ${resumeRevisions.resumeId} = ${input.resumeId}
         AND ${resumeRevisions.revisionId} = ${input.revisionId}
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM ${resumeRevisionFileDeletions}
+      WHERE ${resumeRevisionFileDeletions.ownerId} = ${ownerId}
+        AND ${resumeRevisionFileDeletions.resumeId} = ${input.resumeId}
+        AND ${resumeRevisionFileDeletions.revisionId} = ${input.revisionId}
     )
     AND NOT EXISTS (
       SELECT 1 FROM ${resumeCurrentRevisionOperations}
@@ -1481,7 +1850,7 @@ export async function readResumeRevisionFile(
   revisionId: string,
   format: ResumeFileFormat,
 ) {
-  const rows = await getDb().select({
+  const [rows, retention] = await Promise.all([getDb().select({
     storageGeneration: resumeRevisions.storageGeneration,
     sha256: resumeRevisionFiles.sha256,
     byteSize: resumeRevisionFiles.byteSize,
@@ -1497,6 +1866,6 @@ export async function readResumeRevisionFile(
       eq(resumeRevisionFiles.resumeId, resumeId),
       eq(resumeRevisionFiles.revisionId, revisionId),
       eq(resumeRevisionFiles.format, format),
-    )).limit(1);
-  return rows[0] ?? null;
+    )).limit(1), getResumeFileRetention(ownerId, resumeId, revisionId)]);
+  return rows[0] ? { ...rows[0], retention } : null;
 }

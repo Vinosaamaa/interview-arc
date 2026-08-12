@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { resumeLibrarySchema } from "../app/resume-library-contract.ts";
 import { recentResumeImportsSchema } from "../app/resume-import-status-contract.ts";
+import { resumeFileDeletionReceiptSchema } from "../db/resume-file-deletion-contract.ts";
 import {
   resumeRevisionComparisonSchema,
   resumeRevisionResponseSchema,
@@ -27,12 +28,14 @@ const library = {
         byteSize: 2048,
         mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         downloadPath: "/api/resume-library/primary-resume/resume-revision-2/docx",
+        retention: { state: "retained", operationId: null, errorCode: null, updatedAt: null, deletedAt: null },
       }, {
         format: "pdf",
         sha256: "b".repeat(64),
         byteSize: 4096,
         mimeType: "application/pdf",
         downloadPath: "/api/resume-library/primary-resume/resume-revision-2/pdf",
+        retention: { state: "retained", operationId: null, errorCode: null, updatedAt: null, deletedAt: null },
       }],
     }],
   }],
@@ -97,6 +100,44 @@ test("the Resume Library rejects unsafe download paths and malformed integrity",
       }],
     }],
   }));
+});
+
+test("file retention removes download paths without rewriting immutable revision metadata", () => {
+  const deletedFile = {
+    ...library.sources[0].revisions[0].files[1],
+    downloadPath: null,
+    retention: {
+      state: "deleted",
+      operationId: "resume-file-delete-1",
+      errorCode: null,
+      updatedAt: 30,
+      deletedAt: 30,
+    },
+  };
+  assert.deepEqual(resumeLibrarySchema.parse({
+    ...library,
+    sources: [{
+      ...library.sources[0],
+      revisions: [{ ...library.sources[0].revisions[0], files: [deletedFile] }],
+    }],
+  }).sources[0].revisions[0].files[0], deletedFile);
+  assert.throws(() => resumeLibrarySchema.parse({
+    ...library,
+    sources: [{
+      ...library.sources[0],
+      revisions: [{ ...library.sources[0].revisions[0], files: [{ ...deletedFile, downloadPath: "/api/resume-library/primary-resume/resume-revision-2/pdf" }] }],
+    }],
+  }));
+  assert.deepEqual(resumeFileDeletionReceiptSchema.parse({
+    operationId: "resume-file-delete-1",
+    status: "deleted",
+    resumeId: "primary-resume",
+    revisionId: "resume-revision-2",
+    deletedFormats: ["docx", "pdf"],
+    preserved: ["revision", "integrity", "wording", "semantic_links", "activity_context"],
+    deletedAt: 30,
+    duplicate: false,
+  }).status, "deleted");
 });
 
 test("resume source labels cannot carry private locators, identities, or credentials", () => {

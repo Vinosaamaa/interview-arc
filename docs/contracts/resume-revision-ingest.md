@@ -170,11 +170,36 @@ or export path. The local receipt is a private cache; D1 remains authoritative.
   Unknown owners and identities are indistinguishable (`404`); D1/R2 drift
   fails closed (`503`) without changing state.
 
+## Private-file retention and deletion
+
+- Resume files are retained indefinitely by default. Career Materials exposes
+  a destructive control only for a historical revision; the current revision
+  must first be changed through an exact `set_current_resume_revision`
+  operation.
+- `DELETE /api/resume-revisions/:resumeId/:revisionId/files` and the equivalent
+  integration-token route require the literal `explicit_user_instruction`, a
+  stable operation ID, and a bounded audit reason. The UI presents a separate
+  permanent-removal confirmation and saves the operation ID in session state
+  before the request so an uncertain response can reuse the exact receipt.
+- One additive D1 tombstone reserves the revision before any R2 mutation. The
+  reservation and current-pointer selection fence each other transactionally;
+  a deleting or deleted revision can never become current.
+- R2 deletion is idempotent and covers the exact DOCX/PDF generation pair. D1
+  records `deleted` only after both keys are absent. A partial R2 failure or a
+  D1 failure after R2 deletion remains `retryable_failure`; the same operation
+  deletes/verifies again and completes the durable tombstone.
+- Deletion removes only raw private bytes and download paths. The immutable
+  revision, file hashes and sizes, extracted wording, semantic links, review
+  impacts, and activity provenance remain readable. A retired source snapshot
+  cannot be silently recreated by an unchanged-source import.
+- Deleted files return `404`; a deletion in progress returns `503`. Other-owner
+  and unknown revision requests remain indistinguishable, and no response
+  exposes an R2 key, generation, provider locator, or owner identity.
+
 ## Remaining issue #211 work
 
-Website relocation, richer Career Materials presentation, deletion/retention
-controls, cross-repository cover-letter publication, and provenance-safe
-historical backfill remain separate slices.
+Cross-repository cover-letter publication and provenance-safe historical
+backfill remain separate slices.
 The current import accepts already-extracted bounded occurrences and exact
 semantic identities; it does not run an untrusted semantic model inside the
 Worker or invent pending claims.

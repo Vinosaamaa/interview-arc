@@ -5,7 +5,7 @@ import test from "node:test";
 const load = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 test("Career Materials owns the authenticated Resume Library outside Behavioral Foundation", async () => {
-  const [foundation, materials, home, css, route, importRoute, detailRoute, compareRoute] = await Promise.all([
+  const [foundation, materials, home, css, route, importRoute, detailRoute, compareRoute, deleteRoute] = await Promise.all([
     load("../app/behavioral-foundation.tsx"),
     load("../app/career-materials-workspace.tsx"),
     load("../app/home-client.tsx"),
@@ -14,6 +14,7 @@ test("Career Materials owns the authenticated Resume Library outside Behavioral 
     load("../app/api/resume-imports/route.ts"),
     load("../app/api/resume-revisions/[resumeId]/[revisionId]/route.ts"),
     load("../app/api/resume-revisions/[resumeId]/compare/route.ts"),
+    load("../app/api/resume-revisions/[resumeId]/[revisionId]/files/route.ts"),
   ]);
   assert.doesNotMatch(foundation, /ResumeLibrary|resume-library/);
   assert.match(home, /CareerMaterialsWorkspace/);
@@ -23,7 +24,9 @@ test("Career Materials owns the authenticated Resume Library outside Behavioral 
   assert.match(materials, /\/api\/resume-revisions/);
   assert.match(materials, /\/api\/resume-imports/);
   assert.match(materials, /The exact import can be retried/);
-  assert.match(materials, /href=\{file\.downloadPath\}/);
+  assert.match(materials, /Permanently remove files/);
+  assert.match(materials, /explicit_user_instruction/);
+  assert.match(materials, /href=\{file\.downloadPath!/);
   assert.match(materials, /No résumé revision is stored yet/);
   assert.match(materials, /No newer or neighboring revision was substituted/);
   assert.match(route, /resumeLibrarySchema\.parse\(await getResumeLibrary\(ownerId\)\)/);
@@ -34,6 +37,9 @@ test("Career Materials owns the authenticated Resume Library outside Behavioral 
   assert.match(detailRoute, /resumeRevisionResponseSchema\.parse\(result\)/);
   assert.match(compareRoute, /compareResumeRevisions/);
   assert.match(compareRoute, /resumeRevisionComparisonSchema\.parse\(result\)/);
+  assert.match(deleteRoute, /deletePrivateResumeRevisionFiles/);
+  assert.match(deleteRoute, /resolveOwnerId\(request\)/);
+  assert.match(deleteRoute, /private, no-store/);
   assert.match(css, /\.materials-library-layout \{[^}]*grid-template-columns:/s);
   assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.materials-library-layout \{[^}]*grid-template-columns: 1fr/s);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);

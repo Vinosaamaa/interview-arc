@@ -252,6 +252,7 @@ import {
 import { requestVoiceDeliveryRetry } from "./voice-delivery-retry";
 import { ingestResumeRevision, ResumeImportError } from "./resume-revision-ingest";
 import { servePrivateResumeFile } from "./resume-library-download";
+import { deletePrivateResumeRevisionFiles } from "./resume-file-deletion";
 import { routeLiveV1 } from "./live-v1";
 import { isLiveV1Path } from "./live-v1-path";
 
@@ -383,6 +384,38 @@ async function uploadResumeRevision(ownerId: string, request: Request, env: Env)
     return json(request, {
       error: "The private resume import could not be completed. Retry the exact operation after checking status.",
       code: "resume_import_unavailable",
+      retryable: true,
+    }, { status: 503 });
+  }
+}
+
+async function deleteResumeRevisionFiles(
+  ownerId: string,
+  resumeId: string,
+  revisionId: string,
+  request: Request,
+  env: Env,
+) {
+  try {
+    const receipt = await deletePrivateResumeRevisionFiles(
+      ownerId,
+      resumeId,
+      revisionId,
+      request,
+      env.AUDIO,
+    );
+    return json(request, receipt, { status: 200 });
+  } catch (error) {
+    if (error instanceof ResumeImportError) {
+      return json(request, {
+        error: error.message,
+        code: error.code,
+        retryable: error.retryable,
+      }, { status: error.status });
+    }
+    return json(request, {
+      error: "The private resume file deletion could not be completed. Retry the exact operation receipt.",
+      code: "resume_file_deletion_unavailable",
       retryable: true,
     }, { status: 503 });
   }
@@ -4229,6 +4262,16 @@ export default {
         decodeURIComponent(resumeFile[2]),
         resumeFile[3],
         env.AUDIO,
+      );
+    }
+    const resumeFilePair = url.pathname.match(/^\/resume\/files\/([^/]+)\/([^/]+)$/);
+    if (resumeFilePair && request.method === "DELETE") {
+      return deleteResumeRevisionFiles(
+        ownerId,
+        decodeURIComponent(resumeFilePair[1]),
+        decodeURIComponent(resumeFilePair[2]),
+        request,
+        env,
       );
     }
     if (url.pathname === "/voice/context" && request.method === "GET") {
