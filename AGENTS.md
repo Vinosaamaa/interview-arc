@@ -22,6 +22,7 @@ Read only the guide chain that owns the request:
 | LeetCode | `practice/leetcode/AGENTS.md` |
 | System design | `practice/system-design/AGENTS.md` |
 | Behavioral | `practice/behavioral/AGENTS.md` |
+| Resume or cover-letter administration | `career-materials/resume-cover-letter/AGENTS.md` |
 
 Keep shared schemas/contracts in `docs/contracts/`. When changing any agent
 guide, preserve every required behavior while making the smallest clear edit:
@@ -32,8 +33,9 @@ specialist-only behavior only in that specialist's guide; never duplicate
 specialist runtime instructions at the repository root.
 
 The user may keep every specialist as a long-lived Codex task inside the same
-outer project. Tasks share files, not unrecorded conversation. First-time task
-creation and durable specialist registration follow
+outer project. The Loop Recorder and Resume & Cover Letter Specialist are
+administrative tasks outside practice. Tasks share files, not unrecorded
+conversation. First-time task creation and durable specialist registration follow
 `docs/agents/task-startup-prompts.md`.
 
 ## UI Design Skill Routing

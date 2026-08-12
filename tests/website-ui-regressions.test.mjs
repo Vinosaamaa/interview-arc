@@ -257,7 +257,7 @@ test("Interview navigation uses one shared local model with Journey last", async
   assert.doesNotMatch(source, /view !== "journey" && <nav className="mobile-interview-nav"/);
 });
 
-test("responsive shell keeps the workspace selector above a six-item Interview dock", async () => {
+test("responsive shell keeps the workspace selector above the seven-item Interview dock", async () => {
   const { rules } = await loadResponsiveShell();
   const mobileSidebar = cssRules(rules, ".sidebar", "max-width: 900px").at(-1).declarations;
   assert.equal(mobileSidebar.position, "sticky");
@@ -267,10 +267,10 @@ test("responsive shell keeps the workspace selector above a six-item Interview d
   const interviewDock = cssRules(rules, ".mobile-interview-nav", "max-width: 900px").at(-1).declarations;
   assert.equal(interviewDock.position, "fixed");
   assert.equal(interviewDock.display, "grid");
-  assert.equal(interviewDock["grid-template-columns"], "repeat(6, 1fr)");
+  assert.equal(interviewDock["grid-template-columns"], "repeat(7, 1fr)");
   const compactDock = cssRules(rules, ".mobile-interview-nav", "max-width: 360px").at(-1).declarations;
   assert.equal(compactDock["grid-template-columns"], "repeat(3, minmax(0, 1fr))");
-  assert.equal(cssRules(rules, ".mobile-interview-nav button", "max-width: 360px").at(-1).declarations["min-height"], "44px");
+  assert.equal(cssRules(rules, ".mobile-interview-nav button", "max-width: 420px").at(-1).declarations["min-height"], "44px");
   assert.ok(cssRules(rules, ".topbar > div:last-child").some((rule) => rule.declarations["flex-wrap"] === "nowrap"));
   assert.equal(cssRules(rules, ".topbar .secondary-action", "max-width: 900px").at(-1).declarations.display, "none");
 });

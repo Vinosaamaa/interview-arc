@@ -1,6 +1,6 @@
 # Interview Arc Task Setup And Startup Prompts
 
-Create five long-lived Codex tasks inside the same **Interview Prep** project.
+Create six long-lived Codex tasks inside the same **Interview Prep** project.
 They all use the same repository checkout; do not create separate folders,
 projects, worktrees, or daily tasks.
 
@@ -8,9 +8,10 @@ Use these exact task titles:
 
 1. `Interview Arc — Coordinator`
 2. `Interview Arc — Loop Recorder`
-3. `Interview Arc — LeetCode`
-4. `Interview Arc — System Design`
-5. `Interview Arc — Behavioral`
+3. `Interview Arc — Resume & Cover Letter`
+4. `Interview Arc — LeetCode`
+5. `Interview Arc — System Design`
+6. `Interview Arc — Behavioral`
 
 The repository's `AGENTS.md` files are authoritative. The prompts below only
 initialize the task and force a first capability check; they do not duplicate
@@ -48,6 +49,28 @@ authenticated website-only read. Do not coach practice, infer interviewer
 feedback, duplicate Bank questions, switch Git branches, or publish Git
 artifacts. Do not create a Loop yet. Confirm whether the MCP bridge is
 connected and summarize the Loop commands you will recognize.
+```
+
+## Resume & Cover Letter First Prompt
+
+```text
+Initialize this long-lived task as Interview Arc — Resume & Cover Letter. Read
+the outer workspace instructions, interview-arc/AGENTS.md,
+interview-arc/career-materials/resume-cover-letter/AGENTS.md,
+interview-arc/docs/contracts/resume-revision-ingest.md, and the bounded evidence
+rules that guide requires. This is administrative Career Materials work, not
+Interview practice: never create or mutate an activity, transcript, timer,
+result, review, Bank question, Loop, Role Brief, or practice publication. Use
+the authenticated Google Drive connector for an explicitly authorized Google
+Docs resume import, read exact immutable resume revisions and bounded accepted
+evidence after reconnect, and use the installed cover-letter skill for
+cover-letter work. A complete JD is sufficient input; a Loop or application
+record is not required. Final cover letters are PDF only and Job Journey owns
+their private bytes. For an import, bracket both authenticated exports with
+matching Drive metadata reads and use the ignored private capture controller;
+never print or remotely persist the Drive identity or local paths. Do not import
+a resume or draft a cover letter yet. Confirm whether the MCP bridge and Google
+Drive connector are available and summarize the commands you will recognize.
 ```
 
 ## LeetCode First Prompt
@@ -109,7 +132,7 @@ the commands you will recognize.
 
 ## One-Time Connection
 
-After all five tasks exist and have the exact titles above, return to
+After all six tasks exist and have the exact titles above, return to
 `Interview Arc — Coordinator` and say:
 
 ```text
@@ -119,7 +142,8 @@ Connect specialist tasks.
 The coordinator must:
 
 1. list the Codex tasks in this project;
-2. match the four exact specialist titles, including Loop Recorder;
+2. match the five exact specialist titles, including Loop Recorder and Resume
+   & Cover Letter;
 3. register each task/thread ID and host ID with
    `register_specialist_task`;
 4. read the registry back with `get_specialist_tasks`;
@@ -140,7 +164,7 @@ hot-add tools to an already running long-lived task. After an allowlist or
 server-catalog change:
 
 1. run `pnpm mcp:config:check` from `interview-arc/`;
-2. reconnect or reopen the Coordinator and all four specialist tasks;
+2. reconnect or reopen the Coordinator and all five specialist tasks;
 3. use tool discovery in each applicable task before practice resumes.
 
 The repository allowlist is canonical. The optional outer workspace shim can be

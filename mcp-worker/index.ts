@@ -43,7 +43,10 @@ import {
   queryBehavioralStories,
   upsertBehavioralStory,
 } from "../db/behavioral-story";
-import { resumeContextSelectionSchema } from "../db/activity-resume-context";
+import {
+  backfillActivityResumeContextSchema,
+  resumeContextSelectionSchema,
+} from "../db/activity-resume-context";
 import {
   BehavioralTargetProfileError,
   queryBehavioralTargetProfiles,
@@ -81,7 +84,16 @@ import {
 import { behavioralTargetReviewSchema } from "../db/behavioral-practice-preflight-policy";
 import { loadContentIndex } from "../db/content";
 import { resolveIntegrationOwner } from "../db/integrations";
-import { getResumeImportStatus, getResumeLibrary } from "../db/resume-revisions";
+import {
+  backfillActivityResumeContext,
+  compareResumeRevisions,
+  getActivityResumeContext,
+  getResumeImportStatus,
+  getResumeLibrary,
+  getResumeRevision,
+  queryResumeReferenceUsage,
+  setCurrentResumeRevision,
+} from "../db/resume-revisions";
 import {
   applyFocusTimerAction,
   applyTimerAction,
@@ -244,6 +256,7 @@ import {
 import { requestVoiceDeliveryRetry } from "./voice-delivery-retry";
 import { ingestResumeRevision, ResumeImportError } from "./resume-revision-ingest";
 import { servePrivateResumeFile } from "./resume-library-download";
+import { deletePrivateResumeRevisionFiles } from "./resume-file-deletion";
 import { routeLiveV1 } from "./live-v1";
 import { isLiveV1Path } from "./live-v1-path";
 
@@ -375,6 +388,38 @@ async function uploadResumeRevision(ownerId: string, request: Request, env: Env)
     return json(request, {
       error: "The private resume import could not be completed. Retry the exact operation after checking status.",
       code: "resume_import_unavailable",
+      retryable: true,
+    }, { status: 503 });
+  }
+}
+
+async function deleteResumeRevisionFiles(
+  ownerId: string,
+  resumeId: string,
+  revisionId: string,
+  request: Request,
+  env: Env,
+) {
+  try {
+    const receipt = await deletePrivateResumeRevisionFiles(
+      ownerId,
+      resumeId,
+      revisionId,
+      request,
+      env.AUDIO,
+    );
+    return json(request, receipt, { status: 200 });
+  } catch (error) {
+    if (error instanceof ResumeImportError) {
+      return json(request, {
+        error: error.message,
+        code: error.code,
+        retryable: error.retryable,
+      }, { status: error.status });
+    }
+    return json(request, {
+      error: "The private resume file deletion could not be completed. Retry the exact operation receipt.",
+      code: "resume_file_deletion_unavailable",
       retryable: true,
     }, { status: 503 });
   }
@@ -1853,6 +1898,7 @@ function specialistToolFailure(error: unknown) {
     || error instanceof BehavioralTargetProfileError
     || error instanceof LoopError
     || error instanceof BehavioralStoryError
+    || error instanceof ResumeImportError
     || error instanceof TypedExchangeDeletionError
     || error instanceof InteractionModeError
     || error instanceof InteractionModeFinalizationError
@@ -3168,6 +3214,127 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   );
 
   server.registerTool(
+    "get_resume_revision",
+    {
+      description: "Read one exact owner-private resume revision, including bounded extracted bullet wording, stable claim/evidence links, file integrity, lineage, and review impacts. It never returns raw DOCX/PDF bytes, Drive or local locators, R2 identity, or another owner's state.",
+      inputSchema: {
+        resumeId: behavioralStableIdSchema,
+        revisionId: behavioralStableIdSchema.optional(),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ resumeId, revisionId }) => {
+      const result = await getResumeRevision(ownerId, resumeId, revisionId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "compare_resume_revisions",
+    {
+      description: "Compare two exact immutable revisions of one owner-private resume. The bounded semantic/textual diff reports occurrence, wording, order, claim, and evidence-link changes without reading raw files or changing either revision.",
+      inputSchema: {
+        resumeId: behavioralStableIdSchema,
+        fromRevisionId: behavioralStableIdSchema,
+        toRevisionId: behavioralStableIdSchema,
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ resumeId, fromRevisionId, toRevisionId }) => {
+      const result = await compareResumeRevisions(ownerId, resumeId, fromRevisionId, toRevisionId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "set_current_resume_revision",
+    {
+      description: "Select one exact immutable owner-private resume revision as current after an explicit owner instruction. Stable operation IDs make exact retries idempotent; changed retries and concurrent pointer changes fail closed. No revision, file, attempt, or application material is rewritten.",
+      inputSchema: {
+        operationId: behavioralStableIdSchema,
+        resumeId: behavioralStableIdSchema,
+        revisionId: behavioralStableIdSchema,
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await setCurrentResumeRevision(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Resume ${result.resumeId} current revision is ${result.currentRevisionId}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_activity_resume_context",
+    {
+      description: "Read bounded immutable resume context captured on one exact owner-private behavioral activity. The result preserves contemporaneous versus backfilled provenance and never infers a historical link from dates or the newest resume.",
+      inputSchema: {
+        activityId: behavioralStableIdSchema,
+        snapshotRevision: z.number().int().positive().optional(),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ activityId, snapshotRevision }) => {
+      const result = await getActivityResumeContext(ownerId, activityId, snapshotRevision);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "backfill_activity_resume_context",
+    {
+      description: "Coordinator-only: append one owner-confirmed historical resume relationship to an exact immutable behavioral snapshot. The request must prove the loaded source/DOCX/PDF fingerprints, preserves the attempt and resume revision unchanged, labels the link backfilled, and makes exact retries idempotent. Missing provenance remains legacy unversioned.",
+      inputSchema: backfillActivityResumeContextSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await backfillActivityResumeContext(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Historical resume context is ${result.state} for activity ${result.activityId} snapshot ${result.snapshotRevision}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_resume_reference_usage",
+    {
+      description: "Search one stable claim or accepted-evidence identity across owner-private resume revisions and exact historical activity resume contexts. Results span older revisions without copying resume content into attempts or profiles.",
+      inputSchema: {
+        referenceType: z.enum(["claim", "evidence"]),
+        referenceId: behavioralStableIdSchema,
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ referenceType, referenceId }) => {
+      const result = await queryResumeReferenceUsage(ownerId, referenceType, referenceId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
     "save_leetcode_code_attempt",
     {
       description: "Durably enqueue an exact owner-provided LeetCode attempt after an explicit attempt boundary. Reuse one stable operationId and identical payload after transport uncertainty, then inspect get_specialist_write_status until saved. Use a pending review while evaluation runs, then a new operationId to complete that same immutable attempt. For a complete review, draft the structured fields once and render every summary, finding, testing-evidence, and next-step string unchanged in the referenced visible specialist review; semantic paraphrases are rejected. A persistence child must copy those supplied fields verbatim and never synthesize review wording. Ordinary snippets and generated reference solutions must not use this tool.",
@@ -3552,7 +3719,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
     {
       description: "Register the stable Codex task ID for one specialist so the coordinator can reuse it without asking the user for IDs.",
       inputSchema: {
-        specialty: z.enum(["leetcode", "system_design", "behavioral", "loop_recorder"]),
+        specialty: z.enum(["leetcode", "system_design", "behavioral", "loop_recorder", "resume_cover_letter"]),
         threadId: z.string().min(1),
         hostId: z.string().min(1).optional(),
         title: z.string().min(1),
@@ -4119,6 +4286,16 @@ export default {
         decodeURIComponent(resumeFile[2]),
         resumeFile[3],
         env.AUDIO,
+      );
+    }
+    const resumeFilePair = url.pathname.match(/^\/resume\/files\/([^/]+)\/([^/]+)$/);
+    if (resumeFilePair && request.method === "DELETE") {
+      return deleteResumeRevisionFiles(
+        ownerId,
+        decodeURIComponent(resumeFilePair[1]),
+        decodeURIComponent(resumeFilePair[2]),
+        request,
+        env,
       );
     }
     if (url.pathname === "/voice/context" && request.method === "GET") {

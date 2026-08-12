@@ -25,6 +25,10 @@ export async function servePrivateResumeFile(
     const typedFormat = format as ResumeFileFormat;
     const file = await readResumeRevisionFile(ownerId, resumeId, revisionId, typedFormat);
     if (!file) return privateJson("Resume file not found.", 404);
+    if (file.retention.state === "deleted") return privateJson("Resume file not found.", 404);
+    if (file.retention.state !== "retained") {
+      return privateJson("The private resume file is temporarily unavailable.", 503);
+    }
 
     const key = await privateResumeObjectKey({
       ownerId,

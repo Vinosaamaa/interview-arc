@@ -39,9 +39,10 @@ and Journey for factual reflection across time.
 ## Capabilities and Constraints
 
 - Interview navigation owns Today, Loops, Reviews, Past, and Banks.
-- The shared workspace shell names Interview, Learn, Engineering, and Journey;
-  this implementation opens only Interview and Journey. Learn and Engineering
-  remain intentionally unavailable until their own bounded work begins.
+- The shared workspace shell has exactly three top-level workspaces: Interview,
+  Learn, and Engineering. Interview owns its factual Journey; Learn and
+  Engineering remain intentionally unavailable until their own bounded work
+  begins, when each receives a separate local Statistics surface.
 - One Loop represents one company-and-role process with flexible ordered stages
   and immutable Loop-owned Role Brief revisions.
 - Only the Loop Recorder creates or revises Role Briefs. Practice specialists

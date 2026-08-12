@@ -5,7 +5,6 @@ import {
   behavioralFoundationStatusSchema,
   type BehavioralFoundationStatus,
 } from "./behavioral-foundation-contract";
-import ResumeLibrary from "./resume-library";
 
 type Props = {
   enabled?: boolean;
@@ -219,7 +218,6 @@ export default function BehavioralFoundation({
 
         {status.evidence.total === 0 && status.claims.total === 0 && <div className="foundation-empty"><strong>Your evidence desk is ready.</strong><span>Run a résumé-foundation drill with the Behavioral specialist to add the first sanitized evidence checkpoint.</span></div>}
       </>}
-      <ResumeLibrary enabled={enabled} />
     </section>
   );
 }
