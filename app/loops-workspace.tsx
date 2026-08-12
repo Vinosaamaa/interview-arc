@@ -62,8 +62,14 @@ type LoopProjection = {
     competencySignals: string[];
     seniorityIndicators: string[];
     domainVocabulary: string[];
-    verifiedCompanySignals: string[];
+    verifiedCompanySignals: Array<{ signal: string; sourceLabel: string; verifiedAt: number }>;
     unresolvedAmbiguities: string[];
+    source: {
+      kind: "pasted_jd" | "public_posting";
+      displayLocator: string;
+      capturedAt: number;
+      fingerprint: string;
+    };
   };
   activityBindings: Array<{
     activityId: string;
@@ -108,11 +114,79 @@ type LoopPayload = {
   migrationInbox: unknown[];
 };
 
+type RoleBriefSourcePayload = {
+  loopId: string;
+  roleBriefRevision: number;
+  label: string;
+  company: string;
+  roleTitle: string;
+  source: {
+    kind: "pasted_jd" | "public_posting";
+    displayLocator: string;
+    capturedAt: number;
+    jdText: string;
+    fingerprint: string;
+  };
+  createdAt: number;
+};
+
+type JdBlock =
+  | { type: "heading"; level: number; text: string }
+  | { type: "paragraph"; text: string }
+  | { type: "list"; items: string[] };
+
 async function fetchLoopPayload(includeArchived: boolean, signal?: AbortSignal) {
   const response = await fetch(`/api/loops?includeArchived=${includeArchived}`, { cache: "no-store", signal });
   const body = await response.json() as LoopPayload & { error?: string };
   if (!response.ok) throw new Error(body.error || "Loop state is unavailable.");
   return body;
+}
+
+async function fetchRoleBriefSource(loopId: string, revision: number, signal?: AbortSignal) {
+  const parameters = new URLSearchParams({ loopId, roleBriefRevision: String(revision) });
+  const response = await fetch(`/api/loops/role-brief-source?${parameters}`, { cache: "no-store", signal });
+  const body = await response.json() as RoleBriefSourcePayload & { error?: string };
+  if (!response.ok) throw new Error(body.error || "The full job description is unavailable.");
+  return body;
+}
+
+function parseJdDocument(value: string): JdBlock[] {
+  const blocks: JdBlock[] = [];
+  let paragraph: string[] = [];
+  let list: string[] = [];
+  const flushParagraph = () => {
+    if (paragraph.length) blocks.push({ type: "paragraph", text: paragraph.join(" ") });
+    paragraph = [];
+  };
+  const flushList = () => {
+    if (list.length) blocks.push({ type: "list", items: list });
+    list = [];
+  };
+  value.split(/\r?\n/).forEach((line) => {
+    const text = line.trim();
+    if (!text) {
+      flushParagraph();
+      flushList();
+      return;
+    }
+    const heading = text.match(/^(#{1,4})\s+(.+)$/);
+    if (heading) {
+      flushParagraph();
+      flushList();
+      blocks.push({ type: "heading", level: heading[1].length, text: heading[2] });
+      return;
+    }
+    if (text.startsWith("- ")) {
+      flushParagraph();
+      list.push(text.slice(2));
+      return;
+    }
+    flushList();
+    paragraph.push(text);
+  });
+  flushParagraph();
+  flushList();
+  return blocks;
 }
 
 function formatDate(value?: number) {
@@ -239,14 +313,77 @@ function PreparationLedger({ loop }: { loop: LoopProjection }) {
   </section>;
 }
 
+function JobDescriptionDocument({ source }: { source: RoleBriefSourcePayload }) {
+  const blocks = useMemo(() => parseJdDocument(source.source.jdText), [source.source.jdText]);
+  return <article className="loop-jd-document" aria-label={`Full job description for ${source.roleTitle}`}>
+    {blocks.map((block, index) => {
+      if (block.type === "list") return <ul key={`list-${index}`}>{block.items.map((item) => <li key={item}>{item}</li>)}</ul>;
+      if (block.type === "paragraph") return <p key={`paragraph-${index}`}>{block.text}</p>;
+      if (block.level <= 1) return <h3 key={`heading-${index}`}>{block.text}</h3>;
+      if (block.level === 2) return <h4 key={`heading-${index}`}>{block.text}</h4>;
+      return <h5 key={`heading-${index}`}>{block.text}</h5>;
+    })}
+  </article>;
+}
+
 function RoleBriefPanel({ loop }: { loop: LoopProjection }) {
   const signals = loop.roleBrief.competencySignals.length
     ? loop.roleBrief.competencySignals
     : loop.roleBrief.responsibilities;
+  const [showSource, setShowSource] = useState(false);
+  const [sourceAttempt, setSourceAttempt] = useState(0);
+  const [sourceResult, setSourceResult] = useState<{
+    requestKey: string;
+    source: RoleBriefSourcePayload | null;
+    error: string;
+  }>({ requestKey: "", source: null, error: "" });
+  const sourceRegionId = `loop-jd-${loop.loop.loopId}`;
+  const sourceRequestKey = `${loop.loop.loopId}:${loop.roleBrief.revision}:${sourceAttempt}`;
+  const source = sourceResult.requestKey === sourceRequestKey ? sourceResult.source : null;
+  const sourceError = sourceResult.requestKey === sourceRequestKey ? sourceResult.error : "";
+  const sourceLoading = showSource && sourceResult.requestKey !== sourceRequestKey;
+  useEffect(() => {
+    if (!showSource || source) return;
+    const controller = new AbortController();
+    void fetchRoleBriefSource(loop.loop.loopId, loop.roleBrief.revision, controller.signal).then(
+      (payload) => {
+        setSourceResult({ requestKey: sourceRequestKey, source: payload, error: "" });
+      },
+      (cause: unknown) => {
+        if (controller.signal.aborted) return;
+        setSourceResult({
+          requestKey: sourceRequestKey,
+          source: null,
+          error: cause instanceof Error ? cause.message : "The full job description is unavailable.",
+        });
+      },
+    );
+    return () => controller.abort();
+  }, [loop.loop.loopId, loop.roleBrief.revision, showSource, source, sourceRequestKey]);
+  const toggleSource = () => {
+    setShowSource((current) => !current);
+  };
   return <section className="loop-role-brief" aria-labelledby="loop-role-brief-title">
-    <header><div><h2 id="loop-role-brief-title">Loop-owned Role Brief</h2><span>Revision {loop.roleBrief.revision}</span></div><small>Display-safe · immutable</small></header>
+    <header><div><h2 id="loop-role-brief-title">Loop-owned Role Brief</h2><span>Revision {loop.roleBrief.revision}</span></div><small>Structured summary · immutable source</small></header>
     {signals.length ? <ul>{signals.slice(0, 7).map((signal) => <li key={signal}><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" /><path d="m6.5 10 2.2 2.2 4.8-4.8" /></svg><span>{signal}</span></li>)}</ul> : <p>No display-safe competency signals are recorded in this revision.</p>}
     {loop.roleBrief.unresolvedAmbiguities.length ? <details><summary>{loop.roleBrief.unresolvedAmbiguities.length} unresolved {loop.roleBrief.unresolvedAmbiguities.length === 1 ? "detail" : "details"}</summary><ul>{loop.roleBrief.unresolvedAmbiguities.map((item) => <li key={item}>{item}</li>)}</ul></details> : null}
+    <div className="loop-jd-access">
+      <button type="button" onClick={toggleSource} aria-expanded={showSource} aria-controls={sourceRegionId}>
+        {showSource ? "Hide full job description" : "View full job description"}
+      </button>
+      <span>Private · Role Brief revision {loop.roleBrief.revision}</span>
+    </div>
+    {showSource ? <section className="loop-jd-source" id={sourceRegionId} aria-live="polite">
+      {sourceLoading ? <p className="loop-jd-state">Opening the immutable job description…</p> : null}
+      {sourceError ? <div className="loop-jd-state error" role="alert"><p>{sourceError}</p><button type="button" onClick={() => setSourceAttempt((current) => current + 1)}>Try again</button></div> : null}
+      {source ? <>
+        <header>
+          <div><strong>{source.company} · {source.roleTitle}</strong><span>Captured {formatDate(source.source.capturedAt)}</span></div>
+          {/^https:\/\//.test(source.source.displayLocator) ? <a href={source.source.displayLocator} target="_blank" rel="noreferrer">Open original posting</a> : <span>{source.source.displayLocator}</span>}
+        </header>
+        <JobDescriptionDocument source={source} />
+      </> : null}
+    </section> : null}
   </section>;
 }
 

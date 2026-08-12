@@ -18,6 +18,7 @@ import {
   loopCapturePackets,
   loopRoleBriefRevisions,
   loopTargetProfileMigrations,
+  outcomes,
   timers,
 } from "./schema";
 import {
@@ -26,12 +27,14 @@ import {
   createLoopSchema,
   displaySafeLoopRoleBriefRevisionSchema,
   importLoopCapturePacketSchema,
+  linkCompletedActivitySchema,
   loopActivityContextRequestSchema,
   loopCapturePacketSnapshotSchema,
   loopRoleBriefDisplaySnapshotSchema,
   loopRoleBriefInputSchema,
   loopSnapshotSchema,
   queryLoopCapturePacketsSchema,
+  queryLoopRoleBriefSourceSchema,
   queryLoopsSchema,
   queryRoleBriefMigrationInboxSchema,
   reviseLoopRoleBriefSchema,
@@ -42,6 +45,7 @@ import {
   type CreateLoopInput,
   type DisplaySafeLoopRoleBriefRevision,
   type ImportLoopCapturePacketInput,
+  type LinkCompletedActivityInput,
   type LoopCapturePacketSnapshot,
   type LoopActivityContextRequest,
   type LoopRoleBriefDisplaySnapshot,
@@ -57,8 +61,11 @@ export {
   loopActivityContextRequestSchema,
   createLoopSchema,
   captureLoopPacketSchema,
+  getLoopRoleBriefSourceSchema,
   importLoopCapturePacketSchema,
+  linkCompletedActivitySchema,
   queryLoopCapturePacketsSchema,
+  queryLoopRoleBriefSourceSchema,
   queryLoopsSchema,
   queryRoleBriefMigrationInboxSchema,
   reviseLoopRoleBriefSchema,
@@ -528,6 +535,40 @@ async function readLoopProjection(ownerId: string, input: {
   };
 }
 
+export async function readLoopRoleBriefSource(ownerId: string, inputValue: unknown) {
+  const input = queryLoopRoleBriefSourceSchema.parse(inputValue);
+  const db = getDb();
+  const loopRows = await db.select({
+    currentRoleBriefRevision: interviewLoops.currentRoleBriefRevision,
+  }).from(interviewLoops).where(and(
+    eq(interviewLoops.ownerId, ownerId),
+    eq(interviewLoops.loopId, input.loopId),
+  )).limit(1);
+  const loop = loopRows[0];
+  if (!loop) throw new LoopError("loop_not_found", "That owner-private Loop is unavailable.");
+  const revision = input.roleBriefRevision ?? loop.currentRoleBriefRevision;
+  const revisionRows = await db.select().from(loopRoleBriefRevisions).where(and(
+    eq(loopRoleBriefRevisions.ownerId, ownerId),
+    eq(loopRoleBriefRevisions.loopId, input.loopId),
+    eq(loopRoleBriefRevisions.revision, revision),
+  )).limit(1);
+  const row = revisionRows[0];
+  if (!row) throw new LoopError("loop_role_brief_not_found", "That immutable Role Brief revision is unavailable.");
+  const roleBrief = loopRoleBriefInputSchema.parse(row.privateSnapshot);
+  return {
+    loopId: input.loopId,
+    roleBriefRevision: row.revision,
+    label: roleBrief.label,
+    company: roleBrief.company,
+    roleTitle: roleBrief.roleTitle,
+    source: {
+      ...roleBrief.source,
+      fingerprint: row.sourceFingerprint,
+    },
+    createdAt: row.createdAt,
+  };
+}
+
 export async function resolveLoopActivityContext(
   ownerId: string,
   inputValue: LoopActivityContextRequest,
@@ -713,6 +754,201 @@ export async function bindPlannedActivityToLoop(
     const raced = await replayActivityBinding(ownerId, input.operationId, requestFingerprint);
     if (raced) return raced;
     throw new LoopError("loop_activity_revision_conflict", "The planned activity changed while binding; reread it before retrying.");
+  }
+  return { ...receipt, duplicate: false };
+}
+
+export async function linkCompletedActivityToLoop(
+  ownerId: string,
+  inputValue: unknown,
+  nowMs = Date.now(),
+) {
+  const input = linkCompletedActivitySchema.parse(inputValue) as LinkCompletedActivityInput;
+  const db = getDb();
+  const requestFingerprint = await fingerprint(input);
+  const replay = await replayActivityBinding(ownerId, input.operationId, requestFingerprint);
+  if (replay) return replay;
+
+  const [activityRows, timerRows, outcomeRows, currentBindings, currentHistory, loopRows] = await Promise.all([
+    db.select().from(extraActivities).where(and(
+      eq(extraActivities.ownerId, ownerId),
+      eq(extraActivities.id, input.activityId),
+    )).limit(1),
+    db.select().from(timers).where(and(
+      eq(timers.ownerId, ownerId),
+      eq(timers.subjectId, input.activityId),
+      eq(timers.kind, "activity"),
+    )).limit(1),
+    db.select().from(outcomes).where(and(
+      eq(outcomes.ownerId, ownerId),
+      eq(outcomes.activityId, input.activityId),
+    )).limit(1),
+    db.select().from(loopActivityBindings).where(and(
+      eq(loopActivityBindings.ownerId, ownerId),
+      eq(loopActivityBindings.activityId, input.activityId),
+    )).limit(1),
+    db.select().from(loopActivityHistory).where(and(
+      eq(loopActivityHistory.ownerId, ownerId),
+      eq(loopActivityHistory.activityId, input.activityId),
+    )).limit(1),
+    db.select().from(interviewLoops).where(and(
+      eq(interviewLoops.ownerId, ownerId),
+      eq(interviewLoops.loopId, input.loopId),
+    )).limit(1),
+  ]);
+  const activity = activityRows[0];
+  const timer = timerRows[0];
+  const outcome = outcomeRows[0];
+  const loop = loopRows[0];
+  if (!activity) throw new LoopError("loop_activity_not_found", "That owner-private completed activity is unavailable.");
+  if (!timer?.startedAt || !timer.completed || !timer.completedAt || !outcome) {
+    throw new LoopError(
+      "loop_activity_not_completed",
+      "Historical linking requires an authoritative completed timer and explicit activity result.",
+    );
+  }
+  if (currentBindings[0] || currentHistory[0]) {
+    throw new LoopError("loop_activity_already_bound", "That activity already belongs to a Loop and cannot be moved.");
+  }
+  if (!loop) throw new LoopError("loop_not_found", "That active owner-private Loop is unavailable.");
+  if (loop.currentRevision !== input.expectedLoopRevision) {
+    throw new LoopError("loop_revision_conflict", "The Loop changed; reread it before linking the completed activity.");
+  }
+  if (loop.currentRoleBriefRevision !== input.expectedRoleBriefRevision) {
+    throw new LoopError(
+      "loop_role_brief_revision_conflict",
+      "The Role Brief changed; reread it before linking the completed activity.",
+    );
+  }
+  const payload = activity.payload as Record<string, unknown>;
+  const specialty = payload.type;
+  const questionId = payload.questionId;
+  if (!["leetcode", "system_design", "behavioral"].includes(String(specialty)) || typeof questionId !== "string") {
+    throw new LoopError("loop_activity_not_practice", "Only a stable Interview practice activity can link to a Loop.");
+  }
+  const resolved = await resolveLoopActivityContext(ownerId, {
+    loopId: input.loopId,
+    ...(input.stageId ? { stageId: input.stageId } : {}),
+  });
+  if (
+    resolved.loopContext.loopRevision !== input.expectedLoopRevision
+    || resolved.loopContext.roleBriefRevision !== input.expectedRoleBriefRevision
+  ) {
+    throw new LoopError("loop_revision_conflict", "The Loop context changed; reread it before linking the completed activity.");
+  }
+  const activityRevision = activity.revision + 1;
+  const historyReceipt = {
+    schemaVersion: 1,
+    source: "explicit_completed_activity_link",
+    activityId: input.activityId,
+    timerRevision: timer.revision,
+    outcomeRevision: outcome.revision,
+    completedAt: timer.completedAt,
+    linkedAt: nowMs,
+  };
+  const receipt = {
+    status: "historically_linked" as const,
+    activityId: input.activityId,
+    activityRevision,
+    bindingRevision: 1,
+    result: outcome.outcome,
+    completedAt: timer.completedAt,
+    linkedAt: nowMs,
+    ...resolved.loopContext,
+  };
+  const unchanged = sql`EXISTS (
+    SELECT 1 FROM ${extraActivities}
+    WHERE ${extraActivities.ownerId} = ${ownerId}
+      AND ${extraActivities.id} = ${input.activityId}
+      AND ${extraActivities.revision} = ${activity.revision}
+  ) AND EXISTS (
+    SELECT 1 FROM ${timers}
+    WHERE ${timers.ownerId} = ${ownerId}
+      AND ${timers.subjectId} = ${input.activityId}
+      AND ${timers.kind} = 'activity'
+      AND ${timers.completed} = 1
+      AND ${timers.completedAt} = ${timer.completedAt}
+      AND ${timers.revision} = ${timer.revision}
+  ) AND EXISTS (
+    SELECT 1 FROM ${outcomes}
+    WHERE ${outcomes.ownerId} = ${ownerId}
+      AND ${outcomes.activityId} = ${input.activityId}
+      AND ${outcomes.outcome} = ${outcome.outcome}
+      AND ${outcomes.revision} = ${outcome.revision}
+  ) AND EXISTS (
+    SELECT 1 FROM ${interviewLoops}
+    WHERE ${interviewLoops.ownerId} = ${ownerId}
+      AND ${interviewLoops.loopId} = ${input.loopId}
+      AND ${interviewLoops.currentRevision} = ${input.expectedLoopRevision}
+      AND ${interviewLoops.currentRoleBriefRevision} = ${input.expectedRoleBriefRevision}
+  ) AND NOT EXISTS (
+    SELECT 1 FROM ${loopActivityBindings}
+    WHERE ${loopActivityBindings.ownerId} = ${ownerId}
+      AND ${loopActivityBindings.activityId} = ${input.activityId}
+  ) AND NOT EXISTS (
+    SELECT 1 FROM ${loopActivityHistory}
+    WHERE ${loopActivityHistory.ownerId} = ${ownerId}
+      AND ${loopActivityHistory.activityId} = ${input.activityId}
+  ) AND NOT EXISTS (
+    SELECT 1 FROM ${loopActivityBindingOperations}
+    WHERE ${loopActivityBindingOperations.ownerId} = ${ownerId}
+      AND ${loopActivityBindingOperations.operationId} = ${input.operationId}
+  )`;
+  try {
+    await db.batch([
+      d1TransactionalInvariantGuard(db, unchanged),
+      db.insert(loopActivityBindings).values({
+        ownerId,
+        activityId: input.activityId,
+        loopId: resolved.loopContext.loopId,
+        stageId: resolved.loopContext.stageId ?? null,
+        loopRevision: resolved.loopContext.loopRevision,
+        roleBriefRevision: resolved.loopContext.roleBriefRevision,
+        specialty: specialty as "leetcode" | "system_design" | "behavioral",
+        questionId,
+        roleBriefDisplaySnapshot: boundRoleBriefDisplaySnapshot(resolved.roleBriefDisplaySnapshot),
+        bindingRevision: 1,
+        createdAt: nowMs,
+        updatedAt: nowMs,
+      }),
+      db.update(extraActivities).set({
+        payload: { ...payload, loopContext: resolved.loopContext },
+        revision: activityRevision,
+        updatedAt: nowMs,
+      }).where(and(
+        eq(extraActivities.ownerId, ownerId),
+        eq(extraActivities.id, input.activityId),
+        eq(extraActivities.revision, activity.revision),
+      )),
+      db.insert(loopActivityHistory).values({
+        ownerId,
+        activityId: input.activityId,
+        loopId: resolved.loopContext.loopId,
+        stageId: resolved.loopContext.stageId ?? null,
+        roleBriefRevision: resolved.loopContext.roleBriefRevision,
+        specialty: specialty as "leetcode" | "system_design" | "behavioral",
+        questionId,
+        result: outcome.outcome,
+        completedAt: timer.completedAt,
+        receipt: historyReceipt,
+        createdAt: nowMs,
+      }),
+      db.insert(loopActivityBindingOperations).values({
+        ownerId,
+        operationId: input.operationId,
+        activityId: input.activityId,
+        requestFingerprint,
+        receipt,
+        createdAt: nowMs,
+      }),
+    ]);
+  } catch {
+    const raced = await replayActivityBinding(ownerId, input.operationId, requestFingerprint);
+    if (raced) return raced;
+    throw new LoopError(
+      "loop_completed_activity_link_conflict",
+      "The activity or Loop changed while linking; reread both before retrying.",
+    );
   }
   return { ...receipt, duplicate: false };
 }

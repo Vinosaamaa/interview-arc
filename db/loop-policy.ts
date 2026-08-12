@@ -38,6 +38,16 @@ export const bindPlannedActivitySchema = z.object({
   authorization: z.literal("explicit_user_instruction"),
 }).strict();
 
+export const linkCompletedActivitySchema = z.object({
+  loopId: loopStableIdSchema,
+  stageId: loopStableIdSchema.optional(),
+  operationId: loopStableIdSchema,
+  activityId: loopStableIdSchema,
+  expectedLoopRevision: z.number().int().positive(),
+  expectedRoleBriefRevision: z.number().int().positive(),
+  authorization: z.literal("loop_recorder"),
+}).strict();
+
 export const loopQuestionMemorySchema = z.object({
   memoryId: loopStableIdSchema,
   specialty: loopSpecialtySchema,
@@ -187,6 +197,15 @@ export const queryLoopsSchema = z.object({
   }
 });
 
+export const queryLoopRoleBriefSourceSchema = z.object({
+  loopId: loopStableIdSchema,
+  roleBriefRevision: z.number().int().positive().optional(),
+}).strict();
+
+export const getLoopRoleBriefSourceSchema = queryLoopRoleBriefSourceSchema.extend({
+  authorization: z.literal("loop_recorder"),
+}).strict();
+
 const targetProfileMigrationBaseSchema = z.object({
   operationId: loopStableIdSchema,
   targetId: loopStableIdSchema,
@@ -264,3 +283,4 @@ export type ImportLoopCapturePacketInput = z.infer<typeof importLoopCapturePacke
 export type LoopActivityContextRequest = z.infer<typeof loopActivityContextRequestSchema>;
 export type LoopActivityContextProjection = z.infer<typeof loopActivityContextProjectionSchema>;
 export type BindPlannedActivityInput = z.infer<typeof bindPlannedActivitySchema>;
+export type LinkCompletedActivityInput = z.infer<typeof linkCompletedActivitySchema>;
