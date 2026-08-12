@@ -55,6 +55,10 @@ application ID, parent, and PDF hash. A child revision must provide its existing
 `lineageId` and exact `parentRevisionId`. `jobId` is optional and never created
 by this flow.
 
+`sourceUrl`, when supplied, must be a credential-free public HTTP(S) posting.
+Loopback, local-network hostnames, raw IP literals, embedded credentials, and
+credential-shaped query parameters fail closed before provider contact.
+
 `excludedGapClaimIds` means the specialist explicitly kept that claim's open
 gap out of the final letter; it does not resolve or hide the gap. Every declared
 claim must be currently verified, every declared evidence item must be accepted
@@ -75,6 +79,11 @@ JD/PDF hashes, and sends one multipart command directly to Job Journey using
 the private Sites service credential. Redirects fail closed. If delivery is
 uncertain or Job Journey returns a server failure, the controller reads the
 same operation identity rather than inventing a second artifact.
+
+Provider upload and operation receipts are byte-bounded and validated as the
+complete versioned create receipt before any state can be reported. Missing
+integrity, lineage, lifecycle, filename, application binding, or download
+fields are malformed rather than partially accepted.
 
 Only `ready` completes publication. Retry pending/uncertain work with the same
 manifest; changed content under the same identity conflicts. The bounded local

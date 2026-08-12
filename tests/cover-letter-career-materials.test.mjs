@@ -6,12 +6,14 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { normalizeJobJourneyCoverLetterPage } from "../app/cover-letter-contract.ts";
-import { resolveJobJourneyDownloadUrl } from "../db/job-journey-client.ts";
+import { fetchCoverLetters, resolveJobJourneyDownloadUrl } from "../db/job-journey-client.ts";
 import {
   CoverLetterPublishError,
+  coverLetterPublishManifestSchema,
   publishCoverLetterManifest,
   resolveArtifactIdentity,
   validateEvidencePreflight,
+  validateProviderReceipt,
 } from "../scripts/publish-cover-letter-to-job-journey.mjs";
 
 const providerArtifact = {
@@ -58,6 +60,66 @@ test("Job Journey cover-letter projection is a strict privacy allowlist", () => 
     artifacts: [{ ...providerArtifact, state: "uploaded" }],
     page: { hasMore: false, nextCursor: null },
   }));
+  assert.throws(() => normalizeJobJourneyCoverLetterPage({
+    schemaVersion: 1,
+    generatedAt: "2026-08-12T11:00:02.000Z",
+    artifacts: [{ ...providerArtifact, downloadPath: null }],
+    page: { hasMore: false, nextCursor: null },
+  }));
+  assert.throws(() => normalizeJobJourneyCoverLetterPage({
+    schemaVersion: 1,
+    generatedAt: "2026-08-12T11:00:02.000Z",
+    artifacts: [{ ...providerArtifact, sourceUrl: "https://owner:secret@example.com/job" }],
+    page: { hasMore: false, nextCursor: null },
+  }));
+  assert.throws(() => normalizeJobJourneyCoverLetterPage({
+    schemaVersion: 1,
+    generatedAt: "2026-08-12T11:00:02.000Z",
+    artifacts: [{ ...providerArtifact, sourceUrl: "http://localhost/private" }],
+    page: { hasMore: false, nextCursor: null },
+  }));
+});
+
+test("cover-letter projection bounds provider bytes before JSON materialization", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response("x".repeat(1024 * 1024 + 1), {
+    headers: { "content-type": "application/json" },
+  });
+  try {
+    await assert.rejects(
+      fetchCoverLetters({
+        JOB_JOURNEY_BASE_URL: "https://job-journey.example",
+        JOB_JOURNEY_SITE_TOKEN: "synthetic-job-token",
+      }, "owner-cover-letter-bounds"),
+      /oversized response/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("controller rejects malformed or partial provider receipts before ready", () => {
+  const operationId = "create_receipt_contract";
+  assert.throws(
+    () => validateProviderReceipt({
+      schemaVersion: 1,
+      operationId,
+      operationKind: "create",
+      replayed: false,
+      artifact: { ...providerArtifact, downloadPath: null },
+    }, {
+      operationId,
+      artifactId: providerArtifact.id,
+      lineageId: providerArtifact.lineageId,
+    }, {
+      resumeId: providerArtifact.resumeId,
+      resumeRevisionId: providerArtifact.resumeRevisionId,
+      pdfFilename: providerArtifact.pdfFilename,
+    }, providerArtifact.pdfSha256, providerArtifact.jobDescriptionSha256, providerArtifact.pdfSize),
+    (error) => error instanceof CoverLetterPublishError
+      && error.code === "cover_letter_provider_receipt_invalid"
+      && error.retryable === true,
+  );
 });
 
 test("Job Journey links are credential-free HTTPS URLs under the exact private asset route", () => {
@@ -74,6 +136,10 @@ test("Job Journey links are credential-free HTTPS URLs under the exact private a
   ));
   assert.throws(() => resolveJobJourneyDownloadUrl(
     { JOB_JOURNEY_BASE_URL: "http://job-journey.example" },
+    "/api/assets/cover-letters/artifact_0001",
+  ));
+  assert.throws(() => resolveJobJourneyDownloadUrl(
+    { JOB_JOURNEY_BASE_URL: "https://owner:secret@job-journey.example" },
     "/api/assets/cover-letters/artifact_0001",
   ));
 });
@@ -109,6 +175,20 @@ test("evidence preflight accepts verified support and fails closed on gaps or co
     }),
     (error) => error instanceof CoverLetterPublishError && error.code === "cover_letter_claim_has_contrary_evidence",
   );
+  assert.throws(
+    () => validateEvidencePreflight(check, {
+      ...preflight,
+      claims: [{ ...preflight.claims[0], evidenceIds: [] }],
+    }),
+    (error) => error instanceof CoverLetterPublishError && error.code === "cover_letter_evidence_not_accepted",
+  );
+  assert.throws(
+    () => validateEvidencePreflight({ ...check, evidenceIds: ["evidence-platform", "evidence-unlinked"] }, {
+      ...preflight,
+      supportingEvidence: [...preflight.supportingEvidence, { evidenceId: "evidence-unlinked" }],
+    }),
+    (error) => error instanceof CoverLetterPublishError && error.code === "cover_letter_evidence_not_accepted",
+  );
 });
 
 test("controller verifies Arc state and advances one bounded receipt from pending to ready", async () => {
@@ -142,6 +222,17 @@ test("controller verifies Arc state and advances one bounded receipt from pendin
       inspectedAt: 1_786_537_800_000,
     },
   };
+  assert.equal(coverLetterPublishManifestSchema.safeParse({
+    ...manifest,
+    sourceUrl: "http://owner:secret@example.com/job",
+  }).success, false);
+  assert.equal(coverLetterPublishManifestSchema.safeParse({
+    ...manifest,
+    evidenceChecks: [{
+      ...manifest.evidenceChecks[0],
+      excludedGapClaimIds: ["claim-not-declared"],
+    }],
+  }).success, false);
   await writeFile(manifestPath, JSON.stringify(manifest));
   const requests = [];
   const client = {

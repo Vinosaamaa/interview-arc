@@ -3,7 +3,26 @@ import { z } from "zod";
 const providerId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/);
 const resumeId = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,199}$/);
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/);
-const httpUrl = z.string().url().refine((value) => ["http:", "https:"].includes(new URL(value).protocol));
+function isPublicHttpUrl(value: string) {
+  const url = new URL(value);
+  const hostname = url.hostname.toLowerCase();
+  const hasSensitiveParameter = [...url.searchParams.keys()]
+    .some((key) => /(?:^|[_-])(token|secret|password|signature|auth|api[_-]?key)(?:$|[_-])/i.test(key));
+  return ["http:", "https:"].includes(url.protocol)
+    && !url.username
+    && !url.password
+    && hostname !== "localhost"
+    && !hostname.endsWith(".localhost")
+    && !hostname.endsWith(".local")
+    && !hostname.startsWith("[")
+    && !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname)
+    && !hasSensitiveParameter;
+}
+const httpUrl = z.string().url().max(2_048).refine(isPublicHttpUrl);
+const httpsUrl = z.string().url().max(2_048).refine((value) => {
+  const url = new URL(value);
+  return url.protocol === "https:" && !url.username && !url.password;
+});
 const privateDownloadPath = z.string().regex(/^\/api\/assets\/cover-letters\/[A-Za-z0-9%_-]+$/);
 
 export const coverLetterArtifactStateSchema = z.enum([
@@ -46,14 +65,24 @@ export const jobJourneyCoverLetterPageSchema = z.object({
     hasMore: z.boolean(),
     nextCursor: z.string().min(1).max(2_048).nullable(),
   }).strict(),
-}).strict();
+}).strict().superRefine((page, context) => {
+  for (const [index, artifact] of page.artifacts.entries()) {
+    const downloadable = artifact.state === "ready" || artifact.state === "superseded";
+    if (downloadable !== (artifact.downloadPath !== null)) {
+      context.addIssue({ code: "custom", path: ["artifacts", index, "downloadPath"], message: "Download availability does not match artifact state." });
+    }
+    if (artifact.state === "ready" && artifact.readyAt === null) {
+      context.addIssue({ code: "custom", path: ["artifacts", index, "readyAt"], message: "A ready artifact requires readyAt." });
+    }
+  }
+});
 
 export type JobJourneyCoverLetterPage = z.infer<typeof jobJourneyCoverLetterPageSchema>;
 
 export const careerMaterialsCoverLetterArtifactSchema = jobJourneyCoverLetterArtifactSchema.extend({
   resumeLabel: z.string().trim().min(1).max(120).nullable(),
   resumeRevisionKnown: z.boolean(),
-  downloadUrl: httpUrl.nullable(),
+  downloadUrl: httpsUrl.nullable(),
 }).strict();
 
 export type CareerMaterialsCoverLetterArtifact = z.infer<typeof careerMaterialsCoverLetterArtifactSchema>;

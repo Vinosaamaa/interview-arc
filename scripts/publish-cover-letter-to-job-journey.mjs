@@ -12,11 +12,71 @@ const DEFAULT_MCP_ENDPOINT = "https://limitless-mcp.vinosama.workers.dev/mcp";
 const MAX_MANIFEST_BYTES = 512_000;
 const MAX_PDF_BYTES = 2 * 1024 * 1024;
 const MAX_JOB_DESCRIPTION_BYTES = 200_000;
+const MAX_PROVIDER_RECEIPT_BYTES = 256 * 1024;
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
 const providerId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/);
 const resumeId = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,199}$/);
 const safeDisplay = z.string().trim().min(1).max(180);
 const stableReference = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,199}$/);
+const sha256Hex = z.string().regex(/^[a-f0-9]{64}$/);
+const providerDownloadPath = z.string().regex(/^\/api\/assets\/cover-letters\/[A-Za-z0-9%_-]+$/);
+
+function isPublicPostingUrl(value) {
+  const url = new URL(value);
+  const hostname = url.hostname.toLowerCase();
+  const hasSensitiveParameter = [...url.searchParams.keys()]
+    .some((key) => /(?:^|[_-])(token|secret|password|signature|auth|api[_-]?key)(?:$|[_-])/i.test(key));
+  return ["http:", "https:"].includes(url.protocol)
+    && !url.username
+    && !url.password
+    && hostname !== "localhost"
+    && !hostname.endsWith(".localhost")
+    && !hostname.endsWith(".local")
+    && !hostname.startsWith("[")
+    && !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname)
+    && !hasSensitiveParameter;
+}
+
+const publicPostingUrl = z.string().url().max(2_048).refine(isPublicPostingUrl)
+  .transform((value) => new URL(value).toString());
+const providerArtifactReceiptSchema = z.object({
+  id: providerId,
+  lineageId: providerId,
+  parentRevisionId: providerId.nullable(),
+  company: safeDisplay,
+  role: safeDisplay,
+  sourceUrl: publicPostingUrl.nullable(),
+  state: z.enum(["pending", "ready", "superseded", "deleting", "deleted"]),
+  jobDescriptionSha256: sha256Hex,
+  resumeId,
+  resumeRevisionId: resumeId,
+  pdfSha256: sha256Hex,
+  pdfSize: z.number().int().positive().max(MAX_PDF_BYTES),
+  pdfFilename: z.string().trim().min(1).max(180),
+  jobId: providerId.nullable(),
+  linkRevision: z.number().int().nonnegative(),
+  createdAt: z.string().datetime({ offset: true }),
+  readyAt: z.string().datetime({ offset: true }).nullable(),
+  supersededAt: z.string().datetime({ offset: true }).nullable(),
+  deletedAt: z.string().datetime({ offset: true }).nullable(),
+  updatedAt: z.string().datetime({ offset: true }),
+  downloadPath: providerDownloadPath.nullable(),
+}).strict().superRefine((artifact, context) => {
+  const downloadable = artifact.state === "ready" || artifact.state === "superseded";
+  if (downloadable !== (artifact.downloadPath !== null)) {
+    context.addIssue({ code: "custom", path: ["downloadPath"], message: "Download availability does not match artifact state." });
+  }
+  if (artifact.state === "ready" && artifact.readyAt === null) {
+    context.addIssue({ code: "custom", path: ["readyAt"], message: "A ready artifact requires readyAt." });
+  }
+});
+const providerCreateReceiptSchema = z.object({
+  schemaVersion: z.literal(1),
+  operationId: z.string().regex(/^create_[A-Za-z0-9_-]{1,120}$/),
+  operationKind: z.literal("create"),
+  replayed: z.boolean(),
+  artifact: providerArtifactReceiptSchema,
+}).strict();
 
 export const coverLetterPublishManifestSchema = z.object({
   schemaVersion: z.literal(1),
@@ -26,7 +86,7 @@ export const coverLetterPublishManifestSchema = z.object({
   operationId: z.string().regex(/^create_[A-Za-z0-9_-]{1,120}$/).optional(),
   company: safeDisplay,
   role: safeDisplay,
-  sourceUrl: z.string().url().refine((value) => ["http:", "https:"].includes(new URL(value).protocol)).optional(),
+  sourceUrl: publicPostingUrl.optional(),
   jobDescription: z.string().min(120).max(MAX_JOB_DESCRIPTION_BYTES),
   resumeId,
   resumeRevisionId: resumeId,
@@ -35,8 +95,8 @@ export const coverLetterPublishManifestSchema = z.object({
   pdfFilename: z.string().trim().min(1).max(180).default("cover-letter.pdf"),
   evidenceChecks: z.array(z.object({
     questionId: stableReference,
-    claimIds: z.array(stableReference).max(40),
-    evidenceIds: z.array(stableReference).max(80),
+    claimIds: z.array(stableReference).min(1).max(40),
+    evidenceIds: z.array(stableReference).min(1).max(80),
     excludedGapClaimIds: z.array(stableReference).max(40).default([]),
   }).strict()).max(20).default([]),
   qualityGate: z.object({
@@ -62,6 +122,16 @@ export const coverLetterPublishManifestSchema = z.object({
       path: ["jobDescription"],
       message: "The complete job description exceeds the provider bound.",
     });
+  }
+  for (const [index, check] of value.evidenceChecks.entries()) {
+    for (const field of ["claimIds", "evidenceIds", "excludedGapClaimIds"]) {
+      if (new Set(check[field]).size !== check[field].length) {
+        context.addIssue({ code: "custom", path: ["evidenceChecks", index, field], message: `${field} must be unique.` });
+      }
+    }
+    if (check.excludedGapClaimIds.some((claimId) => !check.claimIds.includes(claimId))) {
+      context.addIssue({ code: "custom", path: ["evidenceChecks", index, "excludedGapClaimIds"], message: "Excluded gaps must belong to declared claims." });
+    }
   }
 });
 
@@ -163,17 +233,20 @@ function structuredResult(result, toolName) {
 
 export function validateEvidencePreflight(check, preflight) {
   const claims = Array.isArray(preflight?.claims) ? preflight.claims : [];
+  const supportingItems = Array.isArray(preflight?.supportingEvidence) ? preflight.supportingEvidence : [];
+  const contraryItems = Array.isArray(preflight?.contraryEvidence) ? preflight.contraryEvidence : [];
   const supportingEvidence = new Set(
-    (Array.isArray(preflight?.supportingEvidence) ? preflight.supportingEvidence : [])
+    supportingItems
       .map((item) => item?.evidenceId)
       .filter((value) => typeof value === "string"),
   );
   const contraryEvidence = new Set(
-    (Array.isArray(preflight?.contraryEvidence) ? preflight.contraryEvidence : [])
+    contraryItems
       .map((item) => item?.evidenceId)
       .filter((value) => typeof value === "string"),
   );
   const gaps = Array.isArray(preflight?.gaps) ? preflight.gaps : [];
+  const linkedEvidence = new Set();
   for (const claimId of check.claimIds) {
     const claim = claims.find((item) => item?.claimId === claimId);
     if (!claim || claim.status !== "verified") {
@@ -182,16 +255,25 @@ export function validateEvidencePreflight(check, preflight) {
         "A declared cover-letter claim is not verified for this owner and question.",
       );
     }
-    for (const evidenceId of Array.isArray(claim.evidenceIds) ? claim.evidenceIds : []) {
+    const claimEvidenceIds = Array.isArray(claim.evidenceIds) ? claim.evidenceIds : [];
+    if (claimEvidenceIds.length === 0) {
+      throw new CoverLetterPublishError(
+        "cover_letter_evidence_not_accepted",
+        "A declared cover-letter claim has no accepted supporting evidence.",
+      );
+    }
+    for (const evidenceId of claimEvidenceIds) {
       if (!supportingEvidence.has(evidenceId) || !check.evidenceIds.includes(evidenceId)) {
         throw new CoverLetterPublishError(
           "cover_letter_evidence_not_accepted",
           "A declared cover-letter claim lacks its accepted supporting evidence.",
         );
       }
+      linkedEvidence.add(evidenceId);
     }
     const hasContrary = (Array.isArray(claim.contraryEvidenceIds) ? claim.contraryEvidenceIds : [])
-      .some((evidenceId) => contraryEvidence.has(evidenceId));
+      .some((evidenceId) => contraryEvidence.has(evidenceId))
+      || contraryItems.some((item) => item?.claimId === claimId);
     if (hasContrary) {
       throw new CoverLetterPublishError(
         "cover_letter_claim_has_contrary_evidence",
@@ -207,7 +289,7 @@ export function validateEvidencePreflight(check, preflight) {
     }
   }
   for (const evidenceId of check.evidenceIds) {
-    if (!supportingEvidence.has(evidenceId)) {
+    if (!supportingEvidence.has(evidenceId) || !linkedEvidence.has(evidenceId)) {
       throw new CoverLetterPublishError(
         "cover_letter_evidence_not_accepted",
         "A declared evidence item is not accepted supporting evidence for this question.",
@@ -283,7 +365,11 @@ function providerHeaders(token) {
 
 async function readProviderJson(response) {
   try {
-    return await response.json();
+    const declaredLength = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_PROVIDER_RECEIPT_BYTES) throw new Error("oversized");
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength > MAX_PROVIDER_RECEIPT_BYTES) throw new Error("oversized");
+    return JSON.parse(new TextDecoder().decode(bytes));
   } catch {
     throw new CoverLetterPublishError(
       "cover_letter_provider_receipt_invalid",
@@ -293,24 +379,39 @@ async function readProviderJson(response) {
   }
 }
 
-function validateProviderReceipt(value, identity, manifest, pdfSha256, jobDescriptionSha256) {
-  const artifact = value?.artifact;
+export function validateProviderReceipt(value, identity, manifest, pdfSha256, jobDescriptionSha256, pdfSize) {
+  const parsed = providerCreateReceiptSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new CoverLetterPublishError(
+      "cover_letter_provider_receipt_invalid",
+      "Job Journey returned a malformed or partial operation receipt.",
+      true,
+    );
+  }
+  const receipt = parsed.data;
+  const artifact = receipt.artifact;
   if (
-    !artifact
-    || artifact.id !== identity.artifactId
+    artifact.id !== identity.artifactId
     || artifact.lineageId !== identity.lineageId
+    || artifact.parentRevisionId !== (manifest.parentRevisionId ?? null)
+    || artifact.company !== manifest.company
+    || artifact.role !== manifest.role
+    || artifact.sourceUrl !== (manifest.sourceUrl ?? null)
     || artifact.resumeId !== manifest.resumeId
     || artifact.resumeRevisionId !== manifest.resumeRevisionId
     || artifact.pdfSha256 !== pdfSha256
+    || artifact.pdfSize !== pdfSize
+    || artifact.pdfFilename !== manifest.pdfFilename
     || artifact.jobDescriptionSha256 !== jobDescriptionSha256
-    || value.operationId !== identity.operationId
+    || artifact.jobId !== (manifest.jobId ?? null)
+    || receipt.operationId !== identity.operationId
   ) {
     throw new CoverLetterPublishError(
       "cover_letter_provider_receipt_mismatch",
       "Job Journey returned a receipt for different immutable input.",
     );
   }
-  return value;
+  return receipt;
 }
 
 async function readProviderOperation(base, headers, operationId, fetchImpl) {
@@ -322,7 +423,7 @@ async function readProviderOperation(base, headers, operationId, fetchImpl) {
     throw new CoverLetterPublishError(
       "cover_letter_provider_readback_unavailable",
       `Job Journey operation readback returned HTTP ${response.status}.`,
-      response.status >= 500,
+      response.status === 404 || response.status === 408 || response.status === 429 || response.status >= 500,
     );
   }
   return readProviderJson(response);
@@ -354,7 +455,7 @@ async function uploadProviderArtifact({ base, headers, identity, manifest, pdfBy
     });
   } catch {
     const readback = await readProviderOperation(base, headers, identity.operationId, fetchImpl);
-    return validateProviderReceipt(readback, identity, manifest, pdfSha256, jobDescriptionSha256);
+    return validateProviderReceipt(readback, identity, manifest, pdfSha256, jobDescriptionSha256, pdfBytes.byteLength);
   }
   if (response.ok) {
     return validateProviderReceipt(
@@ -363,15 +464,17 @@ async function uploadProviderArtifact({ base, headers, identity, manifest, pdfBy
       manifest,
       pdfSha256,
       jobDescriptionSha256,
+      pdfBytes.byteLength,
     );
   }
   if (response.status >= 500) {
     const readback = await readProviderOperation(base, headers, identity.operationId, fetchImpl);
-    return validateProviderReceipt(readback, identity, manifest, pdfSha256, jobDescriptionSha256);
+    return validateProviderReceipt(readback, identity, manifest, pdfSha256, jobDescriptionSha256, pdfBytes.byteLength);
   }
   throw new CoverLetterPublishError(
     response.status === 409 ? "cover_letter_provider_conflict" : "cover_letter_provider_rejected",
     `Job Journey rejected the cover-letter operation with HTTP ${response.status}.`,
+    response.status === 408 || response.status === 429,
   );
 }
 
@@ -481,7 +584,7 @@ export async function publishCoverLetterManifest(manifestPath, {
   try {
     arc = await verifyArcState(client, manifest);
   } finally {
-    await client.close();
+    await client.close().catch(() => undefined);
   }
 
   const provider = await uploadProviderArtifact({

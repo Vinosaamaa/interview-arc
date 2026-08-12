@@ -20,6 +20,7 @@ async function readJson<T>(
   params: URLSearchParams,
   normalize: (value: unknown) => T,
   authorizationHeader: "authorization" | "OAI-Sites-Authorization" = "authorization",
+  maximumResponseBytes?: number,
 ): Promise<CachedJobJourneyValue<T>> {
   const baseUrl = env.JOB_JOURNEY_BASE_URL?.replace(/\/$/, "");
   const token = env.JOB_JOURNEY_SITE_TOKEN;
@@ -34,7 +35,21 @@ async function readJson<T>(
       redirect: "error",
     });
     if (!response.ok) throw new Error(`Job Journey returned ${response.status}.`);
-    const value = normalize(await response.json());
+    let responseValue: unknown;
+    if (maximumResponseBytes) {
+      const declaredLength = Number(response.headers.get("content-length"));
+      if (Number.isFinite(declaredLength) && declaredLength > maximumResponseBytes) {
+        throw new Error("Job Journey returned an oversized response.");
+      }
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes.byteLength > maximumResponseBytes) {
+        throw new Error("Job Journey returned an oversized response.");
+      }
+      responseValue = JSON.parse(new TextDecoder().decode(bytes));
+    } else {
+      responseValue = await response.json();
+    }
+    const value = normalize(responseValue);
     cache.set(cacheKey, { expiresAt: Date.now() + CACHE_TTL_MS, value });
     return { value, stale: false };
   } catch (error) {
@@ -77,6 +92,7 @@ export function fetchCoverLetters(
   ownerId: string,
   params = new URLSearchParams({ limit: "100" }),
 ): Promise<CachedJobJourneyValue<JobJourneyCoverLetterPage>> {
+  validateCoverLetterProviderBase(env);
   return readJson(
     env,
     ownerId,
@@ -84,7 +100,18 @@ export function fetchCoverLetters(
     params,
     normalizeJobJourneyCoverLetterPage,
     "OAI-Sites-Authorization",
+    1024 * 1024,
   );
+}
+
+function validateCoverLetterProviderBase(env: JobJourneyEnv): URL {
+  const raw = env.JOB_JOURNEY_BASE_URL;
+  if (!raw) throw new Error("Job Journey integration is not configured.");
+  const base = new URL(raw);
+  if (base.protocol !== "https:" || base.username || base.password) {
+    throw new Error("Job Journey must use credential-free HTTPS.");
+  }
+  return base;
 }
 
 export function resolveJobJourneyDownloadUrl(
@@ -94,8 +121,7 @@ export function resolveJobJourneyDownloadUrl(
   if (!downloadPath) return null;
   const baseUrl = env.JOB_JOURNEY_BASE_URL?.replace(/\/$/, "");
   if (!baseUrl) throw new Error("Job Journey integration is not configured.");
-  const base = new URL(baseUrl);
-  if (base.protocol !== "https:") throw new Error("Job Journey must use HTTPS.");
+  const base = validateCoverLetterProviderBase({ ...env, JOB_JOURNEY_BASE_URL: baseUrl });
   if (!/^\/api\/assets\/cover-letters\/[A-Za-z0-9%_-]+$/.test(downloadPath)) {
     throw new Error("Job Journey returned an invalid cover-letter link.");
   }
