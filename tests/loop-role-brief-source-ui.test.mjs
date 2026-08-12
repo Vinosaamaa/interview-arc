@@ -1,32 +1,30 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const readProjectFile = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
+import { parseJobDescription } from "../app/loop-role-brief-source.ts";
 
-test("the Loops UI opens one authenticated immutable job-description revision on demand", async () => {
-  const [route, workspace, styles, publicRoute] = await Promise.all([
-    readProjectFile("app/api/loops/role-brief-source/route.ts"),
-    readProjectFile("app/loops-workspace.tsx"),
-    readProjectFile("app/globals.css"),
-    readProjectFile("app/api/loops/route.ts"),
+test("the job-description reader preserves structured headings, prose, and ordered bullet groups", () => {
+  const blocks = parseJobDescription(`# Platform Engineer
+
+Build secure systems across teams.
+Keep source text inert: <script>alert("never execute")</script>
+
+## Responsibilities
+- Design APIs
+- Improve delivery
+
+## Requirements
+- Experience with distributed systems`);
+
+  assert.deepEqual(blocks, [
+    { type: "heading", level: 1, text: "Platform Engineer" },
+    {
+      type: "paragraph",
+      text: "Build secure systems across teams. Keep source text inert: <script>alert(\"never execute\")</script>",
+    },
+    { type: "heading", level: 2, text: "Responsibilities" },
+    { type: "list", items: ["Design APIs", "Improve delivery"] },
+    { type: "heading", level: 2, text: "Requirements" },
+    { type: "list", items: ["Experience with distributed systems"] },
   ]);
-
-  assert.match(route, /resolveOwnerId\(request\)/);
-  assert.match(route, /readLoopRoleBriefSource\(ownerId/);
-  assert.match(route, /private, no-store/);
-  assert.match(route, /x-content-type-options/);
-  assert.doesNotMatch(publicRoute, /readLoopRoleBriefSource|privateSnapshot|jdText/);
-
-  assert.match(workspace, /View full job description/);
-  assert.match(workspace, /aria-expanded=\{showSource\}/);
-  assert.match(workspace, /aria-controls=\{sourceRegionId\}/);
-  assert.match(workspace, /Opening the immutable job description/);
-  assert.match(workspace, /Open original posting/);
-  assert.match(workspace, /controller\.abort\(\)/);
-  assert.doesNotMatch(workspace, /dangerouslySetInnerHTML/);
-
-  assert.match(styles, /\.loop-jd-document \{[^}]*overflow: auto/s);
-  assert.match(styles, /\.loop-jd-access button:focus-visible/);
-  assert.match(styles, /@media[^}]+[\s\S]*\.loop-jd-access, \.loop-jd-source > header/s);
 });

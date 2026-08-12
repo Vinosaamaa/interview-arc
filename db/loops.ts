@@ -33,6 +33,7 @@ import {
   loopRoleBriefDisplaySnapshotSchema,
   loopRoleBriefInputSchema,
   loopSnapshotSchema,
+  loopSpecialtySchema,
   queryLoopCapturePacketsSchema,
   queryLoopRoleBriefSourceSchema,
   queryLoopsSchema,
@@ -637,6 +638,20 @@ async function replayActivityBinding(
   return { ...(operation.receipt as object), duplicate: true };
 }
 
+function practiceActivityIdentity(payloadValue: unknown) {
+  const payload = payloadValue as Record<string, unknown>;
+  const specialty = payload.type;
+  const questionId = payload.questionId;
+  if (!loopSpecialtySchema.safeParse(specialty).success || typeof questionId !== "string") {
+    throw new LoopError("loop_activity_not_practice", "Only a stable Interview practice activity can bind to a Loop.");
+  }
+  return {
+    payload,
+    specialty: specialty as "leetcode" | "system_design" | "behavioral",
+    questionId,
+  };
+}
+
 export async function bindPlannedActivityToLoop(
   ownerId: string,
   inputValue: unknown,
@@ -671,12 +686,7 @@ export async function bindPlannedActivityToLoop(
   if (timerRows[0]?.startedAt) {
     throw new LoopError("loop_activity_already_started", "Loop context is immutable after an activity starts.");
   }
-  const payload = activity.payload as Record<string, unknown>;
-  const specialty = payload.type;
-  const questionId = payload.questionId;
-  if (!["leetcode", "system_design", "behavioral"].includes(String(specialty)) || typeof questionId !== "string") {
-    throw new LoopError("loop_activity_not_practice", "Only a stable Interview practice activity can bind to a Loop.");
-  }
+  const { payload, specialty, questionId } = practiceActivityIdentity(activity.payload);
   const resolved = await resolveLoopActivityContext(ownerId, {
     loopId: input.loopId,
     ...(input.stageId ? { stageId: input.stageId } : {}),
@@ -712,7 +722,7 @@ export async function bindPlannedActivityToLoop(
         stageId: resolved.loopContext.stageId ?? null,
         loopRevision: resolved.loopContext.loopRevision,
         roleBriefRevision: resolved.loopContext.roleBriefRevision,
-        specialty: specialty as "leetcode" | "system_design" | "behavioral",
+        specialty,
         questionId,
         roleBriefDisplaySnapshot: boundRoleBriefDisplaySnapshot(resolved.roleBriefDisplaySnapshot),
         bindingRevision,
@@ -725,7 +735,7 @@ export async function bindPlannedActivityToLoop(
           stageId: resolved.loopContext.stageId ?? null,
           loopRevision: resolved.loopContext.loopRevision,
           roleBriefRevision: resolved.loopContext.roleBriefRevision,
-          specialty: specialty as "leetcode" | "system_design" | "behavioral",
+          specialty,
           questionId,
           roleBriefDisplaySnapshot: boundRoleBriefDisplaySnapshot(resolved.roleBriefDisplaySnapshot),
           bindingRevision,
@@ -758,17 +768,8 @@ export async function bindPlannedActivityToLoop(
   return { ...receipt, duplicate: false };
 }
 
-export async function linkCompletedActivityToLoop(
-  ownerId: string,
-  inputValue: unknown,
-  nowMs = Date.now(),
-) {
-  const input = linkCompletedActivitySchema.parse(inputValue) as LinkCompletedActivityInput;
+async function readCompletedActivityLinkCandidate(ownerId: string, input: LinkCompletedActivityInput) {
   const db = getDb();
-  const requestFingerprint = await fingerprint(input);
-  const replay = await replayActivityBinding(ownerId, input.operationId, requestFingerprint);
-  if (replay) return replay;
-
   const [activityRows, timerRows, outcomeRows, currentBindings, currentHistory, loopRows] = await Promise.all([
     db.select().from(extraActivities).where(and(
       eq(extraActivities.ownerId, ownerId),
@@ -810,7 +811,9 @@ export async function linkCompletedActivityToLoop(
   if (currentBindings[0] || currentHistory[0]) {
     throw new LoopError("loop_activity_already_bound", "That activity already belongs to a Loop and cannot be moved.");
   }
-  if (!loop) throw new LoopError("loop_not_found", "That active owner-private Loop is unavailable.");
+  if (!loop || loop.state !== "active") {
+    throw new LoopError("loop_not_found", "That active owner-private Loop is unavailable.");
+  }
   if (loop.currentRevision !== input.expectedLoopRevision) {
     throw new LoopError("loop_revision_conflict", "The Loop changed; reread it before linking the completed activity.");
   }
@@ -820,22 +823,63 @@ export async function linkCompletedActivityToLoop(
       "The Role Brief changed; reread it before linking the completed activity.",
     );
   }
-  const payload = activity.payload as Record<string, unknown>;
-  const specialty = payload.type;
-  const questionId = payload.questionId;
-  if (!["leetcode", "system_design", "behavioral"].includes(String(specialty)) || typeof questionId !== "string") {
-    throw new LoopError("loop_activity_not_practice", "Only a stable Interview practice activity can link to a Loop.");
-  }
-  const resolved = await resolveLoopActivityContext(ownerId, {
-    loopId: input.loopId,
-    ...(input.stageId ? { stageId: input.stageId } : {}),
-  });
-  if (
-    resolved.loopContext.loopRevision !== input.expectedLoopRevision
-    || resolved.loopContext.roleBriefRevision !== input.expectedRoleBriefRevision
-  ) {
+  return { activity, timer, outcome, loop };
+}
+
+async function resolveCompletedActivityLinkContext(
+  ownerId: string,
+  candidate: Awaited<ReturnType<typeof readCompletedActivityLinkCandidate>>,
+  input: LinkCompletedActivityInput,
+) {
+  const db = getDb();
+  const [loopRevisionRows, roleBriefRows] = await Promise.all([
+    db.select().from(interviewLoopRevisions).where(and(
+      eq(interviewLoopRevisions.ownerId, ownerId),
+      eq(interviewLoopRevisions.loopId, input.loopId),
+      eq(interviewLoopRevisions.revision, input.expectedLoopRevision),
+    )).limit(1),
+    db.select().from(loopRoleBriefRevisions).where(and(
+      eq(loopRoleBriefRevisions.ownerId, ownerId),
+      eq(loopRoleBriefRevisions.loopId, input.loopId),
+      eq(loopRoleBriefRevisions.revision, input.expectedRoleBriefRevision),
+    )).limit(1),
+  ]);
+  const loopRevision = loopRevisionRows[0];
+  const roleBriefRevision = roleBriefRows[0];
+  if (!loopRevision || !roleBriefRevision) {
     throw new LoopError("loop_revision_conflict", "The Loop context changed; reread it before linking the completed activity.");
   }
+  const snapshot = loopSnapshotSchema.parse(loopRevision.snapshot);
+  if (input.stageId && !snapshot.stages.some((stage) => stage.stageId === input.stageId)) {
+    throw new LoopError("loop_stage_not_found", "That Round is not present in the current Loop revision.");
+  }
+  return {
+    loopContext: {
+      loopId: input.loopId,
+      ...(input.stageId ? { stageId: input.stageId } : {}),
+      loopRevision: input.expectedLoopRevision,
+      roleBriefRevision: input.expectedRoleBriefRevision,
+      company: candidate.loop.company,
+      roleTitle: candidate.loop.roleTitle,
+    },
+    roleBriefDisplaySnapshot: displaySafeRoleBrief(roleBriefRevision),
+  };
+}
+
+export async function linkCompletedActivityToLoop(
+  ownerId: string,
+  inputValue: unknown,
+  nowMs = Date.now(),
+) {
+  const input = linkCompletedActivitySchema.parse(inputValue) as LinkCompletedActivityInput;
+  const db = getDb();
+  const requestFingerprint = await fingerprint(input);
+  const replay = await replayActivityBinding(ownerId, input.operationId, requestFingerprint);
+  if (replay) return replay;
+  const candidate = await readCompletedActivityLinkCandidate(ownerId, input);
+  const { activity, timer, outcome } = candidate;
+  const { payload, specialty, questionId } = practiceActivityIdentity(activity.payload);
+  const resolved = await resolveCompletedActivityLinkContext(ownerId, candidate, input);
   const activityRevision = activity.revision + 1;
   const historyReceipt = {
     schemaVersion: 1,
@@ -904,7 +948,7 @@ export async function linkCompletedActivityToLoop(
         stageId: resolved.loopContext.stageId ?? null,
         loopRevision: resolved.loopContext.loopRevision,
         roleBriefRevision: resolved.loopContext.roleBriefRevision,
-        specialty: specialty as "leetcode" | "system_design" | "behavioral",
+        specialty,
         questionId,
         roleBriefDisplaySnapshot: boundRoleBriefDisplaySnapshot(resolved.roleBriefDisplaySnapshot),
         bindingRevision: 1,
@@ -926,7 +970,7 @@ export async function linkCompletedActivityToLoop(
         loopId: resolved.loopContext.loopId,
         stageId: resolved.loopContext.stageId ?? null,
         roleBriefRevision: resolved.loopContext.roleBriefRevision,
-        specialty: specialty as "leetcode" | "system_design" | "behavioral",
+        specialty,
         questionId,
         result: outcome.outcome,
         completedAt: timer.completedAt,

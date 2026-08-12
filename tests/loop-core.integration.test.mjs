@@ -720,6 +720,7 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
     });
     assert.equal(lateRebind.isError, true);
     assert.equal(lateRebind.structuredContent.code, "loop_activity_already_started");
+    const finishRequestedAt = Date.now();
     const finished = await call(client, "control_practice_timer", {
       expectedWorkbenchId: workbenchId,
       mutationId: "loop-course-schedule-finish",
@@ -742,6 +743,13 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
     assert.equal(withHistory.loops[0].activityHistory.length, 2);
     const automaticallyProjectedHistory = withHistory.loops[0].activityHistory.find(
       (history) => history.activityId === activityId,
+    );
+    assert.ok(Number.isInteger(automaticallyProjectedHistory.completedAt));
+    assert.ok(automaticallyProjectedHistory.completedAt >= finishRequestedAt);
+    assert.ok(automaticallyProjectedHistory.completedAt <= Date.now());
+    assert.equal(
+      automaticallyProjectedHistory.receipt.completedAt,
+      automaticallyProjectedHistory.completedAt,
     );
     assert.deepEqual(automaticallyProjectedHistory, {
       activityId,

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { parseJobDescription, type RoleBriefSourcePayload } from "./loop-role-brief-source";
+
 type Specialty = "leetcode" | "system_design" | "behavioral";
 type MemoryConfidence = "exact" | "reconstructed";
 
@@ -114,27 +116,6 @@ type LoopPayload = {
   migrationInbox: unknown[];
 };
 
-type RoleBriefSourcePayload = {
-  loopId: string;
-  roleBriefRevision: number;
-  label: string;
-  company: string;
-  roleTitle: string;
-  source: {
-    kind: "pasted_jd" | "public_posting";
-    displayLocator: string;
-    capturedAt: number;
-    jdText: string;
-    fingerprint: string;
-  };
-  createdAt: number;
-};
-
-type JdBlock =
-  | { type: "heading"; level: number; text: string }
-  | { type: "paragraph"; text: string }
-  | { type: "list"; items: string[] };
-
 async function fetchLoopPayload(includeArchived: boolean, signal?: AbortSignal) {
   const response = await fetch(`/api/loops?includeArchived=${includeArchived}`, { cache: "no-store", signal });
   const body = await response.json() as LoopPayload & { error?: string };
@@ -148,45 +129,6 @@ async function fetchRoleBriefSource(loopId: string, revision: number, signal?: A
   const body = await response.json() as RoleBriefSourcePayload & { error?: string };
   if (!response.ok) throw new Error(body.error || "The full job description is unavailable.");
   return body;
-}
-
-function parseJdDocument(value: string): JdBlock[] {
-  const blocks: JdBlock[] = [];
-  let paragraph: string[] = [];
-  let list: string[] = [];
-  const flushParagraph = () => {
-    if (paragraph.length) blocks.push({ type: "paragraph", text: paragraph.join(" ") });
-    paragraph = [];
-  };
-  const flushList = () => {
-    if (list.length) blocks.push({ type: "list", items: list });
-    list = [];
-  };
-  value.split(/\r?\n/).forEach((line) => {
-    const text = line.trim();
-    if (!text) {
-      flushParagraph();
-      flushList();
-      return;
-    }
-    const heading = text.match(/^(#{1,4})\s+(.+)$/);
-    if (heading) {
-      flushParagraph();
-      flushList();
-      blocks.push({ type: "heading", level: heading[1].length, text: heading[2] });
-      return;
-    }
-    if (text.startsWith("- ")) {
-      flushParagraph();
-      list.push(text.slice(2));
-      return;
-    }
-    flushList();
-    paragraph.push(text);
-  });
-  flushParagraph();
-  flushList();
-  return blocks;
 }
 
 function formatDate(value?: number) {
@@ -314,10 +256,10 @@ function PreparationLedger({ loop }: { loop: LoopProjection }) {
 }
 
 function JobDescriptionDocument({ source }: { source: RoleBriefSourcePayload }) {
-  const blocks = useMemo(() => parseJdDocument(source.source.jdText), [source.source.jdText]);
+  const blocks = useMemo(() => parseJobDescription(source.source.jdText), [source.source.jdText]);
   return <article className="loop-jd-document" aria-label={`Full job description for ${source.roleTitle}`}>
     {blocks.map((block, index) => {
-      if (block.type === "list") return <ul key={`list-${index}`}>{block.items.map((item) => <li key={item}>{item}</li>)}</ul>;
+      if (block.type === "list") return <ul key={`list-${index}`}>{block.items.map((item, itemIndex) => <li key={`${index}-${itemIndex}`}>{item}</li>)}</ul>;
       if (block.type === "paragraph") return <p key={`paragraph-${index}`}>{block.text}</p>;
       if (block.level <= 1) return <h3 key={`heading-${index}`}>{block.text}</h3>;
       if (block.level === 2) return <h4 key={`heading-${index}`}>{block.text}</h4>;
