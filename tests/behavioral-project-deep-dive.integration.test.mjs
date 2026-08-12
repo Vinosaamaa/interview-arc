@@ -141,7 +141,10 @@ test("Project Deep Dives bind exact questions, freeze Past links, and project to
   const otherToken = "ia_project_deep_dive_other_token";
   const overviewQuestion = "experience-map-sample-platform";
   const claimQuestion = "sample-platform-resume-claim";
+  const secondClaimQuestion = "sample-platform-resume-claim-second";
   const otherOverviewQuestion = "sample-platform-second-overview";
+  const similarProjectQuestion = "experience-map-sample-platform-next";
+  const careerOverviewQuestion = "career-resume-overview";
   const oldActivity = "activity-sample-platform-past";
   const newActivity = "activity-sample-platform-current";
   let releaseLock;
@@ -171,10 +174,15 @@ test("Project Deep Dives bind exact questions, freeze Past links, and project to
       VALUES
         ('owner-project','behavioral','${overviewQuestion}','Experience Map: Sample Platform','Walk through this project.',NULL,'personal','["resume-foundation","experience:sample-platform"]',NULL,NULL,NULL,'[]','[]','[]','[]',NULL,100,60,1,1),
         ('owner-project','behavioral','${claimQuestion}','Resume claim: sample platform','Explain this claim.',NULL,'personal','["resume-bullet","experience:sample-platform","claim:claim-sample-platform"]',NULL,NULL,NULL,'[]','[]','[]','[]',NULL,90,45,1,1),
-        ('owner-project','behavioral','${otherOverviewQuestion}','Second overview','Duplicate overview.',NULL,'personal','["resume-foundation","experience:sample-platform"]',NULL,NULL,NULL,'[]','[]','[]','[]',NULL,80,45,1,1);
+        ('owner-project','behavioral','${secondClaimQuestion}','Second resume claim: sample platform','Explain the second claim.',NULL,'personal','["resume-bullet","experience:sample-platform","claim:claim-sample-platform-second"]',NULL,NULL,NULL,'[]','[]','[]','[]',NULL,85,45,1,1),
+        ('owner-project','behavioral','${otherOverviewQuestion}','Second overview','Duplicate overview.',NULL,'personal','["resume-foundation","experience:sample-platform"]',NULL,NULL,NULL,'[]','[]','[]','[]',NULL,80,45,1,1),
+        ('owner-project','behavioral','${similarProjectQuestion}','Experience Map: Sample Platform Next','A similarly named but distinct project.',NULL,'personal','["resume-foundation","experience:sample-platform-next"]',NULL,NULL,NULL,'[]','[]','[]','[]',NULL,75,45,1,1),
+        ('owner-project','behavioral','${careerOverviewQuestion}','Career resume overview','Walk through the resume.',NULL,'personal','["resume-foundation"]',NULL,NULL,NULL,'[]','[]','[]','[]',NULL,70,45,1,1);
       INSERT INTO behavioral_evidence_sources
         (owner_id,source_id,current_revision,state,project_key,kind,label,safe_hint,availability,created_at,updated_at)
-      VALUES ('owner-project','source-sample-platform',1,'active','sample-platform','repository','Sample platform source','Sanitized source hint','available',1,1);
+      VALUES
+        ('owner-project','source-sample-platform',1,'active','sample-platform','repository','Sample platform source','Sanitized source hint','available',1,1),
+        ('owner-project','source-sample-platform-next',1,'active','sample-platform-next','repository','Sample platform next source','Distinct sanitized source hint','available',1,1);
       INSERT INTO behavioral_evidence_items
         (owner_id,evidence_id,project_key,origin,statement,source_revision,evidence_grade,attribution_grade,
          claim_strength,candidate_state,visibility,safe_provenance,supports,limitations,tags,owner_attestation,
@@ -183,7 +191,9 @@ test("Project Deep Dives bind exact questions, freeze Past links, and project to
       INSERT INTO behavioral_claims
         (owner_id,claim_id,question_id,text,scope,status,claim_strength,evidence_ids,contrary_evidence_ids,
          gaps,safer_wording,tags,visibility,revision,created_at,updated_at)
-      VALUES ('owner-project','claim-sample-platform','${claimQuestion}','I implemented explicit operation identities.','personal_contribution','verified','personal_contribution_candidate','["evidence-sample-platform"]','[]','[]',NULL,'["sample-platform"]','owner_private',1,1,1);
+      VALUES
+        ('owner-project','claim-sample-platform','${claimQuestion}','I implemented explicit operation identities.','personal_contribution','verified','personal_contribution_candidate','["evidence-sample-platform"]','[]','[]',NULL,'["sample-platform"]','owner_private',1,1,1),
+        ('owner-project','claim-sample-platform-second','${secondClaimQuestion}','I documented the retry boundary.','personal_contribution','verified','personal_contribution_candidate','["evidence-sample-platform"]','[]','[]',NULL,'["sample-platform"]','owner_private',1,1,1);
       INSERT INTO extra_activities (owner_id,id,date,workbench_id,payload,revision,updated_at)
       VALUES
         ('owner-project','${oldActivity}','2026-08-10',NULL,'{"schemaVersion":2,"id":"${oldActivity}","questionId":"${claimQuestion}","date":"2026-08-10","source":"extra","type":"behavioral","title":"Past claim attempt","allocatedSeconds":2700,"timingSource":"website","status":"completed"}',1,2),
@@ -229,8 +239,10 @@ test("Project Deep Dives bind exact questions, freeze Past links, and project to
 
     const migration = await call(client, "query_behavioral_project_deep_dives", { includeMigrationReview: true });
     assert.equal(migration.projects[0].projectId, "sample-platform");
+    assert.deepEqual(migration.projects.map((item) => item.projectId), ["sample-platform", "sample-platform-next"]);
     assert.equal(migration.migrationReview.find((item) => item.questionId === overviewQuestion).focus, "project_overview");
     assert.equal(migration.migrationReview.find((item) => item.questionId === claimQuestion).sourceClaimId, "claim-sample-platform");
+    assert.equal(migration.migrationReview.find((item) => item.questionId === careerOverviewQuestion).status, "not_deep_dive");
 
     const bindOverview = {
       operationId: "bind-sample-overview-1",
@@ -258,6 +270,14 @@ test("Project Deep Dives bind exact questions, freeze Past links, and project to
     });
     assert.equal(duplicateOverview.isError, true);
     assert.equal(duplicateOverview.structuredContent.code, "behavioral_project_binding_scope_conflict");
+    const unknownProject = await callRaw(client, "set_behavioral_project_binding", {
+      ...bindOverview,
+      operationId: "bind-unknown-project-1",
+      expectedRevision: 1,
+      projectId: "sample-platform-typo",
+    });
+    assert.equal(unknownProject.isError, true);
+    assert.equal(unknownProject.structuredContent.code, "behavioral_project_not_found");
 
     const bindClaim = {
       operationId: "bind-sample-claim-1",
@@ -271,6 +291,20 @@ test("Project Deep Dives bind exact questions, freeze Past links, and project to
       authorization: "behavioral_specialist",
     };
     await call(client, "set_behavioral_project_binding", bindClaim);
+    await call(client, "set_behavioral_project_binding", {
+      ...bindClaim,
+      operationId: "bind-sample-claim-second-1",
+      questionId: secondClaimQuestion,
+      sourceClaimId: "claim-sample-platform-second",
+      reason: "Bind the second exact resume claim without merging question profiles.",
+    });
+    await call(client, "set_behavioral_project_binding", {
+      ...bindOverview,
+      operationId: "bind-similar-project-overview-1",
+      questionId: similarProjectQuestion,
+      projectId: "sample-platform-next",
+      reason: "Keep the similarly named project on its exact stable ID.",
+    });
 
     const invalidProvisional = await callRaw(client, "save_provisional_solution_profile", {
       specialty: "behavioral",
@@ -312,6 +346,19 @@ test("Project Deep Dives bind exact questions, freeze Past links, and project to
     assert.deepEqual(afterPast.finalAnswerSnapshots, beforePast.finalAnswerSnapshots);
     assert.equal(afterPast.projectDeepDiveLink.projectId, "sample-platform");
     assert.equal(afterPast.projectDeepDiveLink.source, "completed_attempt_backfill");
+    await call(client, "set_behavioral_project_binding", {
+      operationId: "revise-sample-claim-focus-2",
+      questionId: claimQuestion,
+      expectedRevision: 1,
+      projectId: "sample-platform",
+      focus: "technical_decision",
+      state: "active",
+      reason: "Correct the current question focus while preserving Past revision 1.",
+      authorization: "behavioral_specialist",
+    });
+    const afterRebind = await call(client, "get_activity_practice_record", { activityId: oldActivity });
+    assert.equal(afterRebind.projectDeepDiveLink.bindingRevision, 1);
+    assert.deepEqual(afterRebind.turns, beforePast.turns);
 
     await call(client, "save_specialist_finalization", finalization(newActivity, overviewQuestion, "new-response"));
     const currentRecord = await call(client, "get_activity_practice_record", { activityId: newActivity });
@@ -324,13 +371,23 @@ test("Project Deep Dives bind exact questions, freeze Past links, and project to
 
     const projection = await call(client, "query_behavioral_project_deep_dives", { projectId: "sample-platform" });
     assert.equal(projection.activityLinks.length, 2);
+    assert.equal(projection.bindings.length, 3);
+    assert.equal(projection.bindings.filter((item) => item.focus === "resume_claim").length, 1);
     assert.equal(projection.learnProjection.find((item) => item.questionId === overviewQuestion).solutionProfileRevision, 1);
+    const similarProjection = await call(client, "query_behavioral_project_deep_dives", { projectId: "sample-platform-next" });
+    assert.deepEqual(similarProjection.bindings.map((item) => item.questionId), [similarProjectQuestion]);
 
     otherClient = await connectMcpClient(baseUrl, otherToken, "project-deep-dive-other");
     const isolated = await call(otherClient, "query_behavioral_project_deep_dives", { includeMigrationReview: true });
     assert.deepEqual(isolated.projects, []);
     assert.deepEqual(isolated.bindings, []);
     assert.deepEqual(isolated.activityLinks, []);
+    const crossOwnerWrite = await callRaw(otherClient, "set_behavioral_project_binding", bindOverview);
+    assert.equal(crossOwnerWrite.isError, true);
+    assert.equal([
+      "behavioral_project_not_found",
+      "behavioral_project_question_not_found",
+    ].includes(crossOwnerWrite.structuredContent.code), true);
   } finally {
     await client?.close().catch(() => {});
     await otherClient?.close().catch(() => {});

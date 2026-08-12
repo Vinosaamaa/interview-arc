@@ -66,6 +66,13 @@ test("overview and resume-claim profiles require stable keyed sections in contra
     }, overviewBinding),
     ["stable sectionKey on every Project Deep Dive section"],
   );
+  assert.deepEqual(
+    behavioralProjectProfileMissingRequirements({
+      ...overview,
+      sections: overview.sections.map((section, index) => index === 1 ? overview.sections[0] : section),
+    }, overviewBinding),
+    ["unique Project Deep Dive section keys"],
+  );
 
   const claimBinding = {
     projectId: "sample-platform",
