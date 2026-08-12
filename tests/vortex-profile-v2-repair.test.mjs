@@ -8,6 +8,7 @@ import {
   TARGET,
   buildMutationSql,
   renderArtifact,
+  resultSetsFromWrangler,
   sha256,
   validateProfile,
 } from "../scripts/repairs/vortex-profile-v2.mjs";
@@ -153,4 +154,12 @@ test("revision-2 profile, artifact, and guarded CAS repair preserve revision-1 h
   const replay = { ...snapshot, profile: [current], revisions };
   assert.throws(() => buildMutationSql(replay, profile, 300), /current revision must be exactly 1/);
   db.close();
+});
+
+test("remote file-import progress is not parsed as a JSON query result", () => {
+  assert.deepEqual(resultSetsFromWrangler("├ Checking if file needs uploading\n", { file: true }), []);
+  assert.throws(
+    () => resultSetsFromWrangler("├ Checking if file needs uploading\n"),
+    /Unexpected token/,
+  );
 });
