@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -9,6 +9,21 @@ import { fileURLToPath } from "node:url";
 import { trustedHeadRemote, validateEngineeringImpact } from "../scripts/validate-engineering-impact.mjs";
 
 const validatorPath = fileURLToPath(new URL("../scripts/validate-engineering-impact.mjs", import.meta.url));
+
+test("the shared receipt contract has one immutable v1 identity and bounded collections", () => {
+  const schema = JSON.parse(readFileSync(new URL(
+    "../docs/contracts/engineering-pull-request-receipt.schema.json",
+    import.meta.url,
+  ), "utf8"));
+  assert.equal(schema.$id, "urn:interview-arc:contracts:engineering-pull-request-receipt:1");
+  assert.equal(schema.properties.sources.maxItems, 32);
+  assert.equal(schema.properties.sources.items.properties.label.maxLength, 160);
+  assert.equal(schema.properties.sources.items.properties.url.maxLength, 2048);
+  assert.equal(schema.$defs.stringList.maxItems, 32);
+  assert.equal(schema.$defs.stringList.items.maxLength, 512);
+  assert.equal(schema.$defs.recordRefs.maxItems, 16);
+  assert.equal(schema.$defs.recordRefs.items.maxLength, 180);
+});
 
 function git(cwd, args) {
   return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -247,6 +262,67 @@ Records one material fixture change.
   assert.match(result.stdout, /Engineering impact: architecture-review/);
 });
 
+test("a material receipt can reuse one exact existing rich record for a PR cluster", (t) => {
+  const cwd = createRepository(t);
+  write(cwd, "docs/engineering/records/review.md", `---
+schemaVersion: 1
+id: review
+revision: 1
+type: architecture-review
+---
+# Review
+
+Records the shared multi-PR architecture boundary.
+`);
+  git(cwd, ["add", "docs/engineering/records/review.md"]);
+  git(cwd, ["commit", "--quiet", "-m", "accept shared review"]);
+  const base = git(cwd, ["rev-parse", "HEAD"]);
+  const receipt = (ref) => `---
+schemaVersion: 1
+repository: interview-arc
+pr: 312
+title: Reuse shared architecture review
+classification: architecture-review
+richRecordRefs: ["${ref}"]
+reconstructed: false
+---
+# Reuse shared architecture review
+
+Links this material slice to the already reviewed multi-PR architecture boundary.
+`;
+  write(cwd, "docs/engineering/changes/pr-312.md", receipt("review@1"));
+  git(cwd, ["add", "docs/engineering/changes/pr-312.md"]);
+  git(cwd, ["commit", "--quiet", "-m", "link shared review"]);
+  const head = git(cwd, ["rev-parse", "HEAD"]);
+
+  const accepted = runValidator(cwd, {
+    pull_request: {
+      number: 312,
+      title: "Reuse shared architecture review",
+      body: checks.review,
+      base: { sha: base },
+      head: { sha: head },
+    },
+  });
+  assert.equal(accepted.status, 0, accepted.stderr);
+
+  write(cwd, "docs/engineering/changes/pr-312.md", receipt("review@2"));
+  git(cwd, ["add", "docs/engineering/changes/pr-312.md"]);
+  git(cwd, ["commit", "--quiet", "-m", "link missing revision"]);
+  const invalidHead = git(cwd, ["rev-parse", "HEAD"]);
+  const rejected = runValidator(cwd, {
+    pull_request: {
+      number: 312,
+      title: "Reuse shared architecture review",
+      body: checks.review,
+      base: { sha: base },
+      head: { sha: invalidHead },
+    },
+  });
+  assert.notEqual(rejected.status, 0);
+  assert.match(rejected.stderr, /exact rich Engineering record revisions/);
+});
+
 test("the required validation CLI rejects deletion of a canonical rich record", (t) => {
   const cwd = createRepository(t);
   write(cwd, "docs/engineering/records/review.md", `---
@@ -412,6 +488,23 @@ test("forward changes require exactly one PR impact classification", () => {
     }),
     /exactly one/,
   );
+  const nestedFenceBody = `\`\`\`\`markdown
+## Engineering impact
+- [x] ADR
+\`\`\`
+- [x] Postmortem
+\`\`\`\`
+
+${checks.none}`;
+  assert.equal(
+    validate({ body: nestedFenceBody, changedFiles: ["README.md"], recordTypes: [] }).classification,
+    "none",
+  );
+});
+
+test("PR title and body edits rerun the required validation workflow", () => {
+  const workflow = readFileSync(new URL("../.github/workflows/deploy.yml", import.meta.url), "utf8");
+  assert.match(workflow, /pull_request:\n\s+types: \[opened, synchronize, reopened, edited\]/);
 });
 
 test("forward receipts bind to the exact repository, title, and authorship mode", () => {
@@ -527,6 +620,6 @@ test("rich classifications require one matching canonical record type", () => {
       recordRefs: ["review@2"],
       receipt: { ...noneReceipt, classification: "architecture-review", richRecordRefs: ["review@1"] },
     }),
-    /exact rich Engineering record reference/,
+    /exact rich Engineering record revisions/,
   );
 });

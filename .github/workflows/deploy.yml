@@ -5,6 +5,7 @@ name: Validate and publish Cloudflare
 # Content/documentation-only merges skip the Worker build and deployment.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
   workflow_dispatch:

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Vinosaamaa/interview-arc/blob/main/docs/contracts/engineering-pull-request-receipt.schema.json",
+  "$id": "urn:interview-arc:contracts:engineering-pull-request-receipt:1",
   "title": "Engineering Pull Request Receipt canonical frontmatter",
   "description": "A compact factual timeline receipt for one merged pull request. Rich engineering narrative remains in the separate Engineering Journal record contract.",
   "type": "object",

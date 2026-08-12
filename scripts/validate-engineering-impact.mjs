@@ -27,10 +27,10 @@ function selectedClassifications(body) {
   let inEngineeringImpact = false;
   let fence = null;
   for (const line of body.split(/\r?\n/)) {
-    const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/);
+    const fenceMatch = line.match(/^\s*(`{3,}|~{3,})(.*)$/);
     if (fenceMatch) {
-      if (fence === null) fence = fenceMatch[1][0];
-      else if (fence === fenceMatch[1][0]) fence = null;
+      if (fence === null) fence = { marker: fenceMatch[1][0], length: fenceMatch[1].length };
+      else if (fence.marker === fenceMatch[1][0] && fenceMatch[1].length >= fence.length && !fenceMatch[2].trim()) fence = null;
       continue;
     }
     if (fence !== null) continue;
@@ -52,6 +52,8 @@ export function validateEngineeringImpact({
   changedFiles,
   recordTypes,
   recordRefs = [],
+  linkedRecordTypes,
+  linkedRecordRefs,
   deletedRecordCount = 0,
   pullRequestNumber,
   pullRequestTitle,
@@ -88,7 +90,7 @@ export function validateEngineeringImpact({
     throw new Error("The canonical Pull Request Receipt has invalid rich Engineering record references.");
   }
   if (deletedRecordCount > 0) {
-    throw new Error("Every changed canonical Engineering record must exist at the pull request head.");
+    throw new Error("Every referenced or changed canonical Engineering record must exist at the pull request head.");
   }
   if (choice.classification === "none") {
     const normalizedReason = choice.reason.trim().replace(/[.!]+$/, "").toLowerCase();
@@ -101,19 +103,25 @@ export function validateEngineeringImpact({
     }
     return { classification: "none", changedFiles };
   }
-  if (recordTypes.length === 0) {
+  const resolvedRecordTypes = linkedRecordTypes ?? recordTypes;
+  const resolvedRecordRefs = linkedRecordRefs ?? recordRefs;
+  if (resolvedRecordTypes.length === 0) {
     throw new Error(`Engineering impact \`${choice.classification}\` requires a matching canonical record in this pull request.`);
   }
-  const uniqueTypes = [...new Set(recordTypes)];
-  if (uniqueTypes.length !== 1 || uniqueTypes[0] !== choice.classification) {
-    throw new Error("The pull request Engineering impact classification does not match its changed canonical records.");
+  if (resolvedRecordTypes.some((type) => type !== choice.classification) ||
+      recordTypes.some((type) => type !== choice.classification)) {
+    throw new Error("The pull request Engineering impact classification does not match its linked or changed canonical records.");
   }
-  const expectedRefs = [...new Set(recordRefs)].sort();
+  const resolvedRefs = [...new Set(resolvedRecordRefs)].sort();
   const receiptRefs = [...new Set(receipt.richRecordRefs)].sort();
-  if (expectedRefs.length !== recordRefs.length || receiptRefs.length !== receipt.richRecordRefs.length ||
-      expectedRefs.length === 0 || expectedRefs.length !== receiptRefs.length ||
-      expectedRefs.some((ref, index) => ref !== receiptRefs[index])) {
-    throw new Error("A material Pull Request Receipt must link every exact rich Engineering record reference changed by this pull request.");
+  if (resolvedRefs.length !== resolvedRecordRefs.length || receiptRefs.length !== receipt.richRecordRefs.length ||
+      resolvedRefs.length === 0 || resolvedRefs.length !== receiptRefs.length ||
+      resolvedRefs.some((ref, index) => ref !== receiptRefs[index])) {
+    throw new Error("A material Pull Request Receipt must link exact rich Engineering record revisions at the pull request head.");
+  }
+  const changedRefs = new Set(recordRefs);
+  if (changedRefs.size !== recordRefs.length || [...changedRefs].some((ref) => !receiptRefs.includes(ref))) {
+    throw new Error("A material Pull Request Receipt must link every exact rich Engineering record revision changed by the pull request.");
   }
   return { classification: choice.classification, changedFiles };
 }
@@ -308,8 +316,6 @@ function main() {
   if (changedRecordMarkdown.some((path) => !/^docs\/engineering\/records\/[a-z0-9]+(?:-[a-z0-9]+)*\.md$/.test(path))) {
     throw new Error("Changed canonical Engineering records must use a lowercase repository-root filename.");
   }
-  const recordPaths = changedRecordMarkdown;
-  const records = recordsAt(recordPaths, pullRequest.head.sha, pullRequest.base.sha);
   const expectedReceiptPath = `docs/engineering/changes/pr-${pullRequest.number}.md`;
   const receiptPaths = changedFiles.filter((path) => path.startsWith("docs/engineering/changes/") && path.endsWith(".md"));
   const receipt = receiptPaths.length === 1 && receiptPaths[0] === expectedReceiptPath
@@ -318,11 +324,26 @@ function main() {
         return markdown === null ? null : parseReceipt(markdown, expectedReceiptPath);
       })()
     : null;
+  const linkedRecordPaths = receipt?.richRecordRefs.map((ref) =>
+    `docs/engineering/records/${ref.slice(0, ref.lastIndexOf("@"))}.md`) ?? [];
+  const recordPaths = [...new Set([...changedRecordMarkdown, ...linkedRecordPaths])];
+  const records = recordsAt(recordPaths, pullRequest.head.sha, pullRequest.base.sha);
+  const recordsByPath = new Map(recordPaths.map((path, index) => [path, records[index]]));
+  const changedRecords = changedRecordMarkdown.map((path) => recordsByPath.get(path));
+  const linkedRecords = receipt?.richRecordRefs.map((ref, index) => {
+    const record = recordsByPath.get(linkedRecordPaths[index]);
+    if (!record || record.ref !== ref) {
+      throw new Error("A material Pull Request Receipt must link exact rich Engineering record revisions at the pull request head.");
+    }
+    return record;
+  }) ?? [];
   const result = validateEngineeringImpact({
     body: pullRequest.body ?? "",
     changedFiles,
-    recordTypes: records.map((record) => record.type),
-    recordRefs: records.map((record) => record.ref),
+    recordTypes: changedRecords.map((record) => record.type),
+    recordRefs: changedRecords.map((record) => record.ref),
+    linkedRecordTypes: linkedRecords.map((record) => record.type),
+    linkedRecordRefs: linkedRecords.map((record) => record.ref),
     deletedRecordCount: records.filter((record) => !record.existsAtHead).length,
     pullRequestNumber: pullRequest.number,
     pullRequestTitle: pullRequest.title,
