@@ -43,6 +43,33 @@ type LoopStage = {
   };
 };
 
+type LoopInterviewMaterial = {
+  materialId: string;
+  loopId: string;
+  stageId?: string;
+  kind: "interview_prep";
+  state: "active" | "archived";
+  label: string;
+  summary?: string;
+  sections: Array<{
+    sectionId: string;
+    title: string;
+    body?: string;
+    bullets: string[];
+  }>;
+  provenance: {
+    kind: "owner_authorized_synthesis";
+    roleBriefRevision: number;
+    activityIds: string[];
+    sourceLabel: string;
+    preparedAt: number;
+  };
+  revision: number;
+  createdAt: number;
+  revisionCreatedAt: number;
+  updatedAt: number;
+};
+
 type LoopProjection = {
   loop: {
     loopId: string;
@@ -97,6 +124,7 @@ type LoopProjection = {
     result: "solved" | "solved_after_reviewing_approach" | "failed";
     completedAt: number;
   }>;
+  interviewMaterials: LoopInterviewMaterial[];
 };
 
 export type LoopJourneyFacts = {
@@ -250,6 +278,45 @@ function PreparationLedger({ loop }: { loop: LoopProjection }) {
       <header><span className={`loop-specialty-mark ${specialty}`} aria-hidden="true" /><strong>{specialty === "leetcode" ? "Coding" : sentenceId(specialty)}</strong><small>{rows.filter((row) => row.state !== "planned").length} / {rows.length}</small></header>
       {rows.length ? <ul>{rows.map((row) => <li key={row.key}><span>{row.title}</span>{row.confidence ? <small className={`memory-confidence ${row.confidence}`}>{sentenceId(row.confidence)}</small> : <small>{sentenceId(row.state)}</small>}</li>)}</ul> : <p>No linked questions.</p>}
     </section>)}</div>
+  </section>;
+}
+
+function InterviewMaterials({ loop, stage }: { loop: LoopProjection; stage?: LoopStage }) {
+  const materials = loop.interviewMaterials.filter((material) => (
+    !material.stageId || material.stageId === stage?.stageId
+  ));
+  return <section className="loop-materials" aria-labelledby="loop-materials-title">
+    <header>
+      <div>
+        <span>Confirmed-process preparation</span>
+        <h2 id="loop-materials-title">Interview materials</h2>
+        <p>{stage ? stage.label : "Loop-wide preparation"} · Separate from Career Materials, the Role Brief, and the raw job description.</p>
+      </div>
+      <small>{materials.length ? `${materials.length} current` : "None attached"}</small>
+    </header>
+    {materials.length ? <div className="loop-material-list">{materials.map((material, index) => <article key={material.materialId}>
+      <details open={index === 0}>
+        <summary>
+          <span><strong>{material.label}</strong><small>{material.stageId ? "Round-specific" : "Loop-wide"} · Revision {material.revision}</small></span>
+          <span className="loop-material-summary-mark" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5 8 5 5 5-5" /></svg></span>
+        </summary>
+        <div className="loop-material-content">
+          {material.summary ? <p className="loop-material-intro">{material.summary}</p> : null}
+          <div className="loop-material-sections">{material.sections.map((section) => <section key={section.sectionId}>
+            <h3>{section.title}</h3>
+            {section.body ? <p>{section.body}</p> : null}
+            {section.bullets.length ? <ul>{section.bullets.map((bullet, bulletIndex) => <li key={`${section.sectionId}-${bulletIndex}`}>{bullet}</li>)}</ul> : null}
+          </section>)}</div>
+          <footer>
+            <span>{material.provenance.sourceLabel}</span>
+            <span>Role Brief r{material.provenance.roleBriefRevision} · {material.provenance.activityIds.length} linked {material.provenance.activityIds.length === 1 ? "activity" : "activities"} · Prepared {formatDate(material.provenance.preparedAt)}</span>
+          </footer>
+        </div>
+      </details>
+    </article>)}</div> : <div className="loop-materials-empty">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h7l4 4V20.5H7z" /><path d="M14 3.5v4h4M9.5 12h6M9.5 15.5h5" /></svg>
+      <div><strong>No interview material is attached to this {stage ? "Round" : "Loop"}.</strong><p>Ask the Loop Recorder to create or revise one source-backed prep document. It will remain separate from resumes, cover letters, the Role Brief, and the raw JD.</p></div>
+    </div>}
   </section>;
 }
 
@@ -475,6 +542,7 @@ export function LoopsWorkspace({ onOpenActivity }: { onOpenActivity: (activityId
       <aside><span>Current truth</span><strong>Loop r{selectedLoop.loop.revision}</strong><small>Role Brief r{selectedLoop.roleBrief.revision}</small></aside>
     </div>
     <StageTimeline stages={selectedLoop.loop.stages} selected={effectiveStageId} onSelect={setSelectedStageId} />
+    <InterviewMaterials loop={selectedLoop} stage={selectedStage} />
     <div className="loop-detail-grid">
       <PreparationLedger loop={selectedLoop} />
       <div className="loop-context-column"><RoleBriefPanel loop={selectedLoop} onOpenSource={(opener) => setSourceDialog({ loop: selectedLoop, opener })} /><DebriefPanel stage={selectedStage} /></div>

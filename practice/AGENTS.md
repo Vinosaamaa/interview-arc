@@ -19,13 +19,15 @@ Read these shared contracts only when the corresponding action is needed:
 
 ## Loop Context Boundary
 
-The Loop Recorder alone owns Loop and Role Brief mutations. A coding,
+The Loop Recorder alone owns Loop, Role Brief, and interview-material
+mutations. A coding,
 system-design, or behavioral specialist may call `query_loops` to consume the
-display-safe Loop and exact Role Brief revision selected by the server. It may
+display-safe Loop, exact Role Brief revision, and current owner-private
+interview prep selected by the server. It may
 attach one optional Loop and Round context to an activity through the planning
-contract, but it must never call the Loop mutation tools, recreate a Role Brief
-as a Target Profile, infer a stage result, or copy private job-description text
-into practice evidence.
+contract, but it must never call the Loop/material mutation tools, recreate a
+Role Brief as a Target Profile, infer a stage result or prep content, or copy
+private job-description text into practice evidence.
 
 ## Mandatory Last-Line Persistence Status
 

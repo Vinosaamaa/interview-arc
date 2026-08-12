@@ -2214,6 +2214,39 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .loop-no-stages { padding: 25px; border: 1px dashed #b9c7bd; border-radius: 14px; background: #f8faf7; display: grid; gap: 5px; }
 .loop-no-stages span { color: var(--muted); }
 
+.loop-materials { border: 1px solid #bdc9c0; border-radius: 17px; background: #f8faf7; overflow: hidden; }
+.loop-materials > header { padding: 19px 22px; border-bottom: 1px solid #d8e1d9; background: #edf4ec; display: flex; justify-content: space-between; align-items: start; gap: 24px; }
+.loop-materials > header > div { display: grid; gap: 4px; }
+.loop-materials > header span { color: #577066; font-size: .64rem; font-weight: 780; letter-spacing: .08em; text-transform: uppercase; }
+.loop-materials h2 { margin: 0; color: #173d34; font-family: var(--font-editorial); font-size: 1.42rem; font-weight: 560; letter-spacing: -.025em; }
+.loop-materials > header p { margin: 0; color: #64756d; font-size: .74rem; line-height: 1.45; }
+.loop-materials > header small { padding: 5px 8px; border: 1px solid #c4d1c5; border-radius: 999px; background: #fff; color: #607269; font-size: .64rem; white-space: nowrap; }
+.loop-material-list { display: grid; }
+.loop-material-list > article { border-bottom: 1px solid #dfe5df; background: #fff; }
+.loop-material-list > article:last-child { border-bottom: 0; }
+.loop-material-list summary { min-height: 66px; padding: 13px 22px; display: flex; justify-content: space-between; align-items: center; gap: 18px; cursor: pointer; list-style: none; }
+.loop-material-list summary::-webkit-details-marker { display: none; }
+.loop-material-list summary:hover { background: #f4f8f3; }
+.loop-material-list summary:focus-visible { outline: 3px solid rgba(91,117,24,.34); outline-offset: -3px; }
+.loop-material-list summary > span:first-child { display: grid; gap: 4px; }
+.loop-material-list summary strong { color: #203f36; font-size: .88rem; }
+.loop-material-list summary small { color: #6c7b73; font-size: .66rem; }
+.loop-material-summary-mark { width: 28px; height: 28px; border: 1px solid #c4cec6; border-radius: 50%; display: grid; place-items: center; }
+.loop-material-summary-mark svg { width: 16px; fill: none; stroke: #45675d; stroke-width: 1.7; transition: transform .16s ease; }
+.loop-material-list details[open] .loop-material-summary-mark svg { transform: rotate(180deg); }
+.loop-material-content { padding: 4px 22px 20px; border-top: 1px solid #edf0ed; }
+.loop-material-intro { max-width: 80ch; margin: 16px 0 0; color: #43544c; font-size: .82rem; line-height: 1.6; }
+.loop-material-sections { margin-top: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+.loop-material-sections > section { padding: 16px; border: 1px solid #dce3dc; border-radius: 11px; background: #fbfcfa; }
+.loop-material-sections h3 { margin: 0; color: #284a40; font-size: .79rem; letter-spacing: -.01em; }
+.loop-material-sections p { margin: 8px 0 0; color: #53635b; font-size: .76rem; line-height: 1.55; white-space: pre-wrap; }
+.loop-material-sections ul { margin: 9px 0 0; padding-left: 18px; color: #485a51; display: grid; gap: 6px; font-size: .75rem; line-height: 1.48; }
+.loop-material-content footer { margin-top: 18px; padding-top: 13px; border-top: 1px solid #e1e6e1; color: #718078; display: flex; justify-content: space-between; gap: 18px; font-size: .65rem; }
+.loop-materials-empty { padding: 24px 22px; background: #fff; display: grid; grid-template-columns: 42px minmax(0, 1fr); align-items: start; gap: 14px; }
+.loop-materials-empty svg { width: 40px; padding: 8px; border: 1px solid #ced8d0; border-radius: 10px; background: #f3f7f2; fill: none; stroke: #58756b; stroke-width: 1.5; }
+.loop-materials-empty strong { color: #344b43; font-size: .8rem; }
+.loop-materials-empty p { max-width: 760px; margin: 5px 0 0; color: #6e7c75; font-size: .74rem; line-height: 1.5; }
+
 .loop-detail-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(300px, .8fr); gap: 22px; align-items: start; }
 .loop-preparation, .loop-role-brief, .loop-debrief, .loop-history { border: 1px solid #c6cfc7; border-radius: 17px; background: #fff; overflow: hidden; }
 .loop-preparation > header, .loop-role-brief > header, .loop-debrief > header, .loop-history > header { padding: 20px 22px; border-bottom: 1px solid #dce2dc; display: flex; justify-content: space-between; align-items: start; gap: 20px; }
@@ -2398,6 +2431,8 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .loop-stage-track button > span:not(.loop-stage-mark) { grid-column: 2; }
   .loop-stage-track button > small { grid-column: 3; grid-row: 1 / 3; align-self: center; text-align: right; }
   .loop-context-column { grid-template-columns: 1fr; }
+  .loop-materials > header, .loop-material-content footer { align-items: flex-start; flex-direction: column; }
+  .loop-material-sections { grid-template-columns: 1fr; }
   .loop-preparation > header, .loop-role-brief > header, .loop-debrief > header, .loop-history > header, .loop-journey-facts > header { padding: 17px 18px; }
   .loop-preparation > header, .loop-history > header, .loop-journey-facts > header { display: grid; }
   .loop-journey-facts > header p { text-align: left; }
@@ -2444,4 +2479,5 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 @media (prefers-reduced-motion: reduce) {
   .loops-loader, .materials-detail-state.loading > span, .materials-library-state.loading > span, .materials-import-state.loading > span { animation: none; }
   .loop-history-arrow { transition: none; }
+  .loop-material-summary-mark svg { transition: none; }
 }

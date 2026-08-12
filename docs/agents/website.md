@@ -138,9 +138,11 @@ The website must not imply that browser draft state has already been published t
 - Loops is an owner-private, responsive company-and-role tracker. Render only
   current explicit stage dates, statuses, outcomes, concise debriefs,
   exact/reconstructed memory labels, display-safe Role Brief revisions,
-  planned bindings, and automatically projected completed activity history.
-  The website reads these records; only the durable Loop Recorder creates or
-  revises a Loop-owned Role Brief.
+  Loop/Round interview-material revisions, planned bindings, and automatically
+  projected completed activity history. Keep interview material visibly
+  separate from Career Materials, the Role Brief, and the raw JD. The website
+  reads these records; only the durable Loop Recorder creates or revises a
+  Loop-owned Role Brief or interview material.
 - Activity detail should lead with summary, outcome, approach, lessons, and feedback; keep full transcript or code expandable.
 - Treat activity detail as a case file: pinned notes first, then facts, review
   date, summary/solution, review, transcript/code, and references. A linked

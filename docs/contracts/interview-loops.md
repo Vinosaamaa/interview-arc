@@ -8,6 +8,7 @@ coding, system-design, or behavioral specialist.
 
 `Interview Arc — Loop Recorder` is the only specialist permitted to call
 `create_loop`, `revise_loop`, `revise_loop_role_brief`,
+`create_loop_interview_material`, `revise_loop_interview_material`,
 `migrate_target_profile_to_loop`, `capture_loop_packet`, or
 `import_loop_capture_packet`. Every Loop Recorder mutation requires the literal
 `authorization: "loop_recorder"`; that value records the authority used but
@@ -25,10 +26,11 @@ ID. It adds the missing immutable context and transcript-free history without
 changing the timer, result, transcript, finalization, or Role Brief. A linked
 activity cannot later move to a different Loop.
 
-The three practice specialists may call `query_loops`. It returns only the
+The three practice specialists may call `query_loops` and
+`query_loop_interview_materials`. They return only the
 display-safe Role Brief projection, bounded activity history, planned bindings,
-and factual Journey aggregates from explicit Loop, stage, date, and outcome
-records. The Role Brief projection includes responsibilities, qualifications,
+current owner-private interview-prep material, and factual Journey aggregates
+from explicit Loop, stage, date, and outcome records. The Role Brief projection includes responsibilities, qualifications,
 competency signals, seniority indicators, vocabulary, verified company
 signals, unresolved ambiguities, and a source fingerprint/locator. Raw job
 description text remains private: it is available only through the authenticated
@@ -37,7 +39,8 @@ an explicit archived-Loop read. Raw source is excluded from MCP tools,
 `query_loops`, practice context, transcripts, history, and publication
 artifacts. Owner-private notes are never returned by the source reader.
 Practice specialists must not create a competing Target Profile or infer any
-Loop, stage, date, outcome, interviewer feedback, or Role Brief revision.
+Loop, stage, date, outcome, interviewer feedback, Role Brief revision, or
+interview-material content.
 
 ## Identity And Revisions
 
@@ -53,6 +56,34 @@ Loop, stage, date, outcome, interviewer feedback, or Role Brief revision.
   returns the original receipt with `duplicate: true`; changed reuse is a
   non-retryable conflict.
 - Archive/reactivate is a Loop revision. It never deletes history.
+
+## Interview Materials
+
+Interview material is owner-private preparation for one confirmed hiring
+process. It is not a resume, cover letter, application record, raw job
+description, Role Brief, practice transcript, or completed-attempt copy.
+
+- One stable `materialId` belongs permanently to one Loop, optional exact
+  Round, and `interview_prep` kind. A database uniqueness guard permits only
+  one current prep material for that scope; updating content appends a revision
+  instead of creating a duplicate.
+- A Round-bound material may be created only when that exact current Round is
+  explicitly `scheduled` or `completed`. Dates alone never confirm it.
+- Every write pins the exact current Loop and Role Brief revisions. Provenance
+  includes the Role Brief revision, an owner-safe source label, preparation
+  time, and zero or more activity IDs that the server verifies against the
+  same Loop and, when Round-bound, the same Round.
+- Only the Loop Recorder may create or revise material, and only from an
+  explicit owner instruction plus source-backed content. It must never infer
+  private interview facts, copy a raw JD or transcript, or present coaching as
+  evidence.
+- Revisions are append-only. Exact operation retry returns the original
+  receipt; changed retry, stale revision, changed binding identity, wrong-owner
+  activity provenance, and duplicate scope all fail closed.
+- Current material is projected into the authenticated Loop detail. Exact
+  historical revisions remain readable through
+  `query_loop_interview_materials`; archived material is excluded unless
+  explicitly requested.
 
 ## Stages, Debriefs, And Questions
 

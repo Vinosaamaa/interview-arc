@@ -77,5 +77,8 @@ test("the Loop detail uses a modal source reader and semantic exact-attempt link
   assert.match(source, /event\.key === "Escape"/);
   assert.match(source, /data-loop-activity-id=/);
   assert.match(source, /onOpenActivity\(activity\.activityId\)/);
+  assert.match(source, />Interview materials</);
+  assert.match(source, /Separate from Career Materials, the Role Brief, and the raw job description/);
+  assert.match(source, /Role Brief r\{material\.provenance\.roleBriefRevision\}/);
   assert.doesNotMatch(source, /showSource \? <section className="loop-jd-source"/);
 });

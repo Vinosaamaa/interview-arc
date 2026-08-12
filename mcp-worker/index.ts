@@ -78,6 +78,15 @@ import {
   targetProfileMigrationSchema,
 } from "../db/loops";
 import {
+  createLoopInterviewMaterial,
+  createLoopInterviewMaterialSchema,
+  LoopMaterialError,
+  queryLoopInterviewMaterials,
+  queryLoopInterviewMaterialsSchema,
+  reviseLoopInterviewMaterial,
+  reviseLoopInterviewMaterialSchema,
+} from "../db/loop-materials";
+import {
   behavioralPracticePreflightInputSchema,
   readBehavioralPracticePreflight,
 } from "../db/behavioral-practice-preflight";
@@ -1897,6 +1906,7 @@ function specialistToolFailure(error: unknown) {
     || error instanceof BehavioralFinalAnswerError
     || error instanceof BehavioralTargetProfileError
     || error instanceof LoopError
+    || error instanceof LoopMaterialError
     || error instanceof BehavioralStoryError
     || error instanceof ResumeImportError
     || error instanceof TypedExchangeDeletionError
@@ -2955,6 +2965,66 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
     async (input) => {
       try {
         const result = await queryLoops(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "create_loop_interview_material",
+    {
+      description: "Create one owner-private immutable interview-prep material revision for an active Loop and optional explicitly scheduled or completed Round. Only the durable Loop Recorder may write it. The record pins an exact Role Brief revision and validates every activity provenance ID against the same Loop/Round; one material per scope prevents duplicates.",
+      inputSchema: createLoopInterviewMaterialSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await createLoopInterviewMaterial(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Interview material ${result.materialId} revision ${result.materialRevision} is saved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "revise_loop_interview_material",
+    {
+      description: "Append one immutable revision to existing Loop/Round interview-prep material. Only the durable Loop Recorder may revise it; Loop, Round, kind, and material identity cannot change. Exact retries are idempotent and stale or changed retries fail closed.",
+      inputSchema: reviseLoopInterviewMaterialSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await reviseLoopInterviewMaterial(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Interview material ${result.materialId} revision ${result.materialRevision} is saved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_loop_interview_materials",
+    {
+      description: "Read bounded owner-private current or exact historical Loop/Round interview-prep material with immutable revision, provenance, and timestamps. This never returns the raw JD, Role Brief private notes, transcripts, resumes, or cover letters.",
+      inputSchema: queryLoopInterviewMaterialsSchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryLoopInterviewMaterials(ownerId, input);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           structuredContent: result,
