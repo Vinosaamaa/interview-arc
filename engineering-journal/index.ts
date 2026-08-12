@@ -328,15 +328,13 @@ const PRIVATE_CONTENT_PATTERNS = [
 
 function parseScalar(raw: string): unknown {
   const value = raw.trim();
+  if (!value || /^['|>&*!]/.test(value)) throw new Error("unsupported frontmatter scalar");
   if (value === "null") return null;
   if (value === "true") return true;
   if (value === "false") return false;
   if (/^-?\d+$/.test(value)) return Number(value);
-  if ((value.startsWith("[") && value.endsWith("]")) || (value.startsWith("{") && value.endsWith("}"))) {
+  if (value.startsWith('"') || value.startsWith("[") || value.startsWith("{")) {
     return JSON.parse(value);
-  }
-  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-    return value.slice(1, -1);
   }
   return value;
 }

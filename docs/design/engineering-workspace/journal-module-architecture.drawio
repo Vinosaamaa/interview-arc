@@ -15,13 +15,13 @@
         <mxCell id="authors" value="AUTHORING REPOSITORIES" style="swimlane;startSize=34;horizontal=1;rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf4f0;strokeColor=#9ebdb5;fontColor=#153b36;fontStyle=1;fontFamily=Helvetica;fontSize=13;container=1;pointerEvents=0;" vertex="1" parent="1">
           <mxGeometry x="40" y="120" width="300" height="520" as="geometry"/>
         </mxCell>
-        <mxCell id="arc" value="interview-arc&#xa;docs/engineering/records/*.md" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffefa;strokeColor=#0d9488;fontColor=#153b36;fontFamily=Helvetica;fontSize=13;fontStyle=1;spacing=10;" vertex="1" parent="authors">
+        <mxCell id="arc" value="interview-arc&#xa;records/*.md + changes/pr-*.md" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffefa;strokeColor=#0d9488;fontColor=#153b36;fontFamily=Helvetica;fontSize=13;fontStyle=1;spacing=10;" vertex="1" parent="authors">
           <mxGeometry x="30" y="70" width="240" height="84" as="geometry"/>
         </mxCell>
-        <mxCell id="voice" value="interview-arc-voice&#xa;docs/engineering/records/*.md" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffefa;strokeColor=#7b61a8;fontColor=#153b36;fontFamily=Helvetica;fontSize=13;fontStyle=1;spacing=10;" vertex="1" parent="authors">
+        <mxCell id="voice" value="interview-arc-voice&#xa;records/*.md + changes/pr-*.md" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffefa;strokeColor=#7b61a8;fontColor=#153b36;fontFamily=Helvetica;fontSize=13;fontStyle=1;spacing=10;" vertex="1" parent="authors">
           <mxGeometry x="30" y="205" width="240" height="84" as="geometry"/>
         </mxCell>
-        <mxCell id="live" value="interview-arc-live&#xa;docs/engineering/records/*.md" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffefa;strokeColor=#b06e3b;fontColor=#153b36;fontFamily=Helvetica;fontSize=13;fontStyle=1;spacing=10;" vertex="1" parent="authors">
+        <mxCell id="live" value="interview-arc-live&#xa;records/*.md + changes/pr-*.md" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffefa;strokeColor=#b06e3b;fontColor=#153b36;fontFamily=Helvetica;fontSize=13;fontStyle=1;spacing=10;" vertex="1" parent="authors">
           <mxGeometry x="30" y="340" width="240" height="84" as="geometry"/>
         </mxCell>
 

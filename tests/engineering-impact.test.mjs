@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { validateEngineeringImpact } from "../scripts/validate-engineering-impact.mjs";
+import { trustedHeadRemote, validateEngineeringImpact } from "../scripts/validate-engineering-impact.mjs";
 
 const validatorPath = fileURLToPath(new URL("../scripts/validate-engineering-impact.mjs", import.meta.url));
 
@@ -34,7 +34,12 @@ function createRepository(t) {
 
 function runValidator(cwd, event) {
   const eventPath = join(cwd, "event.json");
-  writeFileSync(eventPath, `${JSON.stringify(event)}\n`);
+  const normalizedEvent = {
+    repository: { name: "interview-arc", ...(event.repository ?? {}) },
+    ...event,
+    pull_request: { title: "Fixture receipt", ...event.pull_request },
+  };
+  writeFileSync(eventPath, `${JSON.stringify(normalizedEvent)}\n`);
   return spawnSync(process.execPath, [validatorPath], {
     cwd,
     encoding: "utf8",
@@ -49,15 +54,20 @@ const checks = {
 
 const noneReceipt = {
   path: "docs/engineering/changes/pr-312.md",
+  repository: "interview-arc",
   pr: 312,
+  title: "Fixture receipt",
   classification: "none",
   richRecordRefs: [],
+  reconstructed: false,
 };
 
 function validate(input) {
   const changedFiles = [...new Set([...(input.changedFiles ?? []), noneReceipt.path])];
   return validateEngineeringImpact({
     pullRequestNumber: 312,
+    pullRequestTitle: "Fixture receipt",
+    repository: "interview-arc",
     receipt: noneReceipt,
     ...input,
     changedFiles,
@@ -120,6 +130,7 @@ pr: 312
 title: Fixture receipt
 classification: none
 richRecordRefs: []
+reconstructed: false
 ---
 # Fixture receipt
 
@@ -152,6 +163,7 @@ pr: 312
 title: Fixture receipt
 classification: none
 richRecordRefs: []
+reconstructed: false
 ---
 # Fixture receipt
 
@@ -212,6 +224,7 @@ pr: 312
 title: Fixture receipt
 classification: architecture-review
 richRecordRefs: ["review@2"]
+reconstructed: false
 ---
 # Fixture receipt
 
@@ -255,6 +268,7 @@ pr: 312
 title: Invalid deletion receipt
 classification: architecture-review
 richRecordRefs: ["review@1"]
+reconstructed: false
 ---
 # Invalid deletion receipt
 
@@ -267,6 +281,7 @@ Attempts to link a deleted record.
   const result = runValidator(cwd, {
     pull_request: {
       number: 312,
+      title: "Invalid deletion receipt",
       body: checks.review,
       base: { sha: base },
       head: { sha: head },
@@ -298,6 +313,7 @@ pr: 312
 title: Shallow fixture receipt
 classification: none
 richRecordRefs: []
+reconstructed: false
 ---
 # Shallow fixture receipt
 
@@ -313,6 +329,7 @@ Records one small fixture change.
   const result = runValidator(shallow, {
     pull_request: {
       number: 312,
+      title: "Shallow fixture receipt",
       body: checks.none,
       base: { sha: base },
       head: { sha: head },
@@ -353,6 +370,7 @@ pr: 312
 title: Invalid metadata receipt
 classification: architecture-review
 richRecordRefs: ["review@1"]
+reconstructed: false
 ---
 # Invalid metadata receipt
 
@@ -365,6 +383,7 @@ Attempts to rely on stale base metadata.
   const result = runValidator(cwd, {
     pull_request: {
       number: 312,
+      title: "Invalid metadata receipt",
       body: checks.review,
       base: { sha: base },
       head: { sha: head },
@@ -393,6 +412,43 @@ test("forward changes require exactly one PR impact classification", () => {
     }),
     /exactly one/,
   );
+});
+
+test("forward receipts bind to the exact repository, title, and authorship mode", () => {
+  assert.throws(
+    () => validate({
+      body: checks.none,
+      recordTypes: [],
+      receipt: { ...noneReceipt, repository: "interview-arc-live" },
+    }),
+    /repository must match/,
+  );
+  assert.throws(
+    () => validate({
+      body: checks.none,
+      recordTypes: [],
+      receipt: { ...noneReceipt, title: "A copied receipt" },
+    }),
+    /title must match/,
+  );
+  assert.throws(
+    () => validate({
+      body: checks.none,
+      recordTypes: [],
+      receipt: { ...noneReceipt, reconstructed: true },
+    }),
+    /reconstructed: false/,
+  );
+});
+
+test("fork head fetches accept only exact GitHub HTTPS remotes", () => {
+  assert.equal(trustedHeadRemote(undefined), "origin");
+  assert.equal(
+    trustedHeadRemote("https://github.com/example/contributor-fork.git"),
+    "https://github.com/example/contributor-fork.git",
+  );
+  assert.throws(() => trustedHeadRemote("git@github.com:example/contributor-fork.git"), /trusted GitHub HTTPS/);
+  assert.throws(() => trustedHeadRemote("https://example.com/untrusted.git"), /trusted GitHub HTTPS/);
 });
 
 test("None requires a concrete reason and cannot hide a canonical record", () => {

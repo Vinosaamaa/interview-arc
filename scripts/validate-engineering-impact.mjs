@@ -19,6 +19,8 @@ const PLACEHOLDER_REASONS = new Set([
   "replace with a concrete reason",
 ]);
 const RECORD_REF_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*@[1-9]\d*$/;
+const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+$/;
+const TRUSTED_GITHUB_REMOTE_PATTERN = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\.git$/;
 
 function selectedClassifications(body) {
   const selected = [];
@@ -52,6 +54,8 @@ export function validateEngineeringImpact({
   recordRefs = [],
   deletedRecordCount = 0,
   pullRequestNumber,
+  pullRequestTitle,
+  repository,
   receipt,
 }) {
   const selected = selectedClassifications(body ?? "");
@@ -67,6 +71,15 @@ export function validateEngineeringImpact({
   }
   if (receipt.path !== expectedReceiptPath || receipt.pr !== pullRequestNumber) {
     throw new Error("The canonical Pull Request Receipt path and `pr` field must match the pull request number.");
+  }
+  if (!REPOSITORY_PATTERN.test(repository ?? "") || receipt.repository !== repository) {
+    throw new Error("The canonical Pull Request Receipt repository must match the pull request repository.");
+  }
+  if (typeof pullRequestTitle !== "string" || !pullRequestTitle || receipt.title !== pullRequestTitle) {
+    throw new Error("The canonical Pull Request Receipt title must match the pull request title.");
+  }
+  if (receipt.reconstructed !== false) {
+    throw new Error("A forward-authored Pull Request Receipt must declare `reconstructed: false`.");
   }
   if (receipt.classification !== choice.classification) {
     throw new Error("The canonical Pull Request Receipt classification must match the pull request body.");
@@ -121,16 +134,40 @@ function hasCommit(revision) {
   }).status === 0;
 }
 
-function ensureCommit(revision) {
+export function trustedHeadRemote(value) {
+  if (value === undefined || value === null || value === "origin") return "origin";
+  if (typeof value !== "string" || !TRUSTED_GITHUB_REMOTE_PATTERN.test(value)) {
+    throw new Error("The pull request head repository must be a trusted GitHub HTTPS remote.");
+  }
+  return value;
+}
+
+function ensureCommit(revision, remote = "origin") {
   if (!/^[0-9a-f]{40}$/.test(revision)) throw new Error("Pull request revisions must be full commit identifiers.");
   if (hasCommit(revision)) return;
-  const fetch = spawnSync("git", ["fetch", "--no-tags", "--depth=1", "origin", revision], {
+  const fetch = spawnSync("git", ["fetch", "--no-tags", "--depth=1", remote, revision], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
   if (fetch.status !== 0 || !hasCommit(revision)) {
     throw new Error("Unable to load a required pull request revision from the trusted Git remote.");
   }
+}
+
+function frontmatterString(fields, key) {
+  const raw = fields.get(key);
+  if (typeof raw !== "string") return null;
+  const value = raw.trim();
+  if (value.startsWith('"')) {
+    try {
+      const decoded = JSON.parse(value);
+      return typeof decoded === "string" ? decoded : null;
+    } catch {
+      return null;
+    }
+  }
+  if (/^['|>&*!]/.test(value)) return null;
+  return value;
 }
 
 function leadingFrontmatter(markdown, documentKind) {
@@ -149,8 +186,17 @@ function leadingFrontmatter(markdown, documentKind) {
 
 function parseReceipt(markdown, path) {
   const fields = leadingFrontmatter(markdown, "Pull Request Receipt");
+  if (fields.get("schemaVersion") !== "1") {
+    throw new Error("The canonical Pull Request Receipt has an unsupported schema version.");
+  }
+  const repository = frontmatterString(fields, "repository");
+  if (!repository || !REPOSITORY_PATTERN.test(repository)) {
+    throw new Error("The canonical Pull Request Receipt has an invalid repository.");
+  }
   const prValue = fields.get("pr") ?? "";
   if (!/^[1-9]\d*$/.test(prValue)) throw new Error("The canonical Pull Request Receipt has an invalid `pr` field.");
+  const title = frontmatterString(fields, "title");
+  if (!title || title.length > 160) throw new Error("The canonical Pull Request Receipt has an invalid title.");
   const classification = fields.get("classification") ?? "";
   if (![...CLASSIFICATIONS.values()].includes(classification)) {
     throw new Error("The canonical Pull Request Receipt has an invalid classification.");
@@ -161,11 +207,24 @@ function parseReceipt(markdown, path) {
   } catch {
     throw new Error("The canonical Pull Request Receipt has invalid rich Engineering record references.");
   }
-  if (!Array.isArray(richRecordRefs) || new Set(richRecordRefs).size !== richRecordRefs.length ||
-      richRecordRefs.some((ref) => typeof ref !== "string" || !RECORD_REF_PATTERN.test(ref))) {
+  if (!Array.isArray(richRecordRefs) || richRecordRefs.length > 16 ||
+      new Set(richRecordRefs).size !== richRecordRefs.length ||
+      richRecordRefs.some((ref) => typeof ref !== "string" || ref.length > 180 || !RECORD_REF_PATTERN.test(ref))) {
     throw new Error("The canonical Pull Request Receipt has invalid rich Engineering record references.");
   }
-  return { path, pr: Number(prValue), classification, richRecordRefs };
+  const reconstructedValue = fields.get("reconstructed");
+  if (reconstructedValue !== "true" && reconstructedValue !== "false") {
+    throw new Error("The canonical Pull Request Receipt has an invalid `reconstructed` field.");
+  }
+  return {
+    path,
+    repository,
+    pr: Number(prValue),
+    title,
+    classification,
+    richRecordRefs,
+    reconstructed: reconstructedValue === "true",
+  };
 }
 
 function parseRecord(markdown) {
@@ -236,11 +295,14 @@ function main() {
   if (!eventPath) throw new Error("GITHUB_EVENT_PATH is required.");
   const event = JSON.parse(readFileSync(eventPath, "utf8"));
   const pullRequest = event.pull_request;
-  if (!pullRequest?.base?.sha || !pullRequest?.head?.sha || !Number.isInteger(pullRequest.number) || pullRequest.number < 1) {
-    throw new Error("Pull request base, head, and number are required.");
+  const repository = event.repository?.name ?? pullRequest?.base?.repo?.name;
+  if (!pullRequest?.base?.sha || !pullRequest?.head?.sha || !Number.isInteger(pullRequest.number) ||
+      pullRequest.number < 1 || typeof pullRequest.title !== "string" || !pullRequest.title ||
+      typeof repository !== "string" || !REPOSITORY_PATTERN.test(repository)) {
+    throw new Error("Pull request base, head, number, title, and repository are required.");
   }
-  ensureCommit(pullRequest.base.sha);
-  ensureCommit(pullRequest.head.sha);
+  ensureCommit(pullRequest.base.sha, "origin");
+  ensureCommit(pullRequest.head.sha, trustedHeadRemote(pullRequest.head.repo?.clone_url));
   const changedFiles = changedFilesBetween(pullRequest.base.sha, pullRequest.head.sha);
   const changedRecordMarkdown = changedFiles.filter((path) => path.startsWith("docs/engineering/records/") && path.endsWith(".md"));
   if (changedRecordMarkdown.some((path) => !/^docs\/engineering\/records\/[a-z0-9]+(?:-[a-z0-9]+)*\.md$/.test(path))) {
@@ -263,6 +325,8 @@ function main() {
     recordRefs: records.map((record) => record.ref),
     deletedRecordCount: records.filter((record) => !record.existsAtHead).length,
     pullRequestNumber: pullRequest.number,
+    pullRequestTitle: pullRequest.title,
+    repository,
     receipt,
   });
   process.stdout.write(`Engineering impact: ${result.classification}; ${result.changedFiles.length} changed file(s).\n`);

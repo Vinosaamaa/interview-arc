@@ -176,6 +176,24 @@ test("every PR can project one compact receipt without entering the rich-record 
   assert.throws(() => buildEngineeringJournal(duplicate), (error) => error.code === "receipt_duplicate");
 });
 
+test("receipt frontmatter uses the same restricted scalar grammar across repositories", () => {
+  const jsonTitle = RECEIPT
+    .replace("title: Correct Engineering navigation labels", `title: "Candidate's retry: preserve exact segment"`)
+    .replaceAll("Correct Engineering navigation labels", "Candidate's retry: preserve exact segment");
+  const projected = buildEngineeringJournal(inputWithReceipt(jsonTitle));
+  assert.equal(projected.index.pullRequestReceipts[0].title, "Candidate's retry: preserve exact segment");
+
+  for (const invalidTitle of ["'YAML quoted title'", "> folded title", "&anchor title", '"unterminated']) {
+    const invalid = RECEIPT
+      .replace("title: Correct Engineering navigation labels", `title: ${invalidTitle}`)
+      .replace("# Correct Engineering navigation labels", "# Invalid title");
+    assert.throws(
+      () => buildEngineeringJournal(inputWithReceipt(invalid)),
+      (error) => error.code === "frontmatter_invalid_value",
+    );
+  }
+});
+
 test("a material PR receipt links an exact rich-record revision of its declared type", () => {
   const materialReceipt = RECEIPT
     .replace("classification: none", "classification: architecture-review")
