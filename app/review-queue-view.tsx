@@ -207,14 +207,14 @@ export default function ReviewQueueView({
                 const blocked = isBlocked(item);
                 const pending = pendingReviewKeys.has(item.reviewKey);
                 return <article className={`review-row ${item.specialty} ${selected ? "selected" : ""}`} key={item.reviewKey}>
-                  <button type="button" className="review-row-select-surface" onClick={() => toggleSelection(item.reviewKey)} aria-label={`${selected ? "Remove" : "Select"} ${item.title}`} />
                   <button type="button" className="review-select" aria-pressed={selected} aria-label={`${selected ? "Remove" : "Select"} ${item.title}`} onClick={() => toggleSelection(item.reviewKey)}><span aria-hidden="true">{selected ? "✓" : ""}</span></button>
-                  <span className="review-specialty-mark" aria-hidden="true">{item.specialty === "leetcode" ? "C" : item.specialty === "system_design" ? "S" : "B"}</span>
-                  <div className="review-title"><small>{specialtyLabel(item.specialty)}</small><strong>{item.title}</strong></div>
-                  <div className="review-result"><small>Previous result</small><strong>{resultLabel(item.previousResult)}</strong></div>
-                  <div className="review-date"><small>Last attempt</small><strong>{compactDate(item.lastAttemptDate)}</strong><span>Due {compactDate(item.dueDate)}</span></div>
-                  <div className="review-reason"><small>Why due</small><strong>{item.reasonLabel}</strong></div>
-                  <div className="review-estimate"><small>Est. time</small><strong>{item.estimatedMinutes} min</strong></div>
+                  <span className="review-select-slot" aria-hidden="true" />
+                  <span className="review-specialty-mark review-row-static" aria-hidden="true">{item.specialty === "leetcode" ? "C" : item.specialty === "system_design" ? "S" : "B"}</span>
+                  <div className="review-title review-row-static"><small>{specialtyLabel(item.specialty)}</small><strong>{item.title}</strong></div>
+                  <div className="review-result review-row-static"><small>Previous result</small><strong>{resultLabel(item.previousResult)}</strong></div>
+                  <div className="review-date review-row-static"><small>Last attempt</small><strong>{compactDate(item.lastAttemptDate)}</strong><span>Due {compactDate(item.dueDate)}</span></div>
+                  <div className="review-reason review-row-static"><small>Why due</small><strong>{item.reasonLabel}</strong></div>
+                  <div className="review-estimate review-row-static"><small>Est. time</small><strong>{item.estimatedMinutes} min</strong></div>
                   <div className="review-actions">
                     <button type="button" className="review-add" disabled={!canAddToToday || blocked || pending} onClick={() => onAddToToday([item])}>{pending ? "Adding…" : blocked ? "On Today" : "Add to Today"}</button>
                     <button type="button" onClick={() => onOpenAttempt(item)}>Open previous attempt</button>

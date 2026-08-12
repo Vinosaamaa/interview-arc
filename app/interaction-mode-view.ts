@@ -57,9 +57,13 @@ export function interactionModeClassificationLabel(classification: Pick<Interact
 }
 
 export function isRecordedInteractionMode(
-  classification: Pick<InteractionModeClassification, "primaryPracticeModeId"> | null | undefined,
-): classification is Pick<InteractionModeClassification, "primaryPracticeModeId"> {
-  return Boolean(classification && classification.primaryPracticeModeId !== "unrecorded");
+  classification: Pick<InteractionModeClassification, "primaryPracticeModeId" | "provenance"> | null | undefined,
+): classification is Pick<InteractionModeClassification, "primaryPracticeModeId" | "provenance"> {
+  return Boolean(
+    classification
+    && classification.provenance === "recorded"
+    && classification.primaryPracticeModeId !== "unrecorded",
+  );
 }
 
 export function matchesInteractionModeFilter(

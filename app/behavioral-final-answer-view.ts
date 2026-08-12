@@ -22,29 +22,43 @@ export function findExactPastSnapshot<T extends { id: string }>(entries: readonl
   return entries.find((entry) => entry.id === activityId) ?? null;
 }
 
-const LOADED_PAST_SNAPSHOT_FIELDS = [
-  "transcriptTurns",
-  "audioClips",
-  "deliveryAnalyses",
-  "codeAttempts",
-  "finalAnswer",
-  "practiceScenarios",
-  "behavioralAnalysis",
-  "resumeContext",
-  "interactionModeClassification",
-  "interactionModeTransitions",
-  "personalNote",
-  "pinnedNotes",
-  "finalization",
-  "artifact",
-] as const;
+type LoadedPastSnapshotFields = {
+  transcriptTurns?: unknown;
+  audioClips?: unknown;
+  deliveryAnalyses?: unknown;
+  codeAttempts?: unknown;
+  finalAnswer?: unknown;
+  practiceScenarios?: unknown;
+  behavioralAnalysis?: unknown;
+  resumeContext?: unknown;
+  interactionModeClassification?: unknown;
+  interactionModeTransitions?: unknown;
+  personalNote?: unknown;
+  pinnedNotes?: unknown;
+  finalization?: unknown;
+  artifact?: unknown;
+};
 
-export function retainLoadedPastSnapshot<T extends { id: string }>(current: T | null, next: T) {
+function loadedPastSnapshotFields(snapshot: LoadedPastSnapshotFields): LoadedPastSnapshotFields {
+  return {
+    ...(snapshot.transcriptTurns === undefined ? {} : { transcriptTurns: snapshot.transcriptTurns }),
+    ...(snapshot.audioClips === undefined ? {} : { audioClips: snapshot.audioClips }),
+    ...(snapshot.deliveryAnalyses === undefined ? {} : { deliveryAnalyses: snapshot.deliveryAnalyses }),
+    ...(snapshot.codeAttempts === undefined ? {} : { codeAttempts: snapshot.codeAttempts }),
+    ...(snapshot.finalAnswer === undefined ? {} : { finalAnswer: snapshot.finalAnswer }),
+    ...(snapshot.practiceScenarios === undefined ? {} : { practiceScenarios: snapshot.practiceScenarios }),
+    ...(snapshot.behavioralAnalysis === undefined ? {} : { behavioralAnalysis: snapshot.behavioralAnalysis }),
+    ...(snapshot.resumeContext === undefined ? {} : { resumeContext: snapshot.resumeContext }),
+    ...(snapshot.interactionModeClassification === undefined ? {} : { interactionModeClassification: snapshot.interactionModeClassification }),
+    ...(snapshot.interactionModeTransitions === undefined ? {} : { interactionModeTransitions: snapshot.interactionModeTransitions }),
+    ...(snapshot.personalNote === undefined ? {} : { personalNote: snapshot.personalNote }),
+    ...(snapshot.pinnedNotes === undefined ? {} : { pinnedNotes: snapshot.pinnedNotes }),
+    ...(snapshot.finalization === undefined ? {} : { finalization: snapshot.finalization }),
+    ...(snapshot.artifact === undefined ? {} : { artifact: snapshot.artifact }),
+  };
+}
+
+export function retainLoadedPastSnapshot<T extends { id: string } & LoadedPastSnapshotFields>(current: T | null, next: T) {
   if (!current || current.id !== next.id) return next;
-  const merged: Record<string, unknown> = { ...current, ...next };
-  const loaded = current as Record<string, unknown>;
-  for (const field of LOADED_PAST_SNAPSHOT_FIELDS) {
-    if (loaded[field] !== undefined) merged[field] = loaded[field];
-  }
-  return merged as T;
+  return { ...current, ...next, ...loadedPastSnapshotFields(current) };
 }

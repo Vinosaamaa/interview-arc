@@ -121,8 +121,9 @@ test("legacy or incomplete evidence remains unrecorded without fabrication", () 
 
 test("only an explicit recorded mode is eligible for Past badges", () => {
   assert.equal(isRecordedInteractionMode(undefined), false);
-  assert.equal(isRecordedInteractionMode({ primaryPracticeModeId: "unrecorded" }), false);
-  assert.equal(isRecordedInteractionMode({ primaryPracticeModeId: "interviewer" }), true);
+  assert.equal(isRecordedInteractionMode({ primaryPracticeModeId: "unrecorded", provenance: "unrecorded" }), false);
+  assert.equal(isRecordedInteractionMode({ primaryPracticeModeId: "interviewer", provenance: "reconstructed" }), false);
+  assert.equal(isRecordedInteractionMode({ primaryPracticeModeId: "interviewer", provenance: "recorded" }), true);
 });
 
 test("Past mode filters keep assistance independent and registry IDs extensible", () => {

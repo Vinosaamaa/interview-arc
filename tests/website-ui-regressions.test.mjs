@@ -165,9 +165,10 @@ test("Review Queue cards select from the whole surface and reserve navigation fo
   const [source, css] = await Promise.all([load("../app/review-queue-view.tsx"), load("../app/review-queue.css")]);
   const file = parseTsx(source);
   const rules = parseCss(css);
-  assert.ok(hasJsxClass(file, "review-row-select-surface"));
+  assert.equal(hasJsxClass(file, "review-row-select-surface"), false);
+  assert.ok(hasJsxClass(file, "review-select"));
   assert.ok(hasJsxAttribute(file, "aria-label", "Select"));
-  const cardTarget = cssRules(rules, ".review-row-select-surface")[0].declarations;
+  const cardTarget = cssRules(rules, ".review-select")[0].declarations;
   assert.equal(cardTarget.position, "absolute");
   assert.equal(cardTarget.inset, "0");
   assert.equal(cardTarget.cursor, "pointer");
@@ -176,7 +177,7 @@ test("Review Queue cards select from the whole surface and reserve navigation fo
   const action = cssRules(rules, ".review-actions button")[0].declarations;
   assert.notEqual(action.border, "0");
   assert.equal(action.cursor, "pointer");
-  assert.equal(cssRules(rules, ".review-select")[0].declarations.cursor, "pointer");
+  assert.ok(cssRules(rules, ".review-row-static").some((rule) => rule.declarations["pointer-events"] === "none"));
 });
 
 test("Review Queue responds to its panel width and never outgrows the owning sheet", async () => {
@@ -246,9 +247,11 @@ test("Past, Banks, and Journey share a centered bounded scrollable reader shell"
 test("Past hides unknown practice mode and keeps recorded mode in the case header", async () => {
   const source = await load("../app/home-client.tsx");
   const file = parseTsx(source);
-  assert.equal(Boolean(functionNamed(file, "PracticeModeCard")), false);
-  assert.equal(stringLiterals(file).has("case-practice-mode"), false);
-  assert.ok(hasJsxClass(file, "case-mode-tags"));
+  const reader = functionNamed(file, "renderCaseReader");
+  assert.ok(reader);
+  const readerSource = reader.getText(file);
+  assert.doesNotMatch(readerSource, /PracticeModeCard|case-practice-mode/);
+  assert.match(readerSource, /CaseModeTags/);
 });
 
 test("Reader contents reveal collapsed sections before navigating", async () => {

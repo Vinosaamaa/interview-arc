@@ -47,15 +47,14 @@
 .review-row.behavioral { --row-branch: var(--behavior); }
 .review-row::before { content: ""; width: 30px; border-top: 1px dashed var(--row-branch); position: absolute; left: -31px; top: 50%; }
 .review-row::after { content: ""; width: 10px; height: 10px; border: 3px solid var(--review-paper); border-radius: 50%; background: var(--row-branch); box-shadow: 0 0 0 2px color-mix(in srgb, var(--row-branch) 72%, #29483d); position: absolute; left: -37px; top: calc(50% - 7px); z-index: 2; }
-.review-row-select-surface { position: absolute; inset: 0; z-index: 1; border: 0; border-radius: inherit; background: transparent; cursor: pointer; }
+.review-select { position: absolute; inset: 0; z-index: 1; width: auto; min-width: 0; height: auto; padding: 0; border: 0; border-radius: inherit; background: transparent; cursor: pointer; }
+.review-select span { width: 23px; height: 23px; border: 1px solid #9aa99e; border-radius: 4px; background: #fff; color: #31420e; display: grid; place-items: center; font-weight: 900; position: absolute; left: 22px; top: 50%; translate: 0 -50%; }
+.review-select-slot { width: 44px; min-width: 44px; height: 44px; pointer-events: none; }
 .review-row:hover { border-color: color-mix(in srgb, var(--row-branch) 62%, #6d8179); background: #fbfdf9; box-shadow: 0 8px 22px rgba(21,58,51,.08); transform: translateY(-1px); }
 .review-row:focus-within { outline: 3px solid #35a99b; outline-offset: 2px; }
-.review-row > :not(.review-row-select-surface) { position: relative; }
-.review-row > :not(.review-row-select-surface):not(.review-select):not(.review-actions) { pointer-events: none; }
-.review-row button:not(.review-row-select-surface) { z-index: 2; }
+.review-row-static { position: relative; pointer-events: none; }
+.review-row button:not(.review-select) { position: relative; z-index: 2; }
 .review-row.selected { background: linear-gradient(90deg, rgba(185,219,87,.16), rgba(185,219,87,.06)); }
-.review-select { width: 44px; min-width: 44px; height: 44px; padding: 0; border: 0; background: transparent; display: grid; place-items: center; cursor: pointer; }
-.review-select span { width: 23px; height: 23px; border: 1px solid #9aa99e; border-radius: 4px; background: #fff; color: #31420e; display: grid; place-items: center; font-weight: 900; }
 .review-select[aria-pressed="true"] span { border-color: #728d26; background: var(--signal); }
 .review-specialty-mark { width: 40px; height: 40px; border: 1px solid #bcc7bd; border-radius: 8px; color: var(--coding); display: grid; place-items: center; font: 750 .8rem/1 var(--font-geist-mono); }
 .review-row.system_design .review-specialty-mark { color: var(--system); }
