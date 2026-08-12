@@ -12,6 +12,25 @@ Follow `reader-rendering.md` for the boundary between durable profile content
 and the shared runtime reader. Visual/template improvements do not create a new
 profile revision. Missing or materially improved canonical content does.
 
+## Completeness and depth gate
+
+A Solution Profile is a durable reference solution, not a summary card. Every
+section must be concrete, substantive, distinct, and independently useful to a
+reader who cannot reopen the specialist conversation. A heading, keyword list,
+one-sentence name-drop, repeated boilerplate, or code-free algorithm mention is
+not content. Write to the depth the problem requires; do not add padding merely
+to satisfy a length check.
+
+The executable policy in `app/solution-profile-policy.ts` is a finalization
+gate. A complete specialist finalization fails before any D1 mutation when its
+profile is shallow or structurally incomplete. Legacy immutable revisions stay
+unchanged; repair them only by creating a new, evidence-grounded revision.
+
+Published artifacts are full-fidelity renderings of the exact pinned profile
+revision. The coordinator must not replace a section with a shorter paraphrase,
+drop an alternative or code block, or mark an activity published when its
+artifact contains only an abbreviated solution.
+
 ## LeetCode
 
 1. Pattern recognition and constraints
@@ -20,14 +39,44 @@ profile revision. Missing or materially improved canonical content does.
 4. Correctness reasoning
 5. Time and space complexity
 6. Edge cases
-7. Up to two meaningful alternatives and when to use them
+7. One or two meaningful alternatives
 8. Common mistakes and recall cues
-9. References
+9. Concise interview walkthrough
+10. References
+
+The preferred implementation contains complete runnable Java and Python code.
+Each meaningful alternative is a separate `### Alternative: <name>` block and
+contains all of the following substantive `####` subsections:
+
+- when and why to choose it;
+- the complete algorithm and state transition;
+- the invariant and correctness reasoning;
+- explicit time and space complexity;
+- concrete edge cases;
+- tradeoffs versus the preferred approach; and
+- a complete runnable Java reference implementation.
+
+An alternative name or asymptotic-complexity sentence is not an alternative.
+Do not manufacture a cosmetic variant; select the strongest genuinely useful
+approach or approaches, including a simpler or more general option when that
+comparison teaches a real tradeoff.
 
 Use normalized technique tags such as `dfs`, `sliding-window`,
 `topological-sort`, or `binary-search-on-answer`.
 
 ## System design
+
+Every reusable design contains distinct, detailed sections for problem framing
+and assumptions; functional requirements; non-functional requirements;
+quantified capacity estimates; fenced HTTP API contracts; structured data
+records; high-level architecture and component responsibilities; end-to-end
+flows; scaling and performance; reliability and failure recovery; security and
+privacy; observability and operations; alternatives and tradeoffs; an interview
+walkthrough; and likely follow-ups. Include a versioned draw.io source and
+exported SVG architecture diagram. Describe authorities, invariants, access
+patterns, bottlenecks, partial failures, recovery, and why each major choice wins
+over an alternative. Component name-drops and unquantified boxes-and-arrows do
+not pass.
 
 Use the `$interview-arc-system-design` skill and its solution template. Keep
 functional requirements and non-functional requirements separate. Use
@@ -59,6 +108,20 @@ The structured behavioral answer contains:
 - the evidence supporting that answer and any unresolved evidence gaps;
 - up to five optional truthful alternative story variants, each with a label
   and guidance on when it is a better fit.
+
+The preferred answer and every included truthful alternative must be complete,
+interview-ready, and independently understandable. Each alternative identifies
+when to use it and carries its own accepted evidence or explicit evidence gaps.
+The surrounding sections explain the interview signal, truthful Situation,
+Task, personally owned Actions and decisions, verified Result and unresolved
+metrics, Learning, likely follow-ups, gaps, and reusable answer structure. A
+short polished paragraph does not replace those analysis sections.
+
+Project Deep Dives use their exact focus-specific stable section keys in
+contract order. Every keyed section must contain the actual project mechanics,
+evidence boundary, decisions, operations, results/gaps, walkthrough, or
+follow-ups implied by its key. Populating all keys with generic sentences does
+not satisfy the contract.
 
 An explicit, scoped owner confirmation is valid primary evidence for lived
 experience; code, tickets, logs, or documents are optional corroboration. An

@@ -17,6 +17,33 @@ const config = fileURLToPath(new URL("../wrangler.mcp.jsonc", import.meta.url));
 const project = fileURLToPath(new URL("..", import.meta.url));
 const sha256 = (text) => createHash("sha256").update(text).digest("hex");
 const MAX_WORKER_LOG_BYTES = 64 * 1024;
+const profileProse = (topic, count) => Array.from({ length: count }, (_, index) => `${topic}${index + 1}`).join(" ");
+
+function completeSystemDesignProfile() {
+  return {
+    schemaVersion: 1,
+    summary: profileProse("summary", 20),
+    sections: [
+      { title: "Problem framing and assumptions", body: profileProse("scope", 45) },
+      { title: "Functional requirements", body: profileProse("function", 30) },
+      { title: "Non-functional requirements", body: profileProse("quality", 30) },
+      { title: "Capacity estimates", body: `Assume 10 million users, 50k requests per second, 5 TB retained data, and p99 latency below 200 ms. ${profileProse("estimate", 30)}` },
+      { title: "API contracts", body: `${profileProse("api", 40)}\n\n\`\`\`http\nPOST /v1/items\nContent-Type: application/json\n\n{"name":"example"}\n\`\`\`` },
+      { title: "Data model", body: `${profileProse("data", 45)}\n\n\`\`\`sql\nCREATE TABLE items (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL);\n\`\`\`` },
+      { title: "Architecture", body: `${profileProse("architecture", 90)}\n\n![Architecture](typed-delete-design.svg)` },
+      { title: "End-to-end flows", body: profileProse("flow", 70) },
+      { title: "Scaling and performance", body: profileProse("scaling", 60) },
+      { title: "Reliability and failure recovery", body: profileProse("recovery", 65) },
+      { title: "Security and privacy", body: profileProse("security", 50) },
+      { title: "Observability and operations", body: profileProse("operation", 50) },
+      { title: "Tradeoffs and alternatives", body: profileProse("tradeoff", 60) },
+      { title: "Interview walkthrough", body: profileProse("walkthrough", 65) },
+      { title: "Likely follow-ups", body: profileProse("followup", 35) },
+    ],
+    tags: ["reliability"],
+    references: [],
+  };
+}
 
 function appendDiagnosticTail(current, chunk) {
   return `${current}${chunk}`.slice(-MAX_WORKER_LOG_BYTES);
@@ -530,13 +557,7 @@ test("typed exchange deletion is exact, atomic, owner-scoped, and identity-idemp
           assistanceEvents: [],
         },
         solutionProfileAction: "create_or_revise",
-        solutionProfile: {
-          schemaVersion: 1,
-          summary: "A reusable system-design profile.",
-          sections: [{ title: "Architecture", body: "Use an owner-scoped durable boundary." }],
-          tags: ["reliability"],
-          references: [],
-        },
+        solutionProfile: completeSystemDesignProfile(),
       },
     });
     assert.equal(finalizationAfterDeletion.status, "ready");

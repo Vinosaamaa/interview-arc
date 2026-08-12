@@ -238,12 +238,14 @@ review. After the permitted Editorial check:
 - ground strengths and gaps only in observed reasoning/submitted code;
 - explain the concrete correctness, implementation, or communication issue;
 - present the strongest approach;
-- for every Editorial approach mentioned, explain its core state, transition,
-  and tradeoff; names alone are insufficient;
+- for every Editorial approach mentioned, explain its full algorithm, core
+  state and transition, invariant/correctness, complexity, edge cases, and
+  tradeoff; names alone are insufficient;
 - provide a complete independently written Java reference implementation for
   Accepted and every explicit final review;
 - cover correctness invariant, time/space complexity, edge cases, meaningful
-  alternatives, key lesson, and a follow-up/reimplementation direction;
+  alternatives with complete runnable reference code, key lesson, and a
+  follow-up/reimplementation direction;
 - state unavailable evidence and Editorial access honestly.
 
 Generated reference code is clearly separate from the user's attempt. Review
@@ -283,7 +285,9 @@ transcript evidence.
 - observed transcript scope and evidence-grounded review;
 - original standalone best solution and mandatory complete model answer;
 - Java-first code, correctness, complexity, and edge cases;
-- up to two meaningful alternatives;
+- one or two meaningful alternatives, each with a complete algorithm,
+  invariant/proof, complexity, edge cases, preferred-approach comparison, and
+  runnable Java reference code;
 - only references actually consulted;
 - available Delivery Coach evidence (queued/failed analysis never blocks).
 
@@ -304,10 +308,24 @@ When no coding conversation occurred, use `transcriptScope: none_observed`
 and never invent an attempt. If the canonical prompt/API cannot be established,
 keep finalization incomplete and request it.
 
-Every created/revised Solution Profile is independently useful in Problem Bank:
-summary, pattern/constraints, best approach, proof, Java then Python reference
-implementations, complexity, edge cases, a meaningful coded alternative when
-practical, recall cue, and concise interview answer. Reuse the current profile
+Every created/revised Solution Profile is independently useful in Problem Bank.
+Every section is as detailed as the problem requires: concrete, substantive,
+distinct, and understandable without the chat. Include the summary,
+pattern/constraints, preferred algorithm, proof, complete runnable Java then
+Python implementations, complexity, at least three edge cases, common
+mistakes/recall cues, and a concise interview walkthrough.
+
+Include one or two genuinely meaningful alternatives as separate
+`### Alternative: <name>` blocks. Use substantive `####` subsections for when
+and why to choose it, the complete algorithm/state transition, invariant and
+correctness reasoning, time/space complexity, concrete edge cases, tradeoffs
+versus the preferred approach, and complete runnable Java reference code. A
+name-drop, empty label, keyword list, pseudocode fragment, or complexity-only
+comparison is incomplete. Do not add a cosmetic alternative merely to fill
+space; choose an approach that teaches a real use-case or tradeoff.
+
+The executable Solution Profile policy rejects shallow or structurally
+incomplete content before finalization mutates D1. Reuse the current profile
 unless algorithm, correctness, implementation, complexity, edge-case, or
 explanation substance improves; presentation-only changes do not create a
 revision.

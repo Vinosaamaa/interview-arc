@@ -442,6 +442,17 @@ endpoint its own fenced `http` contract, format the data model as readable
 records rather than one paragraph, and include a real architecture diagram
 (versioned draw.io source plus exported SVG) instead of publishing raw Mermaid
 or ASCII arrows as the final visual.
+Every section must be concrete, substantive, distinct, and independently useful
+without reopening the conversation. A complete profile covers problem framing
+and assumptions, functional requirements, non-functional requirements,
+quantified capacity estimates, API contracts, data records, architecture and
+component authorities, end-to-end flows, scaling/performance, reliability and
+failure recovery, security/privacy, observability/operations, alternatives and
+tradeoffs, an interview walkthrough, and likely follow-ups. Explain invariants,
+access patterns, bottlenecks, partial failures, recovery, and why each major
+choice wins over an alternative. Component name-drops, generic boxes-and-arrows,
+and unquantified scale claims are incomplete and fail the executable Solution
+Profile gate before D1 finalization.
 Do not create a new Solution Profile revision for reader styling, zoom,
 fullscreen, typography, or layout changes; those belong to the shared runtime
 reader and update older artifacts automatically. Create or backfill a revision

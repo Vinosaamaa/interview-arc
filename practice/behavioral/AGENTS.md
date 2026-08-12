@@ -207,6 +207,23 @@ The reusable STAR/STARL Solution Profile contains:
 - truthful alternative stories only when genuinely useful;
 - evidence, evidence gaps, likely follow-ups, and reusable structure.
 
+Every section must be as detailed as the evidence permits: concrete,
+substantive, distinct, and independently useful without reopening the
+conversation. Cover the interview signal, truthful Situation, truthful Task,
+personally owned Actions and decisions, verified Result with unresolved metrics
+exposed, Learning, likely follow-ups/evidence gaps, and reusable answer
+structure. The preferred answer must be a complete interview-ready answer, not
+a short summary. Every included truthful alternative must independently state
+when to use it, provide a complete answer, and carry its own accepted evidence
+or explicit gaps.
+
+For Project Deep Dives, keep every required stable key in exact contract order
+and develop each section with the actual project mechanics, evidence boundary,
+decisions, operations, results/gaps, walkthrough, or follow-ups implied by that
+key. Generic sentences copied across all nine keys are incomplete. The
+executable Solution Profile policy rejects shallow profiles before D1
+finalization; never fill a gap with an unsupported claim merely to pass it.
+
 Never put transcript or exchange-by-exchange review into the profile. Reuse the
 current profile when a mock adds no material evidence; revise only for stronger
 evidence/answer, a meaningful gap, useful alternative, or better story—not
