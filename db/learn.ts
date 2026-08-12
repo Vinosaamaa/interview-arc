@@ -1890,6 +1890,7 @@ export async function readActiveLearningVoiceSessions(ownerId: string) {
       sessionId: session.sessionId,
       scopeType: session.scopeType,
       courseId: session.courseId,
+      blueprintRevision: session.blueprintRevision,
       courseTitle: blueprint?.title ?? null,
       moduleId: lesson.moduleId,
       moduleTitle: courseModule?.title ?? null,

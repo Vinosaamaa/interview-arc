@@ -226,6 +226,7 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     assert.equal(learningContext.focusedActivity, null);
     assert.equal(learningContext.focusedLearningSession.sessionId, createSessionInput.sessionId);
     assert.equal(learningContext.focusedLearningSession.courseId, courseBlueprint.courseId);
+    assert.equal(learningContext.focusedLearningSession.blueprintRevision, 1);
     assert.equal(learningContext.focusedLearningSession.courseTitle, courseBlueprint.title);
     assert.equal(learningContext.focusedLearningSession.moduleId, "session-core");
     assert.equal(learningContext.focusedLearningSession.moduleTitle, "Session core");
