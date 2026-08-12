@@ -92,11 +92,13 @@ onsite or other multi-round structures without imposing a fixed process. Dates,
 status, and outcome are explicit owner-provided facts. Scheduled time may
 prompt, but never completes a stage or implies an outcome.
 
-A stage may record an owner-provided format and interviewer names. A concise
-round debrief may contain questions asked, a bounded per-question owner review
-(`strong`, `mixed`, or `needs_work` and/or summary), the owner's stage
-self-assessment, optional real interviewer feedback, and next step. Never infer
-format, interviewers, assessment, or feedback.
+A stage may record an owner-provided format and up to 25 interviewer names. A
+concise round debrief may contain at most 50 questions. Each question may have
+one optional owner review; when present, it requires an explicit assessment
+(`strong`, `mixed`, or `needs_work`), a trimmed 1–5,000-character summary, or
+both. The debrief may also contain the owner's stage self-assessment, optional
+real interviewer feedback, and next step, each limited to 5,000 characters.
+Never infer format, interviewers, assessment, or feedback.
 
 Legacy remembered prompts and answers remain readable and independently
 labelled `exact` or `reconstructed`; new UI and Loop Recorder guidance do not

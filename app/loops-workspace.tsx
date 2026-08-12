@@ -12,8 +12,10 @@ import { loopWorkspaceHref, readLoopWorkspaceState } from "./journey-insights";
 import { acquireDocumentScrollLock } from "./document-scroll-policy";
 import {
   groupLoopPreparation,
+  indexStageMaterials,
   loopStageRecords,
   stageMaterials,
+  type LoopPreparationSource,
   type LoopSpecialty,
 } from "./loops-view-model";
 
@@ -77,7 +79,7 @@ type LoopInterviewMaterial = {
   updatedAt: number;
 };
 
-type LoopProjection = {
+type LoopProjection = LoopPreparationSource & {
   loop: {
     loopId: string;
     company: string;
@@ -113,24 +115,6 @@ type LoopProjection = {
       fingerprint: string;
     };
   };
-  activityBindings: Array<{
-    activityId: string;
-    stageId: string | null;
-    roleBriefRevision: number;
-    specialty: Specialty;
-    questionId: string;
-    title: string;
-    completed: boolean;
-  }>;
-  activityHistory: Array<{
-    activityId: string;
-    stageId: string | null;
-    roleBriefRevision: number;
-    specialty: Specialty;
-    questionId: string;
-    result: "solved" | "solved_after_reviewing_approach" | "failed";
-    completedAt: number;
-  }>;
   interviewMaterials: LoopInterviewMaterial[];
 };
 
@@ -330,16 +314,14 @@ function InterviewMaterial({ material }: { material: LoopInterviewMaterial }) {
   </details>;
 }
 
-function StageRecord({ stage, loop, includeLoopWideMaterial }: {
+function StageRecord({ stage, materials }: {
   stage: LoopStage;
-  loop: LoopProjection;
-  includeLoopWideMaterial: boolean;
+  materials: LoopInterviewMaterial[];
 }) {
   const debrief = stage.debrief;
   const datedAt = stageDate(stage);
   const hasMetadata = Boolean(datedAt || stage.status === "completed" || stage.format || stage.interviewers?.length || stage.outcome);
   const hasRecord = Boolean(debrief || stage.status === "completed" || stage.status === "cancelled" || stage.status === "skipped");
-  const materials = stageMaterials(loop, stage.stageId, includeLoopWideMaterial);
   return <li className={`loop-stage-record ${stage.status} ${hasRecord ? "recorded" : "compact"}`} id={`loop-stage-${stage.stageId}`}>
     <span className={`loop-stage-node ${stage.status}`} aria-hidden="true">{stage.status === "completed" ? <svg viewBox="0 0 20 20"><path d="m5 10 3.2 3.2L15 6.8" /></svg> : null}</span>
     <article>
@@ -363,11 +345,12 @@ function StageRecord({ stage, loop, includeLoopWideMaterial }: {
 
 function StageChronology({ loop }: { loop: LoopProjection }) {
   const stages = loopStageRecords(loop.loop.stages);
+  const materialIndex = useMemo(() => indexStageMaterials(loop.interviewMaterials), [loop.interviewMaterials]);
   if (!stages.length) {
-    const loopWideMaterials = stageMaterials(loop, "", true);
+    const loopWideMaterials = stageMaterials(materialIndex, "");
     return <div className="loop-no-stages"><strong>No stages recorded yet.</strong><span>The Loop Recorder can add the real hiring stages without forcing a template.</span>{loopWideMaterials.map((material) => <InterviewMaterial material={material} key={material.materialId} />)}</div>;
   }
-  return <ol className="loop-stage-chronology" aria-label="Interview stage chronology">{stages.map((stage, index) => <StageRecord stage={stage} loop={loop} includeLoopWideMaterial={index === 0} key={stage.stageId} />)}</ol>;
+  return <ol className="loop-stage-chronology" aria-label="Interview stage chronology">{stages.map((stage, index) => <StageRecord stage={stage} materials={stageMaterials(materialIndex, stage.stageId, index === 0)} key={stage.stageId} />)}</ol>;
 }
 
 export function LoopsWorkspace({ onOpenActivity }: { onOpenActivity: (activityId: string) => void }) {

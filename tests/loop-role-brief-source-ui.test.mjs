@@ -70,15 +70,16 @@ Keep source text inert: <script>alert("never execute")</script>
   ]);
 });
 
-test("the Loop detail uses a modal source reader and semantic exact-attempt links", async () => {
+test("the Loop detail uses a modal source reader, exact-attempt links, and inline stage materials", async () => {
   const source = await readFile(new URL("../app/loops-workspace.tsx", import.meta.url), "utf8");
   assert.match(source, /role="dialog" aria-modal="true"/);
   assert.match(source, /workspace\.inert = true/);
   assert.match(source, /event\.key === "Escape"/);
   assert.match(source, /data-loop-activity-id=/);
-  assert.match(source, /onOpenActivity\(activity\.activityId\)/);
-  assert.match(source, />Interview materials</);
-  assert.match(source, /Separate from Career Materials, the Role Brief, and the raw job description/);
-  assert.match(source, /Role Brief r\{material\.provenance\.roleBriefRevision\}/);
+  assert.match(source, /onOpenActivity\(attempt\.activityId\)/);
+  assert.match(source, /function InterviewMaterial/);
+  assert.match(source, /material\.stageId \? "Stage material" : "Legacy Loop-wide material"/);
+  assert.match(source, /material\.provenance\.sourceLabel/);
+  assert.match(source, /indexStageMaterials\(loop\.interviewMaterials\)/);
   assert.doesNotMatch(source, /showSource \? <section className="loop-jd-source"/);
 });

@@ -20,7 +20,7 @@ export type LoopPreparationHistory = {
   completedAt: number;
 };
 
-type PreparationSource = {
+export type LoopPreparationSource = {
   activityBindings: LoopPreparationBinding[];
   activityHistory: LoopPreparationHistory[];
 };
@@ -42,7 +42,7 @@ export type LoopPreparationGroup = {
   questions: LoopPreparationQuestion[];
 };
 
-export function groupLoopPreparation(loop: PreparationSource): LoopPreparationGroup[] {
+export function groupLoopPreparation(loop: LoopPreparationSource): LoopPreparationGroup[] {
   const history = new Map(loop.activityHistory.map((attempt) => [attempt.activityId, attempt]));
   const questions = new Map<string, LoopPreparationQuestion>();
   loop.activityBindings.forEach((binding) => {
@@ -78,11 +78,20 @@ export function loopStageRecords<T extends { stageId: string; order: number }>(s
   return [...stages].sort((left, right) => left.order - right.order || left.stageId.localeCompare(right.stageId));
 }
 
-type MaterialSource<T> = { interviewMaterials: Array<T & { stageId?: string }> };
+export function indexStageMaterials<T extends { stageId?: string }>(materials: T[]) {
+  const index = new Map<string, T[]>();
+  materials.forEach((material) => {
+    const key = material.stageId ?? "";
+    const bucket = index.get(key);
+    if (bucket) bucket.push(material);
+    else index.set(key, [material]);
+  });
+  return index;
+}
 
-export function stageMaterials<T>(loop: MaterialSource<T>, stageId: string, includeLoopWide = false) {
-  return loop.interviewMaterials.filter((material) => (
-    material.stageId === stageId || (includeLoopWide && !material.stageId)
-  ))
-    .sort((left, right) => Number(Boolean(right.stageId)) - Number(Boolean(left.stageId)));
+export function stageMaterials<T>(index: Map<string, T[]>, stageId: string, includeLoopWide = false) {
+  return [
+    ...(index.get(stageId) ?? []),
+    ...(includeLoopWide ? index.get("") ?? [] : []),
+  ];
 }

@@ -2370,9 +2370,6 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .loop-preparation-ledger > section > header { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; }
 .loop-preparation-ledger header strong { font-size: .8rem; }
 .loop-preparation-ledger header small { color: #77847c; font-family: var(--font-geist-mono); }
-.loop-specialty-mark { width: 10px; height: 10px; border-radius: 3px; background: var(--coding); }
-.loop-specialty-mark.system_design { background: var(--system); }
-.loop-specialty-mark.behavioral { background: var(--behavior); }
 .loop-preparation-ledger ul, .loop-role-brief ul { margin: 13px 0 0; padding: 0; display: grid; gap: 8px; list-style: none; }
 .loop-preparation-ledger li { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; font-size: .82rem; }
 .loop-preparation-ledger li > small { color: #748179; font-size: .68rem; white-space: nowrap; }

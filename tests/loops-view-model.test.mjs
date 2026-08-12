@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   groupLoopPreparation,
+  indexStageMaterials,
   loopStageRecords,
   stageMaterials,
 } from "../app/loops-view-model.ts";
@@ -63,6 +64,7 @@ test("stage chronology is stable and legacy Loop-wide material is rendered once"
   };
 
   assert.deepEqual(loopStageRecords(input.loop.stages).map((stage) => stage.stageId), ["recruiter", "technical"]);
-  assert.deepEqual(stageMaterials(input, "technical", true).map((material) => material.materialId), ["technical-prep", "legacy-wide"]);
-  assert.deepEqual(stageMaterials(input, "recruiter").map((material) => material.materialId), []);
+  const materialIndex = indexStageMaterials(input.interviewMaterials);
+  assert.deepEqual(stageMaterials(materialIndex, "technical", true).map((material) => material.materialId), ["technical-prep", "legacy-wide"]);
+  assert.deepEqual(stageMaterials(materialIndex, "recruiter").map((material) => material.materialId), []);
 });
