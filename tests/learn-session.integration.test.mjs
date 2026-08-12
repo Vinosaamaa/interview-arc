@@ -481,6 +481,7 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     assert.equal(read.sessions[0].intervals.length, 2);
     assert.ok(read.sessions[0].intervals.every((interval) => interval.endedAt !== null));
     assert.doesNotMatch(JSON.stringify(read), /audioClip|objectKey|deliveryAnalysis|finishBlocker/);
+    assert.doesNotMatch(JSON.stringify(read), /"ownerId"|"operationId"|"requestFingerprint"/);
     const evidence = await call(client, "query_learning_evidence", {
       lessonId: lesson.lessonId,
       sessionId: createSessionInput.sessionId,
@@ -494,6 +495,7 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     assert.equal(evidence.artifacts[0].sizeBytes, Buffer.byteLength("public-safe learning session boundary trace"));
     assert.equal(evidence.finalizations[0].revision, 1);
     assert.doesNotMatch(JSON.stringify(evidence), /learning-artifacts-private|privateLocator/);
+    assert.doesNotMatch(JSON.stringify(evidence), /"ownerId"|"operationId"|"requestFingerprint"/);
     const otherEvidence = await call(otherClient, "query_learning_evidence", {});
     assert.deepEqual(otherEvidence.checkpointStates, []);
     assert.deepEqual(otherEvidence.artifacts, []);

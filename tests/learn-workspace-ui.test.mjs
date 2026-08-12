@@ -14,7 +14,7 @@ test("Learn is an enabled workspace with the contracted local navigation", async
   assert.match(home, /\["today", "Today"\]/);
   assert.match(home, /\["courses", "Courses"\]/);
   assert.match(home, /\["history", "History"\]/);
-  assert.match(home, /\["analytics", "Analytics"\]/);
+  assert.match(home, /\["analytics", "Statistics"\]/);
   assert.match(home, /aria-label="Learn navigation"/);
   assert.match(home, /<LearnWorkspace destination=\{learnDestination\}/);
 });
@@ -27,8 +27,13 @@ test("the website remains a durable reading surface rather than a second tutor",
   assert.match(workspace, /Transcript-only Voice/);
   assert.match(workspace, /Finish with specialist/);
   assert.match(workspace, /Only observed Learning records are counted/);
+  assert.match(workspace, /COURSE STATISTICS/);
+  assert.match(workspace, /QUICK STUDY/);
+  assert.match(workspace, /A standalone Current lesson with no Course or Enrollment overhead/);
+  assert.match(workspace, /todayQuickStudy/);
   assert.match(workspace, /No required checkpoints/);
   assert.match(workspace, /operationIds\.current\.get/);
+  assert.match(workspace, /response\.status >= 400 && response\.status < 500/);
   assert.match(workspace, /sessionAction: action/);
   assert.doesNotMatch(workspace, /<textarea|contentEditable|Send message|Ask the tutor/);
 });

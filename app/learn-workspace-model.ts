@@ -87,6 +87,22 @@ export type LearningCourseProjection = {
   }>;
 };
 
+export type LearningQuickStudyProjection = {
+  lesson: {
+    lessonId: string;
+    scopeType: "quick_study";
+    courseId: null;
+    enrollmentId: null;
+    moduleId: null;
+    currentRevision: number;
+    state: "active" | "completed" | "archived";
+    title: string;
+    createdAt: number;
+    updatedAt: number;
+  };
+  current: LearningLessonSnapshot | null;
+};
+
 export type LearningSessionProjection = {
   session: {
     sessionId: string;
@@ -118,10 +134,7 @@ export type LearningSessionProjection = {
 export type LearnPayload = {
   workspace: {
     courses: LearningCourseProjection[];
-    quickStudies: Array<{
-      lesson: LearningCourseProjection["lessons"][number];
-      current: LearningLessonSnapshot | null;
-    }>;
+    quickStudies: LearningQuickStudyProjection[];
     facts: Record<string, number>;
     truncated: boolean;
   };
@@ -185,6 +198,15 @@ export function selectLearningCourse(payload: LearnPayload, courseId?: string) {
   if (courseId) return payload.workspace.courses.find((course) => course.course.courseId === courseId) ?? null;
   return payload.workspace.courses.find((course) => course.course.state === "active")
     ?? payload.workspace.courses[0]
+    ?? null;
+}
+
+export function selectQuickStudy(payload: LearnPayload, lessonId?: string) {
+  if (lessonId) {
+    return payload.workspace.quickStudies.find((study) => study.lesson.lessonId === lessonId) ?? null;
+  }
+  return payload.workspace.quickStudies.find((study) => study.lesson.state === "active")
+    ?? payload.workspace.quickStudies[0]
     ?? null;
 }
 

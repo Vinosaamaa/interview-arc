@@ -134,13 +134,13 @@ const LEARN_NAV_ITEMS: ReadonlyArray<readonly [LearnDestination, string]> = [
   ["today", "Today"],
   ["courses", "Courses"],
   ["history", "History"],
-  ["analytics", "Analytics"],
+  ["analytics", "Statistics"],
 ];
 const LEARN_VIEW_TITLES: Record<LearnDestination, string> = {
   today: "Learn · Today",
   courses: "Learn · Courses",
   history: "Learn · History",
-  analytics: "Learn · Analytics",
+  analytics: "Learn · Statistics",
 };
 
 function readLearnDestination(currentHref: string): LearnDestination {

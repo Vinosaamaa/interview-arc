@@ -1446,7 +1446,6 @@ export async function finishLearningSession(ownerId: string, inputValue: unknown
 
 function displayArtifact(row: typeof learningArtifacts.$inferSelect) {
   return {
-    ownerId: row.ownerId,
     artifactId: row.artifactId,
     lessonId: row.lessonId,
     sessionId: row.sessionId,
@@ -1458,6 +1457,29 @@ function displayArtifact(row: typeof learningArtifacts.$inferSelect) {
     contentHash: row.contentHash,
     createdAt: row.createdAt,
   };
+}
+
+function withoutOwnerId<T extends { ownerId: string }>(row: T): Omit<T, "ownerId"> {
+  const { ownerId, ...display } = row;
+  void ownerId;
+  return display;
+}
+
+function withoutOperationIdentity<T extends { ownerId: string; operationId: string }>(
+  row: T,
+): Omit<T, "ownerId" | "operationId"> {
+  const { ownerId, operationId, ...display } = row;
+  void ownerId;
+  void operationId;
+  return display;
+}
+
+function displayFinalization(row: typeof learningSessionFinalizationRevisions.$inferSelect) {
+  const { ownerId, operationId, requestFingerprint, ...display } = row;
+  void ownerId;
+  void operationId;
+  void requestFingerprint;
+  return display;
 }
 
 export async function queryLearningEvidence(ownerId: string, inputValue: unknown = {}) {
@@ -1494,12 +1516,12 @@ export async function queryLearningEvidence(ownerId: string, inputValue: unknown
       : Promise.resolve([]),
   ]);
   return {
-    checkpointStates: states,
-    checkpointHistory: events,
-    homework,
-    homeworkHistory,
+    checkpointStates: states.map(withoutOwnerId),
+    checkpointHistory: events.map(withoutOperationIdentity),
+    homework: homework.map(withoutOwnerId),
+    homeworkHistory: homeworkHistory.map(withoutOperationIdentity),
     artifacts: artifacts.map(displayArtifact),
-    finalizations,
+    finalizations: finalizations.map(displayFinalization),
   };
 }
 
@@ -1805,7 +1827,12 @@ export async function queryLearningSessions(ownerId: string, inputValue: unknown
         eq(learningTranscriptTurns.sessionId, session.sessionId),
       )).orderBy(asc(learningTranscriptTurns.sequence)),
     ]);
-    return { session, intervals, turns, evidencePolicy: "transcript_only" as const };
+    return {
+      session: withoutOwnerId(session),
+      intervals: intervals.map(withoutOwnerId),
+      turns: turns.map(withoutOwnerId),
+      evidencePolicy: "transcript_only" as const,
+    };
   }));
   return { sessions, truncated: rows.length === 100 };
 }
@@ -1947,12 +1974,12 @@ export async function queryLearningWorkspace(ownerId: string, inputValue: unknow
         eq(learningLessonRevisions.lessonId, lesson.lessonId),
         eq(learningLessonRevisions.revision, revision),
       )).limit(1);
-      return { ...lesson, current: revisions[0] ? displayLesson(revisions[0]) : null };
+      return { ...withoutOwnerId(lesson), current: revisions[0] ? displayLesson(revisions[0]) : null };
     }));
     return {
-      course,
+      course: withoutOwnerId(course),
       blueprint: blueprintRows[0] ? displayBlueprint(blueprintRows[0]) : null,
-      enrollment: enrollmentRows[0] ?? null,
+      enrollment: enrollmentRows[0] ? withoutOwnerId(enrollmentRows[0]) : null,
       lessons,
     };
   }));
@@ -1972,7 +1999,7 @@ export async function queryLearningWorkspace(ownerId: string, inputValue: unknow
       eq(learningLessonRevisions.lessonId, lesson.lessonId),
       eq(learningLessonRevisions.revision, revision),
     )).limit(1);
-    return { lesson, current: rows[0] ? displayLesson(rows[0]) : null };
+    return { lesson: withoutOwnerId(lesson), current: rows[0] ? displayLesson(rows[0]) : null };
   }));
 
   const [allCourses, allLessons, activeEnrollments, allSessions, allHomework, checkpointStates] = await Promise.all([

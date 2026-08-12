@@ -254,6 +254,29 @@
   padding: 16px;
 }
 
+.learn-quick-study-header {
+  align-items: start;
+  background: linear-gradient(120deg, #edf2fb, #f8fafc);
+  border: 1px solid #c7d4e5;
+  border-radius: 13px;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  padding: 22px 24px;
+}
+
+.learn-quick-study-header h2 {
+  font-family: var(--font-editorial), Georgia, serif;
+  font-size: clamp(1.8rem, 3vw, 3rem);
+  letter-spacing: -0.04em;
+  margin: 7px 0;
+}
+
+.learn-quick-study-header p {
+  color: var(--learn-muted);
+  margin: 0;
+}
+
 .learn-course-nav {
   background: #edf2f8;
   border-radius: 11px;
@@ -380,6 +403,8 @@
 .learn-history-index { min-width: 0; overflow: hidden; padding: 12px; }
 .learn-course-index > header,
 .learn-history-index > header { padding: 12px 10px 17px; }
+.learn-course-index-divider { align-items: end; border-top: 1px solid var(--learn-rule); display: flex; justify-content: space-between; margin: 12px 8px 4px; padding: 18px 2px 6px; }
+.learn-course-index-divider small { color: var(--learn-muted); font-size: 0.62rem; }
 .learn-course-index h2,
 .learn-history-index h2 { font-family: var(--font-editorial), Georgia, serif; font-size: 1.65rem; margin: 5px 0 0; }
 .learn-course-index > button,
@@ -483,6 +508,8 @@
   .learn-current-lesson,
   .learn-module-path { border-radius: 12px; padding: 22px 18px; }
   .learn-current-lesson > header { display: block; }
+  .learn-quick-study-header { display: block; padding: 20px; }
+  .learn-quick-study-header .learn-state { display: inline-block; margin-top: 16px; }
   .learn-current-lesson .learn-state { display: inline-block; margin-top: 16px; }
   .learn-current-lesson h2 { font-size: 2.35rem; }
   .learn-courses-layout,

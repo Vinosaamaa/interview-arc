@@ -8,10 +8,12 @@ import {
   selectActiveLearningSession,
   selectCurrentLesson,
   selectLearningCourse,
+  selectQuickStudy,
   type LearnDestination,
   type LearnPayload,
   type LearningCourseProjection,
   type LearningLessonSnapshot,
+  type LearningQuickStudyProjection,
   type LearningSessionProjection,
 } from "./learn-workspace-model";
 
@@ -40,7 +42,7 @@ const LEARN_DESTINATION_COPY: Record<LearnDestination, { eyebrow: string; title:
     description: "Completed Sessions keep their timer, transcript, artifacts, and factual recap without turning raw conversation into a textbook.",
   },
   analytics: {
-    eyebrow: "LEARN · ANALYTICS",
+    eyebrow: "LEARN · STATISTICS",
     title: "Count the work,",
     emphasis: "never invent mastery.",
     description: "Duration, Sessions, Lessons, homework, and checkpoint coverage come directly from recorded Learning events.",
@@ -187,6 +189,31 @@ function CurrentLesson({ payload, lesson }: { payload: LearnPayload; lesson: Lea
   </article>;
 }
 
+function QuickStudyWorkspace({
+  payload,
+  study,
+  now,
+  busy,
+  onControl,
+  onHomework,
+}: {
+  payload: LearnPayload;
+  study: LearningQuickStudyProjection;
+  now: number;
+  busy: boolean;
+  onControl: (session: LearningSessionProjection, action: "start" | "pause" | "resume") => void;
+  onHomework: (homework: LearnPayload["evidence"]["homework"][number]) => void;
+}) {
+  const activeSession = selectActiveLearningSession(payload, study.lesson.lessonId);
+  const homework = payload.evidence.homework.filter((item) => item.lessonId === study.lesson.lessonId);
+  return <div className="learn-course-workspace learn-quick-study-workspace">
+    <header className="learn-quick-study-header"><div><span className="learn-eyebrow">QUICK STUDY</span><h2>{study.lesson.title}</h2><p>A standalone Current lesson with no Course or Enrollment overhead.</p></div><span className={`learn-state ${study.lesson.state}`}>{study.lesson.state}</span></header>
+    {activeSession && <SessionInstrument session={activeSession} now={now} busy={busy} onControl={(action) => onControl(activeSession, action)} />}
+    <CurrentLesson payload={payload} lesson={study.current} />
+    {homework.length > 0 && <section className="learn-homework-panel"><header><span className="learn-eyebrow">HOMEWORK</span><h2>Follow-up, recorded plainly.</h2><p>Completion is a fact. It does not automatically demonstrate a checkpoint.</p></header>{homework.map((item) => <article key={item.homeworkId}><div><strong>{item.prompt}</strong><small>Revision {item.revision} · {item.state}</small></div><button type="button" onClick={() => onHomework(item)} disabled={busy}>{item.state === "completed" ? "Mark open" : "Mark completed"}</button></article>)}</section>}
+  </div>;
+}
+
 function CourseWorkspace({
   payload,
   course,
@@ -216,7 +243,7 @@ function CourseWorkspace({
   const homework = payload.evidence.homework.filter((item) => course.lessons.some((lesson) => lesson.lessonId === item.lessonId));
   const analytics = payload.analytics.courses.find((item) => item.courseId === course.course.courseId);
   return <div className="learn-course-workspace">
-    <nav className="learn-course-nav" aria-label={`${course.course.title} navigation`}>{(["overview", "lessons", "homework", "analytics"] as CourseSection[]).map((item) => <button type="button" key={item} className={section === item ? "active" : ""} aria-current={section === item ? "page" : undefined} onClick={() => onSection(item)}>{item}</button>)}</nav>
+    <nav className="learn-course-nav" aria-label={`${course.course.title} navigation`}>{(["overview", "lessons", "homework", "analytics"] as CourseSection[]).map((item) => <button type="button" key={item} className={section === item ? "active" : ""} aria-current={section === item ? "page" : undefined} onClick={() => onSection(item)}>{item === "analytics" ? "statistics" : item}</button>)}</nav>
     {activeSession && <SessionInstrument session={activeSession} now={now} busy={busy} onControl={(action) => onControl(activeSession, action)} />}
     {(section === "overview" || section === "lessons") && <>
       <div className="learn-mobile-pane-switcher" aria-label="Course reading surface"><button type="button" className={mobilePane === "path" ? "active" : ""} aria-pressed={mobilePane === "path"} onClick={() => onMobilePane("path")}>Module path</button><button type="button" className={mobilePane === "lesson" ? "active" : ""} aria-pressed={mobilePane === "lesson"} onClick={() => onMobilePane("lesson")}>Current lesson</button></div>
@@ -236,7 +263,7 @@ function CourseAnalytics({ course, analytics }: { course: LearningCourseProjecti
     ["Homework open", factualCount(analytics?.openHomeworkCount)],
     ["Last activity", analytics?.lastActivityAt ? formatDate(analytics.lastActivityAt as number) : "None"],
   ];
-  return <section className="learn-course-analytics"><header><span className="learn-eyebrow">COURSE ANALYTICS</span><h2>{course.course.title}</h2><p>Only observed Learning records are counted.</p></header><dl>{cells.map(([label, value]) => <div key={String(label)}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></section>;
+  return <section className="learn-course-analytics"><header><span className="learn-eyebrow">COURSE STATISTICS</span><h2>{course.course.title}</h2><p>Only observed Learning records are counted.</p></header><dl>{cells.map(([label, value]) => <div key={String(label)}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></section>;
 }
 
 function HistoryView({ payload }: { payload: LearnPayload }) {
@@ -269,6 +296,7 @@ export default function LearnWorkspace({ destination }: { destination: LearnDest
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [selectedCourseId, setSelectedCourseId] = useState("");
+  const [selectedQuickStudyId, setSelectedQuickStudyId] = useState("");
   const [courseSection, setCourseSection] = useState<CourseSection>("overview");
   const [mobilePane, setMobilePane] = useState<MobileCoursePane>("lesson");
   const [busy, setBusy] = useState(false);
@@ -303,7 +331,18 @@ export default function LearnWorkspace({ destination }: { destination: LearnDest
     return () => window.removeEventListener("interview-arc-learn-finish-help", finishHelp);
   }, []);
 
-  const selectedCourse = useMemo(() => payload ? selectLearningCourse(payload, selectedCourseId || undefined) : null, [payload, selectedCourseId]);
+  const selectedCourse = useMemo(() => (
+    payload && !selectedQuickStudyId ? selectLearningCourse(payload, selectedCourseId || undefined) : null
+  ), [payload, selectedCourseId, selectedQuickStudyId]);
+  const selectedQuickStudy = useMemo(() => (
+    payload
+      ? selectedQuickStudyId
+        ? selectQuickStudy(payload, selectedQuickStudyId)
+        : selectedCourse
+          ? null
+          : selectQuickStudy(payload)
+      : null
+  ), [payload, selectedCourse, selectedQuickStudyId]);
 
   async function mutate(key: string, body: Record<string, unknown>) {
     setBusy(true);
@@ -317,7 +356,10 @@ export default function LearnWorkspace({ destination }: { destination: LearnDest
         body: JSON.stringify({ ...body, operationId: stableOperationId }),
       });
       const result = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(result.error ?? "The Learn change could not be saved.");
+      if (!response.ok) {
+        if (response.status >= 400 && response.status < 500) operationIds.current.delete(key);
+        throw new Error(result.error ?? "The Learn change could not be saved.");
+      }
       operationIds.current.delete(key);
       await refresh();
     } catch (mutationError) {
@@ -336,7 +378,10 @@ export default function LearnWorkspace({ destination }: { destination: LearnDest
     try {
       const response = await fetch("/api/learn", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "control_session", operationId: stableOperationId, sessionId: session.session.sessionId, expectedRevision: session.session.revision, sessionAction: action }) });
       const result = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(result.error ?? "The Session control could not be saved.");
+      if (!response.ok) {
+        if (response.status >= 400 && response.status < 500) operationIds.current.delete(key);
+        throw new Error(result.error ?? "The Session control could not be saved.");
+      }
       operationIds.current.delete(key);
       await refresh();
     } catch (controlError) {
@@ -353,11 +398,16 @@ export default function LearnWorkspace({ destination }: { destination: LearnDest
   if (error || !payload) return <div className="learn-workspace"><LearnHero destination={destination} payload={null} /><section className="learn-error" role="alert"><span className="learn-eyebrow">LEARN UNAVAILABLE</span><h2>The private Learning record could not be read.</h2><p>{error}</p><button type="button" onClick={() => { setLoading(true); void refresh(); }}>Try again</button></section></div>;
 
   const courses = payload.workspace.courses;
+  const quickStudies = payload.workspace.quickStudies;
+  const activeSession = selectActiveLearningSession(payload);
+  const todayQuickStudy = activeSession?.session.scopeType === "quick_study"
+    ? selectQuickStudy(payload, activeSession.session.lessonId)
+    : selectedQuickStudy;
   return <div className="learn-workspace">
     <LearnHero destination={destination} payload={payload} />
     {notice && <div className="learn-notice" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice("")} aria-label="Dismiss Learn message">×</button></div>}
-    {destination === "today" && (selectedCourse ? <CourseWorkspace payload={payload} course={selectedCourse} section="overview" onSection={setCourseSection} mobilePane={mobilePane} onMobilePane={setMobilePane} now={now} busy={busy} onControl={(session, action) => void controlSessionExact(session, action)} onHomework={(item) => void setHomework(item)} /> : <EmptyLearn destination="today" />)}
-    {destination === "courses" && (courses.length ? <div className="learn-courses-layout"><nav className="learn-course-index" aria-label="Courses"><header><span className="learn-eyebrow">COURSES</span><h2>{courses.length} Blueprint{courses.length === 1 ? "" : "s"}</h2></header>{courses.map((course) => <button type="button" key={course.course.courseId} className={selectedCourse?.course.courseId === course.course.courseId ? "active" : ""} onClick={() => { setSelectedCourseId(course.course.courseId); setCourseSection("overview"); }}><span>{course.course.state}</span><strong>{course.course.title}</strong><small>{course.lessons.filter((lesson) => lesson.state === "completed").length} / {course.blueprint?.modules.flatMap((module) => module.lessons).length ?? course.lessons.length} lessons</small></button>)}</nav>{selectedCourse && <CourseWorkspace payload={payload} course={selectedCourse} section={courseSection} onSection={setCourseSection} mobilePane={mobilePane} onMobilePane={setMobilePane} now={now} busy={busy} onControl={(session, action) => void controlSessionExact(session, action)} onHomework={(item) => void setHomework(item)} />}</div> : <EmptyLearn destination="courses" />)}
+    {destination === "today" && (todayQuickStudy ? <QuickStudyWorkspace payload={payload} study={todayQuickStudy} now={now} busy={busy} onControl={(session, action) => void controlSessionExact(session, action)} onHomework={(item) => void setHomework(item)} /> : selectedCourse ? <CourseWorkspace payload={payload} course={selectedCourse} section="overview" onSection={setCourseSection} mobilePane={mobilePane} onMobilePane={setMobilePane} now={now} busy={busy} onControl={(session, action) => void controlSessionExact(session, action)} onHomework={(item) => void setHomework(item)} /> : <EmptyLearn destination="today" />)}
+    {destination === "courses" && (courses.length || quickStudies.length ? <div className="learn-courses-layout"><nav className="learn-course-index" aria-label="Courses and Quick Studies"><header><span className="learn-eyebrow">COURSES</span><h2>{courses.length} Blueprint{courses.length === 1 ? "" : "s"}</h2></header>{courses.map((course) => <button type="button" key={course.course.courseId} className={selectedCourse?.course.courseId === course.course.courseId ? "active" : ""} onClick={() => { setSelectedQuickStudyId(""); setSelectedCourseId(course.course.courseId); setCourseSection("overview"); }}><span>{course.course.state}</span><strong>{course.course.title}</strong><small>{course.lessons.filter((lesson) => lesson.state === "completed").length} / {course.blueprint?.modules.flatMap((module) => module.lessons).length ?? course.lessons.length} lessons</small></button>)}{quickStudies.length > 0 && <div className="learn-course-index-divider"><span className="learn-eyebrow">QUICK STUDIES</span><small>{quickStudies.length} standalone</small></div>}{quickStudies.map((study) => <button type="button" key={study.lesson.lessonId} className={selectedQuickStudy?.lesson.lessonId === study.lesson.lessonId ? "active" : ""} onClick={() => setSelectedQuickStudyId(study.lesson.lessonId)}><span>{study.lesson.state}</span><strong>{study.lesson.title}</strong><small>Current lesson r{study.current?.revision ?? study.lesson.currentRevision}</small></button>)}</nav>{selectedQuickStudy ? <QuickStudyWorkspace payload={payload} study={selectedQuickStudy} now={now} busy={busy} onControl={(session, action) => void controlSessionExact(session, action)} onHomework={(item) => void setHomework(item)} /> : selectedCourse && <CourseWorkspace payload={payload} course={selectedCourse} section={courseSection} onSection={setCourseSection} mobilePane={mobilePane} onMobilePane={setMobilePane} now={now} busy={busy} onControl={(session, action) => void controlSessionExact(session, action)} onHomework={(item) => void setHomework(item)} />}</div> : <EmptyLearn destination="courses" />)}
     {destination === "history" && <HistoryView payload={payload} />}
     {destination === "analytics" && <AnalyticsView payload={payload} />}
   </div>;

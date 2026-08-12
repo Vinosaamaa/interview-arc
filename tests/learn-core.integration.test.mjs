@@ -387,6 +387,7 @@ test("Learn core preserves immutable owner-private Course, Enrollment, Lesson, a
       needsAnotherPassCheckpointCount: 0,
     });
     assert.doesNotMatch(JSON.stringify(finalRead), /mastery|readiness|productivity|retentionScore/);
+    assert.doesNotMatch(JSON.stringify(finalRead), /"ownerId"|"operationId"|"requestFingerprint"/);
     assert.deepEqual((await call(otherClient, "query_learning_workspace", {})).quickStudies, []);
   } finally {
     await client?.close().catch(() => {});
