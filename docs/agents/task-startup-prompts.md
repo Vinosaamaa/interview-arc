@@ -191,7 +191,7 @@ hot-add tools to an already running long-lived task. After an allowlist or
 server-catalog change:
 
 1. run `pnpm mcp:config:check` from `interview-arc/`;
-2. reconnect or reopen the Coordinator and all five specialist tasks;
+2. reconnect or reopen the Coordinator and all six specialist tasks;
 3. use tool discovery in each applicable task before practice resumes.
 
 The repository allowlist is canonical. The optional outer workspace shim can be

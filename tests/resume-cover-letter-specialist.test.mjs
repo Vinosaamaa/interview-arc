@@ -18,14 +18,17 @@ test("Resume & Cover Letter is a registered administrative specialist outside pr
   ]);
 
   assert.match(rootGuide, /Resume or cover-letter administration[^\n]*career-materials\/resume-cover-letter\/AGENTS\.md/);
-  assert.match(startup, /Create six long-lived Codex tasks/);
+  assert.match(startup, /Create seven long-lived Codex tasks/);
   assert.match(startup, /Interview Arc — Resume & Cover Letter/);
-  assert.match(startup, /match the five exact specialist titles/);
+  assert.match(startup, /match the six exact specialist titles/);
+  assert.match(startup, /all six specialist tasks/);
   assert.match(startup, /complete JD is sufficient input/i);
-  assert.match(architecture, /administrative specialists, not practice specialties/);
-  assert.match(durablePractice, /SpecialistTaskType = Specialty \| "loop_recorder" \| "resume_cover_letter"/);
-  assert.match(schema, /"loop_recorder", "resume_cover_letter"/);
-  assert.match(worker, /"behavioral", "loop_recorder", "resume_cover_letter"/);
+  assert.match(architecture, /Loop Recorder\s+and Resume & Cover Letter are administrative specialists/);
+  assert.match(architecture, /Learning\s+Specialist owns tutoring/);
+  assert.match(architecture, /none is an Interview practice specialty/);
+  assert.match(durablePractice, /SpecialistTaskType = Specialty \| "loop_recorder" \| "learning_specialist" \| "resume_cover_letter"/);
+  assert.match(schema, /"loop_recorder", "learning_specialist", "resume_cover_letter"/);
+  assert.match(worker, /"behavioral", "loop_recorder", "learning_specialist", "resume_cover_letter"/);
 
   assert.match(guide, /not Interview practice/i);
   assert.match(guide, /Never create or mutate an Interview activity/);
