@@ -2,8 +2,9 @@
 
 This is the conversation-first bridge for issue #155 plus the durable write
 receipt and D1 outbox introduced by issue #158. The application-owned response
-hook described by #93 remains future work, but Code Attempt and personal-bank
-writes no longer depend on one uninterrupted MCP request.
+hook described by #93 remains future work, but Code Attempt, personal-bank,
+and complete specialist-finalization writes no longer depend on one
+uninterrupted MCP request.
 
 ## Parent specialist path
 
@@ -102,8 +103,10 @@ The child instruction must say:
 You are a persistence-only sub-agent. Execute only the supplied Interview Arc
 MCP operations, in order, with the arguments and stable IDs verbatim. For
 save_leetcode_code_attempt and upsert_personal_bank_question, supply one stable
-operationId per logical write, then call get_specialist_write_status until the
-receipt is saved or failed. A queued receipt is not a saved result. Do not
+operationId per logical write. For save_specialist_finalization, use the stable
+interactionModeClassificationOperationId as the immutable finalization
+identity. Then call get_specialist_write_status until every returned receipt is
+saved or failed. A queued receipt is not a saved result. Do not
 research, coach, rewrite content, infer missing fields, summarize or paraphrase
 a complete Code Attempt review, use a browser, submit
 code, mutate timers/results, publish, edit files, or perform Git work. Retry an
@@ -139,8 +142,8 @@ evidence is missing or a child failed. Never treat a spawn acknowledgement or
 child message as authoritative D1 evidence.
 
 The agent delegation is not durable across agent/process termination, but a
-successful Code Attempt or personal-bank enqueue is durable. If the parent or
-child disappears before receiving a receipt, reuse the stable operation ID and
-exact payload. Once a receipt exists, the Worker executor owns lease recovery
-and bounded retry. The application-owned response hook and generalized outbox
-remain #93 scope.
+successful Code Attempt, personal-bank, or complete-finalization enqueue is
+durable. If the parent or child disappears before receiving a receipt, reuse
+the stable operation ID and exact payload. Once a receipt exists, the Worker
+executor owns lease recovery and bounded retry. The application-owned response
+hook remains #93 scope.

@@ -197,6 +197,7 @@ import {
   upsertOwnerBankQuestion,
   voiceFinishGuardMessage,
   VoiceResponseGroupConflictError,
+  type SpecialistFinalization,
 } from "../db/durable-practice";
 import { TypedExchangeDeletionError } from "../db/typed-exchange-deletion";
 import {
@@ -231,6 +232,7 @@ import {
 import {
   SPECIALIST_WRITE_REQUEST_DRAIN_LIMIT,
   SPECIALIST_WRITE_SCHEDULED_DRAIN_LIMIT,
+  specialistFinalizationJobId,
 } from "./specialist-write-policy";
 import type { SpecialistWriteJobRow } from "../db/schema";
 import {
@@ -1989,6 +1991,33 @@ function specialistToolFailure(error: unknown) {
   throw error;
 }
 
+const MAX_DUPLICATED_ACTIVITY_RECORD_BYTES = 128 * 1_024;
+
+function activityPracticeRecordToolResult(
+  activityId: string,
+  record: Awaited<ReturnType<typeof readActivityPracticeRecord>>,
+) {
+  const compactRecord = JSON.stringify(record);
+  if (new TextEncoder().encode(compactRecord).byteLength > MAX_DUPLICATED_ACTIVITY_RECORD_BYTES) {
+    return {
+      content: [{ type: "text" as const, text: compactRecord }],
+      structuredContent: {
+        activityId,
+        delivery: "content_json" as const,
+        turnCount: record.turns.length,
+        noteCount: record.notes.length,
+        audioClipCount: record.audioClips.length,
+        deliveryAnalysisCount: record.deliveryAnalyses.length,
+        codeAttemptCount: record.codeAttempts.length,
+      },
+    };
+  }
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(record, null, 2) }],
+    structuredContent: { activityId, ...record },
+  };
+}
+
 async function executeSpecialistWriteJob(job: SpecialistWriteJobRow) {
   if (job.operation === "leetcode_code_attempt") {
     const input = job.payload as Parameters<typeof saveLeetCodeCodeAttempt>[1];
@@ -2024,6 +2053,39 @@ async function executeSpecialistWriteJob(job: SpecialistWriteJobRow) {
   if (job.operation === "behavioral_claim_status") {
     const input = job.payload as Parameters<typeof setBehavioralClaimStatus>[2];
     return setBehavioralClaimStatus(job.ownerId, job.jobId, input, Date.now());
+  }
+  if (job.operation === "specialist_finalization") {
+    const input = job.payload as {
+      activityId: string;
+      specialty: "leetcode" | "system_design" | "behavioral";
+      questionId: string | null;
+      finalization: SpecialistFinalization;
+    };
+    let result: Awaited<ReturnType<typeof saveSpecialistFinalization>>;
+    try {
+      result = await saveSpecialistFinalization(
+        job.ownerId,
+        input.activityId,
+        input.specialty,
+        input.questionId,
+        input.finalization,
+        Date.now(),
+      );
+    } catch (error) {
+      // Domain-level retryable errors require a reread and a newly prepared
+      // payload. Replaying this exact immutable job cannot resolve them.
+      if (error instanceof BehavioralFinalAnswerError && error.retryable) {
+        throw new SpecialistWriteJobError(error.code, error.message);
+      }
+      throw error;
+    }
+    return {
+      activityId: input.activityId,
+      specialty: input.specialty,
+      status: input.finalization.complete ? "ready" as const : "draft" as const,
+      finalAnswer: result.finalAnswer,
+      interactionModeClassification: result.interactionModeClassification,
+    };
   }
   throw new SpecialistWriteJobError(
     "specialist_write_operation_unsupported",
@@ -3627,7 +3689,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "save_specialist_finalization",
     {
-      description: "Save a specialist finalization bundle and immutable interaction-mode classification in D1. This does not publish Git artifacts, open a PR, or deploy.",
+      description: "Durably serialize a complete specialist finalization bundle and immutable interaction-mode classification in D1. Reuse the exact classification operation ID after transport uncertainty. A queued or retry_wait receipt is not proof of finalization; poll get_specialist_write_status until saved. Drafts remain synchronous. This does not publish Git artifacts, open a PR, or deploy.",
       inputSchema: z.object({
         activityId: z.string().min(1),
         specialty: z.enum(["leetcode", "system_design", "behavioral"]),
@@ -3696,6 +3758,74 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
     },
     async ({ activityId, specialty, questionId, finalization }) => {
       try {
+        if (finalization.complete && finalization.interactionModeClassificationOperationId) {
+          const jobId = await specialistFinalizationJobId(
+            finalization.interactionModeClassificationOperationId,
+          );
+          const enqueued = await enqueueSpecialistWriteJob(ownerId, {
+            jobId,
+            operation: "specialist_finalization",
+            payload: {
+              activityId,
+              specialty,
+              questionId: questionId ?? null,
+              finalization,
+            },
+          });
+          if (!["saved", "failed"].includes(enqueued.status)) {
+            await processSpecialistWriteJobs(executeSpecialistWriteJob, {
+              maxJobs: SPECIALIST_WRITE_REQUEST_DRAIN_LIMIT,
+            });
+          }
+          let receipt = (await readSpecialistWriteJobs(ownerId, [jobId]))[0];
+          if (receipt.status === "processing") {
+            for (let attempt = 0; attempt < 40 && receipt.status === "processing"; attempt += 1) {
+              await new Promise((resolve) => setTimeout(resolve, 25));
+              receipt = (await readSpecialistWriteJobs(ownerId, [jobId]))[0];
+            }
+          }
+          receipt = { ...receipt, duplicate: enqueued.duplicate };
+          if (!["saved", "failed"].includes(receipt.status)) {
+            scheduleSpecialistWriteProcessing(ctx);
+          }
+          if (receipt.status === "failed") {
+            return {
+              isError: true,
+              content: [{ type: "text" as const, text: receipt.failure?.message ?? "The durable finalization failed." }],
+              structuredContent: {
+                error: receipt.failure?.message ?? "The durable finalization failed.",
+                code: receipt.failure?.code ?? "specialist_write_rejected",
+                retryable: receipt.failure?.retryable ?? false,
+                writeReceipt: receipt,
+              },
+            };
+          }
+          if (receipt.status === "saved") {
+            const result = receipt.result as {
+              activityId: string;
+              specialty: "leetcode" | "system_design" | "behavioral";
+              status: "ready" | "draft";
+              finalAnswer: unknown;
+              interactionModeClassification: unknown;
+            };
+            return {
+              content: [{ type: "text" as const, text: `${activityId} specialist bundle saved as ready.` }],
+              structuredContent: { ...result, writeReceipt: receipt },
+            };
+          }
+          return {
+            content: [{
+              type: "text" as const,
+              text: `${activityId} specialist bundle is durably ${receipt.status} as ${jobId}; verify its receipt before publication.`,
+            }],
+            structuredContent: {
+              activityId,
+              specialty,
+              status: receipt.status,
+              writeReceipt: receipt,
+            },
+          };
+        }
         const result = await saveSpecialistFinalization(
           ownerId,
           activityId,
@@ -3778,16 +3908,13 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "get_activity_practice_record",
     {
-      description: "Read one activity's ordered transcript, pinned notes, specialist finalization, review schedule, and audio metadata.",
+      description: "Read one activity's ordered transcript, pinned notes, specialist finalization, review schedule, and audio metadata. Large records are returned once as compact JSON in content with a bounded structuredContent receipt; parse content when delivery=content_json.",
       inputSchema: { activityId: z.string().min(1) },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async ({ activityId }) => {
       const record = await readActivityPracticeRecord(ownerId, activityId);
-      return {
-        content: [{ type: "text", text: JSON.stringify(record, null, 2) }],
-        structuredContent: { activityId, ...record },
-      };
+      return activityPracticeRecordToolResult(activityId, record);
     },
   );
 

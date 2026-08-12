@@ -7,6 +7,7 @@ import {
   executeSpecialistWriteAttempt,
   SPECIALIST_WRITE_REQUEST_DRAIN_LIMIT,
   SPECIALIST_WRITE_SCHEDULED_DRAIN_LIMIT,
+  specialistFinalizationJobId,
   specialistWritePayloadDigest,
   specialistWriteRetryDelayMs,
 } from "../mcp-worker/specialist-write-policy.ts";
@@ -14,6 +15,16 @@ import {
 test("request drains stay single-job while scheduled recovery remains bounded", () => {
   assert.equal(SPECIALIST_WRITE_REQUEST_DRAIN_LIMIT, 1);
   assert.equal(SPECIALIST_WRITE_SCHEDULED_DRAIN_LIMIT, 25);
+});
+
+test("complete finalizations derive one bounded durable job identity from the classification operation", async () => {
+  const first = await specialistFinalizationJobId("mode-finalization-operation-1");
+  const replay = await specialistFinalizationJobId("mode-finalization-operation-1");
+  const changed = await specialistFinalizationJobId("mode-finalization-operation-2");
+  assert.equal(first, replay);
+  assert.notEqual(first, changed);
+  assert.match(first, /^finalization-[a-f0-9]{64}$/);
+  assert.ok(first.length <= 200);
 });
 
 test("only the exact legacy pending-review rejection is deterministic-repairable", () => {

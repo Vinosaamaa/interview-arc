@@ -440,8 +440,11 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
       call(client, "save_specialist_finalization", firstPayload),
       call(sameOwnerClient, "save_specialist_finalization", firstPayload),
     ]);
-    assert.deepEqual(concurrentFirst.map((result) => result.finalAnswer.status).sort(), ["created", "unchanged"]);
-    const first = concurrentFirst.find((result) => result.finalAnswer.status === "created");
+    assert.ok(concurrentFirst.every((result) => result.writeReceipt?.operation === "specialist_finalization"));
+    assert.equal(new Set(concurrentFirst.map((result) => result.writeReceipt.jobId)).size, 1);
+    assert.deepEqual(concurrentFirst.map((result) => result.finalAnswer.status), ["created", "created"]);
+    assert.deepEqual(concurrentFirst.map((result) => result.writeReceipt.duplicate).sort(), [false, true]);
+    const first = concurrentFirst[0];
     assert.equal(first.finalAnswer.snapshotRevision, 1);
     assert.equal(first.interactionModeClassification.primaryPracticeModeId, "interviewer");
     assert.equal(first.interactionModeClassification.method, "active_timer_seconds");
@@ -526,8 +529,9 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
       answer,
       responseTurnId,
     }));
-    assert.equal(exactRetry.finalAnswer.status, "unchanged");
+    assert.equal(exactRetry.finalAnswer.status, "created");
     assert.equal(exactRetry.finalAnswer.snapshotRevision, 1);
+    assert.equal(exactRetry.writeReceipt.duplicate, true);
 
     const duplicateSnapshotIdentity = await callRaw(client, "save_specialist_finalization", finalization({
       activityId,
@@ -552,7 +556,8 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
       correction: { replacesSnapshotRevision: 1, reason: "Clarify the exact mechanism." },
     }));
     assert.equal(changedOperationRetry.isError, true);
-    assert.equal(changedOperationRetry.structuredContent.code, "behavioral_final_answer_operation_conflict");
+    assert.equal(changedOperationRetry.structuredContent.code, "specialist_write_identity_conflict");
+    assert.equal(changedOperationRetry.structuredContent.retryable, false);
 
     const corrected = await call(client, "save_specialist_finalization", finalization({
       activityId,
@@ -768,9 +773,10 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
       roleBriefFinalization,
     );
     assert.deepEqual(roleBriefExactRetry.finalAnswer, {
-      status: "unchanged",
+      status: "corrected",
       snapshotRevision: 3,
     });
+    assert.equal(roleBriefExactRetry.writeReceipt.duplicate, true);
 
     const voiceSaved = await call(client, "save_specialist_finalization", finalization({
       activityId: "activity-behavioral-voice",
