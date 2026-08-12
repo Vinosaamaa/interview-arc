@@ -70,6 +70,7 @@ import {
   type WorkspaceRouteView,
 } from "./journey-insights";
 import { readMasterPanePreference, writeMasterPanePreference } from "./ui-preferences";
+import { acquireDocumentScrollLock, documentScrollLockRequired } from "./document-scroll-policy";
 import { effectiveProfileTags, isReusableSolutionProfile } from "./solution-profile-policy";
 import BehavioralFoundation from "./behavioral-foundation";
 import BehavioralTargetBindings from "./behavioral-target-bindings";
@@ -113,6 +114,15 @@ const INTERVIEW_NAV_ITEMS: ReadonlyArray<readonly [View, string]> = [
   ["banks", "Banks"],
   ["journey", "Journey"],
 ];
+const INTERVIEW_VIEW_TITLES: Record<View, string> = {
+  today: "Interview · Today",
+  loops: "Interview · Loops",
+  reviews: "Interview · Reviews",
+  library: "Interview · Past",
+  banks: "Interview · Banks",
+  journey: "Interview · Journey",
+  materials: "Interview · Career Materials",
+};
 type ComposerMode = "session" | "activity";
 type JourneyRange = 30 | 90 | 365 | "all";
 type JourneyMetric = "activities" | "time";
@@ -992,7 +1002,7 @@ function DiagramFigure({ src, alt }: { src: string; alt: string }) {
 
   useEffect(() => {
     if (!expanded) return;
-    const previousOverflow = document.body.style.overflow;
+    const releaseScrollLock = acquireDocumentScrollLock();
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
@@ -1000,10 +1010,9 @@ function DiagramFigure({ src, alt }: { src: string; alt: string }) {
       event.stopImmediatePropagation();
       setExpanded(false);
     };
-    document.body.style.overflow = "hidden";
     window.addEventListener("keydown", closeOnEscape, true);
     return () => {
-      document.body.style.overflow = previousOverflow;
+      releaseScrollLock();
       window.removeEventListener("keydown", closeOnEscape, true);
     };
   }, [expanded]);
@@ -1611,7 +1620,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const nestedReaderFocus = (view === "library" && Boolean(libraryNestedProblem))
     || (view === "banks" && Boolean(bankNestedEntry))
     || (view === "journey" && Boolean(journeyNestedEntry || journeyNestedProblem));
-  const readerOpen = Boolean(selectedEntry || selectedProblem || journeyNestedEntry || journeyNestedProblem);
   const [masterPaneState, setMasterPaneState] = useState<MasterPaneState>({ library: false, banks: false });
   const activeListSurface: ListSurface | null = view === "library" || view === "banks" ? view : null;
   const masterPaneOpen = activeListSurface ? masterPaneState[activeListSurface] : false;
@@ -1974,19 +1982,18 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     };
   }, []);
 
-  useEffect(() => {
-    const previous = document.body.style.overflow;
-    if (arrivalState !== "entered") document.body.style.overflow = "hidden";
-    else document.body.style.overflow = previous;
-    return () => { document.body.style.overflow = previous; };
-  }, [arrivalState]);
+  const documentScrollLocked = documentScrollLockRequired({
+    arrivalState,
+    view,
+    pastReaderOpen: Boolean(selectedEntry),
+    bankReaderOpen: Boolean(selectedProblem),
+    journeyReaderOpen: Boolean(journeyNestedEntry || journeyNestedProblem),
+  });
 
-  useEffect(() => {
-    if (!readerOpen) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = previous; };
-  }, [readerOpen]);
+  useLayoutEffect(() => {
+    if (!documentScrollLocked) return;
+    return acquireDocumentScrollLock();
+  }, [documentScrollLocked]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => setPipSupported("documentPictureInPicture" in window));
@@ -6421,7 +6428,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
       <section className="main-column">
         <header className="topbar">
-          <div><span>{readableDate(journal.date)}</span><strong>{view === "loops" ? "Interview · Loops" : view === "journey" ? "Interview · Journey" : view === "library" ? "Interview · Past" : view === "banks" ? "Interview · Banks" : view === "reviews" ? "Interview · Reviews" : view === "materials" ? "Interview · Career Materials" : "Interview · Today"}</strong></div>
+          <div className="topbar-context"><strong>{INTERVIEW_VIEW_TITLES[view]}</strong><span>{readableDate(journal.date)}</span></div>
           <div>
             <div className={`music-dock ${ambientPlaying ? "active" : ""}`}>
               <button onClick={toggleAmbientSound} aria-pressed={ambientPlaying} title={ambientPlaying ? "Pause music" : "Play music"}><span aria-hidden="true">{ambientPlaying ? "Ⅱ" : "▶"}</span><i><small>{ambientPlaying ? "PLAYING" : "PAUSED"}</small><strong>{trackName}</strong></i></button>

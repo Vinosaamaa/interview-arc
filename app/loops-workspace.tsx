@@ -9,6 +9,7 @@ import {
   type RoleBriefSourcePayload,
 } from "./loop-role-brief-source";
 import { loopWorkspaceHref, readLoopWorkspaceState } from "./journey-insights";
+import { acquireDocumentScrollLock } from "./document-scroll-policy";
 
 type Specialty = "leetcode" | "system_design" | "behavioral";
 type MemoryConfidence = "exact" | "reconstructed";
@@ -363,10 +364,9 @@ function JobDescriptionDialog({ loop, opener, onClose }: {
 
   useEffect(() => {
     const workspace = document.querySelector<HTMLElement>("[data-loop-workspace-root]");
-    const previousOverflow = document.body.style.overflow;
+    const releaseScrollLock = acquireDocumentScrollLock();
     const previousInert = workspace?.inert ?? false;
     if (workspace) workspace.inert = true;
-    document.body.style.overflow = "hidden";
     const frame = window.requestAnimationFrame(() => closeRef.current?.focus());
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -394,7 +394,7 @@ function JobDescriptionDialog({ loop, opener, onClose }: {
       window.cancelAnimationFrame(frame);
       document.removeEventListener("keydown", handleKeyDown);
       if (workspace) workspace.inert = previousInert;
-      document.body.style.overflow = previousOverflow;
+      releaseScrollLock();
       opener?.focus();
     };
   }, [onClose, opener]);

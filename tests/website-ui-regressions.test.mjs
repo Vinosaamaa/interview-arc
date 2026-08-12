@@ -300,7 +300,7 @@ test("Interview navigation uses one shared local model with Journey last", async
     ["banks", "Banks"],
     ["journey", "Journey"],
   ]);
-  assert.match(source, /view === "journey" \? "Interview · Journey"/);
+  assert.match(source, /journey: "Interview · Journey"/);
   assert.doesNotMatch(source, /view !== "journey" && <nav className="mobile-interview-nav"/);
 });
 
@@ -320,4 +320,19 @@ test("responsive shell keeps the workspace selector above the seven-item Intervi
   assert.equal(cssRules(rules, ".mobile-interview-nav button", "max-width: 420px").at(-1).declarations["min-height"], "44px");
   assert.ok(cssRules(rules, ".topbar > div:last-child").some((rule) => rule.declarations["flex-wrap"] === "nowrap"));
   assert.equal(cssRules(rules, ".topbar .secondary-action", "max-width: 900px").at(-1).declarations.display, "none");
+});
+
+test("workspace header stacks the active tab above the Pacific date at every width", async () => {
+  const { source, rules } = await loadResponsiveShell();
+  assert.match(source, /<div className="topbar-context"><strong>/);
+  assert.match(source, /<\/strong><span>\{readableDate\(journal\.date\)\}<\/span><\/div>/);
+
+  const context = cssRules(rules, ".topbar > div:first-child")
+    .find((rule) => rule.declarations["align-content"] === "center")?.declarations;
+  assert.ok(context);
+  assert.equal(context.display, "grid");
+  assert.equal(context["align-content"], "center");
+
+  const narrowDate = cssRules(rules, ".topbar > div:first-child span", "max-width: 680px").at(-1).declarations;
+  assert.notEqual(narrowDate.display, "none");
 });
