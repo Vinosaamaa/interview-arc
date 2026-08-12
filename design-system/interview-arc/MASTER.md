@@ -160,21 +160,24 @@ same vertical spine; none becomes a detached dashboard, modal, or side panel.
 - An expanded interview stage begins with its header and, when present, one
   short stage-material card with the material title, immutable revision, and
   an explicit **Open guide** action. Do not render an empty material card.
-- The stage record uses a balanced two-column card grid: **Questions asked**,
-  **My review**, **Self-assessment**, and optional **Interviewer feedback**.
-  The question list is the selector; choosing a question updates the adjacent
-  review without opening another surface. Long question collections scroll
-  inside their card, not by growing the entire stage without bound.
-- Question review records what went well and what to improve. It does not ask
-  the owner to reconstruct or republish an exact interview answer. The
-  self-assessment uses the explicit Strong, Mixed, and Needs work vocabulary.
-  Never fabricate interviewer feedback; show it only when owner-supplied truth
-  exists. Hide the card in ordinary UI when no feedback was recorded.
-- At desktop widths the four record cards use a shared `150px` minimum height
-  with compact internal spacing; their grid gap is a component rhythm, not the
-  `20px` page-panel gap. At narrow widths the grid becomes one column while
-  preserving DOM/focus order: Questions asked, My review, Self-assessment,
-  Interviewer feedback.
+- Each remembered interview question is one inline accordion card. Its compact
+  header keeps the question title, the explicit owner-selected Strong, Mixed,
+  or Needs work assessment, and its expand affordance visible. The entire
+  header is the trigger; only the selected question expands, while sibling
+  question cards stay compact and move in normal flow.
+- The expanded question body keeps **Question context**, **My approach**, and
+  **My review** together. My review records what went well and what to improve;
+  it never asks the owner to reconstruct or republish a verbatim answer.
+  Long content remains readable inside the expanded card without creating a
+  detached reader or replacing the stage chronology.
+- **Round self-assessment** and optional real **Interviewer feedback** are
+  separate round-level cards below the question collection rather than fields
+  duplicated for every question. Never fabricate interviewer feedback; show
+  it only when owner-supplied truth exists, and hide it when absent.
+- At desktop widths the expanded question body may use three balanced columns
+  for context, approach, and review. At narrow widths those sections stack in
+  that DOM/focus order. Component gaps inside the stage are not the `20px`
+  page-panel gap.
 - Expansion uses one 180–260ms ease-out height/reveal transition. Under
   `prefers-reduced-motion`, content changes immediately without losing focus.
   The trigger exposes `aria-expanded`/`aria-controls`, and focus remains on the

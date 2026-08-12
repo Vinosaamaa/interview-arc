@@ -1,7 +1,8 @@
 {
   "artifact": "loops-hr-stage-behavior-v1.png",
   "createdAt": "2026-08-12T07:52:45-07:00",
-  "status": "awaiting-owner-approval",
+  "status": "superseded",
+  "supersededBy": "loops-hr-question-cards-v2.png",
   "relationship": "Interaction detail for the owner-approved loops-single-spine-dossier-v4.png",
   "states": [
     "expanded illustrative populated HR screen",
