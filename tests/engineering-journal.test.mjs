@@ -35,6 +35,7 @@ capabilities: ["engineering-journal"]
 amends: []
 supersedes: []
 learningRefs: []
+diagrams: [{"title":"Commit-pinned publication flow","sourcePath":"docs/design/engineering-workspace/journal-module-architecture.drawio","renderedPath":"docs/design/engineering-workspace/journal-module-architecture.png","summary":"Verified records cross one deterministic build boundary before reaching both readers.","evidenceRefs":["issue:278"]}]
 sources: [{"label":"Arc issue #278","url":"https://github.com/Vinosaamaa/interview-arc/issues/278","kind":"issue"}]
 verification: {"state":"verified","evidenceRefs":["issue:278"]}
 visibility: public-safe
@@ -61,6 +62,29 @@ Compile canonical Markdown through one deterministic Journal Module.
 The implementation boundary is one public Interface backed by immutable revisions.
 `;
 
+const RECEIPT = `---
+schemaVersion: 1
+repository: interview-arc
+pr: 312
+title: Correct Engineering navigation labels
+classification: none
+richRecordRefs: []
+reconstructed: false
+confidence: verified
+unknowns: []
+headCommit: null
+mergeCommit: null
+mergedAt: null
+sources: [{"label":"Pull request #312","url":"https://github.com/Vinosaamaa/interview-arc/pull/312","kind":"pull-request"}]
+verification: {"state":"verified","evidenceRefs":["pull-request:312"]}
+visibility: public-safe
+publicationEligibility: eligible
+---
+# Correct Engineering navigation labels
+
+Renamed one local navigation label without changing a Module or Interface.
+`;
+
 function input() {
   return {
     trustedRepositories: structuredClone(TRUSTED_REPOSITORIES),
@@ -73,6 +97,19 @@ function input() {
   };
 }
 
+function inputWithReceipt(markdown = RECEIPT) {
+  const buildInput = input();
+  buildInput.trustedRepositories[0].receiptPath = "docs/engineering/changes";
+  buildInput.receiptDocuments = [{
+    repository: "interview-arc",
+    commit: "b".repeat(40),
+    committedAt: "2026-08-12T18:42:11Z",
+    path: "docs/engineering/changes/pr-312.md",
+    markdown,
+  }];
+  return buildInput;
+}
+
 test("the Journal Module deterministically projects one commit-pinned canonical record", () => {
   const first = buildEngineeringJournal(input());
   const second = buildEngineeringJournal(input());
@@ -82,10 +119,168 @@ test("the Journal Module deterministically projects one commit-pinned canonical 
   assert.equal(first.index.records[0].body.startsWith("# "), false);
   assert.equal(first.index.records[0].summary, "Engineering records need one public Interface with exact provenance.");
   assert.equal(first.index.records[0].interviewView.id, "interview-view");
+  assert.deepEqual(first.index.records[0].diagrams[0], {
+    title: "Commit-pinned publication flow",
+    sourcePath: "docs/design/engineering-workspace/journal-module-architecture.drawio",
+    renderedPath: "docs/design/engineering-workspace/journal-module-architecture.png",
+    summary: "Verified records cross one deterministic build boundary before reaching both readers.",
+    evidenceRefs: ["issue:278"],
+    sourcePermalink: `https://github.com/Vinosaamaa/interview-arc/blob/${SOURCE_COMMIT}/docs/design/engineering-workspace/journal-module-architecture.drawio`,
+    renderedPermalink: `https://github.com/Vinosaamaa/interview-arc/blob/${SOURCE_COMMIT}/docs/design/engineering-workspace/journal-module-architecture.png`,
+    renderedUrl: `https://raw.githubusercontent.com/Vinosaamaa/interview-arc/${SOURCE_COMMIT}/docs/design/engineering-workspace/journal-module-architecture.png`,
+  });
   assert.equal(
     first.index.records[0].source.permalink,
     `https://github.com/Vinosaamaa/interview-arc/blob/${SOURCE_COMMIT}/docs/engineering/records/architecture-review-engineering-journal-module.md`,
   );
+});
+
+test("rich-record diagrams require repository-native paths and recorded evidence", () => {
+  const unsafePath = input();
+  unsafePath.documents[0].markdown = unsafePath.documents[0].markdown.replace(
+    "docs/design/engineering-workspace/journal-module-architecture.drawio",
+    "../private/journal-module-architecture.drawio",
+  );
+  assert.throws(() => buildEngineeringJournal(unsafePath), (error) => error.code === "field_diagrams_invalid");
+
+  const unsupportedAsset = input();
+  unsupportedAsset.documents[0].markdown = unsupportedAsset.documents[0].markdown.replace(
+    "journal-module-architecture.png",
+    "journal-module-architecture.html",
+  );
+  assert.throws(() => buildEngineeringJournal(unsupportedAsset), (error) => error.code === "field_diagrams_invalid");
+
+  const unevidenced = input();
+  unevidenced.documents[0].markdown = unevidenced.documents[0].markdown.replace(
+    '"evidenceRefs":["issue:278"]',
+    '"evidenceRefs":["unrecorded:claim"]',
+  );
+  assert.throws(() => buildEngineeringJournal(unevidenced), (error) => error.code === "field_diagrams_invalid");
+});
+
+test("every PR can project one compact receipt without entering the rich-record collection", () => {
+  const result = buildEngineeringJournal(inputWithReceipt());
+
+  assert.equal(result.index.records.length, 1);
+  assert.equal(result.index.pullRequestReceipts.length, 1);
+  assert.equal(result.index.pullRequestReceipts[0].ref, "pr:interview-arc:312");
+  assert.equal(result.index.pullRequestReceipts[0].timelineBasis, "source-commit");
+  assert.deepEqual(result.index.pullRequestReceipts[0].richRecordRefs, []);
+  assert.equal(result.index.receiptStatistics.totalReceipts, 1);
+  assert.equal(result.index.statistics.totalRecords, 1);
+  assert.match(result.index.receiptSearch[0].text, /navigation labels/);
+  assert.doesNotMatch(result.index.search[0].text, /navigation labels/);
+
+  const duplicate = inputWithReceipt();
+  duplicate.receiptDocuments.push({ ...duplicate.receiptDocuments[0], commit: "c".repeat(40) });
+  assert.throws(() => buildEngineeringJournal(duplicate), (error) => error.code === "receipt_duplicate");
+});
+
+test("a material PR receipt links an exact rich-record revision of its declared type", () => {
+  const materialReceipt = RECEIPT
+    .replace("classification: none", "classification: architecture-review")
+    .replace("richRecordRefs: []", 'richRecordRefs: ["architecture-review-engineering-journal-module@1"]');
+  const result = buildEngineeringJournal(inputWithReceipt(materialReceipt));
+
+  assert.deepEqual(
+    result.index.receiptBacklinks["architecture-review-engineering-journal-module@1"],
+    ["pr:interview-arc:312"],
+  );
+
+  const missing = inputWithReceipt(materialReceipt.replace("@1", "@2"));
+  assert.throws(() => buildEngineeringJournal(missing), (error) => error.code === "receipt_record_target_missing");
+
+  const mismatched = inputWithReceipt(materialReceipt.replace("classification: architecture-review", "classification: change-note"));
+  assert.throws(() => buildEngineeringJournal(mismatched), (error) => error.code === "receipt_record_type_mismatch");
+});
+
+test("a lightweight PR receipt cannot become a second rich-prose format", () => {
+  const proseReceipt = RECEIPT.replace(
+    "Renamed one local navigation label without changing a Module or Interface.",
+    "Renamed one local navigation label.\n\n## Decision\n\nThis duplicate narrative belongs in a rich record, not the receipt timeline.",
+  );
+
+  assert.throws(
+    () => buildEngineeringJournal(inputWithReceipt(proseReceipt)),
+    (error) => error.code === "receipt_not_compact",
+  );
+});
+
+test("receipt provenance labels Git-derived fallbacks and externally verified backfill facts", () => {
+  const current = buildEngineeringJournal(inputWithReceipt()).index.pullRequestReceipts[0];
+  assert.equal(current.source.commit, "b".repeat(40));
+  assert.equal(current.source.committedAt, "2026-08-12T18:42:11Z");
+  assert.equal(current.timelineCommit, current.source.commit);
+  assert.equal(current.timelineCommitBasis, "source-commit");
+  assert.deepEqual(current.missingFacts, ["head-commit", "merge-commit", "merged-at"]);
+
+  const reconstructed = RECEIPT
+    .replace("reconstructed: false", "reconstructed: true")
+    .replace("headCommit: null", `headCommit: ${"c".repeat(40)}`)
+    .replace("mergeCommit: null", `mergeCommit: ${"d".repeat(40)}`)
+    .replace("mergedAt: null", "mergedAt: 2026-08-13T01:02:03Z");
+  const verified = buildEngineeringJournal(inputWithReceipt(reconstructed)).index.pullRequestReceipts[0];
+  assert.equal(verified.reconstructed, true);
+  assert.equal(verified.timelineAt, "2026-08-13T01:02:03Z");
+  assert.equal(verified.timelineBasis, "verified-merge");
+  assert.equal(verified.timelineCommit, "d".repeat(40));
+  assert.equal(verified.timelineCommitBasis, "verified-merge");
+  assert.deepEqual(verified.missingFacts, []);
+
+  const unverified = inputWithReceipt(reconstructed.replace(
+    'verification: {"state":"verified","evidenceRefs":["pull-request:312"]}',
+    'verification: {"state":"not-recorded","evidenceRefs":[]}',
+  ));
+  assert.throws(() => buildEngineeringJournal(unverified), (error) => error.code === "receipt_supplied_fact_unverified");
+
+  const impossibleDate = inputWithReceipt();
+  impossibleDate.receiptDocuments[0].committedAt = "2026-02-30T18:42:11Z";
+  assert.throws(() => buildEngineeringJournal(impossibleDate), (error) => error.code === "source_committedAt_invalid");
+});
+
+test("receipt ingestion is deterministic, path-allowlisted, and public-safe without echoing rejected values", () => {
+  assert.deepEqual(buildEngineeringJournal(inputWithReceipt()), buildEngineeringJournal(inputWithReceipt()));
+
+  const unsafePath = inputWithReceipt();
+  unsafePath.receiptDocuments[0].path = "/Users/example/private/pr-312.md";
+  assert.throws(
+    () => buildEngineeringJournal(unsafePath),
+    (error) => error.code === "receipt_source_path_untrusted" && !error.message.includes("example"),
+  );
+
+  const nestedPath = inputWithReceipt();
+  nestedPath.receiptDocuments[0].path = "docs/engineering/changes/archive/pr-312.md";
+  assert.throws(() => buildEngineeringJournal(nestedPath), (error) => error.code === "receipt_filename_mismatch");
+
+  const unsafeBody = inputWithReceipt(`${RECEIPT}\n\naccess_token=privatevalue12345`);
+  assert.throws(
+    () => buildEngineeringJournal(unsafeBody),
+    (error) => error.code === "privacy_violation" && !error.message.includes("privatevalue12345"),
+  );
+});
+
+test("receipt timeline JSON, search, Statistics, and standalone HTML remain one separate projection", () => {
+  const result = buildEngineeringJournal(inputWithReceipt());
+  const embedded = result.standaloneHtml.match(/<script id="engineering-journal-index" type="application\/json">([\s\S]+)<\/script>/);
+
+  assert.ok(embedded);
+  assert.deepEqual(JSON.parse(embedded[1]), result.index);
+  assert.match(result.standaloneHtml, /Pull request timeline/);
+  assert.match(result.standaloneHtml, /Exact receipt source/);
+  assert.match(result.standaloneHtml, /Commit-pinned publication flow/);
+  assert.match(result.standaloneHtml, /journal-module-architecture\.drawio/);
+  assert.deepEqual(result.index.receiptStatistics.byClassification, {
+    none: 1,
+    "change-note": 0,
+    adr: 0,
+    "architecture-review": 0,
+    "feature-retrospective": 0,
+    postmortem: 0,
+    "capability-dossier": 0,
+  });
+  assert.equal(result.index.receiptStatistics.withMissingFacts, 1);
+  assert.equal(result.index.receiptStatistics.earliestTimelineAt, "2026-08-12T18:42:11Z");
+  assert.equal(result.index.statistics.totalRecords, 1);
 });
 
 test("public-safe records reject private paths and secret-like values without echoing them", () => {
@@ -248,6 +443,7 @@ test("normalized JSON, standalone HTML, search, backlinks, and Statistics share 
 test("verification is explicit and never inferred from release or run references", () => {
   const buildInput = input();
   buildInput.documents[0].markdown = TRACER
+    .replace(/^diagrams: .*\n/m, "")
     .replace('verification: {"state":"verified","evidenceRefs":["issue:278"]}', 'verification: {"state":"not-recorded","evidenceRefs":[]}')
     .replace("release: null", "release: v1.0.0")
     .replace("run: null", 'run: "31586541242"');

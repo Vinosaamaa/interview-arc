@@ -10,6 +10,8 @@ export type EngineeringRecordStatus = "proposed" | "accepted" | "released" | "cl
 
 export type EngineeringRecordEffectiveStatus = EngineeringRecordStatus | "amended" | "superseded";
 
+export type EngineeringPullRequestClassification = "none" | EngineeringRecordType;
+
 export type EngineeringRecordSourceReference = {
   label: string;
   url: string;
@@ -25,6 +27,7 @@ export type TrustedJournalRepository = {
   repository: string;
   owner: string;
   canonicalPath: string;
+  receiptPath?: string;
   commit?: string;
 };
 
@@ -35,9 +38,14 @@ export type EngineeringJournalDocument = {
   markdown: string;
 };
 
+export type EngineeringPullRequestReceiptDocument = EngineeringJournalDocument & {
+  committedAt: string;
+};
+
 export type EngineeringJournalBuildInput = {
   trustedRepositories: TrustedJournalRepository[];
   documents: EngineeringJournalDocument[];
+  receiptDocuments?: EngineeringPullRequestReceiptDocument[];
 };
 
 export type EngineeringRecordSource = {
@@ -51,6 +59,44 @@ export type EngineeringRecordSection = {
   id: string;
   title: string;
   body: string;
+};
+
+export type EngineeringRecordDiagram = {
+  title: string;
+  sourcePath: string;
+  renderedPath: string;
+  summary: string;
+  evidenceRefs: string[];
+  sourcePermalink: string;
+  renderedPermalink: string;
+  renderedUrl: string;
+};
+
+export type EngineeringPullRequestReceipt = {
+  schemaVersion: 1;
+  ref: string;
+  repository: string;
+  pr: number;
+  title: string;
+  summary: string;
+  classification: EngineeringPullRequestClassification;
+  richRecordRefs: string[];
+  reconstructed: boolean;
+  confidence: "verified" | "high" | "medium" | "low" | "unknown";
+  unknowns: string[];
+  headCommit: string | null;
+  mergeCommit: string | null;
+  mergedAt: string | null;
+  timelineAt: string;
+  timelineBasis: "verified-merge" | "source-commit";
+  timelineCommit: string;
+  timelineCommitBasis: "verified-merge" | "source-commit";
+  missingFacts: Array<"head-commit" | "merge-commit" | "merged-at">;
+  sources: EngineeringRecordSourceReference[];
+  verification: EngineeringRecordVerification;
+  visibility: "public-safe";
+  publicationEligibility: "eligible";
+  source: EngineeringRecordSource & { committedAt: string };
 };
 
 export type EngineeringJournalRecord = {
@@ -83,6 +129,7 @@ export type EngineeringJournalRecord = {
   amends: string[];
   supersedes: string[];
   learningRefs: string[];
+  diagrams: EngineeringRecordDiagram[];
   sources: EngineeringRecordSourceReference[];
   verification: EngineeringRecordVerification;
   visibility: "public-safe" | "owner-private";
@@ -117,9 +164,28 @@ export type EngineeringJournalStatistics = {
   }>;
 };
 
+export type EngineeringPullRequestReceiptStatistics = {
+  totalReceipts: number;
+  earliestTimelineAt: string | null;
+  latestTimelineAt: string | null;
+  byRepository: Record<string, number>;
+  byClassification: Record<EngineeringPullRequestClassification, number>;
+  reconstructed: number;
+  withMissingFacts: number;
+  chronology: Array<{
+    ref: string;
+    pr: number;
+    timelineAt: string;
+    timelineBasis: EngineeringPullRequestReceipt["timelineBasis"];
+    repository: string;
+    classification: EngineeringPullRequestClassification;
+  }>;
+};
+
 export type EngineeringJournalIndex = {
   schemaVersion: 1;
   records: EngineeringJournalRecord[];
+  pullRequestReceipts: EngineeringPullRequestReceipt[];
   search: Array<{
     id: string;
     ref: string;
@@ -132,8 +198,19 @@ export type EngineeringJournalIndex = {
     effectiveStatus: EngineeringJournalRecord["effectiveStatus"];
     capabilityIds: string[];
   }>;
+  receiptSearch: Array<{
+    ref: string;
+    pr: number;
+    timelineAt: string;
+    text: string;
+    repository: string;
+    classification: EngineeringPullRequestClassification;
+    richRecordRefs: string[];
+  }>;
   backlinks: Record<string, string[]>;
+  receiptBacklinks: Record<string, string[]>;
   statistics: EngineeringJournalStatistics;
+  receiptStatistics: EngineeringPullRequestReceiptStatistics;
 };
 
 export type EngineeringJournalBuild = {
@@ -163,6 +240,7 @@ const RECORD_TYPES = new Set<EngineeringRecordType>([
   "capability-dossier",
 ]);
 const RECORD_STATUSES = new Set<EngineeringRecordStatus>(["proposed", "accepted", "released", "closed"]);
+const RECEIPT_CLASSIFICATIONS = new Set<EngineeringPullRequestClassification>(["none", ...RECORD_TYPES]);
 const CONFIDENCE = new Set(["verified", "high", "medium", "low", "unknown"]);
 const FRONTMATTER_FIELDS = new Set([
   "schemaVersion",
@@ -189,6 +267,7 @@ const FRONTMATTER_FIELDS = new Set([
   "amends",
   "supersedes",
   "learningRefs",
+  "diagrams",
   "sources",
   "verification",
   "visibility",
@@ -198,10 +277,29 @@ const FRONTMATTER_FIELDS = new Set([
   "release",
   "run",
 ]);
+const RECEIPT_FRONTMATTER_FIELDS = new Set([
+  "schemaVersion",
+  "repository",
+  "pr",
+  "title",
+  "classification",
+  "richRecordRefs",
+  "reconstructed",
+  "confidence",
+  "unknowns",
+  "headCommit",
+  "mergeCommit",
+  "mergedAt",
+  "sources",
+  "verification",
+  "visibility",
+  "publicationEligibility",
+]);
 const ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const COMMIT_PATTERN = /^[0-9a-f]{40}$/;
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const RECORD_REF_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*@[1-9]\d*$/;
+const UTC_SECOND_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 const TYPE_STATUSES: Record<EngineeringRecordType, ReadonlySet<EngineeringRecordStatus>> = {
   "change-note": new Set(["released"]),
   adr: new Set(["proposed", "accepted"]),
@@ -334,6 +432,28 @@ function nullableString(frontmatter: Record<string, unknown>, key: string, sourc
   return value.trim();
 }
 
+function nullableCommit(frontmatter: Record<string, unknown>, key: string, source: string) {
+  const value = nullableString(frontmatter, key, source);
+  if (value !== null && !COMMIT_PATTERN.test(value)) {
+    throw new EngineeringJournalError(`field_${key}_invalid`, source);
+  }
+  return value;
+}
+
+function nullableTimestamp(frontmatter: Record<string, unknown>, key: string, source: string) {
+  const value = nullableString(frontmatter, key, source);
+  if (value !== null && !validUtcSecondTimestamp(value)) {
+    throw new EngineeringJournalError(`field_${key}_invalid`, source);
+  }
+  return value;
+}
+
+function validUtcSecondTimestamp(value: string) {
+  if (!UTC_SECOND_TIMESTAMP_PATTERN.test(value)) return false;
+  const parsed = new Date(value);
+  return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().replace(".000Z", "Z") === value;
+}
+
 function sourceReferences(frontmatter: Record<string, unknown>, source: string): EngineeringRecordSourceReference[] {
   const value = frontmatter.sources;
   if (!Array.isArray(value) || value.length === 0) throw new EngineeringJournalError("field_sources_invalid", source);
@@ -358,6 +478,57 @@ function sourceReferences(frontmatter: Record<string, unknown>, source: string):
       label: entry.label.trim(),
       url: entry.url,
       kind: entry.kind as EngineeringRecordSourceReference["kind"],
+    };
+  });
+}
+
+function diagramReferences(
+  frontmatter: Record<string, unknown>,
+  source: string,
+  repository: TrustedJournalRepository,
+  commit: string,
+  verificationEvidence: ReadonlySet<string>,
+): EngineeringRecordDiagram[] {
+  const value = frontmatter.diagrams ?? [];
+  if (!Array.isArray(value)) throw new EngineeringJournalError("field_diagrams_invalid", source);
+  const paths = new Set<string>();
+  return value.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new EngineeringJournalError("field_diagrams_invalid", source);
+    }
+    const entry = item as Record<string, unknown>;
+    const allowed = ["title", "sourcePath", "renderedPath", "summary", "evidenceRefs"];
+    if (Object.keys(entry).some((key) => !allowed.includes(key))) {
+      throw new EngineeringJournalError("field_diagrams_invalid", source);
+    }
+    const title = typeof entry.title === "string" ? entry.title.trim() : "";
+    const summary = typeof entry.summary === "string" ? entry.summary.trim() : "";
+    const sourcePath = typeof entry.sourcePath === "string" ? entry.sourcePath.trim() : "";
+    const renderedPath = typeof entry.renderedPath === "string" ? entry.renderedPath.trim() : "";
+    const evidenceRefs = Array.isArray(entry.evidenceRefs)
+      ? entry.evidenceRefs.map((ref) => typeof ref === "string" ? ref.trim() : "")
+      : [];
+    if (!title || title.length > 160 || !summary || summary.length > 280 ||
+      !pathWithin(sourcePath, "docs/design") || !sourcePath.endsWith(".drawio") ||
+      !pathWithin(renderedPath, "docs/design") || !/\.(?:png|svg)$/.test(renderedPath) ||
+      sourcePath === renderedPath || evidenceRefs.length === 0 || evidenceRefs.some((ref) => !ref) ||
+      new Set(evidenceRefs).size !== evidenceRefs.length || evidenceRefs.some((ref) => !verificationEvidence.has(ref))) {
+      throw new EngineeringJournalError("field_diagrams_invalid", source);
+    }
+    if (paths.has(sourcePath) || paths.has(renderedPath)) {
+      throw new EngineeringJournalError("diagram_path_duplicate", source);
+    }
+    paths.add(sourcePath);
+    paths.add(renderedPath);
+    return {
+      title,
+      sourcePath,
+      renderedPath,
+      summary,
+      evidenceRefs,
+      sourcePermalink: sourcePermalink(repository, commit, sourcePath),
+      renderedPermalink: sourcePermalink(repository, commit, renderedPath),
+      renderedUrl: rawSourceUrl(repository, commit, renderedPath),
     };
   });
 }
@@ -390,6 +561,11 @@ function pathWithin(path: string, canonicalPath: string) {
 function sourcePermalink(repository: TrustedJournalRepository, commit: string, path: string) {
   const encodedPath = path.split("/").map(encodeURIComponent).join("/");
   return `https://github.com/${repository.owner}/${repository.repository}/blob/${commit}/${encodedPath}`;
+}
+
+function rawSourceUrl(repository: TrustedJournalRepository, commit: string, path: string) {
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  return `https://raw.githubusercontent.com/${repository.owner}/${repository.repository}/${commit}/${encodedPath}`;
 }
 
 function normalizeDocument(
@@ -451,6 +627,7 @@ function normalizeDocument(
   if (learningRefs.length > 0) throw new EngineeringJournalError("learn_contract_unreleased", safeSource);
   const title = stringValue(frontmatter, "title", safeSource);
   if (title !== documentTitle) throw new EngineeringJournalError("document_title_mismatch", safeSource);
+  const recordVerification = verification(frontmatter, safeSource);
 
   return {
     schemaVersion: 1,
@@ -482,8 +659,15 @@ function normalizeDocument(
     amends: stringArray(frontmatter, "amends", safeSource),
     supersedes: stringArray(frontmatter, "supersedes", safeSource),
     learningRefs,
+    diagrams: diagramReferences(
+      frontmatter,
+      safeSource,
+      trusted,
+      document.commit,
+      new Set(recordVerification.evidenceRefs),
+    ),
     sources: sourceReferences(frontmatter, safeSource),
-    verification: verification(frontmatter, safeSource),
+    verification: recordVerification,
     visibility,
     publicationEligibility,
     issue: nullableNumber(frontmatter, "issue", safeSource),
@@ -499,6 +683,122 @@ function normalizeDocument(
     body,
     sections,
     interviewView,
+  };
+}
+
+function normalizeReceipt(
+  document: EngineeringPullRequestReceiptDocument,
+  repositories: Map<string, TrustedJournalRepository>,
+  safeSource: string,
+): EngineeringPullRequestReceipt {
+  const trusted = repositories.get(document.repository);
+  if (!trusted) throw new EngineeringJournalError("repository_untrusted", safeSource);
+  if (!COMMIT_PATTERN.test(document.commit)) throw new EngineeringJournalError("commit_invalid", safeSource);
+  if (trusted.commit && trusted.commit !== document.commit) {
+    throw new EngineeringJournalError("commit_pin_mismatch", safeSource);
+  }
+  if (!trusted.receiptPath || !pathWithin(document.path, trusted.receiptPath) || !document.path.endsWith(".md")) {
+    throw new EngineeringJournalError("receipt_source_path_untrusted", safeSource);
+  }
+  if (!validUtcSecondTimestamp(document.committedAt)) {
+    throw new EngineeringJournalError("source_committedAt_invalid", safeSource);
+  }
+  if ([document.repository, document.path, document.commit, document.committedAt, document.markdown].some((value) =>
+    PRIVATE_CONTENT_PATTERNS.some((pattern) => pattern.test(value)))) {
+    throw new EngineeringJournalError("privacy_violation", safeSource);
+  }
+
+  const parsed = parseDocument(document.markdown, safeSource);
+  const { frontmatter, documentTitle, summary, sections, body } = parsed;
+  if (Object.keys(frontmatter).some((key) => !RECEIPT_FRONTMATTER_FIELDS.has(key))) {
+    throw new EngineeringJournalError("receipt_frontmatter_unknown_field", safeSource);
+  }
+  if (frontmatter.schemaVersion !== 1) throw new EngineeringJournalError("receipt_schema_version_unsupported", safeSource);
+  const repository = stringValue(frontmatter, "repository", safeSource);
+  if (repository !== document.repository) throw new EngineeringJournalError("repository_mismatch", safeSource);
+  const pr = nullableNumber(frontmatter, "pr", safeSource);
+  if (pr === null) throw new EngineeringJournalError("field_pr_invalid", safeSource);
+  if (document.path !== `${trusted.receiptPath.replace(/\/$/, "")}/pr-${pr}.md`) {
+    throw new EngineeringJournalError("receipt_filename_mismatch", safeSource);
+  }
+  const title = stringValue(frontmatter, "title", safeSource);
+  if (title !== documentTitle) throw new EngineeringJournalError("document_title_mismatch", safeSource);
+  if (title.length > 160 || sections.length > 0 || body !== summary || summary.length > 280 || /\n\s*\n/.test(summary) || /^#{2,6}\s/m.test(summary)) {
+    throw new EngineeringJournalError("receipt_not_compact", safeSource);
+  }
+  const classification = stringValue(frontmatter, "classification", safeSource) as EngineeringPullRequestClassification;
+  if (!RECEIPT_CLASSIFICATIONS.has(classification)) {
+    throw new EngineeringJournalError("field_classification_invalid", safeSource);
+  }
+  const richRecordRefs = stringArray(frontmatter, "richRecordRefs", safeSource);
+  if (new Set(richRecordRefs).size !== richRecordRefs.length || richRecordRefs.some((ref) => !RECORD_REF_PATTERN.test(ref))) {
+    throw new EngineeringJournalError("field_richRecordRefs_invalid", safeSource);
+  }
+  if (classification === "none" && richRecordRefs.length > 0) {
+    throw new EngineeringJournalError("receipt_none_has_rich_record", safeSource);
+  }
+  if (classification !== "none" && richRecordRefs.length === 0) {
+    throw new EngineeringJournalError("receipt_material_record_missing", safeSource);
+  }
+  if (typeof frontmatter.reconstructed !== "boolean") {
+    throw new EngineeringJournalError("field_reconstructed_invalid", safeSource);
+  }
+  const confidence = stringValue(frontmatter, "confidence", safeSource) as EngineeringPullRequestReceipt["confidence"];
+  if (!CONFIDENCE.has(confidence)) throw new EngineeringJournalError("field_confidence_invalid", safeSource);
+  const unknowns = stringArray(frontmatter, "unknowns", safeSource);
+  const headCommit = nullableCommit(frontmatter, "headCommit", safeSource);
+  const mergeCommit = nullableCommit(frontmatter, "mergeCommit", safeSource);
+  const mergedAt = nullableTimestamp(frontmatter, "mergedAt", safeSource);
+  const receiptVerification = verification(frontmatter, safeSource);
+  if ((headCommit || mergeCommit || mergedAt) && receiptVerification.state !== "verified") {
+    throw new EngineeringJournalError("receipt_supplied_fact_unverified", safeSource);
+  }
+  const visibility = stringValue(frontmatter, "visibility", safeSource);
+  const publicationEligibility = stringValue(frontmatter, "publicationEligibility", safeSource);
+  if (visibility !== "public-safe" || publicationEligibility !== "eligible") {
+    throw new EngineeringJournalError("receipt_not_public_eligible", safeSource);
+  }
+  const sources = sourceReferences(frontmatter, safeSource);
+  const pullRequestUrl = `https://github.com/${trusted.owner}/${repository}/pull/${pr}`;
+  if (!sources.some((entry) => entry.kind === "pull-request" && entry.url === pullRequestUrl)) {
+    throw new EngineeringJournalError("receipt_pull_request_source_missing", safeSource);
+  }
+  const missingFacts: EngineeringPullRequestReceipt["missingFacts"] = [];
+  if (!headCommit) missingFacts.push("head-commit");
+  if (!mergeCommit) missingFacts.push("merge-commit");
+  if (!mergedAt) missingFacts.push("merged-at");
+
+  return {
+    schemaVersion: 1,
+    ref: `pr:${repository}:${pr}`,
+    repository,
+    pr,
+    title,
+    summary,
+    classification,
+    richRecordRefs,
+    reconstructed: frontmatter.reconstructed,
+    confidence,
+    unknowns,
+    headCommit,
+    mergeCommit,
+    mergedAt,
+    timelineAt: mergedAt ?? document.committedAt,
+    timelineBasis: mergedAt ? "verified-merge" : "source-commit",
+    timelineCommit: mergeCommit ?? document.commit,
+    timelineCommitBasis: mergeCommit ? "verified-merge" : "source-commit",
+    missingFacts,
+    sources,
+    verification: receiptVerification,
+    visibility: "public-safe",
+    publicationEligibility: "eligible",
+    source: {
+      repository: document.repository,
+      commit: document.commit,
+      committedAt: document.committedAt,
+      path: document.path,
+      permalink: sourcePermalink(trusted, document.commit, document.path),
+    },
   };
 }
 
@@ -519,6 +819,18 @@ function emptyTypeCounts(): Record<EngineeringRecordType, number> {
 
 function emptyStatusCounts(): Record<EngineeringRecordEffectiveStatus, number> {
   return { proposed: 0, accepted: 0, released: 0, closed: 0, amended: 0, superseded: 0 };
+}
+
+function emptyReceiptClassificationCounts(): Record<EngineeringPullRequestClassification, number> {
+  return {
+    none: 0,
+    "change-note": 0,
+    adr: 0,
+    "architecture-review": 0,
+    "feature-retrospective": 0,
+    postmortem: 0,
+    "capability-dossier": 0,
+  };
 }
 
 function buildStatistics(records: EngineeringJournalRecord[]): EngineeringJournalStatistics {
@@ -564,16 +876,57 @@ function buildStatistics(records: EngineeringJournalRecord[]): EngineeringJourna
   };
 }
 
+function buildReceiptStatistics(receipts: EngineeringPullRequestReceipt[]): EngineeringPullRequestReceiptStatistics {
+  const byRepository: Record<string, number> = {};
+  const byClassification = emptyReceiptClassificationCounts();
+  let reconstructed = 0;
+  let withMissingFacts = 0;
+  for (const receipt of receipts) {
+    byRepository[receipt.repository] = (byRepository[receipt.repository] ?? 0) + 1;
+    byClassification[receipt.classification] += 1;
+    if (receipt.reconstructed) reconstructed += 1;
+    if (receipt.missingFacts.length > 0) withMissingFacts += 1;
+  }
+  const chronology = [...receipts]
+    .sort((left, right) => left.timelineAt.localeCompare(right.timelineAt) || left.ref.localeCompare(right.ref))
+    .map((receipt) => ({
+      ref: receipt.ref,
+      pr: receipt.pr,
+      timelineAt: receipt.timelineAt,
+      timelineBasis: receipt.timelineBasis,
+      repository: receipt.repository,
+      classification: receipt.classification,
+    }));
+  return {
+    totalReceipts: receipts.length,
+    earliestTimelineAt: chronology[0]?.timelineAt ?? null,
+    latestTimelineAt: chronology.at(-1)?.timelineAt ?? null,
+    byRepository: Object.fromEntries(Object.entries(byRepository).sort(([left], [right]) => left.localeCompare(right))),
+    byClassification,
+    reconstructed,
+    withMissingFacts,
+    chronology,
+  };
+}
+
 function renderStandalone(index: EngineeringJournalIndex, normalizedJson: string) {
+  const receipts = index.pullRequestReceipts.map((receipt) => `<article id="${escapeHtml(receipt.ref)}">
+<p>PR #${receipt.pr} · ${escapeHtml(receipt.repository)} · ${escapeHtml(receipt.classification)}</p>
+<h2>${escapeHtml(receipt.title)}</h2>
+<p>${escapeHtml(receipt.summary)}</p>
+<p>${escapeHtml(receipt.timelineAt)} · ${escapeHtml(receipt.timelineBasis)}</p>
+<p><a href="${escapeHtml(receipt.source.permalink)}">Exact receipt source</a></p>
+</article>`).join("\n");
   const records = index.records.map((record) => `<article id="${escapeHtml(record.ref)}">
 <p>${escapeHtml(record.type)} · ${escapeHtml(record.effectiveStatus)} · ${escapeHtml(record.repository)}</p>
 <h1>${escapeHtml(record.title)}</h1>
 <p>${escapeHtml(record.summary)}</p>
+${record.diagrams.map((diagram) => `<figure><a href="${escapeHtml(diagram.renderedPermalink)}"><img src="${escapeHtml(diagram.renderedUrl)}" alt="${escapeHtml(diagram.title)}"></a><figcaption><strong>${escapeHtml(diagram.title)}</strong> — ${escapeHtml(diagram.summary)} <a href="${escapeHtml(diagram.sourcePermalink)}">Editable source</a></figcaption></figure>`).join("\n")}
 ${record.sections.map((section) => `<section id="${escapeHtml(section.id)}"><h2>${escapeHtml(section.title)}</h2><p>${escapeHtml(section.body)}</p></section>`).join("\n")}
 <p><a href="${escapeHtml(record.source.permalink)}">Exact source</a></p>
 </article>`).join("\n");
   const embeddedJson = normalizedJson.trimEnd().replaceAll("<", "\\u003c");
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Interview Arc Engineering Journal</title></head><body><main>${records}</main><script id="engineering-journal-index" type="application/json">${embeddedJson}</script></body></html>\n`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Interview Arc Engineering Journal</title></head><body><main><section aria-labelledby="pull-request-timeline"><h1 id="pull-request-timeline">Pull request timeline</h1>${receipts}</section><section aria-labelledby="rich-engineering-records"><h1 id="rich-engineering-records">Rich engineering records</h1>${records}</section></main><script id="engineering-journal-index" type="application/json">${embeddedJson}</script></body></html>\n`;
 }
 
 export function buildEngineeringJournal(input: EngineeringJournalBuildInput): EngineeringJournalBuild {
@@ -587,6 +940,11 @@ export function buildEngineeringJournal(input: EngineeringJournalBuildInput): En
     if (!repository.canonicalPath || repository.canonicalPath.startsWith("/") || repository.canonicalPath.includes("..") ||
       PRIVATE_CONTENT_PATTERNS.some((pattern) => pattern.test(repository.canonicalPath))) {
       throw new EngineeringJournalError("repository_config_invalid", safeSource);
+    }
+    if (repository.receiptPath !== undefined && (!repository.receiptPath || repository.receiptPath.startsWith("/") ||
+      repository.receiptPath.includes("..") || repository.receiptPath === repository.canonicalPath ||
+      PRIVATE_CONTENT_PATTERNS.some((pattern) => pattern.test(repository.receiptPath)))) {
+      throw new EngineeringJournalError("repository_receipt_config_invalid", safeSource);
     }
     if (repository.commit && !COMMIT_PATTERN.test(repository.commit)) {
       throw new EngineeringJournalError("repository_commit_invalid", safeSource);
@@ -660,9 +1018,30 @@ export function buildEngineeringJournal(input: EngineeringJournalBuildInput): En
         : record.status;
   }
   for (const links of Object.values(backlinks)) links.sort();
+  const pullRequestReceipts = (input.receiptDocuments ?? [])
+    .map((document, index) => normalizeReceipt(document, repositories, `receipt-document-${index + 1}`))
+    .sort((left, right) => right.timelineAt.localeCompare(left.timelineAt) || left.ref.localeCompare(right.ref));
+  const receiptRefs = new Set<string>();
+  const receiptBacklinks: Record<string, string[]> = Object.fromEntries(records.map((record) => [record.ref, []]));
+  for (const receipt of pullRequestReceipts) {
+    if (receiptRefs.has(receipt.ref)) throw new EngineeringJournalError("receipt_duplicate", receipt.source.repository);
+    receiptRefs.add(receipt.ref);
+    let classificationMatched = receipt.classification === "none";
+    for (const target of receipt.richRecordRefs) {
+      const targetRecord = byRef.get(target);
+      if (!targetRecord) throw new EngineeringJournalError("receipt_record_target_missing", receipt.source.repository);
+      receiptBacklinks[target].push(receipt.ref);
+      if (targetRecord.type === receipt.classification) classificationMatched = true;
+    }
+    if (!classificationMatched) {
+      throw new EngineeringJournalError("receipt_record_type_mismatch", receipt.source.repository);
+    }
+  }
+  for (const links of Object.values(receiptBacklinks)) links.sort();
   const index: EngineeringJournalIndex = {
     schemaVersion: 1,
     records,
+    pullRequestReceipts,
     search: records.map((record) => ({
       id: record.id,
       ref: record.ref,
@@ -688,6 +1067,13 @@ export function buildEngineeringJournal(input: EngineeringJournalBuildInput): En
         ...record.amends,
         ...record.supersedes,
         ...record.learningRefs,
+        ...record.diagrams.flatMap((diagram) => [
+          diagram.title,
+          diagram.summary,
+          diagram.sourcePath,
+          diagram.renderedPath,
+          ...diagram.evidenceRefs,
+        ]),
         ...record.sources.flatMap((source) => [source.label, source.kind, source.url]),
         record.issue ? `issue ${record.issue} #${record.issue}` : "",
         record.pr ? `pull request ${record.pr} pr ${record.pr}` : "",
@@ -702,8 +1088,29 @@ export function buildEngineeringJournal(input: EngineeringJournalBuildInput): En
       effectiveStatus: record.effectiveStatus,
       capabilityIds: record.capabilityIds,
     })),
+    receiptSearch: pullRequestReceipts.map((receipt) => ({
+      ref: receipt.ref,
+      pr: receipt.pr,
+      timelineAt: receipt.timelineAt,
+      text: [
+        receipt.title,
+        receipt.summary,
+        receipt.repository,
+        receipt.classification,
+        ...receipt.richRecordRefs,
+        ...receipt.unknowns,
+        ...receipt.missingFacts,
+        ...receipt.sources.flatMap((source) => [source.label, source.kind, source.url]),
+        `pull request ${receipt.pr} pr ${receipt.pr}`,
+      ].join(" ").toLowerCase(),
+      repository: receipt.repository,
+      classification: receipt.classification,
+      richRecordRefs: receipt.richRecordRefs,
+    })),
     backlinks,
+    receiptBacklinks,
     statistics: buildStatistics(records),
+    receiptStatistics: buildReceiptStatistics(pullRequestReceipts),
   };
   const normalizedJson = `${JSON.stringify(index, null, 2)}\n`;
   return { index, normalizedJson, standaloneHtml: renderStandalone(index, normalizedJson) };

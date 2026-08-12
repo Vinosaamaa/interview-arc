@@ -22,9 +22,44 @@ function portablePath(root, path) {
   return relative(root, path).split(sep).join("/");
 }
 
+function inlineDiagramDescriptors(markdown) {
+  const closing = markdown.indexOf("\n---\n", 4);
+  if (!markdown.startsWith("---\n") || closing < 0) return [];
+  const line = markdown.slice(4, closing).split("\n").find((entry) => entry.startsWith("diagrams:"));
+  if (!line) return [];
+  try {
+    const value = JSON.parse(line.slice(line.indexOf(":") + 1).trim());
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
+function validateCommittedDiagramAssets(root, documents) {
+  for (const [documentIndex, document] of documents.entries()) {
+    for (const [diagramIndex, diagram] of inlineDiagramDescriptors(document.markdown).entries()) {
+      for (const key of ["sourcePath", "renderedPath"]) {
+        const path = diagram && typeof diagram === "object" ? diagram[key] : null;
+        if (typeof path !== "string" || !path.startsWith("docs/design/")) continue;
+        try {
+          if (git(root, ["cat-file", "-t", `${document.commit}:${path}`]) !== "blob") throw new Error("not-blob");
+        } catch {
+          throw new Error(`Engineering Journal diagram asset ${documentIndex + 1}.${diagramIndex + 1} is not a committed Git blob at the record revision.`);
+        }
+      }
+    }
+  }
+}
+
 async function markdownPaths(root, canonicalPath) {
   const directory = join(root, canonicalPath);
-  const entries = await readdir(directory, { withFileTypes: true });
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
   const paths = [];
   for (const entry of entries) {
     const path = join(directory, entry.name);
@@ -55,24 +90,34 @@ async function sourceDocuments(repository) {
         throw new Error(`Engineering Journal remote source ${repository.repository} did not resolve to its exact commit.`);
       }
     }
-    const paths = commitPin
-      ? git(root, ["ls-tree", "-r", "--name-only", commitPin, "--", repository.canonicalPath]).split("\n").filter((path) => path.endsWith(".md"))
-      : await markdownPaths(root, repository.canonicalPath);
-    if (paths.length === 0) throw new Error(`Engineering Journal source ${repository.repository} contains no canonical records.`);
-    const documents = [];
-    for (const path of paths) {
-      const commit = commitPin ?? git(root, ["log", "-1", "--format=%H", "--", path]);
-      if (!commit) throw new Error(`No committed source revision exists for ${repository.repository}:${path}.`);
-      const markdown = git(root, ["show", `${commit}:${path}`]);
-      if (!commitPin) {
-        const authored = await readFile(join(root, path), "utf8");
-        if (authored.replace(/\n$/, "") !== markdown) {
-          throw new Error(`Canonical record ${repository.repository}:${path} differs from its latest committed revision.`);
+    const pathsAt = async (canonicalPath) => commitPin
+      ? git(root, ["ls-tree", "-r", "--name-only", commitPin, "--", canonicalPath]).split("\n").filter((path) => path.endsWith(".md"))
+      : await markdownPaths(root, canonicalPath);
+    const documentsAt = async (canonicalPath, kind) => {
+      const paths = await pathsAt(canonicalPath);
+      const documents = [];
+      for (const path of paths) {
+        const commit = commitPin ?? git(root, ["log", "-1", "--format=%H", "--", path]);
+        if (!commit) throw new Error(`No committed ${kind} source revision exists for ${repository.repository}:${path}.`);
+        const markdown = git(root, ["show", `${commit}:${path}`]);
+        if (!commitPin) {
+          const authored = await readFile(join(root, path), "utf8");
+          if (authored.replace(/\n$/, "") !== markdown) {
+            throw new Error(`Canonical ${kind} ${repository.repository}:${path} differs from its latest committed revision.`);
+          }
         }
+        const committedAt = new Date(git(root, ["show", "-s", "--format=%cI", commit])).toISOString().replace(".000Z", "Z");
+        documents.push({ repository: repository.repository, commit, committedAt, path, markdown: `${markdown}\n` });
       }
-      documents.push({ repository: repository.repository, commit, path, markdown: `${markdown}\n` });
-    }
-    return documents;
+      return documents;
+    };
+    const documents = await documentsAt(repository.canonicalPath, "Engineering record");
+    if (documents.length === 0) throw new Error(`Engineering Journal source ${repository.repository} contains no canonical records.`);
+    validateCommittedDiagramAssets(root, documents);
+    const receiptDocuments = repository.receiptPath
+      ? await documentsAt(repository.receiptPath, "pull request receipt")
+      : [];
+    return { documents, receiptDocuments };
   } finally {
     if (temporaryRoot) await rm(temporaryRoot, { recursive: true, force: true });
   }
@@ -83,10 +128,13 @@ async function main() {
   if (config.schemaVersion !== 1 || !Array.isArray(config.repositories)) {
     throw new Error("Engineering Journal trusted source configuration is invalid.");
   }
-  const documents = (await Promise.all(config.repositories.map(sourceDocuments))).flat();
+  const sources = await Promise.all(config.repositories.map(sourceDocuments));
+  const documents = sources.flatMap((source) => source.documents);
+  const receiptDocuments = sources.flatMap((source) => source.receiptDocuments);
   const build = buildEngineeringJournal({
-    trustedRepositories: config.repositories.map(({ repository, owner, canonicalPath, commit }) => ({ repository, owner, canonicalPath, commit })),
+    trustedRepositories: config.repositories.map(({ repository, owner, canonicalPath, receiptPath, commit }) => ({ repository, owner, canonicalPath, receiptPath, commit })),
     documents,
+    receiptDocuments,
   });
   for (const [key, outputPath] of Object.entries(OUTPUTS)) {
     const expected = build[key];
@@ -99,7 +147,7 @@ async function main() {
       await writeFile(outputPath, expected, "utf8");
     }
   }
-  process.stdout.write(`Engineering Journal: ${build.index.records.length} record(s), ${check ? "outputs current" : "outputs written"}.\n`);
+  process.stdout.write(`Engineering Journal: ${build.index.records.length} rich record(s), ${build.index.pullRequestReceipts.length} PR receipt(s), ${check ? "outputs current" : "outputs written"}.\n`);
 }
 
 await main();

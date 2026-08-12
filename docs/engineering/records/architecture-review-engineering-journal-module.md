@@ -23,8 +23,9 @@ capabilities: []
 amends: []
 supersedes: []
 learningRefs: []
+diagrams: [{"title":"Engineering Journal commit-pinned publication flow","sourcePath":"docs/design/engineering-workspace/journal-module-architecture.drawio","renderedPath":"docs/design/engineering-workspace/journal-module-architecture.png","summary":"Canonical records and compact PR receipts from three repositories cross one reviewed, commit-pinned Journal Module before reaching the website and standalone reader.","evidenceRefs":["issue:278","tests/engineering-journal.test.mjs"]}]
 sources: [{"label":"Arc issue #278","url":"https://github.com/Vinosaamaa/interview-arc/issues/278","kind":"issue"},{"label":"Parent product issue #249","url":"https://github.com/Vinosaamaa/interview-arc/issues/249","kind":"issue"}]
-verification: {"state":"verified","evidenceRefs":["tests/engineering-journal.test.mjs"]}
+verification: {"state":"verified","evidenceRefs":["issue:278","tests/engineering-journal.test.mjs"]}
 visibility: public-safe
 publicationEligibility: eligible
 issue: 278
@@ -69,6 +70,10 @@ Statistics are a deterministic Journal projection: factual counts by type, effec
 The build is intentionally strict. Unknown fields, stale relation pins, unsafe content, missing verification evidence, or adapter drift stop publication. That strictness keeps the reader simple and makes failures actionable at the authoring boundary.
 
 The Learn action remains visibly unavailable until the released Learn runtime contract defines a stable revision, commit, and symbol reference. The Engineering workspace does not duplicate Learn state.
+
+## Architecture diagram
+
+The linked repository-native diagram is a reviewed projection of the verified boundary above. Its editable draw.io source and rendered PNG travel together, and the Journal derives immutable links to both from this record's exact source commit.
 
 ## Interview view
 

@@ -37,6 +37,21 @@
     "amends": { "$ref": "#/$defs/recordRefs" },
     "supersedes": { "$ref": "#/$defs/recordRefs" },
     "learningRefs": { "type": "array", "maxItems": 0 },
+    "diagrams": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "sourcePath", "renderedPath", "summary", "evidenceRefs"],
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+          "sourcePath": { "type": "string", "pattern": "^docs/design/(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.drawio$" },
+          "renderedPath": { "type": "string", "pattern": "^docs/design/(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.(?:png|svg)$" },
+          "summary": { "type": "string", "minLength": 1, "maxLength": 280 },
+          "evidenceRefs": { "$ref": "#/$defs/stringList" }
+        }
+      }
+    },
     "sources": {
       "type": "array",
       "minItems": 1,

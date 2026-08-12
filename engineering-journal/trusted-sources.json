@@ -5,19 +5,22 @@
       "repository": "interview-arc",
       "owner": "Vinosaamaa",
       "canonicalPath": "docs/engineering/records",
+      "receiptPath": "docs/engineering/changes",
       "localRoot": "."
     },
     {
       "repository": "interview-arc-voice",
       "owner": "Vinosaamaa",
       "canonicalPath": "docs/engineering/records",
+      "receiptPath": "docs/engineering/changes",
       "remoteUrl": "https://github.com/Vinosaamaa/interview-arc-voice.git",
-      "commit": "b0584ab34880831e924c848b001ac8a36dcc5ffa"
+      "commit": "3fc40e94436fd4071b1c6d9b30d8d414d22b2dbc"
     },
     {
       "repository": "interview-arc-live",
       "owner": "Vinosaamaa",
       "canonicalPath": "docs/engineering/records",
+      "receiptPath": "docs/engineering/changes",
       "remoteUrl": "https://github.com/Vinosaamaa/interview-arc-live.git",
       "commit": "a847256a505707b85d21a7525bea2e83fd381ea8"
     }
