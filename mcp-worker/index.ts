@@ -53,6 +53,17 @@ import {
   resolveBehavioralTarget,
 } from "../db/behavioral-target-profile";
 import {
+  BehavioralProjectDeepDiveError,
+  behavioralProjectBindingWriteSchema,
+  behavioralProjectCompletedAttemptLinkSchema,
+  behavioralProjectProfileBindingSchema,
+  behavioralProjectQuerySchema,
+  linkCompletedBehavioralProjectAttempt,
+  queryBehavioralProjectDeepDives,
+  setBehavioralProjectQuestionBinding,
+} from "../db/behavioral-project-deep-dive";
+import { behavioralProjectSectionKeySchema } from "../db/behavioral-project-deep-dive-policy";
+import {
   LoopError,
   bindPlannedActivitySchema,
   bindPlannedActivityToLoop,
@@ -1909,6 +1920,7 @@ function specialistToolFailure(error: unknown) {
     || error instanceof BehavioralEvidenceReviewError
     || error instanceof BehavioralFinalAnswerError
     || error instanceof BehavioralTargetProfileError
+    || error instanceof BehavioralProjectDeepDiveError
     || error instanceof LoopError
     || error instanceof LoopMaterialError
     || error instanceof BehavioralStoryError
@@ -3191,6 +3203,66 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   );
 
   server.registerTool(
+    "query_behavioral_project_deep_dives",
+    {
+      description: "Read owner-scoped Project Deep Dive registry, exact question bindings, immutable Past-attempt links, link-only Learn projection, and optionally deterministic legacy migration review. Titles and free-form tags are never runtime binding authority.",
+      inputSchema: behavioralProjectQuerySchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryBehavioralProjectDeepDives(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "set_behavioral_project_binding",
+    {
+      description: "Create, correct, or archive one Behavioral Problem Bank question's explicit Project Deep Dive binding. Only the Behavioral specialist may use this contract. Exact operation retries replay; changed retries, stale revisions, unknown projects, cross-owner claims, and duplicate overview/claim scopes fail closed.",
+      inputSchema: behavioralProjectBindingWriteSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await setBehavioralProjectQuestionBinding(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Project Deep Dive binding ${result.status} for ${result.questionId}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "link_completed_behavioral_project_attempt",
+    {
+      description: "Attach one exact completed Behavioral Past attempt to an immutable Project Deep Dive binding revision. This additive operation preserves the attempt transcript, timer, result, final answer, and Solution Profile bytes. Exact retries are idempotent and an existing different link cannot be moved.",
+      inputSchema: behavioralProjectCompletedAttemptLinkSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await linkCompletedBehavioralProjectAttempt(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Completed attempt ${result.activityId} is ${result.status} to project ${result.projectId}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
     "query_behavioral_target_profiles",
     {
       description: "Read bounded owner-private display-safe Target Profile revisions. Omit targetId to list current active targets, provide targetId for its current revision, or provide targetId plus revision for one immutable historical revision. Raw JD text and private analysis are never returned.",
@@ -3576,7 +3648,11 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
           solutionProfile: z.object({
             schemaVersion: z.literal(1),
             summary: z.string().min(1),
-            sections: z.array(z.object({ title: z.string().min(1), body: z.string().min(1) })).min(1),
+            sections: z.array(z.object({
+              sectionKey: behavioralProjectSectionKeySchema.optional(),
+              title: z.string().min(1),
+              body: z.string().min(1),
+            }).strict()).min(1),
             tags: z.array(z.string().min(1)).max(32),
             references: z.array(z.object({ title: z.string().min(1), url: z.string().url(), accessedAt: z.string().min(1) })),
             behavioralAnswer: z.object({
@@ -3595,6 +3671,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
               })).max(5),
             }).optional(),
             practiceScenarios: behavioralPracticeScenariosSchema.optional(),
+            projectDeepDive: behavioralProjectProfileBindingSchema.optional(),
           }).optional(),
         }),
       }).superRefine((input, context) => {
@@ -3652,7 +3729,11 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
         profile: z.object({
           schemaVersion: z.literal(1),
           summary: z.string().min(1),
-          sections: z.array(z.object({ title: z.string().min(1), body: z.string().min(1) })).min(1),
+          sections: z.array(z.object({
+            sectionKey: behavioralProjectSectionKeySchema.optional(),
+            title: z.string().min(1),
+            body: z.string().min(1),
+          }).strict()).min(1),
           tags: z.array(z.string().min(1)).max(32),
           references: z.array(z.object({ title: z.string().min(1), url: z.string().url(), accessedAt: z.string().min(1) })),
           behavioralAnswer: z.object({
@@ -3671,6 +3752,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
             })).max(5),
           }).optional(),
           practiceScenarios: behavioralPracticeScenariosSchema.optional(),
+          projectDeepDive: behavioralProjectProfileBindingSchema.optional(),
         }),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },

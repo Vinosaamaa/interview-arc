@@ -1,9 +1,15 @@
 export type SolutionProfileLike = {
   summary: string;
-  sections: Array<{ title: string; body: string }>;
+  sections: Array<{ sectionKey?: string; title: string; body: string }>;
   tags: string[];
   references: Array<{ title: string; url: string }>;
   behavioralAnswer?: { preferred?: { answer?: string } };
+  projectDeepDive?: {
+    projectId: string;
+    bindingRevision: number;
+    focus: string;
+    sourceClaimId?: string;
+  };
 };
 
 export type SolutionProfileSpecialty = "leetcode" | "system_design" | "behavioral";
