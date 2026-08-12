@@ -4,6 +4,7 @@ import {
   registerActivityAudioClip,
   updateActivityAudioClipStatus,
 } from "../../../db/durable-practice";
+import { LearningError, assertLearningAudioForbidden } from "../../../db/learn";
 import { toRouteErrorMessage } from "../route-helpers";
 
 const MAX_AUDIO_BYTES = 100 * 1024 * 1024;
@@ -29,6 +30,7 @@ export async function POST(request: Request) {
     if (!file.type.startsWith("audio/") || file.size === 0 || file.size > MAX_AUDIO_BYTES) {
       return Response.json({ error: "Choose a non-empty audio file no larger than 100 MB." }, { status: 400 });
     }
+    await assertLearningAudioForbidden(ownerId, activityId);
     clipId = requestedClipId || crypto.randomUUID();
     const filename = safeFilename(file.name);
     const objectKey = `${ownerId}/${activityId}/${clipId}-${filename}`;
@@ -61,6 +63,9 @@ export async function POST(request: Request) {
     }, { status: 201 });
   } catch (error) {
     if (ownerId && clipId) await updateActivityAudioClipStatus(ownerId, clipId, "failed", Date.now()).catch(() => undefined);
-    return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 });
+    return Response.json({
+      error: toRouteErrorMessage(error),
+      ...(error instanceof LearningError ? { code: error.code, retryable: error.retryable } : {}),
+    }, { status: error instanceof LearningError ? 409 : 500 });
   }
 }

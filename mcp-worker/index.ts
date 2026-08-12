@@ -439,6 +439,14 @@ async function uploadPracticeAudio(ownerId: string, request: Request, env: Env) 
       || intent.clipId !== requestedClipId)) {
     return json(request, { error: "Audio upload requires the matching accepted voice-capture intent." }, { status: 409 });
   }
+  try {
+    await assertLearningAudioForbidden(ownerId, activityId);
+  } catch (error) {
+    if (error instanceof LearningError) {
+      return json(request, { error: error.message, code: error.code, retryable: error.retryable }, { status: 409 });
+    }
+    throw error;
+  }
   const clipId = requestedClipId || crypto.randomUUID();
   const filename = safeAudioFilename(file.name);
   const objectKey = `${ownerId}/${activityId}/${clipId}-${filename}`;
@@ -1756,6 +1764,14 @@ async function saveVoiceDelivery(ownerId: string, request: Request) {
   if (!body.id || !body.activityId || !body.audioClipId || !body.transcriptTurnId || !body.specialty
       || !["queued", "processing", "available", "failed"].includes(body.status)) {
     return json(request, { error: "Complete delivery-analysis identity and status are required." }, { status: 400 });
+  }
+  try {
+    await assertLearningAudioForbidden(ownerId, body.activityId);
+  } catch (error) {
+    if (error instanceof LearningError) {
+      return json(request, { error: error.message, code: error.code, retryable: error.retryable }, { status: 409 });
+    }
+    throw error;
   }
   await saveActivityDeliveryAnalysis(ownerId, body, Date.now());
   return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, analysisId: body.id, status: body.status }, { status: 201 });

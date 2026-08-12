@@ -323,6 +323,33 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     assert.equal(deliveryAttempt.isError, true);
     assert.equal(deliveryAttempt.structuredContent.code, "learning_audio_forbidden");
 
+    const audioForm = new FormData();
+    audioForm.set("activityId", createSessionInput.sessionId);
+    audioForm.set("clipId", "learning-http-audio-forbidden");
+    audioForm.set("file", new Blob(["not durable audio"], { type: "audio/wav" }), "learning.wav");
+    const audioHttpAttempt = await fetch(`${baseUrl}/audio/upload`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+      body: audioForm,
+    });
+    assert.equal(audioHttpAttempt.status, 409);
+    assert.equal((await audioHttpAttempt.json()).code, "learning_audio_forbidden");
+
+    const deliveryHttpAttempt = await voiceRequest(baseUrl, token, "/voice/delivery", {
+      method: "POST",
+      body: JSON.stringify({
+        protocolVersion: 2,
+        id: "learning-http-delivery-forbidden",
+        activityId: createSessionInput.sessionId,
+        audioClipId: "learning-http-audio-forbidden",
+        transcriptTurnId: "learner-voice-turn-2",
+        specialty: "behavioral",
+        status: "queued",
+      }),
+    });
+    assert.equal(deliveryHttpAttempt.status, 409);
+    assert.equal((await deliveryHttpAttempt.json()).code, "learning_audio_forbidden");
+
     await new Promise((resolve) => setTimeout(resolve, 1_100));
     const paused = await call(client, "control_learning_session", {
       operationId: "learning-session-pause-2",

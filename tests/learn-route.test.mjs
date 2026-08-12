@@ -6,6 +6,8 @@ import { RouteBodyTooLargeError, readBoundedJson } from "../app/api/route-helper
 
 const routeUrl = new URL("../app/api/learn/route.ts", import.meta.url);
 const artifactRouteUrl = new URL("../app/api/learn/artifacts/route.ts", import.meta.url);
+const audioRouteUrl = new URL("../app/api/audio/route.ts", import.meta.url);
+const bridgeUrl = new URL("../mcp-worker/index.ts", import.meta.url);
 
 test("the Learn route keeps reads owner-private and mutations explicitly bounded", async () => {
   const route = await readFile(routeUrl, "utf8");
@@ -40,4 +42,14 @@ test("the shared request reader rejects oversized Learn mutation bodies", async 
     body: JSON.stringify({ action: "control_session" }),
   });
   await assert.rejects(() => readBoundedJson(request, 128_000), RouteBodyTooLargeError);
+});
+
+test("every website and native audio write seam rejects Learning Session identities", async () => {
+  const [audioRoute, bridge] = await Promise.all([
+    readFile(audioRouteUrl, "utf8"),
+    readFile(bridgeUrl, "utf8"),
+  ]);
+  assert.match(audioRoute, /assertLearningAudioForbidden\(ownerId, activityId\)/);
+  assert.match(audioRoute, /error instanceof LearningError \? 409 : 500/);
+  assert.ok((bridge.match(/assertLearningAudioForbidden\(ownerId, (?:activityId|body\.activityId|input\.activityId)\)/g) ?? []).length >= 4);
 });
