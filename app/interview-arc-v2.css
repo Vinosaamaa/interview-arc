@@ -2274,7 +2274,8 @@ body:has(.review-queue-workspace) { padding-bottom: 0; overflow: hidden; }
 }
 
 /* Bank domain desks — one disclosed specialty at a time, never stale chrome behind a reader. */
-.bank-domain-desks { margin: 0 0 18px; }
+.bank-domain-desks { margin: 0; }
+.bank-domain-desks:has(> .bank-domain-desk-shell.open) { margin-bottom: 20px; }
 .bank-domain-desk-shell { display: grid; grid-template-rows: 0fr; opacity: 0; visibility: hidden; transition: grid-template-rows .28s ease, opacity .2s ease, visibility 0s linear .28s; }
 .bank-domain-desk-shell.open { grid-template-rows: 1fr; opacity: 1; visibility: visible; transition-delay: 0s; }
 .bank-domain-desk-shell > div { min-height: 0; overflow: hidden; }

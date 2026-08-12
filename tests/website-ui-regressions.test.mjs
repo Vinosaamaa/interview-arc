@@ -164,7 +164,7 @@ test("Review Queue keeps filters in the menu, branches each row, and joins its f
   assert.ok(cssRules(rules, ".review-row::before").length >= 1);
   assert.ok(cssRules(rules, ".review-row::after").length >= 1);
   assert.equal(hasJsxClass(file, "review-column-headings"), false);
-  assert.equal(cssRules(rules, ".review-row")[0].declarations["grid-template-columns"], "44px minmax(0, 1fr) minmax(120px, auto) 144px");
+  assert.equal(cssRules(rules, ".review-row")[0].declarations["grid-template-columns"], "44px minmax(0, 1fr) 360px 144px");
   const folioRules = cssRules(rules, ".review-selection-folio");
   assert.equal(folioRules[0].declarations.position, "relative");
   assert.equal(folioRules.some((rule) => rule.declarations.position === "sticky"), false);
@@ -225,8 +225,15 @@ test("Review Queue uses the Bank visual language without redundant row prose", a
   assert.equal(hasJsxClass(file, "review-reason"), false);
   assert.ok(visit(file, (node) => ts.isJsxAttribute(node) && node.name.text === "title" && /previous attempt/i.test(node.initializer?.getText(file) ?? "")).length >= 1);
   assert.equal(cssRules(rules, ".review-icon-actions")[0]?.declarations["grid-template-columns"], "repeat(3, 44px)");
-  assert.equal(cssRules(rules, ".review-row")[0]?.declarations["grid-template-columns"], "44px minmax(0, 1fr) minmax(120px, auto) 144px");
+  assert.equal(cssRules(rules, ".review-row")[0]?.declarations["grid-template-columns"], "44px minmax(0, 1fr) 360px 144px");
   assert.equal(cssRules(rules, ".review-row-meta")[0]?.declarations["justify-items"], "center");
+  assert.equal(cssRules(rules, ".review-row-meta")[0]?.declarations["grid-template-columns"], "160px 110px 72px");
+  assert.equal(cssRules(rules, ".review-row-meta > span")[0]?.declarations["place-items"], "center");
+  assert.equal(cssRules(rules, ".review-outcome-chip")[0]?.declarations.width, "140px !important");
+  const openReviewAttempt = functionNamed(parseTsx(await load("../app/home-client.tsx")), "openReviewAttempt");
+  assert.match(openReviewAttempt.getText(), /openReviewEntry/);
+  assert.doesNotMatch(openReviewAttempt.getText(), /openPastEntry/);
+  assert.match(source, /event\.stopPropagation\(\); onOpenAttempt\(item\)/);
 });
 
 test("Reader contents replace their hash and modal readers own keyboard focus", async () => {
@@ -572,4 +579,66 @@ test("all seven Interview pages use the exact shared hero geometry and semantic 
   assert.match(css, /active-view-banks/);
   assert.match(css, /active-view-journey/);
   assert.match(css, /active-view-materials/);
+});
+
+test("Banks hero selector spans the full summary band and keeps one major-panel gap", async () => {
+  const [heroCss, workspaceCss] = await Promise.all([
+    load("../app/interview-page-hero.css"),
+    load("../app/interview-arc-v2.css"),
+  ]);
+  const heroRules = parseCss(heroCss);
+  const workspaceRules = parseCss(workspaceCss);
+  const footer = cssRules(heroRules, ".page-hero-summary.interactive > .hero-bank-totals")[0]?.declarations;
+  const totals = cssRules(heroRules, ".hero-bank-totals")[0]?.declarations;
+  const closedRail = cssRules(workspaceRules, ".bank-domain-desks")[0]?.declarations;
+  const openRail = cssRules(workspaceRules, ".bank-domain-desks:has(> .bank-domain-desk-shell.open)")[0]?.declarations;
+
+  assert.equal(footer?.["grid-column"], "1 / -1");
+  assert.equal(footer?.width, "100%");
+  assert.equal(totals?.["grid-template-columns"], "repeat(3, minmax(0, 1fr))");
+  assert.equal(closedRail?.margin, "0");
+  assert.equal(openRail?.["margin-bottom"], "20px");
+});
+
+test("Loop archive disclosure remains one continuous surface without a horizontal rule", async () => {
+  const rules = parseCss(await load("../app/loops-redesign.css"));
+  const archiveControl = cssRules(rules, ".loop-switcher-list > label")[0]?.declarations;
+  assert.equal(archiveControl?.border, "0");
+  const spine = cssRules(rules, ".loops-workspace::before")[0]?.declarations;
+  assert.equal(spine?.width, "1px");
+  assert.equal(spine?.top, "350px");
+  assert.equal(spine?.bottom, "44px");
+  assert.equal(cssRules(rules, ".loop-identity-switcher::before")[0]?.declarations.content, "none");
+  assert.equal(cssRules(rules, ".loop-support-band::before")[0]?.declarations.content, "none");
+  assert.equal(cssRules(rules, ".loop-stage-chronology::before")[0]?.declarations.content, "none");
+  const terminal = cssRules(rules, ".loop-stage-terminal > span")[0]?.declarations;
+  assert.equal(terminal?.top, "50%");
+  assert.equal(terminal?.transform, "translateY(-50%)");
+});
+
+test("Today and the private Loop source use the shared page rhythm and Loop accent", async () => {
+  const [heroRules, loopRules] = await Promise.all([
+    load("../app/interview-page-hero.css").then(parseCss),
+    load("../app/loops-redesign.css").then(parseCss),
+  ]);
+  assert.equal(cssRules(heroRules, ".page-content > .interview-page-hero + .orchestrator-rail")[0]?.declarations["margin-top"], "20px");
+  assert.match(cssRules(loopRules, ".loop-jd-dialog-header")[0]?.declarations["box-shadow"] ?? "", /var\(--page-accent\)/);
+  assert.equal(cssRules(loopRules, ".loop-jd-overlay")[0]?.declarations["--page-accent"], "#a8415c");
+  assert.equal(cssRules(loopRules, ".loop-jd-overlay")[0]?.declarations["--page-accent-soft"], "#fbe8ee");
+  assert.equal(cssRules(loopRules, ".loop-jd-provenance")[0]?.declarations["border-radius"], "13px 13px 0 0");
+  assert.equal(cssRules(loopRules, ".loop-jd-document")[0]?.declarations["border-radius"], "0 0 13px 13px");
+});
+
+test("Loop interview materials animate open and closed without a fixed content height", async () => {
+  const [source, css] = await Promise.all([load("../app/loops-workspace.tsx"), load("../app/loops-redesign.css")]);
+  const rules = parseCss(css);
+  assert.match(source, /loop-material-body-shell \$\{open \? "open" : "closed"\}/);
+  assert.match(source, /aria-expanded=\{open\}/);
+  assert.equal(cssRules(rules, ".loop-material-body-shell")[0]?.declarations.display, "grid");
+  assert.match(cssRules(rules, ".loop-material-body-shell")[0]?.declarations.transition ?? "", /grid-template-rows/);
+  assert.equal(cssRules(rules, ".loop-material-body-shell.open")[0]?.declarations["grid-template-rows"], "1fr");
+  assert.equal(cssRules(rules, ".loop-material-body-shell.closed")[0]?.declarations["grid-template-rows"], "0fr");
+  assert.equal(cssRules(rules, ".loop-stage-material > .loop-material-body-shell")[0]?.declarations.padding, "0");
+  assert.equal(cssRules(rules, ".loop-material-body")[0]?.declarations["min-height"], "0");
+  assert.equal(cssRules(rules, ".loop-material-body-shell.closed > .loop-material-body")[0]?.declarations["padding-block"], "0");
 });
