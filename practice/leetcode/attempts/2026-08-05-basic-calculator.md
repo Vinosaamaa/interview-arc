@@ -20,7 +20,7 @@ timing_source: website
 elapsed_seconds: 3165
 started_at: 2026-08-05T20:34:29.012-07:00
 ended_at: 2026-08-05T22:07:28.499-07:00
-user_attempted: false
+user_attempted: true
 outcome: failed
 assistance_level: none
 audio_clips:
