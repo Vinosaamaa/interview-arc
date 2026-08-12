@@ -1,0 +1,133 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-08-06",
+  "practiceTimezone": "America/Los_Angeles",
+  "focus": "Basic Calculator III, Word Ladder, Word Ladder II, and 24 Game",
+  "sessions": [
+    {
+      "id": "2026-08-05-session-voice-2026-08-05-plan-hard20-unsolved-frequency",
+      "label": "Practice session",
+      "source": "extra",
+      "allocatedSeconds": 5400,
+      "activityIds": [
+        "2026-08-05-extra-voice-2026-08-05-plan-hard20-unsolved-frequency-4",
+        "2026-08-05-extra-voice-2026-08-05-plan-hard20-unsolved-frequency-17"
+      ]
+    }
+  ],
+  "timerGroups": [
+    {
+      "id": "2026-08-05-session-voice-2026-08-05-plan-hard20-unsolved-frequency",
+      "label": "Practice session",
+      "allocatedSeconds": 5400,
+      "activityIds": [
+        "2026-08-05-extra-voice-2026-08-05-plan-hard20-unsolved-frequency-4",
+        "2026-08-05-extra-voice-2026-08-05-plan-hard20-unsolved-frequency-17"
+      ]
+    },
+    {
+      "id": "2026-08-06-extra-voice-plan-word-ladder-ii-2026-08-06-v1-0",
+      "label": "Word Ladder II",
+      "allocatedSeconds": 2700,
+      "activityIds": [
+        "2026-08-06-extra-voice-plan-word-ladder-ii-2026-08-06-v1-0"
+      ]
+    },
+    {
+      "id": "2026-08-06-extra-24-game-msi4lvzw-4",
+      "label": "24 Game",
+      "allocatedSeconds": 2700,
+      "activityIds": [
+        "2026-08-06-extra-24-game-msi4lvzw-4"
+      ]
+    }
+  ],
+  "activities": [
+    {
+      "schemaVersion": 2,
+      "id": "2026-08-05-extra-voice-2026-08-05-plan-hard20-unsolved-frequency-4",
+      "questionId": "basic-calculator-iii",
+      "date": "2026-08-06",
+      "source": "extra",
+      "type": "leetcode",
+      "recordKind": "attempt",
+      "title": "Basic Calculator III",
+      "url": "https://leetcode.com/problems/basic-calculator-iii/",
+      "allocatedSeconds": 2700,
+      "sessionId": "2026-08-05-session-voice-2026-08-05-plan-hard20-unsolved-frequency",
+      "timerGroupId": "2026-08-05-session-voice-2026-08-05-plan-hard20-unsolved-frequency",
+      "timingSource": "website",
+      "startedAt": "2026-08-05T22:25:09.246-07:00",
+      "endedAt": "2026-08-06T00:43:26.190-07:00",
+      "elapsedSeconds": 6131,
+      "status": "completed",
+      "outcome": "solved",
+      "artifactPath": "practice/leetcode/attempts/2026-08-06-basic-calculator-iii.md"
+    },
+    {
+      "schemaVersion": 2,
+      "id": "2026-08-05-extra-voice-2026-08-05-plan-hard20-unsolved-frequency-17",
+      "questionId": "word-ladder",
+      "date": "2026-08-06",
+      "source": "extra",
+      "type": "leetcode",
+      "recordKind": "attempt",
+      "title": "Word Ladder",
+      "url": "https://leetcode.com/problems/word-ladder/",
+      "allocatedSeconds": 2700,
+      "sessionId": "2026-08-05-session-voice-2026-08-05-plan-hard20-unsolved-frequency",
+      "timerGroupId": "2026-08-05-session-voice-2026-08-05-plan-hard20-unsolved-frequency",
+      "timingSource": "website",
+      "startedAt": "2026-08-06T01:16:03.711-07:00",
+      "endedAt": "2026-08-06T02:42:31.603-07:00",
+      "elapsedSeconds": 4288,
+      "status": "completed",
+      "outcome": "solved",
+      "artifactPath": "practice/leetcode/attempts/2026-08-06-word-ladder.md"
+    },
+    {
+      "schemaVersion": 2,
+      "id": "2026-08-06-extra-voice-plan-word-ladder-ii-2026-08-06-v1-0",
+      "questionId": "word-ladder-ii",
+      "date": "2026-08-06",
+      "source": "extra",
+      "type": "leetcode",
+      "recordKind": "attempt",
+      "title": "Word Ladder II",
+      "url": "https://leetcode.com/problems/word-ladder-ii/",
+      "allocatedSeconds": 2700,
+      "timerGroupId": "2026-08-06-extra-voice-plan-word-ladder-ii-2026-08-06-v1-0",
+      "timingSource": "website",
+      "startedAt": "2026-08-06T03:12:00.068-07:00",
+      "endedAt": "2026-08-06T05:19:08.606-07:00",
+      "elapsedSeconds": 6757,
+      "status": "completed",
+      "outcome": "solved",
+      "artifactPath": "practice/leetcode/attempts/2026-08-06-word-ladder-ii.md"
+    },
+    {
+      "schemaVersion": 2,
+      "id": "2026-08-06-extra-24-game-msi4lvzw-4",
+      "questionId": "24-game",
+      "date": "2026-08-06",
+      "source": "extra",
+      "type": "leetcode",
+      "recordKind": "attempt",
+      "title": "24 Game",
+      "url": "https://leetcode.com/problems/24-game/",
+      "allocatedSeconds": 2700,
+      "timerGroupId": "2026-08-06-extra-24-game-msi4lvzw-4",
+      "timingSource": "website",
+      "startedAt": "2026-08-06T18:50:50.333-07:00",
+      "endedAt": "2026-08-06T23:23:36.829-07:00",
+      "elapsedSeconds": 7681,
+      "status": "completed",
+      "outcome": "solved_after_reviewing_approach",
+      "artifactPath": "practice/leetcode/attempts/2026-08-06-24-game.md",
+      "reviewDates": [
+        "2026-08-13"
+      ],
+      "reviewReason": "approach_review"
+    }
+  ]
+}
