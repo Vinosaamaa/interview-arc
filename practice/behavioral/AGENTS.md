@@ -36,7 +36,10 @@ sources only after reading their exact current D1 revisions; execute only its
 typed evidence writes, poll every durable receipt, and then present the pending
 candidate queue for explicit owner review. A prepared plan is not a saved
 receipt. Never upload the bundle, plan, source bytes, local locators, or review
-site to R2.
+site to R2. Treat `uncoveredPendingEvidence > 0` as a sync-readiness blocker:
+repair the ignored bundle so every pending observation has exactly one typed
+D1 candidate or explicit local-only exclusion, and never report a source-only
+registry write as a completed evidence sync.
 
 ## Session Behavior
 

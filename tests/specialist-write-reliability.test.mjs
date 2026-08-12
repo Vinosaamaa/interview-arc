@@ -5,9 +5,16 @@ import {
   classifySpecialistWriteFailure,
   deterministicSpecialistWriteRepairable,
   executeSpecialistWriteAttempt,
+  SPECIALIST_WRITE_REQUEST_DRAIN_LIMIT,
+  SPECIALIST_WRITE_SCHEDULED_DRAIN_LIMIT,
   specialistWritePayloadDigest,
   specialistWriteRetryDelayMs,
 } from "../mcp-worker/specialist-write-policy.ts";
+
+test("request drains stay single-job while scheduled recovery remains bounded", () => {
+  assert.equal(SPECIALIST_WRITE_REQUEST_DRAIN_LIMIT, 1);
+  assert.equal(SPECIALIST_WRITE_SCHEDULED_DRAIN_LIMIT, 25);
+});
 
 test("only the exact legacy pending-review rejection is deterministic-repairable", () => {
   const repairable = deterministicSpecialistWriteRepairable({

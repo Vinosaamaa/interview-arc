@@ -6,6 +6,7 @@ import {
   mkdir,
   readdir,
   readFile,
+  realpath,
   rename,
   stat,
   writeFile,
@@ -23,7 +24,9 @@ import {
 const execFileAsync = promisify(execFile);
 const MAX_DIRECTORY_ENTRIES = 5_000;
 const MAX_REMOTE_TEXT = 240;
+const FILESYSTEM_SOURCE_POLICY = "source-policy.json";
 const SOURCE_KINDS = new Set(["resume", "repository", "document", "chat_export", "architecture", "git_history", "user_statement", "other"]);
+const REMOTE_E1_MAX_ORIGINS = new Set(["user_statement", "resume", "generated_secondary", "derived_inference"]);
 const PROVENANCE_BY_ORIGIN = {
   user_statement: "conversation",
   resume: "resume_claim",
@@ -67,6 +70,114 @@ function atomicJson(filePath, value) {
     await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
     await rename(temporaryPath, filePath);
   });
+}
+
+function atomicPrivateJson(filePath, value) {
+  return mkdir(path.dirname(filePath), { recursive: true }).then(async () => {
+    const temporaryPath = `${filePath}.tmp`;
+    await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+    await rename(temporaryPath, filePath);
+  });
+}
+
+function filesystemSourceIdentity(projectId, sourceId) {
+  return `${projectId}:${sourceId}`;
+}
+
+async function canonicalPathOrNull(declaredPath) {
+  try {
+    return await realpath(declaredPath);
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return null;
+    throw new Error("A filesystem source path could not be resolved safely.");
+  }
+}
+
+async function readFilesystemSourcePolicy(bundleRoot) {
+  const policyPath = path.join(bundleRoot, FILESYSTEM_SOURCE_POLICY);
+  let policy;
+  try {
+    policy = JSON.parse(await readFile(policyPath, "utf8"));
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return new Map();
+    throw new Error("The local filesystem source policy is unreadable or invalid.");
+  }
+  if (
+    !policy
+    || typeof policy !== "object"
+    || Array.isArray(policy)
+    || policy.schemaVersion !== 1
+    || policy.visibility !== "local_only"
+    || !Number.isFinite(Date.parse(policy.authorizedAt))
+    || !Array.isArray(policy.sources)
+  ) {
+    throw new Error("The local filesystem source policy is invalid.");
+  }
+  const byIdentity = new Map();
+  for (const source of policy.sources) {
+    if (
+      !source
+      || typeof source !== "object"
+      || Array.isArray(source)
+      || typeof source.identity !== "string"
+      || typeof source.declaredPath !== "string"
+      || !path.isAbsolute(source.declaredPath)
+      || (source.canonicalPath !== null && (typeof source.canonicalPath !== "string" || !path.isAbsolute(source.canonicalPath)))
+      || byIdentity.has(source.identity)
+    ) {
+      throw new Error("The local filesystem source policy contains an invalid or duplicate source boundary.");
+    }
+    byIdentity.set(source.identity, source);
+  }
+  return byIdentity;
+}
+
+export async function authorizeBehavioralFilesystemSources({ bundleRoot, now = new Date() }) {
+  const bundle = await validateBehavioralEvidenceBundle({ bundleRoot });
+  const sources = [];
+  let missing = 0;
+  for (const project of bundle.projects) {
+    for (const source of project.record.sources) {
+      if (source.refreshMode !== "filesystem" || !["user_authorized", "user_owned"].includes(source.authorization)) continue;
+      const declaredPath = path.resolve(source.locator);
+      const canonicalPath = await canonicalPathOrNull(declaredPath);
+      if (canonicalPath === null) missing += 1;
+      sources.push({
+        identity: filesystemSourceIdentity(project.record.project.id, source.id),
+        declaredPath,
+        canonicalPath,
+      });
+    }
+  }
+  sources.sort((left, right) => left.identity.localeCompare(right.identity));
+  await atomicPrivateJson(path.join(bundle.bundleRoot, FILESYSTEM_SOURCE_POLICY), {
+    schemaVersion: 1,
+    visibility: "local_only",
+    authorizedAt: now.toISOString(),
+    sources,
+  });
+  return { authorized: sources.length, missing };
+}
+
+async function authorizedFilesystemLocator({ policyByIdentity, projectId, source }) {
+  const identity = filesystemSourceIdentity(projectId, source.id);
+  const policySource = policyByIdentity.get(identity);
+  const declaredPath = path.resolve(source.locator);
+  if (!policySource || policySource.declaredPath !== declaredPath) {
+    throw new Error("A filesystem source is outside the explicit owner authorization policy.");
+  }
+  const currentCanonicalPath = await canonicalPathOrNull(declaredPath);
+  if (currentCanonicalPath === null) return declaredPath;
+  if (policySource.canonicalPath === null) {
+    if (currentCanonicalPath !== declaredPath) {
+      throw new Error("A previously missing filesystem source now resolves through an unauthorized path boundary.");
+    }
+    return currentCanonicalPath;
+  }
+  if (currentCanonicalPath !== policySource.canonicalPath) {
+    throw new Error("A filesystem source canonical path changed after owner authorization.");
+  }
+  return currentCanonicalPath;
 }
 
 async function hashFile(filePath) {
@@ -123,9 +234,33 @@ async function inspectLocalSource(locator) {
   }
 }
 
-function filesystemLocator(recordDirectory, locator) {
-  if (typeof locator !== "string" || /^<[^>]+>$/.test(locator) || /^[a-z][a-z0-9+.-]*:/i.test(locator)) return null;
-  return path.isAbsolute(locator) ? locator : path.resolve(recordDirectory, locator);
+function filesystemLocator(source) {
+  return source.refreshMode === "filesystem" ? source.locator : null;
+}
+
+function candidateDispositionSummary(project) {
+  const pendingEvidenceIds = new Set(
+    project.record.evidence
+      .filter((item) => item.candidateState === "pending")
+      .map((item) => item.id),
+  );
+  const candidateEvidenceIds = new Set(
+    project.record.d1Candidates.map((candidate) => candidate.sourceEvidenceIds[0]),
+  );
+  const excludedEvidenceIds = new Set(
+    project.record.d1Exclusions.map((exclusion) => exclusion.sourceEvidenceId),
+  );
+  let uncoveredPendingEvidence = 0;
+  for (const evidenceId of pendingEvidenceIds) {
+    if (!candidateEvidenceIds.has(evidenceId) && !excludedEvidenceIds.has(evidenceId)) {
+      uncoveredPendingEvidence += 1;
+    }
+  }
+  return {
+    candidateCoveredEvidence: candidateEvidenceIds.size,
+    excludedEvidence: excludedEvidenceIds.size,
+    uncoveredPendingEvidence,
+  };
 }
 
 export function summarizeBehavioralEvidenceBundle(bundle) {
@@ -137,6 +272,9 @@ export function summarizeBehavioralEvidenceBundle(bundle) {
     evidence: 0,
     pendingEvidence: 0,
     remoteCandidates: 0,
+    candidateCoveredEvidence: 0,
+    excludedEvidence: 0,
+    uncoveredPendingEvidence: 0,
     publicationCandidates: 0,
   };
   for (const project of bundle.projects) {
@@ -145,7 +283,11 @@ export function summarizeBehavioralEvidenceBundle(bundle) {
     totals.blockedSources += project.record.sources.filter((source) => source.availability === "blocked").length;
     totals.evidence += project.record.evidence.length;
     totals.pendingEvidence += project.record.evidence.filter((item) => item.candidateState === "pending").length;
-    totals.remoteCandidates += (project.record.d1Candidates ?? []).length;
+    totals.remoteCandidates += project.record.d1Candidates.length;
+    const disposition = candidateDispositionSummary(project);
+    totals.candidateCoveredEvidence += disposition.candidateCoveredEvidence;
+    totals.excludedEvidence += disposition.excludedEvidence;
+    totals.uncoveredPendingEvidence += disposition.uncoveredPendingEvidence;
     totals.publicationCandidates += project.record.publicationCandidates.length;
   }
   return totals;
@@ -154,26 +296,60 @@ export function summarizeBehavioralEvidenceBundle(bundle) {
 export async function refreshBehavioralEvidenceSources({ bundleRoot, now = new Date() }) {
   const bundle = await validateBehavioralEvidenceBundle({ bundleRoot });
   const summary = { inspected: 0, changed: 0, missing: 0, blocked: 0, notChecked: 0 };
+  const policyByIdentity = await readFilesystemSourcePolicy(bundle.bundleRoot);
+  const authorizedLocators = new Map();
+  for (const project of bundle.projects) {
+    for (const source of project.record.sources) {
+      if (source.refreshMode !== "filesystem" || !["user_authorized", "user_owned"].includes(source.authorization)) continue;
+      const identity = filesystemSourceIdentity(project.record.project.id, source.id);
+      authorizedLocators.set(identity, await authorizedFilesystemLocator({
+        policyByIdentity,
+        projectId: project.record.project.id,
+        source,
+      }));
+    }
+  }
+  let bundleChanged = false;
   for (const project of bundle.projects) {
     let projectChanged = false;
     for (const source of project.record.sources) {
       if (!["user_authorized", "user_owned"].includes(source.authorization)) {
+        const staleInspection = source.revision !== undefined || source.fingerprint !== undefined || source.inspectedAt !== undefined;
+        projectChanged = projectChanged
+          || source.availability !== "blocked"
+          || source.refreshStatus !== "blocked"
+          || staleInspection;
         source.availability = "blocked";
         source.refreshStatus = "blocked";
+        delete source.revision;
+        delete source.fingerprint;
+        delete source.inspectedAt;
         summary.blocked += 1;
-        projectChanged = true;
         continue;
       }
-      const locator = filesystemLocator(project.recordDirectory, source.locator);
+      if (source.refreshMode === "blocked") {
+        const staleInspection = source.revision !== undefined || source.fingerprint !== undefined || source.inspectedAt !== undefined;
+        projectChanged = projectChanged
+          || source.availability !== "blocked"
+          || source.refreshStatus !== "blocked"
+          || staleInspection;
+        source.availability = "blocked";
+        source.refreshStatus = "blocked";
+        delete source.revision;
+        delete source.fingerprint;
+        delete source.inspectedAt;
+        summary.blocked += 1;
+        continue;
+      }
+      const locator = filesystemLocator(source);
       if (!locator) {
-        source.refreshStatus = source.availability === "available" ? "not_checked" : source.availability === "blocked" ? "blocked" : "unavailable";
         summary.notChecked += 1;
-        projectChanged = true;
         continue;
       }
       const previousFingerprint = source.fingerprint ?? null;
       try {
-        const observed = await inspectLocalSource(locator);
+        const authorizedLocator = authorizedLocators.get(filesystemSourceIdentity(project.record.project.id, source.id));
+        const observed = await inspectLocalSource(authorizedLocator);
         source.fingerprint = observed.fingerprint;
         source.revision = observed.revision;
         source.inspectedAt = now.toISOString();
@@ -198,12 +374,15 @@ export async function refreshBehavioralEvidenceSources({ bundleRoot, now = new D
     if (projectChanged) {
       project.record.project.inspectedAt = now.toISOString();
       await atomicJson(project.recordPath, project.record);
+      bundleChanged = true;
     }
   }
-  const manifestPath = path.join(bundle.bundleRoot, "manifest.json");
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-  manifest.updatedAt = now.toISOString();
-  await atomicJson(manifestPath, manifest);
+  if (bundleChanged) {
+    const manifestPath = path.join(bundle.bundleRoot, "manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.updatedAt = now.toISOString();
+    await atomicJson(manifestPath, manifest);
+  }
   await validateBehavioralEvidenceBundle({ bundleRoot });
   return summary;
 }
@@ -221,6 +400,8 @@ function projectSourceSnapshot(project, source) {
   if (source.authorization === "authorization_required" && source.availability === "available") {
     throw new Error("An available source still requires authorization.");
   }
+  const refreshStatus = sourceRefreshStatus(source);
+  const inspectionIsCurrent = source.availability === "available" && ["current", "changed"].includes(refreshStatus);
   const snapshot = {
     schemaVersion: 1,
     sourceId: sourceRemoteId(project.record.project.id, source.id),
@@ -232,16 +413,19 @@ function projectSourceSnapshot(project, source) {
     authorization: source.authorization,
     sensitivity: source.sensitivity,
     availability: source.availability,
-    refreshStatus: sourceRefreshStatus(source),
-    ...(source.revision ? { contentRevision: boundedSafeText(source.revision, "source.revision", 200) } : {}),
-    ...(/^[a-f0-9]{64}$/.test(source.fingerprint ?? "") ? { contentFingerprint: source.fingerprint } : {}),
-    ...(source.inspectedAt && Number.isFinite(Date.parse(source.inspectedAt)) ? { lastInspectedAt: Date.parse(source.inspectedAt) } : {}),
+    refreshStatus,
+    ...(inspectionIsCurrent && source.revision ? { contentRevision: boundedSafeText(source.revision, "source.revision", 200) } : {}),
+    ...(inspectionIsCurrent && /^[a-f0-9]{64}$/.test(source.fingerprint ?? "") ? { contentFingerprint: source.fingerprint } : {}),
+    ...(inspectionIsCurrent && source.inspectedAt && Number.isFinite(Date.parse(source.inspectedAt)) ? { lastInspectedAt: Date.parse(source.inspectedAt) } : {}),
     visibility: "owner_private",
   };
-  if (snapshot.availability === "available" && !snapshot.contentRevision && !snapshot.contentFingerprint) {
+  if (snapshot.availability === "available" && !inspectionIsCurrent) {
+    throw new Error("An available source must have a current or changed refresh status before sync preparation.");
+  }
+  if (inspectionIsCurrent && !snapshot.contentRevision && !snapshot.contentFingerprint) {
     throw new Error("An available source must be refreshed before sync preparation.");
   }
-  if (snapshot.availability === "available" && !snapshot.lastInspectedAt) {
+  if (inspectionIsCurrent && !snapshot.lastInspectedAt) {
     throw new Error("An available source needs an exact inspection timestamp before sync preparation.");
   }
   assertRemoteSafe(snapshot, "source registry snapshot");
@@ -253,6 +437,9 @@ function evidenceSourceRevision(project, evidence, sourceById) {
   const revisions = evidence.sourceIds.map((sourceId) => {
     const source = sourceById.get(sourceId);
     if (!source) throw new Error("Evidence references an unavailable source.");
+    if (source.availability !== "available" || !["current", "changed"].includes(sourceRefreshStatus(source))) {
+      throw new Error("Non-conversation evidence requires an available source with a current or changed refresh status before sync preparation.");
+    }
     return source.revision ?? source.fingerprint;
   });
   if (revisions.some((revision) => !revision)) throw new Error("Non-conversation evidence requires refreshed source revisions before sync preparation.");
@@ -270,6 +457,9 @@ function remoteEvidenceWrites(project, sourceSnapshots) {
     if (!evidence) throw new Error("A remote candidate references unavailable canonical evidence.");
     if (evidence.attributionGrade === "A3") {
       throw new Error("A3 owner attestation must be captured from an exact Behavioral transcript turn, not a local connector.");
+    }
+    if (REMOTE_E1_MAX_ORIGINS.has(evidence.origin) && ["E2", "E3"].includes(evidence.evidenceGrade)) {
+      throw new Error("Owner statements, resume claims, generated material, and inferences cannot be prepared above E1 for D1 sync.");
     }
     const provenanceKind = PROVENANCE_BY_ORIGIN[evidence.origin];
     if (!provenanceKind) throw new Error("The evidence origin has no remote provenance mapping.");
@@ -317,7 +507,17 @@ export async function prepareBehavioralEvidenceSyncPlan({ bundleRoot, now = new 
   const bundle = await validateBehavioralEvidenceBundle({ bundleRoot });
   const sources = [];
   const evidence = [];
+  let evidenceCandidates = 0;
+  let excludedEvidence = 0;
   for (const project of bundle.projects) {
+    const disposition = candidateDispositionSummary(project);
+    if (disposition.uncoveredPendingEvidence > 0) {
+      throw new Error(
+        `Project ${project.record.project.id} has ${disposition.uncoveredPendingEvidence} pending evidence records without a D1 candidate or explicit local-only exclusion.`,
+      );
+    }
+    evidenceCandidates += disposition.candidateCoveredEvidence;
+    excludedEvidence += disposition.excludedEvidence;
     const snapshots = project.record.sources.map((source) => projectSourceSnapshot(project, source));
     for (const source of snapshots) {
       const fingerprint = sha256(JSON.stringify(source));
@@ -340,7 +540,12 @@ export async function prepareBehavioralEvidenceSyncPlan({ bundleRoot, now = new 
     boundary: "sanitized_metadata_and_explicit_typed_candidates_only",
     sources,
     evidence,
-    summary: { sources: sources.length, evidenceWrites: evidence.length },
+    summary: {
+      sources: sources.length,
+      evidenceWrites: evidence.length,
+      evidenceCandidates,
+      excludedEvidence,
+    },
   };
   assertRemoteSafe(plan, "sync plan");
   const planPath = path.join(bundle.bundleRoot, "sync", "plan.json");
@@ -366,6 +571,13 @@ async function main() {
     console.log(JSON.stringify(await refreshBehavioralEvidenceSources({ bundleRoot })));
     return;
   }
+  if (command === "authorize-filesystem") {
+    if (!process.argv.includes("--confirm-owner-authorized-sources")) {
+      throw new Error("authorize-filesystem requires --confirm-owner-authorized-sources.");
+    }
+    console.log(JSON.stringify(await authorizeBehavioralFilesystemSources({ bundleRoot })));
+    return;
+  }
   if (command === "project") {
     const result = await buildBehavioralEvidenceSite({ bundleRoot });
     console.log(JSON.stringify({ projects: result.bundle.projects.length, projection: "generated" }));
@@ -376,7 +588,7 @@ async function main() {
     console.log(JSON.stringify(result.plan.summary));
     return;
   }
-  throw new Error("Use status, refresh, project, or prepare-sync.");
+  throw new Error("Use status, authorize-filesystem, refresh, project, or prepare-sync.");
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

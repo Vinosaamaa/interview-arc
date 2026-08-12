@@ -19,11 +19,22 @@ remain local and are never copied to R2.
 
 ## Local connector
 
-The controller supports `status`, `refresh`, `project`, and `prepare-sync`.
-`status` prints aggregate counts only. `refresh` inspects only `user_owned` or
-`user_authorized` filesystem sources, respects the 5,000-entry directory cap,
-and stores fingerprints and inspection state only in the ignored bundle.
-Unknown or authorization-required sources are blocked without inspection.
+The controller supports `status`, `authorize-filesystem`, `refresh`, `project`,
+and `prepare-sync`. `status` prints aggregate counts only.
+`authorize-filesystem` requires an explicit owner-confirmation flag and writes
+a mode-`0600`, gitignored policy containing exact source identities, declared
+paths, and canonical real paths. `refresh` preflights every eligible source
+against that policy before content inspection, then inspects only `user_owned`
+or `user_authorized` sources whose explicit `refreshMode` is `filesystem`.
+Changed locators and changed symlink targets fail closed. Refresh respects the
+5,000-entry directory cap and stores fingerprints and inspection state only in
+the ignored bundle. Remote and conversation modes are never passed to
+filesystem inspection; a filesystem refresh reports them as not checked but
+does not overwrite state owned by their connector. Repeated unchanged refreshes
+do not rewrite timestamps. Sync preparation includes revisions only for
+`available` sources whose connector state is `current` or `changed`, so stale
+non-filesystem metadata cannot enter a plan. Blocked, unknown, or
+authorization-required sources are blocked without inspection.
 
 `prepare-sync` accepts only typed `kind: evidence` candidates. Each candidate
 projects exactly one canonical pending evidence record and one or more stable
@@ -32,6 +43,14 @@ that grade requires an exact D1 transcript attestation, rejects unsafe paths,
 URLs, identities, and credentials, and writes the plan only under the ignored
 bundle. Source registration is derived separately from display-safe source
 metadata. The plan is not proof of persistence.
+
+Before writing a plan, the controller requires every pending evidence record to
+have exactly one disposition: a typed D1 candidate or an explicit local-only
+exclusion. Status reports covered, excluded, and uncovered counts; exclusions
+and their reasons remain local and are never written to the plan or D1.
+The controller also mirrors the D1 grade ceiling: owner statements, resume
+claims, generated secondary material, and derived inferences cannot be
+prepared above `E1`.
 
 ## Mutation flow
 
@@ -52,6 +71,9 @@ metadata. The plan is not proof of persistence.
    1 s, 2 s, then 4 s) and stop the foreground wait after 10 seconds. If the
    receipt is still nonterminal, report it as pending with its operation ID;
    never invent failure, change the payload, or reserve a replacement ID.
+   Bulk foundation sync keeps only one unresolved write at a time. The durable
+   worker also holds at most one unexpired specialist-write execution lease;
+   scheduled recovery drains the remaining queue serially.
 5. Present pending candidates through `query_behavioral_evidence_candidates`
    or the Behavioral Foundation review desk. Only an explicit owner action may
    call `review_behavioral_evidence_candidates`. Every accept, reject, or

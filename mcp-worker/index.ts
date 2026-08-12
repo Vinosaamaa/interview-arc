@@ -217,6 +217,10 @@ import {
   retrySpecialistWriteJobs,
   SpecialistWriteJobError,
 } from "../db/specialist-write-jobs";
+import {
+  SPECIALIST_WRITE_REQUEST_DRAIN_LIMIT,
+  SPECIALIST_WRITE_SCHEDULED_DRAIN_LIMIT,
+} from "./specialist-write-policy";
 import type { SpecialistWriteJobRow } from "../db/schema";
 import {
   InteractionModeError,
@@ -1987,7 +1991,9 @@ async function executeSpecialistWriteJob(job: SpecialistWriteJobRow) {
 }
 
 function scheduleSpecialistWriteProcessing(ctx: ExecutionContext) {
-  ctx.waitUntil(processSpecialistWriteJobs(executeSpecialistWriteJob));
+  ctx.waitUntil(processSpecialistWriteJobs(executeSpecialistWriteJob, {
+    maxJobs: SPECIALIST_WRITE_REQUEST_DRAIN_LIMIT,
+  }));
 }
 
 type SpecialistTimerMutationInput = {
@@ -4429,6 +4435,8 @@ export default {
     return json(request, { error: "Not found" }, { status: 404 });
   },
   async scheduled(_controller: ScheduledController, _env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(processSpecialistWriteJobs(executeSpecialistWriteJob, { maxJobs: 25 }));
+    ctx.waitUntil(processSpecialistWriteJobs(executeSpecialistWriteJob, {
+      maxJobs: SPECIALIST_WRITE_SCHEDULED_DRAIN_LIMIT,
+    }));
   },
 } satisfies ExportedHandler<Env>;
