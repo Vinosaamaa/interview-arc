@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-08-04",
+  "practiceTimezone": "America/Los_Angeles",
+  "focus": "Subarray With Elements Greater Than Varying Threshold and Trapping Rain Water",
+  "sessions": [
+    {
+      "id": "2026-08-01-session-voice-plan-20-hard-most-frequent-2026-08-01-9c5b59ce",
+      "label": "Practice session",
+      "source": "extra",
+      "allocatedSeconds": 2700,
+      "activityIds": [
+        "2026-08-01-extra-voice-plan-20-hard-most-frequent-2026-08-01-9c5b59ce-0"
+      ]
+    },
+    {
+      "id": "2026-08-04-session-voice-plan-12-hard-most-frequent-20260804-01",
+      "label": "Practice session",
+      "source": "extra",
+      "allocatedSeconds": 2700,
+      "activityIds": [
+        "2026-08-04-extra-voice-plan-12-hard-most-frequent-20260804-01-1"
+      ]
+    }
+  ],
+  "timerGroups": [
+    {
+      "id": "2026-08-01-session-voice-plan-20-hard-most-frequent-2026-08-01-9c5b59ce",
+      "label": "Practice session",
+      "allocatedSeconds": 2700,
+      "activityIds": [
+        "2026-08-01-extra-voice-plan-20-hard-most-frequent-2026-08-01-9c5b59ce-0"
+      ]
+    },
+    {
+      "id": "2026-08-04-session-voice-plan-12-hard-most-frequent-20260804-01",
+      "label": "Practice session",
+      "allocatedSeconds": 2700,
+      "activityIds": [
+        "2026-08-04-extra-voice-plan-12-hard-most-frequent-20260804-01-1"
+      ]
+    }
+  ],
+  "activities": [
+    {
+      "schemaVersion": 2,
+      "id": "2026-08-01-extra-voice-plan-20-hard-most-frequent-2026-08-01-9c5b59ce-0",
+      "questionId": "subarray-with-elements-greater-than-varying-threshold",
+      "date": "2026-08-04",
+      "source": "extra",
+      "type": "leetcode",
+      "recordKind": "attempt",
+      "title": "Subarray With Elements Greater Than Varying Threshold",
+      "url": "https://leetcode.com/problems/subarray-with-elements-greater-than-varying-threshold/",
+      "allocatedSeconds": 2700,
+      "sessionId": "2026-08-01-session-voice-plan-20-hard-most-frequent-2026-08-01-9c5b59ce",
+      "timerGroupId": "2026-08-01-session-voice-plan-20-hard-most-frequent-2026-08-01-9c5b59ce",
+      "timingSource": "website",
+      "startedAt": "2026-08-03T13:23:06.598-07:00",
+      "endedAt": "2026-08-04T02:06:36.408-07:00",
+      "elapsedSeconds": 19263,
+      "status": "completed",
+      "outcome": "solved_after_reviewing_approach",
+      "artifactPath": "practice/leetcode/attempts/2026-08-04-subarray-with-elements-greater-than-varying-threshold.md"
+    },
+    {
+      "schemaVersion": 2,
+      "id": "2026-08-04-extra-voice-plan-12-hard-most-frequent-20260804-01-1",
+      "questionId": "trapping-rain-water",
+      "date": "2026-08-04",
+      "source": "extra",
+      "type": "leetcode",
+      "recordKind": "attempt",
+      "title": "Trapping Rain Water",
+      "url": "https://leetcode.com/problems/trapping-rain-water/",
+      "allocatedSeconds": 2700,
+      "sessionId": "2026-08-04-session-voice-plan-12-hard-most-frequent-20260804-01",
+      "timerGroupId": "2026-08-04-session-voice-plan-12-hard-most-frequent-20260804-01",
+      "timingSource": "website",
+      "startedAt": "2026-08-04T03:14:25.715-07:00",
+      "endedAt": "2026-08-04T14:08:59.820-07:00",
+      "elapsedSeconds": 6827,
+      "status": "completed",
+      "outcome": "solved_after_reviewing_approach",
+      "reviewDates": [
+        "2026-08-11"
+      ],
+      "reviewReason": "approach_review",
+      "artifactPath": "practice/leetcode/attempts/2026-08-04-trapping-rain-water.md"
+    }
+  ]
+}
+
