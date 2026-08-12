@@ -79,6 +79,7 @@ function finalization({
   solutionRevision = 1,
   scope = "universal",
   target,
+  roleBrief,
   story,
   resumeContext = {
     resumeId: "resume-primary",
@@ -164,7 +165,7 @@ function finalization({
           targetAlignment: {
             strengths: ["Connected the decision to reliability ownership."],
             gaps: ["Staff-level influence is not independently established."],
-            competencySignals: target?.competencyEmphasis ?? [],
+            competencySignals: roleBrief?.competencyEmphasis ?? target?.competencyEmphasis ?? [],
           },
           assistance: {
             level: "probing",
@@ -218,6 +219,7 @@ function finalization({
         contradictions: [],
         provenance: { responseTurnId },
         ...(target ? { target } : {}),
+        ...(roleBrief ? { roleBrief } : {}),
       },
       ...(correction ? { finalAnswerCorrection: correction } : {}),
       ...(correction ? { interactionModeClassificationCorrection: correction } : {}),
@@ -311,7 +313,18 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
          '{"modelAnswer":"A historical answer saved before snapshot v1."}',1786363100000,NULL,1,1786363100000);
       INSERT INTO extra_activities (owner_id,id,date,workbench_id,payload,revision,updated_at)
       VALUES ('owner-final-answer','${activityId}','2026-08-10',NULL,
-        '{"schemaVersion":2,"id":"${activityId}","questionId":"${questionId}","date":"2026-08-10","source":"extra","type":"behavioral","title":"Reliability improvement","allocatedSeconds":3600,"sessionId":"session-final-answer","timingSource":"website","status":"running"}',1,1);
+        '{"schemaVersion":2,"id":"${activityId}","questionId":"${questionId}","date":"2026-08-10","source":"extra","type":"behavioral","title":"Reliability improvement","allocatedSeconds":3600,"sessionId":"session-final-answer","timingSource":"website","status":"running"}',1,1),
+        ('owner-final-answer','activity-loop-behavioral-other','2026-08-10',NULL,
+        '{"schemaVersion":2,"id":"activity-loop-behavioral-other","questionId":"behavioral-other-question","date":"2026-08-10","source":"extra","type":"behavioral","title":"Different behavioral question","allocatedSeconds":1800,"timingSource":"website","status":"planned"}',1,1),
+        ('owner-final-answer','activity-loop-legacy-envelope','2026-08-10',NULL,
+        '{"schemaVersion":2,"id":"activity-loop-legacy-envelope","questionId":"${questionId}","date":"2026-08-10","source":"extra","type":"behavioral","title":"Legacy Role Brief envelope","allocatedSeconds":1800,"timingSource":"website","status":"planned"}',1,1);
+      INSERT INTO loop_activity_bindings
+        (owner_id,activity_id,loop_id,stage_id,loop_revision,role_brief_revision,specialty,question_id,
+         role_brief_display_snapshot,binding_revision,created_at,updated_at)
+      VALUES ('owner-final-answer','activity-loop-legacy-envelope','loop-legacy-envelope',NULL,1,1,
+        'behavioral','${questionId}',
+        '{"state":"active","label":"Legacy envelope company · Backend Engineer","company":"Legacy envelope company","roleTitle":"Backend Engineer","responsibilities":["Build reliable services"],"requiredQualifications":["Distributed systems"],"preferredQualifications":[],"competencySignals":["reliability"],"seniorityIndicators":[],"domainVocabulary":[],"verifiedCompanySignals":[],"unresolvedAmbiguities":[],"source":{"kind":"pasted_jd","displayLocator":"Owner-provided job description","capturedAt":1786363200000,"fingerprint":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},"revision":1,"createdAt":1786363200000}',
+        1,1,1);
       INSERT INTO live_sessions (owner_id,id,date,workbench_id,payload,revision,updated_at)
       VALUES ('owner-final-answer','session-final-answer','2026-08-10',NULL,
         '{"schemaVersion":1,"id":"session-final-answer","date":"2026-08-10","source":"extra","label":"Behavioral final answer","allocatedSeconds":3600,"activityIds":["${activityId}"]}',0,1);
@@ -329,6 +342,16 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     await sameOwnerClient.connect(new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), {
       requestInit: { headers: { authorization: `Bearer ${token}` } },
     }));
+
+    const legacyEnvelopePreflight = await call(client, "get_behavioral_practice_preflight", {
+      boundary: "reconnect_handoff",
+      questionId,
+      activityId: "activity-loop-legacy-envelope",
+    });
+    assert.equal(legacyEnvelopePreflight.roleBriefResolution.source, "activity");
+    assert.equal(legacyEnvelopePreflight.roleBriefResolution.roleBrief.loopId, "loop-legacy-envelope");
+    assert.equal(legacyEnvelopePreflight.roleBriefResolution.roleBrief.label, "Legacy envelope company · Backend Engineer");
+    assert.doesNotMatch(JSON.stringify(legacyEnvelopePreflight), /fingerprint|ownerNotes|jdText/);
 
     const story = await call(client, "upsert_behavioral_story", {
       operationId: "story-final-answer-create-1",
@@ -586,141 +609,165 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
       "behavioral_target_review_scope_mismatch",
     );
 
-    const targetCreated = await call(client, "upsert_behavioral_target_profile", {
-      operationId: "target-final-answer-create-1",
-      expectedRevision: 0,
-      target: {
-        targetId: "target-example",
-        label: "Example target",
+    const loopId = "loop-example-senior-backend";
+    const roleBriefInput = {
+      label: "Example Company · Senior Backend Engineer",
+      state: "active",
+      company: "Example Company",
+      roleTitle: "Senior Backend Engineer",
+      source: {
+        kind: "pasted_jd",
+        displayLocator: "Owner-provided job description",
+        capturedAt: 1_786_363_203_000,
+        jdText: "Own reliable distributed services.",
+      },
+      responsibilities: ["Own reliable distributed services"],
+      requiredQualifications: ["Distributed systems"],
+      preferredQualifications: [],
+      competencySignals: ["reliability"],
+      seniorityIndicators: ["owns ambiguous systems"],
+      domainVocabulary: ["distributed systems"],
+      verifiedCompanySignals: [],
+      unresolvedAmbiguities: [],
+      ownerNotes: [],
+    };
+    const roleBriefCreated = await call(client, "create_loop", {
+      operationId: "loop-final-answer-create-1",
+      authorization: "loop_recorder",
+      loop: {
+        loopId,
         state: "active",
         company: "Example Company",
         roleTitle: "Senior Backend Engineer",
-        source: {
-          kind: "pasted_jd",
-          displayLocator: "Owner-provided job description",
-          capturedAt: 1_786_363_203_000,
-          jdText: "Own reliable distributed services.",
-        },
-        responsibilities: ["Own reliable distributed services"],
-        requiredQualifications: ["Distributed systems"],
-        preferredQualifications: [],
-        competencySignals: ["reliability"],
-        seniorityIndicators: ["owns ambiguous systems"],
-        domainVocabulary: ["distributed systems"],
-        verifiedCompanySignals: [],
-        unresolvedAmbiguities: [],
-        ownerNotes: [],
+        status: "active",
+        openedAt: 1_786_363_203_000,
+        outcome: null,
+        stages: [{
+          stageId: "behavioral-round",
+          label: "Behavioral round",
+          order: 0,
+          status: "planned",
+        }],
       },
+      roleBrief: roleBriefInput,
     });
-    assert.equal(targetCreated.revision, 1);
-    const targetReference = {
-      targetId: "target-example",
+    assert.equal(roleBriefCreated.roleBriefRevision, 1);
+    await call(client, "bind_planned_activity_to_loop", {
+      operationId: "loop-final-answer-bind-other-question-1",
+      activityId: "activity-loop-behavioral-other",
+      loopId,
+      expectedActivityRevision: 1,
+      authorization: "explicit_user_instruction",
+    });
+    const wrongSpecialtyPreflight = await call(client, "get_behavioral_practice_preflight", {
+      boundary: "finalization",
+      questionId,
+      activityId: "activity-loop-behavioral-other",
+    });
+    assert.equal(wrongSpecialtyPreflight.roleBriefResolution.source, "none");
+    assert.equal(wrongSpecialtyPreflight.targeting.mode, "universal");
+    const roleBriefReference = {
+      loopId,
       revision: 1,
-      label: "Example target",
-      competencyEmphasis: ["reliability"],
+      label: roleBriefInput.label,
+      company: roleBriefInput.company,
+      roleTitle: roleBriefInput.roleTitle,
+      competencyEmphasis: roleBriefInput.competencySignals,
     };
-    const unboundTarget = await callRaw(client, "save_specialist_finalization", finalization({
+    const unboundRoleBrief = await callRaw(client, "save_specialist_finalization", finalization({
       activityId,
       questionId,
-      operationId: "final-answer-operation-target-unbound",
+      operationId: "final-answer-operation-role-brief-unbound",
       answer: correctedAnswer,
       responseTurnId: "behavioral-response-2",
       solutionRevision: 2,
       scope: "target_tailored",
-      target: targetReference,
-      correction: { replacesSnapshotRevision: 2, reason: "Tailor for an approved target." },
+      roleBrief: roleBriefReference,
+      correction: { replacesSnapshotRevision: 2, reason: "Tailor for the bound Loop Role Brief." },
     }));
-    assert.equal(unboundTarget.isError, true);
-    assert.equal(unboundTarget.structuredContent.code, "behavioral_target_binding_mismatch");
-    const activityBinding = await call(client, "set_behavioral_target_binding", {
-      mutationId: "target-final-answer-bind-1",
-      scope: { type: "activity", id: activityId },
-      action: "set",
-      targetId: "target-example",
-      targetRevision: 1,
-      expectedRevision: 0,
+    assert.equal(unboundRoleBrief.isError, true);
+    assert.equal(unboundRoleBrief.structuredContent.code, "behavioral_role_brief_binding_mismatch");
+    const activityBinding = await call(client, "bind_planned_activity_to_loop", {
+      operationId: "loop-final-answer-bind-1",
+      activityId,
+      loopId,
+      stageId: "behavioral-round",
+      expectedActivityRevision: 1,
       authorization: "explicit_user_instruction",
     });
-    assert.equal(activityBinding.binding.revision, 1);
-    const targetPreflight = await call(client, "get_behavioral_practice_preflight", {
+    assert.equal(activityBinding.bindingRevision, 1);
+    assert.equal(activityBinding.roleBriefRevision, 1);
+    const roleBriefPreflight = await call(client, "get_behavioral_practice_preflight", {
       boundary: "finalization",
       questionId,
       activityId,
     });
-    assert.equal(targetPreflight.targeting.mode, "target_tailored");
-    assert.deepEqual(targetPreflight.targeting.competencySignals, ["reliability"]);
-    assert.deepEqual(targetPreflight.acceptedTargetVariants, []);
+    assert.equal(roleBriefPreflight.targeting.mode, "target_tailored");
+    assert.equal(roleBriefPreflight.targeting.source, "loop_role_brief");
+    assert.deepEqual(roleBriefPreflight.targeting.competencySignals, ["reliability"]);
+    assert.equal(roleBriefPreflight.roleBriefResolution.roleBrief.loopId, loopId);
+    assert.deepEqual(roleBriefPreflight.acceptedRoleBriefVariants, []);
 
-    const targetMismatch = await callRaw(client, "save_specialist_finalization", finalization({
+    const roleBriefMismatch = await callRaw(client, "save_specialist_finalization", finalization({
       activityId,
       questionId,
-      operationId: "final-answer-operation-target-mismatch",
+      operationId: "final-answer-operation-role-brief-mismatch",
       answer: correctedAnswer,
       responseTurnId: "behavioral-response-2",
       solutionRevision: 2,
       scope: "target_tailored",
-      target: {
-        ...targetReference,
-        label: "Wrong target label",
+      roleBrief: {
+        ...roleBriefReference,
+        label: "Wrong Role Brief label",
       },
-      correction: { replacesSnapshotRevision: 2, reason: "Tailor for an approved target." },
+      correction: { replacesSnapshotRevision: 2, reason: "Tailor for the bound Loop Role Brief." },
     }));
-    assert.equal(targetMismatch.isError, true);
-    assert.equal(targetMismatch.structuredContent.code, "behavioral_target_profile_mismatch");
+    assert.equal(roleBriefMismatch.isError, true);
+    assert.equal(roleBriefMismatch.structuredContent.code, "behavioral_role_brief_snapshot_mismatch");
 
-    const targetFinalization = finalization({
+    const roleBriefFinalization = finalization({
       activityId,
       questionId,
-      operationId: "final-answer-operation-target",
+      operationId: "final-answer-operation-role-brief",
       answer: correctedAnswer,
       responseTurnId: "behavioral-response-2",
       solutionRevision: 2,
       scope: "target_tailored",
-      target: targetReference,
-      correction: { replacesSnapshotRevision: 2, reason: "Tailor for an approved target." },
+      roleBrief: roleBriefReference,
+      correction: { replacesSnapshotRevision: 2, reason: "Tailor for the bound Loop Role Brief." },
     });
-    targetFinalization.finalization.review.didWell[0] = "  Scoped the decision.  ";
-    targetFinalization.finalization.review.improve[0] = "  Add a measured outcome.  ";
-    const targetSaved = await call(client, "save_specialist_finalization", targetFinalization);
-    assert.equal(targetSaved.finalAnswer.status, "corrected");
-    assert.equal(targetSaved.finalAnswer.snapshotRevision, 3);
-    const targetRecord = await call(client, "get_activity_practice_record", { activityId });
-    assert.equal(targetRecord.finalAnswer.scope, "target_tailored");
-    assert.deepEqual(targetRecord.finalAnswer.target, {
-      targetId: "target-example",
+    roleBriefFinalization.finalization.review.didWell[0] = "  Scoped the decision.  ";
+    roleBriefFinalization.finalization.review.improve[0] = "  Add a measured outcome.  ";
+    const roleBriefSaved = await call(client, "save_specialist_finalization", roleBriefFinalization);
+    assert.equal(roleBriefSaved.finalAnswer.status, "corrected");
+    assert.equal(roleBriefSaved.finalAnswer.snapshotRevision, 3);
+    const roleBriefRecord = await call(client, "get_activity_practice_record", { activityId });
+    assert.equal(roleBriefRecord.finalAnswer.scope, "target_tailored");
+    assert.equal(roleBriefRecord.finalAnswer.target, null);
+    assert.deepEqual(roleBriefRecord.finalAnswer.roleBrief, {
+      loopId,
       revision: 1,
-      label: "Example target",
+      label: "Example Company · Senior Backend Engineer",
+      company: "Example Company",
+      roleTitle: "Senior Backend Engineer",
       competencyEmphasis: ["reliability"],
     });
-    const acceptedVariantPreflight = await call(client, "get_behavioral_practice_preflight", {
+    assert.match(roleBriefRecord.finalAnswerMarkdown, /Role Brief Example Company · Senior Backend Engineer · revision 1/);
+    assert.equal(roleBriefRecord.behavioralAnalysis.roleBrief.loopId, loopId);
+    const acceptedRoleBriefPreflight = await call(client, "get_behavioral_practice_preflight", {
       boundary: "reconnect_handoff",
       questionId,
       activityId,
     });
-    assert.equal(acceptedVariantPreflight.acceptedTargetVariants.length, 1);
-    assert.equal(acceptedVariantPreflight.acceptedTargetVariants[0].stale, false);
-    assert.equal(acceptedVariantPreflight.acceptedTargetVariants[0].review.assistance.level, "probing");
-    await call(client, "set_behavioral_target_binding", {
-      mutationId: "target-final-answer-clear-2",
-      scope: { type: "activity", id: activityId },
-      action: "clear",
-      expectedRevision: 1,
-      authorization: "explicit_user_instruction",
-    });
-    const staleVariantPreflight = await call(client, "get_behavioral_practice_preflight", {
-      boundary: "post_mutation",
-      questionId,
-      activityId,
-    });
-    assert.equal(staleVariantPreflight.targeting.mode, "universal");
-    assert.equal(staleVariantPreflight.acceptedTargetVariants[0].stale, true);
-    assert.deepEqual(staleVariantPreflight.acceptedTargetVariants[0].staleReasons, ["target_not_resolved"]);
-    const targetRetryAfterClear = await call(
+    assert.equal(acceptedRoleBriefPreflight.acceptedRoleBriefVariants.length, 1);
+    assert.equal(acceptedRoleBriefPreflight.acceptedRoleBriefVariants[0].stale, false);
+    assert.equal(acceptedRoleBriefPreflight.acceptedRoleBriefVariants[0].review.assistance.level, "probing");
+    const roleBriefExactRetry = await call(
       client,
       "save_specialist_finalization",
-      targetFinalization,
+      roleBriefFinalization,
     );
-    assert.deepEqual(targetRetryAfterClear.finalAnswer, {
+    assert.deepEqual(roleBriefExactRetry.finalAnswer, {
       status: "unchanged",
       snapshotRevision: 3,
     });

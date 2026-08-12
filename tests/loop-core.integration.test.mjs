@@ -57,6 +57,22 @@ const roleBrief = (
   ownerNotes: ["Private owner note"],
 });
 
+const sqlText = (value) => String(value).replaceAll("'", "''");
+function legacyTargetFixtureSql(targetId, brief, sequence) {
+  const target = { targetId, ...brief };
+  const { jdText, ...displaySource } = target.source;
+  const display = { ...target, source: displaySource };
+  return `INSERT INTO behavioral_target_profiles
+      (owner_id,target_id,current_revision,state,label,created_at,updated_at)
+    VALUES ('owner-loop','${targetId}',1,'active','${sqlText(target.label)}',${sequence},${sequence});
+    INSERT INTO behavioral_target_profile_revisions
+      (owner_id,target_id,revision,operation_id,request_fingerprint,source_fingerprint,
+       display_snapshot,private_snapshot,created_at)
+    VALUES ('owner-loop','${targetId}',1,'legacy-fixture-${sequence}',
+      '${sha256(JSON.stringify(target))}','${sha256(jdText)}',
+      '${sqlText(JSON.stringify(display))}','${sqlText(JSON.stringify(target))}',${sequence});`;
+}
+
 const initialLoop = {
   loopId: "loop-northstar-backend-2026",
   state: "active",
@@ -127,7 +143,22 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
           ('${sha256(otherToken)}','other-loop','Other Loop owner',1,NULL,NULL);
         INSERT INTO content_bank (category,id,ord,payload,updated_at) VALUES
           ('leetcode','two-sum',0,'{"id":"two-sum","title":"Two Sum","difficulty":"easy","topics":["arrays"],"targetMinutes":25,"active":true}',1),
-          ('leetcode','course-schedule',1,'{"id":"course-schedule","title":"Course Schedule","difficulty":"medium","topics":["graphs"],"targetMinutes":35,"active":true}',1);`,
+          ('leetcode','course-schedule',1,'{"id":"course-schedule","title":"Course Schedule","difficulty":"medium","topics":["graphs"],"targetMinutes":35,"active":true}',1);
+        ${legacyTargetFixtureSql(
+          "target-northstar-backend-legacy",
+          roleBrief("Operate reliable backend services for Northstar."),
+          10,
+        )}
+        ${legacyTargetFixtureSql(
+          "target-acme-data-legacy",
+          roleBrief("Build data systems for Acme.", ["data systems"], "Acme", "Data Engineer"),
+          11,
+        )}
+        ${legacyTargetFixtureSql(
+          "target-archive-legacy",
+          roleBrief("Archive-only legacy target."),
+          12,
+        )}`,
     ], project);
     const started = startMcpWorker({ wrangler, config, persistence, project, port });
     worker = started.child;
@@ -301,20 +332,12 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
     });
     assert.equal(historicalLoop.loops[0].loop.stages[2].status, "scheduled");
 
-    const standaloneRoleBrief = roleBrief("Operate reliable backend services for Northstar.");
-    const standaloneTarget = await call(client, "upsert_behavioral_target_profile", {
-      operationId: "standalone-target-create-1",
-      expectedRevision: 0,
-      target: {
-        targetId: "target-northstar-backend-legacy",
-        ...standaloneRoleBrief,
-      },
-    });
-    assert.equal(standaloneTarget.revision, 1);
     const inbox = await call(client, "query_role_brief_migration_inbox", {});
-    assert.equal(inbox.items.length, 1);
-    assert.equal(inbox.items[0].target.targetId, "target-northstar-backend-legacy");
-    assert.equal(inbox.items[0].decision, null);
+    assert.equal(inbox.items.length, 3);
+    const northstarMigrationItem = inbox.items.find((item) => (
+      item.target.targetId === "target-northstar-backend-legacy"
+    ));
+    assert.equal(northstarMigrationItem.decision, null);
     assert.doesNotMatch(JSON.stringify(inbox), /Operate reliable backend services|jdText/);
 
     const migrated = await call(client, "migrate_target_profile_to_loop", {
@@ -338,22 +361,17 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
     });
     assert.equal(migrationRetry.duplicate, true);
     const pendingAfterMigration = await call(client, "query_role_brief_migration_inbox", {});
-    assert.deepEqual(pendingAfterMigration.items, []);
+    assert.equal(pendingAfterMigration.items.length, 2);
+    assert.equal(pendingAfterMigration.items.some((item) => (
+      item.target.targetId === "target-northstar-backend-legacy"
+    )), false);
     const decidedInbox = await call(client, "query_role_brief_migration_inbox", { includeDecided: true });
-    assert.equal(decidedInbox.items[0].decision.action, "attach_existing_loop");
-    assert.equal(decidedInbox.items[0].decision.roleBriefRevision, 3);
+    const decidedNorthstar = decidedInbox.items.find((item) => (
+      item.target.targetId === "target-northstar-backend-legacy"
+    ));
+    assert.equal(decidedNorthstar.decision.action, "attach_existing_loop");
+    assert.equal(decidedNorthstar.decision.roleBriefRevision, 3);
 
-    const createLoopTargetBrief = roleBrief(
-      "Build data systems for Acme.",
-      ["data systems"],
-      "Acme",
-      "Data Engineer",
-    );
-    await call(client, "upsert_behavioral_target_profile", {
-      operationId: "standalone-target-acme-create-1",
-      expectedRevision: 0,
-      target: { targetId: "target-acme-data-legacy", ...createLoopTargetBrief },
-    });
     const migrationCreatedLoop = await call(client, "migrate_target_profile_to_loop", {
       operationId: "migrate-target-create-loop-1",
       targetId: "target-acme-data-legacy",
@@ -430,14 +448,6 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
       outcomes: { offer: 0, rejected: 0, withdrawn: 0, closed: 0, unresolved: 2 },
     });
 
-    await call(client, "upsert_behavioral_target_profile", {
-      operationId: "standalone-target-archive-create-1",
-      expectedRevision: 0,
-      target: {
-        targetId: "target-archive-legacy",
-        ...roleBrief("Archive-only legacy target."),
-      },
-    });
     const archivedMigration = await call(client, "migrate_target_profile_to_loop", {
       operationId: "migrate-target-archive-1",
       targetId: "target-archive-legacy",
@@ -447,6 +457,8 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
     });
     assert.equal(archivedMigration.action, "archive");
     assert.equal(archivedMigration.loopId, null);
+    const emptyMigrationInbox = await call(client, "query_role_brief_migration_inbox", {});
+    assert.deepEqual(emptyMigrationInbox.items, []);
 
     const captureInput = {
       operationId: "capture-northstar-behavioral-1",

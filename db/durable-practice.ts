@@ -20,6 +20,7 @@ import {
   leetcodeCodeAttempts,
   leetcodeCodeAttemptReviewBackfills,
   liveTurnReservations,
+  loopActivityBindings,
   ownerBankQuestions,
   practiceInteractionModeClassifications,
   practiceInteractionModeTransitions,
@@ -117,6 +118,7 @@ import { behavioralStoryInputSchema } from "./behavioral-story-policy";
 import {
   resolveBehavioralTarget,
 } from "./behavioral-target-profile";
+import { readBoundLoopActivityContext } from "./loops";
 import {
   behavioralTargetReviewSchema,
   type BehavioralTargetReview,
@@ -3535,6 +3537,15 @@ type BehavioralFinalAnswerWritePlan = {
     targetId: string;
     targetRevision: number;
   };
+  roleBriefBinding?: {
+    bindingRevision: number;
+    bindingUpdatedAt: number;
+    loopId: string;
+    loopRevision: number;
+    roleBriefRevision: number;
+    specialty: "behavioral";
+    questionId: string;
+  };
 };
 
 function validateBehavioralTargetReview(
@@ -3575,11 +3586,15 @@ function validateBehavioralTargetReview(
       "The target review must reuse the final-answer evidence gaps exactly.",
     );
   }
-  const targetSignals = new Set(snapshot.target?.competencyEmphasis ?? []);
+  const targetSignals = new Set(
+    snapshot.roleBrief?.competencyEmphasis
+    ?? snapshot.target?.competencyEmphasis
+    ?? [],
+  );
   if (targetReview.targetAlignment.competencySignals.some((signal) => !targetSignals.has(signal))) {
     throw new BehavioralFinalAnswerError(
       "behavioral_target_review_signal_mismatch",
-      "Target review signals must come from the exact final-answer Target Profile snapshot.",
+      "Target review signals must come from the exact final-answer Role Brief or historical Target Profile snapshot.",
     );
   }
   return targetReview;
@@ -3733,40 +3748,80 @@ async function prepareBehavioralFinalAnswerWrite(
   }
   const attemptAnalysis = validateBehavioralAttemptAnalysis(payload, snapshot);
   let targetBinding: BehavioralFinalAnswerWritePlan["targetBinding"];
+  let roleBriefBinding: BehavioralFinalAnswerWritePlan["roleBriefBinding"];
   if (snapshot.scope === "target_tailored") {
-    const target = snapshot.target!;
-    const resolvedTarget = await resolveBehavioralTarget(ownerId, { activityId });
-    if (
-      !resolvedTarget.target
-      || !resolvedTarget.binding
-      || resolvedTarget.source === "none"
-      || resolvedTarget.target.targetId !== target.targetId
-      || resolvedTarget.target.revision !== target.revision
-    ) {
-      throw new BehavioralFinalAnswerError(
-        "behavioral_target_binding_mismatch",
-        "The target-tailored answer does not match the activity's authoritative target binding.",
-      );
+    if (snapshot.roleBrief) {
+      const roleBrief = snapshot.roleBrief;
+      const boundLoop = await readBoundLoopActivityContext(ownerId, activityId);
+      if (
+        !boundLoop
+        || boundLoop.binding.specialty !== "behavioral"
+        || boundLoop.binding.questionId !== questionId
+        || boundLoop.binding.loopId !== roleBrief.loopId
+        || boundLoop.binding.roleBriefRevision !== roleBrief.revision
+      ) {
+        throw new BehavioralFinalAnswerError(
+          "behavioral_role_brief_binding_mismatch",
+          "The tailored answer does not match the activity's exact Loop and Role Brief binding.",
+        );
+      }
+      if (
+        boundLoop.roleBrief.label !== roleBrief.label
+        || boundLoop.roleBrief.company !== roleBrief.company
+        || boundLoop.roleBrief.roleTitle !== roleBrief.roleTitle
+        || roleBrief.competencyEmphasis.some(
+          (signal) => !boundLoop.roleBrief.competencySignals.includes(signal),
+        )
+      ) {
+        throw new BehavioralFinalAnswerError(
+          "behavioral_role_brief_snapshot_mismatch",
+          "The display-safe answer context does not match the bound immutable Role Brief revision.",
+        );
+      }
+      roleBriefBinding = {
+        bindingRevision: boundLoop.binding.revision,
+        bindingUpdatedAt: boundLoop.binding.updatedAt,
+        loopId: boundLoop.binding.loopId,
+        loopRevision: boundLoop.binding.loopRevision,
+        roleBriefRevision: boundLoop.binding.roleBriefRevision,
+        specialty: "behavioral",
+        questionId: boundLoop.binding.questionId,
+      };
+    } else {
+      const target = snapshot.target!;
+      const resolvedTarget = await resolveBehavioralTarget(ownerId, { activityId });
+      if (
+        !resolvedTarget.target
+        || !resolvedTarget.binding
+        || resolvedTarget.source === "none"
+        || resolvedTarget.target.targetId !== target.targetId
+        || resolvedTarget.target.revision !== target.revision
+      ) {
+        throw new BehavioralFinalAnswerError(
+          "behavioral_target_binding_mismatch",
+          "The historical target-tailored answer does not match the activity's exact Target Profile binding.",
+        );
+      }
+      if (
+        resolvedTarget.target.label !== target.label
+        || target.competencyEmphasis.some(
+          (signal) => !resolvedTarget.target!.competencySignals.includes(signal),
+        )
+      ) {
+        throw new BehavioralFinalAnswerError(
+          "behavioral_target_profile_mismatch",
+          "The display-safe target snapshot does not match its historical Target Profile revision.",
+        );
+      }
+      targetBinding = {
+        source: resolvedTarget.source,
+        scopeId: resolvedTarget.binding.scopeId,
+        bindingRevision: resolvedTarget.binding.revision,
+        bindingUpdatedAt: resolvedTarget.binding.updatedAt,
+        targetId: target.targetId,
+        targetRevision: target.revision,
+      };
     }
-    if (
-      resolvedTarget.target.label !== target.label
-      || target.competencyEmphasis.some(
-        (signal) => !resolvedTarget.target!.competencySignals.includes(signal),
-      )
-    ) {
-      throw new BehavioralFinalAnswerError(
-        "behavioral_target_profile_mismatch",
-        "The display-safe target snapshot does not match its authoritative Target Profile revision.",
-      );
-    }
-    targetBinding = {
-      source: resolvedTarget.source,
-      scopeId: resolvedTarget.binding.scopeId,
-      bindingRevision: resolvedTarget.binding.revision,
-      bindingUpdatedAt: resolvedTarget.binding.updatedAt,
-      targetId: target.targetId,
-      targetRevision: target.revision,
-    };
   }
   const responseTurns = await db.select({
     body: practiceTranscriptTurns.body,
@@ -3976,6 +4031,7 @@ async function prepareBehavioralFinalAnswerWrite(
     } : undefined,
     resumeSourceUpdatedAt: selectedResume?.updatedAt,
     resumeContextExpectedAbsent: !selectedResume,
+    roleBriefBinding,
   };
 }
 
@@ -4311,6 +4367,21 @@ export async function saveSpecialistFinalization(
               ? sql`AND json_extract(${extraActivities.payload}, '$.sessionId') = ${targetBinding.scopeId}`
               : sql``}
         )`));
+    }
+    if (behavioralFinalAnswer.roleBriefBinding) {
+      const binding = behavioralFinalAnswer.roleBriefBinding;
+      finalizationGuards.push(d1TransactionalInvariantGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${loopActivityBindings}
+        WHERE ${loopActivityBindings.ownerId} = ${ownerId}
+          AND ${loopActivityBindings.activityId} = ${activityId}
+          AND ${loopActivityBindings.bindingRevision} = ${binding.bindingRevision}
+          AND ${loopActivityBindings.updatedAt} = ${binding.bindingUpdatedAt}
+          AND ${loopActivityBindings.loopId} = ${binding.loopId}
+          AND ${loopActivityBindings.loopRevision} = ${binding.loopRevision}
+          AND ${loopActivityBindings.roleBriefRevision} = ${binding.roleBriefRevision}
+          AND ${loopActivityBindings.specialty} = ${binding.specialty}
+          AND ${loopActivityBindings.questionId} = ${binding.questionId}
+      )`));
     }
     if (behavioralFinalAnswer.resumeContext) {
       const context = behavioralFinalAnswer.resumeContext;

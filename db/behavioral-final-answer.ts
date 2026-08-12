@@ -26,6 +26,15 @@ const targetSnapshotSchema = z.object({
   competencyEmphasis: boundedTextList(24, 120),
 }).strict();
 
+const roleBriefSnapshotSchema = z.object({
+  loopId: stableIdSchema,
+  revision: z.number().int().positive(),
+  label: boundedText(240),
+  company: boundedText(240),
+  roleTitle: boundedText(240),
+  competencyEmphasis: boundedTextList(24, 120),
+}).strict();
+
 export const behavioralFinalAnswerSnapshotInputSchema = z.object({
   schemaVersion: z.literal(1),
   answer: boundedText(40_000),
@@ -51,6 +60,7 @@ export const behavioralFinalAnswerSnapshotInputSchema = z.object({
     responseTurnId: stableIdSchema,
   }).strict(),
   target: targetSnapshotSchema.optional(),
+  roleBrief: roleBriefSnapshotSchema.optional(),
   behavioralAnalysis: behavioralAttemptAnalysisSchema.optional(),
 }).strict().superRefine((snapshot, context) => {
   if (snapshot.question.questionId !== snapshot.solutionProfile.questionId) {
@@ -67,18 +77,25 @@ export const behavioralFinalAnswerSnapshotInputSchema = z.object({
       message: "Accepted evidence IDs must be unique.",
     });
   }
-  if (snapshot.scope === "universal" && snapshot.target) {
+  if (snapshot.target && snapshot.roleBrief) {
     context.addIssue({
       code: "custom",
-      path: ["target"],
-      message: "Universal answers must not contain Target Profile data.",
+      path: ["roleBrief"],
+      message: "One answer cannot use both a legacy Target Profile and a Loop Role Brief.",
     });
   }
-  if (snapshot.scope === "target_tailored" && !snapshot.target) {
+  if (snapshot.scope === "universal" && (snapshot.target || snapshot.roleBrief)) {
     context.addIssue({
       code: "custom",
-      path: ["target"],
-      message: "Target-tailored answers require an exact Target Profile revision.",
+      path: [snapshot.target ? "target" : "roleBrief"],
+      message: "Universal answers must not contain target-specific context.",
+    });
+  }
+  if (snapshot.scope === "target_tailored" && !snapshot.target && !snapshot.roleBrief) {
+    context.addIssue({
+      code: "custom",
+      path: ["roleBrief"],
+      message: "Target-tailored answers require one exact Loop Role Brief or historical Target Profile revision.",
     });
   }
 });
@@ -194,6 +211,7 @@ export type BehavioralFinalAnswerProjection = {
   evidenceGaps: string[];
   contradictions: string[];
   target: BehavioralFinalAnswerSnapshotInput["target"] | null;
+  roleBrief: BehavioralFinalAnswerSnapshotInput["roleBrief"] | null;
   behavioralAnalysis: BehavioralAttemptAnalysis | null;
   finalizedAt: number | null;
   correctionOfRevision: number | null;
@@ -222,6 +240,7 @@ export function projectBehavioralFinalAnswer(input: {
       evidenceGaps: snapshot.evidenceGaps,
       contradictions: snapshot.contradictions,
       target: snapshot.target ?? null,
+      roleBrief: snapshot.roleBrief ?? null,
       behavioralAnalysis: snapshot.behavioralAnalysis ?? null,
       finalizedAt: current.finalizedAt,
       correctionOfRevision: current.correctionOfRevision,
@@ -242,6 +261,7 @@ export function projectBehavioralFinalAnswer(input: {
     evidenceGaps: [],
     contradictions: [],
     target: null,
+    roleBrief: null,
     behavioralAnalysis: null,
     finalizedAt: null,
     correctionOfRevision: null,
@@ -263,6 +283,8 @@ export function renderBehavioralFinalAnswerMarkdown(projection: BehavioralFinalA
     "",
     metadata,
     ...(projection.story ? [`Story ${projection.story.storyId} · ${projection.story.revision ? `revision ${projection.story.revision}` : "legacy unversioned reference"}`] : []),
+    ...(projection.roleBrief ? [`Role Brief ${projection.roleBrief.label} · revision ${projection.roleBrief.revision}`] : []),
+    ...(projection.target ? [`Legacy Target Profile ${projection.target.label} · revision ${projection.target.revision}`] : []),
     "",
     projection.answer,
     "",
@@ -300,6 +322,8 @@ export function renderBehavioralFinalAnswerHtml(projection: BehavioralFinalAnswe
     "<h2>Final tailored answer</h2>",
     `<p>${escapeHtml(metadata)}</p>`,
     ...(projection.story ? [`<p>Story ${escapeHtml(projection.story.storyId)} · ${projection.story.revision ? `revision ${projection.story.revision}` : "legacy unversioned reference"}</p>`] : []),
+    ...(projection.roleBrief ? [`<p>Role Brief ${escapeHtml(projection.roleBrief.label)} · revision ${projection.roleBrief.revision}</p>`] : []),
+    ...(projection.target ? [`<p>Legacy Target Profile ${escapeHtml(projection.target.label)} · revision ${projection.target.revision}</p>`] : []),
     `<div>${escapeHtml(projection.answer).replaceAll("\n", "<br>")}</div>`,
     "<h3>Evidence gaps</h3>",
     htmlList(projection.evidenceGaps, "None recorded."),

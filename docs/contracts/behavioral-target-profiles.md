@@ -1,105 +1,70 @@
-# Behavioral Target Profiles
+# Legacy Behavioral Target Profiles
 
-Target Profiles are owner-private hiring-context inputs. They tune behavioral
-story selection, probing, review, and final delivery; they are never evidence
-about the candidate and never revise the company-neutral Solution Profile.
+Standalone Target Profiles are a migration-only compatibility domain. New
+hiring context belongs to an Interview Loop and its immutable Role Brief
+revisions. Only the Loop Recorder may create or revise a Role Brief.
 
-## Durable model
+## Frozen durable model
 
-- `targetId` is stable; revisions are append-only and start at 1.
-- A new operation whose target content exactly matches the current revision
-  receives a durable `unchanged` receipt without inventing another revision.
-- The stable target row points to the current active or archived revision.
-- A pasted or publicly fetched JD is untrusted data. Its bounded text is stored only in the private
-  revision payload; MCP readback exposes a SHA-256 fingerprint and
-  display-safe metadata, never the JD text.
-- Archive/reactivate creates another revision. Historical attempts and
-  bindings retain their exact revision.
+- Existing owner-private profiles, revisions, source fingerprints, states, and
+  exact activity/session bindings remain readable.
+- Existing revisions are immutable. No website or MCP path creates, revises,
+  archives, reactivates, binds, clears, or otherwise mutates a standalone
+  Target Profile.
+- Raw job-description text remains private and is never returned by a read,
+  export, log, live invalidation, or publication projection.
+- Historical attempts retain their exact display-safe Target Profile snapshot.
+  They are never relabeled as Role Brief attempts.
 
-## Website management and public sources
+## Migration ownership
 
-- Behavioral Problem Bank owns display-safe create, revise, archive,
-  reactivate, current-list, and exact historical-revision controls. A revision
-  requires a fresh owner paste or a freshly fetched public posting; private JD
-  text is never sent back to the browser after save.
-- Public ingestion accepts only credential-free HTTPS hostnames, revalidates
-  every redirect, bounds response size and time, removes executable markup,
-  and treats all resulting prose as inert source data. Unavailable pages remain
-  visibly unavailable; matching and changed fingerprints are reported before
-  save. A saved public capture older than seven days is labeled stale until the
-  owner refreshes it.
-- Production public imports use only the standard Cloudflare Workers outbound
-  `fetch` capability and no VPC binding. Cloudflare's outbound proxy restricts
-  that capability to public Internet services; textual hostname checks remain
-  defense in depth for local and future runtimes. See the official
-  [Workers security model](https://developers.cloudflare.com/workers/reference/security-model/).
-- Today exposes session targets and activity overrides. The UI shows the exact
-  resolved target revision and whether it is an activity override, inherited
-  from the session, or absent. Every write uses the current binding revision;
-  a stale cross-device write fails closed and rereads authoritative state.
-- Owner-scoped `behavioral_target` live invalidations refresh open Bank and
-  Today target surfaces. The fallback read is bounded and `private, no-store`.
-- Public URLs, raw JD content, and private analysis never enter publication,
-  logs, live-update messages, Git, or attempt exports.
+`query_role_brief_migration_inbox` presents undecided historical profiles to
+the Loop Recorder. With explicit `authorization: loop_recorder`, the recorder
+may create a Loop from the exact current profile revision, attach it to an
+existing matching Loop, or archive it from the migration inbox. Every action
+uses stable operation identity, exact expected revisions, owner isolation, and
+an authoritative readback receipt.
 
-## MCP operations
+Migration creates or appends a Loop-owned Role Brief revision; it does not
+revise the historical profile. Coding, system-design, and behavioral
+specialists may consume the resulting display-safe Role Brief and bind planned
+activity context, but they cannot create a competing profile.
 
-Use `upsert_behavioral_target_profile` only after an explicit owner request to
-create, revise, archive, or reactivate a reusable target. Creation uses
-`expectedRevision: 0`; every later write uses the exact current revision. Reuse
-the same `operationId` only with the byte-equivalent payload after transport
-uncertainty. A changed retry or stale revision fails closed.
+## Historical reads
 
-Use `query_behavioral_target_profiles` to list current active targets, inspect
-one current target, or read one immutable historical revision. The result is
-bounded and display-safe.
+`query_behavioral_target_profiles` remains available only for bounded,
+display-safe current or exact-revision reads needed by migration and historical
+attempt rendering. `resolve_behavioral_target` remains available so an already
+bound historical activity/session can be finalized without falsifying its
+original context.
 
-Use `set_behavioral_target_binding` only for an explicit “rest of this
-session,” “this activity only,” or clear instruction. Supply the exact current
-binding revision, one stable `mutationId`, and
-`authorization: explicit_user_instruction`. A company mention is never
-authorization to create or bind a target. Turn-only overrides remain in the
-conversation and are not persisted. New bindings may reference only the
-Target Profile's current active revision; an existing binding keeps its exact
-historical revision after the profile changes.
-
-Use `resolve_behavioral_target` at approved boundaries. Resolution is exactly:
-
-`activity binding > parent-session binding > none`
-
-A clear is a revisioned tombstone, so activity clear falls back to the session
-and session clear resolves to none. Reads and writes are owner-scoped.
-When an activity is supplied, resolution derives its parent session from the
-authoritative activity record; a caller cannot substitute another session.
-
-`get_behavioral_practice_preflight` composes that resolver with the exact
-question's Solution Profile, accepted evidence, gaps, and bounded accepted
-target-tailored snapshots. Call it at start/resume, new-question,
-post-mutation, reconnect/handoff, and finalization. Every call rereads D1;
-target context never survives compaction as assumed state. Accepted variants
-are immutable final-answer snapshots, with staleness derived from the exact
-Target and Solution Profile revisions.
+New planned activities use Loop and optional Round bindings. Their immutable
+binding stores the exact Loop revision, Role Brief revision, specialty,
+question, and display-safe Role Brief snapshot. Forward-looking preflight
+prefers that activity binding and returns historical Target Profile resolution
+only as a compatibility fallback.
 
 ## Final-answer boundary
 
-A `target_tailored` final answer is accepted only when:
+A new target-tailored Behavioral answer normally carries the exact bound Loop
+ID, Role Brief revision, display label, company, role title, and bounded
+competency emphasis. D1 verifies those values against the immutable
+owner-scoped activity binding in the same finalization transaction.
 
-1. its `targetId` and revision exist for the same owner;
-2. its display label and competency-emphasis values match that revision; and
-3. the activity currently resolves to that exact target revision.
+An older activity with an existing standalone binding may still finalize with
+its exact historical Target Profile ID and revision. Universal attempts carry
+neither context. One snapshot can never contain both a Role Brief and a legacy
+Target Profile.
 
-The stored final-answer snapshot contains only the display-safe target link.
-Raw JD text, private target analysis, owner notes, and source internals never
-enter the attempt snapshot, Markdown/HTML export, publication payload, logs, or
-Git. Universal attempts remain target-free and legacy attempts remain readable.
+Raw JD text, owner notes, source internals, and private analysis never enter an
+attempt snapshot, Markdown/HTML export, publication payload, logs, or Git.
 
 ## Retry and conflict rules
 
-- Exact operation/mutation retry returns its stored receipt without another
-  revision.
+- Exact operation retry returns its stored receipt without another revision.
 - Same identity with changed content is a terminal identity conflict.
 - A stale expected revision is terminal until the caller rereads.
-- Concurrent writers with the same expected revision produce one winner; the
-  loser receives a revision conflict.
-- A target owned by another user is indistinguishable from an unavailable
-  target.
+- A binding or Role Brief change during finalization fails the transactional
+  invariant guard; the specialist must reread preflight before retrying.
+- An identity owned by another user is indistinguishable from an unavailable
+  identity.

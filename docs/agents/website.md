@@ -129,11 +129,12 @@ The website must not imply that browser draft state has already been published t
   preferences locally, and disable motion for `prefers-reduced-motion`.
 - Lead with today's practice and progress, then history and review queues.
 - Favor a focused journal/dashboard over contest theater.
-- Use the shared Interview/Learn/Engineering/Journey shell. Interview owns
-  Today, Loops, Reviews, Past, and Banks. Keep Learn and Engineering visibly
-  unavailable until their separately authorized work begins.
-- Provide Today, Loops, Reviews, Past, Banks, and Journey views without placing
-  every raw log on one page.
+- Use exactly three top-level workspaces: Interview, Learn, and Engineering.
+  Interview owns Today, Loops, Reviews, Past, Banks, and Journey. Keep Learn and
+  Engineering visibly unavailable until their separately authorized work
+  begins; each owns a separate local Statistics surface when implemented.
+- Provide Interview-local Today, Loops, Reviews, Past, Banks, and Journey views
+  without placing every raw log on one page.
 - Loops is an owner-private, responsive company-and-role tracker. Render only
   current explicit stage dates, statuses, outcomes, concise debriefs,
   exact/reconstructed memory labels, display-safe Role Brief revisions,

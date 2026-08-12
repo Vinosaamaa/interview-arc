@@ -2157,7 +2157,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .workspace-nav button small { display: none; }
   .workspace-nav button strong { font-size: .7rem; }
   .topbar { top: 74px; }
-  .mobile-interview-nav { position: fixed; left: 10px; right: 10px; bottom: max(9px, env(safe-area-inset-bottom)); min-height: 58px; padding: 6px; border: 1px solid rgba(222,239,233,.2); border-radius: 16px; background: rgba(12,53,49,.96); box-shadow: 0 15px 45px rgba(10,37,33,.28); backdrop-filter: blur(16px); display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; z-index: 70; }
+  .mobile-interview-nav { position: fixed; left: 10px; right: 10px; bottom: max(9px, env(safe-area-inset-bottom)); min-height: 58px; padding: 6px; border: 1px solid rgba(222,239,233,.2); border-radius: 16px; background: rgba(12,53,49,.96); box-shadow: 0 15px 45px rgba(10,37,33,.28); backdrop-filter: blur(16px); display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; z-index: 70; }
   .mobile-interview-nav button { min-width: 0; border: 0; border-radius: 10px; background: transparent; color: #9db9b1; font-size: .68rem; font-weight: 720; cursor: pointer; }
   .mobile-interview-nav button.active { background: var(--signal); color: #183a31; }
   .page-content { padding-bottom: 94px; }
@@ -2200,9 +2200,16 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 }
 
 @media (max-width: 420px) {
+  .mobile-interview-nav button { font-size: .62rem; letter-spacing: -.015em; }
   .loop-journey-facts > div { grid-template-columns: 1fr; }
   .loop-journey-facts article, .loop-journey-facts article:nth-child(2) { border-right: 0; border-bottom: 1px solid #dce2dd; }
   .loop-journey-facts article:last-child { border-bottom: 0; }
+}
+
+@media (max-width: 360px) {
+  .mobile-interview-nav { min-height: 104px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mobile-interview-nav button { min-height: 44px; line-height: 1.1; white-space: normal; }
+  .page-content { padding-bottom: 140px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

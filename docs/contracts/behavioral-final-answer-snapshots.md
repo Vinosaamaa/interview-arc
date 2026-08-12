@@ -19,8 +19,11 @@ Every new completed behavioral finalization supplies:
 - accepted supporting evidence IDs, evidence gaps, and contradictions;
 - the exact owner-scoped behavioral specialist response turn containing the
   answer;
-- for `target_tailored`, the exact Target Profile ID, revision, display label,
-  and bounded competency emphasis—never a raw JD, source locator, or target
+- for `target_tailored`, exactly one display-safe context: normally the bound
+  Loop ID, Role Brief revision, label, company, role title, and bounded
+  competency emphasis; or, only for an already-bound historical activity, the
+  legacy Target Profile ID, revision, label, and bounded competency emphasis.
+  Neither form contains raw JD text, source internals, owner notes, or private
   analysis.
 - the typed attempt audit defined by `behavioral-attempt-analysis.md`.
 - when a current résumé exists, its exact owner-scoped resume/revision IDs;
@@ -46,10 +49,11 @@ publishes a new artifact revision through the normal workflow.
 
 - Issue #201 owns typed Behavioral Attempt analysis and Story Bank identities.
   `story` remains optional until that domain returns an authoritative identity.
-- Issue #209 owns Target Profiles, immutable target revisions, bindings, and
-  preflight. `target_tailored` finalization must use the exact target returned
-  by the current `finalization` preflight; callers must not invent a target
-  revision or downgrade the answer to universal.
+- Interview Loops own forward-looking Role Brief revisions and planned-activity
+  bindings. `target_tailored` finalization must use the exact Role Brief
+  returned by the current `finalization` preflight. Legacy Target Profile
+  resolution remains only for an already-bound historical activity; callers
+  must not invent either revision or downgrade the answer to universal.
 - Issue #226 owns this snapshot, correction, projection, and reader contract.
   Refinements belong there or in a linked child issue, not by rewriting the
   historical parent descriptions.
@@ -70,4 +74,4 @@ IDs. It never embeds raw résumé content, storage keys, or source locators.
 
 Older behavioral finalizations with only `modelAnswer` remain readable as an
 explicit `legacy_model_answer` fallback. They receive no fabricated snapshot,
-revision, evidence, story, target, or backfill.
+revision, evidence, story, target context, or backfill.

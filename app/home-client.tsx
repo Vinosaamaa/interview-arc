@@ -101,6 +101,14 @@ import type { ActivityResumeContext } from "../db/activity-resume-context";
 import type { InteractionModeClassification } from "../db/interaction-mode-classification";
 
 type View = "today" | "loops" | "journey" | "reviews" | "library" | "banks";
+const INTERVIEW_NAV_ITEMS: ReadonlyArray<readonly [View, string]> = [
+  ["today", "Today"],
+  ["loops", "Loops"],
+  ["reviews", "Reviews"],
+  ["library", "Past"],
+  ["banks", "Banks"],
+  ["journey", "Journey"],
+];
 type ComposerMode = "session" | "activity";
 type JourneyRange = 30 | 90 | 365 | "all";
 type JourneyMetric = "activities" | "time";
@@ -1248,7 +1256,7 @@ function FinalAnswerCard({ finalAnswer }: { finalAnswer: BehavioralFinalAnswerPr
       <div><span>FINAL ANSWER SNAPSHOT</span><small>{snapshotLabel}</small></div>
       {finalAnswer.solutionProfile && <strong>Solution revision {finalAnswer.solutionProfile.revision}</strong>}
     </header>
-    {finalAnswer.target && <div className="final-answer-target"><span>{finalAnswer.target.label}</span><small>{finalAnswer.target.competencyEmphasis.join(" · ")}</small></div>}
+    {(finalAnswer.roleBrief || finalAnswer.target) && <div className="final-answer-target"><span>{finalAnswer.roleBrief?.label ?? finalAnswer.target?.label}</span><small>{(finalAnswer.roleBrief?.competencyEmphasis ?? finalAnswer.target?.competencyEmphasis ?? []).join(" · ")}</small></div>}
     <div className="final-answer-body"><MarkdownBody source={finalAnswer.answer} /></div>
     <div className="final-answer-meta">
       <section><h5>Evidence used</h5>{finalAnswer.acceptedEvidenceIds.length ? <ul>{finalAnswer.acceptedEvidenceIds.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No accepted evidence IDs recorded.</p>}</section>
@@ -1297,7 +1305,7 @@ function PracticeScenariosCard({ projection }: { projection: BehavioralPracticeS
 function BehavioralAttemptAnalysisCard({ projection }: { projection: BehavioralAttemptAnalysisProjection }) {
   const { analysis } = projection;
   return <section className="behavioral-attempt-card" aria-label="Behavioral Attempt analysis">
-    <header><div><span>BEHAVIORAL ATTEMPT · IMMUTABLE AUDIT</span><strong>{analysis.answerFormat} · snapshot {projection.snapshotRevision}</strong></div><p>{projection.question.questionId} · Profile revision {projection.solutionProfile.revision}</p>{projection.story && <p>Story {projection.story.storyId} · {projection.story.revision ? `revision ${projection.story.revision}` : "legacy unversioned reference"}{projection.story.alternativeId ? ` · alternative ${projection.story.alternativeId}` : ""}</p>}{projection.target && <p>Target {projection.target.label} · revision {projection.target.revision}</p>}</header>
+    <header><div><span>BEHAVIORAL ATTEMPT · IMMUTABLE AUDIT</span><strong>{analysis.answerFormat} · snapshot {projection.snapshotRevision}</strong></div><p>{projection.question.questionId} · Profile revision {projection.solutionProfile.revision}</p>{projection.story && <p>Story {projection.story.storyId} · {projection.story.revision ? `revision ${projection.story.revision}` : "legacy unversioned reference"}{projection.story.alternativeId ? ` · alternative ${projection.story.alternativeId}` : ""}</p>}{projection.roleBrief && <p>Role Brief {projection.roleBrief.label} · revision {projection.roleBrief.revision}</p>}{projection.target && <p>Legacy Target Profile {projection.target.label} · revision {projection.target.revision}</p>}</header>
     <div className="behavioral-attempt-competencies" aria-label="Competencies">{analysis.competencies.map((item) => <span key={item}>{item}</span>)}</div>
     <div className="behavioral-claim-audit">{analysis.claimAudit.map((claim, index) => <article className={`claim-${claim.status}`} key={`${claim.claim}-${index}`}><header><strong>{claim.status}</strong><span>{claim.claim}</span></header><dl><div><dt>Supporting evidence</dt><dd>{claim.supportingEvidenceIds.join(" · ") || "None"}</dd></div><div><dt>Contrary evidence</dt><dd>{claim.contraryEvidenceIds.join(" · ") || "None"}</dd></div><div><dt>Missing</dt><dd>{claim.gaps.join(" · ") || "None"}</dd></div><div><dt>Contradictions</dt><dd>{claim.contradictions.join(" · ") || "None"}</dd></div></dl></article>)}</div>
     <div className="behavioral-attempt-dimensions" aria-label="Structured review dimensions">{Object.entries(analysis.reviewDimensions).map(([dimension, value]) => <article className={`dimension-${value.status}`} key={dimension}><span>{dimension.replace(/([A-Z])/g, " $1")}</span><strong>{value.status.replaceAll("_", " ")}</strong>{value.observation && <p>{value.observation}</p>}</article>)}</div>
@@ -6347,21 +6355,19 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       <aside className="sidebar">
         <button className="brand" onClick={() => navigateToPrimaryView("today")}><span className="brand-mark" aria-hidden="true" /><span>Interview Arc</span></button>
         <nav className="workspace-nav" aria-label="Workspaces">
-          <button type="button" className={view !== "journey" ? "active" : ""} aria-current={view !== "journey" ? "page" : undefined} onClick={() => navigateToPrimaryView("today")}><span aria-hidden="true">I</span><strong>Interview</strong></button>
+          <button type="button" className="active" aria-current="page" onClick={() => navigateToPrimaryView("today")}><span aria-hidden="true">I</span><strong>Interview</strong></button>
           <button type="button" disabled title="Learn workspace is coming later"><span aria-hidden="true">L</span><strong>Learn</strong><small>Later</small></button>
           <button type="button" disabled title="Engineering workspace is coming later"><span aria-hidden="true">E</span><strong>Engineering</strong><small>Later</small></button>
-          <button type="button" className={view === "journey" ? "active" : ""} aria-current={view === "journey" ? "page" : undefined} onClick={() => navigateToPrimaryView("journey")}><span aria-hidden="true">J</span><strong>Journey</strong></button>
         </nav>
         <div className="local-nav-label"><span>Interview</span><small>Workspace</small></div>
-        <nav className="primary-nav" aria-label="Interview navigation">{([[
-          "today", "Today"], ["loops", "Loops"], ["reviews", "Reviews"], ["library", "Past"], ["banks", "Banks"]] as [View, string][]).map(([id, label], index) => <button key={id} className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
+        <nav className="primary-nav" aria-label="Interview navigation">{INTERVIEW_NAV_ITEMS.map(([id, label], index) => <button key={id} className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
         <div className="sidebar-status"><span className={[...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "live" : ""} /><div><strong>{[...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "Timer running" : hydrated ? "Draft saved locally" : "Loading draft"}</strong><small>Session countdown + one activity stopwatch</small></div></div>
         <div className="profile"><span>IA</span><div><strong>Interview Arc owner</strong><small>Private preparation record</small></div></div>
       </aside>
 
       <section className="main-column">
         <header className="topbar">
-          <div><span>{readableDate(journal.date)}</span><strong>{view === "loops" ? "Interview · Loops" : view === "journey" ? "Journey" : view === "library" ? "Interview · Past" : view === "banks" ? "Interview · Banks" : view === "reviews" ? "Interview · Reviews" : "Interview · Today"}</strong></div>
+          <div><span>{readableDate(journal.date)}</span><strong>{view === "loops" ? "Interview · Loops" : view === "journey" ? "Interview · Journey" : view === "library" ? "Interview · Past" : view === "banks" ? "Interview · Banks" : view === "reviews" ? "Interview · Reviews" : "Interview · Today"}</strong></div>
           <div>
             <div className={`music-dock ${ambientPlaying ? "active" : ""}`}>
               <button onClick={toggleAmbientSound} aria-pressed={ambientPlaying} title={ambientPlaying ? "Pause music" : "Play music"}><span aria-hidden="true">{ambientPlaying ? "Ⅱ" : "▶"}</span><i><small>{ambientPlaying ? "PLAYING" : "PAUSED"}</small><strong>{trackName}</strong></i></button>
@@ -6379,8 +6385,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         <div className="page-content" id="practice-content">{view === "today" && renderToday()}{view === "loops" && <LoopsWorkspace />}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}</div>
       </section>
 
-      {view !== "journey" && <nav className="mobile-interview-nav" aria-label="Interview navigation">{([[
-        "today", "Today"], ["loops", "Loops"], ["reviews", "Reviews"], ["library", "Past"], ["banks", "Banks"]] as [View, string][]).map(([id, label]) => <button key={id} type="button" className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}>{label}</button>)}</nav>}
+      <nav className="mobile-interview-nav" aria-label="Interview navigation">{INTERVIEW_NAV_ITEMS.map(([id, label]) => <button key={id} type="button" className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}>{label}</button>)}</nav>
 
       {composer.open && <div className={`modal-backdrop ${composerClosing ? "closing" : ""}`} role="presentation" onMouseDown={closeComposer} onAnimationEnd={finishComposerClose}>
         <section className={`composer ${composer.mode === "activity" && !composer.editingId ? "activity-composer-dialog" : ""} ${composerClosing ? "closing" : ""}`} role="dialog" aria-modal="true" aria-labelledby="composer-title" onMouseDown={(event) => event.stopPropagation()}>
