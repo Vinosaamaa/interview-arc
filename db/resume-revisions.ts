@@ -1441,6 +1441,57 @@ export async function getResumeLibrary(ownerId: string) {
   };
 }
 
+interface ResumeRevisionReferenceRow {
+  resumeId: string;
+  sourceLabel: string | null;
+  revisionId: string;
+  revisionKnown: number;
+}
+
+export async function getResumeRevisionReferences(
+  ownerId: string,
+  references: Array<{ resumeId: string; revisionId: string }>,
+) {
+  const unique = [...new Map(references.map((reference) => [
+    `${reference.resumeId}\u0000${reference.revisionId}`,
+    reference,
+  ])).values()];
+  if (unique.length === 0) return new Map<string, { label: string | null; revisionKnown: boolean }>();
+  if (unique.length > 100) throw new Error("Resume revision reference read exceeds its bound.");
+
+  const result = await env.DB.prepare(`
+    WITH requested AS (
+      SELECT
+        json_extract(value, '$.resumeId') AS resume_id,
+        json_extract(value, '$.revisionId') AS revision_id
+      FROM json_each(?2)
+    )
+    SELECT
+      requested.resume_id AS resumeId,
+      source.source_label AS sourceLabel,
+      requested.revision_id AS revisionId,
+      CASE WHEN revision.revision_id IS NULL THEN 0 ELSE 1 END AS revisionKnown
+    FROM requested
+    LEFT JOIN resume_sources source
+      ON source.owner_id = ?1
+     AND source.resume_id = requested.resume_id
+    LEFT JOIN resume_revisions revision
+      ON revision.owner_id = ?1
+     AND revision.resume_id = requested.resume_id
+     AND revision.revision_id = requested.revision_id
+  `).bind(ownerId, JSON.stringify(unique)).all<ResumeRevisionReferenceRow>();
+
+  return new Map(result.results.map((row) => [
+    `${row.resumeId}\u0000${row.revisionId}`,
+    {
+      label: row.sourceLabel && isDisplaySafeResumeSourceLabel(row.sourceLabel)
+        ? row.sourceLabel
+        : row.sourceLabel ? "Private resume" : null,
+      revisionKnown: row.revisionKnown === 1,
+    },
+  ]));
+}
+
 function revisionDownloadPath(resumeId: string, revisionId: string, format: ResumeFileFormat) {
   return `/api/resume-library/${resumeId}/${revisionId}/${format}`;
 }

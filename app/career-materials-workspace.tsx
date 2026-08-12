@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  careerMaterialsCoverLetterResponseSchema,
+  type CareerMaterialsCoverLetterArtifact,
+  type CareerMaterialsCoverLetterResponse,
+} from "./cover-letter-contract";
 import { resumeLibrarySchema, type ResumeLibrary } from "./resume-library-contract";
 import {
   recentResumeImportsSchema,
@@ -17,7 +22,7 @@ import { resumeFileDeletionReceiptSchema } from "../db/resume-file-deletion-cont
 
 type Selection = { resumeId: string; revisionId: string };
 
-function readableDate(value: number, includeTime = false) {
+function readableDate(value: number | string, includeTime = false) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
@@ -25,6 +30,14 @@ function readableDate(value: number, includeTime = false) {
     ...(includeTime ? { hour: "numeric", minute: "2-digit", timeZoneName: "short" } : {}),
     timeZone: "America/Los_Angeles",
   }).format(new Date(value));
+}
+
+function coverLetterStateLabel(state: CareerMaterialsCoverLetterArtifact["state"]) {
+  if (state === "ready") return "Ready";
+  if (state === "superseded") return "Superseded";
+  if (state === "pending") return "Upload pending";
+  if (state === "deleting") return "Removal pending";
+  return "Deleted";
 }
 
 function readableSize(value: number) {
@@ -254,6 +267,100 @@ function RevisionDetail({
   </article>;
 }
 
+function CoverLetterHistory() {
+  const [projection, setProjection] = useState<CareerMaterialsCoverLetterResponse | null>();
+  const [requestKey, setRequestKey] = useState(0);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [paginationError, setPaginationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch("/api/career-materials/cover-letters", { cache: "no-store", signal: controller.signal })
+      .then(responseJson)
+      .then((value) => careerMaterialsCoverLetterResponseSchema.parse(value))
+      .then(setProjection)
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setProjection(null);
+      });
+    return () => controller.abort();
+  }, [requestKey]);
+
+  async function loadOlder() {
+    if (projection?.status !== "available" || !projection.page.nextCursor) return;
+    setLoadingOlder(true);
+    setPaginationError(null);
+    try {
+      const parameters = new URLSearchParams({ cursor: projection.page.nextCursor });
+      const next = careerMaterialsCoverLetterResponseSchema.parse(await responseJson(
+        await fetch(`/api/career-materials/cover-letters?${parameters}`, { cache: "no-store" }),
+      ));
+      if (next.status !== "available") {
+        setPaginationError(next.message);
+        return;
+      }
+      setProjection((current) => {
+        if (current?.status !== "available") return next;
+        const existing = new Set(current.artifacts.map((artifact) => artifact.id));
+        return {
+          ...next,
+          stale: current.stale || next.stale,
+          artifacts: [...current.artifacts, ...next.artifacts.filter((artifact) => !existing.has(artifact.id))],
+        };
+      });
+    } catch {
+      setPaginationError("Older cover letters could not be loaded. The records already shown remain authoritative.");
+    } finally {
+      setLoadingOlder(false);
+    }
+  }
+
+  if (projection === undefined) return <section className="materials-cover-letter-state loading" aria-labelledby="materials-cover-letters-title" role="status">
+    <span aria-hidden="true" />
+    <div><h2 id="materials-cover-letters-title">Cover letters</h2><p>Reading the authenticated Job Journey artifact history…</p></div>
+  </section>;
+
+  if (projection === null) return <section className="materials-cover-letter-state error" aria-labelledby="materials-cover-letters-title" role="alert">
+    <div><h2 id="materials-cover-letters-title">Cover-letter history could not load.</h2><p>No empty history was inferred. Your résumé library above remains available.</p></div>
+    <button type="button" onClick={() => { setPaginationError(null); setProjection(undefined); setRequestKey((value) => value + 1); }}>Retry history</button>
+  </section>;
+
+  if (projection.status === "unavailable") return <section className="materials-cover-letter-state unavailable" aria-labelledby="materials-cover-letters-title" role="status">
+    <div><h2 id="materials-cover-letters-title">Cover letters</h2><p>{projection.message}</p></div>
+    <button type="button" onClick={() => { setPaginationError(null); setProjection(undefined); setRequestKey((value) => value + 1); }}>Retry provider</button>
+  </section>;
+
+  return <section className="materials-cover-letters" aria-labelledby="materials-cover-letters-title">
+    <header>
+      <div><span className="materials-kicker">Job Journey artifacts</span><h2 id="materials-cover-letters-title">Cover letters</h2><p>Read-only final PDFs with exact résumé and lineage provenance. Creation stays with the specialist.</p></div>
+      <div className={`materials-provider-state ${projection.stale ? "stale" : "connected"}`}><i aria-hidden="true" />{projection.stale ? "Cached · provider unavailable" : "Authenticated provider read"}</div>
+    </header>
+    {projection.artifacts.length === 0 ? <div className="materials-cover-letter-empty">
+      <strong>No final cover letter has been published.</strong>
+      <span>Ask the Resume &amp; Cover Letter specialist to draft from a complete job description and publish the verified one-page PDF.</span>
+    </div> : <ol className="materials-cover-letter-list">{projection.artifacts.map((artifact) => <li key={artifact.id}>
+      <article>
+        <header>
+          <div><span className={`materials-cover-letter-state-label ${artifact.state}`}><i aria-hidden="true" />{coverLetterStateLabel(artifact.state)}</span><h3>{artifact.company}</h3><p>{artifact.role}</p></div>
+          <time dateTime={artifact.createdAt}>{readableDate(artifact.createdAt, true)}</time>
+        </header>
+        <dl>
+          <div><dt>Résumé revision</dt><dd>{artifact.resumeLabel ?? "Private résumé"} · <code>{artifact.resumeRevisionId}</code>{!artifact.resumeRevisionKnown && <small>Revision is outside this bounded library read</small>}</dd></div>
+          <div><dt>Lineage</dt><dd>{artifact.parentRevisionId ? <>Follows <code>{artifact.parentRevisionId}</code></> : "Initial artifact"}</dd></div>
+          <div><dt>Binding</dt><dd>{artifact.jobId ? `Application-linked · link r${artifact.linkRevision}` : "Standalone cover letter"}</dd></div>
+          <div><dt>PDF integrity</dt><dd>{readableSize(artifact.pdfSize)} · <code title={artifact.pdfSha256}>{artifact.pdfSha256.slice(0, 12)}…</code></dd></div>
+        </dl>
+        <footer>
+          <code title={artifact.id}>{artifact.id}</code>
+          <div>{artifact.sourceUrl && <a href={artifact.sourceUrl} target="_blank" rel="noreferrer">Original posting</a>}{artifact.downloadUrl && <a className="primary" href={artifact.downloadUrl} target="_blank" rel="noreferrer" aria-label={`Open ${artifact.company} ${artifact.role} private cover-letter PDF in Job Journey`}>Open private PDF in Job Journey</a>}</div>
+        </footer>
+      </article>
+    </li>)}</ol>}
+    {paginationError && <p className="materials-cover-letter-page-error" role="alert">{paginationError}</p>}
+    {projection.page.hasMore && projection.page.nextCursor && <button className="materials-cover-letter-more" type="button" disabled={loadingOlder} onClick={() => void loadOlder()}>{loadingOlder ? "Loading older artifacts…" : "Load older artifacts"}</button>}
+  </section>;
+}
+
 export default function CareerMaterialsWorkspace() {
   const [library, setLibrary] = useState<ResumeLibrary | null>();
   const [imports, setImports] = useState<RecentResumeImports | null>();
@@ -347,6 +454,8 @@ export default function CareerMaterialsWorkspace() {
       </aside>
       <RevisionDetail key={`${currentSelection.resumeId}:${currentSelection.revisionId}`} selection={currentSelection} onLibraryChanged={() => setRequestKey((value) => value + 1)} />
     </div>}
+
+    <CoverLetterHistory />
 
     <section className="materials-specialist-handoff" aria-labelledby="materials-specialist-title">
       <div><h2 id="materials-specialist-title">Create with the specialist; verify here.</h2><p>The Resume &amp; Cover Letter specialist imports résumés and drafts evidence-grounded cover letters from a complete job description. A Loop is optional. Final cover-letter PDFs belong to Job Journey; Interview Arc shows only approved authenticated provenance once that cross-project link exists.</p></div>

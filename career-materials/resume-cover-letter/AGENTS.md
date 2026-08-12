@@ -101,11 +101,34 @@ hash/provenance, and exact resume-revision references through the approved
 cross-repository contract. Never store a final cover-letter PDF in Interview
 Arc, attach it to practice, or create a Loop merely to generate it.
 
+After the installed `cover-letter` skill passes its content score and the final
+one-page PDF passes visual QA, prepare one ignored private manifest under
+`private-sources/` using `docs/contracts/cover-letter-publication.md`. Run
+`pnpm cover-letter:publish -- <ignored-private-manifest.json>` once. The
+controller rereads the exact resume revision and every declared evidence claim,
+derives stable artifact/operation identities when they are omitted, hashes the
+complete JD and PDF, and publishes directly to Job Journey with no MCP/base64
+file transfer. One command owns its reserve, upload, integrity check, and
+authoritative operation readback; do not ask the owner to approve each internal
+step.
+
+Only `ready` is a published cover letter. A pending or uncertain receipt must
+reuse the same ignored manifest and operation identity. Changed PDF, JD, resume
+revision, company/role, source, parent, or application link under the same
+operation identity is a conflict. The controller stores only a bounded ignored
+receipt containing hashes, stable identities, evidence IDs/gap fingerprints,
+and provider state. It never stores the PDF in Interview Arc D1/R2/Git or prints
+the JD, local path, evidence text, or service credential. A local PDF is removed
+only when that exact manifest explicitly sets `disposePdfAfterSuccess: true`.
+
 ## Reconnect and truthfulness
 
-After reconnect, reread `get_resume_library` and any relevant import receipt;
-never reconstruct current revision, file durability, or evidence status from
-conversation memory. If a required tool is absent, name it exactly and require
+After reconnect, reread `get_resume_library`, any relevant import receipt, and
+the Career Materials cover-letter status projection; never rely on the ignored
+local receipt alone for Job Journey readiness. Rerun a cover-letter publish only
+with its exact original manifest and operation identity. Never reconstruct
+current revision, file durability, or evidence status from conversation memory.
+If a required tool is absent, name it exactly and require
 an MCP reconnect after the released catalog/allowlist is synchronized. Do not
 substitute a similarly named practice or Loop mutation.
 

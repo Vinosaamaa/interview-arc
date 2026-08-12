@@ -2165,6 +2165,55 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .materials-library-empty li > span { grid-row: 1 / 3; width: 31px; height: 31px; border: 1px solid #aebfb5; border-radius: 50%; display: grid; place-items: center; color: #356358; font-family: var(--font-geist-mono); font-size: .7rem; }
 .materials-library-empty li strong { font-size: .8rem; }
 .materials-library-empty li small { color: #707c74; font-size: .69rem; line-height: 1.4; }
+.materials-cover-letter-state { min-height: 116px; padding: 22px 24px; border: 1px solid #bdc8c0; border-radius: 16px; background: #fff; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.materials-cover-letter-state.loading { justify-content: flex-start; }
+.materials-cover-letter-state.loading > span { width: 25px; height: 25px; flex: 0 0 auto; border: 3px solid #cbd5cd; border-top-color: #205e52; border-radius: 50%; animation: materialsSpin .8s linear infinite; }
+.materials-cover-letter-state.error { border-color: #d7b9b2; background: #fff9f7; }
+.materials-cover-letter-state.unavailable { border-color: #d8c99e; background: #fffbed; }
+.materials-cover-letter-state h2 { margin: 0; font-size: 1.05rem; }
+.materials-cover-letter-state p { max-width: 78ch; margin: 5px 0 0; color: #6c7971; font-size: .72rem; line-height: 1.5; }
+.materials-cover-letter-state button, .materials-cover-letter-more { min-height: 42px; padding: 0 14px; border: 1px solid #315d53; border-radius: 9px; background: #fff; color: #244f45; font-size: .69rem; font-weight: 770; cursor: pointer; }
+.materials-cover-letter-state button:hover, .materials-cover-letter-state button:focus-visible, .materials-cover-letter-more:hover, .materials-cover-letter-more:focus-visible { border-color: #174b41; background: #f2f8f3; outline: 3px solid rgba(31,92,80,.14); outline-offset: 1px; }
+.materials-cover-letters { border: 1px solid #b9c5bd; border-radius: 17px; background: #fff; overflow: hidden; }
+.materials-cover-letters > header { min-height: 116px; padding: 22px clamp(22px, 4vw, 38px); border-bottom: 1px solid #dce3dd; display: flex; align-items: center; justify-content: space-between; gap: 28px; }
+.materials-cover-letters > header h2 { margin: 3px 0 0; font-family: var(--font-editorial); font-size: clamp(1.65rem, 3vw, 2.65rem); font-weight: 520; letter-spacing: -.025em; }
+.materials-cover-letters > header p { max-width: 73ch; margin: 7px 0 0; color: #68766e; font-size: .72rem; line-height: 1.5; }
+.materials-kicker { color: #61736a; font-size: .61rem; font-weight: 820; letter-spacing: .12em; text-transform: uppercase; }
+.materials-provider-state { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px; color: #64736b; font-size: .65rem; font-weight: 730; }
+.materials-provider-state i { width: 8px; height: 8px; border-radius: 50%; background: #78971d; box-shadow: 0 0 0 4px rgba(120,151,29,.12); }
+.materials-provider-state.stale i { background: #b48126; box-shadow: 0 0 0 4px rgba(180,129,38,.13); }
+.materials-cover-letter-empty { min-height: 154px; padding: 34px clamp(22px, 4vw, 38px); display: grid; place-items: center; align-content: center; gap: 6px; text-align: center; }
+.materials-cover-letter-empty strong { font-size: .87rem; }
+.materials-cover-letter-empty span { max-width: 680px; color: #6d7971; font-size: .72rem; line-height: 1.5; }
+.materials-cover-letter-list { margin: 0; padding: 0; list-style: none; }
+.materials-cover-letter-list > li + li { border-top: 1px solid #dce3dd; }
+.materials-cover-letter-list article { min-width: 0; }
+.materials-cover-letter-list article > header { min-height: 105px; padding: 19px clamp(22px, 4vw, 38px); display: flex; align-items: start; justify-content: space-between; gap: 24px; }
+.materials-cover-letter-list h3 { margin: 8px 0 0; color: #1e3d35; font-size: 1.03rem; letter-spacing: -.01em; }
+.materials-cover-letter-list header p { margin: 3px 0 0; color: #617168; font-size: .74rem; }
+.materials-cover-letter-list time { flex: 0 0 auto; color: #748078; font-size: .65rem; }
+.materials-cover-letter-state-label { display: inline-flex; align-items: center; gap: 7px; color: #53665c; font-size: .61rem; font-weight: 810; letter-spacing: .07em; text-transform: uppercase; }
+.materials-cover-letter-state-label i { width: 7px; height: 7px; border-radius: 50%; background: #83948a; }
+.materials-cover-letter-state-label.ready i { background: #739119; }
+.materials-cover-letter-state-label.pending i, .materials-cover-letter-state-label.deleting i { background: #b48126; }
+.materials-cover-letter-state-label.deleted i { background: #95574d; }
+.materials-cover-letter-list dl { margin: 0; border-top: 1px solid #e2e7e3; border-bottom: 1px solid #e2e7e3; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.materials-cover-letter-list dl > div { min-width: 0; min-height: 91px; padding: 15px 18px; border-right: 1px solid #e2e7e3; display: grid; align-content: center; gap: 6px; }
+.materials-cover-letter-list dl > div:last-child { border-right: 0; }
+.materials-cover-letter-list dt { color: #76837b; font-size: .59rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.materials-cover-letter-list dd { min-width: 0; margin: 0; color: #3e5148; font-size: .69rem; line-height: 1.45; overflow-wrap: anywhere; }
+.materials-cover-letter-list dd code { font-size: .62rem; }
+.materials-cover-letter-list dd small { display: block; margin-top: 3px; color: #8b6d2e; font-size: .59rem; }
+.materials-cover-letter-list article > footer { min-height: 65px; padding: 11px clamp(22px, 4vw, 38px); background: #f8faf7; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.materials-cover-letter-list footer > code { min-width: 0; overflow: hidden; color: #718078; font-size: .61rem; text-overflow: ellipsis; white-space: nowrap; }
+.materials-cover-letter-list footer > div { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
+.materials-cover-letter-list footer a { min-height: 39px; padding: 0 12px; border: 1px solid #aebcb3; border-radius: 8px; display: inline-flex; align-items: center; color: #315f54; font-size: .65rem; font-weight: 760; text-decoration: none; }
+.materials-cover-letter-list footer a:hover, .materials-cover-letter-list footer a:focus-visible { border-color: #315f54; outline: 3px solid rgba(31,92,80,.14); outline-offset: 1px; }
+.materials-cover-letter-list footer a.primary { border-color: #194e44; background: #194e44; color: #fff; }
+.materials-cover-letter-list footer a.primary:hover, .materials-cover-letter-list footer a.primary:focus-visible { background: #0f4038; }
+.materials-cover-letter-page-error { margin: 0; padding: 12px 22px; border-top: 1px solid #e3cabf; background: #fff9f7; color: #82493f; font-size: .67rem; }
+.materials-cover-letter-more { margin: 14px clamp(22px, 4vw, 38px) 18px; }
+.materials-cover-letter-more:disabled { cursor: wait; opacity: .58; }
 .materials-specialist-handoff { min-height: 185px; padding: clamp(25px, 4vw, 42px); border-radius: 17px; background: #0f403a; color: #edf7f1; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(280px, .7fr); align-items: center; gap: 44px; }
 .materials-specialist-handoff h2 { margin: 0; color: #fff; font-size: clamp(1.55rem, 3vw, 2.8rem); letter-spacing: -.03em; }
 .materials-specialist-handoff p { max-width: 75ch; margin: 12px 0 0; color: #b8d0c8; font-size: .77rem; line-height: 1.6; }
@@ -2495,6 +2544,9 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .materials-provenance { grid-template-columns: 1fr 1fr; }
   .materials-provenance > div:nth-child(2) { border-right: 0; }
   .materials-provenance > div:nth-child(-n + 2) { border-bottom: 1px solid #e0e6e1; }
+  .materials-cover-letter-list dl { grid-template-columns: 1fr 1fr; }
+  .materials-cover-letter-list dl > div:nth-child(2) { border-right: 0; }
+  .materials-cover-letter-list dl > div:nth-child(-n + 2) { border-bottom: 1px solid #e2e7e3; }
 }
 
 @media (max-width: 680px) {
@@ -2519,6 +2571,14 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .materials-bullets li small { white-space: normal; }
   .materials-review-impact li { grid-template-columns: 1fr auto; }
   .materials-review-impact li small { grid-column: 1 / -1; }
+  .materials-cover-letter-state, .materials-cover-letters > header { align-items: flex-start; flex-direction: column; }
+  .materials-cover-letter-list article > header { align-items: flex-start; flex-direction: column; }
+  .materials-cover-letter-list dl { grid-template-columns: 1fr; }
+  .materials-cover-letter-list dl > div { min-height: 76px; border-right: 0; border-bottom: 1px solid #e2e7e3; }
+  .materials-cover-letter-list dl > div:last-child { border-bottom: 0; }
+  .materials-cover-letter-list article > footer { align-items: stretch; flex-direction: column; }
+  .materials-cover-letter-list footer > div { align-items: stretch; flex-direction: column; }
+  .materials-cover-letter-list footer a { justify-content: center; }
   .materials-library-empty, .materials-specialist-handoff { grid-template-columns: 1fr; }
   .loops-command-bar { padding: 13px; display: grid; grid-template-columns: 1fr auto; }
   .loops-command-bar label:first-child { min-width: 0; grid-column: 1 / -1; grid-template-columns: 1fr; gap: 6px; }
