@@ -42,6 +42,12 @@ export type PastReaderState = {
   problemId?: string;
 };
 
+export type ReviewReaderState = {
+  attemptId: string;
+  specialty?: ReaderSpecialty;
+  problemId?: string;
+};
+
 export type LoopWorkspaceState = {
   loopId: string;
   stageId: string;
@@ -56,7 +62,7 @@ export type BankReaderState = {
 export type WorkspaceRouteView = "today" | "loops" | "journey" | "reviews" | "past" | "banks" | "career-materials";
 
 export type ReaderClosePlan = {
-  view: "journey" | "past" | "banks";
+  view: "journey" | "reviews" | "past" | "banks";
   href: string;
 };
 
@@ -66,6 +72,7 @@ const READER_SPECIALTIES = ["leetcode", "system_design", "behavioral"] as const;
 
 function clearReaderQuery(url: URL) {
   READER_QUERY_KEYS.forEach((key) => url.searchParams.delete(key));
+  url.hash = "";
 }
 
 function readReaderProblemIdentity(url: URL): { specialty?: ReaderSpecialty; problemId?: string } | null {
@@ -140,6 +147,7 @@ export function averageEffortBreakdown(
 
 export function journeyReaderHref(currentHref: string, state: JourneyReaderState) {
   const url = new URL(currentHref);
+  url.hash = "";
   url.searchParams.delete("specialty");
   url.searchParams.delete("problem");
   url.searchParams.set("view", "journey");
@@ -191,22 +199,46 @@ export function journeyHrefWithoutReader(currentHref: string) {
 
 export function pastReaderHref(currentHref: string, attemptId: string) {
   const url = new URL(currentHref);
+  url.hash = "";
   url.searchParams.set("view", "past");
   url.searchParams.set("attempt", attemptId);
   READER_QUERY_KEYS.filter((key) => key !== "attempt").forEach((key) => url.searchParams.delete(key));
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
-export function readPastReaderState(currentHref: string): PastReaderState | null {
+export function reviewReaderHref(currentHref: string, attemptId: string) {
+  const url = new URL(workspaceViewHref(currentHref, "reviews"), new URL(currentHref).origin);
+  url.searchParams.set("attempt", attemptId);
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+function readAttemptReaderState(currentHref: string, view: "reviews" | "past"): PastReaderState | null {
   const url = new URL(currentHref);
-  if (url.searchParams.get("view") !== "past") return null;
+  if (url.searchParams.get("view") !== view) return null;
   const attemptId = url.searchParams.get("attempt")?.trim() ?? "";
   const problemIdentity = readReaderProblemIdentity(url);
   if (!attemptId || !problemIdentity) return null;
-  return {
-    attemptId,
-    ...problemIdentity,
-  };
+  return { attemptId, ...problemIdentity };
+}
+
+export function readReviewReaderState(currentHref: string): ReviewReaderState | null {
+  return readAttemptReaderState(currentHref, "reviews");
+}
+
+export function reviewSolutionReaderHref(
+  currentHref: string,
+  attemptId: string,
+  specialty: NonNullable<ReviewReaderState["specialty"]>,
+  problemId: string,
+) {
+  const url = new URL(reviewReaderHref(currentHref, attemptId), new URL(currentHref).origin);
+  url.searchParams.set("specialty", specialty);
+  url.searchParams.set("problem", problemId);
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+export function readPastReaderState(currentHref: string): PastReaderState | null {
+  return readAttemptReaderState(currentHref, "past");
 }
 
 export function pastSolutionReaderHref(
@@ -288,6 +320,15 @@ export function readerClosePlan(currentHref: string): ReaderClosePlan | null {
       };
     }
     return { view: "journey", href: journeyHrefWithoutReader(currentHref) };
+  }
+  const reviewReader = readReviewReaderState(currentHref);
+  if (reviewReader) {
+    return {
+      view: "reviews",
+      href: reviewReader.specialty && reviewReader.problemId
+        ? reviewReaderHref(currentHref, reviewReader.attemptId)
+        : workspaceViewHref(currentHref, "reviews"),
+    };
   }
   const pastReader = readPastReaderState(currentHref);
   if (pastReader) {

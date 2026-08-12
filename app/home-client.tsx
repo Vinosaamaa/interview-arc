@@ -58,12 +58,15 @@ import {
   loopWorkspaceHref,
   pastReaderHref,
   pastSolutionReaderHref,
+  reviewReaderHref,
+  reviewSolutionReaderHref,
   readerDepthAfterNestedClose,
   readerClosePlan,
   readBankReaderState,
   readJourneyReaderState,
   readLoopWorkspaceState,
   readPastReaderState,
+  readReviewReaderState,
   readWorkspaceRouteView,
   uniqueJourneyEntries,
   workspaceViewHref,
@@ -1478,6 +1481,14 @@ function revealReaderOutlineTarget(link: HTMLAnchorElement) {
     ? target
     : target?.closest<HTMLDetailsElement>("details.reader-group");
   if (group && !group.open) group.open = true;
+  if (!target) return;
+  const nextUrl = new URL(window.location.href);
+  nextUrl.hash = href;
+  window.history.replaceState(window.history.state, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+  window.requestAnimationFrame(() => target.scrollIntoView({
+    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    block: "start",
+  }));
 }
 
 function ReaderOutline({ children }: { children: ReactNode }) {
@@ -1499,9 +1510,65 @@ function ReaderOutline({ children }: { children: ReactNode }) {
   }, []);
   return <details className="reader-outline" ref={outlineRef} onClick={(event) => {
     const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href^='#']") : null;
-    if (link) revealReaderOutlineTarget(link);
+    if (link) {
+      event.preventDefault();
+      revealReaderOutlineTarget(link);
+    }
     if (link && outlineRef.current) outlineRef.current.open = false;
   }}><summary aria-label="Open contents" title="Contents"><Icon name="outline" /></summary><nav>{children}</nav></details>;
+}
+
+function ModalReaderPane({ className, label, focusKey, restoreFocusRef, children }: { className: string; label: string; focusKey: string; restoreFocusRef?: { current: HTMLElement | null }; children: ReactNode }) {
+  const paneRef = useRef<HTMLElement>(null);
+  const fallbackOpenerRef = useRef<HTMLElement | null>(typeof document !== "undefined" && document.activeElement instanceof HTMLElement
+    ? document.activeElement
+    : null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const pane = paneRef.current;
+    if (!pane) return;
+    openerRef.current ??= restoreFocusRef?.current ?? fallbackOpenerRef.current;
+    const opener = openerRef.current;
+    const background = [...document.querySelectorAll<HTMLElement>(".sidebar, .topbar")];
+    const previousInert = background.map((element) => element.inert);
+    background.forEach((element) => { element.inert = true; });
+    const focusable = () => [...pane.querySelectorAll<HTMLElement>("button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex]:not([tabindex='-1'])")]
+      .filter((element) => element.getClientRects().length > 0);
+    const trapTab = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const targets = focusable();
+      if (!targets.length) {
+        event.preventDefault();
+        pane.focus({ preventScroll: true });
+        return;
+      }
+      const first = targets[0];
+      const last = targets[targets.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    pane.addEventListener("keydown", trapTab);
+    return () => {
+      pane.removeEventListener("keydown", trapTab);
+      background.forEach((element, index) => { element.inert = previousInert[index]; });
+      window.requestAnimationFrame(() => {
+        if (opener?.isConnected) opener.focus({ preventScroll: true });
+      });
+    };
+  }, [restoreFocusRef]);
+  useLayoutEffect(() => {
+    const pane = paneRef.current;
+    if (!pane) return;
+    const close = pane.querySelector<HTMLElement>(".reader-close");
+    const firstFocusable = pane.querySelector<HTMLElement>("button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex]:not([tabindex='-1'])");
+    (close ?? firstFocusable ?? pane).focus({ preventScroll: true });
+  }, [focusKey]);
+  return <aside className={className} ref={paneRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={label}>{children}</aside>;
 }
 
 function ReaderGroupSections({ sections, idPrefix, coding }: { sections: ReaderSection[]; idPrefix: string; coding: boolean }) {
@@ -1617,9 +1684,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [bankNestedEntry, setBankNestedEntry] = useState<LogEntry | null>(null);
   const [journeyNestedEntry, setJourneyNestedEntry] = useState<LogEntry | null>(null);
   const [journeyNestedProblem, setJourneyNestedProblem] = useState<{ type: ActivityType; question: QuestionBankItem } | null>(null);
+  const [reviewNestedEntry, setReviewNestedEntry] = useState<LogEntry | null>(null);
+  const [reviewNestedProblem, setReviewNestedProblem] = useState<{ type: ActivityType; question: QuestionBankItem } | null>(null);
   const nestedReaderFocus = (view === "library" && Boolean(libraryNestedProblem))
     || (view === "banks" && Boolean(bankNestedEntry))
-    || (view === "journey" && Boolean(journeyNestedEntry || journeyNestedProblem));
+    || (view === "journey" && Boolean(journeyNestedEntry || journeyNestedProblem))
+    || (view === "reviews" && Boolean(reviewNestedEntry || reviewNestedProblem));
   const [masterPaneState, setMasterPaneState] = useState<MasterPaneState>({ library: false, banks: false });
   const activeListSurface: ListSurface | null = view === "library" || view === "banks" ? view : null;
   const masterPaneOpen = activeListSurface ? masterPaneState[activeListSurface] : false;
@@ -1670,9 +1740,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [journeyTopic, setJourneyTopic] = useState("");
   const [journeyReaderOrderIds, setJourneyReaderOrderIds] = useState<string[]>([]);
   const [pastReaderOrderIds, setPastReaderOrderIds] = useState<string[]>([]);
+  const [reviewReaderOrderIds, setReviewReaderOrderIds] = useState<string[]>([]);
   const [readerNotFound, setReaderNotFound] = useState("");
   const [chartTooltip, setChartTooltip] = useState<ChartTooltipModel | null>(null);
   const workspaceUrlHydratedRef = useRef(false);
+  const restoreWorkspaceLocationRef = useRef<() => void>(() => {});
+  const reviewReaderOpenerRef = useRef<HTMLElement | null>(null);
   const [careerWork, setCareerWork] = useState<CareerWorkPayload | null>(null);
   const [careerLoading, setCareerLoading] = useState(false);
   const [careerLoadingMore, setCareerLoadingMore] = useState(false);
@@ -1891,6 +1964,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         setViewMemoryReady(true);
         return;
       }
+      if (readReviewReaderState(window.location.href)) {
+        setView("reviews");
+        setViewMemoryReady(true);
+        return;
+      }
       if (readPastReaderState(window.location.href)) {
         setView("library");
         setViewMemoryReady(true);
@@ -1988,6 +2066,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     pastReaderOpen: Boolean(selectedEntry),
     bankReaderOpen: Boolean(selectedProblem),
     journeyReaderOpen: Boolean(journeyNestedEntry || journeyNestedProblem),
+    reviewReaderOpen: Boolean(reviewNestedEntry || reviewNestedProblem),
   });
 
   useLayoutEffect(() => {
@@ -2016,7 +2095,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }, [closeComposer, composer.open, integrationOpen]);
 
   useEffect(() => {
-    if (!selectedEntry && !selectedProblem && !journeyNestedEntry && !journeyNestedProblem) return;
+    if (!selectedEntry && !selectedProblem && !journeyNestedEntry && !journeyNestedProblem && !reviewNestedEntry && !reviewNestedProblem) return;
     const closeReader = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (!nestedReaderFocus && masterPaneOpen && window.matchMedia("(max-width: 1976px)").matches) {
@@ -2027,7 +2106,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     };
     window.addEventListener("keydown", closeReader);
     return () => window.removeEventListener("keydown", closeReader);
-  }, [bankNestedEntry, journeyNestedEntry, journeyNestedProblem, libraryNestedProblem, masterPaneOpen, nestedReaderFocus, selectedEntry, selectedProblem, setMasterPaneOpen]);
+  }, [bankNestedEntry, journeyNestedEntry, journeyNestedProblem, libraryNestedProblem, masterPaneOpen, nestedReaderFocus, reviewNestedEntry, reviewNestedProblem, selectedEntry, selectedProblem, setMasterPaneOpen]);
 
   useEffect(() => {
     if (!masterPaneOpen) return;
@@ -3116,6 +3195,32 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     openJournalEntry(entry);
   }
 
+  function openReviewEntry(entry: LibraryEntry, orderedEntries: LogEntry[]) {
+    setChartTooltip(null);
+    setReviewReaderOrderIds([...new Set(orderedEntries.map((candidate) => candidate.id))]);
+    setReaderNotFound("");
+    const currentReviewReader = readReviewReaderState(window.location.href);
+    const currentDepth = currentReviewReader && Number.isInteger(window.history.state?.interviewArcReviewDepth)
+      ? window.history.state.interviewArcReviewDepth as number
+      : 0;
+    if (!currentReviewReader) {
+      window.history.replaceState(
+        { interviewArcWorkspaceView: "reviews", interviewArcReviewDepth: 0 },
+        "",
+        workspaceViewHref(window.location.href, "reviews"),
+      );
+    }
+    window.history.pushState(
+      { interviewArcReviewReader: true, interviewArcReviewDepth: currentDepth + 1 },
+      "",
+      reviewReaderHref(window.location.href, entry.id),
+    );
+    setReaderClosing(false);
+    setReviewNestedEntry((current) => retainLoadedPastSnapshot(current, entry));
+    setReviewNestedProblem(null);
+    transitionToView("reviews");
+  }
+
   function openLoopActivity(activityId: string) {
     const entry = libraryEntries.find((candidate) => (
       candidate.id === activityId || candidate.artifact?.activityId === activityId
@@ -3360,6 +3465,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       openJourneyEntry(exactEntry, selectedProblemAttempts);
       return;
     }
+    if (view === "reviews") {
+      openReviewEntry(exactEntry, selectedProblemAttempts);
+      return;
+    }
     setLibraryNestedProblem(null);
     openPastEntry(exactEntry, selectedProblemAttempts);
   }
@@ -3389,6 +3498,19 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       );
       setReaderClosing(false);
       setJourneyNestedProblem({ type: entry.type, question });
+      return;
+    }
+    if (view === "reviews" && reviewNestedEntry) {
+      const reviewState = readReviewReaderState(window.location.href);
+      if (!reviewState) return;
+      const currentDepth = Number(window.history.state?.interviewArcReviewDepth ?? 1);
+      window.history.pushState(
+        { interviewArcReviewReader: true, interviewArcReviewDepth: currentDepth + 1 },
+        "",
+        reviewSolutionReaderHref(window.location.href, entry.id, entry.type, question.id),
+      );
+      setReaderClosing(false);
+      setReviewNestedProblem({ type: entry.type, question });
       return;
     }
     if (view === "banks" && bankNestedEntry && selectedProblem) {
@@ -4250,7 +4372,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       showUiToast("That completed attempt is no longer available. Refresh the queue.");
       return;
     }
-    openPastEntry(entry, reviewQueueItems.flatMap((candidate) => (
+    if (document.activeElement instanceof HTMLElement) reviewReaderOpenerRef.current = document.activeElement;
+    openReviewEntry(entry, reviewQueueItems.flatMap((candidate) => (
       libraryEntries.find((entryCandidate) => entryCandidate.id === candidate.activityId) ?? []
     )));
   }
@@ -4262,7 +4385,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   useEffect(() => {
     if (!viewMemoryReady || !workspaceUrlHydratedRef.current) return;
-    if (readJourneyReaderState(window.location.href) || readPastReaderState(window.location.href) || readBankReaderState(window.location.href)) return;
+    if (readJourneyReaderState(window.location.href) || readReviewReaderState(window.location.href) || readPastReaderState(window.location.href) || readBankReaderState(window.location.href)) return;
     if (view === "library" && selectedEntry) {
       window.history.replaceState(
         { interviewArcPastReader: true, interviewArcPastDepth: 0 },
@@ -4349,10 +4472,16 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (view === "library" || view === "banks") {
       captureListPosition(view, listModeFor(view));
     }
+    setReaderNotFound("");
     if (view === "journey") {
       setJourneyNestedEntry(null);
       setJourneyNestedProblem(null);
       setJourneyReaderOrderIds([]);
+    }
+    if (view === "reviews") {
+      setReviewNestedEntry(null);
+      setReviewNestedProblem(null);
+      setReviewReaderOrderIds([]);
     }
     if (view === "banks") {
       setSelectedProblem(null);
@@ -4603,6 +4732,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const selectedTopicEntries = topicStats.find((topic) => topic.topic === journeyTopic)?.entries ?? [];
 
   useEffect(() => {
+    const onWorkspacePopState = () => restoreWorkspaceLocationRef.current();
+    window.addEventListener("popstate", onWorkspacePopState);
+    return () => window.removeEventListener("popstate", onWorkspacePopState);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
     const restoreWorkspaceLocation = () => {
       const journeyState = readJourneyReaderState(window.location.href);
       if (journeyState) {
@@ -4641,6 +4777,40 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         setJourneyNestedEntry((current) => retainLoadedPastSnapshot(current, entry));
         setJourneyNestedProblem(nestedProblem && journeyState.specialty ? { type: journeyState.specialty, question: nestedProblem } : null);
         setView("journey");
+        return;
+      }
+
+      const reviewState = readReviewReaderState(window.location.href);
+      if (reviewState) {
+        const queueEntries = reviewQueueItems.flatMap((item) => (
+          libraryEntries.find((entry) => entry.id === item.activityId) ?? []
+        ));
+        const rememberedOrder = reviewReaderOrderIds.length
+          ? reviewReaderOrderIds.flatMap((id) => libraryEntries.find((entry) => entry.id === id) ?? [])
+          : queueEntries;
+        const candidates = rememberedOrder.some((entry) => entry.id === reviewState.attemptId)
+          ? rememberedOrder
+          : libraryEntries;
+        const entry = candidates.find((candidate) => candidate.id === reviewState.attemptId);
+        const nestedProblem = reviewState.specialty && reviewState.problemId
+          ? bankFor(reviewState.specialty).find((candidate) => candidate.id === reviewState.problemId)
+          : undefined;
+        setReviewReaderOrderIds(candidates.map((candidate) => candidate.id));
+        setJourneyNestedEntry(null);
+        setJourneyNestedProblem(null);
+        if (!entry || (reviewState.problemId && (!nestedProblem || entry.type !== reviewState.specialty
+          || (entry.questionId !== reviewState.problemId && normalizedIdentity(entry.title) !== normalizedIdentity(nestedProblem.title))))) {
+          setReviewNestedEntry(null);
+          setReviewNestedProblem(null);
+          setReaderNotFound(reviewState.attemptId);
+          setView("reviews");
+          return;
+        }
+        setReaderNotFound("");
+        setReaderClosing(false);
+        setReviewNestedEntry((current) => retainLoadedPastSnapshot(current, entry));
+        setReviewNestedProblem(nestedProblem && reviewState.specialty ? { type: reviewState.specialty, question: nestedProblem } : null);
+        setView("reviews");
         return;
       }
 
@@ -4722,6 +4892,12 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         setBankNestedEntry(null);
         setReaderNotFound("");
       }
+      if (routeView === "reviews") {
+        setReviewNestedEntry(null);
+        setReviewNestedProblem(null);
+        setReviewReaderOrderIds([]);
+        setReaderNotFound("");
+      }
       setView(routeView === "past" ? "library" : routeView === "career-materials" ? "materials" : routeView);
       if (routeView === "journey") {
         restorePageScroll(window.history.state?.interviewArcJourneyScrollY);
@@ -4729,13 +4905,18 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         restorePageScroll(window.history.state?.interviewArcLoopScrollY);
       }
     };
-    if (!workspaceUrlHydratedRef.current) {
+    restoreWorkspaceLocationRef.current = restoreWorkspaceLocation;
+    const readerRouteUnavailable = Boolean(readerNotFound) && Boolean(
+      readJourneyReaderState(window.location.href)
+      || readReviewReaderState(window.location.href)
+      || readPastReaderState(window.location.href)
+      || readBankReaderState(window.location.href)
+    );
+    if (!workspaceUrlHydratedRef.current || readerRouteUnavailable) {
       workspaceUrlHydratedRef.current = true;
       restoreWorkspaceLocation();
     }
-    window.addEventListener("popstate", restoreWorkspaceLocation);
-    return () => window.removeEventListener("popstate", restoreWorkspaceLocation);
-  }, [bankFor, codingQuestionFor, filteredPastEntries, journal.date, libraryEntries, pastReaderOrderIds]);
+  }, [bankFor, codingQuestionFor, filteredPastEntries, hydrated, journal.date, libraryEntries, pastReaderOrderIds, readerNotFound, reviewQueueItems, reviewReaderOrderIds]);
   const yesterdayEntries = logEntries.filter((entry) => entry.date === yesterdayDate);
   const yesterdayCompleted = yesterdayEntries.filter((entry) => entry.status === "completed" || entry.status === "published");
   const yesterdaySeconds = yesterdayCompleted.reduce((sum, entry) => sum + entry.elapsedSeconds, 0);
@@ -5130,25 +5311,32 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   }
 
   function renderReviewQueue() {
-    return <ReviewQueueView
-      items={reviewQueueItems}
-      loading={!hydrated}
-      stale={hydrated && !synced}
-      errorMessage={mutationError?.type === "review-add-today" || mutationError?.type === "review-defer"
-        ? mutationError.message
-        : null}
-      reviewStreak={reviewQueueStreak}
-      blockedQuestionIds={reviewBlockedQuestionIds}
-      blockedTitles={reviewBlockedTitles}
-      pendingReviewKeys={new Set(
-        mutationError?.type === "review-add-today" ? [] : pendingReviewKeys,
-      )}
-      canAddToToday={Boolean(draft.workbench)}
-      onAddToToday={addReviewsToToday}
-      onDefer={deferReview}
-      onOpenAttempt={openReviewAttempt}
-      onDismissError={dismissReviewQueueError}
-    />;
+    return <section className={`review-queue-workspace ${reviewNestedEntry || reviewNestedProblem ? "has-open-reader" : ""}`}>
+    <div className="review-queue-base" inert={reviewNestedEntry || reviewNestedProblem ? true : undefined}>
+      <ReviewQueueView
+        items={reviewQueueItems}
+        loading={!hydrated}
+        stale={hydrated && !synced}
+        errorMessage={mutationError?.type === "review-add-today" || mutationError?.type === "review-defer"
+          ? mutationError.message
+          : null}
+        readerUnavailable={readerNotFound || null}
+        reviewStreak={reviewQueueStreak}
+        blockedQuestionIds={reviewBlockedQuestionIds}
+        blockedTitles={reviewBlockedTitles}
+        pendingReviewKeys={new Set(
+          mutationError?.type === "review-add-today" ? [] : pendingReviewKeys,
+        )}
+        canAddToToday={Boolean(draft.workbench)}
+        onAddToToday={addReviewsToToday}
+        onDefer={deferReview}
+        onOpenAttempt={openReviewAttempt}
+        onDismissError={dismissReviewQueueError}
+        onDismissReaderUnavailable={() => { setReaderNotFound(""); window.history.replaceState({ interviewArcWorkspaceView: "reviews", interviewArcReviewDepth: 0 }, "", workspaceViewHref(window.location.href, "reviews")); }}
+      />
+    </div>
+    {arrivalState === "entered" && (reviewNestedEntry || reviewNestedProblem) && <div className={`review-reader-detail reader-workspace focused-attempt-workspace ${readerClosing ? "reader-closing" : ""}`}><ModalReaderPane focusKey={reviewNestedProblem ? `review-solution-${reviewNestedProblem.type}-${reviewNestedProblem.question.id}` : `review-attempt-${reviewNestedEntry?.id ?? "unknown"}`} restoreFocusRef={reviewReaderOpenerRef} className="review-reader-pane focused-attempt-pane" label="Selected Review Queue reader">{reviewNestedProblem ? renderSolutionReader() : renderCaseReader()}</ModalReaderPane></div>}
+    </section>;
   }
 
   function renderLibrary() {
@@ -5645,7 +5833,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       ? bankNestedEntry
       : view === "journey"
         ? journeyNestedProblem ? null : journeyNestedEntry
-        : null;
+        : view === "reviews"
+          ? reviewNestedProblem ? null : reviewNestedEntry
+          : null;
   const journeyReaderEntries = journeyReaderOrderIds.flatMap((id) => {
     const entry = libraryEntries.find((candidate) => candidate.id === id);
     return entry ? [entry] : [];
@@ -5654,15 +5844,22 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const entry = libraryEntries.find((candidate) => candidate.id === id);
     return entry ? [entry] : [];
   });
+  const reviewReaderEntries = reviewReaderOrderIds.flatMap((id) => {
+    const entry = libraryEntries.find((candidate) => candidate.id === id);
+    return entry ? [entry] : [];
+  });
   const currentReaderHref = typeof window === "undefined" ? "https://interview-arc.invalid/" : window.location.href;
   const currentJourneyReaderState = readJourneyReaderState(currentReaderHref);
   const currentPastReaderState = readPastReaderState(currentReaderHref);
+  const currentReviewReaderState = readReviewReaderState(currentReaderHref);
   const currentBankReaderState = readBankReaderState(currentReaderHref);
   const bankReaderEntries = selectedProblem
     ? libraryEntries.filter((entry) => entry.type === selectedProblem.type && entry.questionId === selectedProblem.question.id)
     : [];
   const readerNavigationEntries = currentJourneyReaderState
     ? journeyReaderEntries
+    : currentReviewReaderState
+      ? reviewReaderEntries
     : currentPastReaderState
       ? pastReaderEntries
       : currentBankReaderState?.attemptId
@@ -5673,6 +5870,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     : -1;
   const navigateReaderEntry = (entry: LibraryEntry) => {
     if (currentJourneyReaderState) openJourneyEntry(entry, readerNavigationEntries);
+    else if (currentReviewReaderState) openReviewEntry(entry, readerNavigationEntries);
     else if (currentBankReaderState?.attemptId) openAttemptFromSolution(entry);
     else openPastEntry(entry, readerNavigationEntries);
   };
@@ -5682,7 +5880,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       ? libraryNestedProblem
       : view === "journey"
         ? journeyNestedProblem
-        : null;
+        : view === "reviews"
+          ? reviewNestedProblem
+          : null;
   const ownerProblemProfile = readerSelectedProblem ? profileFor(readerSelectedProblem.type, readerSelectedProblem.question.id) : undefined;
   const canonicalProblemProfile = readerSelectedProblem?.question.solutionProfile;
   const selectedProblemProfile = ownerProblemProfile && canonicalProblemProfile ? {
@@ -6097,6 +6297,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           : current;
         if (view === "banks") setBankNestedEntry(enrich);
         else if (view === "journey") setJourneyNestedEntry(enrich);
+        else if (view === "reviews") setReviewNestedEntry(enrich);
         else setSelectedEntry(enrich);
       })
       .catch((error: unknown) => {
@@ -6169,6 +6370,32 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
           interviewArcJourneyDepth: 0,
           interviewArcJourneyScrollY: scrollY,
         },
+        "",
+        closePlan.href,
+      );
+      return;
+    }
+    if (view === "reviews" && closePlan?.view === "reviews") {
+      const reviewState = readReviewReaderState(window.location.href);
+      const depth = Number(window.history.state?.interviewArcReviewDepth ?? 0);
+      setReaderNotFound("");
+      setReaderClosing(false);
+      if (reviewState?.problemId) {
+        setReviewNestedProblem(null);
+        if (window.history.state?.interviewArcReviewReader && depth > 1) window.history.go(-1);
+        else window.history.replaceState(
+          { interviewArcReviewReader: true, interviewArcReviewDepth: readerDepthAfterNestedClose(depth) },
+          "",
+          closePlan.href,
+        );
+        return;
+      }
+      setReviewNestedEntry(null);
+      setReviewNestedProblem(null);
+      setReviewReaderOrderIds([]);
+      if (window.history.state?.interviewArcReviewReader && depth > 0) window.history.go(-depth);
+      else window.history.replaceState(
+        { interviewArcWorkspaceView: "reviews", interviewArcReviewDepth: 0 },
         "",
         closePlan.href,
       );
