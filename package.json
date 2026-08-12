@@ -27,6 +27,7 @@
     "code-attempt-review:backfill": "node --experimental-strip-types scripts/backfill-code-attempt-review.mjs",
     "leetcode:browser": "node scripts/leetcode-playwright-controller.mjs",
     "journal:checkpoint": "node scripts/journal-branch.mjs checkpoint",
+    "engineering:receipt:new": "node scripts/new-engineering-receipt.mjs",
     "engineering:journal:build": "node --experimental-strip-types scripts/build-engineering-journal.mjs",
     "engineering:journal:check": "node --experimental-strip-types scripts/build-engineering-journal.mjs --check",
     "db:generate": "drizzle-kit generate",

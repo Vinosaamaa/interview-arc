@@ -21,6 +21,18 @@ The implementation coordinator owns the receipt as part of the pull request. The
 6. Let CI validate both layers. The deterministic build projects them into separate receipt and rich-record collections, search indexes, backlinks, Statistics, and standalone HTML.
 7. Merge and deploy through the repository's normal release workflow.
 
+After the pull request number is known, scaffold its forward receipt without a separate user operation:
+
+```bash
+pnpm engineering:receipt:new -- \
+  --pr 312 \
+  --title "Correct Engineering navigation labels" \
+  --summary "Renamed one local navigation label without changing a Module or Interface." \
+  --classification none
+```
+
+For a material pull request, select its rich classification and repeat `--rich-record-ref <id>@<revision>` for every exact record changed by that pull request. The non-interactive command makes no GitHub, D1, or network call; it derives only the canonical pull-request URL and evidence reference from `--pr`, leaves head/merge facts `null`, sorts rich references, and refuses invalid, unsafe, or existing targets.
+
 CI does not invent motivation, architecture, root cause, impact, or prose from a diff. The coordinator authors the factual receipt and any required rich record while it has the implementation context. After that authoring step, validation, projection, bundling, and deployment are automatic.
 
 The canonical state is Markdown in Git. The generated JSON and standalone HTML are disposable projections, not a database, backfill workspace, or second narrative source. Engineering content is not inserted into D1, and the production reader never fetches GitHub dynamically. Arc ingests other repositories only from reviewed commit pins during build and CI.
