@@ -22,7 +22,13 @@ handling private material.
 
 Use `query_behavioral_evidence` for the smallest relevant accepted/contrary
 evidence and open gaps. Use `get_resume_library` for exact immutable resume
-revision identity and `get_resume_import_status` after import uncertainty.
+revision identity, `get_resume_revision` for the bounded extracted wording and
+semantic links of one exact revision, and `get_resume_import_status` after
+import uncertainty. Use `compare_resume_revisions` before describing a change,
+`query_resume_reference_usage` to find stable claim/evidence use across older
+revisions and attempts, and `get_activity_resume_context` for exact historical
+practice provenance. Never infer any of those relationships from dates or
+conversation memory.
 Generated wording, a resume bullet, or a semantic similarity is never evidence
 and cannot upgrade a claim.
 
@@ -45,6 +51,14 @@ revision is authoritatively readable, and the intended current pointer is
 confirmed. Exact retries reuse the same operation identity and bytes; changed
 retries fail closed. A queued, staged, or retryable receipt is not a saved
 revision. Partial failure must preserve the prior current revision.
+
+The import manifest may map each bounded bullet occurrence only to existing
+same-owner claims and accepted evidence. A missing, contradicted, pending,
+rejected, or other-owner reference fails closed. A changed claim relationship
+may create a `needs_review` impact for the exact current Behavioral Solution
+Profile, but never rewrites that profile. Use `set_current_resume_revision`
+only after an explicit owner selection; its stable operation ID is separate
+from the import operation.
 
 Resume bytes belong only in the ignored local mirror and private R2. D1 stores
 bounded metadata, hashes, lineage, extraction, claim links, and the current

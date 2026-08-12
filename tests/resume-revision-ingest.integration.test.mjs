@@ -45,16 +45,18 @@ function run(command, args, options = {}) {
   });
 }
 
-async function waitForWorker(baseUrl, child) {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (child.exitCode !== null) throw new Error(`Local MCP Worker exited ${child.exitCode} before startup.`);
+async function waitForWorker(baseUrl, child, readWorkerLog) {
+  for (let attempt = 0; attempt < 300; attempt += 1) {
+    if (child.exitCode !== null) {
+      throw new Error(`Local MCP Worker exited ${child.exitCode} before startup.\n${readWorkerLog()}`);
+    }
     try {
       const response = await fetch(`${baseUrl}/mcp`);
       if (response.status === 401 || response.status === 405) return;
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error("Local MCP Worker did not start.");
+  throw new Error(`Local MCP Worker did not start.\n${readWorkerLog()}`);
 }
 
 async function connect(baseUrl, token, name) {
@@ -79,7 +81,27 @@ function resumeImportForm(overrides = {}) {
   form.set("resumeId", overrides.resumeId ?? "primary-resume");
   form.set("revisionId", overrides.revisionId ?? "resume-revision-1");
   form.set("sourceLabel", overrides.sourceLabel ?? "Primary resume");
-  form.set("sourceFingerprint", overrides.sourceFingerprint ?? sha256("opaque-source-revision-1"));
+  const sourceFingerprint = overrides.sourceFingerprint ?? sha256("opaque-source-revision-1");
+  form.set("sourceFingerprint", sourceFingerprint);
+  if (overrides.manifest !== false) {
+    const manifest = overrides.manifest ?? {
+      schemaVersion: 1,
+      sourceProvider: "local_file",
+      sourceRevisionFingerprint: sourceFingerprint,
+      extractionVersion: "resume-extract-v1",
+      capturedAt: 1_786_505_200_000,
+      bullets: [{
+        occurrenceId: "experience-0",
+        sectionLabel: "Experience",
+        ordinal: 0,
+        text: "Designed and operated a reliable service.",
+        contentFingerprint: sha256("Designed and operated a reliable service."),
+        claimIds: [],
+        evidenceIds: [],
+      }],
+    };
+    form.set("manifest", JSON.stringify(manifest));
+  }
   form.set("docx", new File([docxBytes], "resume.docx", {
     type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   }));
@@ -127,7 +149,7 @@ test("an authenticated staged DOCX/PDF pair becomes one immutable current resume
     };
     worker.stdout.on("data", appendWorkerLog);
     worker.stderr.on("data", appendWorkerLog);
-    await waitForWorker(baseUrl, worker);
+    await waitForWorker(baseUrl, worker, () => workerLog);
     client = await connect(baseUrl, ownerToken, "resume-ingest-owner");
 
     await run(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", `
@@ -165,6 +187,10 @@ test("an authenticated staged DOCX/PDF pair becomes one immutable current resume
     assert.equal(imported.revisionId, "resume-revision-1");
     assert.equal(imported.parentRevisionId, null);
     assert.equal(imported.sourceFingerprint, sha256("opaque-source-revision-1"));
+    assert.equal(imported.sourceProvider, "local_file");
+    assert.equal(imported.sourceRevisionFingerprint, sha256("opaque-source-revision-1"));
+    assert.equal(imported.extractionVersion, "resume-extract-v1");
+    assert.equal(imported.bulletCount, 1);
     assert.equal(Number.isInteger(imported.importedAt), true);
     assert.equal(imported.currentRevisionId, "resume-revision-1");
     assert.equal(imported.files.docx.sha256, sha256(docxBytes));
@@ -177,6 +203,7 @@ test("an authenticated staged DOCX/PDF pair becomes one immutable current resume
     assert.equal(status.found, true);
     assert.equal(status.import.status, "saved");
     assert.equal(status.import.currentRevisionId, "resume-revision-1");
+    assert.equal(status.import.bulletCount, 1);
     assert.deepEqual(status.import.files.map((file) => file.format), ["docx", "pdf"]);
     assert.equal(JSON.stringify(status).includes("objectKey"), false);
     assert.equal(JSON.stringify(status).includes("owner-resume-ingest"), false);
@@ -243,6 +270,26 @@ test("an authenticated staged DOCX/PDF pair becomes one immutable current resume
     assert.equal(nextStatus.import.sourceFingerprint, sha256("opaque-source-revision-3"));
     assert.equal(nextStatus.import.currentRevisionId, "resume-revision-3");
 
+    const exactRevision = await call(client, "get_resume_revision", {
+      resumeId: "primary-resume",
+      revisionId: "resume-revision-3",
+    });
+    assert.equal(exactRevision.found, true);
+    assert.equal(exactRevision.revision.current, true);
+    assert.equal(exactRevision.revision.sourceProvider, "local_file");
+    assert.equal(exactRevision.revision.bullets.length, 1);
+    assert.equal(exactRevision.revision.bullets[0].text, "Designed and operated a reliable service.");
+    assert.deepEqual(exactRevision.revision.bullets[0].claimIds, []);
+    assert.equal(/storageGeneration|objectKey|private-sources|https?:\/\//.test(JSON.stringify(exactRevision)), false);
+
+    const baseComparison = await call(client, "compare_resume_revisions", {
+      resumeId: "primary-resume",
+      fromRevisionId: "resume-revision-1",
+      toRevisionId: "resume-revision-3",
+    });
+    assert.equal(baseComparison.found, true);
+    assert.deepEqual(baseComparison.summary, { added: 0, removed: 0, changed: 0, unchanged: 1 });
+
     const library = await call(client, "get_resume_library", {});
     assert.equal(library.schemaVersion, 1);
     assert.equal(library.sources.find((source) => source.resumeId === "primary-resume").currentRevisionId, "resume-revision-3");
@@ -257,6 +304,169 @@ test("an authenticated staged DOCX/PDF pair becomes one immutable current resume
 
     const isolatedLibrary = await call(otherClient, "get_resume_library", {});
     assert.deepEqual(isolatedLibrary.sources, []);
+
+    await run(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", `
+      INSERT INTO behavioral_evidence_items
+        (owner_id,evidence_id,project_key,origin,statement,source_revision,evidence_grade,attribution_grade,
+         claim_strength,candidate_state,visibility,safe_provenance,supports,limitations,tags,owner_attestation,
+         review_revision,created_at,updated_at)
+      VALUES
+        ('owner-resume-ingest','evidence-platform','project-platform','document','A platform capability exists.',
+         'source-revision-1','E3','A1','project_fact','accepted','owner_private','[]','[]','[]','[]',NULL,1,1,1);
+      INSERT INTO behavioral_claims
+        (owner_id,claim_id,question_id,text,scope,status,claim_strength,evidence_ids,contrary_evidence_ids,
+         gaps,safer_wording,tags,visibility,revision,created_at,updated_at)
+      VALUES
+        ('owner-resume-ingest','claim-platform','behavioral-platform','Built a platform capability.','project','verified',
+         'project_fact','["evidence-platform"]','[]','[]',NULL,'[]','owner_private',1,1,1);
+      INSERT INTO problem_solution_profiles
+        (owner_id,specialty,question_id,title,current_revision,tags,payload,updated_at)
+      VALUES
+        ('owner-resume-ingest','behavioral','behavioral-platform','Platform story',3,'[]','{}',1);
+    `]);
+
+    const semanticDocxV1 = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x10, 0x01]);
+    const semanticPdfV1 = new TextEncoder().encode("%PDF-1.7\n% semantic v1\n%%EOF");
+    const semanticSourceV1 = sha256("google-drive-source-revision-v1");
+    const semanticManifestV1 = {
+      schemaVersion: 1,
+      sourceProvider: "google_drive",
+      sourceRevisionFingerprint: semanticSourceV1,
+      extractionVersion: "resume-extract-v1",
+      capturedAt: 1_786_505_300_000,
+      bullets: [{
+        occurrenceId: "platform-impact",
+        sectionLabel: "Experience",
+        ordinal: 0,
+        text: "Built a reliable platform capability.",
+        contentFingerprint: sha256("Built a reliable platform capability."),
+        claimIds: ["claim-platform"],
+        evidenceIds: ["evidence-platform"],
+      }],
+    };
+    const semanticImportV1 = await postResumeImport(baseUrl, ownerToken, {
+      operationId: "resume-semantic-import-v1",
+      resumeId: "semantic-resume",
+      revisionId: "semantic-revision-v1",
+      sourceLabel: "Semantic resume",
+      sourceFingerprint: semanticSourceV1,
+      docxBytes: semanticDocxV1,
+      pdfBytes: semanticPdfV1,
+      manifest: semanticManifestV1,
+    });
+    assert.equal(semanticImportV1.response.status, 201, JSON.stringify(semanticImportV1.body));
+
+    await run(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", `
+      INSERT INTO activity_resume_contexts
+        (owner_id,activity_id,snapshot_revision,resume_id,resume_revision_id,source_label,resume_imported_at,
+         state,claim_ids,evidence_ids,captured_at)
+      VALUES
+        ('owner-resume-ingest','behavioral-attempt-platform',1,'semantic-resume','semantic-revision-v1',
+         'Semantic resume',1,'contemporaneous','["claim-platform"]','["evidence-platform"]',2);
+    `]);
+
+    const semanticDocxV2 = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x10, 0x02]);
+    const semanticPdfV2 = new TextEncoder().encode("%PDF-1.7\n% semantic v2\n%%EOF");
+    const semanticSourceV2 = sha256("google-drive-source-revision-v2");
+    const semanticManifestV2 = {
+      ...semanticManifestV1,
+      sourceRevisionFingerprint: semanticSourceV2,
+      capturedAt: 1_786_505_400_000,
+      bullets: [{
+        ...semanticManifestV1.bullets[0],
+        text: "Supported a reliable platform capability.",
+        contentFingerprint: sha256("Supported a reliable platform capability."),
+        claimIds: [],
+      }],
+    };
+    const semanticImportV2 = await postResumeImport(baseUrl, ownerToken, {
+      operationId: "resume-semantic-import-v2",
+      resumeId: "semantic-resume",
+      revisionId: "semantic-revision-v2",
+      sourceLabel: "Semantic resume",
+      sourceFingerprint: semanticSourceV2,
+      docxBytes: semanticDocxV2,
+      pdfBytes: semanticPdfV2,
+      manifest: semanticManifestV2,
+    });
+    assert.equal(semanticImportV2.response.status, 201, JSON.stringify(semanticImportV2.body));
+
+    const semanticRevisionV2 = await call(client, "get_resume_revision", {
+      resumeId: "semantic-resume",
+      revisionId: "semantic-revision-v2",
+    });
+    assert.equal(semanticRevisionV2.revision.bullets[0].text, "Supported a reliable platform capability.");
+    assert.deepEqual(semanticRevisionV2.revision.bullets[0].claimIds, []);
+    assert.equal(semanticRevisionV2.revision.reviewImpacts.length, 1);
+    assert.deepEqual(semanticRevisionV2.revision.reviewImpacts[0], {
+      questionId: "behavioral-platform",
+      solutionProfileRevision: 3,
+      changedClaimIds: ["claim-platform"],
+      status: "needs_review",
+      createdAt: semanticImportV2.body.importedAt,
+      acknowledgedAt: null,
+    });
+
+    const semanticComparison = await call(client, "compare_resume_revisions", {
+      resumeId: "semantic-resume",
+      fromRevisionId: "semantic-revision-v1",
+      toRevisionId: "semantic-revision-v2",
+    });
+    assert.deepEqual(semanticComparison.summary, { added: 0, removed: 0, changed: 1, unchanged: 0 });
+    assert.equal(semanticComparison.changed[0].changes.contentChanged, true);
+    assert.deepEqual(semanticComparison.changed[0].changes.claimDelta.removed, ["claim-platform"]);
+
+    const claimUsage = await call(client, "query_resume_reference_usage", {
+      referenceType: "claim",
+      referenceId: "claim-platform",
+    });
+    assert.equal(claimUsage.revisionOccurrences.length, 1);
+    assert.equal(claimUsage.revisionOccurrences[0].revisionId, "semantic-revision-v1");
+    assert.equal(claimUsage.activityContexts.length, 1);
+    assert.equal(claimUsage.activityContexts[0].activityId, "behavioral-attempt-platform");
+
+    const activityContext = await call(client, "get_activity_resume_context", {
+      activityId: "behavioral-attempt-platform",
+    });
+    assert.equal(activityContext.found, true);
+    assert.equal(activityContext.contexts[0].state, "contemporaneous");
+    assert.deepEqual(activityContext.contexts[0].claimIds, ["claim-platform"]);
+
+    const currentSelection = await call(client, "set_current_resume_revision", {
+      operationId: "select-semantic-resume-v1",
+      resumeId: "semantic-resume",
+      revisionId: "semantic-revision-v1",
+    });
+    assert.equal(currentSelection.priorRevisionId, "semantic-revision-v2");
+    assert.equal(currentSelection.currentRevisionId, "semantic-revision-v1");
+    assert.equal(currentSelection.unchanged, false);
+    const currentSelectionRetry = await call(client, "set_current_resume_revision", {
+      operationId: "select-semantic-resume-v1",
+      resumeId: "semantic-resume",
+      revisionId: "semantic-revision-v1",
+    });
+    assert.equal(currentSelectionRetry.duplicate, true);
+    const changedSelectionRetry = await client.callTool({
+      name: "set_current_resume_revision",
+      arguments: {
+        operationId: "select-semantic-resume-v1",
+        resumeId: "semantic-resume",
+        revisionId: "semantic-revision-v2",
+      },
+    });
+    assert.equal(changedSelectionRetry.isError, true);
+    assert.equal(changedSelectionRetry.structuredContent.code, "resume_current_revision_operation_conflict");
+
+    const isolatedRevision = await call(otherClient, "get_resume_revision", {
+      resumeId: "semantic-resume",
+    });
+    assert.deepEqual(isolatedRevision, { found: false });
+    const isolatedClaimUsage = await call(otherClient, "query_resume_reference_usage", {
+      referenceType: "claim",
+      referenceId: "claim-platform",
+    });
+    assert.deepEqual(isolatedClaimUsage.revisionOccurrences, []);
+    assert.deepEqual(isolatedClaimUsage.activityContexts, []);
 
     const downloaded = await fetch(`${baseUrl}/resume/files/primary-resume/resume-revision-3/pdf`, {
       headers: { authorization: `Bearer ${ownerToken}` },

@@ -81,7 +81,15 @@ import {
 import { behavioralTargetReviewSchema } from "../db/behavioral-practice-preflight-policy";
 import { loadContentIndex } from "../db/content";
 import { resolveIntegrationOwner } from "../db/integrations";
-import { getResumeImportStatus, getResumeLibrary } from "../db/resume-revisions";
+import {
+  compareResumeRevisions,
+  getActivityResumeContext,
+  getResumeImportStatus,
+  getResumeLibrary,
+  getResumeRevision,
+  queryResumeReferenceUsage,
+  setCurrentResumeRevision,
+} from "../db/resume-revisions";
 import {
   applyFocusTimerAction,
   applyTimerAction,
@@ -1853,6 +1861,7 @@ function specialistToolFailure(error: unknown) {
     || error instanceof BehavioralTargetProfileError
     || error instanceof LoopError
     || error instanceof BehavioralStoryError
+    || error instanceof ResumeImportError
     || error instanceof TypedExchangeDeletionError
     || error instanceof InteractionModeError
     || error instanceof InteractionModeFinalizationError
@@ -3160,6 +3169,107 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
     },
     async () => {
       const result = await getResumeLibrary(ownerId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "get_resume_revision",
+    {
+      description: "Read one exact owner-private resume revision, including bounded extracted bullet wording, stable claim/evidence links, file integrity, lineage, and review impacts. It never returns raw DOCX/PDF bytes, Drive or local locators, R2 identity, or another owner's state.",
+      inputSchema: {
+        resumeId: behavioralStableIdSchema,
+        revisionId: behavioralStableIdSchema.optional(),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ resumeId, revisionId }) => {
+      const result = await getResumeRevision(ownerId, resumeId, revisionId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "compare_resume_revisions",
+    {
+      description: "Compare two exact immutable revisions of one owner-private resume. The bounded semantic/textual diff reports occurrence, wording, order, claim, and evidence-link changes without reading raw files or changing either revision.",
+      inputSchema: {
+        resumeId: behavioralStableIdSchema,
+        fromRevisionId: behavioralStableIdSchema,
+        toRevisionId: behavioralStableIdSchema,
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ resumeId, fromRevisionId, toRevisionId }) => {
+      const result = await compareResumeRevisions(ownerId, resumeId, fromRevisionId, toRevisionId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "set_current_resume_revision",
+    {
+      description: "Select one exact immutable owner-private resume revision as current after an explicit owner instruction. Stable operation IDs make exact retries idempotent; changed retries and concurrent pointer changes fail closed. No revision, file, attempt, or application material is rewritten.",
+      inputSchema: {
+        operationId: behavioralStableIdSchema,
+        resumeId: behavioralStableIdSchema,
+        revisionId: behavioralStableIdSchema,
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await setCurrentResumeRevision(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Resume ${result.resumeId} current revision is ${result.currentRevisionId}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_activity_resume_context",
+    {
+      description: "Read bounded immutable resume context captured on one exact owner-private behavioral activity. The result preserves contemporaneous versus backfilled provenance and never infers a historical link from dates or the newest resume.",
+      inputSchema: {
+        activityId: behavioralStableIdSchema,
+        snapshotRevision: z.number().int().positive().optional(),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ activityId, snapshotRevision }) => {
+      const result = await getActivityResumeContext(ownerId, activityId, snapshotRevision);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "query_resume_reference_usage",
+    {
+      description: "Search one stable claim or accepted-evidence identity across owner-private resume revisions and exact historical activity resume contexts. Results span older revisions without copying resume content into attempts or profiles.",
+      inputSchema: {
+        referenceType: z.enum(["claim", "evidence"]),
+        referenceId: behavioralStableIdSchema,
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ referenceType, referenceId }) => {
+      const result = await queryResumeReferenceUsage(ownerId, referenceType, referenceId);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         structuredContent: result,
