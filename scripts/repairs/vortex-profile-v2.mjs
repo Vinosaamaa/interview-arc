@@ -51,7 +51,11 @@ function storedJson(value) {
   return typeof value === "string" ? value : JSON.stringify(value);
 }
 
-function resultSetsFromWrangler(output) {
+export function resultSetsFromWrangler(output, { file = false } = {}) {
+  // Remote file imports print progress text even when Wrangler receives
+  // `--json`. D1 has already committed or rolled back by the time the command
+  // exits, and this repair verifies authoritative state with a fresh query.
+  if (file) return [];
   const parsed = JSON.parse(output);
   const batches = Array.isArray(parsed) ? parsed : [parsed];
   return batches.map((batch) => batch?.results ?? batch?.result?.[0]?.results ?? []);
@@ -68,7 +72,7 @@ function executeWrangler(sqlOrFile, { remote, file = false }) {
     cwd: root,
     encoding: "utf8",
     maxBuffer: 32 * 1024 * 1024,
-  }));
+  }), { file });
 }
 
 export function validateProfile(profile) {
