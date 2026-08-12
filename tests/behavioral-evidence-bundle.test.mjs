@@ -528,6 +528,33 @@ test("sync preparation rejects untyped or unsafe remote candidates before writin
   await assert.rejects(access(path.join(fixture.root, "sync", "plan.json")), { code: "ENOENT" });
 });
 
+test("sync preparation rejects a remote candidate whose generated evidence is graded above E1", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.evidence[0].origin = "generated_secondary";
+  record.evidence[0].evidenceGrade = "E2";
+  record.d1Candidates = [{
+    id: "EX-D1-OVERGRADED",
+    kind: "evidence",
+    visibility: "owner_private",
+    content: {
+      questionLinks: [{ questionId: "QUESTION-EXAMPLE-1", relevance: "supporting" }],
+    },
+    sourceEvidenceIds: ["EX-EV-001"],
+    transformations: ["Generalized the observation for owner-private review."],
+    limitations: ["Generated material remains pending review."],
+  }];
+  record.d1Exclusions = [];
+  await writeJson(recordPath, record);
+
+  await assert.rejects(
+    prepareBehavioralEvidenceSyncPlan({ bundleRoot: fixture.root }),
+    /cannot be prepared above E1 for D1 sync/,
+  );
+  await assert.rejects(access(path.join(fixture.root, "sync", "plan.json")), { code: "ENOENT" });
+});
+
 test("the archaeology coordinator defines explicit coverage and output budgets", async () => {
   const prompt = await readFile(new URL(
     "../practice/behavioral/prompts/project-evidence-archaeology.md",

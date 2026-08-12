@@ -24,6 +24,7 @@ const execFileAsync = promisify(execFile);
 const MAX_DIRECTORY_ENTRIES = 5_000;
 const MAX_REMOTE_TEXT = 240;
 const SOURCE_KINDS = new Set(["resume", "repository", "document", "chat_export", "architecture", "git_history", "user_statement", "other"]);
+const REMOTE_E1_MAX_ORIGINS = new Set(["user_statement", "resume", "generated_secondary", "derived_inference"]);
 const PROVENANCE_BY_ORIGIN = {
   user_statement: "conversation",
   resume: "resume_claim",
@@ -309,6 +310,9 @@ function remoteEvidenceWrites(project, sourceSnapshots) {
     if (!evidence) throw new Error("A remote candidate references unavailable canonical evidence.");
     if (evidence.attributionGrade === "A3") {
       throw new Error("A3 owner attestation must be captured from an exact Behavioral transcript turn, not a local connector.");
+    }
+    if (REMOTE_E1_MAX_ORIGINS.has(evidence.origin) && ["E2", "E3"].includes(evidence.evidenceGrade)) {
+      throw new Error("Owner statements, resume claims, generated material, and inferences cannot be prepared above E1 for D1 sync.");
     }
     const provenanceKind = PROVENANCE_BY_ORIGIN[evidence.origin];
     if (!provenanceKind) throw new Error("The evidence origin has no remote provenance mapping.");

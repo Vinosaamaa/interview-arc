@@ -40,6 +40,9 @@ Before writing a plan, the controller requires every pending evidence record to
 have exactly one disposition: a typed D1 candidate or an explicit local-only
 exclusion. Status reports covered, excluded, and uncovered counts; exclusions
 and their reasons remain local and are never written to the plan or D1.
+The controller also mirrors the D1 grade ceiling: owner statements, resume
+claims, generated secondary material, and derived inferences cannot be
+prepared above `E1`.
 
 ## Mutation flow
 

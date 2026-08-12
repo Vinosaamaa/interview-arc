@@ -491,6 +491,10 @@ every remote-safe pending observation one stable D1 candidate with genuinely
 relevant stable question links. If an observation must remain local, add one
 explicit `d1Exclusions` record with its evidence ID and reason. Never leave a
 pending observation without exactly one of those two dispositions.
+Owner statements, resume claims, generated secondary material, and derived
+inferences cannot be projected to D1 above `E1`; keep an overstated local
+observation explicitly excluded until its grade is reviewed instead of
+silently rewriting it during sync preparation.
 
 Never store verbatim implementation snippets.
 
