@@ -10,7 +10,7 @@ import {
   type ActivityBatchDestination,
   type SelectedActivity,
 } from "./activity-batch";
-import { findExactPastSnapshot, orderPastReaderSections } from "./behavioral-final-answer-view";
+import { findExactPastSnapshot, orderPastReaderSections, retainLoadedPastSnapshot } from "./behavioral-final-answer-view";
 import type {
   ContentArtifact,
   ContentIndex,
@@ -77,6 +77,7 @@ import CareerMaterialsWorkspace from "./career-materials-workspace";
 import { activityLifecycleState } from "./activity-state";
 import {
   interactionModeClassificationLabel,
+  isRecordedInteractionMode,
   matchesInteractionModeFilter,
   selectableInteractionModes,
 } from "./interaction-mode-view";
@@ -1317,16 +1318,10 @@ function BehavioralAttemptAnalysisCard({ projection }: { projection: BehavioralA
 }
 
 function InteractionModeMarkers({ snapshot }: { snapshot?: LogEntry["interactionModeClassification"] }) {
-  const classification = snapshot?.classification ?? {
-    primaryPracticeModeId: "unrecorded",
-    modeShares: [],
-    hadMentorAssistance: false,
-    highestHintRung: "none",
-  };
+  const classification = snapshot?.classification;
+  if (!isRecordedInteractionMode(classification)) return null;
   const label = interactionModeClassificationLabel(classification);
-  const shares = classification.modeShares.length
-    ? classification.modeShares
-    : [{ interactionModeId: "unrecorded", basisPoints: 10_000 }];
+  const shares = classification.modeShares;
   return <>
     <i className={`mode-classification-chip mode-${classification.primaryPracticeModeId}`}>{label}</i>
     {classification.hadMentorAssistance && <i className="mode-assistance-chip">Mentor assistance{classification.highestHintRung !== "none" ? ` · ${classification.highestHintRung}` : ""}</i>}
@@ -1336,29 +1331,13 @@ function InteractionModeMarkers({ snapshot }: { snapshot?: LogEntry["interaction
   </>;
 }
 
-function PracticeModeCard({ snapshot }: { snapshot?: LogEntry["interactionModeClassification"] }) {
+function CaseModeTags({ snapshot }: { snapshot?: LogEntry["interactionModeClassification"] }) {
   const classification = snapshot?.classification;
-  if (!classification) {
-    return <section className="practice-mode-card legacy" aria-label="Practice mode not recorded">
-      <InteractionModeMarkers />
-      <p>This attempt predates durable interaction-mode classification. Interview Arc does not guess from the transcript.</p>
-    </section>;
-  }
-  const method = classification.method === "active_timer_seconds"
-    ? "Active practice time"
-    : classification.method === "material_specialist_turn_share"
-      ? "Material specialist responses"
-      : "Not recorded";
-  return <section className="practice-mode-card" aria-label="Practice mode classification">
-    <header><div><span>PRACTICE MODE</span><strong>{interactionModeClassificationLabel(classification)}</strong></div><small>Immutable snapshot {snapshot.snapshotRevision}</small></header>
-    <InteractionModeMarkers snapshot={snapshot} />
-    <dl>
-      <div><dt>Classification basis</dt><dd>{method}</dd></div>
-      <div><dt>Provenance</dt><dd>{classification.provenance}</dd></div>
-      <div><dt>Mode changes</dt><dd>{classification.transitionCount}</dd></div>
-      <div><dt>Mentor assistance</dt><dd>{classification.hadMentorAssistance ? `Yes${classification.highestHintRung !== "none" ? ` · ${classification.highestHintRung}` : ""}` : "None recorded"}</dd></div>
-    </dl>
-  </section>;
+  if (!isRecordedInteractionMode(classification)) return null;
+  return <div className="case-mode-tags" aria-label="Practice mode">
+    <i className={`mode-classification-chip mode-${classification.primaryPracticeModeId}`}>{interactionModeClassificationLabel(classification)}</i>
+    {classification.hadMentorAssistance && <i className="mode-assistance-chip">Mentor assistance{classification.highestHintRung !== "none" ? ` · ${classification.highestHintRung}` : ""}</i>}
+  </div>;
 }
 
 function transcriptBodyWithoutCodeAttempts(source: string, attempts: LeetCodeCodeAttempt[]) {
@@ -1480,6 +1459,16 @@ function LanguageCodeTabs({ sections, idPrefix, title }: { sections: ReaderSecti
   return <section className="language-code-tabs" id={`${idPrefix}-${slugify(title)}-0`}><header><h3>{title}</h3><div role="tablist" aria-label={`${title} language`}>{sections.map((section, index) => <button type="button" role="tab" aria-selected={activeIndex === index} className={activeIndex === index ? "active" : ""} onClick={() => setActiveIndex(index)} key={section.title}>{section.title.match(/[—-]\s*(Java|Python)$/i)?.[1] ?? `Option ${index + 1}`}</button>)}</div></header><CodeBlock language={match[1]} code={match[2]} /></section>;
 }
 
+function revealReaderOutlineTarget(link: HTMLAnchorElement) {
+  const href = link.getAttribute("href");
+  if (!href?.startsWith("#")) return;
+  const target = document.getElementById(decodeURIComponent(href.slice(1)));
+  const group = target instanceof HTMLDetailsElement && target.matches("details.reader-group")
+    ? target
+    : target?.closest<HTMLDetailsElement>("details.reader-group");
+  if (group && !group.open) group.open = true;
+}
+
 function ReaderOutline({ children }: { children: ReactNode }) {
   const outlineRef = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
@@ -1498,7 +1487,9 @@ function ReaderOutline({ children }: { children: ReactNode }) {
     };
   }, []);
   return <details className="reader-outline" ref={outlineRef} onClick={(event) => {
-    if (event.target instanceof Element && event.target.closest("a") && outlineRef.current) outlineRef.current.open = false;
+    const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href^='#']") : null;
+    if (link) revealReaderOutlineTarget(link);
+    if (link && outlineRef.current) outlineRef.current.open = false;
   }}><summary aria-label="Open contents" title="Contents"><Icon name="outline" /></summary><nav>{children}</nav></details>;
 }
 
@@ -3043,7 +3034,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (openingReader || (view === "library" && masterPaneState.library)) pendingSelectedRevealRef.current = "library";
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 1976px)").matches) setMasterPaneOpen(false, "library");
     setReaderClosing(false);
-    setSelectedEntry(entry);
+    setSelectedEntry((current) => retainLoadedPastSnapshot(current, entry));
     transitionToView("library");
   }
 
@@ -3087,7 +3078,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       href,
     );
     setReaderClosing(false);
-    setJourneyNestedEntry(entry);
+    setJourneyNestedEntry((current) => retainLoadedPastSnapshot(current, entry));
     setJourneyNestedProblem(null);
     transitionToView("journey");
   }
@@ -3319,7 +3310,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         "",
         bankReaderHref(window.location.href, selectedProblem.type, selectedProblem.question.id, exactEntry.id),
       );
-      setBankNestedEntry(exactEntry);
+      setBankNestedEntry((current) => retainLoadedPastSnapshot(current, exactEntry));
       return;
     }
     if (view === "journey") {
@@ -4604,7 +4595,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         }
         setReaderNotFound("");
         setReaderClosing(false);
-        setJourneyNestedEntry(entry);
+        setJourneyNestedEntry((current) => retainLoadedPastSnapshot(current, entry));
         setJourneyNestedProblem(nestedProblem && journeyState.specialty ? { type: journeyState.specialty, question: nestedProblem } : null);
         setView("journey");
         return;
@@ -4638,7 +4629,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         setReaderNotFound("");
         setReaderClosing(false);
         pendingSelectedRevealRef.current = "library";
-        setSelectedEntry(entry);
+        setSelectedEntry((current) => retainLoadedPastSnapshot(current, entry));
         setLibraryNestedProblem(nestedProblem && pastState.specialty ? { type: pastState.specialty, question: nestedProblem } : null);
         setView("library");
         return;
@@ -4663,7 +4654,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         }
         setReaderNotFound("");
         setSelectedProblem({ type: bankState.specialty, question });
-        setBankNestedEntry(attempt ?? null);
+        setBankNestedEntry((current) => attempt ? retainLoadedPastSnapshot(current, attempt) : null);
         return;
       }
 
@@ -6258,15 +6249,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     return (
       <article className={`workspace-reader journal-case-reader ${nestedReaderFocus ? "nested-reader" : ""}`} aria-labelledby="journal-reader-title" aria-label="Case file contents">
         <div className="reader-chrome">
-          <div className="reader-chrome-leading">{!nestedReaderFocus && <button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button>}<ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a><a href="#case-practice-mode">Practice mode</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedEntryFinalAnswer && <a href="#case-final-answer">Final tailored answer</a>}{selectedEntryResumeContext && <a href="#case-resume-context">Resume context</a>}{selectedEntryPracticeScenarios && <a href="#case-practice-scenarios">Practice scenarios</a>}{selectedEntryBehavioralAnalysis && <a href="#case-behavioral-analysis">Behavioral Attempt</a>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</ReaderOutline></div>
+          <div className="reader-chrome-leading">{!nestedReaderFocus && <button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button>}<ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedEntryFinalAnswer && <a href="#case-final-answer">Final tailored answer</a>}{selectedEntryResumeContext && <a href="#case-resume-context">Resume context</a>}{selectedEntryPracticeScenarios && <a href="#case-practice-scenarios">Practice scenarios</a>}{selectedEntryBehavioralAnalysis && <a href="#case-behavioral-analysis">Behavioral Attempt</a>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</ReaderOutline></div>
           <div className="reader-chrome-actions">{readerNavigationIndex >= 0 && <div className="reader-attempt-navigation" aria-label="Past practice records"><button type="button" onClick={() => navigateReaderEntry(readerNavigationEntries[readerNavigationIndex - 1])} disabled={readerNavigationIndex <= 0} aria-label="Previous practice record" title={readerNavigationIndex <= 0 ? "First record in this list" : "Previous practice record"}>←</button><span>{readerNavigationIndex + 1} / {readerNavigationEntries.length}</span><button type="button" onClick={() => navigateReaderEntry(readerNavigationEntries[readerNavigationIndex + 1])} disabled={readerNavigationIndex >= readerNavigationEntries.length - 1} aria-label="Next practice record" title={readerNavigationIndex >= readerNavigationEntries.length - 1 ? "Last record in this list" : "Next practice record"}>→</button></div>}<button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close case file" title="Close"><Icon name="close" /></button></div>
         </div>
         <div className="case-document workspace-reader-scroll" ref={readerDocumentRef} onScroll={rememberReaderPosition} onMouseUp={(event) => captureHighlightSelection(event.clientX, event.clientY)} onKeyUp={() => captureHighlightSelection()}>
-          <header id="case-summary"><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time></div><div className="case-title-row"><h2 id="journal-reader-title">{selectedEntry.title}</h2><div className="case-title-actions"><button className={`star-control ${isStarred(selectedEntry.type, selectedEntry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedEntry.type, selectedEntry.questionId)} disabled={!selectedEntry.questionId} aria-label={`${isStarred(selectedEntry.type, selectedEntry.questionId) ? "Unstar" : "Star"} ${selectedEntry.title}`} title="Star this problem"><Icon name="star" /></button><button className="icon-action note-add" onClick={() => openNoteComposer()} disabled={!selectedEntryActivityId} aria-label="Add a note" title="Add a note"><Icon name="note" /><i><Icon name="plus" /></i></button></div></div>{meaningfulSubtitle(selectedEntry.subtitle) && <p>{meaningfulSubtitle(selectedEntry.subtitle)}</p>}{Boolean(bankQuestionForEntry(selectedEntry) && hasReusableSolution(selectedEntry.type, bankQuestionForEntry(selectedEntry)!)) && <button className="solution-link-button" onClick={() => openEntrySolution(selectedEntry)}>Open reusable solution →</button>}</header>
+          <header id="case-summary"><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><CaseModeTags snapshot={selectedEntry.interactionModeClassification} /><time>{readableDate(selectedEntry.date)} · Pacific</time></div><div className="case-title-row"><h2 id="journal-reader-title">{selectedEntry.title}</h2><div className="case-title-actions"><button className={`star-control ${isStarred(selectedEntry.type, selectedEntry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedEntry.type, selectedEntry.questionId)} disabled={!selectedEntry.questionId} aria-label={`${isStarred(selectedEntry.type, selectedEntry.questionId) ? "Unstar" : "Star"} ${selectedEntry.title}`} title="Star this problem"><Icon name="star" /></button><button className="icon-action note-add" onClick={() => openNoteComposer()} disabled={!selectedEntryActivityId} aria-label="Add a note" title="Add a note"><Icon name="note" /><i><Icon name="plus" /></i></button></div></div>{meaningfulSubtitle(selectedEntry.subtitle) && <p>{meaningfulSubtitle(selectedEntry.subtitle)}</p>}{Boolean(bankQuestionForEntry(selectedEntry) && hasReusableSolution(selectedEntry.type, bankQuestionForEntry(selectedEntry)!)) && <button className="solution-link-button" onClick={() => openEntrySolution(selectedEntry)}>Open reusable solution →</button>}</header>
           {Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <aside className="pinned-notes" id="case-notes" aria-label="Pinned practice notes"><span>NOTES</span>{selectedEntry.personalNote?.trim() && <article><div className="note-actions"><button onClick={() => openNoteComposer("personal")} aria-label="Edit personal note" title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote("personal")} aria-label="Delete personal note" title="Delete"><Icon name="trash" /></button></div><MarkdownBody source={selectedEntry.personalNote} /></article>}{selectedEntry.pinnedNotes?.map((note) => <article key={note.id}><header><small>{note.kind}</small><div className="note-actions"><button onClick={() => openNoteComposer(note)} aria-label={`Edit ${note.kind} note`} title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote(note.id)} aria-label={`Delete ${note.kind} note`} title="Delete"><Icon name="trash" /></button></div></header><MarkdownBody source={note.body} /></article>)}</aside>}
           {noteComposerOpen && <form className="case-note-composer" onSubmit={(event) => { event.preventDefault(); void saveCaseNote(); }}><label htmlFor="case-note">{editingNoteId ? "Edit note" : "Add a note"}</label><textarea id="case-note" autoFocus value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} placeholder="A concise reminder, mistake, or pattern to keep visible…" /><div><button type="button" onClick={() => { setNoteComposerOpen(false); setEditingNoteId(""); setNoteDraft(""); }}>Cancel</button><button type="submit" disabled={noteBusy || !noteDraft.trim()}>{noteBusy ? "Saving…" : "Save note"}</button></div></form>}
           <div className="letter-facts" id="case-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.startedAt && <div><span>Started</span><strong>{formatPracticeTimestamp(selectedEntry.startedAt)}</strong></div>}{selectedEntry.endedAt && <div><span>Finished</span><strong>{formatPracticeTimestamp(selectedEntry.endedAt)}</strong></div>}{selectedEntry.sessionId && <div><span>Session</span><strong>{selectedEntry.sessionId}</strong></div>}{selectedEntry.outcome && <div><span>Result</span><strong>{resultLabel(selectedEntry.outcome, selectedEntry.type)}</strong></div>}{selectedEntry.review && <div className="review-fact"><span>{selectedEntry.review.status === "due" ? "Review due" : "Next review"}</span><strong>{selectedEntry.review.dueDate}</strong><small>{selectedEntry.review.reason.replaceAll("_", " ")} · {selectedEntry.review.intervalDays} day interval</small></div>}</div>
-          <details className="reader-group practice-mode-group" id="case-practice-mode" open={readerGroupOpen("case-practice-mode", true)} onToggle={(event) => rememberReaderGroup("case-practice-mode", event.currentTarget.open)}><summary><span>Practice mode</span><small>{interactionModeClassificationLabel(selectedEntry.interactionModeClassification?.classification ?? { primaryPracticeModeId: "unrecorded" })}</small></summary><div><PracticeModeCard snapshot={selectedEntry.interactionModeClassification} /></div></details>
           <div className="letter-sections layered-reader">
             {selectedEntry.artifact
               ? selectedCaseGroups.filter((group) => group.key === "record").map((group) => { const groupId = `case-group-${group.key}`; return <details className="reader-group record-group" id={groupId} open={readerGroupOpen(groupId, true)} onToggle={(event) => rememberReaderGroup(groupId, event.currentTarget.open)} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></div></details>; })
@@ -6536,7 +6526,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       {false && selectedEntry && <div className="letter-backdrop" role="presentation" onMouseDown={() => setSelectedEntry(null)}>
         <article className="reading-letter case-file-shell" role="dialog" aria-modal="true" aria-labelledby="letter-title" onMouseDown={(event) => event.stopPropagation()}>
           <button className="letter-close icon-action" onClick={() => setSelectedEntry(null)} aria-label="Close case file" title="Close"><Icon name="close" /></button>
-          <aside className="case-toc" aria-label="Case file contents"><span>Contents</span><nav><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a><a href="#case-practice-mode">Practice mode</a>{selectedCaseGroups.map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedEntryFinalAnswer && <a href="#case-final-answer">Final tailored answer</a>}</nav></aside>
+          <aside className="case-toc" aria-label="Case file contents"><span>Contents</span><nav><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedEntryFinalAnswer && <a href="#case-final-answer">Final tailored answer</a>}</nav></aside>
           <div className="case-document" ref={readerDocumentRef} onMouseUp={captureHighlightSelection}>
             <header id="case-summary"><div><span className={`type-chip ${selectedEntry.type}`}>{typeLabel(selectedEntry.type)}</span><time>{readableDate(selectedEntry.date)} · Pacific</time></div><div className="case-title-row"><h2 id="letter-title">{selectedEntry.title}</h2><div className="case-title-actions"><button className={`star-control ${isStarred(selectedEntry.type, selectedEntry.questionId) ? "starred" : ""}`} onClick={() => toggleProblemStar(selectedEntry.type, selectedEntry.questionId)} disabled={!selectedEntry.questionId} aria-label={`${isStarred(selectedEntry.type, selectedEntry.questionId) ? "Unstar" : "Star"} ${selectedEntry.title}`} title="Star this problem"><Icon name="star" /></button><button className="icon-action note-add" onClick={() => openNoteComposer()} disabled={!selectedEntryActivityId} aria-label="Add a note" title="Add a note"><Icon name="note" /><i><Icon name="plus" /></i></button></div></div>{meaningfulSubtitle(selectedEntry.subtitle) && <p>{meaningfulSubtitle(selectedEntry.subtitle)}</p>}{selectedEntry.questionId && <button className="solution-link-button" onClick={() => { const question = bankFor(selectedEntry.type).find((candidate) => candidate.id === selectedEntry.questionId); if (question) { setSelectedEntry(null); setSelectedProblem({ type: selectedEntry.type, question }); } }}>View solution →</button>}</header>
             {pendingHighlight && <button className="selection-highlight-action" type="button" onClick={() => void saveHighlight()}>Highlight selection</button>}
@@ -6544,7 +6534,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             {Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <aside className="pinned-notes" id="case-notes" aria-label="Pinned practice notes"><span>NOTES</span>{selectedEntry.personalNote?.trim() && <article><div className="note-actions"><button onClick={() => openNoteComposer("personal")} aria-label="Edit personal note" title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote("personal")} aria-label="Delete personal note" title="Delete"><Icon name="trash" /></button></div><MarkdownBody source={selectedEntry.personalNote} /></article>}{selectedEntry.pinnedNotes?.map((note) => <article key={note.id}><header><small>{note.kind}</small><div className="note-actions"><button onClick={() => openNoteComposer(note)} aria-label={`Edit ${note.kind} note`} title="Edit"><Icon name="edit" /></button><button onClick={() => void deleteCaseNote(note.id)} aria-label={`Delete ${note.kind} note`} title="Delete"><Icon name="trash" /></button></div></header><MarkdownBody source={note.body} /></article>)}</aside>}
             {noteComposerOpen && <form className="case-note-composer" onSubmit={(event) => { event.preventDefault(); void saveCaseNote(); }}><label htmlFor="case-note">{editingNoteId ? "Edit note" : "Add a note"}</label><textarea id="case-note" autoFocus value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} placeholder="A concise reminder, mistake, or pattern to keep visible…" /><div><button type="button" onClick={() => { setNoteComposerOpen(false); setEditingNoteId(""); setNoteDraft(""); }}>Cancel</button><button type="submit" disabled={noteBusy || !noteDraft.trim()}>{noteBusy ? "Saving…" : "Save note"}</button></div></form>}
             <div className="letter-facts" id="case-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.startedAt && <div><span>Started</span><strong>{formatPracticeTimestamp(selectedEntry.startedAt)}</strong></div>}{selectedEntry.endedAt && <div><span>Finished</span><strong>{formatPracticeTimestamp(selectedEntry.endedAt)}</strong></div>}{selectedEntry.sessionId && <div><span>Session</span><strong>{selectedEntry.sessionId}</strong></div>}{selectedEntry.outcome && <div><span>Result</span><strong>{resultLabel(selectedEntry.outcome, selectedEntry.type)}</strong></div>}{selectedEntry.review && <div className="review-fact"><span>{selectedEntry.review.status === "due" ? "Review due" : "Next review"}</span><strong>{selectedEntry.review.dueDate}</strong><small>{selectedEntry.review.reason.replaceAll("_", " ")} · {selectedEntry.review.intervalDays} day interval</small></div>}</div>
-            <details className="reader-group practice-mode-group" id="case-practice-mode" open><summary><span>Practice mode</span><small>{interactionModeClassificationLabel(selectedEntry.interactionModeClassification?.classification ?? { primaryPracticeModeId: "unrecorded" })}</small></summary><div><PracticeModeCard snapshot={selectedEntry.interactionModeClassification} /></div></details>
             {selectedEntry.artifact ? <div className="letter-sections layered-reader">{selectedCaseGroups.map((group) => group.key === "record"
               ? <section className="reader-group record-group" id={`case-group-${group.key}`} key={group.key}><h2>{group.title}</h2><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></section>
               : <details className={`reader-group ${group.key}-group`} id={`case-group-${group.key}`} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></div></details>)}</div> : <div className="unpublished-letter" id="case-draft"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to finalize the transcript, review, solution, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}

@@ -1642,8 +1642,8 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .knowledge-reader .solution-reader-group { padding: 18px; }
 
 @keyframes master-detail-in {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; translate: 0 14px; }
+  to { opacity: 1; translate: 0 0; }
 }
 
 @media (max-width: 1280px) {
@@ -1703,12 +1703,14 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   z-index: 26;
   animation: reader-workspace-enter .2s cubic-bezier(.2,.8,.2,1) both;
 }
+.library-page.has-open-entry::before,
+.banks-page.has-open-solution::before,
 .journey-page.has-open-reader::before {
   content: "";
   position: fixed;
   inset: 54px 0 0 var(--sidebar-size);
   z-index: 25;
-  background: rgba(237,245,242,.96);
+  background: var(--canvas);
 }
 .focused-attempt-workspace {
   display: grid;
@@ -2358,6 +2360,9 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .entry-badges .mode-assistance-chip { border-color: #9d8acc; background: #f3effd; color: #563b91; }
 .mode-share-ribbon { width: 74px; height: 8px; margin-block: 1px; border: 1px solid #b9c9c4; border-radius: 999px; display: inline-flex; overflow: hidden; background: #edf1ed; }
 .entry-badges .mode-share-ribbon { align-self: center; }
+.case-mode-tags { min-width: 0; display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.case-mode-tags i { width: max-content; padding: 5px 9px; border: 1px solid #8da8a1; border-radius: 999px; background: #edf5f2; color: #244d47; font-size: .68rem; font-style: normal; font-weight: 800; }
+.case-mode-tags .mode-assistance-chip { border-color: #9d8acc; background: #f3effd; color: #563b91; }
 .entry-badges .mode-share-ribbon > i,
 .mode-share-ribbon > i { min-width: 2px; height: 100%; padding: 0; border: 0; border-radius: 0; display: block; }
 .mode-interviewer { background-color: #315da8 !important; }
