@@ -148,6 +148,19 @@
 .engineering-markdown th, .engineering-interview-view th { background: #edf5f2; color: #1c4b43; font-weight: 780; }
 .engineering-markdown hr, .engineering-interview-view hr { margin: 36px 0; border: 0; border-top: 1px solid #ccdcd7; }
 .engineering-markdown img, .engineering-interview-view img { max-width: 100%; height: auto; }
+.engineering-diagrams { max-width: 980px; margin: 34px 0 42px; padding-top: 28px; border-top: 1px solid #d4e1dd; }
+.engineering-diagrams > header { margin-bottom: 16px; }
+.engineering-diagrams > header h2 { margin: 0; color: #153a35; font-family: var(--font-newsreader); font-size: 1.65rem; line-height: 1.1; }
+.engineering-diagrams > header p { margin: 6px 0 0; color: #607873; font-size: .85rem; }
+.engineering-diagrams figure { margin: 0; }
+.engineering-diagram-preview { display: block; overflow: hidden; border: 1px solid #b9cec8; border-radius: 10px; background: #fff; }
+.engineering-diagram-preview:focus-visible { outline: 3px solid rgba(13,148,136,.28); outline-offset: 3px; }
+.engineering-diagram-preview img { display: block; width: 100%; height: auto; }
+.engineering-diagrams figcaption { padding: 13px 2px 0; display: grid; gap: 5px; color: #526d67; font-size: .82rem; line-height: 1.5; }
+.engineering-diagrams figcaption strong { color: #173b37; font-size: .92rem; }
+.engineering-diagrams figcaption > div { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 12px; }
+.engineering-diagrams figcaption a { display: inline-flex; align-items: center; gap: 5px; color: #087a70; font-weight: 720; text-underline-offset: 3px; }
+.engineering-diagrams figcaption .engineering-icon { width: 14px; height: 14px; }
 .engineering-interview-view { margin-top: 46px; border-block: 1px solid #cbdad6; }
 .engineering-interview-view summary { min-height: 52px; display: flex; align-items: center; color: #194b43; font-weight: 800; cursor: pointer; }
 .engineering-lineage, .engineering-evidence, .engineering-record-receipts { max-width: 72ch; margin-top: 48px; }

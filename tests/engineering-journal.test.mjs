@@ -127,7 +127,7 @@ test("the Journal Module deterministically projects one commit-pinned canonical 
     evidenceRefs: ["issue:278"],
     sourcePermalink: `https://github.com/Vinosaamaa/interview-arc/blob/${SOURCE_COMMIT}/docs/design/engineering-workspace/journal-module-architecture.drawio`,
     renderedPermalink: `https://github.com/Vinosaamaa/interview-arc/blob/${SOURCE_COMMIT}/docs/design/engineering-workspace/journal-module-architecture.png`,
-    renderedUrl: `https://raw.githubusercontent.com/Vinosaamaa/interview-arc/${SOURCE_COMMIT}/docs/design/engineering-workspace/journal-module-architecture.png`,
+    renderedUrl: `/engineering-journal/assets/interview-arc/${SOURCE_COMMIT}/docs/design/engineering-workspace/journal-module-architecture.png`,
   });
   assert.equal(
     first.index.records[0].source.permalink,
@@ -269,6 +269,8 @@ test("receipt timeline JSON, search, Statistics, and standalone HTML remain one 
   assert.match(result.standaloneHtml, /Exact receipt source/);
   assert.match(result.standaloneHtml, /Commit-pinned publication flow/);
   assert.match(result.standaloneHtml, /journal-module-architecture\.drawio/);
+  assert.match(result.standaloneHtml, new RegExp(`/engineering-journal/assets/interview-arc/${SOURCE_COMMIT}/docs/design/engineering-workspace/journal-module-architecture\\.png`));
+  assert.doesNotMatch(result.standaloneHtml, /raw\.githubusercontent\.com/);
   assert.deepEqual(result.index.receiptStatistics.byClassification, {
     none: 1,
     "change-note": 0,

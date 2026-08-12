@@ -12,10 +12,15 @@ const OUTPUTS = {
   normalizedJson: join(REPOSITORY_ROOT, "engineering-journal", "generated", "index.json"),
   standaloneHtml: join(REPOSITORY_ROOT, "engineering-journal", "generated", "standalone.html"),
 };
+const DIAGRAM_ASSET_ROOT = join(REPOSITORY_ROOT, "public", "engineering-journal", "assets");
 const check = process.argv.includes("--check");
 
 function git(root, args) {
   return execFileSync("git", ["-C", root, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+}
+
+function gitBlob(root, commit, path) {
+  return execFileSync("git", ["-C", root, "show", `${commit}:${path}`], { encoding: null, stdio: ["ignore", "pipe", "pipe"] });
 }
 
 function portablePath(root, path) {
@@ -35,9 +40,12 @@ function inlineDiagramDescriptors(markdown) {
   }
 }
 
-function validateCommittedDiagramAssets(root, documents) {
+function committedDiagramAssets(root, documents) {
+  const assets = [];
   for (const [documentIndex, document] of documents.entries()) {
     for (const [diagramIndex, diagram] of inlineDiagramDescriptors(document.markdown).entries()) {
+      let renderedBytes = null;
+      let renderedPath = null;
       for (const key of ["sourcePath", "renderedPath"]) {
         const path = diagram && typeof diagram === "object" ? diagram[key] : null;
         if (typeof path !== "string" || !path.startsWith("docs/design/")) continue;
@@ -46,8 +54,65 @@ function validateCommittedDiagramAssets(root, documents) {
         } catch {
           throw new Error(`Engineering Journal diagram asset ${documentIndex + 1}.${diagramIndex + 1} is not a committed Git blob at the record revision.`);
         }
+        if (key === "renderedPath") {
+          renderedPath = path;
+          renderedBytes = gitBlob(root, document.commit, path);
+        }
+      }
+      if (renderedPath && renderedBytes) {
+        assets.push({ repository: document.repository, commit: document.commit, renderedPath, bytes: renderedBytes });
       }
     }
+  }
+  return assets;
+}
+
+function diagramAssetPath(asset) {
+  return join(DIAGRAM_ASSET_ROOT, asset.repository, asset.commit, asset.renderedPath);
+}
+
+async function allFiles(root) {
+  let entries;
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+  const paths = [];
+  for (const entry of entries) {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) paths.push(...await allFiles(path));
+    if (entry.isFile()) paths.push(path);
+  }
+  return paths.sort();
+}
+
+async function projectDiagramAssets(assets) {
+  const byPath = new Map();
+  for (const asset of assets) {
+    const path = diagramAssetPath(asset);
+    const prior = byPath.get(path);
+    if (prior && !prior.equals(asset.bytes)) throw new Error("Engineering Journal diagram asset collision.");
+    byPath.set(path, asset.bytes);
+  }
+  const expectedPaths = [...byPath.keys()].sort();
+  if (check) {
+    const actualPaths = await allFiles(DIAGRAM_ASSET_ROOT);
+    if (actualPaths.length !== expectedPaths.length || actualPaths.some((path, index) => path !== expectedPaths[index])) {
+      throw new Error("Generated Engineering Journal diagram asset set is stale.");
+    }
+    for (const path of expectedPaths) {
+      if (!(await readFile(path)).equals(byPath.get(path))) {
+        throw new Error(`Generated Engineering Journal diagram asset is stale: ${portablePath(REPOSITORY_ROOT, path)}.`);
+      }
+    }
+    return;
+  }
+  await rm(DIAGRAM_ASSET_ROOT, { recursive: true, force: true });
+  for (const path of expectedPaths) {
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, byPath.get(path));
   }
 }
 
@@ -113,11 +178,11 @@ async function sourceDocuments(repository) {
     };
     const documents = await documentsAt(repository.canonicalPath, "Engineering record");
     if (documents.length === 0) throw new Error(`Engineering Journal source ${repository.repository} contains no canonical records.`);
-    validateCommittedDiagramAssets(root, documents);
+    const diagramAssets = committedDiagramAssets(root, documents);
     const receiptDocuments = repository.receiptPath
       ? await documentsAt(repository.receiptPath, "pull request receipt")
       : [];
-    return { documents, receiptDocuments };
+    return { documents, receiptDocuments, diagramAssets };
   } finally {
     if (temporaryRoot) await rm(temporaryRoot, { recursive: true, force: true });
   }
@@ -131,6 +196,7 @@ async function main() {
   const sources = await Promise.all(config.repositories.map(sourceDocuments));
   const documents = sources.flatMap((source) => source.documents);
   const receiptDocuments = sources.flatMap((source) => source.receiptDocuments);
+  const diagramAssets = sources.flatMap((source) => source.diagramAssets);
   const build = buildEngineeringJournal({
     trustedRepositories: config.repositories.map(({ repository, owner, canonicalPath, receiptPath, commit }) => ({ repository, owner, canonicalPath, receiptPath, commit })),
     documents,
@@ -147,6 +213,7 @@ async function main() {
       await writeFile(outputPath, expected, "utf8");
     }
   }
+  await projectDiagramAssets(diagramAssets);
   process.stdout.write(`Engineering Journal: ${build.index.records.length} rich record(s), ${build.index.pullRequestReceipts.length} PR receipt(s), ${check ? "outputs current" : "outputs written"}.\n`);
 }
 

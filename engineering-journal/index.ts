@@ -300,6 +300,7 @@ const COMMIT_PATTERN = /^[0-9a-f]{40}$/;
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const RECORD_REF_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*@[1-9]\d*$/;
 const UTC_SECOND_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+const PORTABLE_ASSET_PATH_PATTERN = /^[A-Za-z0-9._/-]+$/;
 const TYPE_STATUSES: Record<EngineeringRecordType, ReadonlySet<EngineeringRecordStatus>> = {
   "change-note": new Set(["released"]),
   adr: new Set(["proposed", "accepted"]),
@@ -509,8 +510,8 @@ function diagramReferences(
       ? entry.evidenceRefs.map((ref) => typeof ref === "string" ? ref.trim() : "")
       : [];
     if (!title || title.length > 160 || !summary || summary.length > 280 ||
-      !pathWithin(sourcePath, "docs/design") || !sourcePath.endsWith(".drawio") ||
-      !pathWithin(renderedPath, "docs/design") || !/\.(?:png|svg)$/.test(renderedPath) ||
+      !PORTABLE_ASSET_PATH_PATTERN.test(sourcePath) || !pathWithin(sourcePath, "docs/design") || !sourcePath.endsWith(".drawio") ||
+      !PORTABLE_ASSET_PATH_PATTERN.test(renderedPath) || !pathWithin(renderedPath, "docs/design") || !/\.(?:png|svg)$/.test(renderedPath) ||
       sourcePath === renderedPath || evidenceRefs.length === 0 || evidenceRefs.some((ref) => !ref) ||
       new Set(evidenceRefs).size !== evidenceRefs.length || evidenceRefs.some((ref) => !verificationEvidence.has(ref))) {
       throw new EngineeringJournalError("field_diagrams_invalid", source);
@@ -528,7 +529,7 @@ function diagramReferences(
       evidenceRefs,
       sourcePermalink: sourcePermalink(repository, commit, sourcePath),
       renderedPermalink: sourcePermalink(repository, commit, renderedPath),
-      renderedUrl: rawSourceUrl(repository, commit, renderedPath),
+      renderedUrl: bundledDiagramUrl(repository.repository, commit, renderedPath),
     };
   });
 }
@@ -563,9 +564,9 @@ function sourcePermalink(repository: TrustedJournalRepository, commit: string, p
   return `https://github.com/${repository.owner}/${repository.repository}/blob/${commit}/${encodedPath}`;
 }
 
-function rawSourceUrl(repository: TrustedJournalRepository, commit: string, path: string) {
-  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
-  return `https://raw.githubusercontent.com/${repository.owner}/${repository.repository}/${commit}/${encodedPath}`;
+function bundledDiagramUrl(repository: string, commit: string, path: string) {
+  const encodedPath = [repository, commit, ...path.split("/")].map(encodeURIComponent).join("/");
+  return `/engineering-journal/assets/${encodedPath}`;
 }
 
 function normalizeDocument(
@@ -921,7 +922,7 @@ function renderStandalone(index: EngineeringJournalIndex, normalizedJson: string
 <p>${escapeHtml(record.type)} · ${escapeHtml(record.effectiveStatus)} · ${escapeHtml(record.repository)}</p>
 <h1>${escapeHtml(record.title)}</h1>
 <p>${escapeHtml(record.summary)}</p>
-${record.diagrams.map((diagram) => `<figure><a href="${escapeHtml(diagram.renderedPermalink)}"><img src="${escapeHtml(diagram.renderedUrl)}" alt="${escapeHtml(diagram.title)}"></a><figcaption><strong>${escapeHtml(diagram.title)}</strong> — ${escapeHtml(diagram.summary)} <a href="${escapeHtml(diagram.sourcePermalink)}">Editable source</a></figcaption></figure>`).join("\n")}
+${record.diagrams.map((diagram) => `<figure><a href="${escapeHtml(diagram.renderedPermalink)}"><img src="${escapeHtml(diagram.renderedUrl)}" alt="${escapeHtml(diagram.summary)}"></a><figcaption><strong>${escapeHtml(diagram.title)}</strong> — ${escapeHtml(diagram.summary)} <a href="${escapeHtml(diagram.sourcePermalink)}">Editable source</a></figcaption></figure>`).join("\n")}
 ${record.sections.map((section) => `<section id="${escapeHtml(section.id)}"><h2>${escapeHtml(section.title)}</h2><p>${escapeHtml(section.body)}</p></section>`).join("\n")}
 <p><a href="${escapeHtml(record.source.permalink)}">Exact source</a></p>
 </article>`).join("\n");

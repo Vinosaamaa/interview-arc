@@ -509,6 +509,10 @@ test("Engineering keeps the complete PR timeline separate from rich records", as
   assert.match(source, /Complete receipt chronology/);
   assert.match(source, /receiptStatistics\.byClassification/);
   assert.match(source, /receiptStatistics\.byRepository/);
+  assert.match(source, /record\.diagrams\.length/);
+  assert.match(source, /diagram\.renderedUrl/);
+  assert.match(source, /Editable draw\.io source/);
+  assert.doesNotMatch(source, /raw\.githubusercontent\.com/);
   assert.match(styles, /\.engineering-receipt-list::before/);
   assert.match(styles, /@media \(pointer: coarse\)/);
 });

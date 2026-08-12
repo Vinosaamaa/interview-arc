@@ -45,8 +45,8 @@
         "required": ["title", "sourcePath", "renderedPath", "summary", "evidenceRefs"],
         "properties": {
           "title": { "type": "string", "minLength": 1, "maxLength": 160 },
-          "sourcePath": { "type": "string", "pattern": "^docs/design/(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.drawio$" },
-          "renderedPath": { "type": "string", "pattern": "^docs/design/(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.(?:png|svg)$" },
+          "sourcePath": { "type": "string", "pattern": "^docs/design/(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._/-]+\\.drawio$" },
+          "renderedPath": { "type": "string", "pattern": "^docs/design/(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._/-]+\\.(?:png|svg)$" },
           "summary": { "type": "string", "minLength": 1, "maxLength": 280 },
           "evidenceRefs": { "$ref": "#/$defs/stringList" }
         }
