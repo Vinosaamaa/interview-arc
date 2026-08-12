@@ -157,6 +157,12 @@ export function validateBehavioralEvidenceWrite(payload: BehavioralEvidenceWrite
   assertStableId(payload.evidence.evidenceId, "evidenceId");
   assertStableId(payload.evidence.projectKey, "projectKey");
   assertStableId(payload.questionLink.questionId, "questionId");
+  if (["rejected", "superseded"].includes(payload.evidence.candidateState)) {
+    throw new BehavioralEvidenceError(
+      "behavioral_evidence_review_required",
+      "Rejected and superseded states may be reached only through explicit owner review.",
+    );
+  }
   const provenanceKindsByOrigin: Record<BehavioralEvidenceInput["origin"], BehavioralEvidenceInput["safeProvenance"][number]["kind"]> = {
     user_statement: "conversation",
     resume: "resume_claim",

@@ -39,7 +39,6 @@ function evidenceIdentityMatches(row: BehavioralEvidenceItemRow, input: Behavior
     && row.evidenceGrade === input.evidenceGrade
     && row.attributionGrade === input.attributionGrade
     && row.claimStrength === input.claimStrength
-    && row.candidateState === input.candidateState
     && row.visibility === "owner_private"
     && jsonEqual(row.safeProvenance, input.safeProvenance)
     && jsonEqual(row.supports, input.supports)
@@ -94,7 +93,13 @@ export async function upsertBehavioralEvidenceItem(
   if (existing && !evidenceIdentityMatches(existing, evidence)) {
     throw new BehavioralEvidenceError(
       "behavioral_evidence_identity_conflict",
-      "That evidence ID already belongs to different immutable content; supersession belongs to the later candidate-review slice.",
+      "That evidence ID already belongs to different immutable content; create a replacement and use the explicit review workflow.",
+    );
+  }
+  if (existing && existing.candidateState !== evidence.candidateState) {
+    throw new BehavioralEvidenceError(
+      "behavioral_evidence_review_required",
+      "Evidence candidate state changes require an explicit revision-guarded owner review.",
     );
   }
   if (evidence.ownerAttestation) {
@@ -169,7 +174,13 @@ export async function upsertBehavioralEvidenceItem(
       if (!evidenceIdentityMatches(authoritativeEvidence, evidence)) {
         throw new BehavioralEvidenceError(
           "behavioral_evidence_identity_conflict",
-          "That evidence ID already belongs to different immutable content; supersession belongs to the later candidate-review slice.",
+          "That evidence ID already belongs to different immutable content; create a replacement and use the explicit review workflow.",
+        );
+      }
+      if (authoritativeEvidence.candidateState !== evidence.candidateState) {
+        throw new BehavioralEvidenceError(
+          "behavioral_evidence_review_required",
+          "Evidence candidate state changes require an explicit revision-guarded owner review.",
         );
       }
       let authoritativeLink = await readEvidenceLink(ownerId, questionLink.questionId, evidence.evidenceId);

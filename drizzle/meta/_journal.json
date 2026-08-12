@@ -260,6 +260,13 @@
       "when": 1786468292938,
       "tag": "0036_amused_red_ghost",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1786496681777,
+      "tag": "0037_parched_prodigy",
+      "breakpoints": true
     }
   ]
 }
