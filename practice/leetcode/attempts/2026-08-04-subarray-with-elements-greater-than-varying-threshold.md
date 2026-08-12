@@ -108,43 +108,43 @@ Interaction-mode snapshot revision 1: unrecorded; mentor assistance recorded; hi
 
 > **Specialist:**
 > The delay was not mainly the MCP. The Today read took 1.1 seconds, the guarded timer resume took 1.2 seconds, the Solution Profile read/save took about 2.0 seconds total, controller preflight/navigation took about 18.3 seconds, and harness reservation took 5.4 seconds. The larger mistake was sequencing all of that before giving you the prompt and commands.
-> 
+>
 > Current problem: LeetCode 2334 — Subarray With Elements Greater Than Varying Threshold.
-> 
+>
 > Problem: Given a positive integer array nums and a positive integer threshold, return the length k of any non-empty contiguous subarray in which every value is strictly greater than threshold / k. Return -1 if no such subarray exists.
-> 
+>
 > Examples:
 > - nums = [1,3,4,3,1], threshold = 6 → 3. The subarray [3,4,3] has length 3, and every value is greater than 2.
 > - nums = [6,5,6,5,8], threshold = 7 → 1 is valid because [8] has length 1 and 8 > 7.
-> 
+>
 > Constraints:
 > - 1 <= nums.length <= 100,000
 > - 1 <= nums[i], threshold <= 1,000,000,000
-> 
+>
 > Required Java API:
 > ```java
 > class Solution {
 >     public int validSubarraySize(int[] nums, int threshold) {
->         
+>
 >     }
 > }
 > ```
-> 
+>
 > Open the working file:
 > ```bash
 > nvim "[workspace]/interview-arc/practice/leetcode/solutions/2334-subarray-with-elements-greater-than-varying-threshold.java"
 > ```
-> 
+>
 > Quick tests:
 > ```bash
 > node "[workspace]/interview-arc/scripts/leetcode-java-harness.mjs" run --activity-id 2026-08-01-extra-voice-plan-20-hard-most-frequent-2026-08-01-9c5b59ce-0 --generation-id 8a1fcb7dec5016c9b0f6
 > ```
-> 
+>
 > Full local tests:
 > ```bash
 > node "[workspace]/interview-arc/scripts/leetcode-java-harness.mjs" run --activity-id 2026-08-01-extra-voice-plan-20-hard-most-frequent-2026-08-01-9c5b59ce-0 --generation-id 8a1fcb7dec5016c9b0f6 --full
 > ```
-> 
+>
 > The harness is generating in the background. If it still says preparing, keep coding and rerun the same command later. The timer is running, and we are in interviewer mode.
 
 > **User:**
@@ -152,41 +152,41 @@ Interaction-mode snapshot revision 1: unrecorded; mentor assistance recorded; hi
 
 > **Specialist:**
 > Yes. The active problem is LeetCode 2334 — Subarray With Elements Greater Than Varying Threshold, and the Java file is ready.
-> 
+>
 > Open it with:
-> 
+>
 > ```bash
 > nvim '[workspace]/interview-arc/practice/leetcode/solutions/2334-subarray-with-elements-greater-than-varying-threshold.java'
 > ```
-> 
+>
 > Problem statement:
-> 
+>
 > You are given an integer array `nums` and an integer `threshold`.
-> 
+>
 > Find any non-empty contiguous subarray of length `k` such that every element in that subarray is strictly greater than `threshold / k`.
-> 
+>
 > Return the length `k` of any valid subarray. If no valid subarray exists, return `-1`.
-> 
+>
 > Examples:
-> 
+>
 > - `nums = [1,3,4,3,1]`, `threshold = 6` → `3`. The subarray `[3,4,3]` has length 3, and every element is greater than `6 / 3 = 2`.
 > - `nums = [6,5,6,5,8]`, `threshold = 7` → `1`. The subarray `[8]` has length 1, and `8 > 7`.
-> 
+>
 > Constraints:
-> 
+>
 > - `1 <= nums.length <= 100,000`
 > - `1 <= nums[i], threshold <= 1,000,000,000`
-> 
+>
 > Required Java signature:
-> 
+>
 > ```java
 > class Solution {
 >     public int validSubarraySize(int[] nums, int threshold) {
->         
+>
 >     }
 > }
 > ```
-> 
+>
 > The activity timer is currently running. Go ahead with your approach; I’ll stay in interviewer mode and won’t reveal the prepared solution unless you ask.
 
 > **User:**
@@ -194,25 +194,25 @@ Interaction-mode snapshot revision 1: unrecorded; mentor assistance recorded; hi
 
 > **Specialist:**
 > You’re right. I should have included the test commands in the initial problem response.
-> 
+>
 > Yes—the dedicated harness sub-agent finished successfully. Generation `8a1fcb7dec5016c9b0f6` is published with status `ready`:
-> 
+>
 > - Quick suite: 8 cases
 > - Full suite: 28 cases, including deterministic oracle checks and a 100,000-element boundary
 > - Your Java source file was not modified by the sub-agent
-> 
+>
 > Run the Quick suite while iterating:
-> 
+>
 > ```bash
 > node "[workspace]/interview-arc/scripts/leetcode-java-harness.mjs" run --activity-id 2026-08-01-extra-voice-plan-20-hard-most-frequent-2026-08-01-9c5b59ce-0 --generation-id 8a1fcb7dec5016c9b0f6
 > ```
-> 
+>
 > Run the Full local suite when the Quick suite passes:
-> 
+>
 > ```bash
 > node "[workspace]/interview-arc/scripts/leetcode-java-harness.mjs" run --activity-id 2026-08-01-extra-voice-plan-20-hard-most-frequent-2026-08-01-9c5b59ce-0 --generation-id 8a1fcb7dec5016c9b0f6 --full
 > ```
-> 
+>
 > Each command rereads your latest saved Java file, compiles a temporary copy, runs the selected tests, and leaves your source untouched. Local success is evidence for your iteration, not a LeetCode Accepted verdict.
 
 > **User:**
@@ -220,119 +220,119 @@ Interaction-mode snapshot revision 1: unrecorded; mentor assistance recorded; hi
 
 > **Specialist:**
 > Absolutely. Mentor mode means I’ll give you the reasoning, then connect each implementation detail to that reasoning.
-> 
+>
 > ## 1. Rewrite the condition
-> 
+>
 > For a candidate subarray of length k, every value must satisfy:
-> 
+>
 > nums[i] > threshold / k
-> 
+>
 > Because the values are positive integers, this is equivalent to:
-> 
+>
 > minimumValueInSubarray * k > threshold
-> 
+>
 > So the real question is:
-> 
+>
 > > Can we find a contiguous range whose minimum value multiplied by the range length is greater than threshold?
-> 
+>
 > ## 2. Why brute force is too slow
-> 
+>
 > We could try every left and right boundary and maintain the minimum. That is O(n²), which is too slow for n up to 100,000.
-> 
+>
 > Instead, think about one element at a time.
-> 
+>
 > Suppose nums[i] is the minimum of a range. For that element, the product is:
-> 
+>
 > nums[i] * rangeLength
-> 
+>
 > For a fixed minimum, a longer valid range is always better. Therefore, we only need the widest contiguous range in which nums[i] can serve as a minimum.
-> 
+>
 > If even that widest range fails, every shorter range with the same minimum also fails.
-> 
+>
 > ## 3. How to find each element’s widest range
-> 
+>
 > For each value, we need:
-> 
+>
 > - the first position to its left with a smaller-or-equal value;
 > - the first position to its right with a strictly smaller value.
-> 
+>
 > Those boundaries tell us the widest interval containing this value where every element is at least its value.
-> 
+>
 > This is the same “span of a minimum” pattern as Largest Rectangle in Histogram.
-> 
+>
 > A monotonic increasing stack finds those boundaries in O(n):
-> 
+>
 > - Keep indices whose values are nondecreasing.
 > - When a smaller value arrives, the indices popped from the stack have just found their first smaller value on the right.
 > - After popping index i, the new stack top is its left boundary.
 > - Therefore:
-> 
+>
 > length = right - left - 1
-> 
+>
 > Then test:
-> 
+>
 > (long) nums[i] * length > threshold
-> 
+>
 > The cast to long prevents integer overflow.
-> 
+>
 > ## 4. Walk through the example
-> 
+>
 > For:
-> 
+>
 > nums = [1, 3, 4, 3, 1], threshold = 6
-> 
+>
 > When the final 1 arrives:
-> 
+>
 > - 4 is popped. Its widest span has length 1, so 4 * 1 = 4; it fails.
 > - The later 3 is popped. Its widest span has length 2, so 3 * 2 = 6; it fails because the condition is strictly greater.
 > - The earlier 3 is then popped. Its widest span has length 3, so 3 * 3 = 9; it succeeds.
-> 
+>
 > Therefore, return 3. The valid subarray is [3, 4, 3].
-> 
+>
 > ## 5. Java implementation
-> 
+>
 > ```java
 > class Solution {
 >     public int validSubarraySize(int[] nums, int threshold) {
 >         Deque<Integer> stack = new ArrayDeque<>();
-> 
+>
 >         for (int right = 0; right <= nums.length; right++) {
 >             int current = right == nums.length ? 0 : nums[right];
-> 
+>
 >             while (!stack.isEmpty() && nums[stack.peek()] > current) {
 >                 int index = stack.pop();
 >                 int left = stack.isEmpty() ? -1 : stack.peek();
 >                 int length = right - left - 1;
-> 
+>
 >                 if ((long) nums[index] * length > threshold) {
 >                     return length;
 >                 }
 >             }
-> 
+>
 >             stack.push(right);
 >         }
-> 
+>
 >         return -1;
 >     }
 > }
 > ```
-> 
+>
 > If the LeetCode starter does not already import these classes, use fully qualified names or add:
-> 
+>
 > ```java
 > import java.util.ArrayDeque;
 > import java.util.Deque;
 > ```
-> 
+>
 > The sentinel iteration at right == nums.length uses current = 0 to flush the remaining stack. It is safe because the constraints make every nums[i] positive.
-> 
+>
 > Complexity:
-> 
+>
 > - Time: O(n), because each index is pushed and popped at most once.
 > - Space: O(n) for the stack.
-> 
+>
 > The key memory hook is:
-> 
+>
 > > Rewrite the condition as minimum × length > threshold, then find every element’s widest span as the minimum.
 
 > **User:**
@@ -340,21 +340,21 @@ Interaction-mode snapshot revision 1: unrecorded; mentor assistance recorded; hi
 
 > **Specialist:**
 > You’re right—I gave you the whole solution instead of coaching you step by step. I’m resetting to true mentor mode now.
-> 
+>
 > We will use this process:
-> 
+>
 > 1. I ask one focused reasoning question.
 > 2. You answer in your own words.
 > 3. I correct or refine only that step.
 > 4. We move to the next step.
 > 5. I will not show implementation or the complete solution unless you explicitly ask.
-> 
+>
 > Step 1: Ignore stacks and code for now.
-> 
+>
 > For a candidate subarray of length k, the requirement says that every element must be greater than threshold / k.
-> 
+>
 > What single property of the subarray determines whether every element satisfies that condition?
-> 
+>
 > Answer just this conceptual question first.
 
 > **User:**
@@ -362,21 +362,21 @@ Interaction-mode snapshot revision 1: unrecorded; mentor assistance recorded; hi
 
 > **Specialist:**
 > Exactly—that is the right first observation.
-> 
+>
 > For a contiguous subarray of length k, checking every element is equivalent to checking only its minimum:
-> 
+>
 > min(subarray) > threshold / k
-> 
+>
 > Now let’s remove the division. Since all values are positive, rewrite it as:
-> 
+>
 > min(subarray) * k > threshold
-> 
+>
 > That form is easier to compute safely and avoids division details.
-> 
+>
 > Step 2:
-> 
+>
 > Suppose we choose one element x and imagine that x is the minimum of the subarray. To make x * k as large as possible, what kind of subarray should we try to find around x?
-> 
+>
 > Answer conceptually—still no data structure or code yet.
 
 > **User:**
@@ -384,13 +384,13 @@ Interaction-mode snapshot revision 1: unrecorded; mentor assistance recorded; hi
 
 > **Specialist:**
 > You’re thinking in a reasonable direction: for a fixed k, we would care about the minimum of each length-k window. That can lead to a sliding-window minimum, but checking every k would still be too expensive.
-> 
+>
 > Binary search is the part we should reject. The predicate “there exists a valid subarray of length k” is not monotonic in k. For example, with threshold 5 and values [3, 3], length 2 is valid because 3 * 2 = 6 > 5, but length 1 is not valid because 3 * 1 = 3. So a valid larger k does not guarantee a valid smaller k.
-> 
+>
 > Let’s return to the fixed-minimum perspective.
-> 
+>
 > Step 3:
-> 
+>
 > Suppose x is the minimum value we are considering. Which neighboring values are allowed to belong to x’s subarray, and where must the subarray stop expanding?
 
 > **User:**
@@ -398,30 +398,30 @@ Interaction-mode snapshot revision 1: unrecorded; mentor assistance recorded; hi
 
 > **Specialist:**
 > Yes, exactly.
-> 
+>
 > The problem does not ask for the longest subarray or a unique answer. It asks for the size of any valid subarray.
-> 
+>
 > That means:
-> 
+>
 > - There may be several valid subarrays.
 > - They may have different lengths k.
 > - Returning any one valid k is accepted.
 > - Return -1 only when no valid subarray exists at all.
-> 
+>
 > For example, with nums = [5, 5, 5] and threshold = 4:
-> 
+>
 > - k = 1 is valid because 5 * 1 > 4.
 > - k = 2 is valid because 5 * 2 > 4.
 > - k = 3 is valid because 5 * 3 > 4.
-> 
+>
 > Returning 1, 2, or 3 would all be valid.
-> 
+>
 > This is useful algorithmically: we can return immediately as soon as we discover one valid span. We do not need to search for the largest k.
-> 
+>
 > Now back to Step 3:
-> 
+>
 > If x is the minimum of the span we are considering, every included neighbor must be at least x. The span must stop when we hit a value smaller than x.
-> 
+>
 > What two boundaries do we need to know to calculate x’s widest valid span?
 
 > **User:**
@@ -429,28 +429,28 @@ Interaction-mode snapshot revision 1: unrecorded; mentor assistance recorded; hi
 
 > **Specialist:**
 > That’s okay—we’re narrowing it down one piece at a time.
-> 
+>
 > If x is the minimum, an included neighbor is allowed only when its value is greater than or equal to x.
-> 
+>
 > Example:
-> 
+>
 > nums = [1, 3, 4, 3, 1]
-> 
+>
 > If x = 3:
-> 
+>
 > - 4 is allowed.
 > - The other 3 is allowed.
 > - 1 is not allowed, so it stops the span.
-> 
+>
 > Therefore, x’s span expands left and right until it reaches the first value smaller than x.
-> 
+>
 > So the two boundaries we need are:
-> 
+>
 > - the nearest position to the left whose value is smaller than x;
 > - the nearest position to the right whose value is smaller than x.
-> 
+>
 > Step 4:
-> 
+>
 > For the 3 at index 1 in [1, 3, 4, 3, 1], what are those left and right boundaries? Don’t think about a stack yet—just identify the positions.
 
 > **User:**
@@ -458,28 +458,28 @@ Interaction-mode snapshot revision 1: unrecorded; mentor assistance recorded; hi
 
 > **Specialist:**
 > That’s okay—we’re narrowing it down one piece at a time.
-> 
+>
 > If x is the minimum, an included neighbor is allowed only when its value is greater than or equal to x.
-> 
+>
 > Example:
-> 
+>
 > nums = [1, 3, 4, 3, 1]
-> 
+>
 > If x = 3:
-> 
+>
 > - 4 is allowed.
 > - The other 3 is allowed.
 > - 1 is not allowed, so it stops the span.
-> 
+>
 > Therefore, x’s span expands left and right until it reaches the first value smaller than x.
-> 
+>
 > So the two boundaries we need are:
-> 
+>
 > - the nearest position to the left whose value is smaller than x;
 > - the nearest position to the right whose value is smaller than x.
-> 
+>
 > Step 4:
-> 
+>
 > For the 3 at index 1 in [1, 3, 4, 3, 1], what are those left and right boundaries? Don’t think about a stack yet—just identify the positions.
 
 > **User:**
@@ -487,21 +487,21 @@ Interaction-mode snapshot revision 1: unrecorded; mentor assistance recorded; hi
 
 > **Specialist:**
 > We are at the boundary step—not at implementation yet.
-> 
+>
 > For x = 3 at index 1 in:
-> 
+>
 > [1, 3, 4, 3, 1]
-> 
+>
 > the first smaller value on the left is at index 0, and the first smaller value on the right is at index 4.
-> 
+>
 > So the span containing x runs from index left + 1 through right - 1.
-> 
+>
 > The length is therefore:
-> 
+>
 > right - left - 1
-> 
+>
 > For this example, what length does that produce?
-> 
+>
 > After that, our next question will be: how can we find those left and right smaller-value boundaries for every index efficiently, without scanning outward from every element?
 
 > **User:**
@@ -509,19 +509,19 @@ Interaction-mode snapshot revision 1: unrecorded; mentor assistance recorded; hi
 
 > **Specialist:**
 > Next step: finish the small example, then move from the conceptual boundaries to an efficient way to discover them.
-> 
+>
 > For the 3 at index 1:
-> 
+>
 > - left boundary = 0
 > - right boundary = 4
 > - span length = 4 - 0 - 1 = 3
-> 
+>
 > Now consider the efficiency problem. If, for every index, we scan left and right to find smaller values, the worst case becomes O(n²).
-> 
+>
 > Instead, scan once from left to right. When a new value is smaller than values near the end of our candidate list, those larger values have just found their first smaller value on the right and can be removed from consideration.
-> 
+>
 > What data structure lets us keep candidates ordered and remove candidates from the end efficiently?
-> 
+>
 > Answer the data-structure question only.
 
 > **User:**
@@ -529,34 +529,34 @@ Interaction-mode snapshot revision 1: unrecorded; mentor assistance recorded; hi
 
 > **Specialist:**
 > Yes—I understand your concern, and it is exactly the subtle point.
-> 
+>
 > Finding the right boundary for index 0 does not solve index 1, index 2, and so on. We still need all of them.
-> 
+>
 > The one-pass idea is not “one element at a time and forget the others.” It is:
-> 
+>
 > > Keep every element whose right boundary has not been discovered yet.
-> 
+>
 > Those unresolved candidates stay in an ordered stack.
-> 
+>
 > For example, while scanning values like:
-> 
+>
 > [2, 5, 4, 3]
-> 
+>
 > the stack can retain all four candidates because each new value is still large enough for the candidate immediately below it.
-> 
+>
 > When a new 1 arrives:
-> 
+>
 > - 3 is popped: 1 is its first smaller value on the right.
 > - Then 4 is popped: 1 is also its first smaller value on the right.
 > - Then 5 is popped.
 > - Then 2 is popped.
-> 
+>
 > Each popped element is processed exactly once. After popping one element, the new stack top tells us that element’s left boundary.
-> 
+>
 > So the stack simultaneously remembers the elements whose right boundaries are still unknown. That is why we do not restart a full scan for every index.
-> 
+>
 > Step 8:
-> 
+>
 > After scanning [2, 5, 4, 3], what should the stack contain—in value order—before the new 1 arrives?
 
 > **User:**
@@ -564,25 +564,25 @@ Interaction-mode snapshot revision 1: unrecorded; mentor assistance recorded; hi
 
 > **Specialist:**
 > Yes—your stack simulation is correct, and I need to correct my previous wording. I incorrectly said the stack could retain [2, 5, 4, 3]. In a nondecreasing monotonic stack, each smaller arrival pops larger values immediately.
-> 
+>
 > The actual progression is:
-> 
+>
 > - Read 2: stack = [2]
 > - Read 5: stack = [2, 5]
 > - Read 4: pop 5, then stack = [2, 4]
 > - Read 3: pop 4, then stack = [2, 3]
 > - Read 1: pop 3, pop 2, then stack = [1]
-> 
+>
 > The important point is that popping does not lose an element. It means we have now discovered that element’s first smaller value on the right, so we can finalize its widest span.
-> 
+>
 > For 5:
-> 
+>
 > - Its right boundary is the index of 4.
 > - After popping 5, the stack top is 2, which is its left boundary.
 > - Its span length is right - left - 1.
-> 
+>
 > Step 9:
-> 
+>
 > For the 5 in [2, 5, 4], what is its span length, and which subarray does that span represent?
 
 > **User:**
@@ -590,23 +590,23 @@ Interaction-mode snapshot revision 1: unrecorded; mentor assistance recorded; hi
 
 > **Specialist:**
 > Yes, exactly. You have the core algorithm now.
-> 
+>
 > Whenever an element is popped:
-> 
+>
 > 1. Its value is the candidate minimum.
 > 2. The current index is its first smaller position on the right.
 > 3. The new stack top is its left boundary.
 > 4. Compute length = right - left - 1.
 > 5. Test whether (long) value * length > threshold.
 > 6. Return length immediately if it succeeds.
-> 
+>
 > If every popped element fails, return -1.
-> 
+>
 > There are two remaining implementation details to reason through:
-> 
+>
 > - What should the left boundary be when the stack is empty after popping?
 > - What makes sure elements still left in the stack get processed after the final array element?
-> 
+>
 > Step 10: How can we force the algorithm to process those remaining elements at the end?
 
 > **User:**
@@ -614,20 +614,20 @@ Interaction-mode snapshot revision 1: unrecorded; mentor assistance recorded; hi
 
 > **Specialist:**
 > You’re thinking of the sentinel value, which is 0—the minimum artificial value used to flush the stack.
-> 
+>
 > For the left boundary, we need an index, not a value:
-> 
+>
 > - If the stack is nonempty, left = stack.peek().
 > - If the stack is empty, left = -1, meaning “there is no smaller value before this element.”
-> 
+>
 > Then the span length is still:
-> 
+>
 > right - left - 1
-> 
+>
 > For example, if left = -1 and right = 5, the span covers indices 0 through 4, so its length is 5.
-> 
+>
 > Step 13:
-> 
+>
 > Why does using -1 correctly represent a span that starts at index 0?
 
 > **User:**
@@ -641,17 +641,17 @@ Interaction-mode snapshot revision 1: unrecorded; mentor assistance recorded; hi
 
 > **Specialist:**
 > Exactly. The code is relatively short once the invariant is clear. The difficult part is recognizing the chain of ideas:
-> 
+>
 > 1. “Every element is greater than threshold / k” depends only on the subarray minimum.
 > 2. Rewrite it as minimum * length > threshold.
 > 3. For each element, only its widest span as the minimum matters.
 > 4. A smaller incoming value finalizes the right boundary of larger unresolved values.
 > 5. A monotonic stack tracks those unresolved candidates.
-> 
+>
 > That pattern—not the Java syntax—is the main thing worth remembering. It is closely related to Largest Rectangle in Histogram and nearest-smaller-element problems.
-> 
+>
 > Let’s finish the last implementation detail conceptually:
-> 
+>
 > If the array ends while the stack still contains increasing values, what artificial value could we process after the array to make every remaining value pop?
 
 > **User:**
@@ -659,17 +659,17 @@ Interaction-mode snapshot revision 1: unrecorded; mentor assistance recorded; hi
 
 > **Specialist:**
 > Almost—use an artificial value of 0, not the integer mean.
-> 
+>
 > The constraints guarantee every nums[i] is positive, so 0 is smaller than every real value. Processing that sentinel after the last element forces all remaining stack entries to pop.
-> 
+>
 > Conceptually:
-> 
+>
 > - real array values are processed at their normal indices;
 > - one extra iteration uses right = nums.length and current = 0;
 > - that extra 0 flushes the stack.
-> 
+>
 > Now the other boundary detail:
-> 
+>
 > When an element is popped and the stack is empty, there is no smaller value on its left. What index should we use as the left boundary in that case?
 
 > **User:**
@@ -731,21 +731,21 @@ Interaction-mode snapshot revision 1: unrecorded; mentor assistance recorded; hi
 
 > **Specialist:**
 > Post-submit review: Accepted after correcting both the left-boundary span calculation and integer-overflow risk.
-> 
+>
 > What went well:
 > - You reduced the condition to minimum × length > threshold.
 > - You chose the correct monotonic-stack pattern.
 > - You diagnosed the overflow issue and then corrected the separate boundary-width issue.
 > - The final code uses a -1 boundary sentinel, a zero flush sentinel, and long arithmetic.
-> 
+>
 > Complexity: O(n) time and O(n) auxiliary space; every index is pushed and popped at most once.
-> 
+>
 > Important edge cases: a valid span beginning at index 0; all equal values; strictly increasing or decreasing arrays; a valid answer found only during the final sentinel flush; no valid span; and products beyond 32-bit range.
-> 
+>
 > Alternatives:
 > 1. Two-pass boundaries: compute previous-smaller/equal and next-smaller arrays, then evaluate each index’s maximal span. Same O(n) time and O(n) space, but more explicit and easier to debug.
 > 2. Descending-value activation with disjoint-set union: activate indices from largest to smallest, union active neighbors, and test value × component size. This is O(n log n) because of sorting and uses O(n) space; it is useful when the connectivity perspective feels more natural.
-> 
+>
 > Main improvement for future: when popping a candidate, immediately name the three roles—candidate index, left boundary, right boundary—before writing the length formula.
 
 > **User:**
@@ -1911,4 +1911,3 @@ Audio-grounded review of the exact 22.34-second recording: 95.7 WPM across 34 al
 ## References
 
 - [LeetCode 2334 — Subarray With Elements Greater Than Varying Threshold](https://leetcode.com/problems/subarray-with-elements-greater-than-varying-threshold/) — accessed 2026-08-03T23:53:12.247Z
-

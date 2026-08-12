@@ -96,9 +96,9 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 
 > **Specialist:**
 > The italic sentence I used was my own explanatory rendering; it was not the literal contract wording. The current LeetCode guide requires the shared truthful line exactly: `↻ Practice persistence delegated in background` whenever the persistence child receives work. For an unrelated typed administrative turn, it specifies: `*Not attached to this practice activity · Not saved to the practice transcript or publication*`.
-> 
+>
 > My recommendation is not to rewrite historical footers. They are already-observed transcript content. Use the canonical line for future responses. If you want a different user-facing wording, that should be an explicit documentation decision followed by the required issue/PR workflow; I will not edit AGENT.md or inspect/modify a PR from this exploratory question.
-> 
+>
 > *Transcript attachment delegated to background persistence; final receipt pending.*
 
 > **User:**
@@ -106,9 +106,9 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 
 > **Specialist:**
 > Yes, it is different. “Transcript attachment delegated to background persistence; final receipt pending” is my clearer explanatory wording; the guide’s canonical required line is `↻ Practice persistence delegated in background`.
-> 
+>
 > Until a documentation decision changes the contract, I should use the canonical line. If you explicitly choose the clearer wording as the new standard, that becomes a docs/contract change handled through the normal issue/PR workflow.
-> 
+>
 > *Transcript attachment delegated to background persistence; final receipt pending.*
 
 > **User:**
@@ -119,15 +119,15 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 
 > **Specialist:**
 > “Canonical” means the authoritative wording written in the contract. The loaded files contain exactly two explicit footer-like strings:
-> 
+>
 > 1. From `docs/contracts/background-specialist-persistence.md` (the shared interim delegation line):
 > `↻ Practice persistence delegated in background`
-> 
+>
 > 2. From `practice/leetcode/AGENTS.md` for unrelated typed administration:
 > `*Not attached to this practice activity · Not saved to the practice transcript or publication*`
-> 
+>
 > The phrase “Transcript attachment delegated to background persistence; final receipt pending” is not in AGENTS.md or the persistence contract; I generated it as explanatory wording. MCP results such as `activity_related`, `saved`, `deferred`, or `duplicate=false` are structured receipts from the MCP, not footer text. The filter/status text you noticed is likewise MCP state, not an additional footer defined in AGENTS.md.
-> 
+>
 > *Transcript attachment delegated to background persistence; final receipt pending.*
 
 > **User:**
@@ -135,18 +135,18 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 
 > **Specialist:**
 > We’re on **Trapping Rain Water**, LeetCode **#42**, and its timer is running.
-> 
+>
 > **Problem**
 > Given an array `height` of non-negative integers where each bar has width `1`, compute how much water it can trap after raining.
-> 
+>
 > Examples:
 > - `height = [0,1,0,2,1,0,1,3,2,1,2,1]` → `6`
 > - `height = [4,2,0,3,2,5]` → `9`
-> 
+>
 > Return the total trapped water.
-> 
+>
 > We’ll proceed step by step in interviewer mode. First question: for a single index, what two pieces of information about the bars to its left and right determine how much water can sit above it?
-> 
+>
 > ↻ Practice persistence delegated in background
 
 > **User:**
@@ -154,7 +154,7 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 
 > **Specialist:**
 > No—the Trapping Rain Water (#42) harness has not been generated yet. The earlier Quick/Full harness belongs only to #2334. For #42, the evolving Java source file did not exist, so the contract’s `prepare` step could not reserve a valid activity-scoped generation; I should have said that explicitly instead of implying the tests were ready.
-> 
+>
 > First open/create the source file from the project root:
 > ```bash
 > nvim "$(
@@ -165,9 +165,9 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 > "water.java"
 > )"
 > ```
-> 
+>
 > After the file exists, I will run the checked-in harness `prepare` command, give you the returned Quick and `--full` commands immediately, and use one harness sub-agent to generate and publish the local suites. I will not invent a runner command before that generation exists.
-> 
+>
 > ↻ Practice persistence delegated in background
 
 > **User:**
@@ -175,9 +175,9 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 
 > **Specialist:**
 > Yes. The first-step sequence is explicitly documented in interview-arc/practice/leetcode/AGENTS.md: browser/controller preflight and same-tab navigation at lines 354-378 and 565-572, then source preparation and harness prepare/Quick/Full handoff at lines 430-459. No PR update was needed. I ran ensure first, navigated the existing single tab to Trapping Rain Water, and confirmed Java. The #42 source is now at the required path; harness generation e392aaf7cdbd1ce39059 is preparing in the staging cache, so no tests have run yet.
-> 
+>
 > ASCII-only prompt (not an image): # = bar, ~ = trapped water. Example [0,1,0,2,1,0,1,3,2,1,2,1] holds 6 units; [4,2,0,3,2,5] holds 9.
-> 
+>
 > Editor command:
 > nvim "$(
 > printf %s \
@@ -186,7 +186,7 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 > "0042-trapping-rain-" \
 > "water.java"
 > )"
-> 
+>
 > Quick and Full commands are supplied in the visible response below; rerun them after the helper publishes.
 > ↻ Practice persistence delegated in background
 
@@ -201,7 +201,7 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 
 > **Specialist:**
 > Agreed. The durable LeetCode rule now says: always include the faithful ASCII/text version in the conversation and Java header; when ASCII would obscure a material relationship, also show an original explanatory image. Never use a copied LeetCode screenshot, image coordinates, or store the generated image in the durable solution tree or practice transcript. I updated interview-arc/practice/leetcode/AGENTS.md accordingly.
-> 
+>
 > #42 harness generation e392aaf7cdbd1ce39059 is ready: Quick 8 cases, Full 19 cases (strict superset), deterministic brute-force oracle. Editor command:
 > nvim "$(
 > printf %s \
@@ -210,7 +210,7 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 > "0042-trapping-rain-" \
 > "water.java"
 > )"
-> 
+>
 > The visible response supplies paste-safe Quick and Full runner commands.
 
 > **User:**
@@ -239,7 +239,7 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 
 > **Specialist:**
 > Mentor mode, step 1: temporarily ignore the stack. Pick one index i and ask: what is the highest wall to its left, what is the highest wall to its right, and which one limits the water level?
-> 
+>
 > Do not implement yet. State the per-index water rule in words first; then we will decide whether a stack is the cleanest way to compute it.
 
 > **User:**
@@ -250,7 +250,7 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 
 > **Specialist:**
 > You are mixing two different valid solutions. For the left-highest/right-highest approach, do not use a monotonic stack; keep one running maximum while scanning. The stack is a separate solution that resolves a basin when a bar is popped; it does not directly maintain the global highest wall.
-> 
+>
 > Next mental check: in [0,1,0,2,1,0,1,3,...], when you reach index 5, what should the highest wall seen on the left be?
 
 > **User:**
@@ -258,7 +258,7 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 
 > **Specialist:**
 > The #42 harness is ready. Run this paste-safe Quick command against the latest saved Java source; add --full only for the larger suite:
-> 
+>
 > [command shown in final response]
 
 > **User:**
@@ -1337,4 +1337,3 @@ The clip is brief and action-oriented at approximately 125 WPM. The main deliver
 ## References
 
 - [LeetCode 42 — Trapping Rain Water](https://leetcode.com/problems/trapping-rain-water/) — accessed 2026-08-04
-

@@ -150,7 +150,7 @@ class Solution {
         String ans = "";
 
         for(int i=0; i<s.length(); i++){
-            
+
             all[s.charAt(i)]--;
             if(all[s.charAt(i)] >= 0) count--;
 
@@ -162,7 +162,7 @@ class Solution {
 
                 all[s.charAt(st)]++;
                 if(all[s.charAt(st)] == 1) count++;
-                
+
                 st++;
             }
         }
@@ -567,4 +567,3 @@ Clear, concise 15.81-second update at approximately 137 words per minute. It sta
 ## References
 
 - [LeetCode 76 — Minimum Window Substring](https://leetcode.com/problems/minimum-window-substring/) — accessed 2026-08-05T22:21:04.355Z
-

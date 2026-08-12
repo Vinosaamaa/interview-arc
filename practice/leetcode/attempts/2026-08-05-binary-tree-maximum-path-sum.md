@@ -80,7 +80,7 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 
 > **Specialist:**
 > Open the current Java file with:
-> 
+>
 > ```bash
 > nvim "$(
 > printf %s \
@@ -117,33 +117,33 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 
 > **Specialist:**
 > Mentoring paused. The harness for Binary Tree Maximum Path Sum is already prepared and ready. Use these commands; do not run zsh -n or wait for the helper.
-> 
+>
 > Open the evolving Java file:
-> 
+>
 >  nvim "$(printf %s \
 >   "[workspace]/" \
 >   "interview-arc/practice/leetcode/" \
 >   "solutions/0124-binary-tree-maximum-path-sum.java")"
-> 
+>
 > Quick local suite:
-> 
+>
 >  node scripts/leetcode-java-harness.mjs run \
 >   --activity-id "$(printf %s \
 >     "2026-08-04-extra-voice-plan-15-" \
 >     "unresolved-current-workbench-20260804-13")" \
 >   --generation-id "33594717b41b5207fbbc"
-> 
+>
 > Full local suite:
-> 
+>
 >  node scripts/leetcode-java-harness.mjs run \
 >   --activity-id "$(printf %s \
 >     "2026-08-04-extra-voice-plan-15-" \
 >     "unresolved-current-workbench-20260804-13")" \
 >   --generation-id "33594717b41b5207fbbc" \
 >   --full
-> 
+>
 > Yes, the activity context is still warm. The delay came from a targeted one-time lookup of the harness command syntax and generation ID, not a full instruction reload, MCP rediscovery, or browser restart.
-> 
+>
 > *Warm activity context reused.*
 
 > **User:**
@@ -157,16 +157,16 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 
 > **Specialist:**
 > Repair started. The first preparation attempt hit the documented default-cache EPERM boundary, so I used the one approved local temporary harness root and reserved a fresh generation: 8c2de36f5741435f8cbc. One harness worker is generating the suites now; I am not waiting for it or retrying automatically.
-> 
+>
 > Open the Java file:
-> 
+>
 >  nvim "$(printf %s \
 >   "[workspace]/" \
 >   "interview-arc/practice/leetcode/" \
 >   "solutions/0124-binary-tree-maximum-path-sum.java")"
-> 
+>
 > Quick local suite (uses the approved temporary harness root):
-> 
+>
 >  env INTERVIEW_ARC_HARNESS_ROOT="$(printf %s \
 >   "/private/tmp/" \
 >   "interview-arc-harnesses")" \
@@ -175,9 +175,9 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 >     "2026-08-04-extra-voice-plan-15-" \
 >     "unresolved-current-workbench-20260804-13")" \
 >   --generation-id "8c2de36f5741435f8cbc"
-> 
+>
 > Full local suite:
-> 
+>
 >  env INTERVIEW_ARC_HARNESS_ROOT="$(printf %s \
 >   "/private/tmp/" \
 >   "interview-arc-harnesses")" \
@@ -187,9 +187,9 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 >     "unresolved-current-workbench-20260804-13")" \
 >   --generation-id "8c2de36f5741435f8cbc" \
 >   --full
-> 
+>
 > The new generation is preparing in background. If you run either suite before publication, the runner will report that it is still preparing; do not submit code until the local harness is ready.
-> 
+>
 > *Warm activity context reused.*
 
 > **User:**
@@ -200,14 +200,14 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 
 > **Specialist:**
 > Submission result: Accepted. The persistent controller verified the Binary Tree Maximum Path Sum page, Java editor, exact source equality, sent one Meta+Enter, and received the new attempt-specific Accepted verdict. Local stage timings: identity verified 0.01 ms, source read 0.65 ms, source replacement/equality 22.50 ms, submit gesture 74.66 ms, server wait 782.25 ms, total user-visible controller command 1,246.75 ms. The user reported that the local Quick and Full harness suites passed; the repaired generation contains Quick 8 cases and Full 26 cases.
-> 
+>
 > The official Editorial URL was opened, but its content was unavailable through the current access path, so I cannot honestly claim that I read or list its editorial-specific alternatives. The official problem page confirms the problem is Hard and is tagged Dynamic Programming, Tree, and Depth-First Search: https://leetcode.com/problems/binary-tree-maximum-path-sum/
-> 
+>
 > My own alternative analysis:
 > 1. Submitted approach: recursive postorder two-state DP. Each node contributes a one-sided downward gain upward; a path through the node may combine both non-negative child gains. Time O(n), auxiliary space O(h).
 > 2. Iterative postorder DP: use an explicit stack plus a map from node to downward gain. This avoids recursion-depth risk, runs in O(n) time, and uses O(n) auxiliary space.
 > 3. Pair-returning recursive DP: return both downward gain and best complete path in a small pair/state object instead of a mutable global holder. Same O(n)/O(h) bounds; cleaner state ownership but more object/boilerplate overhead.
-> 
+>
 > Code review: strengths are the correct two-state recurrence, clamping negative child gains to zero, initializing the answer from root so all-negative trees work, and using long for intermediate sums. No correctness gap was observed in the submitted source, and the platform returned Accepted. Minor clarity improvements would be descriptive names such as leftGain/rightGain and a field or pair state instead of a one-element long array. Edge cases covered include all-negative values, a single node, skewed trees, null child branches, and an optimum path entirely inside a subtree.
 
 > **User:**
@@ -215,7 +215,7 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 
 > **Specialist:**
 > Iterative postorder alternative (original analysis, not claimed Editorial content): use one stack plus an identity map of each node's downward gain. Push a node once, then push its children. When the node reaches the top a second time, both children are already processed, so compute left=max(0,down[left]), right=max(0,down[right]), update best with left + node.val + right, and store down[node]=max(left,right)+node.val. Java:
-> 
+>
 > public int maxPathSum(TreeNode root) {
 >     if (root == null) return 0;
 >     Deque<TreeNode> stack = new ArrayDeque<>();
@@ -238,7 +238,7 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 >     }
 >     return (int) best;
 > }
-> 
+>
 > This is O(n) time and O(n) extra space, avoids recursion-depth risk, and is more bookkeeping-heavy than the submitted O(h)-stack recursion. Preserve the exact response turn and do not append the enveloped user turn separately.
 
 > **User:**
@@ -313,9 +313,9 @@ class Solution {
     }
 
     long dfs(TreeNode root, long[] ans){
-        
+
         if(root == null) return 0;
-        
+
         long L = Math.max(0L, dfs(root.left, ans));
         long R = Math.max(0L, dfs(root.right, ans));
 
@@ -928,4 +928,3 @@ A concise, clearly organized transition: completion status, return to work, then
 ## References
 
 - [LeetCode 124 — Binary Tree Maximum Path Sum](https://leetcode.com/problems/binary-tree-maximum-path-sum/) — accessed 2026-08-04
-

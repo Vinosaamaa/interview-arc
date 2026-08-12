@@ -56,11 +56,11 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 
 > **Specialist:**
 > ## Next problem: Basic Calculator
-> 
+>
 > The activity timer is running. The Java file is already prepared in the isolated batch worktree.
-> 
+>
 > Open the Java file first:
-> 
+>
 > ```bash
 > nvim "$(
 > printf %s \
@@ -71,23 +71,23 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 > tor.java"
 > )"
 > ```
-> 
+>
 > ### Problem
-> 
+>
 > Given a valid expression containing non-negative integers, `+`, `-`, parentheses, and spaces, evaluate and return its integer result. Parentheses may nest, and unary signs can appear where the grammar permits.
-> 
+>
 > Examples: `1 + 1 -> 2`, `2-1 + 2 -> 3`, `(1+(4+5+2)-3)+(6+8) -> 23`.
-> 
+>
 > Java API:
-> 
+>
 > ```java
 > public int calculate(String s)
 > ```
-> 
+>
 > Use a single left-to-right parse with a current number, current sign, subtotal, and a stack for the subtotal/sign context outside parentheses.
-> 
+>
 > Quick test:
-> 
+>
 > ```bash
 > env INTERVIEW_ARC_HARNESS_ROOT="$(
 > printf %s \
@@ -109,9 +109,9 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 > "b844ac40925fb08ab2c4"
 > )"
 > ```
-> 
+>
 > Full test:
-> 
+>
 > ```bash
 > env INTERVIEW_ARC_HARNESS_ROOT="$(
 > printf %s \
@@ -133,7 +133,7 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 > "b844ac40925fb08ab2c4"
 > )" --full
 > ```
-> 
+>
 > If the harness says `preparing`, rerun the same command unchanged. Do not submit until you explicitly ask.
 
 > **User:**
@@ -150,33 +150,33 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 
 > **Specialist:**
 > ## Basic Calculator — final review
-> 
+>
 > You correctly identified the key difficulty: parentheses change the active expression context, while subtraction makes evaluation order matter. You also correctly moved toward a stack and recognized that multi-digit numbers need a persistent scan.
-> 
+>
 > The main issue was state explosion. You mixed this problem with Calculator II/III and kept inventing “previous” variables without first defining one invariant. For this problem, keep exactly three pieces of active state:
-> 
+>
 > - `result`: the value accumulated in the current parenthesized context;
 > - `sign`: the sign waiting to be applied to the next number/expression;
 > - `number`: the multi-digit number currently being scanned.
-> 
+>
 > When `(` begins, save the outer `result` and `sign` on a stack, then reset the inner context. When `)` ends, finish the inner context and combine it with the saved outer context.
-> 
+>
 > ### Strongest solution — one forward stack
-> 
+>
 > ```java
 > import java.util.ArrayDeque;
 > import java.util.Deque;
-> 
+>
 > class Solution {
 >     public int calculate(String s) {
 >         Deque<Integer> stack = new ArrayDeque<>();
 >         int result = 0;
 >         int sign = 1;
 >         int number = 0;
-> 
+>
 >         for (int i = 0; i < s.length(); i++) {
 >             char c = s.charAt(i);
-> 
+>
 >             if (Character.isDigit(c)) {
 >                 number = number * 10 + (c - '0');
 >             } else if (c == '+' || c == '-') {
@@ -191,37 +191,37 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 >             } else if (c == ')') {
 >                 result += sign * number;
 >                 number = 0;
-> 
+>
 >                 int outerSign = stack.pop();
 >                 int outerResult = stack.pop();
 >                 result = outerResult + outerSign * result;
 >                 sign = 1;
 >             }
 >         }
-> 
+>
 >         return result + sign * number;
 >     }
 > }
 > ```
-> 
+>
 > The stack stores pairs in this order: `[outerResult, outerSign]`. At `)`, the inner expression is already complete, so the pair restores the context that existed before `(`.
-> 
+>
 > ### Walkthrough of the invariant
-> 
+>
 > For `1-(2-3)`, the inner expression evaluates to `-1`. The outer context saved `result = 1` and `sign = -1`, so the closing parenthesis computes `1 + (-1 * -1) = 2`.
-> 
+>
 > For `-(2+3)`, the sign before `(` is `-1`; the same pair rule produces `-5` without a special unary-minus branch.
-> 
+>
 > ### Editorial-aligned alternatives
-> 
+>
 > 1. **Reverse-string stack.** Reverse the expression and use a stack to evaluate subexpressions. Reversal compensates for the fact that popping naturally processes tokens from right to left, while subtraction must remain left-associative. It is linear but more difficult to reason about because digit construction and parentheses are reversed.
-> 
+>
 > 2. **Recursive index parser.** Keep one shared index, recursively evaluate when `(` appears, and return when `)` appears. This mirrors the grammar directly and is often the clearest mental model, but recursion depth is O(n) and can be less robust for deeply nested input.
-> 
+>
 > The visible Editorial was accessible and presents the two stack approaches: reverse-plus-stack and forward stack without reversal. The implementation above is an independently written version of the forward approach, not copied Editorial code.
-> 
+>
 > ### Complexity and edge cases
-> 
+>
 > - Time: `O(n)`; each character is processed once.
 > - Auxiliary space: `O(n)` worst case for nested parentheses.
 > - Multi-digit numbers.
@@ -230,11 +230,11 @@ Interaction-mode snapshot revision 1: unrecorded; no mentor assistance recorded.
 > - Nested parentheses such as `1-(2-(3-4))`.
 > - An expression with no parentheses.
 > - A final number with no trailing operator.
-> 
+>
 > Useful checks: `1 + 1 -> 2`, `2-1 + 2 -> 3`, `(1+(4+5+2)-3)+(6+8) -> 23`, `1-(2-3) -> 2`, and `-(2+3) -> -5`.
-> 
+>
 > No user Code Attempt was saved because no Java source was provided or submitted. This is a mentor walkthrough after the user ended the attempt; no LeetCode Accepted verdict occurred.
-> 
+>
 > Next step: implement the three-state invariant once, run the prepared harness, and ask for a new review only after you have an actual submission or explicit final attempt boundary.
 
 ## User Attempt
@@ -574,4 +574,3 @@ Delivery is understandable in short bursts but highly fragmented across the 28.6
 ## References
 
 - [LeetCode 224 — Basic Calculator](https://leetcode.com/problems/basic-calculator/) — accessed 2026-08-06T03:34:54.221Z
-
