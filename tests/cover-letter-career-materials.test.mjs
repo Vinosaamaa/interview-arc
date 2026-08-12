@@ -138,8 +138,26 @@ test("cover-letter provider failures expose only bounded operational categories"
       await capture("owner-cover-letter-network", async () => {
         throw new TypeError("request to https://private.example/?credential=secret failed");
       }),
-      { code: "provider_network_error" },
+      { code: "provider_network_error", detail: "TypeError: request to <url> failed" },
     );
+    const privateToken = environment.JOB_JOURNEY_SITE_TOKEN;
+    const privateDetail = await capture("owner-cover-letter-redaction", async () => {
+      throw new TypeError(
+        `Fetch failed for ${environment.JOB_JOURNEY_BASE_URL}/private/${"opaque-id-".repeat(4)} using ${privateToken} at /Users/private/manifest for owner@example.com`,
+      );
+    });
+    assert.equal(privateDetail.code, "provider_network_error");
+    assert.match(privateDetail.detail, /Fetch failed/);
+    for (const privateValue of [
+      environment.JOB_JOURNEY_BASE_URL,
+      "job-journey.example",
+      privateToken,
+      "/Users/private/manifest",
+      "owner@example.com",
+      "opaque-id-opaque-id-opaque-id-opaque-id-",
+    ]) {
+      assert.equal(privateDetail.detail.includes(privateValue), false);
+    }
     assert.deepEqual(
       await capture("owner-cover-letter-json", async () => new Response("not-json")),
       { code: "provider_invalid_json" },
