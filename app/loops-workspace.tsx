@@ -283,7 +283,7 @@ function JobDescriptionDialog({ loop, opener, onClose }: {
     };
   }, [onClose, opener]);
 
-  return createPortal(<div className="loop-jd-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+  return createPortal(<div className="loop-jd-overlay tone-loops" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <div className="loop-jd-dialog" role="dialog" aria-modal="true" aria-labelledby="loop-jd-dialog-title" ref={dialogRef}>
       <header className="loop-jd-dialog-header"><div><span>Private source · Role Brief revision {loop.roleBrief.revision}</span><h2 id="loop-jd-dialog-title">Full job description</h2><p>{loop.loop.company} · {loop.loop.roleTitle}</p></div><button type="button" className="loop-jd-close" onClick={onClose} ref={closeRef} aria-label="Close full job description"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15" /></svg></button></header>
       <div className="loop-jd-dialog-body" aria-live="polite">
@@ -309,10 +309,12 @@ function RoleBriefPanel({ loop, onOpenSource }: {
 }
 
 function InterviewMaterial({ material }: { material: LoopInterviewMaterial }) {
-  return <details className={`loop-stage-card loop-stage-material ${material.stageId ? "stage-bound" : "legacy-wide"}`}>
-    <summary><span><strong>{material.label}</strong><small>{material.stageId ? "Stage material" : "Legacy Loop-wide material"} · revision {material.revision}</small></span><svg className="loop-disclosure" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" /></svg></summary>
-    <div>{material.summary ? <p>{material.summary}</p> : null}{material.sections.map((section) => <section key={section.sectionId}><h4>{section.title}</h4>{section.body ? <p>{section.body}</p> : null}{section.bullets.length ? <ul>{section.bullets.map((bullet, index) => <li key={`${section.sectionId}-${index}`}>{bullet}</li>)}</ul> : null}</section>)}<footer>{material.provenance.sourceLabel} · Prepared {formatDate(material.provenance.preparedAt)}</footer></div>
-  </details>;
+  const [open, setOpen] = useState(false);
+  const bodyId = `loop-material-${material.materialId}`;
+  return <article className={`loop-stage-card loop-stage-material ${material.stageId ? "stage-bound" : "legacy-wide"} ${open ? "open" : "closed"}`}>
+    <button type="button" className="loop-material-trigger" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen((current) => !current)}><span><strong>{material.label}</strong><small>{material.stageId ? "Stage material" : "Legacy Loop-wide material"} · revision {material.revision}</small></span><svg className="loop-disclosure" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" /></svg></button>
+    <div className={`loop-material-body-shell ${open ? "open" : "closed"}`} id={bodyId} inert={!open} aria-hidden={!open}><div className="loop-material-body">{material.summary ? <p>{material.summary}</p> : null}{material.sections.map((section) => <section key={section.sectionId}><h4>{section.title}</h4>{section.body ? <p>{section.body}</p> : null}{section.bullets.length ? <ul>{section.bullets.map((bullet, index) => <li key={`${section.sectionId}-${index}`}>{bullet}</li>)}</ul> : null}</section>)}<footer>{material.provenance.sourceLabel} · Prepared {formatDate(material.provenance.preparedAt)}</footer></div></div>
+  </article>;
 }
 
 function QuestionCard({ question, index, stageId, expanded, onToggle }: {

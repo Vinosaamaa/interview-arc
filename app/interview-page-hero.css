@@ -47,12 +47,18 @@
 .page-hero-metric span { color: #3f5751; font-size: .72rem; line-height: 1.15; }
 .page-hero-summary.interactive { padding: 0; }
 .hero-bank-totals { width: 100%; height: 50px; margin: 0; border: 0; border-radius: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.page-hero-summary.interactive > .hero-bank-totals { grid-column: 1 / -1; width: 100%; }
 .hero-bank-totals button { height: 50px; min-height: 50px; padding: 0 clamp(18px, 3vw, 42px); border: 0; border-left: 1px solid color-mix(in srgb, var(--page-accent) 35%, #d5dbea); background: transparent; color: #263e60; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; text-align: left; cursor: pointer; }
 .hero-bank-totals button:first-child { border-left: 0; }
 .hero-bank-totals button:hover, .hero-bank-totals button.active { background: color-mix(in srgb, var(--page-accent-soft) 70%, white); }
 .hero-bank-totals strong { color: var(--page-accent); font-family: var(--font-newsreader); font-size: 1.55rem; }
 .hero-bank-totals span { font-size: .74rem; font-weight: 730; }
 .hero-bank-totals i { color: var(--page-accent); font-size: 1.1rem; font-style: normal; }
+@container (min-width: 1201px) {
+  .tone-banks .page-hero-narrative { grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); }
+  .tone-banks .page-hero-copy h1 { max-width: 900px; font-size: clamp(3rem, 3.9vw, 4.25rem); }
+  .tone-banks .page-hero-copy p { max-width: 720px; }
+}
 
 .view-page > .interview-page-hero,
 .career-materials-workspace > .interview-page-hero,
@@ -61,6 +67,7 @@
 .career-materials-workspace > .interview-page-hero,
 .loops-workspace > .interview-page-hero { margin-bottom: 0; }
 .interview-page-hero + :is(section, article, div) { margin-top: 0; }
+.page-content > .interview-page-hero + .orchestrator-rail { margin-top: 20px; }
 
 .app-shell :is(.chart-sheet, .coding-ledger, .mock-sheet, .bank-master-detail, .past-master-detail, .materials-import-register, .materials-cover-letters, .materials-revision, .loop-stage-record > article) {
   border-color: color-mix(in srgb, var(--page-accent) 22%, #c5d0c8);

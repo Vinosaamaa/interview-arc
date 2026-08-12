@@ -55,7 +55,7 @@
 .recall-group h2 { margin: 0 24px 5px 0; color: #29483d; font-size: .875rem; font-style: italic; letter-spacing: .04em; text-transform: uppercase; }
 .recall-group p { margin: 0 28px 0 0; color: #5f7068; font-size: .8rem; line-height: 1.45; }
 .recall-rows { width: 100%; max-width: 100%; min-width: 0; display: grid; gap: 10px; overflow: visible; }
-.review-row { --row-branch: var(--coding); width: 100%; max-width: 100%; min-width: 0; min-height: 92px; padding: 12px; border: 1px solid #c6d0c7; border-radius: 10px; background: #fff; display: grid; grid-template-columns: 44px minmax(0, 1fr) minmax(120px, auto) 144px; align-items: center; gap: 14px; position: relative; transition: border-color .16s ease, background-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+.review-row { --row-branch: var(--coding); width: 100%; max-width: 100%; min-width: 0; min-height: 92px; padding: 12px; border: 1px solid #c6d0c7; border-radius: 10px; background: #fff; display: grid; grid-template-columns: 44px minmax(0, 1fr) 360px 144px; align-items: center; gap: 14px; position: relative; transition: border-color .16s ease, background-color .16s ease, box-shadow .16s ease, transform .16s ease; }
 .review-row.system_design { --row-branch: var(--system); }
 .review-row.behavioral { --row-branch: var(--behavior); }
 .review-row::before { content: ""; width: 30px; border-top: 1px dashed var(--row-branch); position: absolute; left: -31px; top: 50%; }
@@ -73,9 +73,9 @@
 .review-row-copy small { color: #65766f; font-size: .72rem; text-transform: capitalize; }
 .review-row-copy strong { color: #203d35; font-size: .9rem; line-height: 1.25; }
 .review-row-copy p { max-width: 760px; margin: 0; overflow: hidden; color: #5c6e67; font-size: .78rem; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
-.review-row-meta { min-width: 248px; display: grid; grid-template-columns: repeat(3, minmax(72px, 1fr)); align-items: center; justify-items: center; gap: 6px; color: #5c7068; font-size: .72rem; text-align: center; }
-.review-row-meta > span { width: 100%; text-align: center; }
-.review-outcome-chip { padding: 4px 8px; border: 1px solid #c7d2ca; border-radius: 999px; background: #edf4f1; color: #34574e; font-weight: 760; white-space: nowrap; }
+.review-row-meta { min-width: 0; width: 100%; display: grid; grid-template-columns: 160px 110px 72px; align-items: center; justify-content: center; justify-items: center; gap: 9px; color: #5c7068; font-size: .72rem; text-align: center; font-variant-numeric: tabular-nums; }
+.review-row-meta > span { width: 100%; min-height: 30px; display: grid; place-items: center; text-align: center; white-space: nowrap; }
+.review-outcome-chip { width: 140px !important; padding: 4px 8px; border: 1px solid #c7d2ca; border-radius: 999px; background: #edf4f1; color: #34574e; font-weight: 760; white-space: nowrap; }
 .review-outcome-chip.failed { border-color: #e3a99d; background: #fff0eb; color: #923e31; }
 .review-outcome-chip.solved { border-color: #aabb67; background: #f5f9df; color: #465c11; }
 .review-icon-actions { min-width: 0; display: grid; grid-template-columns: repeat(3, 44px); justify-content: end; gap: 6px; }
@@ -122,6 +122,9 @@
   .review-queue-controls { grid-template-columns: minmax(0, 1fr) minmax(235px, .42fr); }
   .review-filter-rail > button { padding-inline: 12px; }
   .review-selection-folio { grid-template-columns: 132px 44px minmax(150px, 1fr) 44px minmax(180px, auto); }
+  .review-row { grid-template-columns: 44px minmax(0, 1fr) 320px 144px; }
+  .review-row-meta { grid-template-columns: 142px 96px 64px; gap: 9px; }
+  .review-outcome-chip { width: 128px !important; }
 }
 
 @container (max-width: 820px) {
@@ -145,6 +148,8 @@
   .review-row::after { left: -29px; }
   .review-row { grid-template-columns: 44px minmax(0, 1fr) 144px; gap: 10px; }
   .review-row-meta { grid-column: 2 / 3; justify-items: center; }
+  .review-row-meta { grid-template-columns: repeat(3, minmax(72px, 1fr)); }
+  .review-outcome-chip { width: min(140px, 100%) !important; }
   .review-icon-actions { grid-column: 3; grid-row: 1 / span 2; }
   .review-selection-folio { min-height: 142px; grid-template-columns: 122px 40px minmax(120px, 1fr) 40px; grid-template-rows: 68px 46px; }
   .folio-add { grid-column: 1 / -1; min-height: 44px; }

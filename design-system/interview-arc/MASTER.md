@@ -90,7 +90,11 @@ does not exempt it from this geometry.
   full-width three-segment interactive selector for Coding, System Design, and
   Behavioral. A visible boundary and segment dividers are allowed because each
   segment expands its corresponding bank panel. The selector still remains
-  inside the same `350px` top-panel border box.
+  inside the same `350px` top-panel border box. Its selector grid spans the
+  complete inner width of the panel and its three equal columns consume that
+  width; it must never inherit a metric grid cell or collapse into only the
+  narrative column. A closed disclosure rail contributes no layout height or
+  margin, so the next Banks panel begins at the shared exact `20px` panel gap.
 - Page-specific high-definition botanical artwork may occupy the narrative
   field's supporting side. Ship it as responsive SVG/vector geometry with a
   stable `viewBox`, decorative `aria-hidden` semantics, and no embedded raster
@@ -99,6 +103,18 @@ does not exempt it from this geometry.
 - The top panel is one semantic region and one visual container. It must remain
   visually separate from the first body panel; never merge the masthead and
   the page's primary list, reader index, or analytics surface into one sheet.
+- Major panels below every page hero begin after one exact `20px` gap. The
+  Today orchestration rail is a major panel and follows this rule even when it
+  is empty.
+- Loops uses one workspace-owned `1px` chronology spine from the hero boundary
+  to the center of the terminal state. Child panels and the stage list must not
+  draw overlapping spine segments; nodes cover the line at intersections and
+  the terminal circle covers its endpoint.
+- The full job-description source opens as a large passive Loop dossier: a
+  fixed pink-accented header, one vertically scrolling body, a sticky compact
+  provenance band, and a readable document measure. It preserves the private
+  source boundary, traps focus, never scrolls horizontally, and restores focus
+  to its opener when dismissed.
 - The top panel remains exactly `350px` tall at every supported width and zoom
   level. When content would exceed that fixed height, reflow or remove
   secondary decoration and move lower-priority content into the body. Never
