@@ -16,6 +16,7 @@ const wrangler = fileURLToPath(new URL("../node_modules/.bin/wrangler", import.m
 const config = fileURLToPath(new URL("../wrangler.mcp.jsonc", import.meta.url));
 const project = fileURLToPath(new URL("..", import.meta.url));
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+const sqlText = (value) => `'${String(value).replaceAll("'", "''")}'`;
 const MAX_WORKER_LOG_CHARS = 20_000;
 
 function availablePort() {
@@ -483,6 +484,135 @@ test("an authenticated staged DOCX/PDF pair becomes one immutable current resume
     });
     assert.equal(semanticImportV1.response.status, 201, JSON.stringify(semanticImportV1.body));
 
+    const backfillAnalysis = {
+      schemaVersion: 1,
+      answerFormat: "STARL",
+      competencies: ["platform engineering"],
+      claimAudit: [{
+        claim: "Built a platform capability.",
+        status: "verified",
+        supportingEvidenceIds: ["evidence-platform"],
+        contraryEvidenceIds: [],
+        gaps: [],
+        contradictions: [],
+      }],
+      reviewDimensions: Object.fromEntries([
+        "relevance", "structure", "specificity", "personalOwnership",
+        "decisions", "result", "learning", "delivery",
+      ].map((dimension) => [dimension, { status: "not_observed" }])),
+      strengths: [],
+      improvements: [],
+      coachingNotes: [],
+      likelyFollowUps: [],
+      nextDrill: "Rehearse the exact platform example.",
+    };
+    const backfillSnapshot = {
+      schemaVersion: 1,
+      answer: "I built a platform capability.",
+      scope: "universal",
+      question: {
+        questionId: "behavioral-platform",
+        title: "Platform example",
+        prompt: "Tell me about a platform capability.",
+      },
+      solutionProfile: { questionId: "behavioral-platform", revision: 3 },
+      acceptedEvidenceIds: ["evidence-platform"],
+      evidenceGaps: [],
+      contradictions: [],
+      provenance: { responseTurnId: "response-platform-backfill" },
+      behavioralAnalysis: backfillAnalysis,
+    };
+    const legacySnapshot = {
+      ...backfillSnapshot,
+      provenance: { responseTurnId: "response-platform-legacy" },
+    };
+    delete legacySnapshot.behavioralAnalysis;
+    await run(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", `
+      INSERT INTO behavioral_final_answer_snapshots
+        (owner_id,activity_id,snapshot_revision,operation_id,request_fingerprint,snapshot,
+         correction_of_revision,correction_reason,finalized_at)
+      VALUES
+        ('owner-resume-ingest','behavioral-attempt-backfill',1,'answer-backfill-operation','answer-backfill-fingerprint',
+         ${sqlText(JSON.stringify(backfillSnapshot))},NULL,NULL,1),
+        ('owner-resume-ingest','behavioral-attempt-legacy',1,'answer-legacy-operation','answer-legacy-fingerprint',
+         ${sqlText(JSON.stringify(legacySnapshot))},NULL,NULL,1);
+    `]);
+    const backfillInput = {
+      operationId: "resume-context-backfill-platform",
+      activityId: "behavioral-attempt-backfill",
+      snapshotRevision: 1,
+      resumeId: "semantic-resume",
+      resumeRevisionId: "semantic-revision-v1",
+      provenance: {
+        sourceFingerprint: semanticSourceV1,
+        docxSha256: semanticImportV1.body.files.docx.sha256,
+        pdfSha256: semanticImportV1.body.files.pdf.sha256,
+        resumeImportedAt: semanticImportV1.body.importedAt,
+        snapshotLoadedAt: semanticImportV1.body.importedAt,
+      },
+      authorization: "explicit_user_instruction",
+      ownerConfirmedAt: semanticImportV1.body.importedAt,
+      reason: "Synthetic owner confirmation of the exact loaded snapshot.",
+    };
+    const mismatchedBackfill = await client.callTool({
+      name: "backfill_activity_resume_context",
+      arguments: {
+        ...backfillInput,
+        operationId: "resume-context-backfill-mismatch",
+        provenance: { ...backfillInput.provenance, pdfSha256: sha256("different PDF") },
+      },
+    });
+    assert.equal(mismatchedBackfill.isError, true);
+    assert.equal(mismatchedBackfill.structuredContent.code, "resume_context_backfill_provenance_mismatch");
+    const legacyBackfill = await client.callTool({
+      name: "backfill_activity_resume_context",
+      arguments: {
+        ...backfillInput,
+        operationId: "resume-context-backfill-legacy",
+        activityId: "behavioral-attempt-legacy",
+      },
+    });
+    assert.equal(legacyBackfill.isError, true);
+    assert.equal(legacyBackfill.structuredContent.code, "resume_context_backfill_snapshot_unsupported");
+    const legacyContext = await call(client, "get_activity_resume_context", {
+      activityId: "behavioral-attempt-legacy",
+    });
+    assert.deepEqual(legacyContext, {
+      found: false,
+      contexts: [],
+      truncated: false,
+      provenanceState: "legacy_unversioned",
+    });
+
+    const backfilled = await call(client, "backfill_activity_resume_context", backfillInput);
+    assert.equal(backfilled.status, "saved");
+    assert.equal(backfilled.state, "backfilled");
+    assert.equal(backfilled.duplicate, false);
+    assert.deepEqual(backfilled.claimIds, ["claim-platform"]);
+    assert.deepEqual(backfilled.evidenceIds, ["evidence-platform"]);
+    assert.equal(/sha256|fingerprint|owner-resume/i.test(JSON.stringify(backfilled)), false);
+    const backfillRetry = await call(client, "backfill_activity_resume_context", backfillInput);
+    assert.equal(backfillRetry.duplicate, true);
+    assert.equal(backfillRetry.capturedAt, backfilled.capturedAt);
+    const changedBackfillRetry = await client.callTool({
+      name: "backfill_activity_resume_context",
+      arguments: { ...backfillInput, reason: "A changed historical assertion." },
+    });
+    assert.equal(changedBackfillRetry.isError, true);
+    assert.equal(changedBackfillRetry.structuredContent.code, "resume_context_backfill_operation_conflict");
+    const isolatedBackfill = await otherClient.callTool({
+      name: "backfill_activity_resume_context",
+      arguments: backfillInput,
+    });
+    assert.equal(isolatedBackfill.isError, true);
+    assert.equal(isolatedBackfill.structuredContent.code, "resume_context_backfill_snapshot_unavailable");
+    const backfilledContext = await call(client, "get_activity_resume_context", {
+      activityId: "behavioral-attempt-backfill",
+      snapshotRevision: 1,
+    });
+    assert.equal(backfilledContext.contexts[0].state, "backfilled");
+    assert.equal(backfilledContext.contexts[0].capturedAt, backfilled.capturedAt);
+
     await run(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", `
       INSERT INTO activity_resume_contexts
         (owner_id,activity_id,snapshot_revision,resume_id,resume_revision_id,source_label,resume_imported_at,
@@ -549,8 +679,11 @@ test("an authenticated staged DOCX/PDF pair becomes one immutable current resume
     });
     assert.equal(claimUsage.revisionOccurrences.length, 1);
     assert.equal(claimUsage.revisionOccurrences[0].revisionId, "semantic-revision-v1");
-    assert.equal(claimUsage.activityContexts.length, 1);
-    assert.equal(claimUsage.activityContexts[0].activityId, "behavioral-attempt-platform");
+    assert.equal(claimUsage.activityContexts.length, 2);
+    assert.deepEqual(
+      claimUsage.activityContexts.map((context) => context.activityId).sort(),
+      ["behavioral-attempt-backfill", "behavioral-attempt-platform"],
+    );
 
     const activityContext = await call(client, "get_activity_resume_context", {
       activityId: "behavioral-attempt-platform",

@@ -160,6 +160,29 @@ test("a Drive revision change during export fails before local or remote persist
   );
 });
 
+test("an inaccessible or revoked connector export creates no mirror or remote write", async (context) => {
+  const fixture = await createFixture();
+  context.after(() => rm(fixture.root, { recursive: true, force: true }));
+  await rm(path.join(fixture.root, "connector-exports", "snapshot.pdf"));
+  let called = false;
+
+  await assert.rejects(
+    importGoogleDocResume({
+      capturePath: fixture.capturePath,
+      root: fixture.root,
+      endpoint: "https://resume-import.example.test/resume/imports",
+      token: "synthetic-integration-token",
+      fetchImpl: async () => { called = true; return savedResponse(fixture.capture); },
+    }),
+    (error) => error instanceof GoogleDocResumeImportError && error.code === "resume_export_invalid",
+  );
+  assert.equal(called, false);
+  await assert.rejects(
+    readFile(path.join(fixture.root, "private-sources/resume-library/imports/primary-resume/primary-resume-r1/manifest.private.json")),
+    { code: "ENOENT" },
+  );
+});
+
 test("an immutable local revision conflicts instead of accepting changed content", async (context) => {
   const fixture = await createFixture();
   context.after(() => rm(fixture.root, { recursive: true, force: true }));

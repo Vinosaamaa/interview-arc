@@ -1467,6 +1467,40 @@ export const activityResumeContexts = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.activityId, table.snapshotRevision] })],
 );
 
+// Coordinator-only audit evidence for an owner-confirmed historical resume
+// relationship. The immutable activity snapshot and resume revision stay in
+// their owning tables; this row proves the exact loaded file identities and
+// makes retries conflict-safe without storing file bytes or private locators.
+export const activityResumeContextBackfills = sqliteTable(
+  "activity_resume_context_backfills",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    activityId: text("activity_id").notNull(),
+    snapshotRevision: integer("snapshot_revision").notNull(),
+    resumeId: text("resume_id").notNull(),
+    resumeRevisionId: text("resume_revision_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    sourceFingerprint: text("source_fingerprint").notNull(),
+    docxSha256: text("docx_sha256").notNull(),
+    pdfSha256: text("pdf_sha256").notNull(),
+    resumeImportedAt: integer("resume_imported_at").notNull(),
+    snapshotLoadedAt: integer("snapshot_loaded_at").notNull(),
+    ownerConfirmedAt: integer("owner_confirmed_at").notNull(),
+    reason: text("reason").notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.operationId] }),
+    uniqueIndex("activity_resume_context_backfills_target_unique").on(
+      table.ownerId,
+      table.activityId,
+      table.snapshotRevision,
+    ),
+  ],
+);
+
 // One stable operation id owns a single immutable request hash. The stored
 // receipt makes an exact retry safe after an ambiguous HTTP response.
 export const resumeImportOperations = sqliteTable(
@@ -2066,6 +2100,7 @@ export type ResumeRevisionRow = typeof resumeRevisions.$inferSelect;
 export type ResumeRevisionFileRow = typeof resumeRevisionFiles.$inferSelect;
 export type ResumeRevisionFileDeletionRow = typeof resumeRevisionFileDeletions.$inferSelect;
 export type ActivityResumeContextRow = typeof activityResumeContexts.$inferSelect;
+export type ActivityResumeContextBackfillRow = typeof activityResumeContextBackfills.$inferSelect;
 export type ResumeImportOperationRow = typeof resumeImportOperations.$inferSelect;
 export type ResumeImportLockRow = typeof resumeImportLocks.$inferSelect;
 export type SpecialistWriteJobRow = typeof specialistWriteJobs.$inferSelect;

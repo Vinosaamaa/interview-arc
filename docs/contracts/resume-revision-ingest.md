@@ -67,6 +67,11 @@ access. For one explicit `Import this resume` command it must:
    revision/version must match the pre-export observation. A mismatch is
    `resume_source_changed_during_export`; discard neither source nor prior
    revisions, and export both formats again from one stable observation.
+   An inaccessible, revoked, or deleted source fails inside the connector and
+   therefore produces no valid export capture. Moving a still-authorized Doc
+   does not create a new source identity: stable file ID and revision evidence
+   remain authoritative, while folder/path metadata never enters the capture
+   or D1.
 4. Prepare an ignored private capture JSON and run
    `npm run resume:import:google-doc -- <private-capture.json>`. The controller
    validates signatures and bounds, computes all fingerprints, atomically
@@ -161,6 +166,16 @@ or export path. The local receipt is a private cache; D1 remains authoritative.
   across current and older resume revisions plus exact activity snapshots.
 - `get_activity_resume_context` reads contemporaneous/backfilled historical
   context directly; it never guesses a relationship.
+- `backfill_activity_resume_context` is a coordinator-only append operation.
+  It requires explicit owner instruction plus the exact source, DOCX, and PDF
+  fingerprints of the snapshot the owner actually loaded. It verifies one
+  immutable behavioral answer revision and one immutable resume revision,
+  derives bounded claim/evidence context from the stored attempt, records a
+  separate audit receipt, and labels the new relationship `backfilled`.
+  Exact retries are unchanged; conflicting retries or pre-existing context
+  fail closed. An attempt without exact snapshot provenance remains legacy
+  unversioned through the absence of any context row; the owner-scoped reader
+  reports that state explicitly without fabricating a relationship.
 - `GET /api/resume-library` serves the same bounded owner-scoped model with
   `private, no-store`. Interview → Career Materials owns this read; Behavioral
   Foundation does not embed or own the Resume Library.
@@ -198,8 +213,8 @@ or export path. The local receipt is a private cache; D1 remains authoritative.
 
 ## Remaining issue #211 work
 
-Cross-repository cover-letter publication and provenance-safe historical
-backfill remain separate slices.
+Cross-repository cover-letter publication remains a separate Job Journey
+slice.
 The current import accepts already-extracted bounded occurrences and exact
 semantic identities; it does not run an untrusted semantic model inside the
 Worker or invent pending claims.
@@ -219,3 +234,11 @@ generation, object key, or provider/local locator. Exact retries are unchanged;
 an explicit answer correction appends a new context revision while preserving
 all earlier rows. Legacy and genuinely no-résumé attempts remain explicitly
 without context—no backfill is fabricated.
+
+Historical linkage is never part of specialist finalization. Only the
+Coordinator may call `backfill_activity_resume_context`, and only after the
+owner confirms that the fingerprinted DOCX/PDF snapshot was actually loaded
+for the exact immutable answer revision. The audit row preserves the loaded
+and confirmation times, file fingerprints, reason, and exact-retry request
+identity without storing bytes or locators. Failure to establish any one of
+those facts leaves the attempt unversioned.

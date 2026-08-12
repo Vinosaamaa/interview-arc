@@ -2,13 +2,20 @@ import { and, asc, desc, eq, inArray, lte, sql } from "drizzle-orm";
 import { env } from "cloudflare:workers";
 import { isDisplaySafeResumeSourceLabel } from "./resume-revision-policy";
 import { resumeSha256Hex, type ResumeRevisionManifest } from "./resume-revision-manifest";
+import { behavioralFinalAnswerSnapshotInputSchema } from "./behavioral-final-answer";
+import {
+  backfillActivityResumeContextSchema,
+  type BackfillActivityResumeContextInput,
+} from "./activity-resume-context";
 
 import { d1TransactionalInvariantGuard, isD1TransactionalInvariantFailure } from "./d1-transactional-guard";
 import { getDb } from "./index";
 import {
   behavioralClaims,
+  behavioralFinalAnswerSnapshots,
   behavioralEvidenceItems,
   activityResumeContexts,
+  activityResumeContextBackfills,
   problemSolutionProfiles,
   resumeBulletClaimLinks,
   resumeBulletOccurrences,
@@ -76,6 +83,19 @@ export interface ResumeFileDeletionInput {
   revisionId: string;
   authorization: "explicit_user_instruction";
   reason: string;
+}
+
+export interface ActivityResumeContextBackfillReceipt {
+  operationId: string;
+  status: "saved";
+  state: "backfilled";
+  activityId: string;
+  snapshotRevision: number;
+  resumeId: string;
+  resumeRevisionId: string;
+  claimIds: string[];
+  evidenceIds: string[];
+  capturedAt: number;
 }
 
 export class ResumeImportError extends Error {
@@ -1726,6 +1746,282 @@ export async function setCurrentResumeRevision(
   return { duplicate: false as const, ...receipt };
 }
 
+export async function backfillActivityResumeContext(
+  ownerId: string,
+  inputValue: BackfillActivityResumeContextInput,
+  nowMs = Date.now(),
+) {
+  const input = backfillActivityResumeContextSchema.parse(inputValue);
+  if (input.ownerConfirmedAt > nowMs + 5 * 60_000 || input.provenance.snapshotLoadedAt > nowMs + 5 * 60_000) {
+    throw new ResumeImportError(
+      "resume_context_backfill_future_provenance",
+      "Historical resume-context provenance cannot be recorded in the future.",
+      400,
+      false,
+    );
+  }
+  const requestFingerprint = await resumeSha256Hex(JSON.stringify({
+    operationId: input.operationId,
+    activityId: input.activityId,
+    snapshotRevision: input.snapshotRevision,
+    resumeId: input.resumeId,
+    resumeRevisionId: input.resumeRevisionId,
+    provenance: input.provenance,
+    authorization: input.authorization,
+    ownerConfirmedAt: input.ownerConfirmedAt,
+    reason: input.reason,
+  }));
+  const db = getDb();
+  const existingOperationRows = await db.select().from(activityResumeContextBackfills).where(and(
+    eq(activityResumeContextBackfills.ownerId, ownerId),
+    eq(activityResumeContextBackfills.operationId, input.operationId),
+  )).limit(1);
+  const existingOperation = existingOperationRows[0];
+  if (existingOperation) {
+    if (existingOperation.requestFingerprint !== requestFingerprint) {
+      throw new ResumeImportError(
+        "resume_context_backfill_operation_conflict",
+        "This historical resume-context operation ID is already bound to a different request.",
+        409,
+        false,
+      );
+    }
+    return {
+      ...(existingOperation.receipt as ActivityResumeContextBackfillReceipt),
+      duplicate: true as const,
+    };
+  }
+
+  const [snapshotRows, sourceRows, revisionRows, fileRows, existingContextRows] = await Promise.all([
+    db.select().from(behavioralFinalAnswerSnapshots).where(and(
+      eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
+      eq(behavioralFinalAnswerSnapshots.activityId, input.activityId),
+      eq(behavioralFinalAnswerSnapshots.snapshotRevision, input.snapshotRevision),
+    )).limit(1),
+    db.select().from(resumeSources).where(and(
+      eq(resumeSources.ownerId, ownerId),
+      eq(resumeSources.resumeId, input.resumeId),
+    )).limit(1),
+    db.select().from(resumeRevisions).where(and(
+      eq(resumeRevisions.ownerId, ownerId),
+      eq(resumeRevisions.resumeId, input.resumeId),
+      eq(resumeRevisions.revisionId, input.resumeRevisionId),
+    )).limit(1),
+    db.select({
+      format: resumeRevisionFiles.format,
+      sha256: resumeRevisionFiles.sha256,
+    }).from(resumeRevisionFiles).where(and(
+      eq(resumeRevisionFiles.ownerId, ownerId),
+      eq(resumeRevisionFiles.resumeId, input.resumeId),
+      eq(resumeRevisionFiles.revisionId, input.resumeRevisionId),
+    )).orderBy(asc(resumeRevisionFiles.format)).limit(3),
+    db.select().from(activityResumeContexts).where(and(
+      eq(activityResumeContexts.ownerId, ownerId),
+      eq(activityResumeContexts.activityId, input.activityId),
+      eq(activityResumeContexts.snapshotRevision, input.snapshotRevision),
+    )).limit(1),
+  ]);
+  if (existingContextRows[0]) {
+    throw new ResumeImportError(
+      "resume_context_backfill_target_conflict",
+      "This immutable activity snapshot already has resume context; it cannot be replaced or relabeled.",
+      409,
+      false,
+    );
+  }
+  if (!snapshotRows[0]) {
+    throw new ResumeImportError(
+      "resume_context_backfill_snapshot_unavailable",
+      "The exact owner-private behavioral snapshot is unavailable and must remain legacy unversioned.",
+      409,
+      false,
+    );
+  }
+  if (!sourceRows[0] || !revisionRows[0]) {
+    throw new ResumeImportError(
+      "resume_context_backfill_revision_unavailable",
+      "The exact owner-private resume revision is unavailable.",
+      409,
+      false,
+    );
+  }
+  const filesByFormat = new Map(fileRows.map((file) => [file.format, file]));
+  const docx = filesByFormat.get("docx");
+  const pdf = filesByFormat.get("pdf");
+  if (
+    fileRows.length !== 2
+    || revisionRows[0].sourceFingerprint !== input.provenance.sourceFingerprint
+    || revisionRows[0].importedAt !== input.provenance.resumeImportedAt
+    || docx?.sha256 !== input.provenance.docxSha256
+    || pdf?.sha256 !== input.provenance.pdfSha256
+  ) {
+    throw new ResumeImportError(
+      "resume_context_backfill_provenance_mismatch",
+      "The owner-confirmed historical relationship does not match the exact immutable resume snapshot fingerprints.",
+      409,
+      false,
+    );
+  }
+
+  let snapshot;
+  try {
+    snapshot = behavioralFinalAnswerSnapshotInputSchema.parse(snapshotRows[0].snapshot);
+  } catch {
+    throw new ResumeImportError(
+      "resume_context_backfill_snapshot_unsupported",
+      "The historical answer lacks a valid immutable snapshot and must remain legacy unversioned.",
+      409,
+      false,
+    );
+  }
+  const analysis = snapshot.behavioralAnalysis;
+  if (!analysis) {
+    throw new ResumeImportError(
+      "resume_context_backfill_snapshot_unsupported",
+      "The historical answer lacks exact typed analysis and must remain legacy unversioned.",
+      409,
+      false,
+    );
+  }
+  const claimTexts = [...new Set(analysis.claimAudit.map((claim) => claim.claim))];
+  const claimRows = claimTexts.length ? await db.select({
+    claimId: behavioralClaims.claimId,
+  }).from(behavioralClaims).where(and(
+    eq(behavioralClaims.ownerId, ownerId),
+    eq(behavioralClaims.questionId, snapshot.question.questionId),
+    inArray(behavioralClaims.text, claimTexts),
+  )).orderBy(asc(behavioralClaims.claimId)).limit(101) : [];
+  const evidenceIds = [...new Set([
+    ...snapshot.acceptedEvidenceIds,
+    ...analysis.claimAudit.flatMap((claim) => claim.contraryEvidenceIds),
+  ])].sort();
+  if (claimRows.length > 100 || evidenceIds.length > 100) {
+    throw new ResumeImportError(
+      "resume_context_backfill_too_large",
+      "The exact historical claim or evidence context exceeds the bounded snapshot limit.",
+      409,
+      false,
+    );
+  }
+  const claimIds = claimRows.map((row) => row.claimId);
+  const receipt: ActivityResumeContextBackfillReceipt = {
+    operationId: input.operationId,
+    status: "saved",
+    state: "backfilled",
+    activityId: input.activityId,
+    snapshotRevision: input.snapshotRevision,
+    resumeId: input.resumeId,
+    resumeRevisionId: input.resumeRevisionId,
+    claimIds,
+    evidenceIds,
+    capturedAt: nowMs,
+  };
+  try {
+    await db.batch([
+      d1TransactionalInvariantGuard(db, sql`NOT EXISTS (
+        SELECT 1 FROM ${activityResumeContextBackfills}
+        WHERE ${activityResumeContextBackfills.ownerId} = ${ownerId}
+          AND ${activityResumeContextBackfills.operationId} = ${input.operationId}
+      )`),
+      d1TransactionalInvariantGuard(db, sql`NOT EXISTS (
+        SELECT 1 FROM ${activityResumeContexts}
+        WHERE ${activityResumeContexts.ownerId} = ${ownerId}
+          AND ${activityResumeContexts.activityId} = ${input.activityId}
+          AND ${activityResumeContexts.snapshotRevision} = ${input.snapshotRevision}
+      )`),
+      d1TransactionalInvariantGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${behavioralFinalAnswerSnapshots}
+        WHERE ${behavioralFinalAnswerSnapshots.ownerId} = ${ownerId}
+          AND ${behavioralFinalAnswerSnapshots.activityId} = ${input.activityId}
+          AND ${behavioralFinalAnswerSnapshots.snapshotRevision} = ${input.snapshotRevision}
+      )`),
+      d1TransactionalInvariantGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${resumeSources}
+        WHERE ${resumeSources.ownerId} = ${ownerId}
+          AND ${resumeSources.resumeId} = ${input.resumeId}
+          AND ${resumeSources.sourceLabel} = ${sourceRows[0].sourceLabel}
+      )`),
+      d1TransactionalInvariantGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${resumeRevisions}
+        WHERE ${resumeRevisions.ownerId} = ${ownerId}
+          AND ${resumeRevisions.resumeId} = ${input.resumeId}
+          AND ${resumeRevisions.revisionId} = ${input.resumeRevisionId}
+          AND ${resumeRevisions.sourceFingerprint} = ${input.provenance.sourceFingerprint}
+          AND ${resumeRevisions.importedAt} = ${input.provenance.resumeImportedAt}
+      )`),
+      d1TransactionalInvariantGuard(db, sql`(
+        SELECT COUNT(*) FROM ${resumeRevisionFiles}
+        WHERE ${resumeRevisionFiles.ownerId} = ${ownerId}
+          AND ${resumeRevisionFiles.resumeId} = ${input.resumeId}
+          AND ${resumeRevisionFiles.revisionId} = ${input.resumeRevisionId}
+          AND (
+            (${resumeRevisionFiles.format} = 'docx' AND ${resumeRevisionFiles.sha256} = ${input.provenance.docxSha256})
+            OR (${resumeRevisionFiles.format} = 'pdf' AND ${resumeRevisionFiles.sha256} = ${input.provenance.pdfSha256})
+          )
+      ) = 2`),
+      ...(claimRows.length ? [d1TransactionalInvariantGuard(db, sql`(
+        SELECT COUNT(*) FROM ${behavioralClaims}
+        WHERE ${behavioralClaims.ownerId} = ${ownerId}
+          AND ${behavioralClaims.questionId} = ${snapshot.question.questionId}
+          AND ${inArray(behavioralClaims.claimId, claimIds)}
+          AND ${inArray(behavioralClaims.text, claimTexts)}
+      ) = ${claimRows.length}`)] : []),
+      db.insert(activityResumeContextBackfills).values({
+        ownerId,
+        operationId: input.operationId,
+        activityId: input.activityId,
+        snapshotRevision: input.snapshotRevision,
+        resumeId: input.resumeId,
+        resumeRevisionId: input.resumeRevisionId,
+        requestFingerprint,
+        sourceFingerprint: input.provenance.sourceFingerprint,
+        docxSha256: input.provenance.docxSha256,
+        pdfSha256: input.provenance.pdfSha256,
+        resumeImportedAt: input.provenance.resumeImportedAt,
+        snapshotLoadedAt: input.provenance.snapshotLoadedAt,
+        ownerConfirmedAt: input.ownerConfirmedAt,
+        reason: input.reason,
+        receipt,
+        createdAt: nowMs,
+      }),
+      db.insert(activityResumeContexts).values({
+        ownerId,
+        activityId: input.activityId,
+        snapshotRevision: input.snapshotRevision,
+        resumeId: input.resumeId,
+        resumeRevisionId: input.resumeRevisionId,
+        sourceLabel: sourceRows[0].sourceLabel,
+        resumeImportedAt: revisionRows[0].importedAt,
+        state: "backfilled",
+        claimIds,
+        evidenceIds,
+        capturedAt: nowMs,
+      }),
+    ] as unknown as Parameters<typeof db.batch>[0]);
+  } catch (error) {
+    const racedRows = await db.select().from(activityResumeContextBackfills).where(and(
+      eq(activityResumeContextBackfills.ownerId, ownerId),
+      eq(activityResumeContextBackfills.operationId, input.operationId),
+    )).limit(1);
+    if (racedRows[0]?.requestFingerprint === requestFingerprint) {
+      return {
+        ...(racedRows[0].receipt as ActivityResumeContextBackfillReceipt),
+        duplicate: true as const,
+      };
+    }
+    if (isD1TransactionalInvariantFailure(error)) {
+      throw new ResumeImportError(
+        "resume_context_backfill_dependency_conflict",
+        "The immutable activity or resume provenance changed before the historical link committed; reread before retrying.",
+        409,
+        false,
+      );
+    }
+    throw error;
+  }
+  return { duplicate: false as const, ...receipt };
+}
+
 export async function getActivityResumeContext(
   ownerId: string,
   activityId: string,
@@ -1736,8 +2032,23 @@ export async function getActivityResumeContext(
     eq(activityResumeContexts.activityId, activityId),
     ...(snapshotRevision ? [eq(activityResumeContexts.snapshotRevision, snapshotRevision)] : []),
   )).orderBy(desc(activityResumeContexts.snapshotRevision)).limit(101);
+  if (!rows.length) {
+    const exactSnapshot = await getDb().select({
+      snapshotRevision: behavioralFinalAnswerSnapshots.snapshotRevision,
+    }).from(behavioralFinalAnswerSnapshots).where(and(
+      eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
+      eq(behavioralFinalAnswerSnapshots.activityId, activityId),
+      ...(snapshotRevision ? [eq(behavioralFinalAnswerSnapshots.snapshotRevision, snapshotRevision)] : []),
+    )).limit(1);
+    return {
+      found: false,
+      contexts: [],
+      truncated: false,
+      ...(exactSnapshot[0] ? { provenanceState: "legacy_unversioned" as const } : {}),
+    };
+  }
   return {
-    found: rows.length > 0,
+    found: true,
     contexts: rows.slice(0, 100).map((row) => ({
       schemaVersion: 1 as const,
       activityId: row.activityId,

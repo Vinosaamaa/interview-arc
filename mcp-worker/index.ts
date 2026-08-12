@@ -43,7 +43,10 @@ import {
   queryBehavioralStories,
   upsertBehavioralStory,
 } from "../db/behavioral-story";
-import { resumeContextSelectionSchema } from "../db/activity-resume-context";
+import {
+  backfillActivityResumeContextSchema,
+  resumeContextSelectionSchema,
+} from "../db/activity-resume-context";
 import {
   BehavioralTargetProfileError,
   queryBehavioralTargetProfiles,
@@ -82,6 +85,7 @@ import { behavioralTargetReviewSchema } from "../db/behavioral-practice-prefligh
 import { loadContentIndex } from "../db/content";
 import { resolveIntegrationOwner } from "../db/integrations";
 import {
+  backfillActivityResumeContext,
   compareResumeRevisions,
   getActivityResumeContext,
   getResumeImportStatus,
@@ -3288,6 +3292,26 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         structuredContent: result,
       };
+    },
+  );
+
+  server.registerTool(
+    "backfill_activity_resume_context",
+    {
+      description: "Coordinator-only: append one owner-confirmed historical resume relationship to an exact immutable behavioral snapshot. The request must prove the loaded source/DOCX/PDF fingerprints, preserves the attempt and resume revision unchanged, labels the link backfilled, and makes exact retries idempotent. Missing provenance remains legacy unversioned.",
+      inputSchema: backfillActivityResumeContextSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await backfillActivityResumeContext(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Historical resume context is ${result.state} for activity ${result.activityId} snapshot ${result.snapshotRevision}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
     },
   );
 

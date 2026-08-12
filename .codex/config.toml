@@ -48,6 +48,7 @@ enabled_tools = [
   "compare_resume_revisions",
   "set_current_resume_revision",
   "get_activity_resume_context",
+  "backfill_activity_resume_context",
   "query_resume_reference_usage",
   "save_leetcode_code_attempt",
   "get_specialist_write_status",

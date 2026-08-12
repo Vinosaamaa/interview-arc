@@ -29,6 +29,11 @@ import uncertainty. Use `compare_resume_revisions` before describing a change,
 revisions and attempts, and `get_activity_resume_context` for exact historical
 practice provenance. Never infer any of those relationships from dates or
 conversation memory.
+`backfill_activity_resume_context` is Coordinator-only: do not call it from
+this specialist. When historical provenance is missing, report the attempt as
+legacy unversioned and ask the Coordinator to perform the audited operation
+only after the owner confirms the exact fingerprinted snapshot that was
+actually loaded.
 Generated wording, a resume bullet, or a semantic similarity is never evidence
 and cannot upgrade a claim.
 
