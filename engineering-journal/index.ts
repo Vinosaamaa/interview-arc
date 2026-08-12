@@ -288,7 +288,18 @@ function parseDocument(markdown: string, source: string) {
   if (!summary) throw new EngineeringJournalError("summary_missing", source);
   const interviewSections = sections.filter((section) => section.id === "interview-view");
   if (interviewSections.length > 1) throw new EngineeringJournalError("interview_view_duplicate", source);
-  return { frontmatter, documentTitle, summary, body, sections, interviewView: interviewSections[0] ?? null };
+  const interviewHeadingIndex = headings.findIndex((heading) => slug(heading[1].trim()) === "interview-view");
+  const readerBody = interviewHeadingIndex === -1
+    ? body
+    : `${body.slice(0, headings[interviewHeadingIndex].index).trim()}\n\n${body.slice(headings[interviewHeadingIndex + 1]?.index ?? body.length).trim()}`.trim();
+  return {
+    frontmatter,
+    documentTitle,
+    summary,
+    body: readerBody,
+    sections: sections.filter((section) => section.id !== "interview-view"),
+    interviewView: interviewSections[0] ?? null,
+  };
 }
 
 function slug(value: string) {
@@ -616,6 +627,9 @@ export function buildEngineeringJournal(input: EngineeringJournalBuildInput): En
       throw new EngineeringJournalError("relation_duplicate", record.source.repository);
     }
     for (const target of links) {
+      if (!RECORD_REF_PATTERN.test(target)) {
+        throw new EngineeringJournalError("relation_ref_invalid", record.ref);
+      }
       const targetRecord = byRef.get(target);
       if (!targetRecord) throw new EngineeringJournalError("relation_target_missing", record.source.repository);
       if (target === record.ref) throw new EngineeringJournalError("relation_self_reference", record.source.repository);
@@ -680,6 +694,7 @@ export function buildEngineeringJournal(input: EngineeringJournalBuildInput): En
         record.release ?? "",
         record.run ?? "",
         ...record.sections.map((section) => `${section.title} ${section.body}`),
+        record.interviewView ? `${record.interviewView.title} ${record.interviewView.body}` : "",
       ].join(" ").toLowerCase(),
       repository: record.repository,
       type: record.type,

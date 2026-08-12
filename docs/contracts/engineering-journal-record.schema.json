@@ -33,7 +33,7 @@
     "decisions": { "$ref": "#/$defs/recordRefs" },
     "incidents": { "$ref": "#/$defs/recordRefs" },
     "features": { "$ref": "#/$defs/recordRefs" },
-    "capabilities": { "$ref": "#/$defs/recordRefs" },
+    "capabilities": { "$ref": "#/$defs/stringList" },
     "amends": { "$ref": "#/$defs/recordRefs" },
     "supersedes": { "$ref": "#/$defs/recordRefs" },
     "learningRefs": { "type": "array", "maxItems": 0 },

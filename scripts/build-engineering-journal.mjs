@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,25 +35,47 @@ async function markdownPaths(root, canonicalPath) {
 }
 
 async function sourceDocuments(repository) {
-  const root = resolve(REPOSITORY_ROOT, repository.localRoot);
+  if (Boolean(repository.localRoot) === Boolean(repository.remoteUrl)) {
+    throw new Error(`Engineering Journal source ${repository.repository} must declare exactly one portable source.`);
+  }
+  if (repository.remoteUrl && (!/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\.git$/.test(repository.remoteUrl) || !repository.commit)) {
+    throw new Error(`Engineering Journal remote source ${repository.repository} requires a trusted GitHub URL and exact commit.`);
+  }
+  const temporaryRoot = repository.remoteUrl
+    ? await mkdtemp(join(tmpdir(), "interview-arc-engineering-"))
+    : null;
+  const root = temporaryRoot ?? resolve(REPOSITORY_ROOT, repository.localRoot);
   const commitPin = repository.commit ?? null;
-  const paths = commitPin
-    ? git(root, ["ls-tree", "-r", "--name-only", commitPin, "--", repository.canonicalPath]).split("\n").filter((path) => path.endsWith(".md"))
-    : await markdownPaths(root, repository.canonicalPath);
-  const documents = [];
-  for (const path of paths) {
-    const commit = commitPin ?? git(root, ["log", "-1", "--format=%H", "--", path]);
-    if (!commit) throw new Error(`No committed source revision exists for ${repository.repository}:${path}.`);
-    const markdown = git(root, ["show", `${commit}:${path}`]);
-    if (!commitPin) {
-      const authored = await readFile(join(root, path), "utf8");
-      if (authored.replace(/\n$/, "") !== markdown) {
-        throw new Error(`Canonical record ${repository.repository}:${path} differs from its latest committed revision.`);
+  try {
+    if (repository.remoteUrl) {
+      git(root, ["init", "--quiet"]);
+      git(root, ["remote", "add", "origin", repository.remoteUrl]);
+      git(root, ["fetch", "--quiet", "--depth=1", "origin", commitPin]);
+      if (git(root, ["rev-parse", "FETCH_HEAD"]) !== commitPin) {
+        throw new Error(`Engineering Journal remote source ${repository.repository} did not resolve to its exact commit.`);
       }
     }
-    documents.push({ repository: repository.repository, commit, path, markdown: `${markdown}\n` });
+    const paths = commitPin
+      ? git(root, ["ls-tree", "-r", "--name-only", commitPin, "--", repository.canonicalPath]).split("\n").filter((path) => path.endsWith(".md"))
+      : await markdownPaths(root, repository.canonicalPath);
+    if (paths.length === 0) throw new Error(`Engineering Journal source ${repository.repository} contains no canonical records.`);
+    const documents = [];
+    for (const path of paths) {
+      const commit = commitPin ?? git(root, ["log", "-1", "--format=%H", "--", path]);
+      if (!commit) throw new Error(`No committed source revision exists for ${repository.repository}:${path}.`);
+      const markdown = git(root, ["show", `${commit}:${path}`]);
+      if (!commitPin) {
+        const authored = await readFile(join(root, path), "utf8");
+        if (authored.replace(/\n$/, "") !== markdown) {
+          throw new Error(`Canonical record ${repository.repository}:${path} differs from its latest committed revision.`);
+        }
+      }
+      documents.push({ repository: repository.repository, commit, path, markdown: `${markdown}\n` });
+    }
+    return documents;
+  } finally {
+    if (temporaryRoot) await rm(temporaryRoot, { recursive: true, force: true });
   }
-  return documents;
 }
 
 async function main() {

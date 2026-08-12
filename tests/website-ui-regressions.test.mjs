@@ -428,8 +428,50 @@ test("workspace selector contains exactly Interview, Learn, and Engineering", as
     .filter((value) => ["Interview", "Learn", "Engineering", "Journey"].includes(value));
   assert.deepEqual(workspaceLabels, ["Interview", "Learn", "Engineering"]);
   assert.equal(literals.has("Statistics"), true);
+  const engineeringNav = visit(file, (node) => ts.isIdentifier(node)
+    && node.text === "ENGINEERING_NAV_ITEMS");
+  assert.ok(engineeringNav.length > 0);
   assert.equal(literals.has("Recall schedule"), false);
   assert.ok(cssRules(rules, ".brand-mark").some((rule) => rule.declarations.background?.includes('/favicon.svg')));
+});
+
+test("Engineering uses its exact local navigation and keeps Statistics out of Interview", async () => {
+  const file = parseTsx(await load("../app/engineering-workspace.tsx"));
+  const engineeringNav = visit(file, (node) => ts.isVariableDeclaration(node)
+    && ts.isIdentifier(node.name)
+    && node.name.text === "ENGINEERING_NAV_ITEMS")[0];
+  assert.ok(engineeringNav?.initializer && ts.isArrayLiteralExpression(engineeringNav.initializer));
+  const items = engineeringNav.initializer.elements.map((element) => {
+    assert.ok(ts.isArrayLiteralExpression(element));
+    return element.elements.map((item) => {
+      assert.ok(ts.isStringLiteral(item));
+      return item.text;
+    });
+  });
+  assert.deepEqual(items, [
+    ["journal", "Journal"],
+    ["capabilities", "Capabilities"],
+    ["decisions", "Decisions"],
+    ["incidents", "Incidents"],
+    ["case-studies", "Case Studies"],
+    ["statistics", "Statistics"],
+  ]);
+
+  const interviewFile = parseTsx(await load("../app/home-client.tsx"));
+  const interviewNav = visit(interviewFile, (node) => ts.isVariableDeclaration(node)
+    && ts.isIdentifier(node.name)
+    && node.name.text === "INTERVIEW_NAV_ITEMS")[0];
+  assert.doesNotMatch(interviewNav.getText(interviewFile), /Statistics/);
+});
+
+test("Engineering reader keys selection by immutable ref and keeps unreleased Learn state unavailable", async () => {
+  const source = await load("../app/engineering-workspace.tsx");
+  assert.match(source, /record\.ref === selectedRef/);
+  assert.match(source, /key=\{record\.ref\}/);
+  assert.match(source, /disabled aria-disabled="true"/);
+  assert.match(source, /Pending the released Learn revision, commit, and symbol contract/);
+  assert.match(source, /record\.source\.permalink/);
+  assert.match(source, /record\.effectiveStatus/);
 });
 
 test("Interview navigation uses one shared local model with Journey last", async () => {
@@ -484,11 +526,8 @@ test("workspace header stacks the active tab above the Pacific date at every wid
   assert.ok(context);
   const elements = context.children.filter(ts.isJsxElement);
   assert.deepEqual(elements.map((element) => element.openingElement.tagName.getText(file)), ["strong", "span"]);
-  assert.equal(
-    elements[0].children[0]?.getText(file),
-    '{view === "learn" ? LEARN_VIEW_TITLES[learnDestination] : INTERVIEW_VIEW_TITLES[view]}',
-  );
-  assert.equal(elements[1].children[0]?.getText(file), "{readableDate(journal.date)}");
+  assert.equal(elements[0].children[0]?.getText(file), '{activeWorkspace === "engineering" ? ENGINEERING_VIEW_TITLES[engineeringView] : activeWorkspace === "learn" ? LEARN_VIEW_TITLES[learnDestination] : INTERVIEW_VIEW_TITLES[view]}');
+  assert.match(elements[1].children[0]?.getText(file) ?? "", /readableDate\(journal\.date\)/);
 
   const contextStyle = cssRules(rules, ".topbar > div:first-child")
     .find((rule) => rule.declarations["align-content"] === "center")?.declarations;

@@ -221,7 +221,10 @@ test("relations must pin an exact existing record revision", () => {
   for (const relation of ["missing-record", "missing-record@1", "architecture-review-engineering-journal-module@2"]) {
     const buildInput = input();
     buildInput.documents[0].markdown = TRACER.replace("relatedRecords: []", `relatedRecords: ["${relation}"]`);
-    assert.throws(() => buildEngineeringJournal(buildInput), (error) => error.code === "relation_target_missing");
+    assert.throws(
+      () => buildEngineeringJournal(buildInput),
+      (error) => error.code === (relation.includes("@") ? "relation_target_missing" : "relation_ref_invalid"),
+    );
   }
 });
 

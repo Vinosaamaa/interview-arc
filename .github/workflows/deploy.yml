@@ -53,6 +53,10 @@ jobs:
       - name: Build and test
         run: pnpm test
 
+      - name: Validate Engineering impact classification
+        if: github.event_name == 'pull_request'
+        run: node scripts/validate-engineering-impact.mjs
+
       - name: Classify the main-branch change
         id: changes
         shell: bash
@@ -73,6 +77,7 @@ jobs:
               scripts/repairs/basic-calculator-profile-v2.json|scripts/repairs/basic-calculator-profile-v2.mjs) repair_basic_calculator_profile=true ;;
             esac
             case "$file" in
+              docs/engineering/*) deploy_worker=true; break ;;
               data/*|practice/*|audio-answers/*|docs/*|scripts/repairs/*|README.md|AGENTS.md) ;;
               *) deploy_worker=true ;;
             esac
