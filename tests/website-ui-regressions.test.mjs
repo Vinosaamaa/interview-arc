@@ -474,6 +474,45 @@ test("Engineering reader keys selection by immutable ref and keeps unreleased Le
   assert.match(source, /record\.effectiveStatus/);
 });
 
+test("Engineering exposes exact provenance, durable navigation memory, and complete factual Statistics", async () => {
+  const source = await load("../app/engineering-workspace.tsx");
+  assert.match(source, /record\.source\.commit/);
+  assert.match(source, /record\.source\.path/);
+  assert.match(source, /CopyControl/);
+  assert.match(source, /Immutable lineage/);
+  assert.match(source, /ENGINEERING_MEMORY_KEY/);
+  assert.match(source, /sessionStorage\.setItem/);
+  assert.match(source, /statistics\.earliestCreatedAt/);
+  assert.match(source, /statistics\.latestCreatedAt/);
+  assert.match(source, /statistics\.byRepository/);
+  assert.match(source, /statistics\.byCapability/);
+  assert.match(source, /onNavigateView\("journal"\)/);
+});
+
+test("Engineering keeps the complete PR timeline separate from rich records", async () => {
+  const source = await load("../app/engineering-workspace.tsx");
+  const styles = await load("../app/engineering-workspace.css");
+  assert.match(source, /type EngineeringJournalLayer = "records" \| "receipts"/);
+  assert.match(source, /All merged PRs/);
+  assert.match(source, /index\.pullRequestReceipts/);
+  assert.match(source, /index\.receiptSearch/);
+  assert.match(source, /index\.receiptBacklinks/);
+  assert.match(source, /index\.receiptStatistics/);
+  assert.match(source, /<details>/);
+  assert.match(source, /Exact receipt source/);
+  assert.match(source, /receipt\.source\.path/);
+  assert.match(source, /receipt\.source\.commit/);
+  assert.match(source, /receipt\.timelineBasis/);
+  assert.match(source, /receipt\.missingFacts/);
+  assert.match(source, /receipt\.sources\.map/);
+  assert.match(source, /Compact receipt only; no rich record was required/);
+  assert.match(source, /Complete receipt chronology/);
+  assert.match(source, /receiptStatistics\.byClassification/);
+  assert.match(source, /receiptStatistics\.byRepository/);
+  assert.match(styles, /\.engineering-receipt-list::before/);
+  assert.match(styles, /@media \(pointer: coarse\)/);
+});
+
 test("Interview navigation uses one shared local model with Journey last", async () => {
   const { source, file } = await loadResponsiveShell();
   const interviewNav = visit(file, (node) => ts.isVariableDeclaration(node)
