@@ -64,8 +64,18 @@ export async function validateResumeRevisionManifest(value: unknown) {
       throw new Error(`Resume bullet ${bullet.occurrenceId} does not match its content fingerprint.`);
     }
   }
+  const immutableManifest = {
+    schemaVersion: manifest.schemaVersion,
+    sourceProvider: manifest.sourceProvider,
+    sourceRevisionFingerprint: manifest.sourceRevisionFingerprint,
+    extractionVersion: manifest.extractionVersion,
+    bullets: manifest.bullets,
+  };
   return {
     manifest,
-    manifestFingerprint: await resumeSha256Hex(JSON.stringify(manifest)),
+    // A later observation of the same source revision is still the same
+    // immutable extraction. Keep the audit timestamp in the manifest, but do
+    // not let it manufacture a second semantic identity.
+    manifestFingerprint: await resumeSha256Hex(JSON.stringify(immutableManifest)),
   };
 }

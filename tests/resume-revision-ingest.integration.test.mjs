@@ -235,12 +235,15 @@ test("an authenticated staged DOCX/PDF pair becomes one immutable current resume
     });
     assert.deepEqual(isolated, { found: false });
 
+    const refreshedObservationManifest = JSON.parse(resumeImportForm().form.get("manifest"));
+    refreshedObservationManifest.capturedAt += 60_000;
     const { response: unchangedResponse, body: unchanged } = await postResumeImport(
       baseUrl,
       ownerToken,
       {
         operationId: "resume-import-operation-2",
         revisionId: "resume-revision-2",
+        manifest: refreshedObservationManifest,
       },
     );
     assert.equal(unchangedResponse.status, 200, JSON.stringify(unchanged));

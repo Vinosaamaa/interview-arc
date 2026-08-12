@@ -108,6 +108,30 @@ function relativeMirrorPath(resumeId, revisionId) {
   return path.join("private-sources", "resume-library", "imports", resumeId, revisionId);
 }
 
+function immutableManifestFingerprint(manifest) {
+  const immutableManifest = {
+    schemaVersion: manifest.schemaVersion,
+    sourceProvider: manifest.sourceProvider,
+    sourceRevisionFingerprint: manifest.sourceRevisionFingerprint,
+    extractionVersion: manifest.extractionVersion,
+    bullets: manifest.bullets,
+  };
+  return sha256(JSON.stringify(immutableManifest));
+}
+
+function compatibleMirrorIdentity(manifest) {
+  return JSON.stringify({
+    schemaVersion: manifest.schemaVersion,
+    resumeId: manifest.resumeId,
+    revisionId: manifest.revisionId,
+    source: manifest.source,
+    sourceFingerprint: manifest.sourceFingerprint,
+    extractionVersion: manifest.extractionVersion,
+    manifestFingerprint: manifest.manifestFingerprint,
+    files: manifest.files,
+  });
+}
+
 async function verifyExistingMirror(targetDirectory, expectedManifest) {
   let existingManifest;
   try {
@@ -138,6 +162,42 @@ async function verifyExistingMirror(targetDirectory, expectedManifest) {
       throw new GoogleDocResumeImportError(
         "resume_local_mirror_conflict",
         "An immutable local resume mirror file no longer matches its recorded integrity.",
+      );
+    }
+  }
+  return targetDirectory;
+}
+
+async function verifyCompatibleCanonicalMirror(targetDirectory, expectedManifest) {
+  let existingManifest;
+  try {
+    existingManifest = JSON.parse(await readFile(path.join(targetDirectory, "manifest.private.json"), "utf8"));
+  } catch {
+    throw new GoogleDocResumeImportError(
+      "resume_local_mirror_incomplete",
+      "The canonical immutable resume mirror exists but its private manifest is unavailable.",
+    );
+  }
+  if (compatibleMirrorIdentity(existingManifest) !== compatibleMirrorIdentity(expectedManifest)) {
+    throw new GoogleDocResumeImportError(
+      "resume_local_mirror_conflict",
+      "The authoritative immutable resume revision already belongs to different local content.",
+    );
+  }
+  for (const [filename, expected] of [
+    ["source.docx", expectedManifest.files.docx],
+    ["snapshot.pdf", expectedManifest.files.pdf],
+  ]) {
+    const bytes = await readBoundedRegularFile(
+      path.join(targetDirectory, filename),
+      MAX_FILE_BYTES,
+      "resume_local_mirror_incomplete",
+      "An authoritative immutable resume mirror file",
+    );
+    if (bytes.byteLength !== expected.byteSize || sha256(bytes) !== expected.sha256) {
+      throw new GoogleDocResumeImportError(
+        "resume_local_mirror_conflict",
+        "An authoritative immutable resume mirror file no longer matches its recorded integrity.",
       );
     }
   }
@@ -269,14 +329,25 @@ async function uploadMirror({ capture, mirror, ingestManifest, sourceFingerprint
     throw new GoogleDocResumeImportError(code, message, Boolean(body?.retryable));
   }
   const receipt = boundedReceipt(body);
-  if (!receipt || receipt.status !== "saved" || receipt.resumeId !== capture.resumeId || receipt.revisionId !== capture.revisionId) {
+  if (
+    !receipt
+    || receipt.status !== "saved"
+    || receipt.resumeId !== capture.resumeId
+    || (receipt.revisionId !== capture.revisionId && receipt.unchanged !== true)
+  ) {
     throw new GoogleDocResumeImportError(
       "resume_import_receipt_invalid",
       "The private resume import returned an invalid authoritative receipt.",
       true,
     );
   }
-  const receiptPath = path.join(mirror.directory, "import-receipt.private.json");
+  return receipt;
+}
+
+async function persistImportReceipt(mirrorDirectory, receipt) {
+  const receiptsDirectory = path.join(mirrorDirectory, "import-receipts");
+  await mkdir(receiptsDirectory, { recursive: true, mode: 0o700 });
+  const receiptPath = path.join(receiptsDirectory, `${receipt.operationId}.private.json`);
   await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, {
     encoding: "utf8",
     mode: 0o600,
@@ -291,7 +362,56 @@ async function uploadMirror({ capture, mirror, ingestManifest, sourceFingerprint
       );
     }
   });
-  return receipt;
+}
+
+async function reconcileAuthoritativeMirror({
+  root,
+  capture,
+  privateManifest,
+  requestedMirror,
+  receipt,
+  docxBytes,
+  pdfBytes,
+}) {
+  if (receipt.revisionId === capture.revisionId) return requestedMirror;
+  const canonicalCapture = { ...capture, revisionId: receipt.revisionId };
+  const canonicalManifest = { ...privateManifest, revisionId: receipt.revisionId };
+  const relative = relativeMirrorPath(capture.resumeId, receipt.revisionId);
+  const targetDirectory = path.join(root, relative);
+  let canonicalMirror;
+  try {
+    const existing = await lstat(targetDirectory);
+    if (!existing.isDirectory() || existing.isSymbolicLink()) {
+      throw new GoogleDocResumeImportError(
+        "resume_local_mirror_conflict",
+        "The authoritative immutable resume revision target is not a private directory.",
+      );
+    }
+    await verifyCompatibleCanonicalMirror(targetDirectory, canonicalManifest);
+    canonicalMirror = { directory: targetDirectory, relative, unchanged: true };
+  } catch (error) {
+    if (error instanceof GoogleDocResumeImportError) throw error;
+    if (error?.code !== "ENOENT") {
+      throw new GoogleDocResumeImportError(
+        "resume_local_mirror_unavailable",
+        "The authoritative private resume mirror cannot be inspected.",
+        true,
+      );
+    }
+    canonicalMirror = await persistMirror({
+      root,
+      capture: canonicalCapture,
+      privateManifest: canonicalManifest,
+      docxBytes,
+      pdfBytes,
+    });
+  }
+  // The requested revision was only a proposal. Once D1 returns an unchanged
+  // canonical revision, remove the exact duplicate mirror created by this
+  // operation after the authoritative mirror has been verified.
+  await verifyExistingMirror(requestedMirror.directory, privateManifest);
+  await rm(requestedMirror.directory, { recursive: true, force: true });
+  return canonicalMirror;
 }
 
 export async function importGoogleDocResume({
@@ -378,7 +498,7 @@ export async function importGoogleDocResume({
     sourceFingerprint,
     capturedAt: capture.capturedAt,
     extractionVersion: capture.extraction.version,
-    manifestFingerprint: sha256(JSON.stringify(ingestManifest)),
+    manifestFingerprint: immutableManifestFingerprint(ingestManifest),
     files: {
       docx: { sha256: sha256(docxBytes), byteSize: docxBytes.byteLength, mimeType: DOCX_MIME },
       pdf: { sha256: sha256(pdfBytes), byteSize: pdfBytes.byteLength, mimeType: PDF_MIME },
@@ -405,13 +525,24 @@ export async function importGoogleDocResume({
     token,
     fetchImpl,
   });
+  const authoritativeMirror = await reconcileAuthoritativeMirror({
+    root,
+    capture,
+    privateManifest,
+    requestedMirror: mirror,
+    receipt,
+    docxBytes,
+    pdfBytes,
+  });
+  await persistImportReceipt(authoritativeMirror.directory, receipt);
   return {
     status: "saved",
     operationId: capture.operationId,
     resumeId: capture.resumeId,
-    revisionId: capture.revisionId,
-    localMirror: mirror.relative.split(path.sep).join("/"),
-    localMirrorUnchanged: mirror.unchanged,
+    revisionId: receipt.revisionId,
+    requestedRevisionId: capture.revisionId,
+    localMirror: authoritativeMirror.relative.split(path.sep).join("/"),
+    localMirrorUnchanged: authoritativeMirror.unchanged,
     receipt,
   };
 }

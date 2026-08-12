@@ -218,7 +218,7 @@ test("a remote failure preserves the exact private mirror for a successful retry
   );
   const mirror = path.join(fixture.root, "private-sources/resume-library/imports/primary-resume/primary-resume-r1");
   assert.equal(JSON.parse(await readFile(path.join(mirror, "manifest.private.json"), "utf8")).operationId, fixture.capture.operationId);
-  await assert.rejects(readFile(path.join(mirror, "import-receipt.private.json")), { code: "ENOENT" });
+  await assert.rejects(readFile(path.join(mirror, "import-receipts", `${fixture.capture.operationId}.private.json`)), { code: "ENOENT" });
 
   const retried = await importGoogleDocResume({
     capturePath: fixture.capturePath,
@@ -229,5 +229,54 @@ test("a remote failure preserves the exact private mirror for a successful retry
   });
   assert.equal(retried.status, "saved");
   assert.equal(retried.localMirrorUnchanged, true);
-  assert.equal(JSON.parse(await readFile(path.join(mirror, "import-receipt.private.json"), "utf8")).status, "saved");
+  assert.equal(JSON.parse(await readFile(path.join(mirror, "import-receipts", `${fixture.capture.operationId}.private.json`), "utf8")).status, "saved");
+});
+
+test("a fresh observation of an unchanged source reuses the canonical revision and local mirror", async (context) => {
+  const fixture = await createFixture();
+  context.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const endpoint = "https://resume-import.example.test/resume/imports";
+  await importGoogleDocResume({
+    capturePath: fixture.capturePath,
+    root: fixture.root,
+    endpoint,
+    token: "synthetic-integration-token",
+    fetchImpl: async () => savedResponse(fixture.capture),
+  });
+
+  fixture.capture.operationId = "google-resume-import-2";
+  fixture.capture.revisionId = "primary-resume-r2-proposed";
+  fixture.capture.capturedAt += 60_000;
+  await writeFile(fixture.capturePath, `${JSON.stringify(fixture.capture, null, 2)}\n`);
+  const unchangedResponse = new Response(JSON.stringify({
+    operationId: fixture.capture.operationId,
+    status: "saved",
+    unchanged: true,
+    resumeId: fixture.capture.resumeId,
+    revisionId: "primary-resume-r1",
+    parentRevisionId: null,
+    currentRevisionId: "primary-resume-r1",
+    importedAt: 1_786_505_300_000,
+    files: {
+      docx: { sha256: "a".repeat(64), byteSize: DOCX_BYTES.byteLength },
+      pdf: { sha256: "b".repeat(64), byteSize: PDF_BYTES.byteLength },
+    },
+  }), { status: 200, headers: { "content-type": "application/json" } });
+  const result = await importGoogleDocResume({
+    capturePath: fixture.capturePath,
+    root: fixture.root,
+    endpoint,
+    token: "synthetic-integration-token",
+    fetchImpl: async () => unchangedResponse,
+  });
+
+  assert.equal(result.revisionId, "primary-resume-r1");
+  assert.equal(result.requestedRevisionId, "primary-resume-r2-proposed");
+  assert.equal(result.localMirror, "private-sources/resume-library/imports/primary-resume/primary-resume-r1");
+  const importsRoot = path.join(fixture.root, "private-sources/resume-library/imports/primary-resume");
+  assert.deepEqual(await readdir(importsRoot), ["primary-resume-r1"]);
+  assert.deepEqual(
+    (await readdir(path.join(importsRoot, "primary-resume-r1", "import-receipts"))).sort(),
+    ["google-resume-import-1.private.json", "google-resume-import-2.private.json"],
+  );
 });

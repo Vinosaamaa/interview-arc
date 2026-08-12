@@ -131,7 +131,8 @@ must remain only in the ignored local file:
 The controller keeps the exact private source observation only in
 `manifest.private.json`. The remote multipart request contains a SHA-256 source
 revision fingerprint, never the Drive ID/revision, provider URL, capture path,
-or export path. The local receipt is a private cache; D1 remains authoritative.
+or export path. Each operation receipt is cached privately under
+`import-receipts/<operation-id>.private.json`; D1 remains authoritative.
 
 ## Idempotency and readback
 
@@ -139,7 +140,10 @@ or export path. The local receipt is a private cache; D1 remains authoritative.
   multipart identity and bytes. A changed retry is a terminal conflict.
 - An exact saved retry returns its original receipt and never writes R2 or D1
   again. An unchanged source under a new operation returns the canonical
-  revision with `unchanged: true`.
+  revision with `unchanged: true`. The observation timestamp is audit metadata,
+  not part of the immutable semantic fingerprint, and the controller reconciles
+  the proposed local revision directory onto the canonical mirror without
+  retaining a duplicate pair.
 - `get_resume_import_status` accepts one exact stable operation ID and returns
   at most one owner-scoped receipt: safe status/error code, canonical revision
   identity, current pointer, and the two file hashes/sizes/MIME types. Unknown
