@@ -192,9 +192,25 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
       hostId: "host-local-test",
       title: "Interview Arc — Loop Recorder",
     });
+    await call(client, "register_specialist_task", {
+      specialty: "resume_cover_letter",
+      threadId: "task-resume-cover-letter",
+      hostId: "host-local-test",
+      title: "Interview Arc — Resume & Cover Letter",
+    });
     const specialistTasks = await call(client, "get_specialist_tasks", {});
-    assert.deepEqual(specialistTasks.tasks.map((task) => task.specialty), ["loop_recorder"]);
-    assert.equal(specialistTasks.tasks[0].threadId, "task-loop-recorder");
+    assert.deepEqual(
+      specialistTasks.tasks.map((task) => task.specialty).sort(),
+      ["loop_recorder", "resume_cover_letter"],
+    );
+    assert.equal(
+      specialistTasks.tasks.find((task) => task.specialty === "loop_recorder").threadId,
+      "task-loop-recorder",
+    );
+    assert.equal(
+      specialistTasks.tasks.find((task) => task.specialty === "resume_cover_letter").threadId,
+      "task-resume-cover-letter",
+    );
     const isolatedTasks = await call(otherClient, "get_specialist_tasks", {});
     assert.deepEqual(isolatedTasks.tasks, []);
 

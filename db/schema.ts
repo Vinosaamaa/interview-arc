@@ -577,7 +577,7 @@ export const specialistTasks = sqliteTable(
   "specialist_tasks",
   {
     ownerId,
-    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral", "loop_recorder"] }).notNull(),
+    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral", "loop_recorder", "resume_cover_letter"] }).notNull(),
     threadId: text("thread_id").notNull(),
     hostId: text("host_id"),
     title: text("title").notNull(),
