@@ -161,6 +161,52 @@ test("Review Queue keeps filters in the menu, branches each row, and joins its f
   assert.equal(folioRules.some((rule) => rule.declarations.bottom === "78px"), false);
 });
 
+test("Review Queue cards expose one whole-card reader target and distinct actions", async () => {
+  const [source, css] = await Promise.all([load("../app/review-queue-view.tsx"), load("../app/review-queue.css")]);
+  const file = parseTsx(source);
+  const rules = parseCss(css);
+  assert.ok(hasJsxClass(file, "review-row-open"));
+  assert.ok(hasJsxAttribute(file, "aria-label", "Open previous attempt for"));
+  const cardTarget = cssRules(rules, ".review-row-open")[0].declarations;
+  assert.equal(cardTarget.position, "absolute");
+  assert.equal(cardTarget.inset, "0");
+  assert.equal(cardTarget.cursor, "pointer");
+  assert.ok(cssRules(rules, ".review-row:has(.review-row-open:hover)").length >= 1);
+  assert.ok(cssRules(rules, ".review-row:has(.review-row-open:focus-visible)").length >= 1);
+  const action = cssRules(rules, ".review-actions button")[0].declarations;
+  assert.notEqual(action.border, "0");
+  assert.equal(action.cursor, "pointer");
+});
+
+test("Past, Banks, and Journey share a centered bounded scrollable reader shell", async () => {
+  const [source, css] = await Promise.all([load("../app/home-client.tsx"), load("../app/interview-arc-v2.css")]);
+  const file = parseTsx(source);
+  const rules = parseCss(css);
+  assert.ok(hasJsxClass(file, "journey-reader-detail reader-workspace focused-attempt-workspace"));
+  assert.ok(hasJsxAttribute(file, "aria-modal", "true"));
+  assert.ok(cssRules(rules, ".journey-page.has-open-reader::before").length >= 1);
+
+  const pastShell = cssRules(rules, ".library-page.has-open-entry .past-master-detail")
+    .find((rule) => rule.declarations.width === "min(var(--reader-pane-width), calc(100vw - var(--sidebar-size) - 32px))")?.declarations;
+  const bankShell = cssRules(rules, ".banks-page.has-open-solution .bank-master-detail")
+    .find((rule) => rule.declarations.width === "min(var(--reader-pane-width), calc(100vw - var(--sidebar-size) - 32px))")?.declarations;
+  for (const shell of [pastShell, bankShell]) {
+    assert.ok(shell);
+    assert.equal(shell.width, "min(var(--reader-pane-width), calc(100vw - var(--sidebar-size) - 32px))");
+    assert.equal(shell.left, "calc(var(--sidebar-size) + (100vw - var(--sidebar-size)) / 2)");
+    assert.equal(shell.transform, "translateX(-50%)");
+  }
+  const widePast = cssRules(rules, ".library-page.has-open-entry .past-master-detail.master-pane-open", "min-width: 1977px")[0].declarations;
+  assert.equal(widePast.left, undefined);
+  assert.equal(widePast.transform, undefined);
+
+  const scroller = cssRules(rules, ".workspace-reader-scroll.case-document")
+    .find((rule) => rule.declarations["min-height"])?.declarations;
+  assert.ok(scroller);
+  assert.equal(scroller["min-height"], "0");
+  assert.equal(scroller["overflow-y"], "auto");
+});
+
 test("workspace selector contains exactly Interview, Learn, and Engineering", async () => {
   const { file, rules } = await loadResponsiveShell();
   const literals = stringLiterals(file);

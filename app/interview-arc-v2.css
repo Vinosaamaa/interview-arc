@@ -1504,7 +1504,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .reader-outline .toc-group { display: grid; }
 .reader-outline .toc-parent { color: #244c45; font-weight: 800; }
 .reader-outline .toc-child { padding-left: 20px; font-size: .67rem; }
-.workspace-reader-scroll.case-document { max-height: none; height: 100%; padding: 42px 64px 52px; background: #fffefb; overflow-x: hidden; overflow-y: auto; }
+.workspace-reader-scroll.case-document { min-height: 0; max-height: none; height: 100%; padding: 42px 64px 52px; background: #fffefb; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .workspace-reader-scroll.case-document > header > div:first-child { gap: 12px; }
 .workspace-reader-scroll .case-title-row { margin: 17px 0 11px; align-items: start; }
 .workspace-reader-scroll .case-title-row h2,
@@ -1729,6 +1729,13 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   z-index: 26;
   animation: reader-workspace-enter .2s cubic-bezier(.2,.8,.2,1) both;
 }
+.journey-page.has-open-reader::before {
+  content: "";
+  position: fixed;
+  inset: 54px 0 0 var(--sidebar-size);
+  z-index: 25;
+  background: rgba(237,245,242,.96);
+}
 .focused-attempt-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1737,17 +1744,20 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   pointer-events: none;
   animation: reader-workspace-exit .18s cubic-bezier(.4,0,.2,1) both;
 }
-.focused-attempt-pane { display: block; width: 100%; height: 100%; min-width: 0; }
+.focused-attempt-pane { display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; border: 1px solid #bdcec9; border-radius: 14px; box-shadow: 0 18px 48px rgba(13,47,41,.14); overflow: hidden; }
 .master-pane-toggle { display: inline-grid; place-items: center; }
 
 .library-page.has-open-entry .past-master-detail,
 .banks-page.has-open-solution .bank-master-detail {
   --master-pane-width: 525px;
   --reader-workspace-gap: 12px;
+  width: min(var(--reader-pane-width), calc(100vw - var(--sidebar-size) - 32px));
   grid-template-columns: 0 minmax(0, 1fr);
   gap: 0;
   align-items: stretch;
   overflow: visible;
+  left: calc(var(--sidebar-size) + (100vw - var(--sidebar-size)) / 2);
+  transform: translateX(-50%);
   transition:
     width .3s cubic-bezier(.2,.8,.2,1),
     grid-template-columns .3s cubic-bezier(.2,.8,.2,1),

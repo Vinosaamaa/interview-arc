@@ -1617,6 +1617,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const nestedReaderFocus = (view === "library" && Boolean(libraryNestedProblem))
     || (view === "banks" && Boolean(bankNestedEntry))
     || (view === "journey" && Boolean(journeyNestedEntry || journeyNestedProblem));
+  const readerOpen = Boolean(selectedEntry || selectedProblem || journeyNestedEntry || journeyNestedProblem);
   const [masterPaneState, setMasterPaneState] = useState<MasterPaneState>({ library: false, banks: false });
   const activeListSurface: ListSurface | null = view === "library" || view === "banks" ? view : null;
   const masterPaneOpen = activeListSurface ? masterPaneState[activeListSurface] : false;
@@ -1985,6 +1986,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     else document.body.style.overflow = previous;
     return () => { document.body.style.overflow = previous; };
   }, [arrivalState]);
+
+  useEffect(() => {
+    if (!readerOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, [readerOpen]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => setPipSupported("documentPictureInPicture" in window));
@@ -4922,7 +4930,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       <section className={`view-page journey-page ${journeyNestedEntry || journeyNestedProblem ? "has-open-reader" : ""}`}>
         <header className="view-masthead journey-masthead"><span className="eyebrow">JOURNEY · PUBLISHED + TODAY&apos;S LIVE RECORD</span><h1>Your practice,<br /><em>mapped over time.</em></h1><p>This page counts only recorded work. Explore consistency, outcomes, topic coverage, effort, and the exact days behind every trend.</p></header>
         {readerNotFound && <div className="journey-reader-not-found" role="alert"><strong>That practice record is unavailable.</strong><span>The saved reader link points to <code>{readerNotFound}</code>, which is not present in the current authoritative record.</span></div>}
-        {(journeyNestedEntry || journeyNestedProblem) && <div className={`journey-reader-detail reader-workspace focused-attempt-workspace ${readerClosing ? "reader-closing" : ""}`}><aside className="journey-reader-pane focused-attempt-pane" aria-label="Selected Journey reader">{journeyNestedProblem ? renderSolutionReader() : renderCaseReader()}</aside></div>}
+        {(journeyNestedEntry || journeyNestedProblem) && <div className={`journey-reader-detail reader-workspace focused-attempt-workspace ${readerClosing ? "reader-closing" : ""}`}><aside className="journey-reader-pane focused-attempt-pane" role="dialog" aria-modal="true" aria-label="Selected Journey reader">{journeyNestedProblem ? renderSolutionReader() : renderCaseReader()}</aside></div>}
         <div className="stat-ledger">
           <article className="stat-block coding-stat"><span>Coding solved</span><strong>{codingSolved}</strong><small>{codingFailed} failed attempt{codingFailed === 1 ? "" : "s"}</small></article>
           <article className="stat-block system-stat"><span>System designs</span><strong>{systemCompleted}</strong><small>completed or published</small></article>
