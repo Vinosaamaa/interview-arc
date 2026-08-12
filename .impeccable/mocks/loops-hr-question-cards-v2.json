@@ -1,6 +1,6 @@
 {
   "artifact": "loops-hr-question-cards-v2.png",
-  "status": "awaiting-owner-approval",
+  "status": "superseded",
   "relationship": "Revised HR-stage interaction detail for the owner-approved loops-single-spine-dossier-v4.png",
   "supersedes": "loops-hr-stage-behavior-v1.png",
   "interactionContract": {
@@ -8,7 +8,7 @@
     "compact": "Question title, explicit owner assessment, and expand affordance remain visible.",
     "expanded": "Question context, My approach, and My review remain together inside the selected card; no verbatim-answer reconstruction.",
     "siblings": "Only the selected question expands; sibling cards remain compact and move in normal flow.",
-    "roundLevel": "Round self-assessment and optional real interviewer feedback remain separate below the question collection.",
+    "roundLevel": "Superseded: the final owner-approved stage does not render round-level self-assessment or interviewer-feedback cards.",
     "truth": "All populated values are explicitly illustrative and must not be treated as saved interview history."
   },
   "sha256": "b18d66334b383956d105f68714492c8fccc9b3da43d88f52b0be6882f3d619a2"

@@ -34,6 +34,7 @@ test("Loop revisions accept owner-authored question reviews and explicit round c
         promptConfidence: "exact",
         ownerReview: {
           assessment: "mixed",
+          approach: "Started from the failure boundary, then traced recovery ownership.",
           summary: "The failure-mode framing was clear; quantify the recovery target next time.",
         },
       }],
@@ -47,6 +48,7 @@ test("Loop revisions accept owner-authored question reviews and explicit round c
   assert.deepEqual(stage.interviewers, ["Hiring manager"]);
   assert.deepEqual(stage.debrief?.questions[0].ownerReview, {
     assessment: "mixed",
+    approach: "Started from the failure boundary, then traced recovery ownership.",
     summary: "The failure-mode framing was clear; quantify the recovery target next time.",
   });
   assert.equal(stage.debrief?.interviewerFeedback, "The interviewer asked for a more precise recovery target.");
@@ -71,7 +73,7 @@ test("owner review cannot persist an empty object", () => {
   }));
 
   assert.equal(result.success, false);
-  assert.match(JSON.stringify(result.error?.issues), /owner review requires an explicit assessment or summary/i);
+  assert.match(JSON.stringify(result.error?.issues), /owner review requires an explicit assessment, approach, or summary/i);
 });
 
 test("legacy answer memory remains readable without new review fields", () => {

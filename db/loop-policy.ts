@@ -59,9 +59,10 @@ export const loopQuestionMemorySchema = z.object({
   answerConfidence: loopMemoryConfidenceSchema.optional(),
   ownerReview: z.object({
     assessment: loopOwnerAssessmentSchema.optional(),
+    approach: optionalText(5_000),
     summary: optionalText(5_000),
-  }).strict().refine((review) => Boolean(review.assessment || review.summary), {
-    message: "An owner review requires an explicit assessment or summary.",
+  }).strict().refine((review) => Boolean(review.assessment || review.approach || review.summary), {
+    message: "An owner review requires an explicit assessment, approach, or summary.",
   }).optional(),
 }).strict().superRefine((memory, context) => {
   if (!memory.canonicalQuestionId && !memory.promptMemory) {
@@ -90,6 +91,8 @@ export const loopQuestionMemorySchema = z.object({
 export const loopRoundDebriefSchema = z.object({
   capturedAt: z.number().int().positive(),
   questions: z.array(loopQuestionMemorySchema).max(50),
+  // Legacy round-level notes remain readable, but the current contract records
+  // assessment at question level and the stage result on the stage itself.
   selfAssessment: optionalText(5_000),
   interviewerFeedback: optionalText(5_000),
   nextStep: optionalText(5_000),

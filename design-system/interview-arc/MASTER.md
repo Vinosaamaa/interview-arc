@@ -170,10 +170,13 @@ same vertical spine; none becomes a detached dashboard, modal, or side panel.
   it never asks the owner to reconstruct or republish a verbatim answer.
   Long content remains readable inside the expanded card without creating a
   detached reader or replacing the stage chronology.
-- **Round self-assessment** and optional real **Interviewer feedback** are
-  separate round-level cards below the question collection rather than fields
-  duplicated for every question. Never fabricate interviewer feedback; show
-  it only when owner-supplied truth exists, and hide it when absent.
+- The stage ends with its explicit status/result. Do not render separate round
+  self-assessment or interviewer-feedback cards. Legacy round-level fields
+  remain readable for immutable historical revisions but are not solicited or
+  foregrounded in this interaction.
+- Final owner-approved visual interaction reference:
+  `.impeccable/mocks/loops-hr-question-cards-v3.png`. The prior v2 question
+  card reference is historical and superseded.
 - At desktop widths the expanded question body may use three balanced columns
   for context, approach, and review. At narrow widths those sections stack in
   that DOM/focus order. Component gaps inside the stage are not the `20px`

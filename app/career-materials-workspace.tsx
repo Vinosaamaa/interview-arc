@@ -19,6 +19,7 @@ import {
   type ResumeRevisionResponse,
 } from "./resume-revision-contract";
 import { resumeFileDeletionReceiptSchema } from "../db/resume-file-deletion-contract";
+import InterviewPageHero from "./interview-page-hero";
 
 type Selection = { resumeId: string; revisionId: string };
 
@@ -390,10 +391,11 @@ export default function CareerMaterialsWorkspace() {
   }, [library, selection]);
 
   return <section className="career-materials-workspace">
-    <header className="materials-masthead">
-      <div><h1>Your résumé,<br /><em>with its history intact.</em></h1><p>Every import is one owner-private DOCX/PDF pair with exact lineage. Career Materials shows what changed and what evidence it uses—without turning résumé wording into truth.</p></div>
-      <aside className="materials-pair-seal"><span>One source revision</span><div><strong>DOCX</strong><i>matches</i><strong>PDF</strong></div><small>{revisionCount} immutable revision{revisionCount === 1 ? "" : "s"} stored</small></aside>
-    </header>
+    <InterviewPageHero tone="materials" eyebrow="CAREER MATERIALS · OWNER PRIVATE" title={<>Your résumé,<br /><em>with its history intact.</em></>} description="Every import is one owner-private DOCX/PDF pair with exact lineage—without turning résumé wording into truth." metrics={[
+      { value: revisionCount, label: `immutable revision${revisionCount === 1 ? "" : "s"}` },
+      { value: "DOCX = PDF", label: "paired source" },
+      { value: "Private", label: "owner read" },
+    ]} />
 
     <div className="materials-trust-strip">
       <span><i aria-hidden="true" />Authenticated owner read</span>

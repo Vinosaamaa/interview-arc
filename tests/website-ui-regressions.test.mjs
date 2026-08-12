@@ -144,14 +144,23 @@ test("Journey heatmap uses a balanced command rail and elastic 53-week grid", as
   assert.equal(cssRules(rules, ".heatmap-command-bar")[0].declarations["justify-content"], "space-between");
 });
 
+test("Journey Loop facts reserve their final geometry while D1 is loading", async () => {
+  const css = await load("../app/loops-redesign.css");
+  const rules = parseCss(css);
+  const loading = cssRules(rules, ".loop-journey-facts.loading")[0]?.declarations ?? {};
+  assert.equal(loading["min-height"], "294px");
+  assert.equal(loading.padding, "26px");
+  assert.equal(loading.display, "block");
+});
+
 test("Review Queue keeps filters in the menu, branches each row, and joins its folio", async () => {
   const [source, css] = await Promise.all([load("../app/review-queue-view.tsx"), load("../app/review-queue.css")]);
   const file = parseTsx(source);
   const literals = stringLiterals(file);
   const rules = parseCss(css);
   assert.equal(literals.has("review-specialty-rail"), false);
-  assert.ok(visit(file, (node) => ts.isJsxText(node) && node.text.trim() === "All").length >= 1);
-  assert.ok(hasJsxClass(file, "review-specialty-menu"));
+  assert.equal(visit(file, (node) => ts.isJsxText(node) && node.text.trim() === "All").length, 0);
+  assert.ok(hasJsxClass(file, "review-filter-rail"));
   assert.ok(cssRules(rules, ".review-row::before").length >= 1);
   assert.ok(cssRules(rules, ".review-row::after").length >= 1);
   assert.equal(hasJsxClass(file, "review-column-headings"), false);
@@ -171,9 +180,11 @@ test("Review Queue keeps specialty filters reachable in the mobile menu and unav
   const file = parseTsx(source);
   const home = parseTsx(homeSource);
   const rules = parseCss(css);
-  assert.ok(hasJsxClass(file, "review-specialty-menu"));
+  assert.ok(hasJsxClass(file, "review-filter-rail"));
+  assert.equal(source.includes("Specialty</legend>"), false);
   assert.ok(hasJsxClass(file, "review-reader-unavailable"));
   assert.equal(hasJsxClass(home, "journey-reader-not-found review-reader-not-found"), false);
+  assert.equal(cssRules(rules, ".review-expanded-controls > div", "@container").some((rule) => rule.declarations.position === "fixed"), true);
   assert.ok(cssRules(rules, ".review-expanded-controls fieldset", "@container").some((rule) => rule.declarations["grid-template-columns"] === "repeat(2, minmax(0, 1fr))"));
   assert.ok(cssRules(rules, ".review-reader-unavailable").length >= 1);
 });
@@ -202,8 +213,7 @@ test("Review Queue uses the Bank visual language without redundant row prose", a
   const file = parseTsx(source);
   const rules = parseCss(css);
 
-  assert.ok(hasJsxClass(file, "review-hero-copy"));
-  assert.ok(hasJsxClass(file, "review-summary-strip"));
+  assert.match(source, /<InterviewPageHero tone="reviews"/);
   assert.ok(hasJsxClass(file, "review-filter-rail"));
   assert.ok(hasJsxClass(file, "review-search-bar"));
   assert.ok(hasJsxClass(file, "review-row-copy"));
@@ -216,6 +226,7 @@ test("Review Queue uses the Bank visual language without redundant row prose", a
   assert.ok(visit(file, (node) => ts.isJsxAttribute(node) && node.name.text === "title" && /previous attempt/i.test(node.initializer?.getText(file) ?? "")).length >= 1);
   assert.equal(cssRules(rules, ".review-icon-actions")[0]?.declarations["grid-template-columns"], "repeat(3, 44px)");
   assert.equal(cssRules(rules, ".review-row")[0]?.declarations["grid-template-columns"], "44px minmax(0, 1fr) minmax(120px, auto) 144px");
+  assert.equal(cssRules(rules, ".review-row-meta")[0]?.declarations["justify-items"], "center");
 });
 
 test("Reader contents replace their hash and modal readers own keyboard focus", async () => {
@@ -266,13 +277,11 @@ test("Review Queue owns its nested reader and keeps only the recall list scrolla
   assert.doesNotMatch(openReviewAttempt.getText(file), /openPastEntry/);
   assert.ok(hasJsxClass(file, "review-reader-detail reader-workspace focused-attempt-workspace"));
 
-  const appShell = cssRules(rules, ".app-shell:has(.review-queue-workspace)")[0]?.declarations;
-  const mainColumn = cssRules(rules, ".main-column:has(.review-queue-workspace)")[0]?.declarations;
-  const pageContent = cssRules(rules, ".page-content:has(> .review-queue-workspace)")[0]?.declarations;
-  assert.equal(appShell?.height, "100dvh");
-  assert.equal(appShell?.overflow, "hidden");
-  assert.equal(mainColumn?.["grid-template-rows"], "auto minmax(0, 1fr)");
-  assert.equal(pageContent?.overflow, "hidden");
+  assert.ok(cssRules(rules, ".app-shell:has(.review-queue-workspace)").some((rule) => rule.declarations.height === "100dvh"));
+  assert.ok(cssRules(rules, ".app-shell:has(.review-queue-workspace)", "max-width: 900px").some((rule) => rule.declarations.height === "auto"));
+  assert.ok(cssRules(rules, ".app-shell:has(.review-queue-workspace)").some((rule) => rule.declarations.overflow === "hidden"));
+  assert.ok(cssRules(rules, ".main-column:has(.review-queue-workspace)").some((rule) => rule.declarations["grid-template-rows"] === "auto minmax(0, 1fr)"));
+  assert.ok(cssRules(rules, ".page-content:has(> .review-queue-workspace)").some((rule) => rule.declarations.overflow === "hidden"));
 
   const workspace = cssRules(rules, ".review-queue-workspace")[0]?.declarations;
   const container = cssRules(rules, ".review-queue-container")[0]?.declarations;
@@ -499,25 +508,30 @@ test("Loops source dialog keeps a stable close callback for its focus and scroll
 });
 
 test("Loops presents one chronological record without the detached dashboard", async () => {
-  const [source, css] = await Promise.all([
+  const [source, css, redesignCss] = await Promise.all([
     load("../app/loops-workspace.tsx"),
     load("../app/globals.css"),
+    load("../app/loops-redesign.css"),
   ]);
   const file = parseTsx(source);
-  const rules = parseCss(css);
+  const rules = parseCss(`${css}\n${redesignCss}`);
   assert.ok(hasJsxClass(file, "loop-support-band"));
   assert.ok(hasJsxClass(file, "loop-preparation-columns"));
   assert.ok(hasJsxClass(file, "loop-stage-chronology"));
   assert.ok(hasJsxClass(file, "loop-stage-record"));
-  assert.ok(hasJsxClass(file, "loop-question-review"));
+  assert.ok(hasJsxClass(file, "loop-question-card"));
+  assert.ok(hasJsxClass(file, "loop-stage-material"));
+  assert.ok(hasJsxClass(file, "loop-stage-result"));
   assert.equal(hasJsxClass(file, "loop-stage-track"), false);
   assert.equal(hasJsxClass(file, "loop-detail-grid"), false);
   assert.equal(hasJsxClass(file, "loop-history"), false);
   assert.equal(hasJsxClass(file, "loop-debrief"), false);
   assert.equal(stringLiterals(file).has("Reconstructed answer"), false);
   assert.equal(stringLiterals(file).has("Activity history"), false);
+  assert.doesNotMatch(functionNamed(file, "QuestionCard").getText(file), /answerMemory/);
+  assert.doesNotMatch(functionNamed(file, "StageRecord").getText(file), /selfAssessment|interviewerFeedback|nextStep/);
 
-  assert.equal(cssRules(rules, ".loop-support-band")[0]?.declarations["grid-template-columns"], "minmax(0, .86fr) minmax(0, 1.14fr)");
+  assert.ok(cssRules(rules, ".loop-support-band").some((rule) => rule.declarations["grid-template-columns"] === "minmax(250px, .7fr) minmax(0, 1.3fr)"));
   assert.equal(cssRules(rules, ".loop-preparation-columns")[0]?.declarations["grid-template-columns"], "repeat(3, minmax(0, 1fr))");
   assert.equal(cssRules(rules, ".loop-stage-chronology")[0]?.declarations.display, "grid");
   assert.equal(cssRules(rules, ".loop-stage-chronology::before")[0]?.declarations.width, "1px");
@@ -527,4 +541,35 @@ test("Loops presents one chronological record without the detached dashboard", a
   assert.equal(cssRules(rules, ".loop-stage-record-body")[0]?.declarations["font-size"], "max(14px, .84rem)");
   assert.equal(cssRules(rules, ".loop-support-band", "max-width: 900px").at(-1)?.declarations["grid-template-columns"], "1fr");
   assert.equal(cssRules(rules, ".loop-preparation-columns", "max-width: 680px").at(-1)?.declarations["grid-template-columns"], "1fr");
+});
+
+test("all seven Interview pages use the exact shared hero geometry and semantic accents", async () => {
+  const [heroSource, homeSource, materialsSource, loopsSource, css] = await Promise.all([
+    load("../app/interview-page-hero.tsx"),
+    load("../app/home-client.tsx"),
+    load("../app/career-materials-workspace.tsx"),
+    load("../app/loops-workspace.tsx"),
+    load("../app/interview-page-hero.css"),
+  ]);
+  const rules = parseCss(css);
+  const hero = cssRules(rules, ".interview-page-hero")[0]?.declarations;
+  assert.equal(hero?.height, "350px");
+  assert.equal(hero?.["min-height"], "350px");
+  assert.equal(hero?.["max-height"], "350px");
+  assert.equal(hero?.["container-type"], "inline-size");
+  assert.equal(cssRules(rules, ".page-hero-narrative")[0]?.declarations.height, "300px");
+  assert.equal(cssRules(rules, ".page-hero-summary")[0]?.declarations.height, "50px");
+  assert.equal(cssRules(rules, ".page-content")[0]?.declarations["padding-top"], "25px");
+  const allPageSources = `${homeSource}\n${materialsSource}\n${loopsSource}\n${await load("../app/review-queue-view.tsx")}`;
+  for (const tone of ["today", "loops", "reviews", "past", "banks", "journey", "materials"]) {
+    assert.match(allPageSources, new RegExp(`tone=["']${tone}["']`));
+  }
+  assert.equal((heroSource.match(/viewBox="0 0 620 250"/g) ?? []).length >= 7, true);
+  assert.equal((heroSource.match(/aria-hidden="true"/g) ?? []).length >= 7, true);
+  assert.match(css, /active-view-loops/);
+  assert.match(css, /active-view-reviews/);
+  assert.match(css, /active-view-library/);
+  assert.match(css, /active-view-banks/);
+  assert.match(css, /active-view-journey/);
+  assert.match(css, /active-view-materials/);
 });
