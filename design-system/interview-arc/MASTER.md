@@ -51,6 +51,141 @@ signal. Reserve pills for compact status and topic chips. Use 8px controls,
 14px panels, and 20px major work surfaces. Motion is 180–260ms and must yield
 to `prefers-reduced-motion`.
 
+### Interview page top-panel system
+
+Every base page in the Interview workspace—**Today, Loops, Reviews, Past,
+Banks, Journey, and Career Materials**—starts with one bounded editorial top
+panel immediately below the persistent top bar. This is a shared page-shell
+primitive, not a page-specific hero treatment. A page being released later
+does not exempt it from this geometry.
+
+| Token | Value | Contract |
+|------|------:|------|
+| `--interview-top-panel-top-gap` | `25px` | Exact visual space from the bottom edge of the persistent top bar to the top-panel border |
+| `--interview-top-panel-height` | `350px` | Exact fixed outer height on every Interview page |
+| `--interview-top-panel-narrative-height` | `300px` | Exact upper zone for the page statement, supporting copy, and optional illustration |
+| `--interview-top-panel-summary-height` | `50px` | Exact lower summary band for truthful metrics or compact page state |
+| `--interview-panel-gap` | `20px` | Exact gap between sibling page-level panel border boxes in the main page flow |
+
+- The panel owns the page eyebrow, primary heading or statement, concise
+  supporting copy, and only the highest-value summary metrics or controls.
+  Secondary controls and growing collections belong in the page body.
+- Today, Loops, and Reviews must converge on this same shell geometry while
+  retaining their distinct internal compositions. Past, Banks, and Journey
+  must move their current loose title, introduction, and summary content into
+  the top panel; Career Materials must move its current loose résumé heading,
+  introduction, and highest-value revision summary into the same primitive.
+  Do not leave a free-floating page heading on the canvas.
+- Every top panel uses one shared vertical anatomy: an exact `300px` narrative
+  field above and an exact `50px` bottom summary zone below, producing one
+  `350px` outer panel. These are layout zones inside one continuous surface,
+  not two visibly stacked components. Except for Banks, do not draw a
+  full-width horizontal divider at their boundary; use only short vertical
+  separators between summary groups. The summary zone has one fixed height,
+  divider treatment, metric-number size, metric-label size, and baseline
+  alignment across pages. The number of truthful metrics may vary; absent
+  metrics are omitted rather than fabricated, and the remaining cells divide
+  the available width evenly.
+- Banks is the sole structural exception: its exact `50px` lower zone is a
+  full-width three-segment interactive selector for Coding, System Design, and
+  Behavioral. A visible boundary and segment dividers are allowed because each
+  segment expands its corresponding bank panel. The selector still remains
+  inside the same `350px` top-panel border box.
+- Page-specific high-definition botanical artwork may occupy the narrative
+  field's supporting side. Ship it as responsive SVG/vector geometry with a
+  stable `viewBox`, decorative `aria-hidden` semantics, and no embedded raster
+  image. It must crop or simplify at narrow widths without changing the fixed
+  panel height, obscuring copy, or becoming the only carrier of meaning.
+- The top panel is one semantic region and one visual container. It must remain
+  visually separate from the first body panel; never merge the masthead and
+  the page's primary list, reader index, or analytics surface into one sheet.
+- The top panel remains exactly `350px` tall at every supported width and zoom
+  level. When content would exceed that fixed height, reflow or remove
+  secondary decoration and move lower-priority content into the body. Never
+  grow or shrink the panel, clip it, add an internal scrollbar, or reduce
+  required text below the typography floor.
+- The `25px` top gap remains visually consistent on desktop and mobile. Safe
+  area insets are resolved by the shell outside this measurement.
+- A **panel** is a major bordered page-level surface: for example the top
+  panel, Loop identity, Role context, Linked preparation, a Round dossier, the
+  Review Queue shell, a Past archive surface, a Banks index surface, or a
+  Journey analytics surface. Sibling panels in the main page flow use one
+  exact `20px` gap between their outer borders at every supported width; their
+  parent owns that gap and panels must not add competing outer margins. The
+  `25px` top-bar-to-top-panel gap is the sole page-shell exception. Cards,
+  review/problem rows, material rows, chips, buttons, fields, and other
+  components nested inside a panel keep their own component spacing and do not
+  inherit `--interview-panel-gap`.
+- Base-page readers and modal detail surfaces may cover or replace the panel
+  while open; they do not create a second top panel. Background page content
+  remains inert and fully obscured according to the reader contract.
+
+### Interview page accent identities
+
+Each Interview page has a stable accent identity. The accent is a page-level
+token, not top-panel decoration: it frames the top panel, selected navigation
+item, chronology or list markers, interactive controls, focus rings, selected
+states, and the quiet tint/border treatment of cards nested on that page. Use
+the pale tint for card surfaces and the accent ink for affordances so the page
+reads as one visual family without saturating every container. Page accents
+never replace specialty colors, result/status colors, destructive colors, or
+evidence semantics; for example, Loops uses blossom pink for its page grammar
+while green remains reserved for explicit completion and success.
+
+| Page | Accent ink | Pale tint | Accent on dark navigation |
+|------|------|------|------|
+| Today | `#667A0F` | `#F1F7D5` | `#C7DF65` |
+| Loops | `#A8415C` | `#FBE8EE` | `#F08AA3` |
+| Reviews | `#8A6500` | `#FFF3C4` | `#E8C44D` |
+| Past | `#354542` | `#ECEFED` | `#D5DEDB` |
+| Banks | `#4859A7` | `#E9ECFA` | `#9DACF1` |
+| Journey | `#0E736C` | `#DFF3F0` | `#69C8BE` |
+| Career Materials | `#7A4D30` | `#F5E9DD` | `#D8A97F` |
+
+The selected left-navigation row uses the current page's accent-on-dark color
+for its index, icon, and label, plus a quiet tinted rail/background. Unselected
+rows stay neutral. Page accents must pass contrast requirements in their exact
+rendering context and remain a redundant signal rather than the only state cue.
+
+### Loops stage interaction
+
+The Loops dossier uses one continuous in-flow chronology. Role context, linked
+preparation, completed/planned stages, and the terminal state all attach to the
+same vertical spine; none becomes a detached dashboard, modal, or side panel.
+
+- A completed stage is an inline accordion. Its compact state keeps the stage
+  name, semantic status, date, populated-record summary, and expand affordance
+  visible. Expanding it moves later stages downward in normal document flow;
+  collapsing it returns to the compact strip without losing scroll context.
+- An expanded interview stage begins with its header and, when present, one
+  short stage-material card with the material title, immutable revision, and
+  an explicit **Open guide** action. Do not render an empty material card.
+- Each remembered interview question is one inline accordion card. Its compact
+  header keeps the question title, the explicit owner-selected Strong, Mixed,
+  or Needs work assessment, and its expand affordance visible. The entire
+  header is the trigger; only the selected question expands, while sibling
+  question cards stay compact and move in normal flow.
+- The expanded question body keeps **Question context**, **My approach**, and
+  **My review** together. My review records what went well and what to improve;
+  it never asks the owner to reconstruct or republish a verbatim answer.
+  Long content remains readable inside the expanded card without creating a
+  detached reader or replacing the stage chronology.
+- The stage ends with its explicit status/result. Do not render separate round
+  self-assessment or interviewer-feedback cards. Legacy round-level fields
+  remain readable for immutable historical revisions but are not solicited or
+  foregrounded in this interaction.
+- Final owner-approved visual interaction reference:
+  `.impeccable/mocks/loops-hr-question-cards-v3.png`. The prior v2 question
+  card reference is historical and superseded.
+- At desktop widths the expanded question body may use three balanced columns
+  for context, approach, and review. At narrow widths those sections stack in
+  that DOM/focus order. Component gaps inside the stage are not the `20px`
+  page-panel gap.
+- Expansion uses one 180–260ms ease-out height/reveal transition. Under
+  `prefers-reduced-motion`, content changes immediately without losing focus.
+  The trigger exposes `aria-expanded`/`aria-controls`, and focus remains on the
+  trigger through both transitions.
+
 ---
 
 ## Global Rules

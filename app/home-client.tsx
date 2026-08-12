@@ -80,6 +80,7 @@ import BehavioralTargetBindings from "./behavioral-target-bindings";
 import BehavioralTargetDesk from "./behavioral-target-desk";
 import BankDomainOverview from "./bank-domain-overview";
 import CareerMaterialsWorkspace from "./career-materials-workspace";
+import InterviewPageHero from "./interview-page-hero";
 import { activityLifecycleState } from "./activity-state";
 import {
   interactionModeClassificationLabel,
@@ -5064,11 +5065,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const railSessionTimer = railSession ? draft.sessionTimers[railSession.id] : undefined;
     return (
       <>
-        <section className="today-masthead">
-          <div className="date-poster"><strong>{journal.date.slice(-2)}</strong><span>{new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(new Date(`${journal.date}T12:00:00Z`))}</span></div>
-          <div className="today-thesis"><span className="eyebrow">TODAY · {journal.focus.toUpperCase()}</span><h1>{totalToday ? `${totalToday} activities.` : "A clean page."}<br /><em>One honest record.</em></h1><p>{journal.note}</p></div>
-          <div className="today-tally"><span className="yesterday-label">YESTERDAY · {readableDate(yesterdayDate, true)}</span><div><strong>{yesterdayCompleted.length}/{yesterdayEntries.length}</strong><span>activities finished</span></div><div><strong>{formatDuration(yesterdaySeconds)}</strong><span>time recorded</span></div><div><strong>{yesterdaySessions}</strong><span>session{yesterdaySessions === 1 ? "" : "s"} planned</span></div></div>
-        </section>
+        <InterviewPageHero tone="today" eyebrow={`TODAY · ${journal.focus.toUpperCase()}`} title={<>{totalToday ? `${totalToday} activities.` : "A clean page."}<br /><em>One honest record.</em></>} description={journal.note} metrics={[
+          { value: `${yesterdayCompleted.length}/${yesterdayEntries.length}`, label: "finished yesterday" },
+          { value: formatDuration(yesterdaySeconds), label: "recorded yesterday" },
+          { value: yesterdaySessions, label: `session${yesterdaySessions === 1 ? "" : "s"} planned` },
+        ]} />
 
         <section className={`orchestrator-rail ${railFocusTimer?.runningSince || activeActivity ? "has-focus" : railFocusBlock || railActivity ? "has-history" : "empty"}`} aria-label="Current workbench activity">
           <div className="orchestrator-signal"><span className={railFocusTimer?.runningSince || focusTimer?.runningSince ? "live" : ""} /><small>NOW</small></div>
@@ -5150,7 +5151,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const maxEffortMinutes = Math.max(1, ...effortEntries.map((entry) => entry.elapsedSeconds / 60));
     return (
       <section className={`view-page journey-page ${journeyNestedEntry || journeyNestedProblem ? "has-open-reader" : ""}`}>
-        <header className="view-masthead journey-masthead"><span className="eyebrow">JOURNEY · PUBLISHED + TODAY&apos;S LIVE RECORD</span><h1>Your practice,<br /><em>mapped over time.</em></h1><p>This page counts only recorded work. Explore consistency, outcomes, topic coverage, effort, and the exact days behind every trend.</p></header>
+        <InterviewPageHero tone="journey" eyebrow="JOURNEY · PUBLISHED + TODAY'S LIVE RECORD" title={<>Your practice,<br /><em>mapped over time.</em></>} description="This page counts only recorded work. Explore consistency, outcomes, topic coverage, effort, and the exact days behind every trend." metrics={[
+          { value: activeDates.length, label: "active days" },
+          { value: streaks.longest, label: "longest streak" },
+          { value: activeDayAverage.toFixed(1), label: "per active day" },
+        ]} />
         {readerNotFound && <div className="journey-reader-not-found" role="alert"><strong>That practice record is unavailable.</strong><span>The saved reader link points to <code>{readerNotFound}</code>, which is not present in the current authoritative record.</span></div>}
         {(journeyNestedEntry || journeyNestedProblem) && <div className={`journey-reader-detail reader-workspace focused-attempt-workspace ${readerClosing ? "reader-closing" : ""}`}><aside className="journey-reader-pane focused-attempt-pane" role="dialog" aria-modal="true" aria-label="Selected Journey reader">{journeyNestedProblem ? renderSolutionReader() : renderCaseReader()}</aside></div>}
         <div className="stat-ledger">
@@ -5390,7 +5395,11 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const visibleRecordCount = groupedLog.reduce((sum, [, entries]) => sum + entries.length, 0);
     return (
       <section className={`view-page library-page ${selectedEntry ? "has-open-entry" : ""} ${listRestoring === "library" ? "list-restoring" : ""}`}>
-        <header className="view-masthead"><span className="eyebrow">PAST · COMPLETED WORK</span><h1>Read the journey<br /><em>like a field journal.</em></h1><p>Past contains finished activity timers and published case files—never planned work or result flags by themselves.</p></header>
+        <InterviewPageHero tone="past" eyebrow="PAST · COMPLETED WORK" title={<>Read the journey<br /><em>like a field journal.</em></>} description="Past contains finished activity timers and published case files—never planned work or result flags by themselves." metrics={[
+          { value: visibleRecordCount, label: "records" },
+          { value: activeDates.length, label: "active days" },
+          { value: "Pacific", label: "record" },
+        ]} />
         {readerNotFound && <div className="journey-reader-not-found" role="alert"><strong>That practice record is unavailable.</strong><span>The saved reader link points to <code>{readerNotFound}</code>, which is not present in the current authoritative record.</span></div>}
         <div className={`past-master-detail ${masterPaneOpen ? "master-pane-open" : ""} ${selectedEntry ? "reader-workspace" : ""} ${nestedReaderFocus ? "nested-reader-focus" : ""} ${readerClosing ? "reader-closing" : ""}`}>
           <div
@@ -5530,8 +5539,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       { key: "recent" as const, label: "Recent", icon: "recent" },
       { key: "acceptance" as const, label: "Acceptance", icon: "accept" },
     ];
-    const finishedCount = bankEntries.filter((entry) => entry.finished).length;
-    const finishedPercent = bankEntries.length ? Math.round((finishedCount / bankEntries.length) * 100) : 0;
     const behavioralCurriculum = bankFor("behavioral").filter(isResumeCurriculumQuestion);
     const completedBehavioralCurriculum = behavioralCurriculum
       .filter((question) => Boolean(latestFinishedAttempt(libraryEntries, "behavioral", question)))
@@ -5584,22 +5591,14 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     const activeSort = sortOptions.find((option) => option.key === bankSortKey) ?? sortOptions[0];
     return (
       <section className={`view-page banks-page ${selectedProblem ? "has-open-solution" : ""} ${listRestoring === "banks" ? "list-restoring" : ""}`}>
-        <header className="view-masthead banks-masthead"><span className="eyebrow">PROBLEM BANKS · ALL PRACTICE SOURCES</span><h1>Choose the next thing<br /><em>worth practicing.</em></h1><div className="banks-masthead-meta"><p>Browse every coding, system-design, and behavioral prompt in one place. “Practice today” adds the question to standalone practice and takes you directly to Today.</p><div className="bank-progress-meter" style={{ background: `conic-gradient(var(--signal-dark) ${finishedPercent}%, #e4e9e1 ${finishedPercent}% 100%)` }} aria-label={`${finishedCount} of ${bankEntries.length} problems finished`}><span><strong>{finishedCount}</strong><small>of {bankEntries.length}</small></span></div></div></header>
-        {readerNotFound && <div className="journey-reader-not-found" role="alert"><strong>That Bank reader is unavailable.</strong><span>The saved reader link points to <code>{readerNotFound}</code>, which is not present in the current authoritative record.</span></div>}
-        <div className="bank-totals" aria-label="Question bank totals">
+        <InterviewPageHero tone="banks" eyebrow="PROBLEM BANKS · ALL PRACTICE SOURCES" title={<>Choose the next thing<br /><em>worth practicing.</em></>} description="Browse every coding, system-design, and behavioral prompt in one place. Practice today adds the question to standalone practice and takes you directly to Today." footer={<div className="bank-totals hero-bank-totals" aria-label="Question bank totals">
           {([[
             "leetcode", bankFor("leetcode").length, "Coding problems"],
             ["system_design", bankFor("system_design").length, "System designs"],
             ["behavioral", bankFor("behavioral").length, "Behavioral prompts"],
-          ] as const).map(([type, total, label]) => <button
-            type="button"
-            className={`${type} ${expandedBankDesk === type ? "active" : ""}`}
-            aria-expanded={expandedBankDesk === type}
-            aria-controls={`bank-domain-desk-${type}`}
-            onClick={() => setExpandedBankDesk((current) => current === type ? null : type)}
-            key={type}
-          ><strong>{total}</strong><span>{label}</span><i aria-hidden="true">{expandedBankDesk === type ? "−" : "+"}</i></button>)}
-        </div>
+          ] as const).map(([type, total, label]) => <button type="button" className={`${type} ${expandedBankDesk === type ? "active" : ""}`} aria-expanded={expandedBankDesk === type} aria-controls={`bank-domain-desk-${type}`} onClick={() => setExpandedBankDesk((current) => current === type ? null : type)} key={type}><strong>{total}</strong><span>{label}</span><i aria-hidden="true">{expandedBankDesk === type ? "−" : "+"}</i></button>)}
+        </div>} />
+        {readerNotFound && <div className="journey-reader-not-found" role="alert"><strong>That Bank reader is unavailable.</strong><span>The saved reader link points to <code>{readerNotFound}</code>, which is not present in the current authoritative record.</span></div>}
         <div className="bank-domain-desks">
           {(["leetcode", "system_design", "behavioral"] as const).map((type) => {
             const open = expandedBankDesk === type;
@@ -6637,7 +6636,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   return (
     <>
     {chartTooltip && <ChartTooltip model={chartTooltip} onDismiss={() => setChartTooltip(null)} />}
-    <main className="app-shell" aria-hidden={arrivalState !== "entered"}>
+    <main className={`app-shell active-view-${view}`} aria-hidden={arrivalState !== "entered"}>
       <a className="skip-link" href="#practice-content">Skip to practice</a>
       <aside className="sidebar">
         <button className="brand" onClick={() => navigateToPrimaryView("today")}><span className="brand-mark" aria-hidden="true" /><span>Interview Arc</span></button>

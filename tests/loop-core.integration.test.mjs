@@ -329,6 +329,7 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
               answerConfidence: "reconstructed",
               ownerReview: {
                 assessment: "strong",
+                approach: "Mapped the cache state before describing eviction.",
                 summary: "The data-structure choice was clear; explain eviction order sooner.",
               },
             },
@@ -380,6 +381,7 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
     assert.equal(debrief.questions[0].answerConfidence, "reconstructed");
     assert.deepEqual(debrief.questions[0].ownerReview, {
       assessment: "strong",
+      approach: "Mapped the cache state before describing eviction.",
       summary: "The data-structure choice was clear; explain eviction order sooner.",
     });
     assert.equal(debrief.interviewerFeedback, "The interviewer explicitly said the solution was clear.");

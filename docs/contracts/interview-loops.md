@@ -95,14 +95,18 @@ prompt, but never completes a stage or implies an outcome.
 A stage may record an owner-provided format and up to 25 interviewer names. A
 concise round debrief may contain at most 50 questions. Each question may have
 one optional owner review; when present, it requires an explicit assessment
-(`strong`, `mixed`, or `needs_work`), a trimmed 1–5,000-character summary, or
-both. The debrief may also contain the owner's stage self-assessment, optional
-real interviewer feedback, and next step, each limited to 5,000 characters.
-Never infer format, interviewers, assessment, or feedback.
+(`strong`, `mixed`, or `needs_work`), a trimmed 1–5,000-character approach or
+review summary, or any combination of those fields. The ordinary stage record consists of its guide/material card, question
+cards, and the explicit stage status/result. New writes do not solicit separate
+round self-assessment or interviewer-feedback cards. Legacy round-level
+`selfAssessment`, `interviewerFeedback`, and `nextStep` fields remain parseable
+for immutable historical revisions but are not foregrounded in the current UI.
+Never infer format, interviewers, assessment, feedback, or stage outcome.
 
 Legacy remembered prompts and answers remain readable and independently
 labelled `exact` or `reconstructed`; new UI and Loop Recorder guidance do not
-foreground or solicit an answer reconstruction. A canonical Bank question is
+foreground or solicit an answer reconstruction. The current UI reads the
+explicit owner-review approach instead. A canonical Bank question is
 linked by stable ID and may belong to many Loops; do not copy or fork the
 canonical question merely to add Loop context.
 

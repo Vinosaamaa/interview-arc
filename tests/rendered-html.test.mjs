@@ -33,7 +33,7 @@ test("the Cloudflare build contains the Interview Arc dashboard", async () => {
   assert.match(bundle, /Build answers on a truthful record/);
   assert.match(bundle, /Registered private sources/);
   assert.match(bundle, /Evidence waiting for your decision/);
-  assert.match(bundle, /YESTERDAY/);
+  assert.match(bundle, /finished yesterday/);
   assert.match(bundle, /365-DAY JOURNEY MAP/);
   assert.match(bundle, /CAREER WORK/);
   assert.match(bundle, /Job application focus/);

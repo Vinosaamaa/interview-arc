@@ -1,0 +1,11 @@
+{
+  "artifact": "loops-switcher-accordion-v1.png",
+  "status": "awaiting-owner-approval",
+  "relationship": "Expanded state of the Loop identity panel in loops-single-spine-dossier-v4.png",
+  "interactionContract": {
+    "topology": "Expands the identity panel in normal page flow; never opens a modal, dialog, drawer, or overlay.",
+    "pageSize": 3,
+    "overflow": "At most three alternative Loops are visible and the alternatives region scrolls for additional records.",
+    "selection": "Selecting a Loop replaces the current dossier and returns the identity panel to its compact state."
+  }
+}

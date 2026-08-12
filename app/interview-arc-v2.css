@@ -103,7 +103,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .today-tally strong { color: #173b39; font-size: 1.38rem; }
 .today-tally span { color: #687d78; }
 .today-tally .yesterday-label { color: var(--primary-deep); }
-.orchestrator-rail { margin-top: 18px; border: 1px solid #bed0cb; border-radius: 14px; background: rgba(251,252,250,.92); box-shadow: var(--shadow-sm); }
+.orchestrator-rail { margin-top: 0; border: 1px solid #bed0cb; border-radius: 14px; background: rgba(251,252,250,.92); box-shadow: var(--shadow-sm); }
 .orchestrator-rail.has-focus { border-color: rgba(13,148,136,.48); box-shadow: inset 4px 0 var(--primary), var(--shadow-sm); }
 .orchestrator-rail.has-history { border-left-color: #9db0aa; }
 .orchestrator-signal small, .orchestrator-clock strong { color: var(--primary-deep); }

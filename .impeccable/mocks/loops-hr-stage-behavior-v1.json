@@ -1,0 +1,20 @@
+{
+  "artifact": "loops-hr-stage-behavior-v1.png",
+  "createdAt": "2026-08-12T07:52:45-07:00",
+  "status": "superseded",
+  "supersededBy": "loops-hr-question-cards-v2.png",
+  "relationship": "Interaction detail for the owner-approved loops-single-spine-dossier-v4.png",
+  "states": [
+    "expanded illustrative populated HR screen",
+    "collapsed HR screen summary",
+    "to-be-continued terminal node"
+  ],
+  "interactionContract": {
+    "topology": "Inline accordion on the one Loops chronology; never modal or detached.",
+    "expanded": "Optional compact stage material followed by Questions asked, My review, Self-assessment, and owner-recorded Interviewer feedback cards.",
+    "collapsed": "Retains stage identity, status, date, populated-record summary, and expand trigger.",
+    "motion": "Later stages move in normal flow; reduced-motion removes the transition without changing focus.",
+    "truth": "All populated values in the mockup are explicitly illustrative and must not be treated as saved history."
+  },
+  "sha256": "cca3fbd9c8bfbe48aae1fb564aa7a091611cca85f93933a0ee7e7cdcbcbbc3f9"
+}

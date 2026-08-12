@@ -1,0 +1,28 @@
+{
+  "artifact": "interview-top-panels-approval-v2.png",
+  "createdAt": "2026-08-12T07:52:45-07:00",
+  "status": "owner-approved",
+  "supersedes": "interview-top-panels-approval-v1.png",
+  "surfaces": [
+    "Today",
+    "Loops",
+    "Reviews",
+    "Past",
+    "Banks",
+    "Journey",
+    "Career Materials"
+  ],
+  "geometry": {
+    "topPanelHeightPx": 350,
+    "narrativeHeightPx": 300,
+    "summaryBandHeightPx": 50,
+    "topBarToTopPanelGapPx": 25,
+    "siblingPagePanelGapPx": 20
+  },
+  "visualContract": {
+    "continuousSurface": "No visible narrative-to-summary horizontal divider except the Banks selector boundary.",
+    "pageAccent": "Each page accent continues through navigation, controls, markers, focus, and quietly tinted nested cards.",
+    "artwork": "Recreate the approved botanical graphs as authored responsive SVG with a stable viewBox, aria-hidden semantics, and no embedded raster."
+  },
+  "sha256": "54f04fc5576bd0201ea9e46c7d2f6e5d57e6a5f5c94837f5d68c4d75aa9d854b"
+}

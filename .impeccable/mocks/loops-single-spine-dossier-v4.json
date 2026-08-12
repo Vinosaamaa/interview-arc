@@ -1,0 +1,12 @@
+{
+  "artifact": "loops-single-spine-dossier-v4.png",
+  "status": "owner-approved",
+  "geometry": {
+    "topPanelHeightPx": 350,
+    "narrativeHeightPx": 300,
+    "summaryBandHeightPx": 50,
+    "topBarToTopPanelGapPx": 25,
+    "siblingPagePanelGapPx": 20
+  },
+  "notes": "Owner-approved Loops dossier with shared top-panel anatomy, expandable preparation columns, compact role context, and the continuous stage spine. Production artwork is authored SVG, not this raster approval render."
+}
