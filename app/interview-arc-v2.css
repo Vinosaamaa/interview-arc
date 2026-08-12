@@ -2299,7 +2299,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 /* Shell compression — jump from desktop navigation straight to the mobile dock. */
 .brand-mark { overflow: hidden; background: url("/favicon.svg") center / cover no-repeat; }
 .topbar { flex-wrap: nowrap; }
-.topbar > div:first-child { min-width: max-content; align-self: stretch; display: flex; align-items: center; }
+.topbar > div:first-child { min-width: max-content; align-self: stretch; display: grid; align-content: center; gap: 2px; }
 .topbar > div:first-child span { line-height: 1.35; }
 .topbar > div:last-child { min-width: 0; flex-wrap: nowrap; }
 .topbar .secondary-action, .atmosphere-toggle { white-space: nowrap; }
@@ -2410,7 +2410,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 }
 
 /* The unified shell owns mobile workspace selection; Interview owns the bottom dock. */
-.topbar > div:first-child { gap: 9px; }
+.topbar > div:first-child { gap: 2px; }
 
 @media (max-width: 900px) {
   body { padding-bottom: 76px; }
@@ -2444,7 +2444,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 @media (max-width: 680px) {
   .sidebar { height: 64px; padding: 7px 10px; }
   .topbar { top: 64px; padding-inline: 10px; }
-  .topbar > div:first-child span { display: none; }
-  .topbar > div:first-child strong { white-space: nowrap; }
+  .topbar > div:first-child span { display: inline; max-width: none; white-space: nowrap; font-size: .58rem; }
+  .topbar > div:first-child strong { white-space: nowrap; font-size: .76rem; }
   .music-dock .music-next { display: none; }
 }

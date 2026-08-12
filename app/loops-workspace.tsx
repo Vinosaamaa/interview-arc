@@ -9,6 +9,7 @@ import {
   type RoleBriefSourcePayload,
 } from "./loop-role-brief-source";
 import { loopWorkspaceHref, readLoopWorkspaceState } from "./journey-insights";
+import { acquireDocumentScrollLock } from "./document-scroll-policy";
 
 type Specialty = "leetcode" | "system_design" | "behavioral";
 type MemoryConfidence = "exact" | "reconstructed";
@@ -363,10 +364,9 @@ function JobDescriptionDialog({ loop, opener, onClose }: {
 
   useEffect(() => {
     const workspace = document.querySelector<HTMLElement>("[data-loop-workspace-root]");
-    const previousOverflow = document.body.style.overflow;
+    const releaseScrollLock = acquireDocumentScrollLock();
     const previousInert = workspace?.inert ?? false;
     if (workspace) workspace.inert = true;
-    document.body.style.overflow = "hidden";
     const frame = window.requestAnimationFrame(() => closeRef.current?.focus());
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -394,7 +394,7 @@ function JobDescriptionDialog({ loop, opener, onClose }: {
       window.cancelAnimationFrame(frame);
       document.removeEventListener("keydown", handleKeyDown);
       if (workspace) workspace.inert = previousInert;
-      document.body.style.overflow = previousOverflow;
+      releaseScrollLock();
       opener?.focus();
     };
   }, [onClose, opener]);
@@ -495,6 +495,7 @@ export function LoopsWorkspace({ onOpenActivity }: { onOpenActivity: (activityId
     typeof window === "undefined" ? "" : readLoopWorkspaceState(window.location.href)?.stageId ?? ""
   ));
   const [sourceDialog, setSourceDialog] = useState<{ loop: LoopProjection; opener: HTMLButtonElement } | null>(null);
+  const closeSourceDialog = useCallback(() => setSourceDialog(null), []);
   const loops = payload?.loops ?? [];
   const selectedLoop = loops.find((loop) => loop.loop.loopId === selectedLoopId) ?? loops[0];
   const preferredStage = selectedLoop?.loop.stages.find((stage) => stage.status === "scheduled")
@@ -548,7 +549,7 @@ export function LoopsWorkspace({ onOpenActivity }: { onOpenActivity: (activityId
       <div className="loop-context-column"><RoleBriefPanel loop={selectedLoop} onOpenSource={(opener) => setSourceDialog({ loop: selectedLoop, opener })} /><DebriefPanel stage={selectedStage} /></div>
     </div>
     <ActivityHistory loop={selectedLoop} onOpenActivity={onOpenActivity} />
-  </section>{sourceDialog ? <JobDescriptionDialog loop={sourceDialog.loop} opener={sourceDialog.opener} onClose={() => setSourceDialog(null)} /> : null}</>;
+  </section>{sourceDialog ? <JobDescriptionDialog loop={sourceDialog.loop} opener={sourceDialog.opener} onClose={closeSourceDialog} /> : null}</>;
 }
 
 export function LoopJourneyFactsPanel() {
