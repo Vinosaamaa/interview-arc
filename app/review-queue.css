@@ -47,8 +47,8 @@
 .review-row::before { content: ""; width: 30px; border-top: 1px dashed var(--row-branch); position: absolute; left: -31px; top: 50%; }
 .review-row::after { content: ""; width: 10px; height: 10px; border: 3px solid var(--review-paper); border-radius: 50%; background: var(--row-branch); box-shadow: 0 0 0 2px color-mix(in srgb, var(--row-branch) 72%, #29483d); position: absolute; left: -37px; top: calc(50% - 7px); z-index: 2; }
 .review-row-open { position: absolute; inset: 0; z-index: 1; border: 0; border-radius: inherit; background: transparent; cursor: pointer; }
-.review-row:has(.review-row-open:hover) { border-color: color-mix(in srgb, var(--row-branch) 62%, #6d8179); background: #fbfdf9; box-shadow: 0 8px 22px rgba(21,58,51,.08); transform: translateY(-1px); }
-.review-row:has(.review-row-open:focus-visible) { outline: 3px solid #35a99b; outline-offset: 2px; }
+.review-row:hover { border-color: color-mix(in srgb, var(--row-branch) 62%, #6d8179); background: #fbfdf9; box-shadow: 0 8px 22px rgba(21,58,51,.08); transform: translateY(-1px); }
+.review-row:focus-within { outline: 3px solid #35a99b; outline-offset: 2px; }
 .review-row > :not(.review-row-open) { position: relative; }
 .review-row > :not(.review-row-open):not(.review-select):not(.review-actions) { pointer-events: none; }
 .review-row button:not(.review-row-open) { z-index: 2; }

@@ -171,8 +171,8 @@ test("Review Queue cards expose one whole-card reader target and distinct action
   assert.equal(cardTarget.position, "absolute");
   assert.equal(cardTarget.inset, "0");
   assert.equal(cardTarget.cursor, "pointer");
-  assert.ok(cssRules(rules, ".review-row:has(.review-row-open:hover)").length >= 1);
-  assert.ok(cssRules(rules, ".review-row:has(.review-row-open:focus-visible)").length >= 1);
+  assert.ok(cssRules(rules, ".review-row:hover").length >= 1);
+  assert.ok(cssRules(rules, ".review-row:focus-within").length >= 1);
   const action = cssRules(rules, ".review-actions button")[0].declarations;
   assert.notEqual(action.border, "0");
   assert.equal(action.cursor, "pointer");
@@ -199,6 +199,14 @@ test("Past, Banks, and Journey share a centered bounded scrollable reader shell"
   const widePast = cssRules(rules, ".library-page.has-open-entry .past-master-detail.master-pane-open", "min-width: 1977px")[0].declarations;
   assert.equal(widePast.left, undefined);
   assert.equal(widePast.transform, undefined);
+
+  const mobilePast = cssRules(rules, ".library-page.has-open-entry .past-master-detail", "max-width: 760px").at(-1).declarations;
+  const mobileBank = cssRules(rules, ".banks-page.has-open-solution .bank-master-detail", "max-width: 760px").at(-1).declarations;
+  for (const shell of [mobilePast, mobileBank]) {
+    assert.equal(shell.width, "100%");
+    assert.equal(shell.inset, "66px 0 72px");
+    assert.equal(shell.transform, "none");
+  }
 
   const scroller = cssRules(rules, ".workspace-reader-scroll.case-document")
     .find((rule) => rule.declarations["min-height"])?.declarations;
