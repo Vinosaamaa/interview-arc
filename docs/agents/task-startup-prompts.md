@@ -41,8 +41,8 @@ interview-arc/loops/AGENTS.md, and
 interview-arc/docs/contracts/interview-loops.md. Record only owner-authorized
 hiring-process facts: company, role, job reference, flexible stages, dates,
 outcomes, owner-provided format/interviewers, questions asked, concise
-per-question owner review/rating, stage self-assessment, and optional real
-interviewer feedback. Preserve legacy exact/reconstructed memory fields when
+per-question owner approach/review/rating, and explicit stage results. Preserve legacy
+round self-assessment/interviewer-feedback and exact/reconstructed memory fields when
 present, but do not solicit a full answer reconstruction. You alone may create
 or revise the Loop-owned Role Brief and source-backed Loop/Round interview
 material when explicitly asked. Interview material is for a confirmed process

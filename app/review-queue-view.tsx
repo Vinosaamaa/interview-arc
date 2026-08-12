@@ -13,6 +13,7 @@ import {
   REVIEW_QUEUE_UI_STORAGE_KEY,
   type ReviewQueueUiState,
 } from "./review-queue-state";
+import InterviewPageHero from "./interview-page-hero";
 
 type ReviewQueueViewProps = {
   items: ReviewQueueItem[];
@@ -65,13 +66,11 @@ function compactDate(value: string) {
   return COMPACT_DATE_FORMATTER.format(new Date(`${value}T12:00:00Z`));
 }
 
-function SpecialtyFilterButtons({ specialties, onClear, onToggle }: {
+function SpecialtyFilterButtons({ specialties, onToggle }: {
   specialties: ReviewQueueSpecialty[];
-  onClear: () => void;
   onToggle: (specialty: ReviewQueueSpecialty) => void;
 }) {
   return <>
-    <button type="button" aria-pressed={specialties.length === 0} onClick={onClear}>All</button>
     {SPECIALTIES.map((specialty) => <button type="button" key={specialty.value} aria-pressed={specialties.includes(specialty.value)} onClick={() => onToggle(specialty.value)}>{specialty.label}</button>)}
   </>;
 }
@@ -174,37 +173,29 @@ export default function ReviewQueueView({
 
   return (
     <div className="review-queue-container"><section className="review-queue-page">
-      <header className="review-queue-masthead">
-        <div className="review-hero-copy">
-          <span className="eyebrow">INTERVIEW · REVIEW QUEUE</span>
-          <h1>Strengthen what you practiced.</h1>
-          <p>A focused second pass turns finished work into recall you can trust.</p>
-        </div>
-        <dl className="review-summary-strip" aria-label="Review queue summary">
-          <div><dt>due now</dt><dd>{dueNowCount}</dd></div>
-          <div><dt>estimated review</dt><dd>{totalMinutes < 60 ? `${totalMinutes}m` : `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`}</dd></div>
-          <div><dt>review streak</dt><dd>{reviewStreak} day{reviewStreak === 1 ? "" : "s"}</dd></div>
-        </dl>
-      </header>
+      <InterviewPageHero tone="reviews" eyebrow="INTERVIEW · REVIEWS" title={<>Return while the<br />memory is still <em>warm.</em></>} description="A short second pass now turns yesterday's friction into something you can recall under pressure." metrics={[
+        { value: dueNowCount, label: "due now" },
+        { value: totalMinutes < 60 ? `${totalMinutes}m` : `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`, label: "estimated review" },
+        { value: `${reviewStreak} day${reviewStreak === 1 ? "" : "s"}`, label: "review streak" },
+      ]} />
 
       <div className="review-queue-controls">
+        <label className="review-search-bar">
+          <svg aria-hidden="true" viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m12.8 12.8 4.2 4.2" /></svg>
+          <input type="search" value={search} onChange={(event) => updateUiState("search", event.target.value)} placeholder="Search reviews" aria-label="Search review queue" />
+          <span aria-live="polite">{visibleItems.length} items</span>
+        </label>
         <div className="review-filter-rail" role="group" aria-label="Filter reviews by specialty">
-          <SpecialtyFilterButtons specialties={specialties} onClear={() => setUiState((current) => ({ ...current, specialties: [] }))} onToggle={toggleSpecialty} />
+          <SpecialtyFilterButtons specialties={specialties} onToggle={toggleSpecialty} />
           <details className="review-expanded-controls control-menu">
             <summary aria-label={`More review filters, ${activeFilterCount} active`} title="More filters"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4" /></svg>{activeFilterCount > 0 && <i>{activeFilterCount}</i>}</summary>
             <div>
-            <fieldset className="review-specialty-menu"><legend>Specialty</legend><SpecialtyFilterButtons specialties={specialties} onClear={() => setUiState((current) => ({ ...current, specialties: [] }))} onToggle={toggleSpecialty} /></fieldset>
             <fieldset><legend>Due date</legend>{([['now', 'Due now'], ['week', '7 days'], ['month', '30 days'], ['all', 'Any']] as const).map(([value, label]) => <button type="button" key={value} aria-pressed={due === value} onClick={() => updateUiState("due", value)}>{label}</button>)}</fieldset>
             <fieldset><legend>Sort by</legend>{([['priority', 'Priority'], ['due', 'Due date'], ['review_time', 'Review time'], ['last_attempt', 'Last attempt']] as const).map(([value, label]) => <button type="button" key={value} aria-pressed={sort === value} onClick={() => updateUiState("sort", value)}>{label}</button>)}</fieldset>
             <footer><button type="button" onClick={resetFilters} disabled={activeFilterCount === 0}>Reset</button><span>{visibleItems.length} item{visibleItems.length === 1 ? "" : "s"}</span></footer>
             </div>
           </details>
         </div>
-        <label className="review-search-bar">
-          <svg aria-hidden="true" viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m12.8 12.8 4.2 4.2" /></svg>
-          <input type="search" value={search} onChange={(event) => updateUiState("search", event.target.value)} placeholder="Search reviews" aria-label="Search review queue" />
-          <span aria-live="polite">{visibleItems.length} items</span>
-        </label>
       </div>
 
       <div className="review-status-stack">

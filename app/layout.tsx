@@ -5,6 +5,8 @@ import "./globals.css";
 import "./interview-arc-v2.css";
 import "./review-queue.css";
 import "./behavioral-targets.css";
+import "./interview-page-hero.css";
+import "./loops-redesign.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
