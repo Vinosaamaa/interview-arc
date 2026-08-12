@@ -1,6 +1,6 @@
 # Interview Arc Task Setup And Startup Prompts
 
-Create six long-lived Codex tasks inside the same **Interview Prep** project.
+Create seven long-lived Codex tasks inside the same **Interview Prep** project.
 They all use the same repository checkout; do not create separate folders,
 projects, worktrees, or daily tasks.
 
@@ -8,10 +8,11 @@ Use these exact task titles:
 
 1. `Interview Arc — Coordinator`
 2. `Interview Arc — Loop Recorder`
-3. `Interview Arc — Resume & Cover Letter`
-4. `Interview Arc — LeetCode`
-5. `Interview Arc — System Design`
-6. `Interview Arc — Behavioral`
+3. `Interview Arc — Learning Specialist`
+4. `Interview Arc — Resume & Cover Letter`
+5. `Interview Arc — LeetCode`
+6. `Interview Arc — System Design`
+7. `Interview Arc — Behavioral`
 
 The repository's `AGENTS.md` files are authoritative. The prompts below only
 initialize the task and force a first capability check; they do not duplicate
@@ -35,7 +36,8 @@ will recognize.
 
 ```text
 Initialize this long-lived task as Interview Arc — Loop Recorder. Read the
-outer workspace instructions, interview-arc/AGENTS.md, and
+outer workspace instructions, interview-arc/AGENTS.md,
+interview-arc/loops/AGENTS.md, and
 interview-arc/docs/contracts/interview-loops.md. Record only owner-authorized
 hiring-process facts: company, role, job reference, flexible stages, dates,
 outcomes, owner-provided format/interviewers, questions asked, concise
@@ -98,6 +100,22 @@ problem yet. Confirm whether the MCP bridge is connected and summarize the
 commands you will recognize.
 ```
 
+## Learning Specialist First Prompt
+
+```text
+Initialize this long-lived task as Interview Arc — Learning Specialist. Read
+the outer workspace instructions, interview-arc/AGENTS.md,
+interview-arc/learn/AGENTS.md, and
+interview-arc/docs/contracts/learning-workspace.md. You alone may propose or
+revise Course Blueprints and Current lesson content. Require my explicit review
+before Enrollment, create the exact Lesson surface before timing, preserve
+owner-private transcript and evidence history, and treat Arc Voice as
+transcript-only with no cloud learning audio. Do not infer mastery, create Loop
+Role Briefs, switch Git branches, or publish Git artifacts. Do not create a
+Course or Session yet. Confirm whether the MCP bridge is connected and
+summarize the Learn commands you will recognize.
+```
+
 ## System Design First Prompt
 
 ```text
@@ -141,7 +159,7 @@ the commands you will recognize.
 
 ## One-Time Connection
 
-After all six tasks exist and have the exact titles above, return to
+After all seven tasks exist and have the exact titles above, return to
 `Interview Arc — Coordinator` and say:
 
 ```text
@@ -151,8 +169,8 @@ Connect specialist tasks.
 The coordinator must:
 
 1. list the Codex tasks in this project;
-2. match the five exact specialist titles, including Loop Recorder and Resume
-   & Cover Letter;
+2. match the six exact specialist titles, including Loop Recorder, Learning
+   Specialist, and Resume & Cover Letter;
 3. register each task/thread ID and host ID with
    `register_specialist_task`;
 4. read the registry back with `get_specialist_tasks`;
@@ -173,7 +191,7 @@ hot-add tools to an already running long-lived task. After an allowlist or
 server-catalog change:
 
 1. run `pnpm mcp:config:check` from `interview-arc/`;
-2. reconnect or reopen the Coordinator and all five specialist tasks;
+2. reconnect or reopen the Coordinator and all six specialist tasks;
 3. use tool discovery in each applicable task before practice resumes.
 
 The repository allowlist is canonical. The optional outer workspace shim can be
@@ -185,9 +203,10 @@ configuration even when the outer workspace is absent.
 - In a specialist: natural practice language such as `Let's work on the focused
   problem`, `Let's do the current mock`, or `What is the solution to the current
   problem?`.
-- In any specialist: `Please note for this problem: ...` pins the exact note.
-- In one specialist: `Publish today's practice` flushes/finalizes all pending
-  activities for that specialty in D1 only.
+- In an Interview practice specialist: `Please note for this problem: ...`
+  pins the exact note.
+- In one Interview practice specialist: `Publish today's practice`
+  flushes/finalizes all pending activities for that specialty in D1 only.
 - In the coordinator: `Publish all pending practice` coordinates every
   specialist, renders the Git case files, and runs the journal publication
   workflow.

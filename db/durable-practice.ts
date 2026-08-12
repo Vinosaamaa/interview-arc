@@ -47,6 +47,7 @@ import {
   voiceResponseGroups,
   voiceSpecialistResponses,
 } from "./schema";
+import { orderContiguousTurns } from "./timed-conversation";
 import {
   canonicalVoiceBatchTurns,
   finishDispositionForVoiceStatus,
@@ -151,7 +152,7 @@ import {
 import type { BehavioralProjectFocus } from "./behavioral-project-deep-dive-policy";
 
 export type Specialty = "leetcode" | "system_design" | "behavioral";
-export type SpecialistTaskType = Specialty | "loop_recorder" | "resume_cover_letter";
+export type SpecialistTaskType = Specialty | "loop_recorder" | "learning_specialist" | "resume_cover_letter";
 export type NoteKind = "remember" | "insight" | "mistake" | "pattern" | "question";
 export type TranscriptSpeaker = "user" | "specialist";
 export type TranscriptSource = "codex" | "dictation" | "audio_transcript";
@@ -641,7 +642,11 @@ export async function appendTranscriptTurns(
   nowMs: number,
 ) {
   const db = getDb();
-  for (const turn of turns) {
+  const orderedTurns = orderContiguousTurns(turns);
+  if (!orderedTurns.contiguous) {
+    throw new Error("Transcript turn sequences must be unique, contiguous, and ordered by their stable sequence.");
+  }
+  for (const turn of orderedTurns.ordered) {
     const existing = (await db.select().from(practiceTranscriptTurns).where(and(
       eq(practiceTranscriptTurns.ownerId, ownerId),
       eq(practiceTranscriptTurns.activityId, activityId),

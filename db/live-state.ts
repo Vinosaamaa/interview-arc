@@ -26,7 +26,7 @@ import {
   type LiveSessionRow,
   voiceCaptureIntents,
 } from "./schema";
-import { foldElapsed, nextTimerState } from "./timer-state";
+import { foldElapsed, nextTimerState } from "./timed-conversation";
 import type {
   PracticeStateExtraActivity,
   PracticeStateSession,

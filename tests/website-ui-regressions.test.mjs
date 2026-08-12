@@ -420,7 +420,7 @@ test("workspace selector contains exactly Interview, Learn, and Engineering", as
     .map((node) => node.text.trim())
     .filter((value) => ["Interview", "Learn", "Engineering", "Journey"].includes(value));
   assert.deepEqual(workspaceLabels, ["Interview", "Learn", "Engineering"]);
-  assert.equal(literals.has("Statistics"), false);
+  assert.equal(literals.has("Statistics"), true);
   assert.equal(literals.has("Recall schedule"), false);
   assert.ok(cssRules(rules, ".brand-mark").some((rule) => rule.declarations.background?.includes('/favicon.svg')));
 });
@@ -477,7 +477,10 @@ test("workspace header stacks the active tab above the Pacific date at every wid
   assert.ok(context);
   const elements = context.children.filter(ts.isJsxElement);
   assert.deepEqual(elements.map((element) => element.openingElement.tagName.getText(file)), ["strong", "span"]);
-  assert.equal(elements[0].children[0]?.getText(file), "{INTERVIEW_VIEW_TITLES[view]}");
+  assert.equal(
+    elements[0].children[0]?.getText(file),
+    '{view === "learn" ? LEARN_VIEW_TITLES[learnDestination] : INTERVIEW_VIEW_TITLES[view]}',
+  );
   assert.equal(elements[1].children[0]?.getText(file), "{readableDate(journal.date)}");
 
   const contextStyle = cssRules(rules, ".topbar > div:first-child")

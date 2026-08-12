@@ -112,6 +112,8 @@ test("Workspace routes keep every primary surface visible in the URL and clear s
   assert.equal(readWorkspaceRouteView("https://example.test/?view=reviews"), "reviews");
   assert.equal(readWorkspaceRouteView("https://example.test/?view=loops"), "loops");
   assert.equal(readWorkspaceRouteView("https://example.test/?view=career-materials"), "career-materials");
+  assert.equal(readWorkspaceRouteView("https://example.test/?view=learn&learn=history"), "learn");
+  assert.doesNotMatch(workspaceViewHref("https://example.test/?view=learn&learn=history", "today"), /learn=/);
 });
 
 test("Loop routes preserve exact Loop and round selection while Past links retain their origin", () => {

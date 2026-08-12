@@ -309,6 +309,13 @@
       "when": 1786548738388,
       "tag": "0043_wet_spencer_smythe",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "6",
+      "when": 1786555711982,
+      "tag": "0044_vengeful_vanisher",
+      "breakpoints": true
     }
   ]
 }

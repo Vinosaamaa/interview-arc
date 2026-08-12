@@ -89,6 +89,42 @@ import {
   targetProfileMigrationSchema,
 } from "../db/loops";
 import {
+  LearningError,
+  appendLearningTranscript,
+  appendLearningTranscriptSchema,
+  appendLearningVoiceTranscriptSchema,
+  approveLearningEnrollment,
+  approveLearningEnrollmentSchema,
+  assertLearningAudioForbidden,
+  controlLearningSession,
+  controlLearningSessionSchema,
+  createLearningCourseBlueprint,
+  createLearningCourseBlueprintSchema,
+  createLearningSession,
+  createLearningSessionSchema,
+  finishLearningSession,
+  finishLearningSessionSchema,
+  queryLearningEvidence,
+  queryLearningEvidenceSchema,
+  queryLearningAnalytics,
+  queryLearningAnalyticsSchema,
+  queryLearningJourney,
+  queryLearningJourneySchema,
+  queryLearningSessions,
+  queryLearningSessionsSchema,
+  queryLearningWorkspace,
+  queryLearningWorkspaceSchema,
+  readActiveLearningVoiceSessions,
+  reviseLearningCourseBlueprint,
+  reviseLearningCourseBlueprintSchema,
+  saveLearningLessonRevision,
+  saveLearningLessonRevisionSchema,
+  saveLearningArtifactTextSchema,
+  setLearningHomeworkState,
+  setLearningHomeworkStateSchema,
+} from "../db/learn";
+import { persistLearningArtifactText } from "../db/learning-artifact-storage";
+import {
   createLoopInterviewMaterial,
   createLoopInterviewMaterialSchema,
   LoopMaterialError,
@@ -403,6 +439,14 @@ async function uploadPracticeAudio(ownerId: string, request: Request, env: Env) 
       || intent.clipId !== requestedClipId)) {
     return json(request, { error: "Audio upload requires the matching accepted voice-capture intent." }, { status: 409 });
   }
+  try {
+    await assertLearningAudioForbidden(ownerId, activityId);
+  } catch (error) {
+    if (error instanceof LearningError) {
+      return json(request, { error: error.message, code: error.code, retryable: error.retryable }, { status: 409 });
+    }
+    throw error;
+  }
   const clipId = requestedClipId || crypto.randomUUID();
   const filename = safeAudioFilename(file.name);
   const objectKey = `${ownerId}/${activityId}/${clipId}-${filename}`;
@@ -581,55 +625,83 @@ async function voiceContext(ownerId: string, request: Request) {
   // newly started stopwatch appear several seconds—or minutes—late. Resolve
   // the one running timer directly, and load richer metadata only when it exists.
   const date = dateInPracticeTimeZone();
-  const [activity, timerInstrument] = await Promise.all([
+  const [activity, timerInstrument, learningSessions] = await Promise.all([
     readActiveVoiceActivity(ownerId),
     readVoiceTimerInstrument(ownerId),
+    readActiveLearningVoiceSessions(ownerId),
   ]);
-  if (!activity) {
+  const learningSession = learningSessions.length === 1 ? learningSessions[0] : null;
+  const captureTarget = learningSessions.length > 1 || (activity && learningSession)
+    ? "ambiguous" as const
+    : learningSession
+      ? "learning" as const
+      : activity
+        ? "interview" as const
+        : null;
+  if (!activity && !learningSession && learningSessions.length === 0) {
     return json(request, {
       protocolVersion: VOICE_PROTOCOL_VERSION,
       date,
+      captureTarget,
       focusedActivity: null,
+      focusedLearningSession: null,
       timerInstrument,
       specialist: null,
-      message: "Start an activity stopwatch in Interview Arc before recording a linked answer.",
+      message: "Start an Interview activity or Learning Session before recording linked Voice text.",
     });
   }
   const [content, specialists] = await Promise.all([
-    loadContentIndex(),
+    activity ? loadContentIndex() : Promise.resolve(null),
     readSpecialistTasks(ownerId),
   ]);
-  const bank = activity.type === "system_design"
-    ? content.questionBanks.systemDesign
-    : activity.type === "behavioral"
-      ? content.questionBanks.behavioral
-      : content.questionBanks.leetcode;
-  const question = bank.find((candidate) => candidate.id === activity.questionId)
-    ?? bank.find((candidate) => activity.url && candidate.url === activity.url)
-    ?? null;
-  const specialist = specialists.find((candidate) => candidate.specialty === activity.type) ?? null;
+  const bank = activity && content
+    ? activity.type === "system_design"
+      ? content.questionBanks.systemDesign
+      : activity.type === "behavioral"
+        ? content.questionBanks.behavioral
+        : content.questionBanks.leetcode
+    : [];
+  const question = activity
+    ? bank.find((candidate) => candidate.id === activity.questionId)
+      ?? bank.find((candidate) => activity.url && candidate.url === activity.url)
+      ?? null
+    : null;
+  const specialistType = captureTarget === "learning"
+    ? "learning_specialist"
+    : captureTarget === "interview"
+      ? activity?.type
+      : null;
+  const specialist = specialistType
+    ? specialists.find((candidate) => candidate.specialty === specialistType) ?? null
+    : null;
+  const focusedActivity = activity ? {
+    activityId: activity.id,
+    workbenchId: typeof activity.workbenchId === "string"
+      ? activity.workbenchId
+      : timerInstrument.workbenchId,
+    questionId: activity.questionId ?? null,
+    specialty: voiceSpecialty(activity.type),
+    interviewArcSpecialty: activity.type,
+    title: activity.title,
+    prompt: activity.prompt ?? question?.prompt ?? null,
+    topics: question?.topics ?? [],
+    tags: [...new Set([...(question?.tags ?? []), ...(question?.companyTags ?? [])])],
+    companies: question?.companyTags ?? [],
+    projects: [],
+    vocabularyPackIds: activity.vocabularyPackIds ?? question?.vocabularyPackIds ?? [],
+    speechTerms: activity.speechTerms ?? question?.speechTerms ?? [],
+    startedAt: activity.timer.startedAt,
+    runningSince: activity.timer.runningSince,
+  } : null;
+  const ambiguityMessage = learningSessions.length > 1
+    ? "Pause all but one running Learning Session before recording linked Voice text."
+    : "An Interview activity and Learning Session are both running. Pause one before recording linked Voice text.";
   return json(request, {
     protocolVersion: VOICE_PROTOCOL_VERSION,
     date,
-    focusedActivity: {
-      activityId: activity.id,
-      workbenchId: typeof activity.workbenchId === "string"
-        ? activity.workbenchId
-        : timerInstrument.workbenchId,
-      questionId: activity.questionId ?? null,
-      specialty: voiceSpecialty(activity.type),
-      interviewArcSpecialty: activity.type,
-      title: activity.title,
-      prompt: activity.prompt ?? question?.prompt ?? null,
-      topics: question?.topics ?? [],
-      tags: [...new Set([...(question?.tags ?? []), ...(question?.companyTags ?? [])])],
-      companies: question?.companyTags ?? [],
-      projects: [],
-      vocabularyPackIds: activity.vocabularyPackIds ?? question?.vocabularyPackIds ?? [],
-      speechTerms: activity.speechTerms ?? question?.speechTerms ?? [],
-      startedAt: activity.timer.startedAt,
-      runningSince: activity.timer.runningSince,
-    },
+    captureTarget,
+    focusedActivity,
+    focusedLearningSession: learningSession,
     timerInstrument,
     specialist: specialist ? {
       specialty: specialist.specialty,
@@ -637,8 +709,82 @@ async function voiceContext(ownerId: string, request: Request) {
       hostId: specialist.hostId,
       title: specialist.title,
     } : null,
-    message: specialist ? null : `Connect the ${activity.type} specialist task before sending a recording.`,
+    message: captureTarget === "ambiguous"
+      ? ambiguityMessage
+      : specialist
+        ? null
+        : captureTarget === "learning"
+          ? "Connect the Learning Specialist task before sending Learning Voice text."
+          : `Connect the ${activity?.type} specialist task before sending a recording.`,
   });
+}
+
+async function voiceLearningTranscript(ownerId: string, request: Request, env: Env) {
+  try {
+    const contentLength = Number(request.headers.get("content-length") ?? 0);
+    if (Number.isFinite(contentLength) && contentLength > 64_000) {
+      return json(request, {
+        error: "The Learning Voice transcript request is too large.",
+        code: "learning_voice_payload_too_large",
+        retryable: false,
+      }, { status: 413 });
+    }
+    const text = await request.text();
+    if (new TextEncoder().encode(text).byteLength > 64_000) {
+      return json(request, {
+        error: "The Learning Voice transcript request is too large.",
+        code: "learning_voice_payload_too_large",
+        retryable: false,
+      }, { status: 413 });
+    }
+    const input = appendLearningVoiceTranscriptSchema.parse(JSON.parse(text));
+    const checksum = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input.transcript));
+    const actualChecksum = [...new Uint8Array(checksum)]
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+    if (actualChecksum !== input.checksum) {
+      throw new LearningError(
+        "learning_transcript_checksum_mismatch",
+        "The Learning Voice transcript does not match its stable checksum.",
+      );
+    }
+    const receipt = await appendLearningTranscript(ownerId, {
+      operationId: input.operationId,
+      sessionId: input.sessionId,
+      expectedTranscriptRevision: input.expectedTranscriptRevision,
+      writer: "arc_voice",
+      turns: [{
+        turnId: input.turnId,
+        sequence: input.sequence,
+        speaker: "learner",
+        source: "voice_transcript",
+        body: input.transcript,
+        occurredAt: input.occurredAt,
+      }],
+    });
+    await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "practice");
+    return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, ...receipt });
+  } catch (error) {
+    if (error instanceof LearningError) {
+      return json(request, {
+        error: error.message,
+        code: error.code,
+        retryable: error.retryable,
+      }, { status: 409 });
+    }
+    if (error instanceof z.ZodError || error instanceof SyntaxError) {
+      return json(request, {
+        error: "A valid Learning Voice transcript request is required.",
+        code: "learning_voice_request_invalid",
+        retryable: false,
+      }, { status: 400 });
+    }
+    return json(request, {
+      error: "The Learning Voice transcript could not be saved.",
+      code: "learning_voice_internal_error",
+      retryable: true,
+    }, { status: 500 });
+  }
 }
 
 async function scheduleCompletedVoiceActivity(
@@ -1619,6 +1765,14 @@ async function saveVoiceDelivery(ownerId: string, request: Request) {
       || !["queued", "processing", "available", "failed"].includes(body.status)) {
     return json(request, { error: "Complete delivery-analysis identity and status are required." }, { status: 400 });
   }
+  try {
+    await assertLearningAudioForbidden(ownerId, body.activityId);
+  } catch (error) {
+    if (error instanceof LearningError) {
+      return json(request, { error: error.message, code: error.code, retryable: error.retryable }, { status: 409 });
+    }
+    throw error;
+  }
   await saveActivityDeliveryAnalysis(ownerId, body, Date.now());
   return json(request, { protocolVersion: VOICE_PROTOCOL_VERSION, analysisId: body.id, status: body.status }, { status: 201 });
 }
@@ -1977,6 +2131,7 @@ function specialistToolFailure(error: unknown) {
     || error instanceof BehavioralTargetProfileError
     || error instanceof BehavioralProjectDeepDiveError
     || error instanceof LoopError
+    || error instanceof LearningError
     || error instanceof LoopMaterialError
     || error instanceof BehavioralStoryError
     || error instanceof ResumeImportError
@@ -3332,6 +3487,306 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   );
 
   server.registerTool(
+    "create_learning_course_blueprint",
+    {
+      description: "Create one owner-private draft Course Blueprint revision 1. Only the Learning Specialist may propose curriculum; the Course remains unenrolled until the owner explicitly approves the exact revision. Exact retries replay the original receipt and changed retries fail closed.",
+      inputSchema: createLearningCourseBlueprintSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await createLearningCourseBlueprint(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Draft Course ${result.courseId} Blueprint revision ${result.blueprintRevision} is saved for review.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "revise_learning_course_blueprint",
+    {
+      description: "Append one immutable Course Blueprint revision using the exact expected revision. Existing Enrollment and Lesson history remain pinned to the revisions they used; only the Learning Specialist may revise curriculum.",
+      inputSchema: reviseLearningCourseBlueprintSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await reviseLearningCourseBlueprint(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Course ${result.courseId} Blueprint revision ${result.blueprintRevision} is saved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "approve_learning_course_enrollment",
+    {
+      description: "Enroll in one exact reviewed Course Blueprint revision after explicit owner approval. The resulting Enrollment remains pinned to that revision even when later Blueprint revisions are created.",
+      inputSchema: approveLearningEnrollmentSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await approveLearningEnrollment(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Enrollment ${result.enrollmentId} is active on Course ${result.courseId} Blueprint revision ${result.blueprintRevision}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "save_learning_lesson_revision",
+    {
+      description: "Create or append one immutable Current lesson revision for an active Course Enrollment or a separate Quick Study. Course Lessons must belong to the exact enrolled Blueprint; Quick Study never fabricates Course or Enrollment state.",
+      inputSchema: saveLearningLessonRevisionSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await saveLearningLessonRevision(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Learning Lesson ${result.lessonId} revision ${result.lessonRevision} is saved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_learning_workspace",
+    {
+      description: "Read bounded owner-private Courses, immutable Blueprint and Current lesson revisions, explicit Enrollments, separate Quick Studies, and factual Learn aggregates. It never returns inferred mastery, productivity, retention, or readiness.",
+      inputSchema: queryLearningWorkspaceSchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryLearningWorkspace(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "create_learning_session",
+    {
+      description: "Open one planned owner-private Learning Session only after its exact Current lesson revision exists. The Session remains separate from Interview Activities and begins timing only through an explicit control operation.",
+      inputSchema: createLearningSessionSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await createLearningSession(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Learning Session ${result.sessionId} is ready on Lesson revision ${result.lessonRevision}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "control_learning_session",
+    {
+      description: "Execute an explicitly authorized start, pause, or resume command on the separate Learning Session timer. Expected revisions and stable operation IDs provide exact retry behavior.",
+      inputSchema: controlLearningSessionSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await controlLearningSession(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Learning Session ${result.sessionId} is ${result.state}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "append_learning_transcript",
+    {
+      description: "Append one contiguous batch of exact owner-private Learning transcript turns. Arc Voice may append text-only voice_transcript turns; the strict schema accepts no audio object, R2 key, delivery metadata, or Finish blocker.",
+      inputSchema: appendLearningTranscriptSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await appendLearningTranscript(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Learning transcript revision ${result.transcriptRevision} is saved for ${result.sessionId}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_learning_sessions",
+    {
+      description: "Read bounded owner-private Learning Session timers, exact transcript turns, and interval history. The response always reports transcript_only evidence policy and never includes audio metadata.",
+      inputSchema: queryLearningSessionsSchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryLearningSessions(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "attach_learning_artifact",
+    {
+      description: "Durably save one bounded text Learning artifact in owner-private storage, verify its byte count and SHA-256 integrity, and attach immutable display-safe metadata. No backing-store locator is accepted or returned.",
+      inputSchema: saveLearningArtifactTextSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await persistLearningArtifactText(ownerId, input, env.AUDIO);
+        return {
+          content: [{ type: "text", text: `Learning artifact ${result.artifactId} is attached to Lesson ${result.lessonId}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "set_learning_homework_state",
+    {
+      description: "Append an explicitly authorized open or completed state revision for one exact owner-private homework item. Completion remains a fact and never implies checkpoint demonstration.",
+      inputSchema: setLearningHomeworkStateSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await setLearningHomeworkState(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Homework ${result.homeworkId} revision ${result.revision} is ${result.state}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "finish_learning_session",
+    {
+      description: "Finish and permanently lock one Learning Session while appending an immutable recap and evidence-bearing checkpoint results. Demonstrated requires exact transcript, artifact, or homework references; audio is never a Finish gate.",
+      inputSchema: finishLearningSessionSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await finishLearningSession(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Learning Session ${result.sessionId} is completed at finalization revision ${result.finalizationRevision}.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_learning_evidence",
+    {
+      description: "Read bounded owner-private checkpoint, homework, artifact, and Session-finalization history. Artifact integrity metadata is display-safe; private backing-store locators are omitted.",
+      inputSchema: queryLearningEvidenceSchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryLearningEvidence(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_learning_journey",
+    {
+      description: "Read compact owner-private Learn chronology for Session, Lesson, Course, checkpoint-demonstration, and homework-completion facts. It never copies transcripts or Lesson bodies and never infers mastery or productivity.",
+      inputSchema: queryLearningJourneySchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryLearningJourney(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_learning_analytics",
+    {
+      description: "Read factual owner-private Course and Learn-wide Analytics: recorded time, Sessions, Lessons, required checkpoint coverage, homework, active days, recent topics, and duration trends. It never infers mastery, readiness, retention, or productivity.",
+      inputSchema: queryLearningAnalyticsSchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryLearningAnalytics(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
     "query_behavioral_project_deep_dives",
     {
       description: "Read owner-scoped Project Deep Dive registry, exact question bindings, immutable Past-attempt links, link-only Learn projection, and optionally deterministic legacy migration review. Titles and free-form tags are never runtime binding authority.",
@@ -4064,7 +4519,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
     {
       description: "Register the stable Codex task ID for one specialist so the coordinator can reuse it without asking the user for IDs.",
       inputSchema: {
-        specialty: z.enum(["leetcode", "system_design", "behavioral", "loop_recorder", "resume_cover_letter"]),
+        specialty: z.enum(["leetcode", "system_design", "behavioral", "loop_recorder", "learning_specialist", "resume_cover_letter"]),
         threadId: z.string().min(1),
         hostId: z.string().min(1).optional(),
         title: z.string().min(1),
@@ -4115,6 +4570,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
     },
     async ({ clipId, ...input }) => {
       try {
+        await assertLearningAudioForbidden(ownerId, input.activityId);
         await registerActivityAudioClip(ownerId, { id: clipId, ...input }, Date.now());
         return {
           content: [{ type: "text", text: `Registered audio metadata for ${input.activityId}.` }],
@@ -4157,11 +4613,16 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async ({ analysisId, ...input }) => {
-      await saveActivityDeliveryAnalysis(ownerId, { id: analysisId, ...input }, Date.now());
-      return {
-        content: [{ type: "text", text: `Saved ${input.status} delivery analysis for ${input.activityId}.` }],
-        structuredContent: { analysisId, activityId: input.activityId, status: input.status },
-      };
+      try {
+        await assertLearningAudioForbidden(ownerId, input.activityId);
+        await saveActivityDeliveryAnalysis(ownerId, { id: analysisId, ...input }, Date.now());
+        return {
+          content: [{ type: "text", text: `Saved ${input.status} delivery analysis for ${input.activityId}.` }],
+          structuredContent: { analysisId, activityId: input.activityId, status: input.status },
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
     },
   );
 
@@ -4664,6 +5125,9 @@ export default {
     }
     if (url.pathname === "/voice/context" && request.method === "GET") {
       return voiceContext(ownerId, request);
+    }
+    if (url.pathname === "/voice/learning-transcripts" && request.method === "POST") {
+      return voiceLearningTranscript(ownerId, request, env);
     }
     if (url.pathname === "/voice/timers" && request.method === "POST") {
       return voiceTimerMutation(ownerId, request, env);

@@ -1,0 +1,184 @@
+{
+  "courseId": "course-interview-arc-architecture",
+  "state": "draft",
+  "title": "Interview Arc Architecture for Java and JavaScript Engineers",
+  "goal": "Build an evidence-grounded mental model of Interview Arc from React and Worker request handling through owner-isolated D1 state, retry-safe commands, timed conversations, and factual product projections.",
+  "priorKnowledge": [
+    "Comfort reading Java service and repository layers",
+    "Working JavaScript or TypeScript knowledge",
+    "Basic HTTP, relational database, and transaction concepts"
+  ],
+  "intendedOutcome": "Trace one product mutation and one timed conversation across JavaScript boundaries, map them to familiar Java architecture vocabulary without forcing false equivalence, and explain owner isolation, immutable revisions, idempotency, evidence policy, and release integrity from exact source paths.",
+  "sourcePins": [
+    {
+      "kind": "repository",
+      "title": "Interview Arc MCP command boundary",
+      "repository": "Vinosaamaa/interview-arc",
+      "commit": "3889f0d12e2f4d4591afca899b3d71155334d09c",
+      "path": "mcp-worker/index.ts",
+      "symbols": ["createServer", "specialistToolFailure"]
+    },
+    {
+      "kind": "repository",
+      "title": "Interview Arc owner-private database access",
+      "repository": "Vinosaamaa/interview-arc",
+      "commit": "3889f0d12e2f4d4591afca899b3d71155334d09c",
+      "path": "db/index.ts",
+      "symbols": ["getDb"]
+    },
+    {
+      "kind": "repository",
+      "title": "Interview Arc transactional invariant guard",
+      "repository": "Vinosaamaa/interview-arc",
+      "commit": "3889f0d12e2f4d4591afca899b3d71155334d09c",
+      "path": "db/d1-transactional-guard.ts",
+      "symbols": ["d1TransactionalInvariantGuard"]
+    },
+    {
+      "kind": "repository",
+      "title": "Learn policy schemas",
+      "repository": "Vinosaamaa/interview-arc",
+      "commit": "3889f0d12e2f4d4591afca899b3d71155334d09c",
+      "path": "db/learn-policy.ts",
+      "symbols": ["learningCourseBlueprintSchema", "learningLessonSnapshotSchema", "finishLearningSessionSchema"]
+    },
+    {
+      "kind": "repository",
+      "title": "Learn durable commands",
+      "repository": "Vinosaamaa/interview-arc",
+      "commit": "3889f0d12e2f4d4591afca899b3d71155334d09c",
+      "path": "db/learn.ts",
+      "symbols": ["createLearningCourseBlueprint", "createLearningSession", "finishLearningSession"]
+    },
+    {
+      "kind": "repository",
+      "title": "Hosted Worker request boundary",
+      "repository": "Vinosaamaa/interview-arc",
+      "commit": "3889f0d12e2f4d4591afca899b3d71155334d09c",
+      "path": "worker/index.ts",
+      "symbols": ["fetch"]
+    },
+    {
+      "kind": "repository",
+      "title": "React workspace composition",
+      "repository": "Vinosaamaa/interview-arc",
+      "commit": "3889f0d12e2f4d4591afca899b3d71155334d09c",
+      "path": "app/home-client.tsx",
+      "symbols": ["HomeClient"]
+    }
+  ],
+  "modules": [
+    {
+      "moduleId": "runtime-map",
+      "title": "Runtime map",
+      "order": 0,
+      "objective": "Locate the browser, hosted Worker, MCP Worker, command, and D1 boundaries and map them carefully to familiar Java layers.",
+      "lessons": [
+        {
+          "lessonId": "javascript-runtime-boundaries",
+          "title": "JavaScript runtime boundaries",
+          "order": 0,
+          "kind": "lesson",
+          "objective": "Trace requests through React, Cloudflare Worker adapters, MCP tools, domain commands, and D1 without treating one file as the whole system.",
+          "prerequisites": []
+        },
+        {
+          "lessonId": "java-mental-model-bridge",
+          "title": "A careful Java mental-model bridge",
+          "order": 1,
+          "kind": "lab",
+          "objective": "Compare adapters, command modules, schemas, and D1 access with controller, service, repository, and transaction concepts while naming where the analogy breaks.",
+          "prerequisites": ["javascript-runtime-boundaries"]
+        }
+      ]
+    },
+    {
+      "moduleId": "durable-state",
+      "title": "Durable state and reliability",
+      "order": 1,
+      "objective": "Explain owner isolation, stable identity, immutable revisions, and atomic retry behavior from schema and command evidence.",
+      "lessons": [
+        {
+          "lessonId": "owner-isolation",
+          "title": "Owner isolation as a domain invariant",
+          "order": 0,
+          "kind": "lesson",
+          "objective": "Show how verified identity flows into every private query and mutation instead of relying on client-supplied ownership.",
+          "prerequisites": ["javascript-runtime-boundaries"]
+        },
+        {
+          "lessonId": "immutable-revision-families",
+          "title": "Immutable revision families",
+          "order": 1,
+          "kind": "lesson",
+          "objective": "Distinguish stable current pointers from append-only Blueprint, Lesson, finalization, and evidence history.",
+          "prerequisites": ["owner-isolation"]
+        },
+        {
+          "lessonId": "idempotent-command-lab",
+          "title": "Idempotent command lab",
+          "order": 2,
+          "kind": "lab",
+          "objective": "Trace exact retry replay, changed retry rejection, expected-revision conflicts, and transactional guards through one command.",
+          "prerequisites": ["immutable-revision-families"]
+        }
+      ]
+    },
+    {
+      "moduleId": "timed-conversation",
+      "title": "Timed conversations and evidence policy",
+      "order": 2,
+      "objective": "Separate reusable timer and transcript mechanics from Interview and Learn evidence/finalization policy.",
+      "lessons": [
+        {
+          "lessonId": "timer-transcript-identities",
+          "title": "Timer and transcript identities",
+          "order": 0,
+          "kind": "lesson",
+          "objective": "Explain interval history, Session revision, transcript revision, stable turn order, and permanent Finish locking.",
+          "prerequisites": ["idempotent-command-lab"]
+        },
+        {
+          "lessonId": "domain-policy-seams",
+          "title": "Domain policy seams",
+          "order": 1,
+          "kind": "lesson",
+          "objective": "Identify the shared timed-conversation mechanics and the separate Interview versus Learn outcome, evidence, and finalization rules.",
+          "prerequisites": ["timer-transcript-identities"]
+        },
+        {
+          "lessonId": "transcript-only-voice-lab",
+          "title": "Transcript-only Voice lab",
+          "order": 2,
+          "kind": "lab",
+          "objective": "Prove that Learning Voice stores exact text turns without cloud audio, private-audio metadata, delivery analysis, or an audio Finish gate.",
+          "prerequisites": ["domain-policy-seams"]
+        }
+      ]
+    },
+    {
+      "moduleId": "projection-delivery",
+      "title": "Projection and delivery",
+      "order": 3,
+      "objective": "Connect private durable facts to responsive product views, compact Journey events, and release verification without fabricating interpretation.",
+      "lessons": [
+        {
+          "lessonId": "factual-projections",
+          "title": "Factual projections",
+          "order": 0,
+          "kind": "lesson",
+          "objective": "Derive time, Session, Lesson, homework, checkpoint-coverage, Course, and Quick Study facts without inferred mastery or productivity.",
+          "prerequisites": ["transcript-only-voice-lab"]
+        },
+        {
+          "lessonId": "release-integrity-lab",
+          "title": "Release integrity lab",
+          "order": 1,
+          "kind": "lab",
+          "objective": "Follow focused local verification, hosted validation, additive migration deployment, exact commit evidence, and production readback.",
+          "prerequisites": ["factual-projections"]
+        }
+      ]
+    }
+  ]
+}

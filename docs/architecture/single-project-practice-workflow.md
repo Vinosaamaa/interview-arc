@@ -6,12 +6,13 @@ Accepted on 2026-07-17.
 
 ## Decision
 
-Use one Codex project and one shared `interview-arc` checkout. Keep six
-long-lived tasks for the coordinator, Loop Recorder, Resume & Cover Letter,
-LeetCode, system design, and behavioral practice. Do not create a separate
-project or Git worktree for each specialist. Loop Recorder and Resume & Cover
-Letter are administrative specialists, not practice specialties; they do not
-inherit practice transcript, timer, Voice, review, or publication behavior.
+Use one Codex project and one shared `interview-arc` checkout. Keep seven
+long-lived tasks for the coordinator, Loop Recorder, Learning Specialist,
+Resume & Cover Letter, LeetCode, system design, and behavioral practice. Do not
+create a separate project or Git worktree for each specialist. Loop Recorder
+and Resume & Cover Letter are administrative specialists, and the Learning
+Specialist owns tutoring; none is an Interview practice specialty or inherits
+practice transcript, review, outcome, or publication behavior.
 
 Tasks share repository files but not hidden conversational context. Durable instructions live in `AGENTS.md`; durable session evidence lives in the activity and artifact files.
 

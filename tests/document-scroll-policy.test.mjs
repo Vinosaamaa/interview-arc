@@ -15,6 +15,7 @@ test("arrival owns the document lock until the workspace is entered", () => {
   assert.equal(documentScrollLockRequired({ ...entered, arrivalState: "show", view: "today" }), true);
   assert.equal(documentScrollLockRequired({ ...entered, arrivalState: "leaving", view: "today" }), true);
   assert.equal(documentScrollLockRequired({ ...entered, view: "today" }), false);
+  assert.equal(documentScrollLockRequired({ ...entered, view: "learn" }), false);
 });
 
 test("only a reader visible in the active workspace can lock document scroll", () => {
