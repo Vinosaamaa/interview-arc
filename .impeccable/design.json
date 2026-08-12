@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-12T12:14:20Z",
+  "generatedAt": "2026-08-12T13:10:54Z",
   "title": "Design System: Interview Arc",
   "extensions": {
     "colorMeta": {
@@ -225,12 +225,12 @@
       "css": ".ds-action-primary { min-height: 42px; padding: 0 16px; border: 1px solid var(--primary-deep); border-radius: var(--radius-control); background: var(--primary-deep); color: #fff; font-family: var(--font-geist-sans), Arial, sans-serif; font-size: .8rem; font-weight: 730; cursor: pointer; box-shadow: var(--shadow-xs); transition: border-color .2s ease, background-color .2s ease, color .2s ease, box-shadow .2s ease, transform .2s ease; } .ds-action-primary:hover { background: #0b514d; transform: translateY(-2px); box-shadow: 0 10px 22px rgba(15,95,90,.18); } .ds-action-primary:focus-visible { outline: 3px solid rgba(13,148,136,.28); outline-offset: 3px; } .ds-action-primary:active { transform: translateY(0); }"
     },
     {
-      "name": "Secondary Action",
-      "kind": "button",
-      "refersTo": "action-secondary",
-      "description": "A quiet bordered action for supporting or reversible choices.",
-      "html": "<button class='ds-action-secondary' type='button'>Connect</button>",
-      "css": ".ds-action-secondary { min-height: 42px; padding: 0 16px; border: 1px solid #b9cec8; border-radius: var(--radius-control); background: rgba(251,252,250,.92); color: #31504c; font-family: var(--font-geist-sans), Arial, sans-serif; font-size: .8rem; font-weight: 730; cursor: pointer; transition: border-color .2s ease, background-color .2s ease, color .2s ease, transform .2s ease; } .ds-action-secondary:hover { border-color: var(--primary); background: #fff; color: var(--primary-deep); } .ds-action-secondary:focus-visible { outline: 3px solid rgba(13,148,136,.28); outline-offset: 3px; } .ds-action-secondary:active { transform: translateY(1px); }"
+      "name": "Journal Evidence-Layer Switch",
+      "kind": "nav",
+      "refersTo": "journal-layer-switch",
+      "description": "The explicit Rich records / All merged PRs selector; independent counts prevent narrative depth from masquerading as pull-request coverage.",
+      "html": "<div class='ds-journal-layers' role='group' aria-label='Journal evidence layer'><button type='button' aria-pressed='true'><span>Rich records</span><strong>00</strong></button><button type='button' aria-pressed='false'><span>All merged PRs</span><strong>000</strong></button></div>",
+      "css": ".ds-journal-layers { width: min(340px,100%); min-height: 58px; padding: 8px 14px; border-bottom: 1px solid #cbdad6; display: grid; grid-template-columns: 1fr 1fr; background: #e7f0ed; font-family: var(--font-geist-sans), Arial, sans-serif; } .ds-journal-layers button { min-width: 0; min-height: 42px; padding: 0 9px; border: 0; border-bottom: 2px solid transparent; display: flex; align-items: center; justify-content: space-between; gap: 6px; background: transparent; color: #58716a; font-size: .75rem; font-weight: 740; text-align: left; cursor: pointer; } .ds-journal-layers button:hover { background: rgba(255,255,255,.54); color: #214f47; } .ds-journal-layers button[aria-pressed='true'] { border-bottom-color: #0d9488; background: #fff; color: #124a42; } .ds-journal-layers button:focus-visible { position: relative; z-index: 1; outline: 3px solid rgba(13,148,136,.24); outline-offset: 1px; } .ds-journal-layers strong { min-width: 24px; color: inherit; font: 740 .75rem var(--font-geist-mono), ui-monospace, monospace; text-align: right; }"
     },
     {
       "name": "Engineering Local Navigation",
@@ -265,12 +265,19 @@
       "css": ".ds-record-row { position: relative; width: min(344px,100%); min-height: 138px; padding: 18px 20px 17px; border: 0; border-bottom: 1px solid #d1dedb; display: grid; align-content: start; gap: 8px; background: transparent; color: #173a35; text-align: left; font-family: var(--font-geist-sans), Arial, sans-serif; cursor: pointer; transition: background-color .2s ease, color .2s ease; } .ds-record-row:hover, .ds-record-row[aria-current='true'] { background: #fff; } .ds-record-row:focus-visible { outline: 3px solid rgba(13,148,136,.28); outline-offset: -3px; } .ds-record-row:active { background: #f7faf9; } .ds-record-meta { display: flex; justify-content: space-between; gap: 12px; color: #5d7770; font: 730 .75rem/1.2 var(--font-geist-mono), ui-monospace, monospace; } .ds-record-row i, .ds-record-row em { font-style: normal; } .ds-record-row strong { color: #0c6f66; font-size: .875rem; line-height: 1.38; } .ds-record-row small { color: #60756f; font: .75rem/1.45 var(--font-geist-mono), ui-monospace, monospace; overflow-wrap: anywhere; } .ds-record-row em { width: max-content; padding: 4px 7px; border-radius: 999px; background: #dfeee9; color: #245c54; font-size: .75rem; font-weight: 800; }"
     },
     {
-      "name": "Copy Control",
-      "kind": "button",
-      "refersTo": "action-secondary",
-      "description": "The compact utility action attached directly to an immutable value.",
-      "html": "<button class='ds-copy-control' type='button' aria-label='Copy record reference'><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><rect x='8' y='8' width='11' height='11' rx='2'/><path d='M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2'/></svg><span>Copy</span></button>",
-      "css": ".ds-copy-control { min-width: 67px; min-height: 30px; padding: 0 7px; border: 1px solid #b5cbc5; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; background: transparent; color: #38655d; font-family: var(--font-geist-sans), Arial, sans-serif; font-size: .75rem; font-weight: 760; cursor: pointer; transition: border-color .2s ease, background-color .2s ease, color .2s ease, transform .2s ease; } .ds-copy-control svg { width: 14px; height: 14px; } .ds-copy-control:hover { border-color: #0d9488; background: #f1faf7; color: #0b6f66; } .ds-copy-control:focus-visible { outline: 3px solid rgba(13,148,136,.28); outline-offset: 3px; } .ds-copy-control:active { transform: translateY(1px); }"
+      "name": "Pull Request Receipt Timeline",
+      "kind": "custom",
+      "refersTo": "receipt-timeline-row",
+      "description": "The complete compact chronology: every ingested merged PR gets one expandable factual row, whether or not it warrants a rich record.",
+      "html": "<ol class='ds-receipt-list' aria-label='Complete merged pull-request timeline'><li><details open><summary><span><time>YYYY-MM-DD</time><i>repository · PR #000</i></span><strong>Document merged change</strong><span><em>Compact change</em><small>Verified merge</small></span></summary><div class='ds-receipt-detail'><p>A concise, public-safe summary of the merged change.</p><dl><div><dt>Receipt</dt><dd><code>repository-pr-000</code></dd></div><div><dt>Timeline</dt><dd>Verified merge facts</dd></div></dl><small>Compact receipt only; no rich record was required.</small></div></details></li></ol>",
+      "css": ".ds-receipt-list { position: relative; width: min(340px,100%); margin: 0; padding: 0; background: #f0f6f3; font-family: var(--font-geist-sans), Arial, sans-serif; list-style: none; } .ds-receipt-list::before { content: ''; position: absolute; left: 25px; top: 20px; bottom: 20px; width: 1px; background: #9bbdb5; } .ds-receipt-list > li { position: relative; border-bottom: 1px solid #d1dedb; } .ds-receipt-list > li::before { content: ''; position: absolute; z-index: 1; left: 20px; top: 25px; width: 7px; height: 7px; border: 2px solid #f0f6f3; border-radius: 50%; background: #0d9488; box-shadow: 0 0 0 1px #0d9488; pointer-events: none; } .ds-receipt-list summary { min-height: 126px; padding: 18px 42px 17px 45px; display: grid; align-content: start; gap: 8px; background: transparent; color: #173a35; cursor: pointer; list-style: none; } .ds-receipt-list summary::-webkit-details-marker { display: none; } .ds-receipt-list summary:hover, .ds-receipt-list details[open] summary { background: #fff; } .ds-receipt-list summary:focus-visible { outline: 3px solid rgba(13,148,136,.24); outline-offset: -4px; } .ds-receipt-list summary > span { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; } .ds-receipt-list summary time, .ds-receipt-list summary i { color: #607972; font: 710 .75rem/1.25 var(--font-geist-mono), ui-monospace, monospace; font-style: normal; } .ds-receipt-list summary strong { color: #153b36; font-size: .875rem; line-height: 1.38; } .ds-receipt-list summary em { padding: 4px 7px; border-radius: 999px; background: #dfeee9; color: #245c54; font-size: .75rem; font-weight: 780; font-style: normal; } .ds-receipt-list summary small { color: #667a75; font-size: .75rem; } .ds-receipt-detail { padding: 0 18px 20px 45px; background: #fff; color: #49645e; font-size: .75rem; line-height: 1.5; } .ds-receipt-detail p { margin: 0 0 12px; font-size: .875rem; } .ds-receipt-detail dl { margin: 0 0 12px; border-block: 1px solid #d7e3df; } .ds-receipt-detail dl > div { padding: 8px 0; border-bottom: 1px solid #e2ebe8; display: grid; grid-template-columns: 72px minmax(0,1fr); gap: 7px; } .ds-receipt-detail dl > div:last-child { border-bottom: 0; } .ds-receipt-detail dt { color: #657a74; font-weight: 760; } .ds-receipt-detail dd { min-width: 0; margin: 0; color: #31564f; overflow-wrap: anywhere; } .ds-receipt-detail code { color: #1d5048; font: 690 .75rem/1.45 var(--font-geist-mono), ui-monospace, monospace; }"
+    },
+    {
+      "name": "Rich-Record Evidence Attachments",
+      "kind": "custom",
+      "description": "Commit-pinned architecture diagrams and compact pull-request backlinks remain inside the rich-record reading flow with exact-source exits.",
+      "html": "<section class='ds-record-attachments'><figure><a class='ds-diagram-preview' href='#' aria-label='Open exact rendered architecture diagram'><svg viewBox='0 0 420 180' role='img' aria-label='Architecture diagram connecting canonical Markdown, deterministic projection, and Journal readers'><rect x='16' y='58' width='110' height='64' rx='8'/><rect x='155' y='58' width='110' height='64' rx='8'/><rect x='294' y='58' width='110' height='64' rx='8'/><path d='M126 90h29M265 90h29'/><path d='m149 84 6 6-6 6M288 84l6 6-6 6'/><text x='71' y='86' text-anchor='middle'>Markdown</text><text x='71' y='103' text-anchor='middle'>record</text><text x='210' y='86' text-anchor='middle'>deterministic</text><text x='210' y='103' text-anchor='middle'>projection</text><text x='349' y='86' text-anchor='middle'>Journal</text><text x='349' y='103' text-anchor='middle'>readers</text></svg></a><figcaption><strong>Journal module architecture</strong><span>Evidence-backed assets bundled from this record's exact Git revision.</span><div><a href='#'>Exact rendered asset ↗</a><a href='#'>Editable draw.io source ↗</a></div></figcaption></figure><section class='ds-pr-history'><h3>Pull request history</h3><p>Compact receipts that cite this rich record. Receipt coverage remains independent from record status and verification.</p><ul><li><div><span>repository · PR #000</span><strong>Document merged change</strong></div><a href='#'>Exact receipt ↗</a></li></ul></section></section>",
+      "css": ".ds-record-attachments { width: min(720px,100%); display: grid; gap: 42px; color: #526d67; font-family: var(--font-geist-sans), Arial, sans-serif; } .ds-record-attachments figure { margin: 0; padding-top: 28px; border-top: 1px solid #d4e1dd; } .ds-diagram-preview { display: block; overflow: hidden; border: 1px solid #b9cec8; border-radius: 10px; background: #fff; color: #2c665d; } .ds-diagram-preview:hover { border-color: #0d9488; } .ds-diagram-preview:focus-visible, .ds-record-attachments a:focus-visible { outline: 3px solid rgba(13,148,136,.28); outline-offset: 3px; } .ds-diagram-preview svg { display: block; width: 100%; height: auto; background: #fbfcfa; } .ds-diagram-preview rect { fill: #e7f0ed; stroke: #4d8d82; stroke-width: 1.5; } .ds-diagram-preview path { fill: none; stroke: #0d9488; stroke-width: 1.8; } .ds-diagram-preview text { fill: #214f47; font: 700 12px var(--font-geist-sans), Arial, sans-serif; } .ds-record-attachments figcaption { padding: 13px 2px 0; display: grid; gap: 5px; font-size: .82rem; line-height: 1.5; } .ds-record-attachments figcaption strong { color: #173b37; font-size: .92rem; } .ds-record-attachments figcaption > div { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 12px; } .ds-record-attachments a { color: #087a70; font-weight: 720; text-decoration: underline; text-underline-offset: 3px; } .ds-pr-history h3 { margin: 0 0 7px; color: #153b36; font-family: var(--font-newsreader), Georgia, serif; font-size: 1.75rem; letter-spacing: -.02em; } .ds-pr-history > p { margin: 0 0 16px; color: #637873; font-size: .875rem; line-height: 1.55; } .ds-pr-history ul { margin: 0; padding: 0; border-top: 1px solid #d0ddd9; list-style: none; } .ds-pr-history li { min-height: 58px; padding: 9px 0; border-bottom: 1px solid #dbe5e1; display: flex; align-items: center; justify-content: space-between; gap: 14px; } .ds-pr-history li div { min-width: 0; display: grid; gap: 3px; } .ds-pr-history li span { color: #697c77; font: .75rem var(--font-geist-mono), ui-monospace, monospace; } .ds-pr-history li strong { color: #245149; font-size: .875rem; line-height: 1.35; } .ds-pr-history li a { min-height: 36px; padding: 0 8px; display: inline-flex; align-items: center; font-size: .75rem; white-space: nowrap; } @media (max-width: 460px) { .ds-pr-history li { align-items: flex-start; flex-direction: column; } .ds-pr-history li a { min-height: 44px; } }"
     },
     {
       "name": "Provenance Register",
@@ -290,12 +297,13 @@
   ],
   "narrative": {
     "northStar": "The Continuity Ledger",
-    "overview": "Interview Arc is a calm, exact, evidence-first editorial instrument. It should feel like a durable ledger for consequential work: factual enough to trust, composed enough to read for long periods, and dense enough to keep related evidence visible without becoming a generic analytics dashboard.\n\nThe visual world moves from a deep-teal operating shell through a pale mineral field into cream reading sheets. Geist carries controls and prose, Geist Mono marks immutable references and compact facts, and Newsreader gives records and section headings an editorial voice. The system is predominantly flat: tonal layers, one-pixel rules, and typographic hierarchy establish structure before restrained shadows do.\n\nDesktop surfaces keep an index and its selected record in one continuous instrument. Smaller screens preserve the same hierarchy by switching explicitly between list and reader. Expression comes from exact alignment, warm paper, selective teal, and rare lime signal—not decorative card grids, glassy chrome, or contest theater.",
+    "overview": "Interview Arc is a calm, exact, evidence-first editorial instrument. It should feel like a durable ledger for consequential work: factual enough to trust, composed enough to read for long periods, and dense enough to keep related evidence visible without becoming a generic analytics dashboard.\n\nThe visual world moves from a deep-teal operating shell through a pale mineral field into cream reading sheets. Geist carries controls and prose, Geist Mono marks immutable references and compact facts, and Newsreader gives records and section headings an editorial voice. The system is predominantly flat: tonal layers, one-pixel rules, and typographic hierarchy establish structure before restrained shadows do.\n\nDesktop surfaces keep an index and its selected record in one continuous instrument. Journal makes two complementary evidence layers explicit: **Rich records** for material architecture, decision, incident, capability, and retrospective narratives, and **All merged PRs** for the complete compact change timeline. Smaller screens preserve the same hierarchy by switching explicitly between list and reader. Expression comes from exact alignment, warm paper, selective teal, and rare lime signal—not decorative card grids, glassy chrome, or contest theater.",
     "keyCharacteristics": [
       "Deep-teal shell framing a pale mineral canvas and cream reading sheets.",
       "Newsreader editorial headings over Geist body copy with Geist Mono factual identifiers.",
       "Flat bordered instruments with hairline rules as the primary structure.",
       "Lime reserved for current state; teal reserved for action, focus, and provenance.",
+      "An explicit Rich records / All merged PRs switch that never conflates narrative depth with pull-request coverage.",
       "Dense desktop split views that become explicit list-or-reader flows on mobile."
     ],
     "rules": [
@@ -335,6 +343,11 @@
         "section": "layout"
       },
       {
+        "name": "The Two-Layer Legibility Rule",
+        "body": "Never imply that rich-record count equals pull-request coverage; name, count, filter, and report the two evidence layers independently.",
+        "section": "layout"
+      },
+      {
         "name": "The Flat Ledger Rule",
         "body": "Operational surfaces rest on tone and one-pixel rules; shadows indicate real stacking, not component importance.",
         "section": "elevation"
@@ -348,6 +361,11 @@
         "name": "The Instrument Shape Rule",
         "body": "Use the smallest radius that preserves comfort and grouping; never inflate dense evidence controls into oversized capsules.",
         "section": "shapes"
+      },
+      {
+        "name": "The Evidence Asset Rule",
+        "body": "A diagram or pull-request backlink belongs in a rich record only when its exact source remains visible and its relationship to the record is evidence-backed.",
+        "section": "components"
       }
     ],
     "dos": [
@@ -355,7 +373,10 @@
       "Do reserve lime for current, live, or selected state and teal for action, focus, and provenance.",
       "Do use one-pixel rules and aligned registers to organize dense factual material.",
       "Do set immutable references, commits, paths, dates, and measurements in Geist Mono.",
-      "Do switch the Journal to an explicit list-or-reader flow below 760px.",
+      "Do preserve the literal Rich records / All merged PRs labels, their independent counts, and their separate filters.",
+      "Do keep every ingested merged PR visible in the compact timeline while reserving rich records for material narratives.",
+      "Do expose related pull-request receipts and exact diagram source/render links inside the rich-record reading flow.",
+      "Do switch the Journal to an explicit list-or-reader flow below `760px`.",
       "Do keep visible focus states, text reinforcement for color, and reduced-motion behavior."
     ],
     "donts": [
@@ -364,6 +385,9 @@
       "Don't add glassy, neumorphic, or ubiquitous shadow treatment to flat evidence surfaces.",
       "Don't use Newsreader for controls, dense metadata, or long identifiers.",
       "Don't hide exact source, revision lineage, or verification context behind decorative summary cards.",
+      "Don't imply that a missing rich record means a merged pull request is absent from the complete timeline.",
+      "Don't flatten receipt coverage and rich-record verification into one statistic or one chronology.",
+      "Don't render an architecture diagram as decorative media without its evidence summary and immutable rendered/source links.",
       "Don't rely on color alone to communicate category, status, verification, or selection."
     ]
   }

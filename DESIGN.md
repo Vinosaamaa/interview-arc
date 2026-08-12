@@ -104,6 +104,18 @@ components:
     typography: "{typography.label}"
     rounded: "{rounded.pill}"
     padding: "5px 8px"
+  journal-layer-switch:
+    backgroundColor: "#e7f0ed"
+    textColor: "#58716a"
+    rounded: "0"
+    padding: "8px 14px"
+    height: "58px"
+  journal-layer-switch-active:
+    backgroundColor: "#ffffff"
+    textColor: "#124a42"
+    rounded: "0"
+    padding: "0 9px"
+    height: "42px"
   record-row:
     backgroundColor: "transparent"
     textColor: "#173a35"
@@ -116,6 +128,12 @@ components:
     rounded: "0"
     padding: "18px 20px 17px"
     height: "138px"
+  receipt-timeline-row:
+    backgroundColor: "transparent"
+    textColor: "#173a35"
+    rounded: "0"
+    padding: "18px 42px 17px 45px"
+    height: "126px"
   reader-sheet:
     backgroundColor: "{colors.reader-sheet}"
     textColor: "#304d48"
@@ -133,7 +151,7 @@ Interview Arc is a calm, exact, evidence-first editorial instrument. It should f
 
 The visual world moves from a deep-teal operating shell through a pale mineral field into cream reading sheets. Geist carries controls and prose, Geist Mono marks immutable references and compact facts, and Newsreader gives records and section headings an editorial voice. The system is predominantly flat: tonal layers, one-pixel rules, and typographic hierarchy establish structure before restrained shadows do.
 
-Desktop surfaces keep an index and its selected record in one continuous instrument. Smaller screens preserve the same hierarchy by switching explicitly between list and reader. Expression comes from exact alignment, warm paper, selective teal, and rare lime signal—not decorative card grids, glassy chrome, or contest theater.
+Desktop surfaces keep an index and its selected record in one continuous instrument. Journal makes two complementary evidence layers explicit: **Rich records** for material architecture, decision, incident, capability, and retrospective narratives, and **All merged PRs** for the complete compact change timeline. Smaller screens preserve the same hierarchy by switching explicitly between list and reader. Expression comes from exact alignment, warm paper, selective teal, and rare lime signal—not decorative card grids, glassy chrome, or contest theater.
 
 **Key Characteristics:**
 
@@ -141,6 +159,7 @@ Desktop surfaces keep an index and its selected record in one continuous instrum
 - Newsreader editorial headings over Geist body copy with Geist Mono factual identifiers.
 - Flat bordered instruments with hairline rules as the primary structure.
 - Lime reserved for current state; teal reserved for action, focus, and provenance.
+- An explicit Rich records / All merged PRs switch that never conflates narrative depth with pull-request coverage.
 - Dense desktop split views that become explicit list-or-reader flows on mobile.
 
 ## Colors
@@ -200,15 +219,17 @@ The palette is botanical but technical: cool mineral neutrals carry most of the 
 
 ## Layout
 
-The desktop shell uses a fixed `216px` workspace rail, a sticky `72px` topbar, and a content field capped at `1460px`. Engineering's principal instrument is one bordered two-pane grid: a `292–340px` record index beside a flexible reader. The reader body caps at `1050px`, uses fluid inline gutters (`clamp(28px, 6vw, 84px)`), and keeps narrative content near `72ch`.
+The desktop shell uses a fixed `216px` workspace rail, a sticky `72px` topbar, and a content field capped at `1460px`. Engineering's principal instrument is one bordered two-pane grid: a `292–340px` evidence index beside a flexible reader. Journal keeps a `58px` two-option layer switch directly beneath the index heading. **Rich records** exposes the searchable material-record index; **All merged PRs** replaces that index with its own searchable, repository- and classification-filterable receipt timeline while leaving the reading context beside it. The reader body caps at `1050px`, uses fluid inline gutters (`clamp(28px, 6vw, 84px)`), and keeps narrative content near `72ch`.
 
 Spacing follows an observed compact rhythm rather than a named token scale: `4–12px` for internal control relationships, `18–22px` for rows and compact panels, `28–32px` for reader starts, and `42–48px` for major section separation. Repeated facts use aligned grid cells and one-pixel rules instead of isolated metric cards.
 
-At `1120px`, four-column fact and statistic groups become two columns. At `900px`, the workspace selector becomes a sticky top bar and the local Engineering destinations move to the bottom navigation. At `760px`, the two-pane Journal becomes a list-or-reader flow with an explicit back control. At `460px`, provenance and fact grids become single-column.
+Statistics preserves the same distinction at page scale: one section reports rich-record type, status, provenance, and chronology; a separately headed Pull request coverage section reports receipt totals, complete merge facts, reconstructed receipts, missing facts, classifications, repositories, timeline range, and full receipt chronology. At `1120px`, four-column fact and statistic groups become two columns. At `900px`, the workspace selector becomes a sticky top bar and the local Engineering destinations move to the bottom navigation. At `760px`, the two-pane Journal becomes a list-or-reader flow with an explicit back control; choosing All merged PRs keeps the receipt list as the active mobile task. At `460px`, provenance and fact grids become single-column and receipt controls retain coarse-pointer targets of at least `44px`.
 
 **The Ledger Pair Rule.** On desktop, the index and selected record remain two halves of one bordered instrument; do not split them into a card gallery.
 
 **The Single-Task Mobile Rule.** Below the master-detail breakpoint, show the list or the reader at full width and preserve an explicit route back.
+
+**The Two-Layer Legibility Rule.** Never imply that rich-record count equals pull-request coverage; name, count, filter, and report the two evidence layers independently.
 
 ## Elevation & Depth
 
@@ -269,6 +290,22 @@ Components should read as precise instruments: quiet at rest, explicit on hover 
 - **Hover / Focus:** Hover shifts local destinations by no more than `2px` and applies a translucent light surface. Focus keeps the shared visible teal outline.
 - **Mobile:** The top bar owns workspace selection while a fixed bottom rail owns the six Engineering destinations.
 
+### Journal Evidence-Layer Switch
+
+- **Structure:** Two equal-width controls sit in one `58px` pale-mint register directly below the Journal heading. Each keeps its literal label and independent count: **Rich records** and **All merged PRs**.
+- **State:** The pressed option uses a white field, dark-teal text, and a `2px` Ledger Teal bottom rule. Hover remains a quiet translucent-paper shift; keyboard focus uses the shared teal outline.
+- **Behavior:** Switching layers swaps the index filters and list without rewriting the selected rich-record evidence. On mobile, All merged PRs returns focus to the complete receipt list; choosing a receipt's rich-record reference deliberately returns to Rich records and opens that record.
+
+### Pull Request Receipt Timeline
+
+- **Structure:** Every receipt is one compact expandable row (`126px` minimum height) on a continuous `1px` teal timeline with a circular teal node. The collapsed state shows timeline date, repository and PR number, title, classification, and whether chronology uses verified merge facts or a source-commit fallback.
+- **Expanded Evidence:** Summary, receipt reference, timeline basis and commits, canonical source, confidence, missing facts, unknowns, evidence links, rich-record references, and the exact receipt source remain inside the row instead of becoming detached cards.
+- **Materiality:** Small changes stay visible as compact receipts with an explicit “no rich record required” note. Material receipts may link to one or more rich records; the compact chronology never disappears merely because deeper narrative exists.
+
+### Pull Request Coverage Ledger
+
+Rich-record statistics and pull-request coverage are two separately titled ledger sections. Reuse aligned fact cells, bordered tables, and full-width chronology rows; never combine the totals into one ambiguous “engineering activity” metric.
+
 ### Provenance Register
 
 The provenance register is the signature component. A teal node, horizontal rules, mono record/commit/path values, copy controls, and an Exact source action make source truth visible before narrative detail. Revision lineage repeats the same node-and-rule grammar; derived state never visually overwrites its accepted source.
@@ -276,6 +313,16 @@ The provenance register is the signature component. A teal node, horizontal rule
 ### Record Reader
 
 The reader is a cream editorial sheet with a short mono classification line, a large Newsreader title, a readable summary, the provenance register, aligned fact cells, and a `72ch` narrative column. Inline code uses a pale mint lozenge; code blocks use Deep Teal Shell with explicit light text.
+
+### Evidence-Backed Diagrams
+
+Architecture diagrams sit inside the record reading flow after its fact register. The rendered asset uses a quiet white frame with a `1px` cool-teal border and `10px` radius; its caption names the diagram, states what it proves, and exposes separate immutable links to the exact rendered asset and editable draw.io source. Serve the exact commit-pinned bundled bytes and retain descriptive alternative text; a diagram supplements the record's textual evidence rather than replacing it.
+
+### Rich-Record Pull Request History
+
+When compact receipts cite a rich record, render a **Pull request history** backlink section after Evidence. Each hairline-separated row pairs repository and PR number with the factual title and an **Exact receipt** action. The copy must explicitly state that receipt coverage remains independent from record status and verification.
+
+**The Evidence Asset Rule.** A diagram or pull-request backlink belongs in a rich record only when its exact source remains visible and its relationship to the record is evidence-backed.
 
 ## Do's and Don'ts
 
@@ -285,6 +332,9 @@ The reader is a cream editorial sheet with a short mono classification line, a l
 - **Do** reserve lime for current, live, or selected state and teal for action, focus, and provenance.
 - **Do** use one-pixel rules and aligned registers to organize dense factual material.
 - **Do** set immutable references, commits, paths, dates, and measurements in Geist Mono.
+- **Do** preserve the literal Rich records / All merged PRs labels, their independent counts, and their separate filters.
+- **Do** keep every ingested merged PR visible in the compact timeline while reserving rich records for material narratives.
+- **Do** expose related pull-request receipts and exact diagram source/render links inside the rich-record reading flow.
 - **Do** switch the Journal to an explicit list-or-reader flow below `760px`.
 - **Do** keep visible focus states, text reinforcement for color, and reduced-motion behavior.
 
@@ -295,4 +345,7 @@ The reader is a cream editorial sheet with a short mono classification line, a l
 - **Don't** add glassy, neumorphic, or ubiquitous shadow treatment to flat evidence surfaces.
 - **Don't** use Newsreader for controls, dense metadata, or long identifiers.
 - **Don't** hide exact source, revision lineage, or verification context behind decorative summary cards.
+- **Don't** imply that a missing rich record means a merged pull request is absent from the complete timeline.
+- **Don't** flatten receipt coverage and rich-record verification into one statistic or one chronology.
+- **Don't** render an architecture diagram as decorative media without its evidence summary and immutable rendered/source links.
 - **Don't** rely on color alone to communicate category, status, verification, or selection.
