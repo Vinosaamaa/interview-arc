@@ -36,6 +36,12 @@ normalized domain/concept tags such as `feed-ranking`, `event-streaming`,
 
 ## Behavioral
 
+Project-specific overview, résumé-claim, architecture, decision, challenge,
+incident, scale, and result profiles additionally follow
+`behavioral-project-deep-dives.md`. That contract supplies stable project
+identity, typed focus, required keyed sections, immutable attempt links, and
+the link-only relationship to Learn.
+
 1. Interview signal and what the prompt is testing
 2. Truthful Situation
 3. Truthful Task

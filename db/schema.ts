@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { BEHAVIORAL_PROJECT_FOCUS_VALUES } from "./behavioral-project-deep-dive-policy";
 
 // Live practice state owned by the deployed website. Durable narrative content
 // (daily journals, attempt write-ups, transcripts) stays in Git; these tables
@@ -739,6 +740,92 @@ export const ownerBankQuestions = sqliteTable(
     updatedAt,
   },
   (table) => [primaryKey({ columns: [table.ownerId, table.specialty, table.questionId] })],
+);
+
+// Project Deep Dive identity is explicit and owner-scoped. Question titles,
+// prompts, employers, and free-form tags are discovery metadata only; they are
+// never used as runtime binding authority. The current row is a pointer while
+// immutable revisions preserve every correction.
+export const behavioralProjectQuestionBindings = sqliteTable(
+  "behavioral_project_question_bindings",
+  {
+    ownerId,
+    questionId: text("question_id").notNull(),
+    currentRevision: integer("current_revision").notNull(),
+    projectId: text("project_id").notNull(),
+    focus: text("focus", { enum: BEHAVIORAL_PROJECT_FOCUS_VALUES }).notNull(),
+    sourceClaimId: text("source_claim_id"),
+    state: text("state", { enum: ["active", "archived"] }).notNull().default("active"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.questionId] }),
+    index("behavioral_project_bindings_project_idx").on(table.ownerId, table.projectId, table.focus, table.state),
+    uniqueIndex("behavioral_project_overview_unique")
+      .on(table.ownerId, table.projectId)
+      .where(sql`${table.state} = 'active' AND ${table.focus} = 'project_overview'`),
+    uniqueIndex("behavioral_project_resume_claim_unique")
+      .on(table.ownerId, table.projectId, table.sourceClaimId)
+      .where(sql`${table.state} = 'active' AND ${table.focus} = 'resume_claim'`),
+  ],
+);
+
+export const behavioralProjectQuestionBindingRevisions = sqliteTable(
+  "behavioral_project_question_binding_revisions",
+  {
+    ownerId,
+    questionId: text("question_id").notNull(),
+    revision: integer("revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    projectId: text("project_id").notNull(),
+    focus: text("focus", { enum: BEHAVIORAL_PROJECT_FOCUS_VALUES }).notNull(),
+    sourceClaimId: text("source_claim_id"),
+    state: text("state", { enum: ["active", "archived"] }).notNull(),
+    reason: text("reason").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.questionId, table.revision] }),
+    uniqueIndex("behavioral_project_binding_revision_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
+export const behavioralProjectActivityLinks = sqliteTable(
+  "behavioral_project_activity_links",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    questionId: text("question_id").notNull(),
+    bindingRevision: integer("binding_revision").notNull(),
+    projectId: text("project_id").notNull(),
+    focus: text("focus", { enum: BEHAVIORAL_PROJECT_FOCUS_VALUES }).notNull(),
+    sourceClaimId: text("source_claim_id"),
+    solutionRevision: integer("solution_revision"),
+    source: text("source", { enum: ["finalization", "completed_attempt_backfill"] }).notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    linkedAt: integer("linked_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.activityId] }),
+    uniqueIndex("behavioral_project_activity_link_operation_idx").on(table.ownerId, table.operationId),
+    index("behavioral_project_activity_link_project_idx").on(table.ownerId, table.projectId, table.linkedAt),
+  ],
+);
+
+export const behavioralProjectOperations = sqliteTable(
+  "behavioral_project_operations",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    action: text("action", { enum: ["set_question_binding", "link_completed_attempt"] }).notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.operationId] })],
 );
 
 // Behavioral evidence is sanitized before it reaches D1. These rows contain
@@ -2145,6 +2232,10 @@ export type ProvisionalSolutionProfileRow = typeof provisionalSolutionProfiles.$
 export type ProblemSolutionRevisionRow = typeof problemSolutionRevisions.$inferSelect;
 export type ActivitySolutionLinkRow = typeof activitySolutionLinks.$inferSelect;
 export type OwnerBankQuestionRow = typeof ownerBankQuestions.$inferSelect;
+export type BehavioralProjectQuestionBindingRow = typeof behavioralProjectQuestionBindings.$inferSelect;
+export type BehavioralProjectQuestionBindingRevisionRow = typeof behavioralProjectQuestionBindingRevisions.$inferSelect;
+export type BehavioralProjectActivityLinkRow = typeof behavioralProjectActivityLinks.$inferSelect;
+export type BehavioralProjectOperationRow = typeof behavioralProjectOperations.$inferSelect;
 export type BehavioralEvidenceSourceRow = typeof behavioralEvidenceSources.$inferSelect;
 export type BehavioralEvidenceSourceRevisionRow = typeof behavioralEvidenceSourceRevisions.$inferSelect;
 export type BehavioralEvidenceSourceOperationRow = typeof behavioralEvidenceSourceOperations.$inferSelect;

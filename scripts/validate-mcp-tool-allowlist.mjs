@@ -10,6 +10,7 @@ const CONTRACT_FILES = [
   "docs/contracts/durable-practice-publishing.md",
   "docs/contracts/practice-interaction-modes.md",
   "docs/contracts/behavioral-evidence-domain.md",
+  "docs/contracts/behavioral-project-deep-dives.md",
   "docs/contracts/behavioral-target-profiles.md",
   "docs/contracts/interview-loops.md",
   "docs/contracts/resume-revision-ingest.md",

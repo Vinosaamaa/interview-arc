@@ -1,9 +1,12 @@
+import type { BehavioralProjectProfileBinding } from "../db/behavioral-project-deep-dive-policy";
+
 export type SolutionProfileLike = {
   summary: string;
-  sections: Array<{ title: string; body: string }>;
+  sections: Array<{ sectionKey?: string; title: string; body: string }>;
   tags: string[];
   references: Array<{ title: string; url: string }>;
   behavioralAnswer?: { preferred?: { answer?: string } };
+  projectDeepDive?: BehavioralProjectProfileBinding;
 };
 
 export type SolutionProfileSpecialty = "leetcode" | "system_design" | "behavioral";

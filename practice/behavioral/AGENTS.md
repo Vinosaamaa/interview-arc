@@ -71,6 +71,14 @@ Use `upsert_personal_bank_question`, stable identities, priority ordering, and
 highest-priority unfinished prerequisite unless the user overrides the
 curriculum. Ordinary Bugfree.ai practice follows the foundation.
 
+For project overview and résumé-bullet investigations, follow
+`../../docs/contracts/behavioral-project-deep-dives.md`. Resolve and persist the
+explicit stable project binding before preparing or revising the Solution
+Profile. Never use a title, employer string, or free-form tag as runtime
+binding authority. The Behavioral specialist owns these profiles; Resume &
+Cover Letter may supply exact claim identities and Learn may consume exact
+links, but neither creates a competing profile.
+
 ## Bugfree.ai Reference Policy
 
 The bank contains 74 Bugfree.ai behavioral questions with exact answer-page

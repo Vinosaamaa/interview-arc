@@ -485,6 +485,14 @@ Problem Bank Solution Profile. This avoids duplicating the same canonical
 solution across repeated attempts while preserving the exact profile revision
 used for each attempt.
 
+Behavioral Project Deep Dives additionally follow
+`behavioral-project-deep-dives.md`. The publishing coordinator resolves the
+exact project binding and immutable Solution Profile revision, then renders
+that canonical profile; it never copies a Learn-owned body or publishes from a
+title/tag inference. Existing Past attempts require their audited additive
+project link before publication. Finalization and D1 linkage are readiness,
+not publication, and never authorize publishing a transcript by themselves.
+
 ## Audio
 
 Transcripts are canonical. Voice Memo clips may supplement long answers and
