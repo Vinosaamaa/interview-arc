@@ -1,4 +1,8 @@
-import { normalizeCareerSummary, normalizeJobPage, type CareerJobPage, type CareerSummary } from "../app/career-work";
+import { normalizeCareerSummary, normalizeJobPage, type CareerJobPage, type CareerSummary } from "../app/career-work.ts";
+import {
+  normalizeJobJourneyCoverLetterPage,
+  type JobJourneyCoverLetterPage,
+} from "../app/cover-letter-contract.ts";
 
 type JobJourneyEnv = {
   JOB_JOURNEY_BASE_URL?: string;
@@ -15,6 +19,7 @@ async function readJson<T>(
   path: string,
   params: URLSearchParams,
   normalize: (value: unknown) => T,
+  authorizationHeader: "authorization" | "OAI-Sites-Authorization" = "authorization",
 ): Promise<CachedJobJourneyValue<T>> {
   const baseUrl = env.JOB_JOURNEY_BASE_URL?.replace(/\/$/, "");
   const token = env.JOB_JOURNEY_SITE_TOKEN;
@@ -24,8 +29,9 @@ async function readJson<T>(
   if (cached && cached.expiresAt > Date.now()) return { value: cached.value as T, stale: false };
   try {
     const response = await fetch(`${baseUrl}${path}?${params.toString()}`, {
-      headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+      headers: { [authorizationHeader]: `Bearer ${token}`, accept: "application/json" },
       cf: { cacheTtl: 0 },
+      redirect: "error",
     });
     if (!response.ok) throw new Error(`Job Journey returned ${response.status}.`);
     const value = normalize(await response.json());
@@ -64,4 +70,34 @@ export function fetchCareerJobs(
     params,
     normalizeJobPage,
   );
+}
+
+export function fetchCoverLetters(
+  env: JobJourneyEnv,
+  ownerId: string,
+  params = new URLSearchParams({ limit: "100" }),
+): Promise<CachedJobJourneyValue<JobJourneyCoverLetterPage>> {
+  return readJson(
+    env,
+    ownerId,
+    "/api/integrations/interview-arc/v1/cover-letters",
+    params,
+    normalizeJobJourneyCoverLetterPage,
+    "OAI-Sites-Authorization",
+  );
+}
+
+export function resolveJobJourneyDownloadUrl(
+  env: JobJourneyEnv,
+  downloadPath: string | null,
+): string | null {
+  if (!downloadPath) return null;
+  const baseUrl = env.JOB_JOURNEY_BASE_URL?.replace(/\/$/, "");
+  if (!baseUrl) throw new Error("Job Journey integration is not configured.");
+  const base = new URL(baseUrl);
+  if (base.protocol !== "https:") throw new Error("Job Journey must use HTTPS.");
+  if (!/^\/api\/assets\/cover-letters\/[A-Za-z0-9%_-]+$/.test(downloadPath)) {
+    throw new Error("Job Journey returned an invalid cover-letter link.");
+  }
+  return new URL(downloadPath, base).toString();
 }
