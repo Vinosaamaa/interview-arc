@@ -20,14 +20,15 @@ Authorized local sources
         ↓ bounded inspection
 Ignored evidence bundle (canonical)
         ├─→ generated local HTML / diagrams
-        ├─→ reviewed owner-private D1 candidates (future)
+        ├─→ typed pending owner-private D1 candidates
         └─→ explicitly approved publication-safe derivatives (future)
 ```
 
 - **Persist** means update the ignored canonical bundle.
 - **Project** means regenerate a disposable local view from that bundle.
-- **Sync** means a future, explicit write of validated owner-private candidates
-  to D1.
+- **Sync** means an explicit specialist write of a validated owner-private
+  source snapshot or typed evidence candidate to D1, followed by receipt
+  verification.
 - **Publish** means an explicit owner-approved `publication_safe` derivative.
 
 Projection must be one-way. Editing generated HTML, SVG, or Markdown never
@@ -143,6 +144,12 @@ common path, email, credential, and private-remote patterns.
 6. Supersede stale observations while preserving lineage.
 7. Regenerate projections. Do not infer D1 sync or publication from generation.
 
+Remote `d1Candidates` are deliberately narrow. Each has `kind: evidence`,
+references exactly one canonical pending evidence record, and contains only one
+or more stable question/relevance links. Source metadata is projected directly
+from the source registry, not duplicated in a candidate. Claims and Story Bank
+records use their owning D1 workflows only after evidence review.
+
 Use `practice/behavioral/prompts/project-evidence-archaeology.md` only when the
 owner explicitly asks to add or re-audit a project or experience. Ordinary
 behavioral mocks must not load that long prompt.
@@ -152,11 +159,21 @@ behavioral mocks must not load that long prompt.
 ```bash
 pnpm behavioral:evidence:validate
 pnpm behavioral:evidence:build
+pnpm behavioral:evidence:status
+pnpm behavioral:evidence:refresh
+pnpm behavioral:evidence:prepare-sync
 ```
 
 Both commands default to `private-sources/behavioral-foundation`. Pass
 `--bundle <path>` for an isolated test or another explicitly selected bundle.
 Build writes only beneath that bundle's `site/` directory.
+
+The controller commands use the same default bundle. `status` emits aggregate
+counts only. `refresh` updates ignored source fingerprints and refresh state
+without printing locators. `prepare-sync` writes an ignored `sync/plan.json`
+containing only display-safe source snapshots and explicit typed candidate
+writes. It never calls MCP itself, uploads to R2, or treats a generated plan as
+a saved receipt.
 
 The generated site must:
 
@@ -169,10 +186,10 @@ The generated site must:
 - identify itself as a local review projection, never as D1-synced or
   published content.
 
-## Future product boundary
+## Product boundary
 
-Issue #201 owns the later local connector, candidate-review writes, D1/MCP
-domain, Behavioral Foundation hub in the current Interview Arc website, typed
-Behavioral Attempt analysis, and Solution Profile integration. This local
-bundle does not mutate Today, a practice activity, transcript, result, timer,
-Story Bank, Solution Profile, D1, or publication state.
+The local bundle does not mutate Today, a practice activity, transcript,
+result, timer, Story Bank, Solution Profile, D1, R2, or publication state. The
+Behavioral specialist reads the prepared plan, performs exact owner-private MCP
+writes, verifies durable receipts, and presents pending candidates for explicit
+owner review.

@@ -19,6 +19,17 @@ import {
   validateBehavioralEvidenceWrite,
 } from "../db/behavioral-evidence-policy";
 import {
+  behavioralEvidenceCandidateQuerySchema,
+  behavioralEvidenceCandidateReviewSchema,
+  behavioralEvidenceSourceQuerySchema,
+  behavioralEvidenceSourceWriteSchema,
+  BehavioralEvidenceReviewError,
+  queryBehavioralEvidenceCandidates,
+  queryBehavioralEvidenceSources,
+  reviewBehavioralEvidenceCandidates,
+  upsertBehavioralEvidenceSource,
+} from "../db/behavioral-evidence-review";
+import {
   BehavioralFinalAnswerError,
   behavioralFinalAnswerCorrectionSchema,
   behavioralFinalAnswerSnapshotInputSchema,
@@ -1835,6 +1846,7 @@ function specialistToolFailure(error: unknown) {
     || error instanceof VoiceResponseGroupConflictError
     || error instanceof SpecialistWriteJobError
     || error instanceof BehavioralEvidenceError
+    || error instanceof BehavioralEvidenceReviewError
     || error instanceof BehavioralFinalAnswerError
     || error instanceof BehavioralTargetProfileError
     || error instanceof LoopError
@@ -2610,6 +2622,46 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   );
 
   server.registerTool(
+    "upsert_behavioral_evidence_source",
+    {
+      description: "Append one display-safe owner-private source snapshot produced by the bounded local evidence connector. The payload never contains a local locator or raw source bytes. Exact operation retries are idempotent; changed retries and stale expected revisions fail closed.",
+      inputSchema: behavioralEvidenceSourceWriteSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await upsertBehavioralEvidenceSource(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Evidence source ${result.sourceId} revision ${result.revision} is saved.` }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_behavioral_evidence_registry",
+    {
+      description: "Read bounded owner-private display-safe source snapshots and exact historical revisions. This registry never returns local paths, raw documents, source code, private remotes, credentials, or source excerpts.",
+      inputSchema: behavioralEvidenceSourceQuerySchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryBehavioralEvidenceSources(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
     "upsert_behavioral_evidence_item",
     {
       description: "Durably enqueue one already-sanitized owner-private behavioral evidence item and one question relevance link. Provenance references must be opaque stable IDs; non-conversation evidence requires a source revision and matching provenance kind. Reuse the exact stable operationId after transport uncertainty and inspect get_specialist_write_status until saved. Candidate supersession is not supported in this slice. This tool never reads a local source, publishes evidence, or verifies a claim.",
@@ -2630,6 +2682,46 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
             ? `Behavioral evidence ${payload.evidence.evidenceId} is durably saved.`
             : `Behavioral evidence ${payload.evidence.evidenceId} is durably queued as ${operationId}; verify its receipt before reuse.` }],
           structuredContent: receipt,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "query_behavioral_evidence_candidates",
+    {
+      description: "Read a bounded owner-private queue of sanitized evidence candidates with exact review revisions and question links. Pending is the default; raw source contents and private locators are never returned.",
+      inputSchema: behavioralEvidenceCandidateQuerySchema.shape,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await queryBehavioralEvidenceCandidates(ownerId, input);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "review_behavioral_evidence_candidates",
+    {
+      description: "Apply one explicit owner review batch to sanitized candidates. Decisions are accept, reject, or supersede; every candidate uses its exact review revision, the batch is atomic, and exact operation retries return the durable receipt.",
+      inputSchema: behavioralEvidenceCandidateReviewSchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await reviewBehavioralEvidenceCandidates(ownerId, input);
+        return {
+          content: [{ type: "text", text: `Reviewed ${result.decisions.length} behavioral evidence candidate${result.decisions.length === 1 ? "" : "s"}.` }],
+          structuredContent: result,
         };
       } catch (error) {
         return specialistToolFailure(error);

@@ -189,9 +189,12 @@ Use the canonical project schema without inventing a combined evidence/claim
 record. `evidence` owns one transformed observation, provenance, grades,
 limitations, contrary-evidence links, visibility, and review state. `claims`
 owns claim text, scope, verification status, linked evidence, gaps, and safer
-wording. `d1Candidates` and `publicationCandidates` own derivative payloads and
-link back through `sourceEvidenceIds`. Assign stable IDs to every material
-record and retain the project source revision in its project/source context.
+wording. A `d1Candidates` entry uses `kind: evidence`, links exactly one pending
+canonical evidence record through `sourceEvidenceIds`, and contains only stable
+`content.questionLinks` with supporting/contrary relevance. Source registration
+is derived separately. `publicationCandidates` remain explicit approved
+derivatives. Assign stable IDs to every material record and retain the project
+source revision in its project/source context.
 
 Do not use absolute paths in evidence intended for remote storage or
 publication.
@@ -471,13 +474,12 @@ Do not write first-person resume/profile wording until ownership is confirmed.
 ## Candidate evidence records
 
 Use only `d1Candidates` and `publicationCandidates` from the canonical project
-schema. Both carry the shared candidate core and link to accepted observations
-through `sourceEvidenceIds`; their variant-specific `kind`, `visibility`, and
-publication `approval` fields remain separate. Put claim text/scope/status in a
-linked `claims` record and provenance/grades/counterevidence in linked
-`evidence` records instead of duplicating those fields inside the candidate.
-New candidates remain pending review until the canonical review workflow
-changes their state.
+schema. A D1 candidate links exactly one pending observation through
+`sourceEvidenceIds`; `content.questionLinks` is the only remote-specific
+content. Put claim text/scope/status in a linked `claims` record and
+provenance/grades/counterevidence in linked `evidence` records instead of
+duplicating those fields inside the candidate. New candidates remain pending
+review until the explicit owner-review workflow changes their state.
 
 Never store verbatim implementation snippets.
 

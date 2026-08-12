@@ -31,7 +31,8 @@ test("the Cloudflare build contains the Interview Arc dashboard", async () => {
   assert.match(bundle, /Loop-owned Role Brief/);
   assert.match(bundle, /BEHAVIORAL FOUNDATION/);
   assert.match(bundle, /Build answers on a truthful record/);
-  assert.match(bundle, /Source registration is not shipped yet/);
+  assert.match(bundle, /Registered private sources/);
+  assert.match(bundle, /Evidence waiting for your decision/);
   assert.match(bundle, /YESTERDAY/);
   assert.match(bundle, /365-DAY JOURNEY MAP/);
   assert.match(bundle, /CAREER WORK/);

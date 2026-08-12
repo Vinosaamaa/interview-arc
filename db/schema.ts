@@ -744,6 +744,60 @@ export const ownerBankQuestions = sqliteTable(
 // Behavioral evidence is sanitized before it reaches D1. These rows contain
 // no local source locator or raw source bytes; every relationship remains
 // owner-scoped so accepted evidence cannot cross account boundaries.
+export const behavioralEvidenceSources = sqliteTable(
+  "behavioral_evidence_sources",
+  {
+    ownerId,
+    sourceId: text("source_id").notNull(),
+    currentRevision: integer("current_revision").notNull(),
+    state: text("state", { enum: ["active", "archived"] }).notNull(),
+    projectKey: text("project_key").notNull(),
+    kind: text("kind").notNull(),
+    label: text("label").notNull(),
+    safeHint: text("safe_hint").notNull(),
+    availability: text("availability", { enum: ["available", "missing", "not_checked", "blocked"] }).notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.sourceId] }),
+    index("behavioral_evidence_sources_owner_state_idx").on(table.ownerId, table.state, table.updatedAt),
+    index("behavioral_evidence_sources_owner_project_idx").on(table.ownerId, table.projectKey),
+  ],
+);
+
+export const behavioralEvidenceSourceRevisions = sqliteTable(
+  "behavioral_evidence_source_revisions",
+  {
+    ownerId,
+    sourceId: text("source_id").notNull(),
+    revision: integer("revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    snapshot: text("snapshot", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.sourceId, table.revision] }),
+    uniqueIndex("behavioral_evidence_source_revisions_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
+export const behavioralEvidenceSourceOperations = sqliteTable(
+  "behavioral_evidence_source_operations",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    sourceId: text("source_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    sourceRevision: integer("source_revision").notNull(),
+    status: text("status", { enum: ["created", "revised", "unchanged"] }).notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.operationId] })],
+);
+
 export const behavioralEvidenceItems = sqliteTable(
   "behavioral_evidence_items",
   {
@@ -765,6 +819,7 @@ export const behavioralEvidenceItems = sqliteTable(
     limitations: text("limitations", { mode: "json" }).notNull(),
     tags: text("tags", { mode: "json" }).notNull(),
     ownerAttestation: text("owner_attestation", { mode: "json" }),
+    reviewRevision: integer("review_revision").notNull().default(1),
     createdAt: integer("created_at").notNull(),
     updatedAt,
   },
@@ -788,6 +843,37 @@ export const behavioralEvidenceQuestionLinks = sqliteTable(
   (table) => [
     primaryKey({ columns: [table.ownerId, table.questionId, table.evidenceId] }),
     index("behavioral_evidence_question_idx").on(table.ownerId, table.questionId, table.relevance),
+  ],
+);
+
+export const behavioralEvidenceReviewOperations = sqliteTable(
+  "behavioral_evidence_review_operations",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.operationId] })],
+);
+
+export const behavioralEvidenceReviewEvents = sqliteTable(
+  "behavioral_evidence_review_events",
+  {
+    ownerId,
+    evidenceId: text("evidence_id").notNull(),
+    revision: integer("revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    fromState: text("from_state", { enum: ["pending", "accepted", "rejected", "superseded"] }).notNull(),
+    toState: text("to_state", { enum: ["accepted", "rejected", "superseded"] }).notNull(),
+    reason: text("reason").notNull(),
+    replacementEvidenceId: text("replacement_evidence_id"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.evidenceId, table.revision] }),
+    index("behavioral_evidence_review_events_operation_idx").on(table.ownerId, table.operationId),
   ],
 );
 
@@ -1833,8 +1919,13 @@ export type ProvisionalSolutionProfileRow = typeof provisionalSolutionProfiles.$
 export type ProblemSolutionRevisionRow = typeof problemSolutionRevisions.$inferSelect;
 export type ActivitySolutionLinkRow = typeof activitySolutionLinks.$inferSelect;
 export type OwnerBankQuestionRow = typeof ownerBankQuestions.$inferSelect;
+export type BehavioralEvidenceSourceRow = typeof behavioralEvidenceSources.$inferSelect;
+export type BehavioralEvidenceSourceRevisionRow = typeof behavioralEvidenceSourceRevisions.$inferSelect;
+export type BehavioralEvidenceSourceOperationRow = typeof behavioralEvidenceSourceOperations.$inferSelect;
 export type BehavioralEvidenceItemRow = typeof behavioralEvidenceItems.$inferSelect;
 export type BehavioralEvidenceQuestionLinkRow = typeof behavioralEvidenceQuestionLinks.$inferSelect;
+export type BehavioralEvidenceReviewOperationRow = typeof behavioralEvidenceReviewOperations.$inferSelect;
+export type BehavioralEvidenceReviewEventRow = typeof behavioralEvidenceReviewEvents.$inferSelect;
 export type BehavioralClaimRow = typeof behavioralClaims.$inferSelect;
 export type BehavioralClaimStatusEventRow = typeof behavioralClaimStatusEvents.$inferSelect;
 export type BehavioralStoryRow = typeof behavioralStories.$inferSelect;
