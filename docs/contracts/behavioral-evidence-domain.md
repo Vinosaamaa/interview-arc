@@ -19,13 +19,21 @@ remain local and are never copied to R2.
 
 ## Local connector
 
-The controller supports `status`, `refresh`, `project`, and `prepare-sync`.
-`status` prints aggregate counts only. `refresh` inspects only `user_owned` or
-`user_authorized` sources whose explicit `refreshMode` is `filesystem`,
-respects the 5,000-entry directory cap, and stores fingerprints and inspection
-state only in the ignored bundle. Filesystem locators name one real canonical
-root or exact file. Remote and conversation modes are never passed to
-filesystem inspection and report `not_checked`; blocked, unknown, or
+The controller supports `status`, `authorize-filesystem`, `refresh`, `project`,
+and `prepare-sync`. `status` prints aggregate counts only.
+`authorize-filesystem` requires an explicit owner-confirmation flag and writes
+a mode-`0600`, gitignored policy containing exact source identities, declared
+paths, and canonical real paths. `refresh` preflights every eligible source
+against that policy before content inspection, then inspects only `user_owned`
+or `user_authorized` sources whose explicit `refreshMode` is `filesystem`.
+Changed locators and changed symlink targets fail closed. Refresh respects the
+5,000-entry directory cap and stores fingerprints and inspection state only in
+the ignored bundle. Remote and conversation modes are never passed to
+filesystem inspection; a filesystem refresh reports them as not checked but
+does not overwrite state owned by their connector. Repeated unchanged refreshes
+do not rewrite timestamps. Sync preparation includes revisions only for
+`available` sources whose connector state is `current` or `changed`, so stale
+non-filesystem metadata cannot enter a plan. Blocked, unknown, or
 authorization-required sources are blocked without inspection.
 
 `prepare-sync` accepts only typed `kind: evidence` candidates. Each candidate

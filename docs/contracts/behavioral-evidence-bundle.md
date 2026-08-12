@@ -39,6 +39,7 @@ changes evidence identity, acceptance, visibility, or publication approval.
 ```text
 private-sources/behavioral-foundation/
 ├── manifest.json
+├── source-policy.json
 ├── projects/
 │   └── <project-id>/
 │       ├── project.json
@@ -157,6 +158,15 @@ pending evidence record has exactly one sync disposition: one `d1Candidates`
 record, or one `d1Exclusions` record explaining why it remains local-only.
 Exclusions are private control data and never enter the remote sync plan.
 
+`source-policy.json` is a gitignored, owner-private authorization sidecar. It
+records each authorized filesystem source identity, its exact declared path,
+and its canonical real path at authorization time. Refresh preflights every
+filesystem source against that boundary before inspecting content and fails
+closed if a locator or symlink target changed. A newly available source that
+was missing during authorization must resolve directly to its declared path;
+otherwise it requires reauthorization. The policy never enters D1, R2, a sync
+plan, generated site, test fixture, log, or publication artifact.
+
 Use `practice/behavioral/prompts/project-evidence-archaeology.md` only when the
 owner explicitly asks to add or re-audit a project or experience. Ordinary
 behavioral mocks must not load that long prompt.
@@ -167,6 +177,7 @@ behavioral mocks must not load that long prompt.
 pnpm behavioral:evidence:validate
 pnpm behavioral:evidence:build
 pnpm behavioral:evidence:status
+pnpm behavioral:evidence:authorize-filesystem -- --confirm-owner-authorized-sources
 pnpm behavioral:evidence:refresh
 pnpm behavioral:evidence:prepare-sync
 ```
@@ -177,9 +188,14 @@ Build writes only beneath that bundle's `site/` directory.
 
 The controller commands use the same default bundle. `status` emits aggregate
 counts only, including candidate-covered, excluded, and uncovered pending
-evidence. `refresh` updates ignored source fingerprints and refresh state
-without printing locators. `prepare-sync` fails when any pending evidence is
-uncovered; otherwise it writes an ignored `sync/plan.json`
+evidence. `authorize-filesystem` requires the explicit confirmation flag and
+writes only the ignored local source policy. Run it whenever the owner changes
+an authorized locator. `refresh` updates ignored source fingerprints and
+refresh state without printing locators; it leaves remote and conversation
+state to their owning connectors, and unchanged non-filesystem sources do not
+rewrite project or manifest timestamps. `prepare-sync` accepts a source
+revision only when its state is `available` and `current` or `changed`, and it
+fails when any pending evidence is uncovered; otherwise it writes an ignored `sync/plan.json`
 containing only display-safe source snapshots and explicit typed candidate
 writes. It never calls MCP itself, uploads to R2, or treats a generated plan as
 a saved receipt.

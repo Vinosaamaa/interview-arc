@@ -203,6 +203,14 @@ repository description, placeholder, or stale path in that field. Remote and
 conversation provenance must use their explicit non-filesystem modes so the
 local controller never passes them to filesystem inspection.
 
+After the owner confirms the final filesystem source list, run the controller's
+explicit `authorize-filesystem --confirm-owner-authorized-sources` operation.
+This creates the ignored local source policy that binds each source identity to
+its declared and canonical real path. Do not hand-edit, publish, sync, or quote
+that policy. If a locator or symlink target changes, stop and reauthorize the
+bounded source list before refresh; never bypass the policy or broaden it by
+guessing a parent directory.
+
 Do not use absolute paths in evidence intended for remote storage or
 publication.
 

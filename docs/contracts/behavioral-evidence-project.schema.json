@@ -179,7 +179,7 @@
         },
         {
           "if": { "properties": { "refreshMode": { "const": "remote" } } },
-          "then": { "properties": { "locator": { "pattern": "^(?!file:)[A-Za-z][A-Za-z0-9+.-]*:" } } }
+          "then": { "properties": { "locator": { "pattern": "^(?![fF][iI][lL][eE]:)[A-Za-z][A-Za-z0-9+.-]*:" } } }
         },
         {
           "if": { "properties": { "refreshMode": { "const": "conversation" } } },

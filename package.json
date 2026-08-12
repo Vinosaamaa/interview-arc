@@ -19,6 +19,7 @@
     "behavioral:evidence:validate": "node scripts/build-behavioral-evidence-site.mjs --validate-only",
     "behavioral:evidence:build": "node scripts/build-behavioral-evidence-site.mjs",
     "behavioral:evidence:status": "node scripts/behavioral-evidence-controller.mjs status",
+    "behavioral:evidence:authorize-filesystem": "node scripts/behavioral-evidence-controller.mjs authorize-filesystem",
     "behavioral:evidence:refresh": "node scripts/behavioral-evidence-controller.mjs refresh",
     "behavioral:evidence:prepare-sync": "node scripts/behavioral-evidence-controller.mjs prepare-sync",
     "resume:import:google-doc": "node scripts/import-google-doc-resume.mjs",
