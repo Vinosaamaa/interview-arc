@@ -161,13 +161,13 @@ test("Review Queue keeps filters in the menu, branches each row, and joins its f
   assert.equal(folioRules.some((rule) => rule.declarations.bottom === "78px"), false);
 });
 
-test("Review Queue cards expose one whole-card reader target and distinct actions", async () => {
+test("Review Queue cards select from the whole surface and reserve navigation for its action", async () => {
   const [source, css] = await Promise.all([load("../app/review-queue-view.tsx"), load("../app/review-queue.css")]);
   const file = parseTsx(source);
   const rules = parseCss(css);
-  assert.ok(hasJsxClass(file, "review-row-open"));
-  assert.ok(hasJsxAttribute(file, "aria-label", "Open previous attempt for"));
-  const cardTarget = cssRules(rules, ".review-row-open")[0].declarations;
+  assert.ok(hasJsxClass(file, "review-row-select-surface"));
+  assert.ok(hasJsxAttribute(file, "aria-label", "Select"));
+  const cardTarget = cssRules(rules, ".review-row-select-surface")[0].declarations;
   assert.equal(cardTarget.position, "absolute");
   assert.equal(cardTarget.inset, "0");
   assert.equal(cardTarget.cursor, "pointer");
@@ -176,6 +176,20 @@ test("Review Queue cards expose one whole-card reader target and distinct action
   const action = cssRules(rules, ".review-actions button")[0].declarations;
   assert.notEqual(action.border, "0");
   assert.equal(action.cursor, "pointer");
+  assert.equal(cssRules(rules, ".review-select")[0].declarations.cursor, "pointer");
+});
+
+test("Review Queue responds to its panel width and never outgrows the owning sheet", async () => {
+  const rules = parseCss(await load("../app/review-queue.css"));
+  const container = cssRules(rules, ".review-queue-container")[0].declarations;
+  const page = cssRules(rules, ".review-queue-page")[0].declarations;
+  assert.equal(container["container-type"], "inline-size");
+  assert.equal(page["max-width"], "100%");
+  for (const selector of [".review-queue-sheet", ".recall-spine", ".recall-group", ".recall-rows", ".review-row"]) {
+    assert.ok(cssRules(rules, selector).some((rule) => rule.declarations["min-width"] === "0"));
+    assert.ok(cssRules(rules, selector).some((rule) => rule.declarations["max-width"] === "100%"));
+  }
+  assert.ok(cssRules(rules, ".review-queue-page", "@container").length >= 2);
 });
 
 test("Past, Banks, and Journey share a centered bounded scrollable reader shell", async () => {
@@ -184,7 +198,15 @@ test("Past, Banks, and Journey share a centered bounded scrollable reader shell"
   const rules = parseCss(css);
   assert.ok(hasJsxClass(file, "journey-reader-detail reader-workspace focused-attempt-workspace"));
   assert.ok(hasJsxAttribute(file, "aria-modal", "true"));
-  assert.ok(cssRules(rules, ".journey-page.has-open-reader::before").length >= 1);
+  for (const backdrop of [
+    ".library-page.has-open-entry::before",
+    ".banks-page.has-open-solution::before",
+    ".journey-page.has-open-reader::before",
+  ]) {
+    const declarations = cssRules(rules, backdrop)[0]?.declarations;
+    assert.ok(declarations, `${backdrop} must cover its owning workspace`);
+    assert.equal(declarations.background, "var(--canvas)");
+  }
 
   const pastShell = cssRules(rules, ".library-page.has-open-entry .past-master-detail")
     .find((rule) => rule.declarations.width === "min(var(--reader-pane-width), calc(100vw - var(--sidebar-size) - 32px))")?.declarations;
@@ -195,6 +217,12 @@ test("Past, Banks, and Journey share a centered bounded scrollable reader shell"
     assert.equal(shell.width, "min(var(--reader-pane-width), calc(100vw - var(--sidebar-size) - 32px))");
     assert.equal(shell.left, "calc(var(--sidebar-size) + (100vw - var(--sidebar-size)) / 2)");
     assert.equal(shell.transform, "translateX(-50%)");
+  }
+  for (const frame of ["from", "to"]) {
+    const declarations = cssRules(rules, frame, "@keyframes master-detail-in")[0]?.declarations;
+    assert.ok(declarations, `master-detail-in ${frame} frame is required`);
+    assert.equal(declarations.transform, undefined, "entry motion must not replace horizontal centering");
+    assert.match(declarations.translate, /^0 /);
   }
   const widePast = cssRules(rules, ".library-page.has-open-entry .past-master-detail.master-pane-open", "min-width: 1977px")[0].declarations;
   assert.equal(widePast.left, undefined);
@@ -213,6 +241,22 @@ test("Past, Banks, and Journey share a centered bounded scrollable reader shell"
   assert.ok(scroller);
   assert.equal(scroller["min-height"], "0");
   assert.equal(scroller["overflow-y"], "auto");
+});
+
+test("Past hides unknown practice mode and keeps recorded mode in the case header", async () => {
+  const source = await load("../app/home-client.tsx");
+  const file = parseTsx(source);
+  assert.equal(Boolean(functionNamed(file, "PracticeModeCard")), false);
+  assert.equal(stringLiterals(file).has("case-practice-mode"), false);
+  assert.ok(hasJsxClass(file, "case-mode-tags"));
+});
+
+test("Reader contents reveal collapsed sections before navigating", async () => {
+  const file = parseTsx(await load("../app/home-client.tsx"));
+  const reveal = functionNamed(file, "revealReaderOutlineTarget");
+  assert.ok(reveal);
+  assert.match(reveal.getText(file), /closest<.*HTMLDetailsElement.*>\("details\.reader-group"\)/s);
+  assert.match(reveal.getText(file), /group\.open = true/);
 });
 
 test("workspace selector contains exactly Interview, Learn, and Engineering", async () => {

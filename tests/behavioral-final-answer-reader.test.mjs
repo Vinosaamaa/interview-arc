@@ -1,7 +1,23 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { findExactPastSnapshot, orderPastReaderSections } from "../app/behavioral-final-answer-view.ts";
+import { findExactPastSnapshot, orderPastReaderSections, retainLoadedPastSnapshot } from "../app/behavioral-final-answer-view.ts";
+
+test("reselecting the same Past item keeps its loaded conversation evidence", () => {
+  const loaded = {
+    id: "attempt-1",
+    title: "Loaded title",
+    transcriptTurns: [{ turnId: "turn-1" }],
+    audioClips: [{ captureId: "capture-1" }],
+    codeAttempts: [{ id: "code-1" }],
+  };
+  const listProjection = { id: "attempt-1", title: "Fresh list title" };
+  assert.deepEqual(retainLoadedPastSnapshot(loaded, listProjection), {
+    ...loaded,
+    title: "Fresh list title",
+  });
+  assert.equal(retainLoadedPastSnapshot(loaded, { id: "attempt-2", title: "Other" }).id, "attempt-2");
+});
 
 const root = new URL("..", import.meta.url);
 

@@ -155,7 +155,7 @@ export default function ReviewQueueView({
   });
 
   return (
-    <section className="review-queue-page">
+    <div className="review-queue-container"><section className="review-queue-page">
       <header className="review-queue-masthead">
         <div>
           <span className="eyebrow">PAST · REVIEW QUEUE</span>
@@ -207,7 +207,7 @@ export default function ReviewQueueView({
                 const blocked = isBlocked(item);
                 const pending = pendingReviewKeys.has(item.reviewKey);
                 return <article className={`review-row ${item.specialty} ${selected ? "selected" : ""}`} key={item.reviewKey}>
-                  <button type="button" className="review-row-open" onClick={() => onOpenAttempt(item)} aria-label={`Open previous attempt for ${item.title}`} />
+                  <button type="button" className="review-row-select-surface" onClick={() => toggleSelection(item.reviewKey)} aria-label={`${selected ? "Remove" : "Select"} ${item.title}`} />
                   <button type="button" className="review-select" aria-pressed={selected} aria-label={`${selected ? "Remove" : "Select"} ${item.title}`} onClick={() => toggleSelection(item.reviewKey)}><span aria-hidden="true">{selected ? "✓" : ""}</span></button>
                   <span className="review-specialty-mark" aria-hidden="true">{item.specialty === "leetcode" ? "C" : item.specialty === "system_design" ? "S" : "B"}</span>
                   <div className="review-title"><small>{specialtyLabel(item.specialty)}</small><strong>{item.title}</strong></div>
@@ -236,6 +236,6 @@ export default function ReviewQueueView({
         <button type="button" className="folio-arrow" onClick={() => moveFolio(1)} aria-label="Scroll selected reviews right">→</button>
         <button type="button" className="folio-add" disabled={!canAddToToday || addableSelected.length === 0} onClick={() => { onAddToToday(addableSelected); setUiState((current) => ({ ...current, selectedKeys: current.selectedKeys.filter((key) => !addableSelected.some((item) => item.reviewKey === key)) })); }}>Add selected to Today <span aria-hidden="true">→</span></button>
       </aside>
-    </section>
+    </section></div>
   );
 }

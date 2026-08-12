@@ -56,6 +56,12 @@ export function interactionModeClassificationLabel(classification: Pick<Interact
     ?? `${classification.primaryPracticeModeId.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase())}-led`;
 }
 
+export function isRecordedInteractionMode(
+  classification: Pick<InteractionModeClassification, "primaryPracticeModeId"> | null | undefined,
+): classification is Pick<InteractionModeClassification, "primaryPracticeModeId"> {
+  return Boolean(classification && classification.primaryPracticeModeId !== "unrecorded");
+}
+
 export function matchesInteractionModeFilter(
   classification: Pick<InteractionModeClassification, "primaryPracticeModeId" | "hadMentorAssistance"> | null | undefined,
   filter: string,

@@ -7,6 +7,7 @@ import {
 } from "../db/interaction-mode-classification.ts";
 import {
   interactionModeClassificationLabel,
+  isRecordedInteractionMode,
   matchesInteractionModeFilter,
 } from "../app/interaction-mode-view.ts";
 
@@ -115,6 +116,13 @@ test("legacy or incomplete evidence remains unrecorded without fabrication", () 
   assert.equal(result.primaryPracticeModeId, "unrecorded");
   assert.equal(result.provenance, "unrecorded");
   assert.equal(interactionModeClassificationLabel(result), "Mode not recorded");
+  assert.equal(isRecordedInteractionMode(result), false);
+});
+
+test("only an explicit recorded mode is eligible for Past badges", () => {
+  assert.equal(isRecordedInteractionMode(undefined), false);
+  assert.equal(isRecordedInteractionMode({ primaryPracticeModeId: "unrecorded" }), false);
+  assert.equal(isRecordedInteractionMode({ primaryPracticeModeId: "interviewer" }), true);
 });
 
 test("Past mode filters keep assistance independent and registry IDs extensible", () => {
