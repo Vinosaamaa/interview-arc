@@ -544,6 +544,32 @@ test("filesystem refresh leaves non-filesystem connector state byte-identical", 
   assert.equal(await readFile(manifestPath, "utf8"), firstManifestBytes);
 });
 
+test("repeated refresh leaves an unchanged blocked source byte-identical", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const manifestPath = path.join(fixture.root, "manifest.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.sources[0].refreshMode = "blocked";
+  record.sources[0].locator = "blocked:authorization-required";
+  record.sources[0].authorization = "authorization_required";
+  record.sources[0].availability = "blocked";
+  record.sources[0].refreshStatus = "blocked";
+  delete record.sources[0].revision;
+  delete record.sources[0].inspectedAt;
+  await writeJson(recordPath, record);
+  const initialProjectBytes = await readFile(recordPath, "utf8");
+  const initialManifestBytes = await readFile(manifestPath, "utf8");
+
+  const refreshed = await refreshBehavioralEvidenceSources({
+    bundleRoot: fixture.root,
+    now: new Date("2026-08-11T18:00:00.000Z"),
+  });
+
+  assert.equal(refreshed.blocked, 1);
+  assert.equal(await readFile(recordPath, "utf8"), initialProjectBytes);
+  assert.equal(await readFile(manifestPath, "utf8"), initialManifestBytes);
+});
+
 test("sync preparation rejects stale non-filesystem revisions before writing a plan", async (t) => {
   const fixture = await createFixture(t);
   const recordPath = path.join(fixture.projectRoot, "project.json");
