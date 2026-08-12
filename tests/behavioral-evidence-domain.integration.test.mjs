@@ -73,9 +73,14 @@ async function call(client, name, args) {
 
 const callRaw = (client, name, args) => client.callTool({ name, arguments: args });
 
-async function waitForJobs(client, jobIds) {
+async function waitForJobs(client, jobIds, recoveryBaseUrl = null) {
   let latest = [];
   for (let attempt = 0; attempt < 300; attempt += 1) {
+    // A recurring scheduled drain may overlap a request-scoped drain that
+    // already owns the execution lease. Keep exercising the bounded recovery
+    // path until the durable receipts settle instead of assuming one cron
+    // invocation must acquire the lease immediately.
+    if (recoveryBaseUrl) await runScheduledRecovery(recoveryBaseUrl);
     const result = await call(client, "get_specialist_write_status", { jobIds });
     latest = result.jobs;
     if (result.jobs.every((job) => job.status === "saved" || job.status === "failed")) return result.jobs;
@@ -785,8 +790,11 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
         "upsert_behavioral_evidence_item",
         input,
       )));
-      await runScheduledRecovery(baseUrl);
-      const batchJobs = await waitForJobs(ownerClient, batch.map((input) => input.operationId));
+      const batchJobs = await waitForJobs(
+        ownerClient,
+        batch.map((input) => input.operationId),
+        baseUrl,
+      );
       assert.equal(batchJobs.every((job) => job.status === "saved"), true, workerLog);
     }
     const bounded = await call(ownerClient, "query_behavioral_evidence", {
@@ -816,8 +824,11 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
     for (let start = 0; start < boundedClaims.length; start += 5) {
       const batch = boundedClaims.slice(start, start + 5);
       await Promise.all(batch.map((input) => call(ownerClient, "set_behavioral_claim_status", input)));
-      await runScheduledRecovery(baseUrl);
-      const batchJobs = await waitForJobs(ownerClient, batch.map((input) => input.operationId));
+      const batchJobs = await waitForJobs(
+        ownerClient,
+        batch.map((input) => input.operationId),
+        baseUrl,
+      );
       assert.equal(batchJobs.every((job) => job.status === "saved"), true, workerLog);
     }
     const boundedClaimRead = await call(ownerClient, "query_behavioral_evidence", {
