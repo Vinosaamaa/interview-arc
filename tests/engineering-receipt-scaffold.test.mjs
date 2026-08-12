@@ -10,13 +10,32 @@ import { buildEngineeringJournal } from "../engineering-journal/index.ts";
 
 const SCRIPT = fileURLToPath(new URL("../scripts/new-engineering-receipt.mjs", import.meta.url));
 
-async function repositoryFixture(t) {
+async function repositoryFixture(t, { receiptDirectory = true } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), "engineering-receipt-scaffold-"));
   t.after(() => rm(root, { recursive: true, force: true }));
-  await mkdir(path.join(root, "docs", "engineering", "changes"), { recursive: true });
+  await mkdir(
+    path.join(root, "docs", "engineering", ...(receiptDirectory ? ["changes"] : [])),
+    { recursive: true },
+  );
   await writeFile(path.join(root, "package.json"), '{"name":"interview-arc","private":true}\n');
   return root;
 }
+
+test("a fresh clone creates its first canonical receipt directory", async (t) => {
+  const root = await repositoryFixture(t, { receiptDirectory: false });
+  const result = scaffold(root, [
+    "--pr", "311",
+    "--title", "Adopt the first Engineering receipt",
+    "--summary", "Created the first canonical receipt in a fresh repository clone.",
+    "--classification", "none",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    await readFile(path.join(root, "docs", "engineering", "changes", "pr-311.md"), "utf8"),
+    /^pr: 311$/m,
+  );
+});
 
 function scaffold(root, arguments_) {
   return spawnSync(process.execPath, [SCRIPT, ...arguments_], {

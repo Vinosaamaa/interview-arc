@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { lstat, readFile, realpath, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const REPOSITORY = "interview-arc";
@@ -86,13 +86,25 @@ async function assertRepositoryRoot(root) {
 
   const segments = ["docs", "engineering", "changes"];
   let receiptDirectory = root;
-  for (const segment of segments) {
+  for (const [index, segment] of segments.entries()) {
     receiptDirectory = path.join(receiptDirectory, segment);
     let metadata;
     try {
       metadata = await lstat(receiptDirectory);
-    } catch {
-      fail("The canonical Engineering receipt directory is missing.");
+    } catch (error) {
+      const isMissingReceiptDirectory = error?.code === "ENOENT" && index === segments.length - 1;
+      if (!isMissingReceiptDirectory) fail("The canonical Engineering receipt directory is missing.");
+      try {
+        await mkdir(receiptDirectory, { mode: 0o755 });
+        metadata = await lstat(receiptDirectory);
+      } catch (mkdirError) {
+        if (mkdirError?.code !== "EEXIST") fail("Unable to create the canonical Engineering receipt directory.");
+        try {
+          metadata = await lstat(receiptDirectory);
+        } catch {
+          fail("Unable to create the canonical Engineering receipt directory.");
+        }
+      }
     }
     if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
       fail("The canonical Engineering receipt directory is unsafe.");
