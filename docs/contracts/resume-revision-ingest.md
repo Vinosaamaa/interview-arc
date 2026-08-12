@@ -53,6 +53,81 @@ can be reclaimed, but a delayed operation cannot overwrite a current pointer
 that changed since its reservation. No response that says `staging` or
 `retryable_failure` is proof of a saved revision.
 
+## Authenticated Google Doc orchestration
+
+The Resume & Cover Letter specialist—not the deployed Worker—owns connector
+access. For one explicit `Import this resume` command it must:
+
+1. Read authenticated Drive metadata and verify
+   `application/vnd.google-apps.document` plus a revision ID or Drive version.
+2. Export DOCX and PDF through the authenticated connector and materialize only
+   its returned `file_uri` or `workspace_path`. Each export remains bounded by
+   the connector and Worker limits; never request inline base64.
+3. Read the same metadata again. File ID, MIME type, modified time, and exact
+   revision/version must match the pre-export observation. A mismatch is
+   `resume_source_changed_during_export`; discard neither source nor prior
+   revisions, and export both formats again from one stable observation.
+4. Prepare an ignored private capture JSON and run
+   `npm run resume:import:google-doc -- <private-capture.json>`. The controller
+   validates signatures and bounds, computes all fingerprints, atomically
+   creates or verifies
+   `private-sources/resume-library/imports/<resume-id>/<revision-id>/`, and
+   uploads only the exact mirrored bytes and bounded ingest manifest.
+5. Treat only a bounded `saved` response plus authoritative MCP/library
+   readback as completion. An upload failure leaves the mirror intact for the
+   same exact retry. A changed retry or reused immutable ID fails closed.
+
+The private capture has this synthetic shape; real Drive identities and paths
+must remain only in the ignored local file:
+
+```json
+{
+  "schemaVersion": 1,
+  "operationId": "resume-import-operation-1",
+  "resumeId": "primary-resume",
+  "revisionId": "primary-resume-r1",
+  "sourceLabel": "Primary resume",
+  "capturedAt": 1786505200000,
+  "source": {
+    "provider": "google_drive",
+    "beforeExports": {
+      "fileId": "private-drive-file-identity",
+      "mimeType": "application/vnd.google-apps.document",
+      "modifiedTime": "2026-08-11T20:00:00.000Z",
+      "version": "42"
+    },
+    "afterExports": {
+      "fileId": "private-drive-file-identity",
+      "mimeType": "application/vnd.google-apps.document",
+      "modifiedTime": "2026-08-11T20:00:00.000Z",
+      "version": "42"
+    }
+  },
+  "exports": {
+    "docxPath": "connector-exports/source.docx",
+    "pdfPath": "connector-exports/snapshot.pdf"
+  },
+  "extraction": {
+    "version": "resume-extract-v1",
+    "bullets": [
+      {
+        "occurrenceId": "experience-platform-0",
+        "sectionLabel": "Experience",
+        "ordinal": 0,
+        "text": "Designed and operated a reliable service.",
+        "claimIds": [],
+        "evidenceIds": []
+      }
+    ]
+  }
+}
+```
+
+The controller keeps the exact private source observation only in
+`manifest.private.json`. The remote multipart request contains a SHA-256 source
+revision fingerprint, never the Drive ID/revision, provider URL, capture path,
+or export path. The local receipt is a private cache; D1 remains authoritative.
+
 ## Idempotency and readback
 
 - After HTTP uncertainty, retry only the same `operationId` with the exact same
@@ -92,10 +167,9 @@ that changed since its reservation. No response that says `staging` or
 
 ## Remaining issue #211 work
 
-Google connector authorization/export and the ignored local mirror remain
-specialist-side orchestration work. Website relocation, richer Career Materials
-presentation, deletion/retention controls, cross-repository cover-letter
-publication, and provenance-safe historical backfill remain separate slices.
+Website relocation, richer Career Materials presentation, deletion/retention
+controls, cross-repository cover-letter publication, and provenance-safe
+historical backfill remain separate slices.
 The current import accepts already-extracted bounded occurrences and exact
 semantic identities; it does not run an untrusted semantic model inside the
 Worker or invent pending claims.

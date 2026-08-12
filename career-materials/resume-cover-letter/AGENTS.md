@@ -43,8 +43,19 @@ that source or one named evidence gap requires it.
 `Import this resume` plus an exact Google Doc URL is the owner's authorization
 for that one import. Use the authenticated Google Drive connector: read file
 metadata first, verify that the source is a native Google Doc, and export both
-DOCX and PDF from the same observed source revision. Never scrape a public or
-unauthenticated share page.
+DOCX and PDF from the same observed source revision. Read metadata again after
+both exports and fail closed if file identity, revision/version, MIME type, or
+modified time changed. Never scrape a public or unauthenticated share page.
+
+Materialize the connector's authenticated `file_uri`/`workspace_path` results
+and prepare one ignored private capture JSON matching the controller contract
+in `docs/contracts/resume-revision-ingest.md`. Put private Drive identity and
+local export paths only in that ignored capture. Run
+`npm run resume:import:google-doc -- <private-capture.json>` once; it creates or
+verifies the immutable ignored mirror, uploads the exact mirrored pair, and
+stores a bounded private receipt. Use `--mirror-only` only when the owner asks
+for an interim local capture or the deployed import is unavailable; a mirrored
+receipt is not a saved D1/R2 revision.
 
 The import is complete only after both private files are durable, one immutable
 revision is authoritatively readable, and the intended current pointer is

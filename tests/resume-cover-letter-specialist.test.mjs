@@ -5,7 +5,7 @@ import test from "node:test";
 const load = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 test("Resume & Cover Letter is a registered administrative specialist outside practice", async () => {
-  const [guide, startup, rootGuide, durablePractice, schema, worker, architecture] = await Promise.all([
+  const [guide, startup, rootGuide, durablePractice, schema, worker, architecture, contract, packageJson] = await Promise.all([
     load("../career-materials/resume-cover-letter/AGENTS.md"),
     load("../docs/agents/task-startup-prompts.md"),
     load("../AGENTS.md"),
@@ -13,6 +13,8 @@ test("Resume & Cover Letter is a registered administrative specialist outside pr
     load("../db/schema.ts"),
     load("../mcp-worker/index.ts"),
     load("../docs/architecture/single-project-practice-workflow.md"),
+    load("../docs/contracts/resume-revision-ingest.md"),
+    load("../package.json"),
   ]);
 
   assert.match(rootGuide, /Resume or cover-letter administration[^\n]*career-materials\/resume-cover-letter\/AGENTS\.md/);
@@ -31,8 +33,13 @@ test("Resume & Cover Letter is a registered administrative specialist outside pr
   assert.match(guide, /Use `query_behavioral_evidence`/);
   assert.match(guide, /Use `get_resume_library`/);
   assert.match(guide, /authenticated Google Drive connector/);
+  assert.match(guide, /before[\s\S]*after[\s\S]*exports/i);
+  assert.match(guide, /resume:import:google-doc/);
   assert.match(guide, /installed `cover-letter` skill/);
   assert.match(guide, /final cover letter is PDF only/i);
   assert.match(guide, /Job Journey owns the application record and\s+private PDF bytes/);
   assert.doesNotMatch(guide, /save_practice_exchange|append_practice_transcript|save_specialist_finalization/);
+  assert.match(contract, /resume_source_changed_during_export/);
+  assert.match(contract, /never the Drive ID\/revision, provider URL, capture path/);
+  assert.equal(JSON.parse(packageJson).scripts["resume:import:google-doc"], "node scripts/import-google-doc-resume.mjs");
 });
