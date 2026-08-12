@@ -87,7 +87,41 @@ test("local MCP persists exact specialist writes through durable receipts and re
       INSERT INTO practice_transcript_turns
         (owner_id,activity_id,turn_id,specialty,speaker,body,source,sequence,occurred_at,updated_at)
       VALUES
-        ('owner-specialist-write','activity-write','user-write-1','leetcode','user','My submitted code.','codex',1,100,100);
+        ('owner-specialist-write','activity-write','user-write-1','leetcode','user','My submitted code.','codex',1,100,100),
+        ('owner-specialist-write','activity-recovery','user-recovery-1','leetcode','user','I submitted this exact code before finalization.','codex',1,100,100),
+        ('owner-specialist-write','activity-recovery','specialist-recovery-review-1','leetcode','specialist','Recovered review. The invariant is correct. Use clearer names. The exact source was reviewed. Keep the recovered implementation.','codex',2,120,120),
+        ('owner-specialist-write','activity-deleted-recovery','user-deleted-recovery-1','leetcode','user','I submitted this exact code before finalization.','codex',1,100,100),
+        ('owner-specialist-write','activity-deleted-recovery','specialist-deleted-recovery-review-1','leetcode','specialist','Recovered review. The invariant is correct. Use clearer names. The exact source was reviewed. Keep the recovered implementation.','codex',2,120,120),
+        ('owner-specialist-write','activity-sequence-recovery','user-sequence-recovery-1','leetcode','user','I submitted this exact code before finalization.','codex',1,100,100),
+        ('owner-specialist-write','activity-sequence-recovery','specialist-sequence-recovery-review-1','leetcode','specialist','Recovered review. The invariant is correct. Use clearer names. The exact source was reviewed. Keep the recovered implementation.','codex',2,120,120),
+        ('owner-specialist-write','activity-concurrent-recovery','user-concurrent-recovery-1','leetcode','user','I submitted this exact code before finalization.','codex',1,100,100),
+        ('owner-specialist-write','activity-concurrent-recovery','specialist-concurrent-recovery-review-1','leetcode','specialist','Recovered review. The invariant is correct. Use clearer names. The exact source was reviewed. Keep the recovered implementation.','codex',2,120,120),
+        ('owner-specialist-write','activity-published-recovery','user-published-recovery-1','leetcode','user','Published code.','codex',1,100,100),
+        ('owner-specialist-write','activity-published-recovery','specialist-published-recovery-review-1','leetcode','specialist','Published review. Correct. Improve names. Evidence. Next.','codex',2,120,120),
+        ('owner-specialist-write-other','activity-cross-owner-recovery','user-cross-owner-recovery-1','leetcode','user','I submitted this exact code before finalization.','codex',1,100,100),
+        ('owner-specialist-write-other','activity-cross-owner-recovery','specialist-cross-owner-recovery-review-1','leetcode','specialist','Recovered review. The invariant is correct. Use clearer names. The exact source was reviewed. Keep the recovered implementation.','codex',2,120,120);
+      INSERT INTO activity_finalizations
+        (owner_id,activity_id,specialty,status,payload,finalized_at,published_at,revision,updated_at)
+      VALUES
+        ('owner-specialist-write','activity-recovery','leetcode','ready','{"title":"Recovery","complete":true}',200,NULL,1,200),
+        ('owner-specialist-write','activity-missing-recovery','leetcode','ready','{"title":"Missing","complete":true}',200,NULL,1,200),
+        ('owner-specialist-write','activity-deleted-recovery','leetcode','ready','{"title":"Deleted","complete":true}',200,NULL,1,200),
+        ('owner-specialist-write','activity-cross-owner-recovery','leetcode','ready','{"title":"Cross owner","complete":true}',200,NULL,1,200),
+        ('owner-specialist-write','activity-sequence-recovery','leetcode','ready','{"title":"Sequence","complete":true}',200,NULL,1,200),
+        ('owner-specialist-write','activity-concurrent-recovery','leetcode','ready','{"title":"Concurrent","complete":true}',200,NULL,1,200),
+        ('owner-specialist-write','activity-published-recovery','leetcode','published','{"title":"Published","complete":true}',200,300,1,300);
+      INSERT INTO typed_practice_exchange_deletions
+        (owner_id,operation_id,activity_id,user_turn_id,response_turn_id,specialty,expected_revision,request_fingerprint,reason,receipt,deleted_at)
+      VALUES
+        ('owner-specialist-write','delete-recovery-evidence','activity-deleted-recovery','user-deleted-recovery-1','specialist-deleted-recovery-review-1','leetcode',1,'deleted-recovery-fingerprint','Owner deleted the typed exchange.','{}',150);
+      INSERT INTO leetcode_code_attempts
+        (owner_id,id,activity_id,originating_turn_id,sequence,language,code,line_count,occurred_at,review,review_response_turn_id,observed_correctness,concrete_findings,edge_cases,complexity,final_declaration,created_at,updated_at)
+      VALUES
+        ('owner-specialist-write','attempt-existing-sequence','activity-sequence-recovery','user-sequence-recovery-1',1,'java','class Existing {}',1,110,'{"schemaVersion":1,"status":"complete","summary":"Recovered review.","whatWentWell":["The invariant is correct."],"whatToImprove":["Use clearer names."],"testingEvidence":["The exact source was reviewed."],"nextStep":"Keep the recovered implementation.","provenance":"specialist_observed","reviewedAt":120}','specialist-sequence-recovery-review-1','appears_correct','["The invariant is correct.","The exact source was reviewed."]','["Empty input outside the stated constraints."]','{"time":"O(n)","space":"O(1)"}','The exact historical source and review were recovered.',130,130);
+      INSERT INTO problem_solution_profiles
+        (owner_id,specialty,question_id,title,current_revision,tags,payload,updated_at)
+      VALUES
+        ('owner-specialist-write','leetcode','recovery-question','Recovery profile',1,'["array"]','{"summary":"Unchanged by Code Attempt recovery.","sections":[{"title":"Approach, correctness, complexity, edge cases, alternatives, and common mistakes","body":"Problem framing and constraints. Best algorithm. Correctness invariant. Time and space complexity. Edge cases. Alternative. Common mistake. Reference implementation.\\n\\u0060\\u0060\\u0060java\\nclass Solution {}\\n\\u0060\\u0060\\u0060"}],"references":[{"title":"Recovery reference","url":"https://leetcode.com/problems/recovery-question/"}],"tags":["array"]}',190);
     `]);
     worker = spawn(wrangler, ["dev", "--local", "--test-scheduled", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
       cwd: project,
@@ -166,6 +200,172 @@ test("local MCP persists exact specialist writes through durable receipts and re
     assert.equal(queuedStalePending.jobId, stalePendingAttempt.operationId);
     assert.equal(savedStalePending.status, "saved");
     assert.equal(savedStalePending.result.status, "inserted");
+
+    const recoveredAttempt = {
+      operationId: "operation-attempt-recovery-1",
+      id: "attempt-recovery-1",
+      activityId: "activity-recovery",
+      originatingTurnId: "user-recovery-1",
+      sequence: 1,
+      language: "java",
+      code: "class Solution { int recovered() { return 42; } }",
+      occurredAt: 110,
+      review: {
+        schemaVersion: 1,
+        status: "complete",
+        summary: "Recovered review.",
+        whatWentWell: ["The invariant is correct."],
+        whatToImprove: ["Use clearer names."],
+        testingEvidence: ["The exact source was reviewed."],
+        nextStep: "Keep the recovered implementation.",
+        provenance: "specialist_observed",
+        reviewedAt: 120,
+      },
+      reviewResponseTurnId: "specialist-recovery-review-1",
+      observedCorrectness: "appears_correct",
+      concreteFindings: ["The invariant is correct.", "The exact source was reviewed."],
+      edgeCases: ["Empty input outside the stated constraints."],
+      complexity: { time: "O(n)", space: "O(1)" },
+      finalDeclaration: "The exact historical source and review were recovered.",
+      authorization: "explicit_user_instruction",
+      auditReason: "Recover an exact pre-finalization owner attempt whose structured projection was missed.",
+    };
+    const readyBeforeRecovery = await call("get_activity_practice_record", { activityId: "activity-recovery" });
+    const profileBeforeRecovery = await call("get_problem_solution_profile", {
+      specialty: "leetcode",
+      questionId: "recovery-question",
+    });
+    assert.equal(readyBeforeRecovery.codeAttempts.length, 0);
+    assert.equal(readyBeforeRecovery.finalization.status, "ready");
+
+    const ordinaryReadyWrite = await call("save_leetcode_code_attempt", {
+      ...recoveredAttempt,
+      operationId: "operation-attempt-ready-ordinary-rejected",
+      authorization: undefined,
+      auditReason: undefined,
+    });
+    const [ordinaryReadyReceipt] = await waitForJobs(call, [ordinaryReadyWrite.jobId], baseUrl);
+    assert.equal(ordinaryReadyReceipt.status, "failed");
+    assert.match(ordinaryReadyReceipt.failure.message, /cannot be added after its activity is ready or published/);
+
+    const queuedRecovery = await call("recover_leetcode_code_attempt", recoveredAttempt);
+    const [savedRecovery] = await waitForJobs(call, [queuedRecovery.jobId], baseUrl);
+    assert.equal(savedRecovery.status, "saved");
+    assert.equal(savedRecovery.operation, "leetcode_code_attempt_recovery");
+    assert.equal(savedRecovery.result.status, "inserted");
+    assert.equal(savedRecovery.result.recovery, true);
+
+    const readyAfterRecovery = await call("get_activity_practice_record", { activityId: "activity-recovery" });
+    assert.equal(readyAfterRecovery.codeAttempts.length, 1);
+    assert.equal(readyAfterRecovery.codeAttempts[0].code, recoveredAttempt.code);
+    assert.deepEqual(readyAfterRecovery.finalization, readyBeforeRecovery.finalization);
+    const profileAfterRecovery = await call("get_problem_solution_profile", {
+      specialty: "leetcode",
+      questionId: "recovery-question",
+    });
+    assert.deepEqual(profileAfterRecovery, profileBeforeRecovery);
+
+    const recoveryReplay = await call("recover_leetcode_code_attempt", recoveredAttempt);
+    assert.equal(recoveryReplay.status, "saved");
+    assert.equal(recoveryReplay.duplicate, true);
+    const changedRecovery = await callRaw("recover_leetcode_code_attempt", {
+      ...recoveredAttempt,
+      code: "class Solution { int recovered() { return 7; } }",
+    });
+    assert.equal(changedRecovery.isError, true);
+    assert.equal(changedRecovery.structuredContent.code, "specialist_write_identity_conflict");
+
+    const publishedRecovery = await call("recover_leetcode_code_attempt", {
+      ...recoveredAttempt,
+      operationId: "operation-attempt-published-recovery-rejected",
+      id: "attempt-published-recovery-1",
+      activityId: "activity-published-recovery",
+      originatingTurnId: "user-published-recovery-1",
+      review: {
+        ...recoveredAttempt.review,
+        summary: "Published review.",
+        whatWentWell: ["Correct."],
+        whatToImprove: ["Improve names."],
+        testingEvidence: ["Evidence."],
+        nextStep: "Next.",
+      },
+      reviewResponseTurnId: "specialist-published-recovery-review-1",
+    });
+    const [publishedRecoveryReceipt] = await waitForJobs(call, [publishedRecovery.jobId], baseUrl);
+    assert.equal(publishedRecoveryReceipt.status, "failed");
+    assert.match(publishedRecoveryReceipt.failure.message, /published Code Attempt cannot be recovered/);
+
+    const lateRecovery = await call("recover_leetcode_code_attempt", {
+      ...recoveredAttempt,
+      operationId: "operation-attempt-late-recovery-rejected",
+      id: "attempt-late-recovery-1",
+      sequence: 2,
+      occurredAt: 201,
+    });
+    const [lateRecoveryReceipt] = await waitForJobs(call, [lateRecovery.jobId], baseUrl);
+    assert.equal(lateRecoveryReceipt.status, "failed");
+    assert.match(lateRecoveryReceipt.failure.message, /must predate the ready finalization/);
+    const lateReviewRecovery = await call("recover_leetcode_code_attempt", {
+      ...recoveredAttempt,
+      operationId: "operation-attempt-late-review-recovery-rejected",
+      id: "attempt-late-review-recovery-1",
+      sequence: 3,
+      review: { ...recoveredAttempt.review, reviewedAt: 201 },
+    });
+    const [lateReviewRecoveryReceipt] = await waitForJobs(call, [lateReviewRecovery.jobId], baseUrl);
+    assert.equal(lateReviewRecoveryReceipt.status, "failed");
+    assert.match(lateReviewRecoveryReceipt.failure.message, /must predate the ready finalization/);
+
+    const recoveryCase = (slug, overrides = {}) => ({
+      ...recoveredAttempt,
+      operationId: `operation-attempt-${slug}-recovery`,
+      id: `attempt-${slug}-recovery-1`,
+      activityId: `activity-${slug}-recovery`,
+      originatingTurnId: `user-${slug}-recovery-1`,
+      reviewResponseTurnId: `specialist-${slug}-recovery-review-1`,
+      ...overrides,
+    });
+    const rejectedRecoveries = [
+      recoveryCase("missing"),
+      recoveryCase("cross-owner"),
+      recoveryCase("deleted"),
+      recoveryCase("sequence"),
+    ];
+    const rejectedRecoveryJobs = await Promise.all(
+      rejectedRecoveries.map((candidate) => call("recover_leetcode_code_attempt", candidate)),
+    );
+    const rejectedRecoveryReceipts = await waitForJobs(
+      call,
+      rejectedRecoveryJobs.map((job) => job.jobId),
+      baseUrl,
+    );
+    assert.deepEqual(rejectedRecoveryReceipts.map((job) => job.status), ["failed", "failed", "failed", "failed"]);
+    assert.match(rejectedRecoveryReceipts[0].failure.message, /owner-scoped user turn/);
+    assert.match(rejectedRecoveryReceipts[1].failure.message, /owner-scoped user turn/);
+    assert.match(rejectedRecoveryReceipts[2].failure.message, /transcript evidence changed/);
+    assert.match(rejectedRecoveryReceipts[3].failure.message, /already belongs to another code version/);
+
+    const concurrentRecovery = recoveryCase("concurrent");
+    const concurrentRecoveryJobs = await Promise.all([
+      call("recover_leetcode_code_attempt", concurrentRecovery),
+      call("recover_leetcode_code_attempt", {
+        ...concurrentRecovery,
+        operationId: "operation-attempt-concurrent-recovery-replay",
+      }),
+    ]);
+    const concurrentRecoveryReceipts = await waitForJobs(
+      call,
+      concurrentRecoveryJobs.map((job) => job.jobId),
+      baseUrl,
+    );
+    assert.deepEqual(concurrentRecoveryReceipts.map((job) => job.status), ["saved", "saved"]);
+    assert.deepEqual(
+      concurrentRecoveryReceipts.map((job) => job.result.status).sort(),
+      ["duplicate", "inserted"],
+    );
+    const concurrentRecord = await call("get_activity_practice_record", { activityId: "activity-concurrent-recovery" });
+    assert.equal(concurrentRecord.codeAttempts.length, 1);
+    assert.equal(concurrentRecord.codeAttempts[0].id, concurrentRecovery.id);
 
     const metadataFor = (problemNumber, difficulty, topics, companyTags, title, url, capturedAt = "2026-08-04T22:00:00.000Z") => ({
       problemNumber,

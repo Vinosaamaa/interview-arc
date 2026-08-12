@@ -267,7 +267,13 @@ every sidecar conclusion, strength, issue, improvement, test result, edge case,
 next step, and alternative unchanged in the visible response. The child copies
 it mechanically; semantic paraphrases are rejected. Follow
 `code-attempt-reviews.md` for pending completion and exact rejection recovery.
-Historical backfill is coordinator-owned.
+Historical backfill is coordinator-owned. If an audit proves exact owner code
+and its complete visible review both predated an existing ready finalization
+but the Code Attempt projection is missing, only the coordinator may use
+`recover_leetcode_code_attempt` under the historical recovery contract in
+`code-attempt-reviews.md`. Specialists must not use that repair to infer code
+from walkthroughs, starter stubs, reference solutions, or incomplete
+transcript evidence.
 
 ## Finalization And Solution Profile
 
