@@ -11,8 +11,6 @@ import {
   EMPTY_REVIEW_QUEUE_UI_STATE,
   parseReviewQueueUiState,
   REVIEW_QUEUE_UI_STORAGE_KEY,
-  type ReviewQueueDueFilter,
-  type ReviewQueueSort,
   type ReviewQueueUiState,
 } from "./review-queue-state";
 
@@ -157,12 +155,12 @@ export default function ReviewQueueView({
   return (
     <div className="review-queue-container"><section className="review-queue-page">
       <header className="review-queue-masthead">
-        <div>
-          <span className="eyebrow">PAST · REVIEW QUEUE</span>
-          <h1>Review Queue</h1>
-          <p>Return to completed work at the moment another pass can strengthen recall.</p>
+        <div className="review-hero-copy">
+          <span className="eyebrow">INTERVIEW · REVIEW QUEUE</span>
+          <h1>Strengthen what you practiced.</h1>
+          <p>A focused second pass turns finished work into recall you can trust.</p>
         </div>
-        <dl aria-label="Review queue summary">
+        <dl className="review-summary-strip" aria-label="Review queue summary">
           <div><dt>due now</dt><dd>{dueNowCount}</dd></div>
           <div><dt>estimated review</dt><dd>{totalMinutes < 60 ? `${totalMinutes}m` : `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`}</dd></div>
           <div><dt>review streak</dt><dd>{reviewStreak} day{reviewStreak === 1 ? "" : "s"}</dd></div>
@@ -170,32 +168,31 @@ export default function ReviewQueueView({
       </header>
 
       <div className="review-queue-controls">
-        <label className="review-search">
-          <span aria-hidden="true">⌕</span>
-          <input type="search" value={search} onChange={(event) => updateUiState("search", event.target.value)} placeholder="Search past attempts" aria-label="Search review queue" />
-        </label>
-        <select value={due} onChange={(event) => updateUiState("due", event.target.value as ReviewQueueDueFilter)} aria-label="Filter review queue by due date">
-          <option value="all">Due: any</option><option value="now">Due now</option><option value="week">Within 7 days</option><option value="month">Within 30 days</option>
-        </select>
-        <select value={sort} onChange={(event) => updateUiState("sort", event.target.value as ReviewQueueSort)} aria-label="Sort review queue">
-          <option value="priority">Priority</option><option value="due">Due date</option><option value="review_time">Review time</option><option value="last_attempt">Last attempt</option>
-        </select>
-        <details className="review-expanded-controls">
-          <summary aria-label={`Expanded review filters, ${activeFilterCount} active`}><span aria-hidden="true">☷</span>{activeFilterCount > 0 && <i>{activeFilterCount}</i>}</summary>
-          <div>
-            <fieldset><legend>Specialty</legend><button type="button" aria-pressed={specialties.length === 0} onClick={() => setUiState((current) => ({ ...current, specialties: [] }))}>All</button>{SPECIALTIES.map((specialty) => <button type="button" key={specialty.value} aria-pressed={specialties.includes(specialty.value)} onClick={() => toggleSpecialty(specialty.value)}>{specialty.label}</button>)}</fieldset>
+        <div className="review-filter-rail" role="group" aria-label="Filter reviews by specialty">
+          <button type="button" aria-pressed={specialties.length === 0} onClick={() => setUiState((current) => ({ ...current, specialties: [] }))}>All</button>
+          {SPECIALTIES.map((specialty) => <button type="button" key={specialty.value} aria-pressed={specialties.includes(specialty.value)} onClick={() => toggleSpecialty(specialty.value)}>{specialty.label}</button>)}
+          <details className="review-expanded-controls control-menu">
+            <summary aria-label={`More review filters, ${activeFilterCount} active`} title="More filters"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4" /></svg>{activeFilterCount > 0 && <i>{activeFilterCount}</i>}</summary>
+            <div>
             <fieldset><legend>Due date</legend>{([['now', 'Due now'], ['week', '7 days'], ['month', '30 days'], ['all', 'Any']] as const).map(([value, label]) => <button type="button" key={value} aria-pressed={due === value} onClick={() => updateUiState("due", value)}>{label}</button>)}</fieldset>
             <fieldset><legend>Sort by</legend>{([['priority', 'Priority'], ['due', 'Due date'], ['review_time', 'Review time'], ['last_attempt', 'Last attempt']] as const).map(([value, label]) => <button type="button" key={value} aria-pressed={sort === value} onClick={() => updateUiState("sort", value)}>{label}</button>)}</fieldset>
             <footer><button type="button" onClick={resetFilters} disabled={activeFilterCount === 0}>Reset</button><span>{visibleItems.length} item{visibleItems.length === 1 ? "" : "s"}</span></footer>
-          </div>
-        </details>
+            </div>
+          </details>
+        </div>
+        <label className="review-search-bar">
+          <svg aria-hidden="true" viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m12.8 12.8 4.2 4.2" /></svg>
+          <input type="search" value={search} onChange={(event) => updateUiState("search", event.target.value)} placeholder="Search reviews" aria-label="Search review queue" />
+          <span aria-live="polite">{visibleItems.length} items</span>
+        </label>
       </div>
 
-      {errorMessage && <div className="review-queue-error" role="alert"><div><strong>That queue change was not saved.</strong><span>{errorMessage} The queue has been refreshed from D1.</span></div><button type="button" onClick={onDismissError}>Dismiss</button></div>}
-      {stale && <div className="review-queue-stale" role="status"><strong>Showing the last saved queue.</strong><span>Interview Arc will reconcile with D1 when the connection returns. Add and defer actions stay in the retry queue.</span></div>}
+      <div className="review-status-stack">
+        {errorMessage && <div className="review-queue-error" role="alert"><div><strong>That queue change was not saved.</strong><span>{errorMessage} The queue has been refreshed from D1.</span></div><button type="button" onClick={onDismissError}>Dismiss</button></div>}
+        {stale && <div className="review-queue-stale" role="status"><strong>Showing the last saved queue.</strong><span>Interview Arc will reconcile with D1 when the connection returns. Add and defer actions stay in the retry queue.</span></div>}
+      </div>
 
       <div className="review-queue-sheet" aria-busy={loading}>
-        {!loading && visibleItems.length > 0 && <div className="review-column-headings" aria-hidden="true"><span /><span>Type</span><span>Practice</span><span>Previous result</span><span>Last attempt</span><span>Why due</span><span>Time</span><span>Actions</span></div>}
         {loading ? <div className="review-queue-loading" aria-label="Loading review queue">{Array.from({ length: 4 }, (_, index) => <span key={index} />)}</div> : items.length === 0 ? <div className="review-queue-empty"><i aria-hidden="true">✓</i><div><strong>Nothing needs another pass.</strong><span>Completed attempts return here when their next recall window opens.</span></div></div> : visibleItems.length === 0 ? <div className="review-queue-empty filtered"><div><strong>No reviews match these filters.</strong><button type="button" onClick={resetFilters}>Reset filters</button></div></div> : <div className="recall-spine">
           {HORIZONS.map((horizon) => {
             const groupItems = visibleItems.filter((item) => item.horizon === horizon.value);
@@ -206,19 +203,16 @@ export default function ReviewQueueView({
                 const selected = selectedKeySet.has(item.reviewKey);
                 const blocked = isBlocked(item);
                 const pending = pendingReviewKeys.has(item.reviewKey);
+                const specialtyInitial = item.specialty === "leetcode" ? "C" : item.specialty === "system_design" ? "S" : "B";
                 return <article className={`review-row ${item.specialty} ${selected ? "selected" : ""}`} key={item.reviewKey}>
-                  <button type="button" className="review-select" aria-pressed={selected} aria-label={`${selected ? "Remove" : "Select"} ${item.title}`} onClick={() => toggleSelection(item.reviewKey)}><span aria-hidden="true">{selected ? "✓" : ""}</span></button>
+                  <button type="button" className="review-select" aria-pressed={selected} aria-label={`${selected ? "Remove" : "Select"} ${item.title}`} onClick={() => toggleSelection(item.reviewKey)}><span aria-hidden="true">{selected ? "✓" : specialtyInitial}</span></button>
                   <span className="review-select-slot" aria-hidden="true" />
-                  <span className="review-specialty-mark review-row-static" aria-hidden="true">{item.specialty === "leetcode" ? "C" : item.specialty === "system_design" ? "S" : "B"}</span>
-                  <div className="review-title review-row-static"><small>{specialtyLabel(item.specialty)}</small><strong>{item.title}</strong></div>
-                  <div className="review-result review-row-static"><small>Previous result</small><strong>{resultLabel(item.previousResult)}</strong></div>
-                  <div className="review-date review-row-static"><small>Last attempt</small><strong>{compactDate(item.lastAttemptDate)}</strong><span>Due {compactDate(item.dueDate)}</span></div>
-                  <div className="review-reason review-row-static"><small>Why due</small><strong>{item.reasonLabel}</strong></div>
-                  <div className="review-estimate review-row-static"><small>Est. time</small><strong>{item.estimatedMinutes} min</strong></div>
-                  <div className="review-actions">
-                    <button type="button" className="review-add" disabled={!canAddToToday || blocked || pending} onClick={() => onAddToToday([item])}>{pending ? "Adding…" : blocked ? "On Today" : "Add to Today"}</button>
-                    <button type="button" onClick={() => onOpenAttempt(item)}>Open previous attempt</button>
-                    <button type="button" disabled={pending} onClick={() => onDefer(item)}>Review next week</button>
+                  <div className="review-row-copy review-row-static"><small>{specialtyLabel(item.specialty)} · {horizon.label}</small><strong>{item.title}</strong><p>{item.reasonLabel}</p></div>
+                  <div className="review-row-meta review-row-static"><span className={`review-outcome-chip ${item.previousResult}`}>{resultLabel(item.previousResult)}</span><span>Due {compactDate(item.dueDate)}</span><span>{item.estimatedMinutes} min</span></div>
+                  <div className="review-actions review-icon-actions">
+                    <button type="button" className="review-add" title={pending ? "Adding to Today" : blocked ? "Already on Today" : "Add to Today"} aria-label={pending ? `Adding ${item.title} to Today` : blocked ? `${item.title} is already on Today` : `Add ${item.title} to Today`} disabled={!canAddToToday || blocked || pending} onClick={() => onAddToToday([item])}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg></button>
+                    <button type="button" title="Open previous attempt" aria-label={`Open previous attempt for ${item.title}`} onClick={() => onOpenAttempt(item)}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 4h9l3 3v13H6z" /><path d="M15 4v4h4M9 12h6M9 16h6" /></svg></button>
+                    <button type="button" title="Review next week" aria-label={`Defer ${item.title} until next week`} disabled={pending} onClick={() => onDefer(item)}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3v3M18 3v3M4 9h16M5 5h14v15H5z" /><path d="m10 14 2 2 4-4" /></svg></button>
                   </div>
                 </article>;
               })}</div>

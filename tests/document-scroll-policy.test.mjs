@@ -8,6 +8,7 @@ const entered = {
   pastReaderOpen: false,
   bankReaderOpen: false,
   journeyReaderOpen: false,
+  reviewReaderOpen: false,
 };
 
 test("arrival owns the document lock until the workspace is entered", () => {
@@ -20,11 +21,13 @@ test("only a reader visible in the active workspace can lock document scroll", (
   assert.equal(documentScrollLockRequired({ ...entered, view: "library", pastReaderOpen: true }), true);
   assert.equal(documentScrollLockRequired({ ...entered, view: "banks", bankReaderOpen: true }), true);
   assert.equal(documentScrollLockRequired({ ...entered, view: "journey", journeyReaderOpen: true }), true);
+  assert.equal(documentScrollLockRequired({ ...entered, view: "reviews", reviewReaderOpen: true }), true);
 
   assert.equal(documentScrollLockRequired({ ...entered, view: "reviews", pastReaderOpen: true }), false);
   assert.equal(documentScrollLockRequired({ ...entered, view: "journey", pastReaderOpen: true }), false);
   assert.equal(documentScrollLockRequired({ ...entered, view: "reviews", bankReaderOpen: true }), false);
   assert.equal(documentScrollLockRequired({ ...entered, view: "library", journeyReaderOpen: true }), false);
+  assert.equal(documentScrollLockRequired({ ...entered, view: "journey", reviewReaderOpen: true }), false);
 });
 
 test("rapid tab switching releases and reacquires the lock without discarding reader memory", () => {

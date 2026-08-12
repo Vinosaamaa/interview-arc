@@ -8,12 +8,15 @@ import {
   loopWorkspaceHref,
   pastReaderHref,
   pastSolutionReaderHref,
+  reviewReaderHref,
+  reviewSolutionReaderHref,
   readerDepthAfterNestedClose,
   readerClosePlan,
   readJourneyReaderState,
   readLoopWorkspaceState,
   readBankReaderState,
   readPastReaderState,
+  readReviewReaderState,
   readWorkspaceRouteView,
   uniqueJourneyEntries,
   workspaceViewHref,
@@ -62,6 +65,30 @@ test("Past attempt URLs round-trip stable selection without Journey-only state",
   assert.match(href, /attempt=activity%2Fone/);
   assert.match(href, /keep=yes/);
   assert.doesNotMatch(href, /range=|topic=/);
+});
+
+test("Review attempt URLs keep the reader owned by Reviews", () => {
+  const href = reviewReaderHref("https://example.test/practice?keep=yes&view=reviews#case-transcript-thread", "activity/one");
+  assert.deepEqual(readReviewReaderState(`https://example.test${href}`), { attemptId: "activity/one" });
+  assert.equal(readPastReaderState(`https://example.test${href}`), null);
+  assert.match(href, /view=reviews/);
+  assert.match(href, /attempt=activity%2Fone/);
+  assert.match(href, /keep=yes/);
+  assert.doesNotMatch(href, /#/);
+});
+
+test("Review nested solution URLs close back to the exact review attempt", () => {
+  const attemptHref = reviewReaderHref("https://example.test/practice?keep=yes&view=reviews", "activity/one");
+  const solutionHref = reviewSolutionReaderHref(`https://example.test${attemptHref}`, "activity/one", "leetcode", "word-break-ii");
+  assert.deepEqual(readReviewReaderState(`https://example.test${solutionHref}`), {
+    attemptId: "activity/one",
+    specialty: "leetcode",
+    problemId: "word-break-ii",
+  });
+  assert.deepEqual(readerClosePlan(`https://example.test${solutionHref}`), {
+    view: "reviews",
+    href: attemptHref,
+  });
 });
 
 test("Past nested solution URLs retain both attempt and stable problem identity", () => {
@@ -126,18 +153,20 @@ test("Problem Bank URLs preserve stable problem and nested attempt identity", ()
   assert.equal(readBankReaderState("https://example.test/?view=banks&specialty=unknown&problem=x"), null);
 });
 
-test("reader close plans deterministically return Journey, Past, and Bank readers to their origin routes", () => {
+test("reader close plans deterministically return Journey, Reviews, Past, and Bank readers to their origin routes", () => {
   const journeyReader = "https://example.test/practice?keep=yes&view=journey&attempt=activity%2Fone&range=30&metric=time&heatmap=leetcode&day=2026-08-07&topic=Graphs#reader";
   const journeySolution = journeyReader.replace("#reader", "&specialty=leetcode&problem=word-break-ii#reader");
   const pastReader = "https://example.test/practice?keep=yes&view=past&attempt=activity%2Fone&range=30#reader";
   const pastSolution = pastReader.replace("#reader", "&specialty=leetcode&problem=word-break-ii#reader");
   const bankAttempt = "https://example.test/practice?keep=yes&view=banks&specialty=leetcode&problem=word-break-ii&attempt=activity%2Fone#reader";
+  const reviewReader = "https://example.test/practice?keep=yes&view=reviews&attempt=activity%2Fone#reader";
   const cases = [
-    [journeyReader, { view: "journey", href: "/practice?keep=yes&view=journey#reader" }],
-    [journeySolution, { view: "journey", href: "/practice?keep=yes&view=journey&attempt=activity%2Fone&range=30&metric=time&heatmap=leetcode&day=2026-08-07&topic=Graphs#reader" }],
-    [pastReader, { view: "past", href: "/practice?keep=yes&view=past#reader" }],
-    [pastSolution, { view: "past", href: "/practice?keep=yes&view=past&attempt=activity%2Fone#reader" }],
-    [bankAttempt, { view: "banks", href: "/practice?keep=yes&view=banks&specialty=leetcode&problem=word-break-ii#reader" }],
+    [journeyReader, { view: "journey", href: "/practice?keep=yes&view=journey" }],
+    [journeySolution, { view: "journey", href: "/practice?keep=yes&view=journey&attempt=activity%2Fone&range=30&metric=time&heatmap=leetcode&day=2026-08-07&topic=Graphs" }],
+    [pastReader, { view: "past", href: "/practice?keep=yes&view=past" }],
+    [pastSolution, { view: "past", href: "/practice?keep=yes&view=past&attempt=activity%2Fone" }],
+    [bankAttempt, { view: "banks", href: "/practice?keep=yes&view=banks&specialty=leetcode&problem=word-break-ii" }],
+    [reviewReader, { view: "reviews", href: "/practice?keep=yes&view=reviews" }],
     ["https://example.test/practice?view=banks&specialty=leetcode&problem=word-break-ii", { view: "banks", href: "/practice?view=banks" }],
   ];
   cases.forEach(([href, expected]) => assert.deepEqual(readerClosePlan(href), expected, href));

@@ -153,8 +153,8 @@ test("Review Queue keeps filters in the menu, branches each row, and joins its f
   assert.ok(visit(file, (node) => ts.isJsxText(node) && node.text.trim() === "All").length >= 1);
   assert.ok(cssRules(rules, ".review-row::before").length >= 1);
   assert.ok(cssRules(rules, ".review-row::after").length >= 1);
-  assert.equal(cssRules(rules, ".review-column-headings")[0].declarations["grid-template-columns"], "var(--review-columns)");
-  assert.equal(cssRules(rules, ".review-row")[0].declarations["grid-template-columns"], "var(--review-columns)");
+  assert.equal(hasJsxClass(file, "review-column-headings"), false);
+  assert.equal(cssRules(rules, ".review-row")[0].declarations["grid-template-columns"], "44px minmax(0, 1fr) minmax(120px, auto) 96px");
   const folioRules = cssRules(rules, ".review-selection-folio");
   assert.equal(folioRules[0].declarations.position, "relative");
   assert.equal(folioRules.some((rule) => rule.declarations.position === "sticky"), false);
@@ -174,10 +174,49 @@ test("Review Queue cards select from the whole surface and reserve navigation fo
   assert.equal(cardTarget.cursor, "pointer");
   assert.ok(cssRules(rules, ".review-row:hover").length >= 1);
   assert.ok(cssRules(rules, ".review-row:focus-within").length >= 1);
-  const action = cssRules(rules, ".review-actions button")[0].declarations;
+  const action = cssRules(rules, ".review-icon-actions button")[0].declarations;
   assert.notEqual(action.border, "0");
   assert.equal(action.cursor, "pointer");
   assert.ok(cssRules(rules, ".review-row-static").some((rule) => rule.declarations["pointer-events"] === "none"));
+});
+
+test("Review Queue uses the Bank visual language without redundant row prose", async () => {
+  const [source, css] = await Promise.all([load("../app/review-queue-view.tsx"), load("../app/review-queue.css")]);
+  const file = parseTsx(source);
+  const rules = parseCss(css);
+
+  assert.ok(hasJsxClass(file, "review-hero-copy"));
+  assert.ok(hasJsxClass(file, "review-summary-strip"));
+  assert.ok(hasJsxClass(file, "review-filter-rail"));
+  assert.ok(hasJsxClass(file, "review-search-bar"));
+  assert.ok(hasJsxClass(file, "review-row-copy"));
+  assert.ok(hasJsxClass(file, "review-row-meta"));
+  assert.ok(hasJsxClass(file, "review-icon-actions"));
+  assert.equal(hasJsxClass(file, "review-column-headings"), false);
+  assert.equal(hasJsxClass(file, "review-result"), false);
+  assert.equal(hasJsxClass(file, "review-date"), false);
+  assert.equal(hasJsxClass(file, "review-reason"), false);
+  assert.ok(visit(file, (node) => ts.isJsxAttribute(node) && node.name.text === "title" && /previous attempt/i.test(node.initializer?.getText(file) ?? "")).length >= 1);
+  assert.ok(cssRules(rules, ".review-icon-actions")[0]?.declarations.display);
+  assert.equal(cssRules(rules, ".review-row")[0]?.declarations["grid-template-columns"], "44px minmax(0, 1fr) minmax(120px, auto) 96px");
+});
+
+test("Reader contents replace their hash and modal readers own keyboard focus", async () => {
+  const source = await load("../app/home-client.tsx");
+  const file = parseTsx(source);
+  const outline = functionNamed(file, "ReaderOutline");
+  const reveal = functionNamed(file, "revealReaderOutlineTarget");
+  const modal = functionNamed(file, "ModalReaderPane");
+  assert.ok(outline);
+  assert.ok(reveal);
+  assert.match(outline.getText(file), /preventDefault/);
+  assert.match(reveal.getText(file), /history\.replaceState/);
+  assert.match(reveal.getText(file), /scrollIntoView/);
+  assert.ok(modal);
+  assert.match(modal.getText(file), /Tab/);
+  assert.match(modal.getText(file), /\.focus\(/);
+  assert.ok(hasJsxClass(file, "review-queue-base"));
+  assert.ok(hasJsxAttribute(file, "inert", "reviewNestedEntry"));
 });
 
 test("Review Queue responds to its panel width and never outgrows the owning sheet", async () => {
@@ -191,6 +230,45 @@ test("Review Queue responds to its panel width and never outgrows the owning she
     assert.ok(cssRules(rules, selector).some((rule) => rule.declarations["max-width"] === "100%"));
   }
   assert.ok(cssRules(rules, ".review-queue-page", "@container").length >= 2);
+});
+
+test("Review Queue owns its nested reader and keeps only the recall list scrollable", async () => {
+  const [homeSource, reviewCss, shellCss] = await Promise.all([
+    load("../app/home-client.tsx"),
+    load("../app/review-queue.css"),
+    load("../app/interview-arc-v2.css"),
+  ]);
+  const file = parseTsx(homeSource);
+  const rules = parseCss(`${reviewCss}\n${shellCss}`);
+  const openReviewAttempt = functionNamed(file, "openReviewAttempt");
+  assert.ok(openReviewAttempt);
+  assert.match(openReviewAttempt.getText(file), /openReviewEntry/);
+  assert.doesNotMatch(openReviewAttempt.getText(file), /openPastEntry/);
+  assert.ok(hasJsxClass(file, "review-reader-detail reader-workspace focused-attempt-workspace"));
+
+  const appShell = cssRules(rules, ".app-shell:has(.review-queue-workspace)")[0]?.declarations;
+  const mainColumn = cssRules(rules, ".main-column:has(.review-queue-workspace)")[0]?.declarations;
+  const pageContent = cssRules(rules, ".page-content:has(> .review-queue-workspace)")[0]?.declarations;
+  assert.equal(appShell?.height, "100dvh");
+  assert.equal(appShell?.overflow, "hidden");
+  assert.equal(mainColumn?.["grid-template-rows"], "auto minmax(0, 1fr)");
+  assert.equal(pageContent?.overflow, "hidden");
+
+  const workspace = cssRules(rules, ".review-queue-workspace")[0]?.declarations;
+  const container = cssRules(rules, ".review-queue-container")[0]?.declarations;
+  const page = cssRules(rules, ".review-queue-page")[0]?.declarations;
+  const sheet = cssRules(rules, ".review-queue-sheet")[0]?.declarations;
+  assert.equal(workspace?.height, "100%");
+  assert.equal(container?.height, "100%");
+  assert.equal(page?.display, "grid");
+  assert.match(page?.["grid-template-rows"] ?? "", /minmax\(0, 1fr\)/);
+  assert.equal(sheet?.["min-height"], "0");
+  assert.equal(sheet?.["overflow-y"], "auto");
+  assert.equal(cssRules(rules, ".review-queue-sheet")[0]?.declarations["overflow-y"], "auto");
+
+  const backdrop = cssRules(rules, ".review-queue-workspace.has-open-reader::before")[0]?.declarations;
+  assert.equal(backdrop?.position, "fixed");
+  assert.equal(backdrop?.background, "var(--canvas)");
 });
 
 test("Past, Banks, and Journey share a centered bounded scrollable reader shell", async () => {
