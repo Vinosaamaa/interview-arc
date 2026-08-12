@@ -9,6 +9,8 @@ hierarchy while applying the later product decisions:
 - Journey remains inside Interview and is not shown as shared Engineering UI.
 - Engineering owns Journal, Capabilities, Decisions, Incidents, Case Studies,
   and Statistics.
+- Journal exposes distinct `Rich records` and `All merged PRs` evidence layers,
+  so complete compact coverage does not inflate every change into a case study.
 - The record reader exposes exact revision and source-commit provenance.
 - `Learn this` remains unavailable until the released Learn contract exists.
 
