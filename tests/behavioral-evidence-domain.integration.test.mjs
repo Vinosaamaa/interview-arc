@@ -17,6 +17,7 @@ const config = fileURLToPath(new URL("../wrangler.mcp.jsonc", import.meta.url));
 const project = fileURLToPath(new URL("..", import.meta.url));
 const sha256 = (text) => createHash("sha256").update(text).digest("hex");
 const MAX_WORKER_LOG_CHARS = 20_000;
+const RECOVERY_INTERVAL_POLLS = 10;
 
 function availablePort() {
   return new Promise((resolve, reject) => {
@@ -76,11 +77,12 @@ const callRaw = (client, name, args) => client.callTool({ name, arguments: args 
 async function waitForJobs(client, jobIds, recoveryBaseUrl = null) {
   let latest = [];
   for (let attempt = 0; attempt < 300; attempt += 1) {
-    // A recurring scheduled drain may overlap a request-scoped drain that
-    // already owns the execution lease. Keep exercising the bounded recovery
-    // path until the durable receipts settle instead of assuming one cron
-    // invocation must acquire the lease immediately.
-    if (recoveryBaseUrl) await runScheduledRecovery(recoveryBaseUrl);
+    // A scheduled drain may overlap a request-scoped drain that already owns
+    // the execution lease. Exercise recurring recovery at a bounded interval
+    // instead of assuming one cron invocation must acquire the lease.
+    if (recoveryBaseUrl && attempt % RECOVERY_INTERVAL_POLLS === 0) {
+      await runScheduledRecovery(recoveryBaseUrl);
+    }
     const result = await call(client, "get_specialist_write_status", { jobIds });
     latest = result.jobs;
     if (result.jobs.every((job) => job.status === "saved" || job.status === "failed")) return result.jobs;
