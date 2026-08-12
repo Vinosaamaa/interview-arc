@@ -451,7 +451,7 @@ test("controller requires the complete content and visual quality gate", async (
 });
 
 test("specialist and Career Materials source stay read-only, targeted, and controller-driven", async () => {
-  const [guide, startup, component, route, client, controller, contract, packageJson] = await Promise.all([
+  const [guide, startup, component, route, client, controller, contract, packageJson, wranglerConfig] = await Promise.all([
     readFile(new URL("../career-materials/resume-cover-letter/AGENTS.md", import.meta.url), "utf8"),
     readFile(new URL("../docs/agents/task-startup-prompts.md", import.meta.url), "utf8"),
     readFile(new URL("../app/career-materials-workspace.tsx", import.meta.url), "utf8"),
@@ -460,6 +460,7 @@ test("specialist and Career Materials source stay read-only, targeted, and contr
     readFile(new URL("../scripts/publish-cover-letter-to-job-journey.mjs", import.meta.url), "utf8"),
     readFile(new URL("../docs/contracts/cover-letter-publication.md", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"),
   ]);
   assert.match(guide, /pnpm cover-letter:publish/);
   assert.match(guide, /Only `ready` is a published cover letter/);
@@ -471,6 +472,7 @@ test("specialist and Career Materials source stay read-only, targeted, and contr
   assert.doesNotMatch(route, /getResumeRevisionReferences[\s\S]{0,240}\.catch/);
   assert.match(client, /MAX_CACHE_ENTRIES/);
   assert.match(client, /privateCoverLetterDownloadPathSchema/);
+  assert.match(wranglerConfig, /"global_fetch_strictly_public"/);
   assert.doesNotMatch(controller, /save_practice_exchange|append_practice_transcript|create_loop/);
   assert.match(contract, /never an empty\s+history/);
   assert.equal(JSON.parse(packageJson).scripts["cover-letter:publish"], "node scripts/publish-cover-letter-to-job-journey.mjs");
