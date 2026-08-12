@@ -53,7 +53,7 @@ jobs:
       - name: Build and test
         run: pnpm test
 
-      - name: Validate Engineering impact classification
+      - name: Validate Engineering impact and PR receipt
         if: github.event_name == 'pull_request'
         run: node scripts/validate-engineering-impact.mjs
 
