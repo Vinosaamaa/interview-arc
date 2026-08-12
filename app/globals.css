@@ -2472,8 +2472,8 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 }
 
 @media (max-width: 360px) {
-  .mobile-interview-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .page-content { padding-bottom: 190px; }
+  .mobile-interview-nav { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .page-content { padding-bottom: 140px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

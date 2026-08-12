@@ -151,6 +151,7 @@ test("Review Queue keeps filters in the menu, branches each row, and joins its f
   const rules = parseCss(css);
   assert.equal(literals.has("review-specialty-rail"), false);
   assert.ok(visit(file, (node) => ts.isJsxText(node) && node.text.trim() === "All").length >= 1);
+  assert.ok(hasJsxClass(file, "review-specialty-menu"));
   assert.ok(cssRules(rules, ".review-row::before").length >= 1);
   assert.ok(cssRules(rules, ".review-row::after").length >= 1);
   assert.equal(hasJsxClass(file, "review-column-headings"), false);
@@ -159,6 +160,22 @@ test("Review Queue keeps filters in the menu, branches each row, and joins its f
   assert.equal(folioRules[0].declarations.position, "relative");
   assert.equal(folioRules.some((rule) => rule.declarations.position === "sticky"), false);
   assert.equal(folioRules.some((rule) => rule.declarations.bottom === "78px"), false);
+});
+
+test("Review Queue keeps specialty filters reachable in the mobile menu and unavailable routes inside its grid", async () => {
+  const [source, homeSource, css] = await Promise.all([
+    load("../app/review-queue-view.tsx"),
+    load("../app/home-client.tsx"),
+    load("../app/review-queue.css"),
+  ]);
+  const file = parseTsx(source);
+  const home = parseTsx(homeSource);
+  const rules = parseCss(css);
+  assert.ok(hasJsxClass(file, "review-specialty-menu"));
+  assert.ok(hasJsxClass(file, "review-reader-unavailable"));
+  assert.equal(hasJsxClass(home, "journey-reader-not-found review-reader-not-found"), false);
+  assert.ok(cssRules(rules, ".review-expanded-controls fieldset", "@container").some((rule) => rule.declarations["grid-template-columns"] === "repeat(2, minmax(0, 1fr))"));
+  assert.ok(cssRules(rules, ".review-reader-unavailable").length >= 1);
 });
 
 test("Review Queue cards select from the whole surface and reserve navigation for its action", async () => {
@@ -217,6 +234,9 @@ test("Reader contents replace their hash and modal readers own keyboard focus", 
   assert.match(modal.getText(file), /\.focus\(/);
   assert.ok(hasJsxClass(file, "review-queue-base"));
   assert.ok(hasJsxAttribute(file, "inert", "reviewNestedEntry"));
+  assert.match(source, /focusKey=\{reviewNestedProblem \?/);
+  assert.match(source, /restoreFocusRef=\{reviewReaderOpenerRef\}/);
+  assert.match(source, /arrivalState === "entered" && \(reviewNestedEntry \|\| reviewNestedProblem\)/);
 });
 
 test("Review Queue responds to its panel width and never outgrows the owning sheet", async () => {
@@ -269,6 +289,36 @@ test("Review Queue owns its nested reader and keeps only the recall list scrolla
   const backdrop = cssRules(rules, ".review-queue-workspace.has-open-reader::before")[0]?.declarations;
   assert.equal(backdrop?.position, "fixed");
   assert.equal(backdrop?.background, "var(--canvas)");
+});
+
+test("Review Queue retries hydrated reader routes and compacts its folio at high zoom", async () => {
+  const [homeSource, reviewCss, workspaceCss, globalCss] = await Promise.all([
+    load("../app/home-client.tsx"),
+    load("../app/review-queue.css"),
+    load("../app/interview-arc-v2.css"),
+    load("../app/globals.css"),
+  ]);
+  const home = parseTsx(homeSource);
+  const restoreEffects = visit(home, (node) => ts.isCallExpression(node) && node.expression.getText(home) === "useEffect" && node.getText(home).includes("restoreWorkspaceLocation"));
+  assert.equal(restoreEffects.length, 2);
+  const stableSubscription = restoreEffects.find((effect) => effect.getText(home).includes('addEventListener("popstate"'));
+  const hydratedRestore = restoreEffects.find((effect) => effect.getText(home).includes("readerRouteUnavailable"));
+  assert.ok(stableSubscription);
+  assert.match(stableSubscription.getText(home), /\}, \[\]\)/);
+  assert.ok(hydratedRestore);
+  assert.match(hydratedRestore.getText(home), /if \(!hydrated\) return/);
+  assert.match(hydratedRestore.getText(home), /restoreWorkspaceLocationRef\.current = restoreWorkspaceLocation/);
+  assert.match(hydratedRestore.getText(home), /readerNotFound/);
+  const rules = parseCss(reviewCss);
+  assert.ok(cssRules(rules, ".review-selection-folio", "@media").some((rule) => rule.declarations["grid-template-rows"] === "48px"));
+  assert.ok(cssRules(rules, ".folio-bookmarks", "@media").some((rule) => rule.declarations.display === "none"));
+  assert.ok(cssRules(rules, ".review-expanded-controls > div")[0].declarations["max-height"]);
+  const workspaceRules = parseCss(workspaceCss);
+  assert.ok(cssRules(workspaceRules, ".page-content:has(> .review-queue-workspace)", "@media").some((rule) => rule.declarations.height === "auto" && rule.declarations["padding-bottom"] === "76px"));
+  assert.ok(cssRules(workspaceRules, ".page-content:has(> .review-queue-workspace)", "@media").some((rule) => rule.declarations["padding-bottom"] === "122px"));
+  assert.ok(cssRules(workspaceRules, ".page-content > .review-queue-workspace", "@media").some((rule) => rule.declarations.height === "calc(100% - 68px)"));
+  const globalRules = parseCss(globalCss);
+  assert.equal(cssRules(globalRules, ".mobile-interview-nav", "@media").some((rule) => rule.declarations["grid-template-columns"] === "repeat(3, minmax(0, 1fr))"), false);
 });
 
 test("Past, Banks, and Journey share a centered bounded scrollable reader shell", async () => {
@@ -394,7 +444,7 @@ test("responsive shell keeps the workspace selector above the seven-item Intervi
   assert.equal(interviewDock.display, "grid");
   assert.equal(interviewDock["grid-template-columns"], "repeat(7, 1fr)");
   const compactDock = cssRules(rules, ".mobile-interview-nav", "max-width: 360px").at(-1).declarations;
-  assert.equal(compactDock["grid-template-columns"], "repeat(3, minmax(0, 1fr))");
+  assert.equal(compactDock["grid-template-columns"], "repeat(4, minmax(0, 1fr))");
   assert.equal(cssRules(rules, ".mobile-interview-nav button", "max-width: 420px").at(-1).declarations["min-height"], "44px");
   assert.ok(cssRules(rules, ".topbar > div:last-child").some((rule) => rule.declarations["flex-wrap"] === "nowrap"));
   assert.equal(cssRules(rules, ".topbar .secondary-action", "max-width: 900px").at(-1).declarations.display, "none");

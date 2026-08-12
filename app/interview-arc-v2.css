@@ -2334,13 +2334,18 @@ body:has(.review-queue-workspace) { padding-bottom: 0; overflow: hidden; }
   .topbar .music-dock label, .topbar .music-dock i { display: none; }
   .topbar .secondary-action { min-height: 40px; padding: 0 9px; display: inline-flex; align-items: center; font-size: .67rem; }
   .page-content { padding-bottom: 90px; }
-  .page-content:has(> .review-queue-workspace) { padding-bottom: 82px; }
+  .page-content:has(> .review-queue-workspace) { height: auto; padding-bottom: 76px; }
+  .page-content > .review-queue-workspace { height: calc(100% - 68px); }
   .review-queue-workspace.has-open-reader::before { inset: 66px 0 0; }
   .bank-domain-ledger { grid-template-columns: 1fr 1fr; }
   .bank-domain-ledger article:nth-child(2) { border-right: 0; }
   .bank-domain-ledger article:nth-child(-n + 2) { border-bottom: 1px solid #dce5e1; }
   .heatmap-command-bar { align-items: stretch; flex-direction: column; gap: 6px; }
   .heatmap-command-bar .heatmap-legend { align-self: flex-end; padding: 3px 7px 2px; }
+}
+
+@media (max-width: 420px) {
+  .page-content:has(> .review-queue-workspace) { padding-bottom: 122px; }
 }
 
 @media (max-width: 600px) {

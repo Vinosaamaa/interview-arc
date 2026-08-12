@@ -19,6 +19,7 @@ type ReviewQueueViewProps = {
   loading: boolean;
   stale: boolean;
   errorMessage: string | null;
+  readerUnavailable: string | null;
   reviewStreak: number;
   blockedQuestionIds: Set<string>;
   blockedTitles: Set<string>;
@@ -28,6 +29,7 @@ type ReviewQueueViewProps = {
   onDefer: (item: ReviewQueueItem) => void;
   onOpenAttempt: (item: ReviewQueueItem) => void;
   onDismissError: () => void;
+  onDismissReaderUnavailable: () => void;
 };
 
 const SPECIALTIES: Array<{ value: ReviewQueueSpecialty; label: string }> = [
@@ -67,6 +69,7 @@ export default function ReviewQueueView({
   loading,
   stale,
   errorMessage,
+  readerUnavailable,
   reviewStreak,
   blockedQuestionIds,
   blockedTitles,
@@ -76,6 +79,7 @@ export default function ReviewQueueView({
   onDefer,
   onOpenAttempt,
   onDismissError,
+  onDismissReaderUnavailable,
 }: ReviewQueueViewProps) {
   const [uiState, setUiState] = useState<ReviewQueueUiState>(() => (
     typeof window === "undefined"
@@ -174,6 +178,7 @@ export default function ReviewQueueView({
           <details className="review-expanded-controls control-menu">
             <summary aria-label={`More review filters, ${activeFilterCount} active`} title="More filters"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4" /></svg>{activeFilterCount > 0 && <i>{activeFilterCount}</i>}</summary>
             <div>
+            <fieldset className="review-specialty-menu"><legend>Specialty</legend><button type="button" aria-pressed={specialties.length === 0} onClick={() => setUiState((current) => ({ ...current, specialties: [] }))}>All</button>{SPECIALTIES.map((specialty) => <button type="button" key={specialty.value} aria-pressed={specialties.includes(specialty.value)} onClick={() => toggleSpecialty(specialty.value)}>{specialty.label}</button>)}</fieldset>
             <fieldset><legend>Due date</legend>{([['now', 'Due now'], ['week', '7 days'], ['month', '30 days'], ['all', 'Any']] as const).map(([value, label]) => <button type="button" key={value} aria-pressed={due === value} onClick={() => updateUiState("due", value)}>{label}</button>)}</fieldset>
             <fieldset><legend>Sort by</legend>{([['priority', 'Priority'], ['due', 'Due date'], ['review_time', 'Review time'], ['last_attempt', 'Last attempt']] as const).map(([value, label]) => <button type="button" key={value} aria-pressed={sort === value} onClick={() => updateUiState("sort", value)}>{label}</button>)}</fieldset>
             <footer><button type="button" onClick={resetFilters} disabled={activeFilterCount === 0}>Reset</button><span>{visibleItems.length} item{visibleItems.length === 1 ? "" : "s"}</span></footer>
@@ -188,6 +193,7 @@ export default function ReviewQueueView({
       </div>
 
       <div className="review-status-stack">
+        {readerUnavailable && <div className="review-reader-unavailable" role="alert"><div><strong>That review record is unavailable.</strong><span>The saved link points to <code>{readerUnavailable}</code>, which is not present in the current authoritative record.</span></div><button type="button" onClick={onDismissReaderUnavailable}>Return to Reviews</button></div>}
         {errorMessage && <div className="review-queue-error" role="alert"><div><strong>That queue change was not saved.</strong><span>{errorMessage} The queue has been refreshed from D1.</span></div><button type="button" onClick={onDismissError}>Dismiss</button></div>}
         {stale && <div className="review-queue-stale" role="status"><strong>Showing the last saved queue.</strong><span>Interview Arc will reconcile with D1 when the connection returns. Add and defer actions stay in the retry queue.</span></div>}
       </div>

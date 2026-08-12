@@ -1518,21 +1518,22 @@ function ReaderOutline({ children }: { children: ReactNode }) {
   }}><summary aria-label="Open contents" title="Contents"><Icon name="outline" /></summary><nav>{children}</nav></details>;
 }
 
-function ModalReaderPane({ className, label, children }: { className: string; label: string; children: ReactNode }) {
+function ModalReaderPane({ className, label, focusKey, restoreFocusRef, children }: { className: string; label: string; focusKey: string; restoreFocusRef?: { current: HTMLElement | null }; children: ReactNode }) {
   const paneRef = useRef<HTMLElement>(null);
-  const openerRef = useRef<HTMLElement | null>(typeof document !== "undefined" && document.activeElement instanceof HTMLElement
+  const fallbackOpenerRef = useRef<HTMLElement | null>(typeof document !== "undefined" && document.activeElement instanceof HTMLElement
     ? document.activeElement
     : null);
+  const openerRef = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
     const pane = paneRef.current;
     if (!pane) return;
+    openerRef.current ??= restoreFocusRef?.current ?? fallbackOpenerRef.current;
     const opener = openerRef.current;
     const background = [...document.querySelectorAll<HTMLElement>(".sidebar, .topbar")];
     const previousInert = background.map((element) => element.inert);
     background.forEach((element) => { element.inert = true; });
     const focusable = () => [...pane.querySelectorAll<HTMLElement>("button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex]:not([tabindex='-1'])")]
       .filter((element) => element.getClientRects().length > 0);
-    (pane.querySelector<HTMLElement>(".reader-close") ?? focusable()[0] ?? pane).focus({ preventScroll: true });
     const trapTab = (event: KeyboardEvent) => {
       if (event.key !== "Tab") return;
       const targets = focusable();
@@ -1559,7 +1560,14 @@ function ModalReaderPane({ className, label, children }: { className: string; la
         if (opener?.isConnected) opener.focus({ preventScroll: true });
       });
     };
-  }, []);
+  }, [restoreFocusRef]);
+  useLayoutEffect(() => {
+    const pane = paneRef.current;
+    if (!pane) return;
+    const close = pane.querySelector<HTMLElement>(".reader-close");
+    const firstFocusable = pane.querySelector<HTMLElement>("button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex]:not([tabindex='-1'])");
+    (close ?? firstFocusable ?? pane).focus({ preventScroll: true });
+  }, [focusKey]);
   return <aside className={className} ref={paneRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={label}>{children}</aside>;
 }
 
@@ -1736,6 +1744,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const [readerNotFound, setReaderNotFound] = useState("");
   const [chartTooltip, setChartTooltip] = useState<ChartTooltipModel | null>(null);
   const workspaceUrlHydratedRef = useRef(false);
+  const restoreWorkspaceLocationRef = useRef<() => void>(() => {});
+  const reviewReaderOpenerRef = useRef<HTMLElement | null>(null);
   const [careerWork, setCareerWork] = useState<CareerWorkPayload | null>(null);
   const [careerLoading, setCareerLoading] = useState(false);
   const [careerLoadingMore, setCareerLoadingMore] = useState(false);
@@ -4362,6 +4372,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       showUiToast("That completed attempt is no longer available. Refresh the queue.");
       return;
     }
+    if (document.activeElement instanceof HTMLElement) reviewReaderOpenerRef.current = document.activeElement;
     openReviewEntry(entry, reviewQueueItems.flatMap((candidate) => (
       libraryEntries.find((entryCandidate) => entryCandidate.id === candidate.activityId) ?? []
     )));
@@ -4461,6 +4472,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     if (view === "library" || view === "banks") {
       captureListPosition(view, listModeFor(view));
     }
+    setReaderNotFound("");
     if (view === "journey") {
       setJourneyNestedEntry(null);
       setJourneyNestedProblem(null);
@@ -4720,6 +4732,13 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   const selectedTopicEntries = topicStats.find((topic) => topic.topic === journeyTopic)?.entries ?? [];
 
   useEffect(() => {
+    const onWorkspacePopState = () => restoreWorkspaceLocationRef.current();
+    window.addEventListener("popstate", onWorkspacePopState);
+    return () => window.removeEventListener("popstate", onWorkspacePopState);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
     const restoreWorkspaceLocation = () => {
       const journeyState = readJourneyReaderState(window.location.href);
       if (journeyState) {
@@ -4886,13 +4905,18 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         restorePageScroll(window.history.state?.interviewArcLoopScrollY);
       }
     };
-    if (!workspaceUrlHydratedRef.current) {
+    restoreWorkspaceLocationRef.current = restoreWorkspaceLocation;
+    const readerRouteUnavailable = Boolean(readerNotFound) && Boolean(
+      readJourneyReaderState(window.location.href)
+      || readReviewReaderState(window.location.href)
+      || readPastReaderState(window.location.href)
+      || readBankReaderState(window.location.href)
+    );
+    if (!workspaceUrlHydratedRef.current || readerRouteUnavailable) {
       workspaceUrlHydratedRef.current = true;
       restoreWorkspaceLocation();
     }
-    window.addEventListener("popstate", restoreWorkspaceLocation);
-    return () => window.removeEventListener("popstate", restoreWorkspaceLocation);
-  }, [bankFor, codingQuestionFor, filteredPastEntries, journal.date, libraryEntries, pastReaderOrderIds, reviewQueueItems, reviewReaderOrderIds]);
+  }, [bankFor, codingQuestionFor, filteredPastEntries, hydrated, journal.date, libraryEntries, pastReaderOrderIds, readerNotFound, reviewQueueItems, reviewReaderOrderIds]);
   const yesterdayEntries = logEntries.filter((entry) => entry.date === yesterdayDate);
   const yesterdayCompleted = yesterdayEntries.filter((entry) => entry.status === "completed" || entry.status === "published");
   const yesterdaySeconds = yesterdayCompleted.reduce((sum, entry) => sum + entry.elapsedSeconds, 0);
@@ -5289,7 +5313,6 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   function renderReviewQueue() {
     return <section className={`review-queue-workspace ${reviewNestedEntry || reviewNestedProblem ? "has-open-reader" : ""}`}>
     <div className="review-queue-base" inert={reviewNestedEntry || reviewNestedProblem ? true : undefined}>
-      {readerNotFound && <div className="journey-reader-not-found review-reader-not-found" role="alert"><strong>That review record is unavailable.</strong><span>The saved reader link points to <code>{readerNotFound}</code>, which is not present in the current authoritative record.</span><button type="button" onClick={() => { setReaderNotFound(""); window.history.replaceState({ interviewArcWorkspaceView: "reviews", interviewArcReviewDepth: 0 }, "", workspaceViewHref(window.location.href, "reviews")); }}>Return to Reviews</button></div>}
       <ReviewQueueView
         items={reviewQueueItems}
         loading={!hydrated}
@@ -5297,6 +5320,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         errorMessage={mutationError?.type === "review-add-today" || mutationError?.type === "review-defer"
           ? mutationError.message
           : null}
+        readerUnavailable={readerNotFound || null}
         reviewStreak={reviewQueueStreak}
         blockedQuestionIds={reviewBlockedQuestionIds}
         blockedTitles={reviewBlockedTitles}
@@ -5308,9 +5332,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         onDefer={deferReview}
         onOpenAttempt={openReviewAttempt}
         onDismissError={dismissReviewQueueError}
+        onDismissReaderUnavailable={() => { setReaderNotFound(""); window.history.replaceState({ interviewArcWorkspaceView: "reviews", interviewArcReviewDepth: 0 }, "", workspaceViewHref(window.location.href, "reviews")); }}
       />
     </div>
-    {(reviewNestedEntry || reviewNestedProblem) && <div className={`review-reader-detail reader-workspace focused-attempt-workspace ${readerClosing ? "reader-closing" : ""}`}><ModalReaderPane className="review-reader-pane focused-attempt-pane" label="Selected Review Queue reader">{reviewNestedProblem ? renderSolutionReader() : renderCaseReader()}</ModalReaderPane></div>}
+    {arrivalState === "entered" && (reviewNestedEntry || reviewNestedProblem) && <div className={`review-reader-detail reader-workspace focused-attempt-workspace ${readerClosing ? "reader-closing" : ""}`}><ModalReaderPane focusKey={reviewNestedProblem ? `review-solution-${reviewNestedProblem.type}-${reviewNestedProblem.question.id}` : `review-attempt-${reviewNestedEntry?.id ?? "unknown"}`} restoreFocusRef={reviewReaderOpenerRef} className="review-reader-pane focused-attempt-pane" label="Selected Review Queue reader">{reviewNestedProblem ? renderSolutionReader() : renderCaseReader()}</ModalReaderPane></div>}
     </section>;
   }
 
