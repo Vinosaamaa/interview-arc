@@ -59,7 +59,7 @@ export type BankReaderState = {
   attemptId: string;
 };
 
-export type WorkspaceRouteView = "today" | "loops" | "journey" | "reviews" | "past" | "banks" | "career-materials";
+export type WorkspaceRouteView = "today" | "loops" | "journey" | "reviews" | "past" | "banks" | "career-materials" | "learn";
 
 export type ReaderClosePlan = {
   view: "journey" | "reviews" | "past" | "banks";
@@ -299,6 +299,7 @@ export function workspaceViewHref(currentHref: string, view: WorkspaceRouteView)
   const url = new URL(currentHref);
   clearReaderQuery(url);
   if (view !== "loops") LOOP_QUERY_KEYS.forEach((key) => url.searchParams.delete(key));
+  if (view !== "learn") url.searchParams.delete("learn");
   url.searchParams.set("view", view);
   return `${url.pathname}${url.search}${url.hash}`;
 }
@@ -353,5 +354,5 @@ export function readerClosePlan(currentHref: string): ReaderClosePlan | null {
 
 export function readWorkspaceRouteView(currentHref: string): WorkspaceRouteView | null {
   const view = new URL(currentHref).searchParams.get("view");
-  return view === "today" || view === "loops" || view === "journey" || view === "reviews" || view === "past" || view === "banks" || view === "career-materials" ? view : null;
+  return view === "today" || view === "loops" || view === "journey" || view === "reviews" || view === "past" || view === "banks" || view === "career-materials" || view === "learn" ? view : null;
 }

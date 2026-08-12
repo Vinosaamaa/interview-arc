@@ -151,7 +151,12 @@ export type LearnPayload = {
   analytics: {
     courses: Array<Record<string, unknown> & { courseId: string }>;
     overall: Record<string, number | null>;
-    time: Record<string, unknown[]>;
+    time: {
+      byDay: Array<{ key: string; sessionCount: number; recordedSeconds: number }>;
+      byWeek: Array<{ key: string; sessionCount: number; recordedSeconds: number }>;
+      byMonth: Array<{ key: string; sessionCount: number; recordedSeconds: number }>;
+      byCourse: Array<{ key: string; title: string; sessionCount: number; recordedSeconds: number }>;
+    };
     recentTopics: Array<{ lessonId: string; courseId: string | null; title: string; lastActivityAt: number }>;
     sessionDurationTrend: Array<{
       sessionId: string;

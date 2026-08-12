@@ -13,6 +13,8 @@ test("the Learn route keeps reads owner-private and mutations explicitly bounded
   assert.match(route, /readBoundedJson\(request, 128_000\)/);
   assert.match(route, /authorization: "explicit_user_instruction"/);
   assert.match(route, /action === "control_session"/);
+  assert.match(route, /const \{ action, sessionAction, \.\.\.input \} = body/);
+  assert.match(route, /action: sessionAction/);
   assert.match(route, /action === "finish_session"/);
   assert.match(route, /action === "set_homework_state"/);
   assert.match(route, /"cache-control": "private, no-store"/);

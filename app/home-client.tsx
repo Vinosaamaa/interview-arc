@@ -81,6 +81,8 @@ import BehavioralTargetDesk from "./behavioral-target-desk";
 import BankDomainOverview from "./bank-domain-overview";
 import CareerMaterialsWorkspace from "./career-materials-workspace";
 import InterviewPageHero from "./interview-page-hero";
+import LearnWorkspace from "./learn-workspace";
+import type { LearnDestination } from "./learn-workspace-model";
 import { activityLifecycleState } from "./activity-state";
 import {
   interactionModeClassificationLabel,
@@ -109,8 +111,9 @@ import type { BehavioralAttemptAnalysisProjection } from "../db/behavioral-attem
 import type { ActivityResumeContext } from "../db/activity-resume-context";
 import type { InteractionModeClassification } from "../db/interaction-mode-classification";
 
-type View = "today" | "loops" | "journey" | "reviews" | "library" | "banks" | "materials";
-const INTERVIEW_NAV_ITEMS: ReadonlyArray<readonly [View, string]> = [
+type InterviewView = "today" | "loops" | "journey" | "reviews" | "library" | "banks" | "materials";
+type View = InterviewView | "learn";
+const INTERVIEW_NAV_ITEMS: ReadonlyArray<readonly [InterviewView, string]> = [
   ["today", "Today"],
   ["loops", "Loops"],
   ["reviews", "Reviews"],
@@ -118,7 +121,7 @@ const INTERVIEW_NAV_ITEMS: ReadonlyArray<readonly [View, string]> = [
   ["banks", "Banks"],
   ["journey", "Journey"],
 ];
-const INTERVIEW_VIEW_TITLES: Record<View, string> = {
+const INTERVIEW_VIEW_TITLES: Record<InterviewView, string> = {
   today: "Interview · Today",
   loops: "Interview · Loops",
   reviews: "Interview · Reviews",
@@ -127,6 +130,23 @@ const INTERVIEW_VIEW_TITLES: Record<View, string> = {
   journey: "Interview · Journey",
   materials: "Interview · Career Materials",
 };
+const LEARN_NAV_ITEMS: ReadonlyArray<readonly [LearnDestination, string]> = [
+  ["today", "Today"],
+  ["courses", "Courses"],
+  ["history", "History"],
+  ["analytics", "Analytics"],
+];
+const LEARN_VIEW_TITLES: Record<LearnDestination, string> = {
+  today: "Learn · Today",
+  courses: "Learn · Courses",
+  history: "Learn · History",
+  analytics: "Learn · Analytics",
+};
+
+function readLearnDestination(currentHref: string): LearnDestination {
+  const destination = new URL(currentHref).searchParams.get("learn");
+  return destination === "courses" || destination === "history" || destination === "analytics" ? destination : "today";
+}
 type ComposerMode = "session" | "activity";
 type JourneyRange = 30 | 90 | 365 | "all";
 type JourneyMetric = "activities" | "time";
@@ -1663,6 +1683,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   // the one-time restoration, so the remembered workspace is ready before the
   // user enters without forcing React to discard a mismatched server tree.
   const [view, setView] = useState<View>("today");
+  const [learnDestination, setLearnDestination] = useState<LearnDestination>("today");
   const [viewMemoryReady, setViewMemoryReady] = useState(false);
   const {
     draft,
@@ -1981,12 +2002,19 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         return;
       }
       if (routeView) {
+        if (routeView === "learn") setLearnDestination(readLearnDestination(window.location.href));
         setView(routeView === "past" ? "library" : routeView === "career-materials" ? "materials" : routeView);
         setViewMemoryReady(true);
         return;
       }
       const stored = window.sessionStorage.getItem("interview-arc-active-view");
-      if (stored === "loops" || stored === "journey" || stored === "reviews" || stored === "library" || stored === "banks" || stored === "materials") setView(stored);
+      if (stored === "loops" || stored === "journey" || stored === "reviews" || stored === "library" || stored === "banks" || stored === "materials" || stored === "learn") {
+        setView(stored);
+        if (stored === "learn") {
+          const storedLearn = window.sessionStorage.getItem("interview-arc-learn-destination");
+          if (storedLearn === "courses" || storedLearn === "history" || storedLearn === "analytics") setLearnDestination(storedLearn);
+        }
+      }
       setViewMemoryReady(true);
     });
     return () => window.cancelAnimationFrame(frame);
@@ -1995,6 +2023,10 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
   useEffect(() => {
     if (viewMemoryReady) window.sessionStorage.setItem("interview-arc-active-view", view);
   }, [view, viewMemoryReady]);
+
+  useEffect(() => {
+    if (viewMemoryReady) window.sessionStorage.setItem("interview-arc-learn-destination", learnDestination);
+  }, [learnDestination, viewMemoryReady]);
 
   useEffect(() => {
     const memory: WorkspaceUiMemory = {
@@ -4505,6 +4537,19 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
     transitionToView(nextView);
   }
 
+  function navigateToLearn(nextDestination: LearnDestination) {
+    if (view === "learn" && learnDestination === nextDestination) return;
+    const route = new URL(workspaceViewHref(window.location.href, "learn"), window.location.origin);
+    route.searchParams.set("learn", nextDestination);
+    window.history.pushState(
+      { interviewArcWorkspaceView: "learn", interviewArcLearnDestination: nextDestination },
+      "",
+      `${route.pathname}${route.search}${route.hash}`,
+    );
+    setLearnDestination(nextDestination);
+    transitionToView("learn");
+  }
+
   function startFreshPracticeDay() {
     const missingResults = allTodayActivities.filter((activity) => (
       Boolean(draft.timers[activity.id]?.startedAt) && !draft.outcomes[activity.id]
@@ -4899,6 +4944,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         setReviewReaderOrderIds([]);
         setReaderNotFound("");
       }
+      if (routeView === "learn") setLearnDestination(readLearnDestination(window.location.href));
       setView(routeView === "past" ? "library" : routeView === "career-materials" ? "materials" : routeView);
       if (routeView === "journey") {
         restorePageScroll(window.history.state?.interviewArcJourneyScrollY);
@@ -6641,20 +6687,21 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       <aside className="sidebar">
         <button className="brand" onClick={() => navigateToPrimaryView("today")}><span className="brand-mark" aria-hidden="true" /><span>Interview Arc</span></button>
         <nav className="workspace-nav" aria-label="Workspaces">
-          <button type="button" className="active" aria-current="page" onClick={() => navigateToPrimaryView("today")}><span aria-hidden="true">I</span><strong>Interview</strong></button>
-          <button type="button" disabled title="Learn workspace is coming later"><span aria-hidden="true">L</span><strong>Learn</strong><small>Later</small></button>
+          <button type="button" className={view !== "learn" ? "active" : ""} aria-current={view !== "learn" ? "page" : undefined} onClick={() => navigateToPrimaryView("today")}><span aria-hidden="true">I</span><strong>Interview</strong></button>
+          <button type="button" className={view === "learn" ? "active learn" : "learn"} aria-current={view === "learn" ? "page" : undefined} onClick={() => navigateToLearn(learnDestination)}><span aria-hidden="true">L</span><strong>Learn</strong></button>
           <button type="button" disabled title="Engineering workspace is coming later"><span aria-hidden="true">E</span><strong>Engineering</strong><small>Later</small></button>
         </nav>
-        <div className="local-nav-label"><span>Interview</span><small>Workspace</small></div>
-        <nav className="primary-nav" aria-label="Interview navigation">{INTERVIEW_NAV_ITEMS.map(([id, label], index) => <button key={id} className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
-        <nav className="materials-nav" aria-label="Career Materials navigation"><button type="button" className={view === "materials" ? "active" : ""} aria-current={view === "materials" ? "page" : undefined} onClick={() => navigateToPrimaryView("materials")}><span aria-hidden="true">CM</span><strong>Career Materials</strong><small>Private</small></button></nav>
-        <div className="sidebar-status"><span className={[...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "live" : ""} /><div><strong>{[...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "Timer running" : hydrated ? "Draft saved locally" : "Loading draft"}</strong><small>Session countdown + one activity stopwatch</small></div></div>
+        <div className="local-nav-label"><span>{view === "learn" ? "Learn" : "Interview"}</span><small>Workspace</small></div>
+        {view === "learn"
+          ? <nav className="primary-nav learn-local-nav" aria-label="Learn navigation">{LEARN_NAV_ITEMS.map(([id, label], index) => <button key={id} className={learnDestination === id ? "active" : ""} aria-current={learnDestination === id ? "page" : undefined} onClick={() => navigateToLearn(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
+          : <><nav className="primary-nav" aria-label="Interview navigation">{INTERVIEW_NAV_ITEMS.map(([id, label], index) => <button key={id} className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav><nav className="materials-nav" aria-label="Career Materials navigation"><button type="button" className={view === "materials" ? "active" : ""} aria-current={view === "materials" ? "page" : undefined} onClick={() => navigateToPrimaryView("materials")}><span aria-hidden="true">CM</span><strong>Career Materials</strong><small>Private</small></button></nav></>}
+        <div className="sidebar-status"><span className={view !== "learn" && [...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "live" : ""} /><div><strong>{view === "learn" ? "Private Learning record" : [...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "Timer running" : hydrated ? "Draft saved locally" : "Loading draft"}</strong><small>{view === "learn" ? "Transcript-only sessions · no cloud audio" : "Session countdown + one activity stopwatch"}</small></div></div>
         <div className="profile"><span>IA</span><div><strong>Interview Arc owner</strong><small>Private preparation record</small></div></div>
       </aside>
 
       <section className="main-column">
         <header className="topbar">
-          <div className="topbar-context"><strong>{INTERVIEW_VIEW_TITLES[view]}</strong><span>{readableDate(journal.date)}</span></div>
+          <div className="topbar-context"><strong>{view === "learn" ? LEARN_VIEW_TITLES[learnDestination] : INTERVIEW_VIEW_TITLES[view]}</strong><span>{readableDate(journal.date)}</span></div>
           <div>
             <div className={`music-dock ${ambientPlaying ? "active" : ""}`}>
               <button onClick={toggleAmbientSound} aria-pressed={ambientPlaying} title={ambientPlaying ? "Pause music" : "Play music"}><span aria-hidden="true">{ambientPlaying ? "Ⅱ" : "▶"}</span><i><small>{ambientPlaying ? "PLAYING" : "PAUSED"}</small><strong>{trackName}</strong></i></button>
@@ -6666,13 +6713,15 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             <button className={`atmosphere-toggle ${petalsEnabled ? "active" : ""}`} onClick={togglePetals} aria-pressed={petalsEnabled} title={petalsEnabled ? "Pause cherry blossoms" : "Resume cherry blossoms"}><span aria-hidden="true">✦</span>Petals</button>
             {view === "today" && pipSupported && <button className={`secondary-action pip-toggle ${pipWindow && !pipWindow.closed ? "active" : ""}`} onClick={openNowWindow} aria-pressed={Boolean(pipWindow && !pipWindow.closed)}>{pipWindow && !pipWindow.closed ? "Close timer" : "Pop out timer"}</button>}
             <button className="secondary-action" onClick={() => setIntegrationOpen(true)}>Connect</button>
-            <button className="secondary-action" onClick={() => void exportDraft()}>Export today</button>
+            {view !== "learn" && <button className="secondary-action" onClick={() => void exportDraft()}>Export today</button>}
           </div>
         </header>
-        <div className="page-content" id="practice-content">{view === "today" && renderToday()}{view === "loops" && <LoopsWorkspace onOpenActivity={openLoopActivity} />}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}{view === "materials" && <CareerMaterialsWorkspace />}</div>
+        <div className="page-content" id="practice-content">{view === "today" && renderToday()}{view === "loops" && <LoopsWorkspace onOpenActivity={openLoopActivity} />}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}{view === "materials" && <CareerMaterialsWorkspace />}{view === "learn" && <LearnWorkspace destination={learnDestination} />}</div>
       </section>
 
-      <nav className="mobile-interview-nav" aria-label="Interview navigation">{INTERVIEW_NAV_ITEMS.map(([id, label]) => <button key={id} type="button" className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}>{label}</button>)}<button type="button" className={view === "materials" ? "active materials" : "materials"} aria-current={view === "materials" ? "page" : undefined} onClick={() => navigateToPrimaryView("materials")}>Materials</button></nav>
+      {view === "learn"
+        ? <nav className="mobile-interview-nav mobile-learn-nav" aria-label="Learn navigation">{LEARN_NAV_ITEMS.map(([id, label]) => <button key={id} type="button" className={learnDestination === id ? "active" : ""} aria-current={learnDestination === id ? "page" : undefined} onClick={() => navigateToLearn(id)}>{label}</button>)}</nav>
+        : <nav className="mobile-interview-nav" aria-label="Interview navigation">{INTERVIEW_NAV_ITEMS.map(([id, label]) => <button key={id} type="button" className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}>{label}</button>)}<button type="button" className={view === "materials" ? "active materials" : "materials"} aria-current={view === "materials" ? "page" : undefined} onClick={() => navigateToPrimaryView("materials")}>Materials</button></nav>}
 
       {composer.open && <div className={`modal-backdrop ${composerClosing ? "closing" : ""}`} role="presentation" onMouseDown={closeComposer} onAnimationEnd={finishComposerClose}>
         <section className={`composer ${composer.mode === "activity" && !composer.editingId ? "activity-composer-dialog" : ""} ${composerClosing ? "closing" : ""}`} role="dialog" aria-modal="true" aria-labelledby="composer-title" onMouseDown={(event) => event.stopPropagation()}>

@@ -5,7 +5,8 @@ export type DocumentScrollView =
   | "reviews"
   | "library"
   | "banks"
-  | "materials";
+  | "materials"
+  | "learn";
 
 type DocumentScrollLockInput = {
   arrivalState: "show" | "leaving" | "entered";

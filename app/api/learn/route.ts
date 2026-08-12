@@ -68,10 +68,13 @@ export async function POST(request: Request) {
         { status: 400, headers: { "cache-control": "private, no-store" } },
       );
     }
-    const { action, ...input } = body as Record<string, unknown>;
+    const { action, sessionAction, ...input } = body as Record<string, unknown>;
     const authorizedInput = { ...input, authorization: "explicit_user_instruction" };
     const result = action === "control_session"
-      ? await controlLearningSession(ownerId, authorizedInput)
+      ? await controlLearningSession(ownerId, {
+        ...authorizedInput,
+        action: sessionAction,
+      })
       : action === "finish_session"
         ? await finishLearningSession(ownerId, authorizedInput)
         : action === "set_homework_state"
