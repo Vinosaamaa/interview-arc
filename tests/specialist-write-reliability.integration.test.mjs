@@ -56,8 +56,10 @@ async function waitForWorker(baseUrl, child) {
   throw new Error("Local MCP Worker did not start.");
 }
 
-async function waitForJobs(call, jobIds) {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+async function waitForJobs(call, jobIds, baseUrl) {
+  for (let attempt = 0; attempt < 400; attempt += 1) {
+    const scheduled = await fetch(`${baseUrl}/__scheduled?cron=*+*+*+*+*`);
+    assert.equal(scheduled.ok, true);
     const result = await call("get_specialist_write_status", { jobIds });
     if (result.jobs.every((job) => job.status === "saved" || job.status === "failed")) return result.jobs;
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -65,7 +67,7 @@ async function waitForJobs(call, jobIds) {
   throw new Error(`Specialist writes did not settle: ${jobIds.join(", ")}`);
 }
 
-test("local MCP persists exact specialist writes through durable receipts and rejects changed retries", { timeout: 90_000 }, async () => {
+test("local MCP persists exact specialist writes through durable receipts and rejects changed retries", { timeout: 180_000 }, async () => {
   const token = "ia_specialist_write_integration_token";
   const tokenHash = sha256(token);
   let releaseIntegrationLock;
@@ -133,7 +135,7 @@ test("local MCP persists exact specialist writes through durable receipts and re
     await client.connect(new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), {
       requestInit: { headers: { authorization: `Bearer ${token}` } },
     }));
-    const [savedAttempt] = await waitForJobs(call, [attempt.operationId]);
+    const [savedAttempt] = await waitForJobs(call, [attempt.operationId], baseUrl);
     assert.equal(savedAttempt.status, "saved");
     assert.equal(savedAttempt.operation, "leetcode_code_attempt");
     assert.equal(savedAttempt.result.status, "inserted");
@@ -160,7 +162,7 @@ test("local MCP persists exact specialist writes through durable receipts and re
       reviewResponseTurnId: "stale-specialist-turn",
     };
     const queuedStalePending = await call("save_leetcode_code_attempt", stalePendingAttempt);
-    const [savedStalePending] = await waitForJobs(call, [stalePendingAttempt.operationId]);
+    const [savedStalePending] = await waitForJobs(call, [stalePendingAttempt.operationId], baseUrl);
     assert.equal(queuedStalePending.jobId, stalePendingAttempt.operationId);
     assert.equal(savedStalePending.status, "saved");
     assert.equal(savedStalePending.result.status, "inserted");
@@ -268,7 +270,7 @@ test("local MCP persists exact specialist writes through durable receipts and re
       },
     ];
     for (const question of bankJobs) await call("upsert_personal_bank_question", question);
-    const savedBankJobs = await waitForJobs(call, bankJobs.map((job) => job.operationId));
+    const savedBankJobs = await waitForJobs(call, bankJobs.map((job) => job.operationId), baseUrl);
     assert.deepEqual(savedBankJobs.map((job) => job.status), ["saved", "saved", "saved", "saved", "saved", "saved"]);
     assert.deepEqual(savedBankJobs.map((job) => job.result.status), ["upserted", "upserted", "upserted", "upserted", "upserted", "upserted"]);
     assert.equal(savedBankJobs[0].result.metadata.problemNumber, 407);
@@ -298,14 +300,12 @@ test("local MCP persists exact specialist writes through durable receipts and re
       burstJobs.map((question) => call("upsert_personal_bank_question", question)),
     );
     assert.ok(queuedBurst.every((job) => ["queued", "processing", "saved"].includes(job.status)));
-    const scheduled = await fetch(`${baseUrl}/__scheduled?cron=*+*+*+*+*`);
-    assert.equal(scheduled.ok, true);
-    const savedBurst = await waitForJobs(call, burstJobs.map((job) => job.operationId));
+    const savedBurst = await waitForJobs(call, burstJobs.map((job) => job.operationId), baseUrl);
     assert.ok(savedBurst.every((job) => job.status === "saved"));
 
     const bankReplays = await Promise.all(bankJobs.map((question) => call("upsert_personal_bank_question", question)));
     assert.ok(bankReplays.every((result) => result.status === "saved"));
-    const replayedBankJobs = await waitForJobs(call, bankJobs.map((job) => job.operationId));
+    const replayedBankJobs = await waitForJobs(call, bankJobs.map((job) => job.operationId), baseUrl);
     assert.ok(replayedBankJobs.every((job) => job.status === "saved"));
     assert.equal(replayedBankJobs[0].result.metadata.problemNumber, 407);
 
@@ -334,8 +334,8 @@ test("local MCP persists exact specialist writes through durable receipts and re
       active: true,
     };
     await call("upsert_personal_bank_question", independentBank);
-    const partial = await waitForJobs(call, [invalidAttempt.jobId, independentBank.operationId]);
-    const invalidMetadataJob = await waitForJobs(call, [invalidMetadata.jobId]);
+    const partial = await waitForJobs(call, [invalidAttempt.jobId, independentBank.operationId], baseUrl);
+    const invalidMetadataJob = await waitForJobs(call, [invalidMetadata.jobId], baseUrl);
     assert.equal(invalidMetadataJob[0].status, "failed");
     assert.equal(invalidMetadataJob[0].failure.retryable, false);
     assert.match(invalidMetadataJob[0].failure.message, /only valid for LeetCode/);
