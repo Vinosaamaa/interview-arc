@@ -92,7 +92,19 @@ export const behavioralEvidenceCandidateReviewSchema = z.object({
   operationId: stableId,
   authorization: z.literal("explicit_owner_review"),
   decisions: z.array(behavioralEvidenceCandidateDecisionSchema).min(1).max(25)
-    .refine((items) => new Set(items.map((item) => item.evidenceId)).size === items.length, "Each evidence ID may appear only once."),
+    .refine((items) => new Set(items.map((item) => item.evidenceId)).size === items.length, "Each evidence ID may appear only once.")
+    .superRefine((items, context) => {
+      const reviewedIds = new Set(items.map((item) => item.evidenceId));
+      for (const [index, item] of items.entries()) {
+        if (item.replacementEvidenceId && reviewedIds.has(item.replacementEvidenceId)) {
+          context.addIssue({
+            code: "custom",
+            path: [index, "replacementEvidenceId"],
+            message: "A supersession replacement cannot also change state in the same review batch.",
+          });
+        }
+      }
+    }),
 }).strict();
 
 export type BehavioralEvidenceSourceSnapshot = z.infer<typeof behavioralEvidenceSourceSnapshotSchema>;

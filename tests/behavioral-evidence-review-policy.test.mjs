@@ -98,6 +98,28 @@ test("candidate decisions enforce explicit authority and supersession identity",
     })),
     /cannot supersede itself/,
   );
+  assert.throws(
+    () => behavioralEvidenceCandidateReviewSchema.parse({
+      operationId: "review-operation-batch-replacement",
+      authorization: "explicit_owner_review",
+      decisions: [
+        {
+          evidenceId: "evidence-candidate-1",
+          expectedRevision: 1,
+          decision: "supersede",
+          reason: "A more precise candidate replaces this observation.",
+          replacementEvidenceId: "evidence-candidate-2",
+        },
+        {
+          evidenceId: "evidence-candidate-2",
+          expectedRevision: 1,
+          decision: "reject",
+          reason: "The replacement cannot change state in the same batch.",
+        },
+      ],
+    }),
+    /cannot also change state in the same review batch/,
+  );
 });
 
 test("candidate transitions are monotonic and terminal decisions fail closed", () => {

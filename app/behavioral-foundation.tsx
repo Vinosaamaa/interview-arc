@@ -25,6 +25,19 @@ function readableUpdatedAt(value: number | null) {
   }).format(new Date(value))}`;
 }
 
+async function reviewOperationId(
+  evidenceId: string,
+  expectedRevision: number,
+  decision: "accept" | "reject",
+) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(evidenceId));
+  const identity = [...new Uint8Array(digest)]
+    .slice(0, 16)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  return `foundation-review-${expectedRevision}-${decision}-${identity}`;
+}
+
 export default function BehavioralFoundation({
   enabled = true,
   curriculumQuestionIds,
@@ -67,7 +80,7 @@ export default function BehavioralFoundation({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          operationId: `foundation-review-${crypto.randomUUID()}`,
+          operationId: await reviewOperationId(evidenceId, expectedRevision, decision),
           decisions: [{ evidenceId, expectedRevision, decision }],
         }),
       });

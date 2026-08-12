@@ -30,6 +30,9 @@ test("Behavioral Foundation renders a responsive owner-review queue and safe sou
   assert.match(component, /foundation-candidate-list/);
   assert.match(component, /Accept evidence/);
   assert.match(component, /expectedRevision/);
+  assert.match(component, /reviewOperationId/);
+  assert.match(component, /crypto\.subtle\.digest\("SHA-256"/);
+  assert.doesNotMatch(component, /foundation-review-\$\{crypto\.randomUUID/);
   assert.match(contract, /candidateReview: z\.literal\("available"\)/);
   assert.match(contract, /behavioralFoundationReviewRequestSchema/);
   assert.match(route, /explicit_owner_review/);
