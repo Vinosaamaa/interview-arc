@@ -84,6 +84,11 @@ async function waitForJobs(client, jobIds) {
   throw new Error(`Behavioral evidence writes did not settle: ${JSON.stringify(latest)}`);
 }
 
+async function runScheduledRecovery(baseUrl) {
+  const response = await fetch(`${baseUrl}/__scheduled?cron=*+*+*+*+*`);
+  assert.equal(response.ok, true);
+}
+
 test("owner-private evidence and claim state survive reconnect into bounded behavioral preflight", { timeout: 90_000 }, async () => {
   const ownerToken = "ia_behavioral_evidence_owner_integration_token";
   const otherToken = "ia_behavioral_evidence_other_integration_token";
@@ -110,7 +115,7 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
         ('owner-behavioral-evidence','activity-behavioral-1','turn-behavioral-owner-1','behavioral','user','I personally designed the retry boundary for the project.','codex',1,1786291200000,1786291200000),
         ('other-behavioral-evidence','activity-behavioral-other','turn-behavioral-other-1','behavioral','user','I owned a different project decision.','codex',1,1786291201000,1786291201000);
     `]);
-    worker = spawn(wrangler, ["dev", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
+    worker = spawn(wrangler, ["dev", "--local", "--test-scheduled", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
       cwd: project,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -171,6 +176,7 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
       "upsert_behavioral_evidence_item",
       input,
     )));
+    await runScheduledRecovery(baseUrl);
     const concurrentReceipts = await waitForJobs(
       ownerClient,
       concurrentOperations.map((input) => input.operationId),
@@ -382,6 +388,7 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
       questionLink: { questionId: "question-replay-trigger", relevance: "supporting" },
     };
     await call(ownerClient, "upsert_behavioral_evidence_item", replayTrigger);
+    await runScheduledRecovery(baseUrl);
     const [replayedOriginal, savedTrigger] = await waitForJobs(ownerClient, [
       claimInput.operationId,
       replayTrigger.operationId,
@@ -733,6 +740,7 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
         },
       }));
     await Promise.all(personalClaims.map((input) => call(ownerClient, "set_behavioral_claim_status", input)));
+    await runScheduledRecovery(baseUrl);
     const failedPersonalClaims = await waitForJobs(
       ownerClient,
       personalClaims.map((input) => input.operationId),
@@ -777,6 +785,7 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
         "upsert_behavioral_evidence_item",
         input,
       )));
+      await runScheduledRecovery(baseUrl);
       const batchJobs = await waitForJobs(ownerClient, batch.map((input) => input.operationId));
       assert.equal(batchJobs.every((job) => job.status === "saved"), true, workerLog);
     }
@@ -807,6 +816,7 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
     for (let start = 0; start < boundedClaims.length; start += 5) {
       const batch = boundedClaims.slice(start, start + 5);
       await Promise.all(batch.map((input) => call(ownerClient, "set_behavioral_claim_status", input)));
+      await runScheduledRecovery(baseUrl);
       const batchJobs = await waitForJobs(ownerClient, batch.map((input) => input.operationId));
       assert.equal(batchJobs.every((job) => job.status === "saved"), true, workerLog);
     }
