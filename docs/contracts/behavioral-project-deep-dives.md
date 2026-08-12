@@ -35,7 +35,9 @@ revision.
 
 Use `query_behavioral_project_deep_dives` before a write,
 `set_behavioral_project_binding` with the exact expected revision, and then
-repeat the query. Exact operation retries replay the saved receipt. A changed
+repeat the query. The bounded read returns both current pointers and immutable
+`bindingRevisions` so a historical attempt can select an exact prior binding
+without reconstructing it from conversation memory. Exact operation retries replay the saved receipt. A changed
 retry, stale revision, unknown project, cross-owner identity, contradicted
 claim, unavailable evidence, or uniqueness conflict fails closed.
 

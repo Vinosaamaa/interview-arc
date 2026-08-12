@@ -373,6 +373,12 @@ test("Project Deep Dives bind exact questions, freeze Past links, and project to
     assert.equal(projection.activityLinks.length, 2);
     assert.equal(projection.bindings.length, 3);
     assert.equal(projection.bindings.filter((item) => item.focus === "resume_claim").length, 1);
+    assert.deepEqual(
+      projection.bindingRevisions
+        .filter((item) => item.questionId === claimQuestion)
+        .map((item) => item.revision),
+      [2, 1],
+    );
     assert.equal(projection.learnProjection.find((item) => item.questionId === overviewQuestion).solutionProfileRevision, 1);
     const similarProjection = await call(client, "query_behavioral_project_deep_dives", { projectId: "sample-platform-next" });
     assert.deepEqual(similarProjection.bindings.map((item) => item.questionId), [similarProjectQuestion]);

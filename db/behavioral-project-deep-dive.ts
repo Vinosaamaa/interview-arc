@@ -705,7 +705,7 @@ export async function queryBehavioralProjectDeepDives(ownerId: string, inputValu
     .where(bindingWhere).orderBy(asc(behavioralProjectQuestionBindings.projectId), asc(behavioralProjectQuestionBindings.questionId)).limit(51);
   const visibleBindings = bindings.slice(0, 50);
   const questionIds = visibleBindings.map((binding) => binding.questionId);
-  const [profiles, activityLinks] = await Promise.all([
+  const [profiles, activityLinks, bindingRevisions] = await Promise.all([
     questionIds.length ? db.select({
       questionId: problemSolutionProfiles.questionId,
       currentRevision: problemSolutionProfiles.currentRevision,
@@ -720,6 +720,15 @@ export async function queryBehavioralProjectDeepDives(ownerId: string, inputValu
       input.projectId ? eq(behavioralProjectActivityLinks.projectId, input.projectId) : undefined,
       input.questionId ? eq(behavioralProjectActivityLinks.questionId, input.questionId) : undefined,
     )).orderBy(desc(behavioralProjectActivityLinks.linkedAt)).limit(101),
+    db.select().from(behavioralProjectQuestionBindingRevisions).where(and(
+      eq(behavioralProjectQuestionBindingRevisions.ownerId, ownerId),
+      input.projectId ? eq(behavioralProjectQuestionBindingRevisions.projectId, input.projectId) : undefined,
+      input.questionId ? eq(behavioralProjectQuestionBindingRevisions.questionId, input.questionId) : undefined,
+      input.includeArchived ? undefined : eq(behavioralProjectQuestionBindingRevisions.state, "active"),
+    )).orderBy(
+      desc(behavioralProjectQuestionBindingRevisions.createdAt),
+      desc(behavioralProjectQuestionBindingRevisions.revision),
+    ).limit(101),
   ]);
   const profileByQuestion = new Map(profiles.map((profile) => [profile.questionId, profile]));
   const bindingProjection = visibleBindings.map((binding) => ({
@@ -730,6 +739,8 @@ export async function queryBehavioralProjectDeepDives(ownerId: string, inputValu
     projects: input.projectId ? registry.filter((project) => project.projectId === input.projectId) : registry,
     bindings: bindingProjection,
     bindingsTruncated: bindings.length > 50,
+    bindingRevisions: bindingRevisions.slice(0, 100),
+    bindingRevisionsTruncated: bindingRevisions.length > 100,
     activityLinks: activityLinks.slice(0, 100),
     activityLinksTruncated: activityLinks.length > 100,
     learnProjection: bindingProjection.map((binding) => ({

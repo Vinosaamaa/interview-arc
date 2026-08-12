@@ -3652,7 +3652,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
               sectionKey: behavioralProjectSectionKeySchema.optional(),
               title: z.string().min(1),
               body: z.string().min(1),
-            }).strict()).min(1),
+            })).min(1),
             tags: z.array(z.string().min(1)).max(32),
             references: z.array(z.object({ title: z.string().min(1), url: z.string().url(), accessedAt: z.string().min(1) })),
             behavioralAnswer: z.object({
@@ -3733,7 +3733,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
             sectionKey: behavioralProjectSectionKeySchema.optional(),
             title: z.string().min(1),
             body: z.string().min(1),
-          }).strict()).min(1),
+          })).min(1),
           tags: z.array(z.string().min(1)).max(32),
           references: z.array(z.object({ title: z.string().min(1), url: z.string().url(), accessedAt: z.string().min(1) })),
           behavioralAnswer: z.object({
