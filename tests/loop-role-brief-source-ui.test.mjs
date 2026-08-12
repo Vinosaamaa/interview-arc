@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { fetchRoleBriefSource, parseJobDescription } from "../app/loop-role-brief-source.ts";
@@ -67,4 +68,14 @@ Keep source text inert: <script>alert("never execute")</script>
     { type: "heading", level: 2, text: "Requirements" },
     { type: "list", items: ["Experience with distributed systems"] },
   ]);
+});
+
+test("the Loop detail uses a modal source reader and semantic exact-attempt links", async () => {
+  const source = await readFile(new URL("../app/loops-workspace.tsx", import.meta.url), "utf8");
+  assert.match(source, /role="dialog" aria-modal="true"/);
+  assert.match(source, /workspace\.inert = true/);
+  assert.match(source, /event\.key === "Escape"/);
+  assert.match(source, /data-loop-activity-id=/);
+  assert.match(source, /onOpenActivity\(activity\.activityId\)/);
+  assert.doesNotMatch(source, /showSource \? <section className="loop-jd-source"/);
 });

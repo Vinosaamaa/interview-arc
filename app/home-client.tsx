@@ -55,12 +55,14 @@ import {
   bankReaderHref,
   journeyHrefWithoutReader,
   journeyReaderHref,
+  loopWorkspaceHref,
   pastReaderHref,
   pastSolutionReaderHref,
   readerDepthAfterNestedClose,
   readerClosePlan,
   readBankReaderState,
   readJourneyReaderState,
+  readLoopWorkspaceState,
   readPastReaderState,
   readWorkspaceRouteView,
   uniqueJourneyEntries,
@@ -3105,11 +3107,45 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       window.history.replaceState({ interviewArcPastDepth: 0 }, "", workspaceViewHref(window.location.href, "past"));
     }
     window.history.pushState(
-      { interviewArcPastReader: true, interviewArcPastDepth: currentDepth + 1 },
+      {
+        interviewArcPastReader: true,
+        interviewArcPastDepth: currentDepth + 1,
+        ...(window.history.state?.interviewArcLoopOrigin ? { interviewArcLoopOrigin: true } : {}),
+      },
       "",
       pastReaderHref(window.location.href, entry.id),
     );
     openJournalEntry(entry);
+  }
+
+  function openLoopActivity(activityId: string) {
+    const entry = libraryEntries.find((candidate) => (
+      candidate.id === activityId || candidate.artifact?.activityId === activityId
+    ));
+    const loopState = readLoopWorkspaceState(window.location.href) ?? { loopId: "", stageId: "" };
+    window.history.replaceState(
+      {
+        ...window.history.state,
+        interviewArcWorkspaceView: "loops",
+        interviewArcLoopScrollY: window.scrollY,
+        interviewArcLoopFocusActivity: activityId,
+      },
+      "",
+      loopWorkspaceHref(window.location.href, loopState),
+    );
+    window.history.pushState(
+      { interviewArcPastReader: true, interviewArcPastDepth: 1, interviewArcLoopOrigin: true },
+      "",
+      pastReaderHref(window.location.href, activityId),
+    );
+    setPastReaderOrderIds(entry ? [entry.id] : []);
+    setJourneyReaderOrderIds([]);
+    setReaderClosing(false);
+    setReaderNotFound(entry ? "" : activityId);
+    if (!entry) window.sessionStorage.removeItem("interview-arc-selected-past");
+    setSelectedEntry(entry ?? null);
+    setLibraryNestedProblem(null);
+    transitionToView("library");
   }
 
   function showChartTooltip(target: Element, model: Omit<ChartTooltipModel, "anchor">) {
@@ -4618,7 +4654,9 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         const candidates = rememberedOrder.some((entry) => entry.id === pastState.attemptId)
           ? rememberedOrder
           : libraryEntries;
-        const entry = candidates.find((candidate) => candidate.id === pastState.attemptId);
+        const entry = candidates.find((candidate) => (
+          candidate.id === pastState.attemptId || candidate.artifact?.activityId === pastState.attemptId
+        ));
         const nestedProblem = pastState.specialty && pastState.problemId
           ? bankFor(pastState.specialty).find((candidate) => candidate.id === pastState.problemId)
           : undefined;
@@ -4689,6 +4727,8 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
       setView(routeView === "past" ? "library" : routeView === "career-materials" ? "materials" : routeView);
       if (routeView === "journey") {
         restorePageScroll(window.history.state?.interviewArcJourneyScrollY);
+      } else if (routeView === "loops") {
+        restorePageScroll(window.history.state?.interviewArcLoopScrollY);
       }
     };
     if (!workspaceUrlHydratedRef.current) {
@@ -6086,6 +6126,18 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
 
   function closeReaderPanel() {
     const closePlan = readerClosePlan(window.location.href);
+    if (view === "library" && window.history.state?.interviewArcLoopOrigin) {
+      window.sessionStorage.removeItem("interview-arc-selected-past");
+      const storedDepth = Number(window.history.state?.interviewArcPastDepth ?? 1);
+      const depth = Number.isInteger(storedDepth) && storedDepth > 0 ? storedDepth : 1;
+      setSelectedEntry(null);
+      setLibraryNestedProblem(null);
+      setPastReaderOrderIds([]);
+      setReaderNotFound("");
+      setReaderClosing(false);
+      window.history.go(-depth);
+      return;
+    }
     if (view === "journey" && closePlan?.view === "journey") {
       const journeyState = readJourneyReaderState(window.location.href);
       const depth = Number(window.history.state?.interviewArcJourneyDepth ?? 0);
@@ -6394,7 +6446,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
             <button className="secondary-action" onClick={() => void exportDraft()}>Export today</button>
           </div>
         </header>
-        <div className="page-content" id="practice-content">{view === "today" && renderToday()}{view === "loops" && <LoopsWorkspace />}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}{view === "materials" && <CareerMaterialsWorkspace />}</div>
+        <div className="page-content" id="practice-content">{view === "today" && renderToday()}{view === "loops" && <LoopsWorkspace onOpenActivity={openLoopActivity} />}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}{view === "materials" && <CareerMaterialsWorkspace />}</div>
       </section>
 
       <nav className="mobile-interview-nav" aria-label="Interview navigation">{INTERVIEW_NAV_ITEMS.map(([id, label]) => <button key={id} type="button" className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}>{label}</button>)}<button type="button" className={view === "materials" ? "active materials" : "materials"} aria-current={view === "materials" ? "page" : undefined} onClick={() => navigateToPrimaryView("materials")}>Materials</button></nav>
