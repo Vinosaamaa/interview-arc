@@ -34,6 +34,7 @@ enabled_tools = [
   "query_loops",
   "query_role_brief_migration_inbox",
   "bind_planned_activity_to_loop",
+  "link_completed_activity_to_loop",
   "migrate_target_profile_to_loop",
   "capture_loop_packet",
   "query_loop_capture_packets",

@@ -118,6 +118,10 @@ const initialLoop = {
   ],
 };
 
+const historicalBehavioralActivityId = "historical-behavioral-attempt";
+const historicalBehavioralCompletedAt = 1_787_900_000_000;
+const changedResultActivityId = "historical-result-changed-after-completion";
+
 test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, then preserves exact revisions", { timeout: 180_000 }, async () => {
   const token = "ia_loop_owner_integration_token_2026";
   const otherToken = "ia_loop_other_integration_token_2026";
@@ -144,6 +148,22 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
         INSERT INTO content_bank (category,id,ord,payload,updated_at) VALUES
           ('leetcode','two-sum',0,'{"id":"two-sum","title":"Two Sum","difficulty":"easy","topics":["arrays"],"targetMinutes":25,"active":true}',1),
           ('leetcode','course-schedule',1,'{"id":"course-schedule","title":"Course Schedule","difficulty":"medium","topics":["graphs"],"targetMinutes":35,"active":true}',1);
+        INSERT INTO extra_activities (owner_id,id,date,workbench_id,payload,revision,updated_at)
+          VALUES ('owner-loop','${historicalBehavioralActivityId}','2026-08-10',NULL,
+            '{"id":"${historicalBehavioralActivityId}","type":"behavioral","questionId":"tell-me-about-yourself","title":"Tell me about yourself","status":"completed","plannedSeconds":2700}',5,${historicalBehavioralCompletedAt});
+        INSERT INTO timers
+          (owner_id,subject_id,kind,accumulated_seconds,started_at,running_since,completed,completed_at,revision,updated_at)
+          VALUES ('owner-loop','${historicalBehavioralActivityId}','activity',2700,${historicalBehavioralCompletedAt - 2_700_000},NULL,1,${historicalBehavioralCompletedAt},2,${historicalBehavioralCompletedAt});
+        INSERT INTO outcomes (owner_id,activity_id,outcome,revision,updated_at)
+          VALUES ('owner-loop','${historicalBehavioralActivityId}','solved',1,${historicalBehavioralCompletedAt});
+        INSERT INTO extra_activities (owner_id,id,date,workbench_id,payload,revision,updated_at)
+          VALUES ('owner-loop','${changedResultActivityId}','2026-08-10',NULL,
+            '{"id":"${changedResultActivityId}","type":"behavioral","questionId":"changed-result","title":"Changed result","status":"completed","plannedSeconds":1800}',2,${historicalBehavioralCompletedAt + 1});
+        INSERT INTO timers
+          (owner_id,subject_id,kind,accumulated_seconds,started_at,running_since,completed,completed_at,revision,updated_at)
+          VALUES ('owner-loop','${changedResultActivityId}','activity',1800,${historicalBehavioralCompletedAt - 1_800_000},NULL,1,${historicalBehavioralCompletedAt},2,${historicalBehavioralCompletedAt});
+        INSERT INTO outcomes (owner_id,activity_id,outcome,revision,updated_at)
+          VALUES ('owner-loop','${changedResultActivityId}','failed',2,${historicalBehavioralCompletedAt + 1});
         ${legacyTargetFixtureSql(
           "target-northstar-backend-legacy",
           roleBrief("Operate reliable backend services for Northstar."),
@@ -539,6 +559,62 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
     assert.equal(loopAfterImport.loops[0].loop.revision, 3);
     assert.equal(loopAfterImport.loops[0].loop.stages.at(-1).stageId, "onsite-behavioral");
 
+    assert.doesNotMatch(JSON.stringify(loopAfterImport), /Ignore prior instructions|reveal secrets|jdText|Private owner note/);
+
+    const historicalLinkInput = {
+      operationId: "loop-link-historical-behavioral-1",
+      activityId: historicalBehavioralActivityId,
+      loopId: initialLoop.loopId,
+      stageId: "recruiter",
+      expectedLoopRevision: 3,
+      expectedRoleBriefRevision: 3,
+      authorization: "explicit_user_instruction",
+    };
+    const historicalLink = await call(client, "link_completed_activity_to_loop", historicalLinkInput);
+    assert.equal(historicalLink.status, "historically_linked");
+    assert.equal(historicalLink.result, "solved");
+    assert.equal(historicalLink.completedAt, historicalBehavioralCompletedAt);
+    assert.equal(historicalLink.roleBriefRevision, 3);
+    assert.equal(historicalLink.duplicate, false);
+    const historicalLinkRetry = await call(client, "link_completed_activity_to_loop", historicalLinkInput);
+    assert.equal(historicalLinkRetry.duplicate, true);
+    assert.equal(historicalLinkRetry.linkedAt, historicalLink.linkedAt);
+    const changedHistoricalLinkRetry = await callRaw(client, "link_completed_activity_to_loop", {
+      ...historicalLinkInput,
+      stageId: "onsite-behavioral",
+    });
+    assert.equal(changedHistoricalLinkRetry.isError, true);
+    assert.equal(changedHistoricalLinkRetry.structuredContent.code, "loop_activity_binding_operation_conflict");
+    const isolatedHistoricalLink = await callRaw(otherClient, "link_completed_activity_to_loop", {
+      ...historicalLinkInput,
+      operationId: "loop-link-isolated-behavioral-1",
+    });
+    assert.equal(isolatedHistoricalLink.isError, true);
+    assert.equal(isolatedHistoricalLink.structuredContent.code, "loop_activity_not_found");
+    const changedResultLink = await callRaw(client, "link_completed_activity_to_loop", {
+      ...historicalLinkInput,
+      operationId: "loop-link-changed-result-1",
+      activityId: changedResultActivityId,
+    });
+    assert.equal(changedResultLink.isError, true);
+    assert.equal(
+      changedResultLink.structuredContent.code,
+      "loop_activity_result_changed_after_completion",
+    );
+    const afterHistoricalLink = await call(client, "query_loops", { loopId: initialLoop.loopId });
+    assert.equal(afterHistoricalLink.loops[0].activityHistory.length, 1);
+    assert.deepEqual(afterHistoricalLink.loops[0].activityHistory[0].receipt, {
+      schemaVersion: 1,
+      source: "explicit_completed_activity_link",
+      activityId: historicalBehavioralActivityId,
+      timerRevision: 2,
+      outcomeRevision: 1,
+      outcomeUpdatedAt: historicalBehavioralCompletedAt,
+      completedAt: historicalBehavioralCompletedAt,
+      linkedAt: historicalLink.linkedAt,
+    });
+    assert.doesNotMatch(JSON.stringify(afterHistoricalLink.loops[0].activityHistory), /transcript|jdText|Private owner note/);
+
     const catalog = await call(client, "query_practice_catalog", {
       specialty: "leetcode",
       questionId: "course-schedule",
@@ -668,8 +744,21 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
     });
     assert.equal(finishRetry.duplicate, true);
     const withHistory = await call(client, "query_loops", { loopId: initialLoop.loopId });
-    assert.equal(withHistory.loops[0].activityHistory.length, 1);
-    assert.deepEqual(withHistory.loops[0].activityHistory[0], {
+    assert.equal(withHistory.loops[0].activityHistory.length, 2);
+    const automaticallyProjectedHistory = withHistory.loops[0].activityHistory.find(
+      (history) => history.activityId === activityId,
+    );
+    const authoritativeFinishedActivity = finished.authoritative.snapshot.activities.find(
+      (activity) => activity.id === activityId,
+    );
+    const authoritativeCompletedAt = authoritativeFinishedActivity.timer.completedAt;
+    assert.ok(Number.isInteger(authoritativeCompletedAt));
+    assert.equal(automaticallyProjectedHistory.completedAt, authoritativeCompletedAt);
+    assert.equal(
+      automaticallyProjectedHistory.receipt.completedAt,
+      authoritativeCompletedAt,
+    );
+    assert.deepEqual(automaticallyProjectedHistory, {
       activityId,
       loopId: initialLoop.loopId,
       stageId: "onsite-system-design",
@@ -677,14 +766,14 @@ test("Loop Recorder creates an owner-isolated Loop and immutable Role Brief, the
       specialty: "leetcode",
       questionId: "course-schedule",
       result: "solved",
-      completedAt: withHistory.loops[0].activityHistory[0].completedAt,
+      completedAt: authoritativeCompletedAt,
       receipt: {
         schemaVersion: 1,
         source: "authoritative_timer_completion",
         activityId,
         timerRevision: 2,
         outcomeRevision: 1,
-        completedAt: withHistory.loops[0].activityHistory[0].completedAt,
+        completedAt: authoritativeCompletedAt,
       },
     });
     assert.doesNotMatch(JSON.stringify(withHistory.loops[0].activityHistory), /transcript|jdText|Private owner note/);

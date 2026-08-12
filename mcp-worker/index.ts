@@ -59,6 +59,8 @@ import {
   createLoopSchema,
   importLoopCapturePacket,
   importLoopCapturePacketSchema,
+  linkCompletedActivitySchema,
+  linkCompletedActivityToLoop,
   migrateTargetProfile,
   queryLoopCapturePackets,
   queryLoopCapturePacketsSchema,
@@ -2949,6 +2951,26 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
         const result = await bindPlannedActivityToLoop(ownerId, input);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return specialistToolFailure(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "link_completed_activity_to_loop",
+    {
+      description: "Link one exact already-completed owner-private practice activity to one Loop and optional Round after an explicit owner instruction. This backfills only immutable Loop context and transcript-free history; it never rewrites the timer, result, transcript, finalization, or Role Brief. Exact retries are idempotent and an activity can never be moved between Loops.",
+      inputSchema: linkCompletedActivitySchema.shape,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => {
+      try {
+        const result = await linkCompletedActivityToLoop(ownerId, input);
+        return {
+          content: [{ type: "text", text: "The completed activity is linked to the requested Loop." }],
           structuredContent: result,
         };
       } catch (error) {

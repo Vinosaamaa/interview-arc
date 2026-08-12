@@ -2145,6 +2145,29 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .loop-role-brief details { margin: 0 22px 20px; padding-top: 14px; border-top: 1px solid #e1e5e1; }
 .loop-role-brief summary { color: #65736b; font-size: .75rem; cursor: pointer; }
 .loop-role-brief details ul { margin: 10px 0 0; padding-left: 18px; color: #65736b; font-size: .75rem; }
+.loop-jd-access { margin: 0 22px 20px; padding-top: 16px; border-top: 1px solid #e1e5e1; display: flex; justify-content: space-between; align-items: center; gap: 14px; }
+.loop-jd-access button { min-height: 39px; padding: 0 13px; border: 1px solid #1c584e; border-radius: 9px; background: #f4f8f3; color: #174a41; font-size: .75rem; font-weight: 780; cursor: pointer; }
+.loop-jd-access button:hover { background: #e9f2e8; }
+.loop-jd-access button:focus-visible, .loop-jd-source a:focus-visible, .loop-jd-state button:focus-visible { outline: 3px solid rgba(91,117,24,.34); outline-offset: 3px; }
+.loop-jd-access > span { color: #78857d; font-size: .68rem; text-align: right; }
+.loop-jd-source { border-top: 1px solid #d8e0d9; background: #f7faf6; }
+.loop-jd-source > header { padding: 15px 22px; border-bottom: 1px solid #d8e0d9; background: #eef4ed; display: flex; justify-content: space-between; align-items: center; gap: 18px; }
+.loop-jd-source > header > div { display: grid; gap: 3px; }
+.loop-jd-source > header strong { color: #203c34; font-size: .78rem; line-height: 1.4; }
+.loop-jd-source > header span { color: #687870; font-size: .68rem; }
+.loop-jd-source > header a { color: #17574c; font-size: .72rem; font-weight: 760; text-underline-offset: 3px; }
+.loop-jd-state { margin: 0; padding: 22px; color: #64736b; font-size: .78rem; }
+.loop-jd-state.error { display: flex; justify-content: space-between; align-items: center; gap: 14px; color: #7a392e; }
+.loop-jd-state.error p { margin: 0; }
+.loop-jd-state button { min-height: 36px; padding: 0 12px; border: 1px solid #87483c; border-radius: 8px; background: #fff; color: #73382e; font-weight: 740; cursor: pointer; }
+.loop-jd-document { max-height: min(68vh, 760px); padding: 10px clamp(22px, 5vw, 48px) 42px; overflow: auto; color: #33423b; font-size: .82rem; line-height: 1.72; scrollbar-color: #aebbb1 transparent; }
+.loop-jd-document > * { max-width: 72ch; margin-left: auto; margin-right: auto; overflow-wrap: anywhere; }
+.loop-jd-document h3 { margin-top: 32px; margin-bottom: 12px; color: #163d34; font-family: var(--font-editorial); font-size: 1.65rem; font-weight: 560; letter-spacing: -.025em; line-height: 1.16; }
+.loop-jd-document h4 { margin-top: 30px; margin-bottom: 9px; color: #1b4339; font-size: 1rem; letter-spacing: -.02em; }
+.loop-jd-document h5 { margin-top: 23px; margin-bottom: 7px; color: #36554c; font-size: .8rem; }
+.loop-jd-document p { margin-top: 8px; margin-bottom: 14px; }
+.loop-jd-document ul { margin-top: 9px; margin-bottom: 17px; padding-left: 22px; display: grid; gap: 7px; list-style: disc; }
+.loop-jd-document li { padding-left: 3px; }
 .loop-debrief dl { margin: 0; padding: 4px 22px 16px; }
 .loop-debrief dl > div { padding: 13px 0; border-bottom: 1px solid #e4e8e4; display: grid; gap: 5px; }
 .loop-debrief dl > div:last-child { border-bottom: 0; }
@@ -2222,6 +2245,10 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .loop-identity { min-height: 0; padding: 27px 22px; display: grid; align-items: start; }
   .loop-identity h1 { font-size: 2.35rem; line-height: 1; }
   .loop-identity > aside { padding: 14px 0 0; border-top: 1px solid #c8d2ca; border-left: 0; }
+  .loop-jd-access, .loop-jd-source > header { align-items: stretch; flex-direction: column; }
+  .loop-jd-access > span { text-align: left; }
+  .loop-jd-source > header { padding: 14px 18px; }
+  .loop-jd-document { max-height: 62vh; padding: 4px 18px 32px; font-size: .8rem; }
   .loop-stage-track { padding: 15px 14px; display: grid; overflow: visible; }
   .loop-stage-track::before { left: 33px; right: auto; top: 34px; bottom: 34px; width: 2px; height: auto; }
   .loop-stage-track li { min-width: 0; }
