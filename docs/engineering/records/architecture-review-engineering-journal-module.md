@@ -55,6 +55,14 @@ Each record is identified by an immutable `id@revision` reference. The six suppo
 
 Corrections append a new record that names exact prior revisions through `amends` or `supersedes`. Accepted source revisions remain unchanged. Effective status and reverse links are projections, never edits to history.
 
+## Pull request receipt Interface
+
+Every merged pull request owns one compact, factual receipt under `docs/engineering/changes/pr-<number>.md`, including changes classified as `none`. The receipt is the complete chronological ledger; it does not become a rich record merely because a pull request exists.
+
+A material pull request links one or more exact `id@revision` rich-record references. It may add a new record or reuse an existing record when several small pull requests belong to the same evidence-backed change. CI binds the receipt path, repository, pull-request number, current title, selected impact classification, and rich references to the reviewed Git objects. The deterministic projection keeps receipts and rich records as separate evidence layers while exposing backlinks between them.
+
+The workflow never invents narrative prose from a diff. The pull-request coordinator authors the public-safe receipt and, when the classification is material, the supporting record; CI validates and publishes those canonical inputs automatically.
+
 ## Privacy and provenance
 
 Only allowlisted repositories and canonical paths are accepted. The module fails closed on absolute machine paths, private task identifiers, credentials, private remotes, non-example email addresses, and owner-private records marked eligible for publication. Diagnostics use fixed locators so a rejected value is not echoed into a workflow log.
