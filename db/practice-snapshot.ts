@@ -145,7 +145,12 @@ export async function buildPublicationQueue(ownerId: string, requestedDate?: str
       ...(timer?.completedAt ? { endedAt: new Date(timer.completedAt).toISOString() } : {}),
       ...(timer ? { elapsedSeconds: timer.accumulatedSeconds } : {}),
     } satisfies ConnectedActivity];
-  });
+  }).sort((left, right) => (
+    left.practiceDate.localeCompare(right.practiceDate)
+    || (left.timer?.completedAt ?? 0) - (right.timer?.completedAt ?? 0)
+    || (left.timer?.startedAt ?? 0) - (right.timer?.startedAt ?? 0)
+    || left.id.localeCompare(right.id)
+  ));
   const evidence = await readPublicationEvidenceState(ownerId, candidates.map((activity) => activity.id));
   const blockersByActivity = new Map<string, typeof evidence.blockers>();
   evidence.blockers.forEach((blocker) => blockersByActivity.set(

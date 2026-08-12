@@ -1,5 +1,6 @@
 import registryData from "../data/interaction-modes.json" with { type: "json" };
 import type { D1TransactionalFailureKind } from "./d1-transactional-guard";
+import { d1SafeInClauseBatches, d1SafeInClauseBatchSize } from "./d1-read-batching.ts";
 
 export type PracticeSpecialty = "leetcode" | "system_design" | "behavioral";
 export type InteractionModePhase = "fresh_attempt" | "active_attempt" | "review";
@@ -54,15 +55,10 @@ export function classifyInteractionModeAtomicFailure(kind: D1TransactionalFailur
 }
 
 export const interactionModeRegistry = registryData as InteractionModeRegistry;
-export const interactionModeReadBatchSize = 200;
+export const interactionModeReadBatchSize = d1SafeInClauseBatchSize;
 
 export function interactionModeActivityIdBatches(activityIds: readonly string[]) {
-  const ids = [...new Set(activityIds.filter(Boolean))];
-  const batches: string[][] = [];
-  for (let index = 0; index < ids.length; index += interactionModeReadBatchSize) {
-    batches.push(ids.slice(index, index + interactionModeReadBatchSize));
-  }
-  return batches;
+  return d1SafeInClauseBatches(activityIds);
 }
 
 function normalizedModeName(value: string) {

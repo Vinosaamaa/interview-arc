@@ -83,6 +83,7 @@ import {
   d1TransactionalInvariantGuard,
   isD1TransactionalInvariantFailure,
 } from "./d1-transactional-guard";
+import { readD1RowsInBatches } from "./d1-read-batching.ts";
 import {
   listTypedExchangePairs,
   resolveTypedExchangePair,
@@ -5037,58 +5038,99 @@ export type PublicationEvidenceBlocker = {
 };
 
 export async function readPublicationEvidenceState(ownerId: string, activityIds: string[]) {
-  if (!activityIds.length) return { blockers: [] as PublicationEvidenceBlocker[], unavailableClipIds: [] as string[] };
+  const requestedActivityIds = [...new Set(activityIds.filter(Boolean))];
+  if (!requestedActivityIds.length) {
+    return { blockers: [] as PublicationEvidenceBlocker[], unavailableClipIds: [] as string[] };
+  }
   const db = getDb();
-  const intents = await db.select().from(voiceCaptureIntents).where(and(
-    eq(voiceCaptureIntents.ownerId, ownerId),
-    inArray(voiceCaptureIntents.activityId, activityIds),
-    eq(voiceCaptureIntents.status, "accepted"),
+  const intents = await readD1RowsInBatches(requestedActivityIds, (batch) => (
+    db.select().from(voiceCaptureIntents).where(and(
+      eq(voiceCaptureIntents.ownerId, ownerId),
+      inArray(voiceCaptureIntents.activityId, batch),
+      eq(voiceCaptureIntents.status, "accepted"),
+    )).orderBy(
+      asc(voiceCaptureIntents.activityId),
+      asc(voiceCaptureIntents.occurredAt),
+      asc(voiceCaptureIntents.captureId),
+    )
   ));
   if (!intents.length) return { blockers: [] as PublicationEvidenceBlocker[], unavailableClipIds: [] as string[] };
-  const clipIds = intents.map((intent) => intent.clipId);
-  const [clips, analyses, responses] = await Promise.all([
-    db.select().from(activityAudioClips).where(and(
+  intents.sort((left, right) => (
+    left.activityId.localeCompare(right.activityId)
+    || left.occurredAt - right.occurredAt
+    || left.captureId.localeCompare(right.captureId)
+  ));
+  const clipIds = [...new Set(intents.map((intent) => intent.clipId))];
+  const captureIds = [...new Set(intents.map((intent) => intent.captureId))];
+  const [clips, analyses, responses, groupMembers] = await Promise.all([
+    readD1RowsInBatches(clipIds, (batch) => db.select().from(activityAudioClips).where(and(
       eq(activityAudioClips.ownerId, ownerId),
-      inArray(activityAudioClips.id, clipIds),
-    )),
-    db.select().from(activityDeliveryAnalyses).where(and(
+      inArray(activityAudioClips.id, batch),
+    ))),
+    readD1RowsInBatches(clipIds, (batch) => db.select().from(activityDeliveryAnalyses).where(and(
       eq(activityDeliveryAnalyses.ownerId, ownerId),
-      inArray(activityDeliveryAnalyses.audioClipId, clipIds),
-    )),
-    db.select().from(voiceSpecialistResponses).where(and(
+      inArray(activityDeliveryAnalyses.audioClipId, batch),
+    ))),
+    readD1RowsInBatches(captureIds, (batch) => db.select().from(voiceSpecialistResponses).where(and(
       eq(voiceSpecialistResponses.ownerId, ownerId),
-      inArray(voiceSpecialistResponses.captureId, intents.map((intent) => intent.captureId)),
-    )),
+      inArray(voiceSpecialistResponses.captureId, batch),
+    ))),
+    readD1RowsInBatches(captureIds, (batch) => db.select().from(voiceResponseGroupMembers).where(and(
+      eq(voiceResponseGroupMembers.ownerId, ownerId),
+      inArray(voiceResponseGroupMembers.captureId, batch),
+    ))),
   ]);
-  const canonicalTurnIds = responses.flatMap((response) => [response.userTurnId, response.responseTurnId]);
-  const canonicalTurns = canonicalTurnIds.length
-    ? await db.select().from(practiceTranscriptTurns).where(and(
-      eq(practiceTranscriptTurns.ownerId, ownerId),
-      inArray(practiceTranscriptTurns.activityId, activityIds),
-      inArray(practiceTranscriptTurns.turnId, canonicalTurnIds),
+  const groupResponseTurnIds = [...new Set(groupMembers.map((member) => member.responseTurnId))];
+  const responseGroups = await readD1RowsInBatches(groupResponseTurnIds, (batch) => (
+    db.select().from(voiceResponseGroups).where(and(
+      eq(voiceResponseGroups.ownerId, ownerId),
+      inArray(voiceResponseGroups.responseTurnId, batch),
     ))
-    : [];
+  ));
+  const canonicalTurnIds = [...new Set([
+    ...responses.flatMap((response) => [response.userTurnId, response.responseTurnId]),
+    ...groupMembers.map((member) => member.userTurnId),
+    ...groupResponseTurnIds,
+  ])];
+  // Query canonical turns by their bounded IDs only. The composite
+  // activity/turn map below keeps exact activity identity without combining
+  // two independent IN lists into one statement.
+  const canonicalTurns = await readD1RowsInBatches(canonicalTurnIds, (batch) => (
+    db.select().from(practiceTranscriptTurns).where(and(
+      eq(practiceTranscriptTurns.ownerId, ownerId),
+      inArray(practiceTranscriptTurns.turnId, batch),
+    ))
+  ));
   const clipById = new Map(clips.map((clip) => [clip.id, clip]));
   const analysisByClipId = new Map(analyses.map((analysis) => [analysis.audioClipId, analysis]));
   const responseByCaptureId = new Map(responses.map((response) => [response.captureId, response]));
+  const groupMemberByCaptureId = new Map(groupMembers.map((member) => [member.captureId, member]));
+  const groupByResponseTurnId = new Map(responseGroups.map((group) => [group.responseTurnId, group]));
   const turnByActivityAndId = new Map(canonicalTurns.map((turn) => [`${turn.activityId}\u0000${turn.turnId}`, turn]));
   const blockers: PublicationEvidenceBlocker[] = [];
   const unavailableClipIds: string[] = [];
   for (const intent of intents) {
     const response = responseByCaptureId.get(intent.captureId);
-    const userTurn = response
-      ? turnByActivityAndId.get(`${intent.activityId}\u0000${response.userTurnId}`)
+    const member = groupMemberByCaptureId.get(intent.captureId);
+    const group = member ? groupByResponseTurnId.get(member.responseTurnId) : undefined;
+    const userTurnId = response?.userTurnId ?? member?.userTurnId;
+    const responseTurnId = response?.responseTurnId ?? group?.responseTurnId;
+    const userTurn = userTurnId
+      ? turnByActivityAndId.get(`${intent.activityId}\u0000${userTurnId}`)
       : undefined;
-    const specialistTurn = response
-      ? turnByActivityAndId.get(`${intent.activityId}\u0000${response.responseTurnId}`)
+    const specialistTurn = responseTurnId
+      ? turnByActivityAndId.get(`${intent.activityId}\u0000${responseTurnId}`)
       : undefined;
-    if (!hasCanonicalMaterializedVoiceExchange(intent, response, userTurn, specialistTurn)) {
+    const hasCanonicalExchange = response
+      ? hasCanonicalMaterializedVoiceExchange(intent, response, userTurn, specialistTurn)
+      : hasCanonicalMaterializedVoiceGroupMember(intent, member, group, userTurn, specialistTurn);
+    if (!hasCanonicalExchange) {
       blockers.push({
         activityId: intent.activityId,
         captureId: intent.captureId,
         clipId: intent.clipId,
         kind: "transcript_not_materialized",
-        status: response?.status ?? "missing",
+        status: response?.status ?? group?.status ?? "missing",
       });
       continue;
     }
