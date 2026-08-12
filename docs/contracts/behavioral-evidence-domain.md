@@ -63,6 +63,7 @@ prepared above `E1`.
    1 s, 2 s, then 4 s) and stop the foreground wait after 10 seconds. If the
    receipt is still nonterminal, report it as pending with its operation ID;
    never invent failure, change the payload, or reserve a replacement ID.
+   Bulk foundation sync keeps only one unresolved write at a time.
 5. Present pending candidates through `query_behavioral_evidence_candidates`
    or the Behavioral Foundation review desk. Only an explicit owner action may
    call `review_behavioral_evidence_candidates`. Every accept, reject, or

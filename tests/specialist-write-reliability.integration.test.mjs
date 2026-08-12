@@ -87,7 +87,7 @@ test("local MCP persists exact specialist writes through durable receipts and re
       VALUES
         ('owner-specialist-write','activity-write','user-write-1','leetcode','user','My submitted code.','codex',1,100,100);
     `]);
-    worker = spawn(wrangler, ["dev", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
+    worker = spawn(wrangler, ["dev", "--local", "--test-scheduled", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
       cwd: project,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -285,6 +285,24 @@ test("local MCP persists exact specialist writes through durable receipts and re
       "company:amazon",
     ]);
     assert.equal(new Set(savedBankJobs.map((job) => job.result.questionId)).size, 6);
+
+    const burstJobs = Array.from({ length: 12 }, (_, index) => ({
+      operationId: `operation-bank-burst-${index + 1}`,
+      specialty: "leetcode",
+      questionId: `custom:leetcode:burst-${index + 1}`,
+      title: `Burst write ${index + 1}`,
+      tags: ["queue-reliability"],
+      active: true,
+    }));
+    const queuedBurst = await Promise.all(
+      burstJobs.map((question) => call("upsert_personal_bank_question", question)),
+    );
+    assert.ok(queuedBurst.every((job) => ["queued", "processing", "saved"].includes(job.status)));
+    const scheduled = await fetch(`${baseUrl}/__scheduled?cron=*+*+*+*+*`);
+    assert.equal(scheduled.ok, true);
+    const savedBurst = await waitForJobs(call, burstJobs.map((job) => job.operationId));
+    assert.ok(savedBurst.every((job) => job.status === "saved"));
+
     const bankReplays = await Promise.all(bankJobs.map((question) => call("upsert_personal_bank_question", question)));
     assert.ok(bankReplays.every((result) => result.status === "saved"));
     const replayedBankJobs = await waitForJobs(call, bankJobs.map((job) => job.operationId));
