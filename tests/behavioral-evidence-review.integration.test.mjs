@@ -172,6 +172,23 @@ test("source revisions and candidate review are owner-isolated, atomic, and exac
       ["evidence-candidate-1", 1, "pending"],
     ]);
     assert.equal((await call(otherClient, "query_behavioral_evidence_candidates", {})).candidates.length, 0);
+    const foundation = await call(client, "get_behavioral_foundation_status", {});
+    assert.equal(foundation.schemaVersion, 2);
+    assert.deepEqual(foundation.sources, {
+      total: 1,
+      active: 1,
+      available: 1,
+      changed: 1,
+      blocked: 0,
+      revisions: 2,
+      recent: [foundation.sources.recent[0]],
+      lastUpdatedAt: foundation.sources.lastUpdatedAt,
+      limit: 6,
+      truncated: false,
+    });
+    assert.equal(foundation.sources.recent[0].contentRevision, "revision-2");
+    assert.equal(foundation.candidates.pending, 3);
+    assert.equal(foundation.candidates.items.length, 3);
 
     const review = {
       operationId: "review-operation-1",

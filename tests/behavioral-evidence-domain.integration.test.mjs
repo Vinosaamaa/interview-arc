@@ -251,9 +251,29 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
     }]);
     assert.deepEqual(foundation.capabilities, {
       evidenceRead: "available",
-      sourceRegistry: "not_available",
+      sourceRegistry: "available",
+      candidateReview: "available",
       storyBank: "available",
       resumeLibrary: "available",
+    });
+    assert.deepEqual(foundation.sources, {
+      total: 0,
+      active: 0,
+      available: 0,
+      changed: 0,
+      blocked: 0,
+      revisions: 0,
+      recent: [],
+      lastUpdatedAt: null,
+      limit: 6,
+      truncated: false,
+    });
+    assert.deepEqual(foundation.candidates, {
+      pending: 0,
+      items: [],
+      lastUpdatedAt: null,
+      limit: 10,
+      truncated: false,
     });
     assert.deepEqual(foundation.stories, {
       total: 0,

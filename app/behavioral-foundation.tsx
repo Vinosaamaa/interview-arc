@@ -32,6 +32,8 @@ export default function BehavioralFoundation({
 }: Props) {
   const [status, setStatus] = useState<BehavioralFoundationStatus | null>();
   const [requestKey, setRequestKey] = useState(0);
+  const [reviewingEvidenceId, setReviewingEvidenceId] = useState<string | null>(null);
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
@@ -52,6 +54,33 @@ export default function BehavioralFoundation({
   const curriculumQuestionSet = useMemo(() => new Set(curriculumQuestionIds), [curriculumQuestionIds]);
   const evidenceLinkedCurriculum = status?.questionCoverage.filter((item) => curriculumQuestionSet.has(item.questionId)).length ?? 0;
   const curriculumCompleted = new Set(completedCurriculumQuestionIds).size;
+
+  const reviewCandidate = async (
+    evidenceId: string,
+    expectedRevision: number,
+    decision: "accept" | "reject",
+  ) => {
+    setReviewError(null);
+    setReviewingEvidenceId(evidenceId);
+    try {
+      const response = await fetch("/api/behavioral-foundation", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operationId: `foundation-review-${crypto.randomUUID()}`,
+          decisions: [{ evidenceId, expectedRevision, decision }],
+        }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "The evidence decision could not be saved.");
+      setStatus(undefined);
+      setRequestKey((value) => value + 1);
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : "The evidence decision could not be saved.");
+    } finally {
+      setReviewingEvidenceId(null);
+    }
+  };
 
   return (
     <section className="behavioral-foundation" aria-labelledby="behavioral-foundation-title">
@@ -79,10 +108,10 @@ export default function BehavioralFoundation({
         <div className="foundation-ledger">
           <article>
             <span className="foundation-index">SOURCE DOCKET</span>
-            <strong>{status.evidence.sourceRevisions}</strong>
-            <h3>Sanitized revisions</h3>
-            <p>{status.evidence.projects} project scope{status.evidence.projects === 1 ? "" : "s"} · {status.evidence.accepted} accepted evidence item{status.evidence.accepted === 1 ? "" : "s"}</p>
-            <small>Source registration is not shipped yet. This desk never guesses availability from stale evidence.</small>
+            <strong>{status.sources.total}</strong>
+            <h3>Registered private sources</h3>
+            <p>{status.sources.available} available · {status.sources.changed} changed · {status.sources.blocked} blocked</p>
+            <small>{status.sources.revisions} immutable revision{status.sources.revisions === 1 ? "" : "s"}. Only display-safe metadata leaves the local connector.</small>
           </article>
           <article>
             <span className="foundation-index">RÉSUMÉ COVERAGE</span>
@@ -111,6 +140,69 @@ export default function BehavioralFoundation({
             <small>{status.stories.truncated ? "More stories are available through the question-scoped preflight." : "Transcripts are never copied into this reusable layer."}</small>
           </article>
         </div>
+
+        <section className="foundation-source-register" aria-labelledby="foundation-source-register-title">
+          <header>
+            <div>
+              <span className="foundation-index">SOURCE REGISTER</span>
+              <h3 id="foundation-source-register-title">What the evidence specialist can inspect</h3>
+            </div>
+            <small>{status.sources.active} active · {status.sources.revisions} revisions</small>
+          </header>
+          {status.sources.recent.length ? <ol>
+            {status.sources.recent.map((source) => <li key={`${source.sourceId}:${source.revision}`}>
+              <div>
+                <strong>{source.label}</strong>
+                <span>{source.safeHint}</span>
+              </div>
+              <dl>
+                <div><dt>Project</dt><dd>{source.projectKey}</dd></div>
+                <div><dt>Availability</dt><dd data-state={source.availability}>{source.availability.replaceAll("_", " ")}</dd></div>
+                <div><dt>Refresh</dt><dd data-state={source.refreshStatus}>{source.refreshStatus.replaceAll("_", " ")}</dd></div>
+                <div><dt>Revision</dt><dd>v{source.revision}</dd></div>
+              </dl>
+            </li>)}
+          </ol> : <div className="foundation-subempty"><strong>No sources registered yet.</strong><span>Run the bounded local evidence refresh to publish sanitized source metadata—never raw files or locators.</span></div>}
+          {status.sources.truncated && <small className="foundation-more">More sources are available through the Behavioral specialist registry.</small>}
+        </section>
+
+        <section className="foundation-review-desk" aria-labelledby="foundation-review-desk-title">
+          <header>
+            <div>
+              <span className="foundation-index">OWNER REVIEW</span>
+              <h3 id="foundation-review-desk-title">Evidence waiting for your decision</h3>
+            </div>
+            <strong>{status.candidates.pending}</strong>
+          </header>
+          <p className="foundation-review-intro">Accept only factual, correctly scoped observations. Acceptance does not prove personal ownership; A3 attribution still requires your exact confirmation.</p>
+          {reviewError && <div className="foundation-review-error" role="alert">{reviewError}</div>}
+          {status.candidates.items.length ? <ol className="foundation-candidate-list">
+            {status.candidates.items.map((candidate) => {
+              const busy = reviewingEvidenceId === candidate.evidenceId;
+              return <li key={`${candidate.evidenceId}:${candidate.reviewRevision}`}>
+                <div className="foundation-candidate-meta">
+                  <span>{candidate.projectKey}</span>
+                  <span>{candidate.origin.replaceAll("_", " ")}</span>
+                  <span>{candidate.evidenceGrade} · {candidate.attributionGrade}</span>
+                  <span>review v{candidate.reviewRevision}</span>
+                </div>
+                <p>{candidate.statement}</p>
+                <div className="foundation-candidate-context">
+                  <span><strong>Supports</strong>{candidate.supports[0] ?? "No supporting scope recorded."}</span>
+                  <span><strong>Limit</strong>{candidate.limitations[0] ?? "No limitation recorded."}</span>
+                </div>
+                <div className="foundation-candidate-actions">
+                  <small>{candidate.questionLinks.length} linked prompt{candidate.questionLinks.length === 1 ? "" : "s"}</small>
+                  <div>
+                    <button type="button" className="reject" disabled={reviewingEvidenceId !== null} onClick={() => void reviewCandidate(candidate.evidenceId, candidate.reviewRevision, "reject")}>{busy ? "Saving…" : "Reject"}</button>
+                    <button type="button" className="accept" disabled={reviewingEvidenceId !== null} onClick={() => void reviewCandidate(candidate.evidenceId, candidate.reviewRevision, "accept")}>{busy ? "Saving…" : "Accept evidence"}</button>
+                  </div>
+                </div>
+              </li>;
+            })}
+          </ol> : <div className="foundation-subempty"><strong>The review queue is clear.</strong><span>New sanitized candidates appear here after a local specialist refresh.</span></div>}
+          {status.candidates.truncated && <small className="foundation-more">Review this bounded page, then refresh for the remaining candidates.</small>}
+        </section>
 
         {status.evidence.total === 0 && status.claims.total === 0 && <div className="foundation-empty"><strong>Your evidence desk is ready.</strong><span>Run a résumé-foundation drill with the Behavioral specialist to add the first sanitized evidence checkpoint.</span></div>}
       </>}
