@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { BEHAVIORAL_PROJECT_FOCUS_VALUES } from "./behavioral-project-deep-dive-policy";
 
 // Live practice state owned by the deployed website. Durable narrative content
 // (daily journals, attempt write-ups, transcripts) stays in Git; these tables
@@ -752,18 +753,7 @@ export const behavioralProjectQuestionBindings = sqliteTable(
     questionId: text("question_id").notNull(),
     currentRevision: integer("current_revision").notNull(),
     projectId: text("project_id").notNull(),
-    focus: text("focus", {
-      enum: [
-        "project_overview",
-        "resume_claim",
-        "architecture",
-        "technical_decision",
-        "challenge",
-        "incident",
-        "scale",
-        "results",
-      ],
-    }).notNull(),
+    focus: text("focus", { enum: BEHAVIORAL_PROJECT_FOCUS_VALUES }).notNull(),
     sourceClaimId: text("source_claim_id"),
     state: text("state", { enum: ["active", "archived"] }).notNull().default("active"),
     createdAt: integer("created_at").notNull(),
@@ -790,18 +780,7 @@ export const behavioralProjectQuestionBindingRevisions = sqliteTable(
     operationId: text("operation_id").notNull(),
     requestFingerprint: text("request_fingerprint").notNull(),
     projectId: text("project_id").notNull(),
-    focus: text("focus", {
-      enum: [
-        "project_overview",
-        "resume_claim",
-        "architecture",
-        "technical_decision",
-        "challenge",
-        "incident",
-        "scale",
-        "results",
-      ],
-    }).notNull(),
+    focus: text("focus", { enum: BEHAVIORAL_PROJECT_FOCUS_VALUES }).notNull(),
     sourceClaimId: text("source_claim_id"),
     state: text("state", { enum: ["active", "archived"] }).notNull(),
     reason: text("reason").notNull(),
@@ -821,18 +800,7 @@ export const behavioralProjectActivityLinks = sqliteTable(
     questionId: text("question_id").notNull(),
     bindingRevision: integer("binding_revision").notNull(),
     projectId: text("project_id").notNull(),
-    focus: text("focus", {
-      enum: [
-        "project_overview",
-        "resume_claim",
-        "architecture",
-        "technical_decision",
-        "challenge",
-        "incident",
-        "scale",
-        "results",
-      ],
-    }).notNull(),
+    focus: text("focus", { enum: BEHAVIORAL_PROJECT_FOCUS_VALUES }).notNull(),
     sourceClaimId: text("source_claim_id"),
     solutionRevision: integer("solution_revision"),
     source: text("source", { enum: ["finalization", "completed_attempt_backfill"] }).notNull(),

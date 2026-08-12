@@ -37,11 +37,12 @@ Learn may organize Behavioral Project Deep Dives beneath a project, but it
 does not own or copy their body. Follow
 `../contracts/behavioral-project-deep-dives.md` and consume the link-only
 projection from `query_behavioral_project_deep_dives`: stable project and
-question IDs, typed focus, binding revision, and exact/current Solution Profile
-revision. The canonical body remains the Behavioral Problem Bank Solution
-Profile. A Learn Lesson may teach from that exact revision, but any improvement
-to the project profile returns to the Behavioral specialist as a normal new
-immutable profile revision.
+question IDs, typed focus, binding revision, and the current reusable Solution
+Profile revision. The canonical body remains the Behavioral Problem Bank
+Solution Profile. When a Learn Lesson selects a profile, it persists and pins
+that exact immutable revision; a later current revision does not silently
+change the Lesson. Any improvement to the project profile returns to the
+Behavioral specialist as a normal new immutable profile revision.
 
 Titles, company names, transcript text, and lesson similarity never establish
 a project link. Learn does not publish the profile and does not turn a deep-dive

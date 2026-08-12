@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 
 import { d1TransactionalInvariantGuard } from "./d1-transactional-guard";
 import { getDb } from "./index";
@@ -21,6 +21,7 @@ import {
 } from "./schema";
 import {
   behavioralProjectBindingWriteSchema,
+  behavioralProjectActivityLinkMatches,
   behavioralProjectCompletedAttemptLinkSchema,
   behavioralProjectProfileMissingRequirements,
   behavioralProjectQuerySchema,
@@ -54,6 +55,9 @@ type BehavioralProjectOperationReceipt = Record<string, unknown> & {
   projectId?: string;
 };
 
+const PROJECT_REGISTRY_LIMIT = 100;
+const MIGRATION_REVIEW_LIMIT = 100;
+
 async function sha256(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -79,15 +83,36 @@ async function replayOperation(ownerId: string, operationId: string, fingerprint
   return { ...(operation.receipt as BehavioralProjectOperationReceipt), duplicate: true as const };
 }
 
-async function projectRegistryRows(ownerId: string) {
+async function projectRegistryRows(ownerId: string, projectId?: string, afterProjectId?: string) {
   const db = getDb();
   const [sources, evidence, stories] = await Promise.all([
-    db.select({ projectId: behavioralEvidenceSources.projectKey }).from(behavioralEvidenceSources)
-      .where(eq(behavioralEvidenceSources.ownerId, ownerId)),
-    db.select({ projectId: behavioralEvidenceItems.projectKey }).from(behavioralEvidenceItems)
-      .where(eq(behavioralEvidenceItems.ownerId, ownerId)),
-    db.select({ projectId: behavioralStories.projectKey }).from(behavioralStories)
-      .where(eq(behavioralStories.ownerId, ownerId)),
+    db.select({
+      projectId: behavioralEvidenceSources.projectKey,
+      count: sql<number>`count(*)`,
+    }).from(behavioralEvidenceSources).where(and(
+      eq(behavioralEvidenceSources.ownerId, ownerId),
+      projectId ? eq(behavioralEvidenceSources.projectKey, projectId) : undefined,
+      afterProjectId ? gt(behavioralEvidenceSources.projectKey, afterProjectId) : undefined,
+    )).groupBy(behavioralEvidenceSources.projectKey).orderBy(asc(behavioralEvidenceSources.projectKey))
+      .limit(projectId ? 1 : PROJECT_REGISTRY_LIMIT + 1),
+    db.select({
+      projectId: behavioralEvidenceItems.projectKey,
+      count: sql<number>`count(*)`,
+    }).from(behavioralEvidenceItems).where(and(
+      eq(behavioralEvidenceItems.ownerId, ownerId),
+      projectId ? eq(behavioralEvidenceItems.projectKey, projectId) : undefined,
+      afterProjectId ? gt(behavioralEvidenceItems.projectKey, afterProjectId) : undefined,
+    )).groupBy(behavioralEvidenceItems.projectKey).orderBy(asc(behavioralEvidenceItems.projectKey))
+      .limit(projectId ? 1 : PROJECT_REGISTRY_LIMIT + 1),
+    db.select({
+      projectId: behavioralStories.projectKey,
+      count: sql<number>`count(*)`,
+    }).from(behavioralStories).where(and(
+      eq(behavioralStories.ownerId, ownerId),
+      projectId ? eq(behavioralStories.projectKey, projectId) : undefined,
+      afterProjectId ? gt(behavioralStories.projectKey, afterProjectId) : undefined,
+    )).groupBy(behavioralStories.projectKey).orderBy(asc(behavioralStories.projectKey))
+      .limit(projectId ? 1 : PROJECT_REGISTRY_LIMIT + 1),
   ]);
   const counts = new Map<string, { sourceCount: number; evidenceCount: number; storyCount: number }>();
   const touch = (projectId: string) => {
@@ -95,16 +120,39 @@ async function projectRegistryRows(ownerId: string) {
     counts.set(projectId, current);
     return current;
   };
-  for (const row of sources) touch(row.projectId).sourceCount += 1;
-  for (const row of evidence) touch(row.projectId).evidenceCount += 1;
-  for (const row of stories) touch(row.projectId).storyCount += 1;
-  return [...counts.entries()].map(([projectId, countsByKind]) => ({ projectId, ...countsByKind }))
+  for (const row of sources) touch(row.projectId).sourceCount += Number(row.count);
+  for (const row of evidence) touch(row.projectId).evidenceCount += Number(row.count);
+  for (const row of stories) touch(row.projectId).storyCount += Number(row.count);
+  const projects = [...counts.entries()].map(([stableProjectId, countsByKind]) => ({ projectId: stableProjectId, ...countsByKind }))
     .sort((left, right) => left.projectId.localeCompare(right.projectId));
+  return {
+    projects: projects.slice(0, PROJECT_REGISTRY_LIMIT),
+    truncated: !projectId && (
+      projects.length > PROJECT_REGISTRY_LIMIT
+      || sources.length > PROJECT_REGISTRY_LIMIT
+      || evidence.length > PROJECT_REGISTRY_LIMIT
+      || stories.length > PROJECT_REGISTRY_LIMIT
+    ),
+  };
 }
 
 async function assertProjectExists(ownerId: string, projectId: string) {
-  const registry = await projectRegistryRows(ownerId);
-  if (!registry.some((project) => project.projectId === projectId)) {
+  const db = getDb();
+  const [source, evidence, story] = await Promise.all([
+    db.select({ projectId: behavioralEvidenceSources.projectKey }).from(behavioralEvidenceSources).where(and(
+      eq(behavioralEvidenceSources.ownerId, ownerId),
+      eq(behavioralEvidenceSources.projectKey, projectId),
+    )).limit(1),
+    db.select({ projectId: behavioralEvidenceItems.projectKey }).from(behavioralEvidenceItems).where(and(
+      eq(behavioralEvidenceItems.ownerId, ownerId),
+      eq(behavioralEvidenceItems.projectKey, projectId),
+    )).limit(1),
+    db.select({ projectId: behavioralStories.projectKey }).from(behavioralStories).where(and(
+      eq(behavioralStories.ownerId, ownerId),
+      eq(behavioralStories.projectKey, projectId),
+    )).limit(1),
+  ]);
+  if (!source[0] && !evidence[0] && !story[0]) {
     throw new BehavioralProjectDeepDiveError(
       "behavioral_project_not_found",
       "That stable project ID is unavailable in the same owner's Behavioral evidence registry.",
@@ -593,23 +641,7 @@ export async function prepareBehavioralProjectFinalizationLink(input: {
   )).limit(1);
   const existing = existingRows[0];
   if (existing) {
-    const existingIdentity = {
-      activityId: existing.activityId,
-      questionId: existing.questionId,
-      bindingRevision: existing.bindingRevision,
-      projectId: existing.projectId,
-      focus: existing.focus,
-      sourceClaimId: existing.sourceClaimId,
-    };
-    const immutableIdentity = {
-      activityId: identity.activityId,
-      questionId: identity.questionId,
-      bindingRevision: identity.bindingRevision,
-      projectId: identity.projectId,
-      focus: identity.focus,
-      sourceClaimId: identity.sourceClaimId,
-    };
-    if (JSON.stringify(existingIdentity) !== JSON.stringify(immutableIdentity)) {
+    if (!behavioralProjectActivityLinkMatches(existing, identity)) {
       throw new BehavioralProjectDeepDiveError(
         "behavioral_project_activity_link_conflict",
         "That attempt already has a different immutable Project Deep Dive link.",
@@ -623,23 +655,108 @@ function tagsOf(row: typeof ownerBankQuestions.$inferSelect) {
   return [...new Set(((row.tags ?? []) as string[]).map((tag) => tag.trim().toLowerCase()))];
 }
 
-async function migrationReview(ownerId: string, registry: Awaited<ReturnType<typeof projectRegistryRows>>) {
+function migrationQuestionMetadata(row: typeof ownerBankQuestions.$inferSelect) {
+  const tags = tagsOf(row);
+  return {
+    questionId: row.questionId,
+    isOverview: tags.includes("resume-foundation"),
+    isClaim: tags.includes("resume-bullet"),
+    projects: tags.filter((tag) => tag.startsWith("experience:"))
+      .map((tag) => tag.slice("experience:".length)).filter(Boolean),
+    claims: tags.filter((tag) => tag.startsWith("claim:") || tag.startsWith("resume-claim:"))
+      .map((tag) => tag.slice(tag.indexOf(":") + 1)).filter(Boolean),
+  };
+}
+
+async function knownProjectIds(ownerId: string, projectIds: string[]) {
+  const stableIds = [...new Set(projectIds)];
+  if (!stableIds.length) return new Set<string>();
   const db = getDb();
-  const [questions, bindings] = await Promise.all([
-    db.select().from(ownerBankQuestions).where(and(
-      eq(ownerBankQuestions.ownerId, ownerId),
-      eq(ownerBankQuestions.specialty, "behavioral"),
-      eq(ownerBankQuestions.active, true),
-    )).orderBy(asc(ownerBankQuestions.questionId)),
-    db.select().from(behavioralProjectQuestionBindings).where(eq(behavioralProjectQuestionBindings.ownerId, ownerId)),
+  const [sources, evidence, stories] = await Promise.all([
+    db.select({ projectId: behavioralEvidenceSources.projectKey }).from(behavioralEvidenceSources).where(and(
+      eq(behavioralEvidenceSources.ownerId, ownerId),
+      inArray(behavioralEvidenceSources.projectKey, stableIds),
+    )),
+    db.select({ projectId: behavioralEvidenceItems.projectKey }).from(behavioralEvidenceItems).where(and(
+      eq(behavioralEvidenceItems.ownerId, ownerId),
+      inArray(behavioralEvidenceItems.projectKey, stableIds),
+    )),
+    db.select({ projectId: behavioralStories.projectKey }).from(behavioralStories).where(and(
+      eq(behavioralStories.ownerId, ownerId),
+      inArray(behavioralStories.projectKey, stableIds),
+    )),
   ]);
-  const knownProjects = new Set(registry.map((project) => project.projectId));
+  return new Set([...sources, ...evidence, ...stories].map((row) => row.projectId));
+}
+
+type ClaimProjectResolution = { projectId: string } | { errorCode: string };
+
+async function resolveClaimProjects(ownerId: string, claimIds: string[]) {
+  const stableClaimIds = [...new Set(claimIds)];
+  const resolutions = new Map<string, ClaimProjectResolution>();
+  if (!stableClaimIds.length) return resolutions;
+  const db = getDb();
+  const claims = await db.select().from(behavioralClaims).where(and(
+    eq(behavioralClaims.ownerId, ownerId),
+    inArray(behavioralClaims.claimId, stableClaimIds),
+  ));
+  const claimById = new Map(claims.map((claim) => [claim.claimId, claim]));
+  const evidenceIds = [...new Set(claims.flatMap((claim) => claim.evidenceIds as string[]))];
+  const evidence = evidenceIds.length ? await db.select({
+    evidenceId: behavioralEvidenceItems.evidenceId,
+    projectId: behavioralEvidenceItems.projectKey,
+    state: behavioralEvidenceItems.candidateState,
+  }).from(behavioralEvidenceItems).where(and(
+    eq(behavioralEvidenceItems.ownerId, ownerId),
+    inArray(behavioralEvidenceItems.evidenceId, evidenceIds),
+  )) : [];
+  const evidenceById = new Map(evidence.map((item) => [item.evidenceId, item]));
+  for (const claimId of stableClaimIds) {
+    const claim = claimById.get(claimId);
+    if (!claim || claim.status === "contradicted") {
+      resolutions.set(claimId, { errorCode: "behavioral_project_claim_unavailable" });
+      continue;
+    }
+    const linkedEvidenceIds = [...new Set(claim.evidenceIds as string[])];
+    if (!linkedEvidenceIds.length) {
+      resolutions.set(claimId, { errorCode: "behavioral_project_claim_project_unresolved" });
+      continue;
+    }
+    const linkedEvidence = linkedEvidenceIds.map((evidenceId) => evidenceById.get(evidenceId));
+    if (linkedEvidence.some((item) => !item || item.state !== "accepted")) {
+      resolutions.set(claimId, { errorCode: "behavioral_project_claim_evidence_unavailable" });
+      continue;
+    }
+    const projects = [...new Set(linkedEvidence.map((item) => item!.projectId))];
+    resolutions.set(claimId, projects.length === 1
+      ? { projectId: projects[0] }
+      : { errorCode: "behavioral_project_claim_project_conflict" });
+  }
+  return resolutions;
+}
+
+async function migrationReview(ownerId: string, afterQuestionId?: string) {
+  const db = getDb();
+  const questionRows = await db.select().from(ownerBankQuestions).where(and(
+    eq(ownerBankQuestions.ownerId, ownerId),
+    eq(ownerBankQuestions.specialty, "behavioral"),
+    eq(ownerBankQuestions.active, true),
+    afterQuestionId ? gt(ownerBankQuestions.questionId, afterQuestionId) : undefined,
+  )).orderBy(asc(ownerBankQuestions.questionId)).limit(MIGRATION_REVIEW_LIMIT + 1);
+  const questions = questionRows.slice(0, MIGRATION_REVIEW_LIMIT).map(migrationQuestionMetadata);
+  const questionIds = questions.map((question) => question.questionId);
+  const bindings = questionIds.length ? await db.select().from(behavioralProjectQuestionBindings).where(and(
+    eq(behavioralProjectQuestionBindings.ownerId, ownerId),
+    inArray(behavioralProjectQuestionBindings.questionId, questionIds),
+  )) : [];
+  const [knownProjects, claimProjects] = await Promise.all([
+    knownProjectIds(ownerId, questions.flatMap((question) => question.projects)),
+    resolveClaimProjects(ownerId, questions.flatMap((question) => question.claims)),
+  ]);
   const bindingByQuestion = new Map(bindings.map((binding) => [binding.questionId, binding]));
-  const review = [];
+  const review: Array<Record<string, unknown>> = [];
   for (const question of questions) {
-    const tags = tagsOf(question);
-    const isOverview = tags.includes("resume-foundation");
-    const isClaim = tags.includes("resume-bullet");
+    const { isOverview, isClaim } = question;
     if (!isOverview && !isClaim) continue;
     const existing = bindingByQuestion.get(question.questionId);
     if (existing) {
@@ -650,7 +767,7 @@ async function migrationReview(ownerId: string, registry: Awaited<ReturnType<typ
       review.push({ questionId: question.questionId, status: "needs_review", reason: "conflicting_deep_dive_tags" });
       continue;
     }
-    const projects = tags.filter((tag) => tag.startsWith("experience:")).map((tag) => tag.slice("experience:".length)).filter(Boolean);
+    const { projects } = question;
     if (isOverview && projects.length === 0) {
       review.push({ questionId: question.questionId, status: "not_deep_dive", reason: "career_overview_without_project" });
       continue;
@@ -668,33 +785,35 @@ async function migrationReview(ownerId: string, registry: Awaited<ReturnType<typ
       review.push({ questionId: question.questionId, status: "ready", projectId, focus: "project_overview" });
       continue;
     }
-    const claims = tags.filter((tag) => tag.startsWith("claim:") || tag.startsWith("resume-claim:"))
-      .map((tag) => tag.slice(tag.indexOf(":") + 1)).filter(Boolean);
+    const { claims } = question;
     if (claims.length !== 1) {
       review.push({ questionId: question.questionId, status: "needs_review", reason: claims.length ? "multiple_source_claim_ids" : "missing_source_claim_id", projectId });
       continue;
     }
-    try {
-      const resolvedProject = await claimProject(ownerId, claims[0]);
-      review.push(resolvedProject === projectId
-        ? { questionId: question.questionId, status: "ready", projectId, focus: "resume_claim", sourceClaimId: claims[0] }
-        : { questionId: question.questionId, status: "needs_review", reason: "source_claim_project_mismatch", projectId });
-    } catch (error) {
-      review.push({
-        questionId: question.questionId,
-        status: "needs_review",
-        reason: error instanceof BehavioralProjectDeepDiveError ? error.code : "source_claim_unavailable",
-        projectId,
-      });
-    }
+    const resolvedClaim = claimProjects.get(claims[0]);
+    review.push(resolvedClaim && "projectId" in resolvedClaim && resolvedClaim.projectId === projectId
+      ? { questionId: question.questionId, status: "ready", projectId, focus: "resume_claim", sourceClaimId: claims[0] }
+      : {
+          questionId: question.questionId,
+          status: "needs_review",
+          reason: resolvedClaim && "errorCode" in resolvedClaim
+            ? resolvedClaim.errorCode
+            : resolvedClaim ? "source_claim_project_mismatch" : "behavioral_project_claim_unavailable",
+          projectId,
+        });
   }
-  return review;
+  const truncated = questionRows.length > MIGRATION_REVIEW_LIMIT;
+  return {
+    review,
+    truncated,
+    nextQuestionCursor: truncated ? questions.at(-1)?.questionId ?? null : null,
+  };
 }
 
 export async function queryBehavioralProjectDeepDives(ownerId: string, inputValue: unknown) {
   const input = behavioralProjectQuerySchema.parse(inputValue);
   const db = getDb();
-  const registry = await projectRegistryRows(ownerId);
+  const registry = await projectRegistryRows(ownerId, input.projectId, input.projectAfterId);
   const bindingWhere = and(
     eq(behavioralProjectQuestionBindings.ownerId, ownerId),
     input.projectId ? eq(behavioralProjectQuestionBindings.projectId, input.projectId) : undefined,
@@ -710,6 +829,7 @@ export async function queryBehavioralProjectDeepDives(ownerId: string, inputValu
       questionId: problemSolutionProfiles.questionId,
       currentRevision: problemSolutionProfiles.currentRevision,
       title: problemSolutionProfiles.title,
+      payload: problemSolutionProfiles.payload,
     }).from(problemSolutionProfiles).where(and(
       eq(problemSolutionProfiles.ownerId, ownerId),
       eq(problemSolutionProfiles.specialty, "behavioral"),
@@ -731,12 +851,30 @@ export async function queryBehavioralProjectDeepDives(ownerId: string, inputValu
     ).limit(101),
   ]);
   const profileByQuestion = new Map(profiles.map((profile) => [profile.questionId, profile]));
-  const bindingProjection = visibleBindings.map((binding) => ({
-    ...binding,
-    solutionProfile: profileByQuestion.get(binding.questionId) ?? null,
-  }));
+  const bindingProjection = visibleBindings.map((binding) => {
+    const profile = profileByQuestion.get(binding.questionId);
+    const missingRequirements = profile
+      ? behavioralProjectProfileMissingRequirements(
+          profile.payload as { sections: Array<{ sectionKey?: string }>; projectDeepDive?: unknown },
+          expectedProjectProfileBinding(binding),
+        )
+      : [];
+    return {
+      ...binding,
+      solutionProfile: profile ? {
+        questionId: profile.questionId,
+        currentRevision: profile.currentRevision,
+        title: profile.title,
+        reusable: missingRequirements.length === 0,
+        missingRequirements,
+      } : null,
+    };
+  });
+  const migration = input.includeMigrationReview ? await migrationReview(ownerId, input.migrationAfterQuestionId) : null;
   return {
-    projects: input.projectId ? registry.filter((project) => project.projectId === input.projectId) : registry,
+    projects: registry.projects,
+    projectsTruncated: registry.truncated,
+    nextProjectCursor: registry.truncated ? registry.projects.at(-1)?.projectId ?? null : null,
     bindings: bindingProjection,
     bindingsTruncated: bindings.length > 50,
     bindingRevisions: bindingRevisions.slice(0, 100),
@@ -749,8 +887,13 @@ export async function queryBehavioralProjectDeepDives(ownerId: string, inputValu
       focus: binding.focus,
       ...(binding.sourceClaimId ? { sourceClaimId: binding.sourceClaimId } : {}),
       bindingRevision: binding.currentRevision,
-      solutionProfileRevision: binding.solutionProfile?.currentRevision ?? null,
+      solutionProfileRevision: binding.solutionProfile?.reusable ? binding.solutionProfile.currentRevision : null,
+      solutionProfileReusable: binding.solutionProfile?.reusable ?? false,
     })),
-    ...(input.includeMigrationReview ? { migrationReview: await migrationReview(ownerId, registry) } : {}),
+    ...(migration ? {
+      migrationReview: migration.review,
+      migrationReviewTruncated: migration.truncated,
+      nextMigrationQuestionCursor: migration.nextQuestionCursor,
+    } : {}),
   };
 }

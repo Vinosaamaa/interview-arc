@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   behavioralProjectBindingWriteSchema,
+  behavioralProjectActivityLinkMatches,
   behavioralProjectProfileMissingRequirements,
   PROJECT_OVERVIEW_SECTION_KEYS,
   RESUME_CLAIM_SECTION_KEYS,
@@ -96,4 +97,33 @@ test("unbound Behavioral profiles cannot smuggle Project Deep Dive identity", ()
     projectDeepDive: overviewBinding,
     sections: PROJECT_OVERVIEW_SECTION_KEYS.map((sectionKey) => ({ sectionKey })),
   }, null), ["an active Project Deep Dive question binding"]);
+});
+
+test("immutable attempt links include the exact Solution Profile revision and source", () => {
+  const existing = {
+    activityId: "activity-sample-platform",
+    questionId: "experience-map-sample-platform",
+    bindingRevision: 1,
+    projectId: "sample-platform",
+    focus: "project_overview",
+    sourceClaimId: null,
+    solutionRevision: 1,
+    source: "finalization",
+  };
+  assert.equal(behavioralProjectActivityLinkMatches(existing, {
+    ...existing,
+    sourceClaimId: undefined,
+    source: "finalization",
+  }), true);
+  assert.equal(behavioralProjectActivityLinkMatches(existing, {
+    ...existing,
+    sourceClaimId: undefined,
+    solutionRevision: 2,
+    source: "finalization",
+  }), false);
+  assert.equal(behavioralProjectActivityLinkMatches({ ...existing, source: "completed_attempt_backfill" }, {
+    ...existing,
+    sourceClaimId: undefined,
+    source: "finalization",
+  }), false);
 });

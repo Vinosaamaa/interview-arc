@@ -340,6 +340,35 @@ const behavioralClaimToolSchema = z.object({
   }),
 });
 
+const specialistSolutionProfileSchema = z.object({
+  schemaVersion: z.literal(1),
+  summary: z.string().min(1),
+  sections: z.array(z.object({
+    sectionKey: behavioralProjectSectionKeySchema.optional(),
+    title: z.string().min(1),
+    body: z.string().min(1),
+  })).min(1),
+  tags: z.array(z.string().min(1)).max(32),
+  references: z.array(z.object({ title: z.string().min(1), url: z.string().url(), accessedAt: z.string().min(1) })),
+  behavioralAnswer: z.object({
+    preferred: z.object({
+      label: z.string().min(1),
+      answer: z.string().min(1),
+      evidence: z.array(z.string()),
+      evidenceGaps: z.array(z.string()),
+    }),
+    alternatives: z.array(z.object({
+      label: z.string().min(1),
+      answer: z.string().min(1),
+      whenToUse: z.string().optional(),
+      evidence: z.array(z.string()),
+      evidenceGaps: z.array(z.string()),
+    })).max(5),
+  }).optional(),
+  practiceScenarios: behavioralPracticeScenariosSchema.optional(),
+  projectDeepDive: behavioralProjectProfileBindingSchema.optional(),
+});
+
 const publishOwnerLiveUpdate = publishOwnerLiveUpdateRequest;
 
 function safeAudioFilename(value: string) {
@@ -3645,34 +3674,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
             researchPerformed: z.boolean(),
             sourcesChecked: z.array(z.string()),
           }).optional(),
-          solutionProfile: z.object({
-            schemaVersion: z.literal(1),
-            summary: z.string().min(1),
-            sections: z.array(z.object({
-              sectionKey: behavioralProjectSectionKeySchema.optional(),
-              title: z.string().min(1),
-              body: z.string().min(1),
-            })).min(1),
-            tags: z.array(z.string().min(1)).max(32),
-            references: z.array(z.object({ title: z.string().min(1), url: z.string().url(), accessedAt: z.string().min(1) })),
-            behavioralAnswer: z.object({
-              preferred: z.object({
-                label: z.string().min(1),
-                answer: z.string().min(1),
-                evidence: z.array(z.string()),
-                evidenceGaps: z.array(z.string()),
-              }),
-              alternatives: z.array(z.object({
-                label: z.string().min(1),
-                answer: z.string().min(1),
-                whenToUse: z.string().optional(),
-                evidence: z.array(z.string()),
-                evidenceGaps: z.array(z.string()),
-              })).max(5),
-            }).optional(),
-            practiceScenarios: behavioralPracticeScenariosSchema.optional(),
-            projectDeepDive: behavioralProjectProfileBindingSchema.optional(),
-          }).optional(),
+          solutionProfile: specialistSolutionProfileSchema.optional(),
         }),
       }).superRefine((input, context) => {
         if (input.specialty !== "leetcode" && input.finalization.questionMetadata) {
@@ -3680,6 +3682,13 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
             code: "custom",
             path: ["finalization", "questionMetadata"],
             message: "questionMetadata is supported only for LeetCode finalizations.",
+          });
+        }
+        if (input.specialty !== "behavioral" && input.finalization.solutionProfile?.projectDeepDive) {
+          context.addIssue({
+            code: "custom",
+            path: ["finalization", "solutionProfile", "projectDeepDive"],
+            message: "Project Deep Dive metadata is supported only for behavioral finalizations.",
           });
         }
       }),
@@ -3726,34 +3735,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
           researchPerformed: z.boolean(),
           sourcesChecked: z.array(z.string()),
         }).optional(),
-        profile: z.object({
-          schemaVersion: z.literal(1),
-          summary: z.string().min(1),
-          sections: z.array(z.object({
-            sectionKey: behavioralProjectSectionKeySchema.optional(),
-            title: z.string().min(1),
-            body: z.string().min(1),
-          })).min(1),
-          tags: z.array(z.string().min(1)).max(32),
-          references: z.array(z.object({ title: z.string().min(1), url: z.string().url(), accessedAt: z.string().min(1) })),
-          behavioralAnswer: z.object({
-            preferred: z.object({
-              label: z.string().min(1),
-              answer: z.string().min(1),
-              evidence: z.array(z.string()),
-              evidenceGaps: z.array(z.string()),
-            }),
-            alternatives: z.array(z.object({
-              label: z.string().min(1),
-              answer: z.string().min(1),
-              whenToUse: z.string().optional(),
-              evidence: z.array(z.string()),
-              evidenceGaps: z.array(z.string()),
-            })).max(5),
-          }).optional(),
-          practiceScenarios: behavioralPracticeScenariosSchema.optional(),
-          projectDeepDive: behavioralProjectProfileBindingSchema.optional(),
-        }),
+        profile: specialistSolutionProfileSchema,
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },

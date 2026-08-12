@@ -243,6 +243,10 @@ test("Project Deep Dives bind exact questions, freeze Past links, and project to
     assert.equal(migration.migrationReview.find((item) => item.questionId === overviewQuestion).focus, "project_overview");
     assert.equal(migration.migrationReview.find((item) => item.questionId === claimQuestion).sourceClaimId, "claim-sample-platform");
     assert.equal(migration.migrationReview.find((item) => item.questionId === careerOverviewQuestion).status, "not_deep_dive");
+    assert.equal(migration.projectsTruncated, false);
+    assert.equal(migration.nextProjectCursor, null);
+    assert.equal(migration.migrationReviewTruncated, false);
+    assert.equal(migration.nextMigrationQuestionCursor, null);
 
     const bindOverview = {
       operationId: "bind-sample-overview-1",
@@ -313,6 +317,20 @@ test("Project Deep Dives bind exact questions, freeze Past links, and project to
       profile: { ...overviewProfile, sections: [{ title: "Overview", body: "Missing stable keys." }] },
     });
     assert.equal(invalidProvisional.isError, true);
+    const crossSpecialtyProjectMetadata = await callRaw(client, "save_provisional_solution_profile", {
+      specialty: "leetcode",
+      questionId: "sample-platform-as-code",
+      title: "Invalid cross-specialty profile",
+      profile: {
+        schemaVersion: 1,
+        summary: "This profile must not carry Behavioral project identity.",
+        sections: [{ title: "Reference implementation", body: "```js\nreturn true;\n```" }],
+        tags: [],
+        references: [],
+        projectDeepDive: overviewProfile.projectDeepDive,
+      },
+    });
+    assert.equal(crossSpecialtyProjectMetadata.isError, true);
     await call(client, "save_provisional_solution_profile", {
       activityId: newActivity,
       specialty: "behavioral",
@@ -382,6 +400,18 @@ test("Project Deep Dives bind exact questions, freeze Past links, and project to
     assert.equal(projection.learnProjection.find((item) => item.questionId === overviewQuestion).solutionProfileRevision, 1);
     const similarProjection = await call(client, "query_behavioral_project_deep_dives", { projectId: "sample-platform-next" });
     assert.deepEqual(similarProjection.bindings.map((item) => item.questionId), [similarProjectQuestion]);
+
+    await call(client, "set_behavioral_project_binding", {
+      ...bindOverview,
+      operationId: "revise-sample-overview-focus-2",
+      expectedRevision: 1,
+      focus: "architecture",
+      reason: "Revise the focus without treating the revision-1 profile as current.",
+    });
+    const staleProjection = await call(client, "query_behavioral_project_deep_dives", { questionId: overviewQuestion });
+    assert.equal(staleProjection.bindings[0].solutionProfile.reusable, false);
+    assert.equal(staleProjection.learnProjection[0].solutionProfileRevision, null);
+    assert.equal(staleProjection.learnProjection[0].solutionProfileReusable, false);
 
     otherClient = await connectMcpClient(baseUrl, otherToken, "project-deep-dive-other");
     const isolated = await call(otherClient, "query_behavioral_project_deep_dives", { includeMigrationReview: true });

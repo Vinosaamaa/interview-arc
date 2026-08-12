@@ -316,6 +316,9 @@ function validateSolutionProfile(
   projectBinding: typeof behavioralProjectQuestionBindings.$inferSelect | null = null,
 ) {
   if (!payload) throw new Error("A complete finalization needs a reusable Solution Profile.");
+  if (specialty !== "behavioral" && payload.projectDeepDive) {
+    throw new Error("Project Deep Dive metadata is supported only for behavioral Solution Profiles.");
+  }
   validatePracticeScenariosForSpecialty(specialty, payload.practiceScenarios);
   const missing = [
     ...solutionProfileMissingRequirements(specialty, payload),
@@ -381,6 +384,9 @@ export async function saveProvisionalSolutionProfile(
   }
   if (specialty === "behavioral" && payload.sections.some((section) => TRANSCRIPT_SECTION.test(section.title))) {
     throw new Error("Behavioral provisional profiles cannot contain a transcript.");
+  }
+  if (specialty !== "behavioral" && payload.projectDeepDive) {
+    throw new Error("Project Deep Dive metadata is supported only for behavioral Solution Profiles.");
   }
   validatePracticeScenariosForSpecialty(specialty, payload.practiceScenarios);
   const db = getDb();
@@ -4250,22 +4256,67 @@ export async function saveSpecialistFinalization(
       linkedRevision = priorProfile.currentRevision;
     } else {
       const revision = (priorProfile?.currentRevision ?? 0) + 1;
-      await db
-        .insert(problemSolutionProfiles)
-        .values({ ownerId, specialty, questionId, title: payload.title, currentRevision: revision, tags: profile.tags, payload: profile, updatedAt: nowMs })
-        .onConflictDoUpdate({
-          target: [problemSolutionProfiles.ownerId, problemSolutionProfiles.specialty, problemSolutionProfiles.questionId],
-          set: { title: payload.title, currentRevision: revision, tags: profile.tags, payload: profile, updatedAt: nowMs },
-        });
-      await db.insert(problemSolutionRevisions).values({
-        ownerId,
-        specialty,
-        questionId,
-        revision,
-        activityId,
-        payload: profile,
-        createdAt: nowMs,
-      });
+      const profileCondition = priorProfile
+        ? sql`EXISTS (
+            SELECT 1 FROM ${problemSolutionProfiles}
+            WHERE ${problemSolutionProfiles.ownerId} = ${ownerId}
+              AND ${problemSolutionProfiles.specialty} = ${specialty}
+              AND ${problemSolutionProfiles.questionId} = ${questionId}
+              AND ${problemSolutionProfiles.currentRevision} = ${priorProfile.currentRevision}
+              AND ${problemSolutionProfiles.updatedAt} = ${priorProfile.updatedAt}
+          )`
+        : sql`NOT EXISTS (
+            SELECT 1 FROM ${problemSolutionProfiles}
+            WHERE ${problemSolutionProfiles.ownerId} = ${ownerId}
+              AND ${problemSolutionProfiles.specialty} = ${specialty}
+              AND ${problemSolutionProfiles.questionId} = ${questionId}
+          )`;
+      try {
+        await db.batch([
+          d1TransactionalInvariantGuard(db, profileCondition),
+          db.insert(problemSolutionProfiles)
+            .values({ ownerId, specialty, questionId, title: payload.title, currentRevision: revision, tags: profile.tags, payload: profile, updatedAt: nowMs })
+            .onConflictDoUpdate({
+              target: [problemSolutionProfiles.ownerId, problemSolutionProfiles.specialty, problemSolutionProfiles.questionId],
+              set: { title: payload.title, currentRevision: revision, tags: profile.tags, payload: profile, updatedAt: nowMs },
+            }),
+          db.insert(problemSolutionRevisions).values({
+            ownerId,
+            specialty,
+            questionId,
+            revision,
+            activityId,
+            payload: profile,
+            createdAt: nowMs,
+          }),
+        ] as unknown as Parameters<typeof db.batch>[0]);
+      } catch (error) {
+        const [settledProfiles, settledRevisions] = await Promise.all([
+          db.select().from(problemSolutionProfiles).where(and(
+            eq(problemSolutionProfiles.ownerId, ownerId),
+            eq(problemSolutionProfiles.specialty, specialty),
+            eq(problemSolutionProfiles.questionId, questionId),
+          )).limit(1),
+          db.select().from(problemSolutionRevisions).where(and(
+            eq(problemSolutionRevisions.ownerId, ownerId),
+            eq(problemSolutionRevisions.specialty, specialty),
+            eq(problemSolutionRevisions.questionId, questionId),
+            eq(problemSolutionRevisions.revision, revision),
+          )).limit(1),
+        ]);
+        const settledProfile = settledProfiles[0];
+        const settledRevision = settledRevisions[0];
+        const exactConcurrentWrite = settledProfile?.currentRevision === revision
+          && Boolean(settledRevision)
+          && profileFingerprint(settledProfile.payload as NonNullable<SpecialistFinalization["solutionProfile"]>) === profileFingerprint(profile)
+          && profileFingerprint(settledRevision!.payload as NonNullable<SpecialistFinalization["solutionProfile"]>) === profileFingerprint(profile);
+        if (!exactConcurrentWrite) {
+          if (isD1TransactionalInvariantFailure(error)) {
+            throw new Error("The Solution Profile changed during finalization; reread it before retrying.");
+          }
+          throw error;
+        }
+      }
       linkedRevision = revision;
     }
     await db.delete(provisionalSolutionProfiles).where(and(
