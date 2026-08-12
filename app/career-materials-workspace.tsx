@@ -34,10 +34,7 @@ function readableDate(value: number | string, includeTime = false) {
 
 function coverLetterStateLabel(state: CareerMaterialsCoverLetterArtifact["state"]) {
   if (state === "ready") return "Ready";
-  if (state === "superseded") return "Superseded";
-  if (state === "pending") return "Upload pending";
-  if (state === "deleting") return "Removal pending";
-  return "Deleted";
+  return "Superseded";
 }
 
 function readableSize(value: number) {
@@ -287,7 +284,7 @@ function CoverLetterHistory() {
   }, [requestKey]);
 
   async function loadOlder() {
-    if (projection?.status !== "available" || !projection.page.nextCursor) return;
+    if (!projection?.page.nextCursor) return;
     setLoadingOlder(true);
     setPaginationError(null);
     try {
@@ -295,16 +292,11 @@ function CoverLetterHistory() {
       const next = careerMaterialsCoverLetterResponseSchema.parse(await responseJson(
         await fetch(`/api/career-materials/cover-letters?${parameters}`, { cache: "no-store" }),
       ));
-      if (next.status !== "available") {
-        setPaginationError(next.message);
-        return;
-      }
       setProjection((current) => {
-        if (current?.status !== "available") return next;
+        if (!current) return next;
         const existing = new Set(current.artifacts.map((artifact) => artifact.id));
         return {
           ...next,
-          stale: current.stale || next.stale,
           artifacts: [...current.artifacts, ...next.artifacts.filter((artifact) => !existing.has(artifact.id))],
         };
       });
@@ -317,7 +309,7 @@ function CoverLetterHistory() {
 
   if (projection === undefined) return <section className="materials-cover-letter-state loading" aria-labelledby="materials-cover-letters-title" role="status">
     <span aria-hidden="true" />
-    <div><h2 id="materials-cover-letters-title">Cover letters</h2><p>Reading the authenticated Job Journey artifact history…</p></div>
+    <div><h2 id="materials-cover-letters-title">Cover letters</h2><p>Reading your owner-private Interview Arc document library…</p></div>
   </section>;
 
   if (projection === null) return <section className="materials-cover-letter-state error" aria-labelledby="materials-cover-letters-title" role="alert">
@@ -325,19 +317,14 @@ function CoverLetterHistory() {
     <button type="button" onClick={() => { setPaginationError(null); setProjection(undefined); setRequestKey((value) => value + 1); }}>Retry history</button>
   </section>;
 
-  if (projection.status === "unavailable") return <section className="materials-cover-letter-state unavailable" aria-labelledby="materials-cover-letters-title" role="status">
-    <div><h2 id="materials-cover-letters-title">Cover letters</h2><p>{projection.message}</p></div>
-    <button type="button" onClick={() => { setPaginationError(null); setProjection(undefined); setRequestKey((value) => value + 1); }}>Retry provider</button>
-  </section>;
-
   return <section className="materials-cover-letters" aria-labelledby="materials-cover-letters-title">
     <header>
-      <div><span className="materials-kicker">Job Journey artifacts</span><h2 id="materials-cover-letters-title">Cover letters</h2><p>Read-only final PDFs with exact résumé and lineage provenance. Creation stays with the specialist.</p></div>
-      <div className={`materials-provider-state ${projection.stale ? "stale" : "connected"}`}><i aria-hidden="true" />{projection.stale ? "Cached · provider unavailable" : "Authenticated provider read"}</div>
+      <div><span className="materials-kicker">Private document library</span><h2 id="materials-cover-letters-title">Cover letters</h2><p>Immutable DOCX/PDF pairs with exact résumé, evidence, and job-description provenance. Creation stays with the specialist.</p></div>
+      <div className="materials-provider-state connected"><i aria-hidden="true" />Interview Arc private storage</div>
     </header>
     {projection.artifacts.length === 0 ? <div className="materials-cover-letter-empty">
-      <strong>No final cover letter has been published.</strong>
-      <span>Ask the Resume &amp; Cover Letter specialist to draft from a complete job description and publish the verified one-page PDF.</span>
+      <strong>No cover letter has been saved yet.</strong>
+      <span>Give the Resume &amp; Cover Letter specialist a complete job description. After content and visual QA, both private formats appear here.</span>
     </div> : <ol className="materials-cover-letter-list">{projection.artifacts.map((artifact) => <li key={artifact.id}>
       <article>
         <header>
@@ -347,12 +334,12 @@ function CoverLetterHistory() {
         <dl>
           <div><dt>Résumé revision</dt><dd>{artifact.resumeLabel ?? "Private résumé"} · <code>{artifact.resumeRevisionId}</code>{!artifact.resumeRevisionKnown && <small>Revision is outside this bounded library read</small>}</dd></div>
           <div><dt>Lineage</dt><dd>{artifact.parentRevisionId ? <>Follows <code>{artifact.parentRevisionId}</code></> : "Initial artifact"}</dd></div>
-          <div><dt>Binding</dt><dd>{artifact.jobId ? `Application-linked · link r${artifact.linkRevision}` : "Standalone cover letter"}</dd></div>
-          <div><dt>PDF integrity</dt><dd>{readableSize(artifact.pdfSize)} · <code title={artifact.pdfSha256}>{artifact.pdfSha256.slice(0, 12)}…</code></dd></div>
+          <div><dt>Job description</dt><dd><code title={artifact.jobDescriptionSha256}>{artifact.jobDescriptionSha256.slice(0, 12)}…</code><small>Exact source fingerprint</small></dd></div>
+          <div><dt>Private files</dt><dd>{artifact.files.map((file) => `${file.format.toUpperCase()} · ${readableSize(file.byteSize)}`).join(" · ")}</dd></div>
         </dl>
         <footer>
           <code title={artifact.id}>{artifact.id}</code>
-          <div>{artifact.sourceUrl && <a href={artifact.sourceUrl} target="_blank" rel="noreferrer">Original posting</a>}{artifact.downloadUrl && <a className="primary" href={artifact.downloadUrl} target="_blank" rel="noreferrer" aria-label={`Open ${artifact.company} ${artifact.role} private cover-letter PDF in Job Journey`}>Open private PDF in Job Journey</a>}</div>
+          <div>{artifact.sourceUrl && <a href={artifact.sourceUrl} target="_blank" rel="noreferrer">Original posting</a>}{artifact.files.map((file) => <a key={file.format} className={file.format === "pdf" ? "primary" : undefined} href={file.downloadPath} aria-label={`Download ${artifact.company} ${artifact.role} cover letter as ${file.format.toUpperCase()}`}>Download {file.format.toUpperCase()}</a>)}</div>
         </footer>
       </article>
     </li>)}</ol>}
@@ -458,7 +445,7 @@ export default function CareerMaterialsWorkspace() {
     <CoverLetterHistory />
 
     <section className="materials-specialist-handoff" aria-labelledby="materials-specialist-title">
-      <div><h2 id="materials-specialist-title">Create with the specialist; verify here.</h2><p>The Resume &amp; Cover Letter specialist imports résumés and drafts evidence-grounded cover letters from a complete job description. A Loop is optional. Final cover-letter PDFs belong to Job Journey; Interview Arc shows only approved authenticated provenance once that cross-project link exists.</p></div>
+      <div><h2 id="materials-specialist-title">Create with the specialist; verify here.</h2><p>The Resume &amp; Cover Letter specialist imports résumés and drafts evidence-grounded cover letters from a complete job description. A Loop and Job Journey record are not required. Interview Arc stores the final private DOCX/PDF pair directly.</p></div>
       <ul><li>Use the exact current résumé revision</li><li>Keep unsupported claims out</li><li>Never rewrite old submissions</li></ul>
     </section>
   </section>;

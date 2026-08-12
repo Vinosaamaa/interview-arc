@@ -1708,6 +1708,60 @@ export const resumeImportLocks = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.resumeId] })],
 );
 
+// Cover letters are private Career Materials, not Job Journey application
+// records. D1 owns immutable revision/provenance metadata while the exact DOCX
+// and PDF pair lives in the same owner-private R2 boundary as résumé files.
+// Raw job descriptions, local paths, storage keys, and document bytes never
+// enter D1.
+export const coverLetterArtifacts = sqliteTable(
+  "cover_letter_artifacts",
+  {
+    ownerId,
+    artifactId: text("artifact_id").notNull(),
+    lineageId: text("lineage_id").notNull(),
+    parentRevisionId: text("parent_revision_id"),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    company: text("company").notNull(),
+    role: text("role").notNull(),
+    sourceUrl: text("source_url"),
+    jobDescriptionSha256: text("job_description_sha256").notNull(),
+    resumeId: text("resume_id").notNull(),
+    resumeRevisionId: text("resume_revision_id").notNull(),
+    evidenceFingerprint: text("evidence_fingerprint").notNull(),
+    storageGeneration: text("storage_generation").notNull(),
+    state: text("state", { enum: ["pending", "ready", "superseded"] }).notNull().default("pending"),
+    visibility: text("visibility", { enum: ["owner_private"] }).notNull().default("owner_private"),
+    createdAt: integer("created_at").notNull(),
+    readyAt: integer("ready_at"),
+    supersededAt: integer("superseded_at"),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.artifactId] }),
+    uniqueIndex("cover_letter_artifacts_operation_idx").on(table.ownerId, table.operationId),
+    uniqueIndex("cover_letter_artifacts_parent_idx").on(table.ownerId, table.parentRevisionId),
+    index("cover_letter_artifacts_lineage_idx").on(table.ownerId, table.lineageId, table.createdAt),
+    index("cover_letter_artifacts_state_idx").on(table.ownerId, table.state, table.createdAt),
+  ],
+);
+
+export const coverLetterArtifactFiles = sqliteTable(
+  "cover_letter_artifact_files",
+  {
+    ownerId,
+    artifactId: text("artifact_id").notNull(),
+    format: text("format", { enum: ["docx", "pdf"] }).notNull(),
+    sha256: text("sha256").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    mimeType: text("mime_type").notNull(),
+    filename: text("filename").notNull(),
+    visibility: text("visibility", { enum: ["owner_private"] }).notNull().default("owner_private"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.artifactId, table.format] })],
+);
+
 // Specialist writes first reserve a stable, owner-scoped operation receipt.
 // The MCP request only performs this small enqueue; a scheduled executor owns
 // the potentially expensive durable write and can reclaim an expired lease if

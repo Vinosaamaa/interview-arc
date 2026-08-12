@@ -71,11 +71,11 @@ the authenticated Google Drive connector for an explicitly authorized Google
 Docs resume import, read exact immutable resume revisions and bounded accepted
 evidence after reconnect, and use the installed cover-letter skill for
 cover-letter work. A complete JD is sufficient input; a Loop or application
-record is not required. Final cover letters are PDF only and Job Journey owns
-their private bytes. After content and visual QA, use one ignored private
-manifest with `pnpm cover-letter:publish -- private-sources/path/to/manifest.private.json`; reuse that exact manifest after
-uncertainty and treat only the authoritative Job Journey `ready` receipt as
-published. For an import, bracket both authenticated exports with
+record is not required. Final cover letters are matching DOCX/PDF pairs owned
+by Interview Arc private D1/R2 storage. After content and visual QA, use one
+ignored private manifest with `pnpm cover-letter:save -- private-sources/path/to/manifest.private.json`; reuse that exact manifest after
+uncertainty and treat only the authoritative Interview Arc `saved`/`ready`
+receipt as durable. For an import, bracket both authenticated exports with
 matching Drive metadata reads and use the ignored private capture controller;
 never print or remotely persist the Drive identity or local paths. Do not import
 a resume or draft a cover letter yet. Confirm whether the MCP bridge and Google

@@ -215,10 +215,8 @@ or export path. Each operation receipt is cached privately under
   and unknown revision requests remain indistinguishable, and no response
   exposes an R2 key, generation, provider locator, or owner identity.
 
-## Remaining issue #211 work
+## Bounded extraction
 
-Cross-repository cover-letter publication remains a separate Job Journey
-slice.
 The current import accepts already-extracted bounded occurrences and exact
 semantic identities; it does not run an untrusted semantic model inside the
 Worker or invent pending claims.
