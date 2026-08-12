@@ -176,9 +176,21 @@ test("Behavioral completeness rejects tiny answers, transcript sections, and inc
       "orientation", "architecture", "end_to_end_flows", "ownership_and_evidence", "decisions_and_tradeoffs",
       "operations_reliability_security", "results_and_gaps", "interview_walkthrough", "likely_follow_ups",
     ].map((sectionKey) => ({ sectionKey, title: sectionKey, body: prose(sectionKey, 70) })),
+    behavioralAnswer: {
+      preferred: complete.behavioralAnswer.preferred,
+      alternatives: [{
+        answer: prose("focusPivot", 62),
+        whenToUse: prose("when", 12),
+        evidence: [],
+        evidenceGaps: ["Personal ownership remains unresolved."],
+      }],
+    },
     projectDeepDive: { projectId: "sample", bindingRevision: 1, focus: "project_overview" },
   };
   assert.equal(isReusableSolutionProfile("behavioral", project), true, solutionProfileMissingRequirements("behavioral", project).join("\n"));
+  project.behavioralAnswer.alternatives[0].answer = prose("thinPivot", 59);
+  assert.ok(solutionProfileMissingRequirements("behavioral", project).includes("behavioral alternative 1 detailed answer"));
+  project.behavioralAnswer.alternatives[0].answer = prose("focusPivot", 62);
   project.sections[2].body = "Thin flow.";
   assert.ok(solutionProfileMissingRequirements("behavioral", project).includes("detailed Project Deep Dive section: end_to_end_flows"));
 });
