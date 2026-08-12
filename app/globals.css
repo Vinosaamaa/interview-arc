@@ -2206,6 +2206,12 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .loop-journey-facts article:last-child { border-bottom: 0; }
 }
 
+@media (max-width: 360px) {
+  .mobile-interview-nav { min-height: 104px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mobile-interview-nav button { min-height: 44px; line-height: 1.1; white-space: normal; }
+  .page-content { padding-bottom: 140px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .loops-loader { animation: none; }
 }

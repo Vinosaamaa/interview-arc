@@ -214,6 +214,9 @@ test("responsive shell keeps the workspace selector above a six-item Interview d
   assert.equal(interviewDock.position, "fixed");
   assert.equal(interviewDock.display, "grid");
   assert.equal(interviewDock["grid-template-columns"], "repeat(6, 1fr)");
+  const compactDock = cssRules(rules, ".mobile-interview-nav", "max-width: 360px").at(-1).declarations;
+  assert.equal(compactDock["grid-template-columns"], "repeat(3, minmax(0, 1fr))");
+  assert.equal(cssRules(rules, ".mobile-interview-nav button", "max-width: 360px").at(-1).declarations["min-height"], "44px");
   assert.ok(cssRules(rules, ".topbar > div:last-child").some((rule) => rule.declarations["flex-wrap"] === "nowrap"));
   assert.equal(cssRules(rules, ".topbar .secondary-action", "max-width: 900px").at(-1).declarations.display, "none");
 });
