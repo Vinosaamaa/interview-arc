@@ -56,3 +56,20 @@ test("private resume downloads resolve owner identity and never accept a storage
   assert.match(download, /cache-control": "private, no-store/);
   assert.doesNotMatch(download, /searchParams|get\("objectKey"\)|request\.json/);
 });
+
+test("Career Materials owns cover-letter history and both private formats without a provider read", async () => {
+  const [materials, route, download, client] = await Promise.all([
+    load("../app/career-materials-workspace.tsx"),
+    load("../app/api/career-materials/cover-letters/route.ts"),
+    load("../mcp-worker/cover-letter-artifact-download.ts"),
+    load("../db/job-journey-client.ts"),
+  ]);
+  assert.match(materials, /Interview Arc private storage/);
+  assert.match(materials, /Download \{file\.format\.toUpperCase\(\)\}/);
+  assert.match(materials, /A Loop and Job Journey record are not required/);
+  assert.match(route, /readCoverLetterLibrary\(ownerId/);
+  assert.match(route, /getResumeRevisionReferences/);
+  assert.match(download, /readCoverLetterArtifactFile\(ownerId, artifactId, typedFormat\)/);
+  assert.match(download, /privateCoverLetterObjectKey/);
+  assert.doesNotMatch(client, /fetchCoverLetters|cover-letters/);
+});

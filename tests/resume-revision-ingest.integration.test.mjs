@@ -119,6 +119,44 @@ async function postResumeImport(baseUrl, token, overrides = {}) {
   return { response, body: await response.json() };
 }
 
+function coverLetterForm(overrides = {}) {
+  const docxBytes = overrides.docxBytes ?? new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0, 0, 0]);
+  const pdfBytes = overrides.pdfBytes ?? new TextEncoder().encode("%PDF-1.7\n% private cover-letter fixture\n%%EOF");
+  const form = new FormData();
+  form.set("operationId", overrides.operationId ?? "cover-letter-save-operation-1");
+  form.set("artifactId", overrides.artifactId ?? "cover-letter-artifact-1");
+  form.set("lineageId", overrides.lineageId ?? "cover-letter-artifact-1");
+  form.set("company", overrides.company ?? "Example Company");
+  form.set("role", overrides.role ?? "Platform Engineer");
+  form.set("sourceUrl", "https://example.com/jobs/platform-engineer");
+  form.set("jobDescriptionSha256", sha256("complete private job description"));
+  form.set("resumeId", "primary-resume");
+  form.set("resumeRevisionId", "resume-revision-1");
+  form.set("evidenceFingerprint", sha256("bounded accepted evidence identities"));
+  form.set("qualityAttestation", JSON.stringify(overrides.qualityAttestation ?? {
+    contentScore: 10,
+    factualityFullCredit: true,
+    specificityFullCredit: true,
+    pageCount: 1,
+    visuallyInspected: true,
+    inspectedAt: 1_786_530_000_000,
+  }));
+  form.set("docx", new File([docxBytes], "Example-Cover-Letter.docx", {
+    type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  }));
+  form.set("pdf", new File([pdfBytes], "Example-Cover-Letter.pdf", { type: "application/pdf" }));
+  return { form, docxBytes, pdfBytes };
+}
+
+async function postCoverLetter(baseUrl, token, overrides = {}) {
+  const response = await fetch(`${baseUrl}/cover-letter/imports`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+    body: coverLetterForm(overrides).form,
+  });
+  return { response, body: await response.json() };
+}
+
 async function deleteResumeFiles(baseUrl, token, resumeId, revisionId, body) {
   const response = await fetch(`${baseUrl}/resume/files/${resumeId}/${revisionId}`, {
     method: "DELETE",
@@ -229,11 +267,59 @@ test("an authenticated staged DOCX/PDF pair becomes one immutable current resume
     assert.equal(changedRetry.response.status, 409);
     assert.equal(changedRetry.body.code, "resume_import_operation_conflict");
 
+    const coverFiles = coverLetterForm();
+    const coverCreated = await postCoverLetter(baseUrl, ownerToken);
+    assert.equal(coverCreated.response.status, 201, `${JSON.stringify(coverCreated.body)}\n${workerLog}`);
+    assert.equal(coverCreated.body.status, "saved");
+    assert.equal(coverCreated.body.artifact.id, "cover-letter-artifact-1");
+    assert.deepEqual(coverCreated.body.artifact.files.map((file) => file.format), ["docx", "pdf"]);
+    assert.equal(/objectKey|storageGeneration|"jobDescription":/.test(JSON.stringify(coverCreated.body)), false);
+
+    const coverReplay = await postCoverLetter(baseUrl, ownerToken);
+    assert.equal(coverReplay.response.status, 200);
+    assert.deepEqual(coverReplay.body, coverCreated.body);
+    const coverChanged = await postCoverLetter(baseUrl, ownerToken, { company: "Changed Company" });
+    assert.equal(coverChanged.response.status, 409);
+    assert.equal(coverChanged.body.code, "cover_letter_operation_conflict");
+    const invalidQuality = await postCoverLetter(baseUrl, ownerToken, {
+      operationId: "cover-letter-save-invalid-quality",
+      artifactId: "cover-letter-artifact-invalid-quality",
+      lineageId: "cover-letter-artifact-invalid-quality",
+      qualityAttestation: {
+        contentScore: 10,
+        factualityFullCredit: true,
+        specificityFullCredit: true,
+        pageCount: 1,
+        visuallyInspected: true,
+        inspectedAt: 0,
+        unsupported: "must fail closed",
+      },
+    });
+    assert.equal(invalidQuality.response.status, 400);
+    assert.equal(invalidQuality.body.code, "cover_letter_quality_gate_failed");
+
+    for (const [format, bytes] of [["docx", coverFiles.docxBytes], ["pdf", coverFiles.pdfBytes]]) {
+      const download = await fetch(`${baseUrl}/cover-letter/files/cover-letter-artifact-1/${format}`, {
+        headers: { authorization: `Bearer ${ownerToken}` },
+      });
+      assert.equal(download.status, 200);
+      assert.deepEqual(new Uint8Array(await download.arrayBuffer()), bytes);
+      assert.equal(download.headers.get("cache-control"), "private, no-store");
+    }
+
     otherClient = await connect(baseUrl, otherToken, "resume-ingest-other-owner");
     const isolated = await call(otherClient, "get_resume_import_status", {
       operationId: "resume-import-operation-1",
     });
     assert.deepEqual(isolated, { found: false });
+    const isolatedCoverOperation = await fetch(`${baseUrl}/cover-letter/operations/cover-letter-save-operation-1`, {
+      headers: { authorization: `Bearer ${otherToken}` },
+    });
+    assert.equal(isolatedCoverOperation.status, 404);
+    const isolatedCoverFile = await fetch(`${baseUrl}/cover-letter/files/cover-letter-artifact-1/pdf`, {
+      headers: { authorization: `Bearer ${otherToken}` },
+    });
+    assert.equal(isolatedCoverFile.status, 404);
 
     const refreshedObservationManifest = JSON.parse(resumeImportForm().form.get("manifest"));
     refreshedObservationManifest.capturedAt += 60_000;

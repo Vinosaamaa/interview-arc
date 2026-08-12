@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-const providerId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/);
-const resumeId = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,199}$/);
+const stableId = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,199}$/);
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/);
+
 function isPublicHttpUrl(value: string) {
   const url = new URL(value);
   const hostname = url.hostname.toLowerCase();
@@ -18,110 +18,78 @@ function isPublicHttpUrl(value: string) {
     && !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname)
     && !hasSensitiveParameter;
 }
-const httpUrl = z.string().url().max(2_048).refine(isPublicHttpUrl);
-const httpsUrl = z.string().url().max(2_048).refine((value) => {
-  const url = new URL(value);
-  return url.protocol === "https:" && !url.username && !url.password;
-});
-export const privateCoverLetterDownloadPathSchema = z.string().regex(/^\/api\/assets\/cover-letters\/[A-Za-z0-9%_-]+$/);
-const coverLetterPageCursorSchema = z.object({
+
+const publicHttpUrl = z.string().url().max(2_048).refine(isPublicHttpUrl);
+const pageCursorSchema = z.object({
   hasMore: z.boolean(),
   nextCursor: z.string().min(1).max(2_048).nullable(),
 }).strict().superRefine((page, context) => {
-  if (page.hasMore !== (page.nextCursor !== null)) {
-    context.addIssue({
-      code: "custom",
-      path: ["nextCursor"],
-      message: "A continuation cursor is required exactly when more results exist.",
-    });
-  }
+  if (page.hasMore !== (page.nextCursor !== null)) context.addIssue({
+    code: "custom",
+    path: ["nextCursor"],
+    message: "A continuation cursor is required exactly when more results exist.",
+  });
 });
 
-export const coverLetterArtifactStateSchema = z.enum([
-  "pending",
-  "ready",
-  "superseded",
-  "deleting",
-  "deleted",
-]);
+export const coverLetterArtifactFileSchema = z.object({
+  format: z.enum(["docx", "pdf"]),
+  sha256,
+  byteSize: z.number().int().positive().max(8 * 1024 * 1024),
+  mimeType: z.enum([
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/pdf",
+  ]),
+  filename: z.string().trim().min(1).max(180),
+  downloadPath: z.string().regex(/^\/api\/career-materials\/cover-letters\/[a-z0-9._-]+\/(docx|pdf)$/),
+}).strict().superRefine((file, context) => {
+  if (!file.filename.toLowerCase().endsWith(`.${file.format}`)) context.addIssue({
+    code: "custom",
+    path: ["filename"],
+    message: "The filename extension must match its format.",
+  });
+  if (!file.downloadPath.endsWith(`/${file.format}`)) context.addIssue({
+    code: "custom",
+    path: ["downloadPath"],
+    message: "The download path must match its format.",
+  });
+});
 
-export const jobJourneyCoverLetterArtifactSchema = z.object({
-  id: providerId,
-  lineageId: providerId,
-  parentRevisionId: providerId.nullable(),
+export const careerMaterialsCoverLetterArtifactSchema = z.object({
+  id: stableId,
+  lineageId: stableId,
+  parentRevisionId: stableId.nullable(),
   company: z.string().trim().min(1).max(180),
   role: z.string().trim().min(1).max(180),
-  sourceUrl: httpUrl.nullable(),
-  state: coverLetterArtifactStateSchema,
+  sourceUrl: publicHttpUrl.nullable(),
+  state: z.enum(["ready", "superseded"]),
   jobDescriptionSha256: sha256,
-  resumeId,
-  resumeRevisionId: resumeId,
-  pdfSha256: sha256,
-  pdfSize: z.number().int().positive().max(2 * 1024 * 1024),
-  pdfFilename: z.string().trim().min(1).max(180),
-  jobId: providerId.nullable(),
-  linkRevision: z.number().int().nonnegative(),
-  createdAt: z.string().datetime({ offset: true }),
-  readyAt: z.string().datetime({ offset: true }).nullable(),
-  supersededAt: z.string().datetime({ offset: true }).nullable(),
-  deletedAt: z.string().datetime({ offset: true }).nullable(),
-  updatedAt: z.string().datetime({ offset: true }),
-  downloadPath: privateCoverLetterDownloadPathSchema.nullable(),
-}).strict();
-
-export const jobJourneyCoverLetterPageSchema = z.object({
-  schemaVersion: z.literal(1),
-  generatedAt: z.string().datetime({ offset: true }),
-  artifacts: z.array(jobJourneyCoverLetterArtifactSchema).max(100),
-  page: coverLetterPageCursorSchema,
-}).strict().superRefine((page, context) => {
-  for (const [index, artifact] of page.artifacts.entries()) {
-    const downloadable = artifact.state === "ready" || artifact.state === "superseded";
-    if (downloadable !== (artifact.downloadPath !== null)) {
-      context.addIssue({ code: "custom", path: ["artifacts", index, "downloadPath"], message: "Download availability does not match artifact state." });
-    }
-    if (artifact.state === "ready" && artifact.readyAt === null) {
-      context.addIssue({ code: "custom", path: ["artifacts", index, "readyAt"], message: "A ready artifact requires readyAt." });
-    }
-  }
-});
-
-export type JobJourneyCoverLetterPage = z.infer<typeof jobJourneyCoverLetterPageSchema>;
-
-export const careerMaterialsCoverLetterArtifactSchema = jobJourneyCoverLetterArtifactSchema.extend({
+  resumeId: stableId,
+  resumeRevisionId: stableId,
+  evidenceFingerprint: sha256,
   resumeLabel: z.string().trim().min(1).max(120).nullable(),
   resumeRevisionKnown: z.boolean(),
-  downloadUrl: httpsUrl.nullable(),
-}).strict();
+  createdAt: z.string().datetime({ offset: true }),
+  readyAt: z.string().datetime({ offset: true }),
+  supersededAt: z.string().datetime({ offset: true }).nullable(),
+  files: z.array(coverLetterArtifactFileSchema).length(2),
+}).strict().superRefine((artifact, context) => {
+  const formats = new Set(artifact.files.map((file) => file.format));
+  if (formats.size !== 2 || !formats.has("docx") || !formats.has("pdf")) context.addIssue({
+    code: "custom",
+    path: ["files"],
+    message: "A complete DOCX/PDF pair is required.",
+  });
+});
 
 export type CareerMaterialsCoverLetterArtifact = z.infer<typeof careerMaterialsCoverLetterArtifactSchema>;
 
-const availableResponse = z.object({
+export const careerMaterialsCoverLetterResponseSchema = z.object({
   schemaVersion: z.literal(1),
   status: z.literal("available"),
-  stale: z.boolean(),
+  stale: z.literal(false),
   generatedAt: z.string().datetime({ offset: true }),
   artifacts: z.array(careerMaterialsCoverLetterArtifactSchema).max(100),
-  page: coverLetterPageCursorSchema,
+  page: pageCursorSchema,
 }).strict();
-
-const unavailableResponse = z.object({
-  schemaVersion: z.literal(1),
-  status: z.literal("unavailable"),
-  stale: z.literal(false),
-  generatedAt: z.null(),
-  artifacts: z.null(),
-  page: z.null(),
-  message: z.string().min(1).max(240),
-}).strict();
-
-export const careerMaterialsCoverLetterResponseSchema = z.discriminatedUnion("status", [
-  availableResponse,
-  unavailableResponse,
-]);
 
 export type CareerMaterialsCoverLetterResponse = z.infer<typeof careerMaterialsCoverLetterResponseSchema>;
-
-export function normalizeJobJourneyCoverLetterPage(value: unknown): JobJourneyCoverLetterPage {
-  return jobJourneyCoverLetterPageSchema.parse(value);
-}

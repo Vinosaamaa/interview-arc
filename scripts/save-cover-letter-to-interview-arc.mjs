@@ -9,17 +9,20 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { z } from "zod";
 
 const DEFAULT_MCP_ENDPOINT = "https://limitless-mcp.vinosama.workers.dev/mcp";
+const DEFAULT_IMPORT_ENDPOINT = "https://limitless-mcp.vinosama.workers.dev/cover-letter/imports";
 const MAX_MANIFEST_BYTES = 512_000;
-const MAX_PDF_BYTES = 2 * 1024 * 1024;
+const MAX_DOCUMENT_BYTES = 8 * 1024 * 1024;
 const MAX_JOB_DESCRIPTION_BYTES = 200_000;
-const MAX_PROVIDER_RECEIPT_BYTES = 256 * 1024;
+const MAX_RECEIPT_BYTES = 256 * 1024;
 const projectRoot = fileURLToPath(new URL("..", import.meta.url));
-const providerId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/);
+const artifactId = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,199}$/);
 const resumeId = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,199}$/);
-const safeDisplay = z.string().trim().min(1).max(180);
+const safeDisplay = z.string().trim().min(1).max(180)
+  .transform((value) => value.normalize("NFKC"))
+  .pipe(z.string().min(1).max(180));
 const stableReference = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,199}$/);
 const sha256Hex = z.string().regex(/^[a-f0-9]{64}$/);
-const providerDownloadPath = z.string().regex(/^\/api\/assets\/cover-letters\/[A-Za-z0-9%_-]+$/);
+const privateDownloadPath = z.string().regex(/^\/api\/career-materials\/cover-letters\/[a-z0-9._-]+\/(docx|pdf)$/);
 
 function isPublicPostingUrl(value) {
   const url = new URL(value);
@@ -39,58 +42,65 @@ function isPublicPostingUrl(value) {
 
 const publicPostingUrl = z.string().url().max(2_048).refine(isPublicPostingUrl)
   .transform((value) => new URL(value).toString());
-const providerArtifactReceiptSchema = z.object({
-  id: providerId,
-  lineageId: providerId,
-  parentRevisionId: providerId.nullable(),
+const artifactFileReceiptSchema = z.object({
+  format: z.enum(["docx", "pdf"]),
+  sha256: sha256Hex,
+  byteSize: z.number().int().positive().max(MAX_DOCUMENT_BYTES),
+  mimeType: z.enum([
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/pdf",
+  ]),
+  filename: z.string().trim().min(1).max(180),
+  downloadPath: privateDownloadPath,
+}).strict();
+const arcArtifactReceiptSchema = z.object({
+  id: artifactId,
+  lineageId: artifactId,
+  parentRevisionId: artifactId.nullable(),
   company: safeDisplay,
   role: safeDisplay,
   sourceUrl: publicPostingUrl.nullable(),
-  state: z.enum(["pending", "ready", "superseded", "deleting", "deleted"]),
+  state: z.enum(["pending", "ready", "superseded"]),
   jobDescriptionSha256: sha256Hex,
   resumeId,
   resumeRevisionId: resumeId,
-  pdfSha256: sha256Hex,
-  pdfSize: z.number().int().positive().max(MAX_PDF_BYTES),
-  pdfFilename: z.string().trim().min(1).max(180),
-  jobId: providerId.nullable(),
-  linkRevision: z.number().int().nonnegative(),
+  evidenceFingerprint: sha256Hex,
   createdAt: z.string().datetime({ offset: true }),
   readyAt: z.string().datetime({ offset: true }).nullable(),
   supersededAt: z.string().datetime({ offset: true }).nullable(),
-  deletedAt: z.string().datetime({ offset: true }).nullable(),
-  updatedAt: z.string().datetime({ offset: true }),
-  downloadPath: providerDownloadPath.nullable(),
+  files: z.array(artifactFileReceiptSchema).max(2),
 }).strict().superRefine((artifact, context) => {
-  const downloadable = artifact.state === "ready" || artifact.state === "superseded";
-  if (downloadable !== (artifact.downloadPath !== null)) {
-    context.addIssue({ code: "custom", path: ["downloadPath"], message: "Download availability does not match artifact state." });
+  if (artifact.state !== "pending") {
+    const formats = new Set(artifact.files.map((file) => file.format));
+    if (formats.size !== 2 || !formats.has("docx") || !formats.has("pdf")) {
+      context.addIssue({ code: "custom", path: ["files"], message: "Saved artifacts require a complete DOCX/PDF pair." });
+    }
   }
   if (artifact.state === "ready" && artifact.readyAt === null) {
     context.addIssue({ code: "custom", path: ["readyAt"], message: "A ready artifact requires readyAt." });
   }
 });
-const providerCreateReceiptSchema = z.object({
+const arcCreateReceiptSchema = z.object({
   schemaVersion: z.literal(1),
-  operationId: z.string().regex(/^create_[A-Za-z0-9_-]{1,120}$/),
-  operationKind: z.literal("create"),
-  replayed: z.boolean(),
-  artifact: providerArtifactReceiptSchema,
+  operationId: artifactId,
+  status: z.enum(["staging", "saved"]),
+  artifact: arcArtifactReceiptSchema,
 }).strict();
 
 export const coverLetterPublishManifestSchema = z.object({
   schemaVersion: z.literal(1),
-  artifactId: providerId.optional(),
-  lineageId: providerId.optional(),
-  parentRevisionId: providerId.optional(),
-  operationId: z.string().regex(/^create_[A-Za-z0-9_-]{1,120}$/).optional(),
+  artifactId: artifactId.optional(),
+  lineageId: artifactId.optional(),
+  parentRevisionId: artifactId.optional(),
+  operationId: artifactId.optional(),
   company: safeDisplay,
   role: safeDisplay,
   sourceUrl: publicPostingUrl.optional(),
   jobDescription: z.string().min(120).max(MAX_JOB_DESCRIPTION_BYTES),
   resumeId,
   resumeRevisionId: resumeId,
-  jobId: providerId.nullable().optional(),
+  docxPath: z.string().min(1).max(4_096),
+  docxFilename: z.string().trim().min(1).max(180).default("cover-letter.docx"),
   pdfPath: z.string().min(1).max(4_096),
   pdfFilename: z.string().trim().min(1).max(180).default("cover-letter.pdf"),
   evidenceChecks: z.array(z.object({
@@ -107,7 +117,7 @@ export const coverLetterPublishManifestSchema = z.object({
     visuallyInspected: z.literal(true),
     inspectedAt: z.number().int().positive(),
   }).strict(),
-  disposePdfAfterSuccess: z.boolean().default(false),
+  disposeFilesAfterSuccess: z.boolean().default(false),
 }).strict().superRefine((value, context) => {
   if (value.parentRevisionId && !value.lineageId) {
     context.addIssue({
@@ -120,7 +130,7 @@ export const coverLetterPublishManifestSchema = z.object({
     context.addIssue({
       code: "custom",
       path: ["jobDescription"],
-      message: "The complete job description exceeds the provider bound.",
+      message: "The complete job description exceeds the private import bound.",
     });
   }
   for (const [index, check] of value.evidenceChecks.entries()) {
@@ -166,7 +176,7 @@ function validateHttpsEndpoint(value, label) {
   return endpoint;
 }
 
-function normalizedIdentity(manifest, pdfSha256, jobDescriptionSha256) {
+function normalizedIdentity(manifest, docxSha256, pdfSha256, jobDescriptionSha256) {
   return JSON.stringify({
     schemaVersion: manifest.schemaVersion,
     company: manifest.company,
@@ -175,19 +185,19 @@ function normalizedIdentity(manifest, pdfSha256, jobDescriptionSha256) {
     jobDescriptionSha256,
     resumeId: manifest.resumeId,
     resumeRevisionId: manifest.resumeRevisionId,
-    jobId: manifest.jobId ?? null,
     parentRevisionId: manifest.parentRevisionId ?? null,
+    docxSha256,
     pdfSha256,
   });
 }
 
-export function resolveArtifactIdentity(manifest, pdfSha256, jobDescriptionSha256) {
-  const digest = sha256(normalizedIdentity(manifest, pdfSha256, jobDescriptionSha256));
-  const artifactId = manifest.artifactId ?? `artifact_${digest.slice(0, 32)}`;
+export function resolveArtifactIdentity(manifest, docxSha256, pdfSha256, jobDescriptionSha256) {
+  const digest = sha256(normalizedIdentity(manifest, docxSha256, pdfSha256, jobDescriptionSha256));
+  const resolvedArtifactId = manifest.artifactId ?? `cover-letter-${digest.slice(0, 32)}`;
   return {
-    artifactId,
-    lineageId: manifest.lineageId ?? artifactId,
-    operationId: manifest.operationId ?? `create_${digest.slice(0, 32)}`,
+    artifactId: resolvedArtifactId,
+    lineageId: manifest.lineageId ?? resolvedArtifactId,
+    operationId: manifest.operationId ?? `cover-letter-save-${digest.slice(0, 32)}`,
   };
 }
 
@@ -367,21 +377,18 @@ async function verifyArcState(client, manifest) {
   };
 }
 
-function providerHeaders(token) {
+function arcImportHeaders(token) {
   if (!token || token.startsWith("Bearer ")) {
-    throw new CoverLetterPublishError("cover_letter_provider_auth_required", "JOB_JOURNEY_SITE_TOKEN is required as a raw token.");
+    throw new CoverLetterPublishError("cover_letter_arc_auth_required", "INTERVIEW_ARC_MCP_TOKEN is required as a raw token.");
   }
-  return {
-    "OAI-Sites-Authorization": `Bearer ${token}`,
-    accept: "application/json",
-  };
+  return { authorization: `Bearer ${token}`, accept: "application/json" };
 }
 
-async function readProviderJson(response) {
+async function readArcJson(response) {
   try {
     const contentLength = response.headers.get("content-length");
     const declaredLength = contentLength === null ? null : Number(contentLength);
-    if (declaredLength !== null && Number.isFinite(declaredLength) && declaredLength > MAX_PROVIDER_RECEIPT_BYTES) {
+    if (declaredLength !== null && Number.isFinite(declaredLength) && declaredLength > MAX_RECEIPT_BYTES) {
       throw new Error("oversized");
     }
     if (!response.body) throw new Error("missing");
@@ -393,7 +400,7 @@ async function readProviderJson(response) {
         const { done, value } = await reader.read();
         if (done) break;
         total += value.byteLength;
-        if (total > MAX_PROVIDER_RECEIPT_BYTES) {
+        if (total > MAX_RECEIPT_BYTES) {
           await reader.cancel();
           throw new Error("oversized");
         }
@@ -411,19 +418,19 @@ async function readProviderJson(response) {
     return JSON.parse(new TextDecoder().decode(bytes));
   } catch {
     throw new CoverLetterPublishError(
-      "cover_letter_provider_receipt_invalid",
-      "Job Journey returned an invalid operation receipt.",
+      "cover_letter_arc_receipt_invalid",
+      "Interview Arc returned an invalid operation receipt.",
       true,
     );
   }
 }
 
-export function validateProviderReceipt(value, identity, manifest, pdfSha256, jobDescriptionSha256, pdfSize) {
-  const parsed = providerCreateReceiptSchema.safeParse(value);
+export function validateArcReceipt(value, identity, manifest, integrity, jobDescriptionSha256, evidenceFingerprint) {
+  const parsed = arcCreateReceiptSchema.safeParse(value);
   if (!parsed.success) {
     throw new CoverLetterPublishError(
-      "cover_letter_provider_receipt_invalid",
-      "Job Journey returned a malformed or partial operation receipt.",
+      "cover_letter_arc_receipt_invalid",
+      "Interview Arc returned a malformed or partial operation receipt.",
       true,
     );
   }
@@ -438,37 +445,48 @@ export function validateProviderReceipt(value, identity, manifest, pdfSha256, jo
     || artifact.sourceUrl !== (manifest.sourceUrl ?? null)
     || artifact.resumeId !== manifest.resumeId
     || artifact.resumeRevisionId !== manifest.resumeRevisionId
-    || artifact.pdfSha256 !== pdfSha256
-    || artifact.pdfSize !== pdfSize
-    || artifact.pdfFilename !== manifest.pdfFilename
     || artifact.jobDescriptionSha256 !== jobDescriptionSha256
-    || artifact.jobId !== (manifest.jobId ?? null)
+    || artifact.evidenceFingerprint !== evidenceFingerprint
     || receipt.operationId !== identity.operationId
   ) {
     throw new CoverLetterPublishError(
-      "cover_letter_provider_receipt_mismatch",
-      "Job Journey returned a receipt for different immutable input.",
+      "cover_letter_arc_receipt_mismatch",
+      "Interview Arc returned a receipt for different immutable input.",
+    );
+  }
+  if (receipt.status === "saved") {
+    const expected = new Map(Object.entries(integrity));
+    const matches = artifact.files.length === 2 && artifact.files.every((file) => {
+      const wanted = expected.get(file.format);
+      return wanted
+        && wanted.sha256 === file.sha256
+        && wanted.byteSize === file.byteSize
+        && wanted.filename === file.filename;
+    });
+    if (!matches) throw new CoverLetterPublishError(
+      "cover_letter_arc_receipt_mismatch",
+      "Interview Arc returned different private file integrity metadata.",
     );
   }
   return receipt;
 }
 
-async function readProviderOperation(base, headers, operationId, fetchImpl) {
+async function readArcOperation(endpoint, headers, operationId, fetchImpl) {
   const response = await fetchImpl(
-    new URL(`/api/career-materials/v1/cover-letters/operations/${encodeURIComponent(operationId)}`, base),
+    new URL(`operations/${encodeURIComponent(operationId)}`, new URL("./", endpoint)),
     { headers, redirect: "error" },
   );
   if (!response.ok) {
     throw new CoverLetterPublishError(
-      "cover_letter_provider_readback_unavailable",
-      `Job Journey operation readback returned HTTP ${response.status}.`,
+      "cover_letter_arc_readback_unavailable",
+      `Interview Arc operation readback returned HTTP ${response.status}.`,
       response.status === 404 || response.status === 408 || response.status === 429 || response.status >= 500,
     );
   }
-  return readProviderJson(response);
+  return readArcJson(response);
 }
 
-async function uploadProviderArtifact({ base, headers, identity, manifest, pdfBytes, pdfSha256, jobDescriptionSha256, fetchImpl }) {
+async function uploadArcArtifact({ endpoint, headers, identity, manifest, docxBytes, pdfBytes, integrity, jobDescriptionSha256, evidenceFingerprint, fetchImpl }) {
   const form = new FormData();
   form.set("artifactId", identity.artifactId);
   form.set("lineageId", identity.lineageId);
@@ -477,47 +495,50 @@ async function uploadProviderArtifact({ base, headers, identity, manifest, pdfBy
   form.set("company", manifest.company);
   form.set("role", manifest.role);
   if (manifest.sourceUrl) form.set("sourceUrl", manifest.sourceUrl);
-  form.set("jobDescription", manifest.jobDescription.trim());
+  form.set("jobDescriptionSha256", jobDescriptionSha256);
   form.set("resumeId", manifest.resumeId);
   form.set("resumeRevisionId", manifest.resumeRevisionId);
-  if (manifest.jobId) form.set("jobId", manifest.jobId);
-  form.set("pdfSha256", pdfSha256);
+  form.set("evidenceFingerprint", evidenceFingerprint);
+  form.set("qualityAttestation", JSON.stringify(manifest.qualityGate));
+  form.set("docx", new File([docxBytes], manifest.docxFilename, {
+    type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  }));
   form.set("pdf", new File([pdfBytes], manifest.pdfFilename, { type: "application/pdf" }));
 
   let response;
   try {
-    response = await fetchImpl(new URL("/api/career-materials/v1/cover-letters", base), {
+    response = await fetchImpl(endpoint, {
       method: "POST",
       headers,
       body: form,
       redirect: "error",
     });
   } catch {
-    const readback = await readProviderOperation(base, headers, identity.operationId, fetchImpl);
-    return validateProviderReceipt(readback, identity, manifest, pdfSha256, jobDescriptionSha256, pdfBytes.byteLength);
+    const readback = await readArcOperation(endpoint, headers, identity.operationId, fetchImpl);
+    return validateArcReceipt(readback, identity, manifest, integrity, jobDescriptionSha256, evidenceFingerprint);
   }
   if (response.ok) {
-    return validateProviderReceipt(
-      await readProviderJson(response),
+    return validateArcReceipt(
+      await readArcJson(response),
       identity,
       manifest,
-      pdfSha256,
+      integrity,
       jobDescriptionSha256,
-      pdfBytes.byteLength,
+      evidenceFingerprint,
     );
   }
   if (response.status >= 500) {
-    const readback = await readProviderOperation(base, headers, identity.operationId, fetchImpl);
-    return validateProviderReceipt(readback, identity, manifest, pdfSha256, jobDescriptionSha256, pdfBytes.byteLength);
+    const readback = await readArcOperation(endpoint, headers, identity.operationId, fetchImpl);
+    return validateArcReceipt(readback, identity, manifest, integrity, jobDescriptionSha256, evidenceFingerprint);
   }
   throw new CoverLetterPublishError(
-    response.status === 409 ? "cover_letter_provider_conflict" : "cover_letter_provider_rejected",
-    `Job Journey rejected the cover-letter operation with HTTP ${response.status}.`,
+    response.status === 409 ? "cover_letter_arc_conflict" : "cover_letter_arc_rejected",
+    `Interview Arc rejected the cover-letter operation with HTTP ${response.status}.`,
     response.status === 408 || response.status === 429,
   );
 }
 
-function boundedLocalReceipt({ identity, manifest, pdfSha256, jobDescriptionSha256, arc, provider }) {
+function boundedLocalReceipt({ identity, manifest, integrity, jobDescriptionSha256, evidenceFingerprint, arc, saved }) {
   return {
     schemaVersion: 1,
     operationId: identity.operationId,
@@ -533,13 +554,11 @@ function boundedLocalReceipt({ identity, manifest, pdfSha256, jobDescriptionSha2
     resumeWasCurrentAtPublish: arc.resume.current,
     arcGeneration: arc.generation,
     evidenceSummary: arc.evidenceSummary,
-    pdfSha256,
-    pdfSize: provider.artifact.pdfSize,
-    state: provider.artifact.state,
-    createdAt: provider.artifact.createdAt,
-    readyAt: provider.artifact.readyAt,
-    jobId: provider.artifact.jobId,
-    linkRevision: provider.artifact.linkRevision,
+    evidenceFingerprint,
+    files: integrity,
+    state: saved.artifact.state,
+    createdAt: saved.artifact.createdAt,
+    readyAt: saved.artifact.readyAt,
   };
 }
 
@@ -571,8 +590,8 @@ async function persistReceipt(receipt) {
       resumeRevisionId: candidate.resumeRevisionId,
       arcGeneration: candidate.arcGeneration,
       evidenceSummary: candidate.evidenceSummary,
-      pdfSha256: candidate.pdfSha256,
-      pdfSize: candidate.pdfSize,
+      evidenceFingerprint: candidate.evidenceFingerprint,
+      files: candidate.files,
     });
     if (JSON.stringify(immutableIdentity(existing)) !== JSON.stringify(immutableIdentity(receipt))) {
       throw new CoverLetterPublishError(
@@ -585,8 +604,6 @@ async function persistReceipt(receipt) {
       state: receipt.state,
       createdAt: receipt.createdAt,
       readyAt: receipt.readyAt,
-      jobId: receipt.jobId,
-      linkRevision: receipt.linkRevision,
     };
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
@@ -601,38 +618,53 @@ async function persistReceipt(receipt) {
   }
 }
 
-export async function publishCoverLetterManifest(manifestPath, {
+export async function saveCoverLetterManifest(manifestPath, {
   environment = process.env,
   fetchImpl = fetch,
   connectArcImpl = connectArc,
 } = {}) {
   const manifest = await readManifest(manifestPath);
+  const docxPath = path.resolve(manifest.docxPath);
   const pdfPath = path.resolve(manifest.pdfPath);
-  const pdfBytes = await readBoundedRegularFile(pdfPath, MAX_PDF_BYTES, "The final cover-letter PDF");
+  const docxBytes = await readBoundedRegularFile(docxPath, MAX_DOCUMENT_BYTES, "The final cover-letter DOCX");
+  const pdfBytes = await readBoundedRegularFile(pdfPath, MAX_DOCUMENT_BYTES, "The final cover-letter PDF");
+  if (docxBytes[0] !== 0x50 || docxBytes[1] !== 0x4b || docxBytes[2] !== 0x03 || docxBytes[3] !== 0x04) {
+    throw new CoverLetterPublishError("cover_letter_docx_invalid", "The final cover-letter DOCX is not an Office Open XML document.");
+  }
   if (pdfBytes[0] !== 0x25 || pdfBytes[1] !== 0x50 || pdfBytes[2] !== 0x44 || pdfBytes[3] !== 0x46 || pdfBytes[4] !== 0x2d) {
     throw new CoverLetterPublishError("cover_letter_pdf_invalid", "The final cover-letter file is not a PDF.");
   }
+  const docxSha256 = sha256(docxBytes);
   const pdfSha256 = sha256(pdfBytes);
   const jobDescriptionSha256 = sha256(manifest.jobDescription.trim());
-  const identity = resolveArtifactIdentity(manifest, pdfSha256, jobDescriptionSha256);
-  providerId.parse(identity.artifactId);
-  providerId.parse(identity.lineageId);
+  const identity = resolveArtifactIdentity(manifest, docxSha256, pdfSha256, jobDescriptionSha256);
+  artifactId.parse(identity.artifactId);
+  artifactId.parse(identity.lineageId);
+  artifactId.parse(identity.operationId);
 
   const mcpEndpoint = validateHttpsEndpoint(environment.INTERVIEW_ARC_MCP_ENDPOINT ?? DEFAULT_MCP_ENDPOINT, "The Interview Arc MCP endpoint");
-  const providerBase = validateHttpsEndpoint(environment.JOB_JOURNEY_BASE_URL, "The Job Journey endpoint");
+  const importEndpoint = validateHttpsEndpoint(environment.INTERVIEW_ARC_COVER_LETTER_URL ?? DEFAULT_IMPORT_ENDPOINT, "The Interview Arc cover-letter import endpoint");
   const client = await connectArcImpl(mcpEndpoint, environment.INTERVIEW_ARC_MCP_TOKEN);
   let arc;
-  let provider;
+  let saved;
+  let evidenceFingerprint;
+  const integrity = {
+    docx: { sha256: docxSha256, byteSize: docxBytes.byteLength, filename: manifest.docxFilename },
+    pdf: { sha256: pdfSha256, byteSize: pdfBytes.byteLength, filename: manifest.pdfFilename },
+  };
   try {
     arc = await verifyArcState(client, manifest);
-    provider = await uploadProviderArtifact({
-      base: providerBase,
-      headers: providerHeaders(environment.JOB_JOURNEY_SITE_TOKEN),
+    evidenceFingerprint = sha256(JSON.stringify(arc.evidenceSummary));
+    saved = await uploadArcArtifact({
+      endpoint: importEndpoint,
+      headers: arcImportHeaders(environment.INTERVIEW_ARC_MCP_TOKEN),
       identity,
       manifest,
+      docxBytes,
       pdfBytes,
-      pdfSha256,
+      integrity,
       jobDescriptionSha256,
+      evidenceFingerprint,
       fetchImpl,
     });
     const confirmedArc = await verifyArcState(client, manifest);
@@ -649,39 +681,42 @@ export async function publishCoverLetterManifest(manifestPath, {
   const receipt = boundedLocalReceipt({
     identity,
     manifest,
-    pdfSha256,
+    integrity,
     jobDescriptionSha256,
+    evidenceFingerprint,
     arc,
-    provider,
+    saved,
   });
   await persistReceipt(receipt);
-  if (provider.artifact.state !== "ready") {
+  if (saved.status !== "saved" || saved.artifact.state !== "ready") {
     throw new CoverLetterPublishError(
-      "cover_letter_provider_not_ready",
-      `Job Journey recorded ${provider.artifact.state}; retry this exact manifest after checking the operation receipt.`,
-      ["pending", "deleting"].includes(provider.artifact.state),
+      "cover_letter_arc_not_ready",
+      `Interview Arc recorded ${saved.artifact.state}; retry this exact manifest after checking the operation receipt.`,
+      saved.artifact.state === "pending",
     );
   }
-  if (manifest.disposePdfAfterSuccess) await unlink(pdfPath);
+  if (manifest.disposeFilesAfterSuccess) await Promise.all([unlink(docxPath), unlink(pdfPath)]);
   return receipt;
 }
+
+export const publishCoverLetterManifest = saveCoverLetterManifest;
 
 async function main(argv) {
   const [manifestPath, ...extra] = argv;
   if (!manifestPath || extra.length) {
     throw new CoverLetterPublishError(
       "cover_letter_usage_invalid",
-      "Usage: pnpm cover-letter:publish -- <ignored-private-manifest.json>",
+      "Usage: pnpm cover-letter:save -- <ignored-private-manifest.json>",
     );
   }
-  const receipt = await publishCoverLetterManifest(path.resolve(manifestPath));
+  const receipt = await saveCoverLetterManifest(path.resolve(manifestPath));
   process.stdout.write(`${JSON.stringify({
     status: receipt.state,
     artifactId: receipt.artifactId,
     operationId: receipt.operationId,
     resumeId: receipt.resumeId,
     resumeRevisionId: receipt.resumeRevisionId,
-    pdfSha256: receipt.pdfSha256,
+    files: receipt.files,
     createdAt: receipt.createdAt,
   })}\n`);
 }

@@ -1,9 +1,4 @@
 import { normalizeCareerSummary, normalizeJobPage, type CareerJobPage, type CareerSummary } from "../app/career-work.ts";
-import {
-  normalizeJobJourneyCoverLetterPage,
-  privateCoverLetterDownloadPathSchema,
-  type JobJourneyCoverLetterPage,
-} from "../app/cover-letter-contract.ts";
 
 type JobJourneyEnv = {
   JOB_JOURNEY_BASE_URL?: string;
@@ -193,45 +188,6 @@ export function fetchCareerJobs(
   );
 }
 
-export function fetchCoverLetters(
-  env: JobJourneyEnv,
-  ownerId: string,
-  params = new URLSearchParams({ limit: "100" }),
-): Promise<CachedJobJourneyValue<JobJourneyCoverLetterPage>> {
-  validateCoverLetterProviderBase(env);
-  return readJson(
-    env,
-    ownerId,
-    "/api/integrations/interview-arc/v1/cover-letters",
-    params,
-    normalizeJobJourneyCoverLetterPage,
-    "OAI-Sites-Authorization",
-    1024 * 1024,
-  );
-}
-
-function validateCoverLetterProviderBase(env: JobJourneyEnv): URL {
-  const raw = env.JOB_JOURNEY_BASE_URL;
-  if (!raw) throw new JobJourneyReadError("not_configured");
-  let base: URL;
-  try {
-    base = new URL(raw);
-  } catch {
-    throw new JobJourneyReadError("invalid_provider_origin");
-  }
-  if (
-    base.protocol !== "https:"
-    || base.username
-    || base.password
-    || base.pathname !== "/"
-    || base.search
-    || base.hash
-  ) {
-    throw new JobJourneyReadError("invalid_provider_origin");
-  }
-  return new URL(base.origin);
-}
-
 export function describeJobJourneyReadFailure(error: unknown): JobJourneyReadFailure {
   if (error instanceof JobJourneyReadError) {
     return {
@@ -241,18 +197,4 @@ export function describeJobJourneyReadFailure(error: unknown): JobJourneyReadFai
     };
   }
   return { code: "provider_unknown_error" };
-}
-
-export function resolveJobJourneyDownloadUrl(
-  env: JobJourneyEnv,
-  downloadPath: string | null,
-): string | null {
-  if (!downloadPath) return null;
-  const baseUrl = env.JOB_JOURNEY_BASE_URL?.replace(/\/$/, "");
-  if (!baseUrl) throw new Error("Job Journey integration is not configured.");
-  const base = validateCoverLetterProviderBase({ ...env, JOB_JOURNEY_BASE_URL: baseUrl });
-  if (!privateCoverLetterDownloadPathSchema.safeParse(downloadPath).success) {
-    throw new Error("Job Journey returned an invalid cover-letter link.");
-  }
-  return new URL(downloadPath, base).toString();
 }

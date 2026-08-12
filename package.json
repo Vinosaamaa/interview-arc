@@ -23,7 +23,7 @@
     "behavioral:evidence:refresh": "node scripts/behavioral-evidence-controller.mjs refresh",
     "behavioral:evidence:prepare-sync": "node scripts/behavioral-evidence-controller.mjs prepare-sync",
     "resume:import:google-doc": "node scripts/import-google-doc-resume.mjs",
-    "cover-letter:publish": "node scripts/publish-cover-letter-to-job-journey.mjs",
+    "cover-letter:save": "node scripts/save-cover-letter-to-interview-arc.mjs",
     "code-attempt-review:backfill": "node --experimental-strip-types scripts/backfill-code-attempt-review.mjs",
     "leetcode:browser": "node scripts/leetcode-playwright-controller.mjs",
     "journal:checkpoint": "node scripts/journal-branch.mjs checkpoint",

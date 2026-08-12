@@ -284,6 +284,9 @@ import { requestVoiceDeliveryRetry } from "./voice-delivery-retry";
 import { ingestResumeRevision, ResumeImportError } from "./resume-revision-ingest";
 import { servePrivateResumeFile } from "./resume-library-download";
 import { deletePrivateResumeRevisionFiles } from "./resume-file-deletion";
+import { ingestCoverLetterArtifact } from "./cover-letter-artifact-ingest";
+import { servePrivateCoverLetterFile } from "./cover-letter-artifact-download";
+import { CoverLetterArtifactError, readCoverLetterOperation } from "../db/cover-letter-artifacts";
 import { routeLiveV1 } from "./live-v1";
 import { isLiveV1Path } from "./live-v1-path";
 
@@ -444,6 +447,26 @@ async function uploadResumeRevision(ownerId: string, request: Request, env: Env)
     return json(request, {
       error: "The private resume import could not be completed. Retry the exact operation after checking status.",
       code: "resume_import_unavailable",
+      retryable: true,
+    }, { status: 503 });
+  }
+}
+
+async function uploadCoverLetterArtifact(ownerId: string, request: Request, env: Env) {
+  try {
+    const result = await ingestCoverLetterArtifact(ownerId, request, env.AUDIO);
+    return json(request, result.body, { status: result.status });
+  } catch (error) {
+    if (error instanceof CoverLetterArtifactError) {
+      return json(request, {
+        error: error.message,
+        code: error.code,
+        retryable: error.retryable,
+      }, { status: error.status });
+    }
+    return json(request, {
+      error: "The private cover-letter import could not be completed. Retry the exact operation after checking status.",
+      code: "cover_letter_import_unavailable",
       retryable: true,
     }, { status: 503 });
   }
@@ -4599,6 +4622,25 @@ export default {
     }
     if (url.pathname === "/resume/imports" && request.method === "POST") {
       return uploadResumeRevision(ownerId, request, env);
+    }
+    if (url.pathname === "/cover-letter/imports" && request.method === "POST") {
+      return uploadCoverLetterArtifact(ownerId, request, env);
+    }
+    const coverLetterOperation = url.pathname.match(/^\/cover-letter\/operations\/([^/]+)$/);
+    if (coverLetterOperation && request.method === "GET") {
+      const receipt = await readCoverLetterOperation(ownerId, decodeURIComponent(coverLetterOperation[1]));
+      return receipt
+        ? json(request, receipt)
+        : json(request, { error: "Cover-letter operation not found.", code: "cover_letter_operation_not_found", retryable: false }, { status: 404 });
+    }
+    const coverLetterFile = url.pathname.match(/^\/cover-letter\/files\/([^/]+)\/(docx|pdf)$/);
+    if (coverLetterFile && request.method === "GET") {
+      return servePrivateCoverLetterFile(
+        ownerId,
+        decodeURIComponent(coverLetterFile[1]),
+        coverLetterFile[2],
+        env.AUDIO,
+      );
     }
     const resumeFile = url.pathname.match(/^\/resume\/files\/([^/]+)\/([^/]+)\/(docx|pdf)$/);
     if (resumeFile && request.method === "GET") {

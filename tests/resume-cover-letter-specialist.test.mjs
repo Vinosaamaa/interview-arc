@@ -36,10 +36,13 @@ test("Resume & Cover Letter is a registered administrative specialist outside pr
   assert.match(guide, /before[\s\S]*after[\s\S]*exports/i);
   assert.match(guide, /resume:import:google-doc/);
   assert.match(guide, /installed `cover-letter` skill/);
-  assert.match(guide, /final cover letter is PDF only/i);
-  assert.match(guide, /Job Journey owns the application record and\s+private PDF bytes/);
+  assert.match(guide, /final cover letter is one matching DOCX\/PDF pair/i);
+  assert.match(guide, /Interview Arc owns its\s+immutable D1 metadata and private R2 bytes/);
+  assert.match(guide, /must not be contacted or\s+created merely to generate or save a letter/i);
+  assert.match(guide, /cover-letter:save/);
   assert.doesNotMatch(guide, /save_practice_exchange|append_practice_transcript|save_specialist_finalization/);
   assert.match(contract, /resume_source_changed_during_export/);
   assert.match(contract, /never the Drive ID\/revision, provider URL, capture path/);
   assert.equal(JSON.parse(packageJson).scripts["resume:import:google-doc"], "node scripts/import-google-doc-resume.mjs");
+  assert.equal(JSON.parse(packageJson).scripts["cover-letter:save"], "node scripts/save-cover-letter-to-interview-arc.mjs");
 });

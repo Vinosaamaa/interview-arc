@@ -1,11 +1,5 @@
-import { env } from "cloudflare:workers";
-
 import { careerMaterialsCoverLetterResponseSchema } from "../../../cover-letter-contract";
-import {
-  describeJobJourneyReadFailure,
-  fetchCoverLetters,
-  resolveJobJourneyDownloadUrl,
-} from "../../../../db/job-journey-client";
+import { CoverLetterArtifactError, readCoverLetterLibrary } from "../../../../db/cover-letter-artifacts";
 import { resolveOwnerId } from "../../../../db/owner";
 import { getResumeRevisionReferences } from "../../../../db/resume-revisions";
 import { toRouteErrorMessage } from "../../route-helpers";
@@ -16,61 +10,32 @@ export async function GET(request: Request) {
   try {
     const ownerId = await resolveOwnerId(request);
     const url = new URL(request.url);
-    const cursor = url.searchParams.get("cursor");
-    const params = new URLSearchParams({ limit: "100" });
-    if (cursor) params.set("cursor", cursor);
     if ([...url.searchParams.keys()].some((key) => key !== "cursor")) {
-      return Response.json({ error: "Only the cover-letter cursor is supported." }, {
-        status: 400,
-        headers: NO_STORE,
-      });
+      return Response.json({ error: "Only the cover-letter cursor is supported." }, { status: 400, headers: NO_STORE });
     }
-
-    let provider;
-    try {
-      provider = await fetchCoverLetters(env, ownerId, params);
-    } catch (error) {
-      console.warn("cover_letter_provider_unavailable", describeJobJourneyReadFailure(error));
-      const unavailable = careerMaterialsCoverLetterResponseSchema.parse({
-        schemaVersion: 1,
-        status: "unavailable",
-        stale: false,
-        generatedAt: null,
-        artifacts: null,
-        page: null,
-        message: "Cover-letter history is temporarily unavailable. The Resume Library remains authoritative and usable.",
-      });
-      return Response.json(unavailable, { headers: NO_STORE });
-    }
-
+    const library = await readCoverLetterLibrary(ownerId, 100, url.searchParams.get("cursor") ?? undefined);
     const references = await getResumeRevisionReferences(
       ownerId,
-      provider.value.artifacts.map((artifact) => ({
-        resumeId: artifact.resumeId,
-        revisionId: artifact.resumeRevisionId,
-      })),
+      library.artifacts.map((artifact) => ({ resumeId: artifact.resumeId, revisionId: artifact.resumeRevisionId })),
     );
-    const available = careerMaterialsCoverLetterResponseSchema.parse({
-      schemaVersion: 1,
+    const response = careerMaterialsCoverLetterResponseSchema.parse({
+      ...library,
       status: "available",
-      stale: provider.stale,
-      generatedAt: provider.value.generatedAt,
-      artifacts: provider.value.artifacts.map((artifact) => {
+      stale: false,
+      artifacts: library.artifacts.map((artifact) => {
         const resume = references.get(`${artifact.resumeId}\u0000${artifact.resumeRevisionId}`);
         return {
           ...artifact,
           resumeLabel: resume?.label ?? null,
           resumeRevisionKnown: resume?.revisionKnown ?? false,
-          downloadUrl: resolveJobJourneyDownloadUrl(env, artifact.downloadPath),
         };
       }),
-      page: provider.value.page,
     });
-    return Response.json(available, { headers: NO_STORE });
+    return Response.json(response, { headers: NO_STORE });
   } catch (error) {
-    return Response.json({ error: toRouteErrorMessage(error) }, {
-      status: 500,
-      headers: NO_STORE,
-    });
+    return Response.json(
+      { error: toRouteErrorMessage(error) },
+      { status: error instanceof CoverLetterArtifactError ? error.status : 500, headers: NO_STORE },
+    );
   }
 }
