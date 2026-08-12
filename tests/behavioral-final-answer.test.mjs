@@ -47,7 +47,7 @@ test("universal snapshots preserve exact answer and revision identities", () => 
   assert.equal(snapshot.solutionProfile.revision, 3);
 });
 
-test("scope validation forbids target data on universal answers and requires it on tailored answers", () => {
+test("scope validation keeps universal answers neutral and accepts one exact tailored context", () => {
   assert.throws(
     () => behavioralFinalAnswerSnapshotInputSchema.parse(universalSnapshot({
       target: {
@@ -74,12 +74,64 @@ test("scope validation forbids target data on universal answers and requires it 
   }));
   assert.equal(tailored.target.revision, 2);
 
+  const loopTailored = behavioralFinalAnswerSnapshotInputSchema.parse(universalSnapshot({
+    scope: "target_tailored",
+    roleBrief: {
+      loopId: "loop-example-staff-backend",
+      revision: 4,
+      label: "Example company · Staff backend",
+      company: "Example company",
+      roleTitle: "Staff backend engineer",
+      competencyEmphasis: ["reliability", "ownership"],
+    },
+  }));
+  assert.equal(loopTailored.roleBrief.revision, 4);
+
+  assert.throws(
+    () => behavioralFinalAnswerSnapshotInputSchema.parse({
+      ...tailored,
+      roleBrief: loopTailored.roleBrief,
+    }),
+  );
+
   assert.throws(
     () => behavioralFinalAnswerSnapshotInputSchema.parse({
       ...tailored,
       target: { ...tailored.target, rawJobDescription: "private JD" },
     }),
   );
+
+  assert.throws(
+    () => behavioralFinalAnswerSnapshotInputSchema.parse({
+      ...loopTailored,
+      roleBrief: { ...loopTailored.roleBrief, rawJobDescription: "private JD" },
+    }),
+  );
+});
+
+test("Role Brief projections preserve exact Loop ownership without raw job-description data", () => {
+  const stored = {
+    snapshotRevision: 1,
+    correctionOfRevision: null,
+    correctionReason: null,
+    finalizedAt: 1_786_363_200_000,
+    snapshot: universalSnapshot({
+      scope: "target_tailored",
+      roleBrief: {
+        loopId: "loop-example-staff-backend",
+        revision: 4,
+        label: "Example company · Staff backend",
+        company: "Example company",
+        roleTitle: "Staff backend engineer",
+        competencyEmphasis: ["reliability", "ownership"],
+      },
+    }),
+  };
+  const projection = projectBehavioralFinalAnswer({ snapshots: [stored] });
+  assert.equal(projection.roleBrief.loopId, "loop-example-staff-backend");
+  assert.equal(projection.target, null);
+  assert.match(renderBehavioralFinalAnswerMarkdown(projection), /Role Brief Example company · Staff backend · revision 4/);
+  assert.match(renderBehavioralFinalAnswerHtml(projection), /Role Brief Example company · Staff backend · revision 4/);
 });
 
 test("final-answer identity includes the typed target review", async () => {

@@ -50,6 +50,13 @@ export class BehavioralTargetProfileError extends Error {
   }
 }
 
+export function rejectLegacyTargetProfileWrite(): never {
+  throw new BehavioralTargetProfileError(
+    "behavioral_target_migration_only",
+    "Standalone Target Profiles are migration-only. Ask the Loop Recorder to create or revise the Loop-owned Role Brief.",
+  );
+}
+
 async function sha256(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return [...new Uint8Array(digest)]

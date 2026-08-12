@@ -35,12 +35,8 @@ import {
 import { resumeContextSelectionSchema } from "../db/activity-resume-context";
 import {
   BehavioralTargetProfileError,
-  behavioralTargetBindingWriteSchema,
-  behavioralTargetProfileMcpWriteSchema,
   queryBehavioralTargetProfiles,
   resolveBehavioralTarget,
-  setBehavioralTargetBinding,
-  upsertBehavioralTargetProfile,
 } from "../db/behavioral-target-profile";
 import {
   LoopError,
@@ -2959,26 +2955,6 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   );
 
   server.registerTool(
-    "upsert_behavioral_target_profile",
-    {
-      description: "Create or revise one owner-private pasted-JD Target Profile. Use expectedRevision=0 for creation and the exact current revision for every update, including archive/reactivate. Reuse an identical stable operationId after transport uncertainty. The raw JD remains private and is never returned, logged, published, or treated as candidate evidence.",
-      inputSchema: behavioralTargetProfileMcpWriteSchema.shape,
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-    },
-    async (input) => {
-      try {
-        const result = await upsertBehavioralTargetProfile(ownerId, input);
-        return {
-          content: [{ type: "text", text: `Target Profile ${result.targetId} revision ${result.revision} is saved.` }],
-          structuredContent: result,
-        };
-      } catch (error) {
-        return specialistToolFailure(error);
-      }
-    },
-  );
-
-  server.registerTool(
     "query_behavioral_target_profiles",
     {
       description: "Read bounded owner-private display-safe Target Profile revisions. Omit targetId to list current active targets, provide targetId for its current revision, or provide targetId plus revision for one immutable historical revision. Raw JD text and private analysis are never returned.",
@@ -2994,26 +2970,6 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
         const result = await queryBehavioralTargetProfiles(ownerId, input);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-          structuredContent: result,
-        };
-      } catch (error) {
-        return specialistToolFailure(error);
-      }
-    },
-  );
-
-  server.registerTool(
-    "set_behavioral_target_binding",
-    {
-      description: "Set or clear one explicit owner-private session or behavioral-activity Target Profile binding. The exact active target revision is retained historically. Use the current binding revision, one stable mutationId, and the explicit authorization literal; merely mentioning a company must never call this tool.",
-      inputSchema: behavioralTargetBindingWriteSchema.shape,
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-    },
-    async (input) => {
-      try {
-        const result = await setBehavioralTargetBinding(ownerId, input);
-        return {
-          content: [{ type: "text", text: `Behavioral target binding ${result.status} at revision ${result.binding.revision}.` }],
           structuredContent: result,
         };
       } catch (error) {
@@ -3048,7 +3004,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "get_behavioral_practice_preflight",
     {
-      description: "Load one deterministic owner-private behavioral preflight at start/resume, new-question, post-mutation, reconnect/handoff, or finalization. It presents the current Solution Profile read, accepted evidence and gaps, authoritative Target Profile resolution, target grading signals, and bounded accepted target-tailored answer snapshots with source-revision staleness. It never returns raw job descriptions or private target analysis.",
+      description: "Load one deterministic owner-private behavioral preflight at start/resume, new-question, post-mutation, reconnect/handoff, or finalization. It presents the current Solution Profile, accepted evidence and gaps, the activity's exact Loop-owned Role Brief when bound, historical Target Profile resolution only for compatibility, target grading signals, and bounded accepted tailored-answer snapshots with revision staleness. It never returns raw job descriptions or private target analysis.",
       inputSchema: behavioralPracticePreflightInputSchema.shape,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },

@@ -40,7 +40,7 @@ const baseTarget = {
   ownerNotes: [],
 };
 
-test("Target Profiles accept public postings without weakening exact state operations", () => {
+test("legacy Target Profile source schemas remain readable for exact migration", () => {
   assert.equal(behavioralTargetProfileInputSchema.parse(baseTarget).source.kind, "public_posting");
   assert.equal(behavioralTargetProfileMcpWriteSchema.safeParse({
     operationId: "target-public-mcp-1",

@@ -24,6 +24,7 @@ import {
   bindPlannedActivitySchema,
   captureLoopPacketSchema,
   createLoopSchema,
+  displaySafeLoopRoleBriefRevisionSchema,
   importLoopCapturePacketSchema,
   loopActivityContextRequestSchema,
   loopCapturePacketSnapshotSchema,
@@ -125,6 +126,17 @@ function displaySafeRoleBrief(row: {
     revision: row.revision,
     createdAt: row.createdAt,
   };
+}
+
+function boundRoleBriefDisplaySnapshot(value: unknown): LoopRoleBriefDisplaySnapshot {
+  const revision = displaySafeLoopRoleBriefRevisionSchema.safeParse(value);
+  if (!revision.success) return loopRoleBriefDisplaySnapshotSchema.parse(value);
+  const { revision: _revision, createdAt: _createdAt, source, ...snapshot } = revision.data;
+  const { fingerprint: _fingerprint, ...displaySource } = source;
+  return loopRoleBriefDisplaySnapshotSchema.parse({
+    ...snapshot,
+    source: displaySource,
+  });
 }
 
 function displayLoop(row: { revision: number; snapshot: unknown; createdAt: number }) {
@@ -537,6 +549,29 @@ export async function resolveLoopActivityContext(
   };
 }
 
+export async function readBoundLoopActivityContext(ownerId: string, activityId: string) {
+  const rows = await getDb().select().from(loopActivityBindings).where(and(
+    eq(loopActivityBindings.ownerId, ownerId),
+    eq(loopActivityBindings.activityId, activityId),
+  )).limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    binding: {
+      activityId: row.activityId,
+      loopId: row.loopId,
+      stageId: row.stageId,
+      loopRevision: row.loopRevision,
+      roleBriefRevision: row.roleBriefRevision,
+      specialty: row.specialty,
+      questionId: row.questionId,
+      revision: row.bindingRevision,
+      updatedAt: row.updatedAt,
+    },
+    roleBrief: boundRoleBriefDisplaySnapshot(row.roleBriefDisplaySnapshot),
+  };
+}
+
 async function replayActivityBinding(
   ownerId: string,
   operationId: string,
@@ -634,7 +669,7 @@ export async function bindPlannedActivityToLoop(
         roleBriefRevision: resolved.loopContext.roleBriefRevision,
         specialty: specialty as "leetcode" | "system_design" | "behavioral",
         questionId,
-        roleBriefDisplaySnapshot: resolved.roleBriefDisplaySnapshot,
+        roleBriefDisplaySnapshot: boundRoleBriefDisplaySnapshot(resolved.roleBriefDisplaySnapshot),
         bindingRevision,
         createdAt: currentBindings[0]?.createdAt ?? nowMs,
         updatedAt: nowMs,
@@ -647,7 +682,7 @@ export async function bindPlannedActivityToLoop(
           roleBriefRevision: resolved.loopContext.roleBriefRevision,
           specialty: specialty as "leetcode" | "system_design" | "behavioral",
           questionId,
-          roleBriefDisplaySnapshot: resolved.roleBriefDisplaySnapshot,
+          roleBriefDisplaySnapshot: boundRoleBriefDisplaySnapshot(resolved.roleBriefDisplaySnapshot),
           bindingRevision,
           updatedAt: nowMs,
         },
