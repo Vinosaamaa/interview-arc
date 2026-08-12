@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import {
   behavioralTargetProfileListSchema,
@@ -27,14 +27,25 @@ function TargetRevision({ target }: { target: DisplaySafeBehavioralTargetRevisio
 export default function BehavioralTargetDesk({ enabled = true }: { enabled?: boolean }) {
   const { targets, error, refresh } = useBehavioralTargetProfiles(enabled);
   const [inspected, setInspected] = useState<Record<string, DisplaySafeBehavioralTargetRevision>>({});
+  const [requestedRevisions, setRequestedRevisions] = useState<Record<string, number>>({});
+  const latestRevisionRequest = useRef<Record<string, number>>({});
   const legacyCount = useMemo(() => targets?.length ?? 0, [targets]);
 
   const inspectRevision = async (target: DisplaySafeBehavioralTargetRevision, revision: number) => {
+    latestRevisionRequest.current[target.targetId] = revision;
+    setRequestedRevisions((current) => ({ ...current, [target.targetId]: revision }));
     try {
       const payload = behavioralTargetProfileListSchema.parse(await behavioralTargetRequest(`/api/behavioral-targets?includeArchived=true&targetId=${encodeURIComponent(target.targetId)}&revision=${revision}`));
-      if (payload.targets[0]) setInspected((current) => ({ ...current, [target.targetId]: payload.targets[0] }));
+      if (latestRevisionRequest.current[target.targetId] === revision && payload.targets[0]?.revision === revision) {
+        setInspected((current) => ({ ...current, [target.targetId]: payload.targets[0] }));
+      }
     } catch {
-      await refresh();
+      if (latestRevisionRequest.current[target.targetId] === revision) {
+        setRequestedRevisions((current) => Object.fromEntries(
+          Object.entries(current).filter(([targetId]) => targetId !== target.targetId),
+        ));
+        await refresh();
+      }
     }
   };
 
@@ -50,7 +61,7 @@ export default function BehavioralTargetDesk({ enabled = true }: { enabled?: boo
         <header><div><span>{target.state === "active" ? "Active legacy record" : "Archived legacy record"}</span>{target.source.kind === "public_posting" && <i className={sourceAgeState(target)}>{sourceAgeState(target)}</i>}</div><small>Revision {shown.revision} of {target.revision}</small></header>
         <h3>{target.label}</h3>
         <TargetRevision target={shown} />
-        {target.revision > 1 && <label className="target-revision-picker"><span>Inspect immutable revision</span><select value={shown.revision} onChange={(event) => void inspectRevision(target, Number(event.target.value))}>{Array.from({ length: target.revision }, (_, index) => index + 1).reverse().map((revision) => <option value={revision} key={revision}>Revision {revision}</option>)}</select></label>}
+        {target.revision > 1 && <label className="target-revision-picker"><span>Inspect immutable revision</span><input type="number" inputMode="numeric" min={1} max={target.revision} value={requestedRevisions[target.targetId] ?? shown.revision} aria-label={`Inspect ${target.label} revision, from 1 to ${target.revision}`} onChange={(event) => { const revision = Number(event.target.value); if (Number.isInteger(revision) && revision >= 1 && revision <= target.revision) void inspectRevision(target, revision); }} /></label>}
         <footer><span>Read-only historical record · Loop Recorder migration required</span></footer>
       </article>;
     })}</div>}

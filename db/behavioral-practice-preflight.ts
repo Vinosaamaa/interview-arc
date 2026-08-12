@@ -2,7 +2,10 @@ import { and, desc, eq, inArray, max, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { queryBehavioralEvidence } from "./behavioral-evidence";
-import { behavioralFinalAnswerSnapshotInputSchema } from "./behavioral-final-answer";
+import {
+  behavioralFinalAnswerSnapshotInputSchema,
+  type BehavioralFinalAnswerSnapshotInput,
+} from "./behavioral-final-answer";
 import {
   behavioralTargetReviewSchema,
   targetVariantStaleReasons,
@@ -39,6 +42,38 @@ export type BehavioralPracticePreflightInput = z.infer<typeof behavioralPractice
 
 const VARIANT_LIMIT = 50;
 const VARIANT_SCAN_LIMIT = VARIANT_LIMIT * 2 + 1;
+
+type AcceptedVariantRow = {
+  activityId: string;
+  snapshotRevision: number;
+  finalizedAt: number;
+  finalization: unknown;
+};
+
+function projectAcceptedTailoredVariant(
+  row: AcceptedVariantRow,
+  snapshot: BehavioralFinalAnswerSnapshotInput,
+  context: { target: NonNullable<BehavioralFinalAnswerSnapshotInput["target"]> }
+    | { roleBrief: NonNullable<BehavioralFinalAnswerSnapshotInput["roleBrief"]> },
+  staleReasons: string[],
+) {
+  const finalization = row.finalization as { behavioralReview?: unknown } | null;
+  const reviewResult = behavioralTargetReviewSchema.safeParse(finalization?.behavioralReview);
+  return {
+    activityId: row.activityId,
+    snapshotRevision: row.snapshotRevision,
+    answer: snapshot.answer,
+    question: snapshot.question,
+    solutionProfile: snapshot.solutionProfile,
+    story: snapshot.story ?? null,
+    acceptedEvidenceIds: snapshot.acceptedEvidenceIds,
+    ...context,
+    review: reviewResult.success ? reviewResult.data : null,
+    finalizedAt: row.finalizedAt,
+    stale: staleReasons.length > 0,
+    staleReasons,
+  };
+}
 
 export async function readBehavioralPracticePreflight(
   ownerId: string,
@@ -120,8 +155,6 @@ export async function readBehavioralPracticePreflight(
     : null;
   const acceptedTargetVariants = legacyTargetSnapshots.map(({ row, snapshot }) => {
     const target = snapshot.target!;
-    const finalization = row.finalization as { behavioralReview?: unknown } | null;
-    const reviewResult = behavioralTargetReviewSchema.safeParse(finalization?.behavioralReview);
     const staleReasons = targetVariantStaleReasons({
       targetId: target.targetId,
       targetRevision: target.revision,
@@ -132,25 +165,10 @@ export async function readBehavioralPracticePreflight(
       currentTargetRevision: currentTargetRevisions.get(target.targetId) ?? null,
       currentSolutionProfileRevision,
     });
-    return {
-      activityId: row.activityId,
-      snapshotRevision: row.snapshotRevision,
-      answer: snapshot.answer,
-      question: snapshot.question,
-      solutionProfile: snapshot.solutionProfile,
-      story: snapshot.story ?? null,
-      acceptedEvidenceIds: snapshot.acceptedEvidenceIds,
-      target,
-      review: reviewResult.success ? reviewResult.data : null,
-      finalizedAt: row.finalizedAt,
-      stale: staleReasons.length > 0,
-      staleReasons,
-    };
+    return projectAcceptedTailoredVariant(row, snapshot, { target }, staleReasons);
   });
   const acceptedRoleBriefVariants = loopRoleBriefSnapshots.map(({ row, snapshot }) => {
     const roleBrief = snapshot.roleBrief!;
-    const finalization = row.finalization as { behavioralReview?: unknown } | null;
-    const reviewResult = behavioralTargetReviewSchema.safeParse(finalization?.behavioralReview);
     const staleReasons: string[] = [];
     if (!boundBehavioralLoop) staleReasons.push("loop_role_brief_unbound");
     else {
@@ -160,20 +178,7 @@ export async function readBehavioralPracticePreflight(
     if (currentSolutionProfileRevision !== snapshot.solutionProfile.revision) {
       staleReasons.push("solution_profile_revised");
     }
-    return {
-      activityId: row.activityId,
-      snapshotRevision: row.snapshotRevision,
-      answer: snapshot.answer,
-      question: snapshot.question,
-      solutionProfile: snapshot.solutionProfile,
-      story: snapshot.story ?? null,
-      acceptedEvidenceIds: snapshot.acceptedEvidenceIds,
-      roleBrief,
-      review: reviewResult.success ? reviewResult.data : null,
-      finalizedAt: row.finalizedAt,
-      stale: staleReasons.length > 0,
-      staleReasons,
-    };
+    return projectAcceptedTailoredVariant(row, snapshot, { roleBrief }, staleReasons);
   });
 
   const targetContext = resolvedTarget.target

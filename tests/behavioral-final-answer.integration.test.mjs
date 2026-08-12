@@ -610,6 +610,27 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     );
 
     const loopId = "loop-example-senior-backend";
+    const roleBriefInput = {
+      label: "Example Company · Senior Backend Engineer",
+      state: "active",
+      company: "Example Company",
+      roleTitle: "Senior Backend Engineer",
+      source: {
+        kind: "pasted_jd",
+        displayLocator: "Owner-provided job description",
+        capturedAt: 1_786_363_203_000,
+        jdText: "Own reliable distributed services.",
+      },
+      responsibilities: ["Own reliable distributed services"],
+      requiredQualifications: ["Distributed systems"],
+      preferredQualifications: [],
+      competencySignals: ["reliability"],
+      seniorityIndicators: ["owns ambiguous systems"],
+      domainVocabulary: ["distributed systems"],
+      verifiedCompanySignals: [],
+      unresolvedAmbiguities: [],
+      ownerNotes: [],
+    };
     const roleBriefCreated = await call(client, "create_loop", {
       operationId: "loop-final-answer-create-1",
       authorization: "loop_recorder",
@@ -628,27 +649,7 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
           status: "planned",
         }],
       },
-      roleBrief: {
-        label: "Example Company · Senior Backend Engineer",
-        state: "active",
-        company: "Example Company",
-        roleTitle: "Senior Backend Engineer",
-        source: {
-          kind: "pasted_jd",
-          displayLocator: "Owner-provided job description",
-          capturedAt: 1_786_363_203_000,
-          jdText: "Own reliable distributed services.",
-        },
-        responsibilities: ["Own reliable distributed services"],
-        requiredQualifications: ["Distributed systems"],
-        preferredQualifications: [],
-        competencySignals: ["reliability"],
-        seniorityIndicators: ["owns ambiguous systems"],
-        domainVocabulary: ["distributed systems"],
-        verifiedCompanySignals: [],
-        unresolvedAmbiguities: [],
-        ownerNotes: [],
-      },
+      roleBrief: roleBriefInput,
     });
     assert.equal(roleBriefCreated.roleBriefRevision, 1);
     await call(client, "bind_planned_activity_to_loop", {
@@ -668,10 +669,10 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     const roleBriefReference = {
       loopId,
       revision: 1,
-      label: "Example Company · Senior Backend Engineer",
-      company: "Example Company",
-      roleTitle: "Senior Backend Engineer",
-      competencyEmphasis: ["reliability"],
+      label: roleBriefInput.label,
+      company: roleBriefInput.company,
+      roleTitle: roleBriefInput.roleTitle,
+      competencyEmphasis: roleBriefInput.competencySignals,
     };
     const unboundRoleBrief = await callRaw(client, "save_specialist_finalization", finalization({
       activityId,

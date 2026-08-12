@@ -1,23 +1,9 @@
 import {
-  BehavioralTargetProfileError,
   queryBehavioralTargetProfiles,
   rejectLegacyTargetProfileWrite,
 } from "../../../db/behavioral-target-profile";
 import { resolveOwnerId } from "../../../db/owner";
-import { toRouteErrorMessage } from "../route-helpers";
-
-function targetError(error: unknown) {
-  if (error instanceof BehavioralTargetProfileError) {
-    const conflict = error.code.includes("conflict")
-      || error.code.includes("not_found")
-      || error.code === "behavioral_target_migration_only";
-    return Response.json(
-      { error: error.message, code: error.code, retryable: error.retryable },
-      { status: conflict ? 409 : 400 },
-    );
-  }
-  return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 });
-}
+import { behavioralTargetRouteError } from "../behavioral-target-route-error";
 
 export async function GET(request: Request) {
   try {
@@ -30,7 +16,7 @@ export async function GET(request: Request) {
     const result = await queryBehavioralTargetProfiles(ownerId, { targetId, revision, includeArchived });
     return Response.json(result, { headers: { "cache-control": "private, no-store" } });
   } catch (error) {
-    return targetError(error);
+    return behavioralTargetRouteError(error, "The Target Profile request is invalid.");
   }
 }
 
@@ -39,6 +25,6 @@ export async function POST(request: Request) {
     await resolveOwnerId(request);
     rejectLegacyTargetProfileWrite();
   } catch (error) {
-    return targetError(error);
+    return behavioralTargetRouteError(error, "The Target Profile request is invalid.");
   }
 }

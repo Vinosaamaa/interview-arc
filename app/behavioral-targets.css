@@ -66,7 +66,7 @@
 .target-source-summary code { width: fit-content; padding: 3px 5px; border-radius: 4px; background: #eff1ed; font-size: .7rem; }
 .target-signal-list ul { margin: 2px 0 0; padding-left: 18px; color: #566157; }
 .target-revision-picker { display: grid; gap: 6px; }
-.target-revision-picker select,
+.target-revision-picker input,
 .target-editor input,
 .target-editor textarea,
 .target-binding-row select { width: 100%; min-height: 44px; padding: 9px 11px; border: 1px solid #bfc8be; border-radius: 8px; background: white; color: var(--ink); font: inherit; }
