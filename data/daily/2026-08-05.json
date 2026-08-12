@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-08-05",
+  "practiceTimezone": "America/Los_Angeles",
+  "focus": "N-Queens and Text Justification",
+  "sessions": [
+    {
+      "id": "2026-08-05-session-voice-2026-08-05-plan-hard20-unsolved-frequency",
+      "label": "Practice session",
+      "source": "extra",
+      "allocatedSeconds": 5400,
+      "activityIds": [
+        "2026-08-05-extra-voice-2026-08-05-plan-hard20-unsolved-frequency-1",
+        "2026-08-05-extra-voice-2026-08-05-plan-hard20-unsolved-frequency-2"
+      ]
+    }
+  ],
+  "timerGroups": [
+    {
+      "id": "2026-08-05-session-voice-2026-08-05-plan-hard20-unsolved-frequency",
+      "label": "Practice session",
+      "allocatedSeconds": 5400,
+      "activityIds": [
+        "2026-08-05-extra-voice-2026-08-05-plan-hard20-unsolved-frequency-1",
+        "2026-08-05-extra-voice-2026-08-05-plan-hard20-unsolved-frequency-2"
+      ]
+    }
+  ],
+  "activities": [
+    {
+      "schemaVersion": 2,
+      "id": "2026-08-05-extra-voice-2026-08-05-plan-hard20-unsolved-frequency-1",
+      "questionId": "n-queens",
+      "date": "2026-08-05",
+      "source": "extra",
+      "type": "leetcode",
+      "recordKind": "attempt",
+      "title": "N-Queens",
+      "url": "https://leetcode.com/problems/n-queens/",
+      "allocatedSeconds": 2700,
+      "sessionId": "2026-08-05-session-voice-2026-08-05-plan-hard20-unsolved-frequency",
+      "timerGroupId": "2026-08-05-session-voice-2026-08-05-plan-hard20-unsolved-frequency",
+      "timingSource": "website",
+      "startedAt": "2026-08-05T17:05:17.274-07:00",
+      "endedAt": "2026-08-05T18:03:18.690-07:00",
+      "elapsedSeconds": 3481,
+      "status": "completed",
+      "outcome": "solved",
+      "artifactPath": "practice/leetcode/attempts/2026-08-05-n-queens.md"
+    },
+    {
+      "schemaVersion": 2,
+      "id": "2026-08-05-extra-voice-2026-08-05-plan-hard20-unsolved-frequency-2",
+      "questionId": "text-justification",
+      "date": "2026-08-05",
+      "source": "extra",
+      "type": "leetcode",
+      "recordKind": "attempt",
+      "title": "Text Justification",
+      "url": "https://leetcode.com/problems/text-justification/",
+      "allocatedSeconds": 2700,
+      "sessionId": "2026-08-05-session-voice-2026-08-05-plan-hard20-unsolved-frequency",
+      "timerGroupId": "2026-08-05-session-voice-2026-08-05-plan-hard20-unsolved-frequency",
+      "timingSource": "website",
+      "startedAt": "2026-08-05T18:56:43.358-07:00",
+      "endedAt": "2026-08-05T20:32:52.775-07:00",
+      "elapsedSeconds": 5769,
+      "status": "completed",
+      "outcome": "solved",
+      "artifactPath": "practice/leetcode/attempts/2026-08-05-text-justification.md"
+    }
+  ]
+}
