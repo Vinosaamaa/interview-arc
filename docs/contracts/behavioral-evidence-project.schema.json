@@ -154,9 +154,10 @@
           "enum": ["public", "private", "employer_confidential", "secret_adjacent", "unknown"]
         },
         "availability": { "enum": ["available", "missing", "not_checked", "blocked"] },
+        "refreshStatus": { "enum": ["current", "changed", "unavailable", "not_checked", "blocked"] },
         "visibility": { "const": "local_only" },
         "revision": { "type": "string" },
-        "fingerprint": { "type": "string" },
+        "fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
         "inspectedAt": { "type": "string", "format": "date-time" },
         "canSupport": { "$ref": "#/$defs/stringList" },
         "cannotSupport": { "$ref": "#/$defs/stringList" }
@@ -328,13 +329,43 @@
         { "$ref": "#/$defs/candidateCore" },
         {
           "type": "object",
-          "required": ["kind", "visibility"],
+          "required": ["kind", "visibility", "content"],
           "properties": {
-            "kind": { "enum": ["source_metadata", "evidence", "claim", "story", "implementation_note", "diagram"] },
-            "visibility": { "const": "owner_private" }
+            "kind": { "const": "evidence" },
+            "visibility": { "const": "owner_private" },
+            "sourceEvidenceIds": { "$ref": "#/$defs/singleIdList" },
+            "content": { "$ref": "#/$defs/remoteEvidenceContent" }
           }
         }
       ]
+    },
+    "singleIdList": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/stableId" },
+      "minItems": 1,
+      "maxItems": 1,
+      "uniqueItems": true
+    },
+    "remoteEvidenceContent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["questionLinks"],
+      "properties": {
+        "questionLinks": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["questionId", "relevance"],
+            "properties": {
+              "questionId": { "$ref": "#/$defs/stableId" },
+              "relevance": { "enum": ["supporting", "contrary"] }
+            }
+          }
+        }
+      }
     },
     "publicationCandidate": {
       "unevaluatedProperties": false,

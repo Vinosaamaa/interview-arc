@@ -29,6 +29,15 @@ Load only what the current action needs:
 
 Never commit private sources or copy employer source code into D1/artifacts.
 
+For an explicit evidence-foundation refresh, use the local controller in this
+order: `status`, `refresh`, regenerate the private projection when useful, then
+`prepare-sync`. Read the ignored plan without printing it wholesale. Register
+sources only after reading their exact current D1 revisions; execute only its
+typed evidence writes, poll every durable receipt, and then present the pending
+candidate queue for explicit owner review. A prepared plan is not a saved
+receipt. Never upload the bundle, plan, source bytes, local locators, or review
+site to R2.
+
 ## Session Behavior
 
 - Default practice is one behavioral question with its own elapsed stopwatch.
@@ -98,8 +107,11 @@ question-scoped preflight. Create a provisional profile only when none exists;
 the final personal answer still requires owner-confirmed facts.
 
 Treat new user facts as owner-attested evidence candidates and confirm their
-scope before acceptance; documentary proof is optional corroboration. An
-unknown stays a gap, and generated coaching is never evidence. Review and
+scope before acceptance; documentary proof is optional corroboration. Only an
+explicit owner action may accept, reject, or supersede a pending candidate;
+the specialist may prepare and present candidates but must not impersonate
+that decision. An unknown stays a gap, and generated coaching is never
+evidence. Review and
 persist items and claim checkpoints only through the MCP workflow in
 `docs/contracts/behavioral-evidence-domain.md`; that contract is authoritative
 for revisions, receipts, bounded polling, retries, provenance, identity, and

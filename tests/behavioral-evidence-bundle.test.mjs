@@ -9,6 +9,11 @@ import {
   buildBehavioralEvidenceSite,
   validateBehavioralEvidenceBundle,
 } from "../scripts/build-behavioral-evidence-site.mjs";
+import {
+  prepareBehavioralEvidenceSyncPlan,
+  refreshBehavioralEvidenceSources,
+  summarizeBehavioralEvidenceBundle,
+} from "../scripts/behavioral-evidence-controller.mjs";
 
 async function writeJson(filePath, value) {
   await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -224,7 +229,7 @@ test("rejects private locators and identities in remote-safe candidates", () => 
   const privateLocator = ["", "Users", "example", "private", "repository"].join("/");
   assert.throws(
     () => assertRemoteSafe({ content: { locator: privateLocator, contact: "person@example.test" } }),
-    /absolute macOS path/,
+    /absolute filesystem path/,
   );
 });
 
@@ -293,6 +298,82 @@ test("candidate variants share one closed canonical schema core", async () => {
     assert.equal(schema.$defs[variant].unevaluatedProperties, false);
     assert.equal(schema.$defs[variant].allOf[0].$ref, "#/$defs/candidateCore");
   }
+  assert.equal(schema.$defs.remoteCandidate.allOf[1].properties.kind.const, "evidence");
+  assert.equal(schema.$defs.remoteCandidate.allOf[1].properties.content.$ref, "#/$defs/remoteEvidenceContent");
+});
+
+test("local refresh prepares only typed remote-safe source and evidence operations", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.sources[0].locator = fixture.projectRoot;
+  record.d1Candidates = [{
+    id: "EX-D1-001",
+    kind: "evidence",
+    visibility: "owner_private",
+    content: {
+      questionLinks: [{ questionId: "QUESTION-EXAMPLE-1", relevance: "supporting" }],
+    },
+    sourceEvidenceIds: ["EX-EV-001"],
+    transformations: ["Omitted the private locator and implementation detail."],
+    limitations: ["The observation does not establish personal ownership."],
+  }];
+  await writeJson(recordPath, record);
+
+  const refreshed = await refreshBehavioralEvidenceSources({
+    bundleRoot: fixture.root,
+    now: new Date("2026-08-11T18:00:00.000Z"),
+  });
+  assert.equal(refreshed.inspected, 1);
+  const { plan, planPath } = await prepareBehavioralEvidenceSyncPlan({
+    bundleRoot: fixture.root,
+    now: new Date("2026-08-11T18:01:00.000Z"),
+  });
+  assert.deepEqual(plan.summary, { sources: 1, evidenceWrites: 1 });
+  assert.equal(plan.sources[0].source.sourceId, "example-project.ex-src-001");
+  assert.equal(plan.sources[0].expectedRevision, "read_current_registry_before_write");
+  assert.equal(plan.evidence[0].input.evidence.candidateState, "pending");
+  assert.equal(plan.evidence[0].input.questionLink.questionId, "question-example-1");
+  assert.equal(plan.evidence[0].input.evidence.safeProvenance[0].reference, "example-project.ex-src-001");
+  assert.doesNotMatch(JSON.stringify(plan), new RegExp(fixture.root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.doesNotMatch(JSON.stringify(plan), /"safeLocators"|"locator"/);
+  assert.equal(JSON.parse(await readFile(planPath, "utf8")).summary.evidenceWrites, 1);
+
+  const bundle = await validateBehavioralEvidenceBundle({ bundleRoot: fixture.root });
+  assert.deepEqual(summarizeBehavioralEvidenceBundle(bundle), {
+    projects: 1,
+    sources: 1,
+    availableSources: 1,
+    blockedSources: 0,
+    evidence: 1,
+    pendingEvidence: 1,
+    remoteCandidates: 1,
+    publicationCandidates: 0,
+  });
+});
+
+test("sync preparation rejects untyped or unsafe remote candidates before writing a plan", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.d1Candidates = [{
+    id: "EX-D1-UNSAFE",
+    kind: "evidence",
+    visibility: "owner_private",
+    content: {
+      questionLinks: [{ questionId: "QUESTION-EXAMPLE-1", relevance: "supporting" }],
+    },
+    sourceEvidenceIds: ["EX-EV-001"],
+    transformations: ["Retained src/private/implementation.ts"],
+    limitations: ["Fixture only"],
+  }];
+  await writeJson(recordPath, record);
+
+  await assert.rejects(
+    prepareBehavioralEvidenceSyncPlan({ bundleRoot: fixture.root }),
+    /private locator/,
+  );
+  await assert.rejects(access(path.join(fixture.root, "sync", "plan.json")), { code: "ENOENT" });
 });
 
 test("the archaeology coordinator defines explicit coverage and output budgets", async () => {
