@@ -78,6 +78,11 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
 - A bank question may point to a durable `solutionPath`. The content importer
   hydrates that Markdown into its reusable Solution Profile without turning it
   into a dated Past attempt.
+- Follow `../contracts/behavioral-project-deep-dives.md` for owner-private
+  project grouping. Website and Learn surfaces consume the exact binding and
+  Solution Profile revision; they render the canonical profile through the
+  shared reader and never duplicate its body, infer identity from text, or
+  rewrite a Past attempt's immutable `projectDeepDiveLink`.
 - Treat `practice/*/sessions/*.md` and `audio-answers/*.md` as durable journal artifacts.
 - Use the contracts under `docs/contracts/` as the canonical field names.
 - Follow `../contracts/live-update-reliability.md` for website, Picture-in-

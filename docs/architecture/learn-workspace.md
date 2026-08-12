@@ -31,6 +31,22 @@ The MVP includes:
 - explicit lesson checkpoints;
 - factual Course and Learn-wide Analytics.
 
+## Behavioral Project Deep Dive relationship
+
+Learn may organize Behavioral Project Deep Dives beneath a project, but it
+does not own or copy their body. Follow
+`../contracts/behavioral-project-deep-dives.md` and consume the link-only
+projection from `query_behavioral_project_deep_dives`: stable project and
+question IDs, typed focus, binding revision, and exact/current Solution Profile
+revision. The canonical body remains the Behavioral Problem Bank Solution
+Profile. A Learn Lesson may teach from that exact revision, but any improvement
+to the project profile returns to the Behavioral specialist as a normal new
+immutable profile revision.
+
+Titles, company names, transcript text, and lesson similarity never establish
+a project link. Learn does not publish the profile and does not turn a deep-dive
+conversation transcript into a duplicate lesson or textbook.
+
 It deliberately excludes cloud learning-audio storage, review scheduling,
 numerical grades, inferred mastery, public publishing, a separate Notebook, and
 automatic textbook generation from transcripts.

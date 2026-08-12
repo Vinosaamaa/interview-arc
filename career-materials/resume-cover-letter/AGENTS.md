@@ -17,6 +17,12 @@ handling private material.
 - The Behavioral specialist owns evidence discovery and coaching. The Loop
   Recorder alone owns Loop and Role Brief administration. The Coordinator owns
   executable product, migration, release, and deployment work.
+- For a résumé-bullet Project Deep Dive, supply only the exact immutable résumé
+  revision, occurrence, and accepted same-owner claim/evidence identities. The
+  Behavioral specialist alone calls `set_behavioral_project_binding` and owns
+  the canonical profile under
+  `docs/contracts/behavioral-project-deep-dives.md`; never create, revise, or
+  publish a competing project profile from this specialist.
 
 ## Evidence and private sources
 
