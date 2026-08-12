@@ -133,6 +133,10 @@ export const coverLetterPublishManifestSchema = z.object({
       context.addIssue({ code: "custom", path: ["evidenceChecks", index, "excludedGapClaimIds"], message: "Excluded gaps must belong to declared claims." });
     }
   }
+  const questionIds = value.evidenceChecks.map((check) => check.questionId);
+  if (new Set(questionIds).size !== questionIds.length) {
+    context.addIssue({ code: "custom", path: ["evidenceChecks"], message: "Each questionId may appear only once." });
+  }
 });
 
 export class CoverLetterPublishError extends Error {
@@ -325,12 +329,15 @@ async function verifyArcState(client, manifest) {
     );
   }
 
-  const evidenceSummary = [];
-  for (const check of manifest.evidenceChecks) {
+  const evidenceReads = await Promise.all(manifest.evidenceChecks.map(async (check) => {
     const preflight = structuredResult(await client.callTool({
       name: "query_behavioral_evidence",
       arguments: { questionId: check.questionId },
     }), "query_behavioral_evidence");
+    return { check, preflight };
+  }));
+  const evidenceSummary = [];
+  for (const { check, preflight } of evidenceReads) {
     validateEvidencePreflight(check, preflight);
     evidenceSummary.push({
       questionId: check.questionId,

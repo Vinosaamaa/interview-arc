@@ -71,7 +71,7 @@ evidence after reconnect, and use the installed cover-letter skill for
 cover-letter work. A complete JD is sufficient input; a Loop or application
 record is not required. Final cover letters are PDF only and Job Journey owns
 their private bytes. After content and visual QA, use one ignored private
-manifest with `pnpm cover-letter:publish`; reuse that exact manifest after
+manifest with `pnpm cover-letter:publish -- private-sources/path/to/manifest.private.json`; reuse that exact manifest after
 uncertainty and treat only the authoritative Job Journey `ready` receipt as
 published. For an import, bracket both authenticated exports with
 matching Drive metadata reads and use the ignored private capture controller;

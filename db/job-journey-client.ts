@@ -1,6 +1,7 @@
 import { normalizeCareerSummary, normalizeJobPage, type CareerJobPage, type CareerSummary } from "../app/career-work.ts";
 import {
   normalizeJobJourneyCoverLetterPage,
+  privateCoverLetterDownloadPathSchema,
   type JobJourneyCoverLetterPage,
 } from "../app/cover-letter-contract.ts";
 
@@ -10,6 +11,7 @@ type JobJourneyEnv = {
 };
 
 const CACHE_TTL_MS = 5 * 60 * 1_000;
+const MAX_CACHE_ENTRIES = 100;
 const cache = new Map<string, { expiresAt: number; value: unknown }>();
 export type CachedJobJourneyValue<T> = { value: T; stale: boolean };
 
@@ -50,7 +52,17 @@ async function readJson<T>(
       responseValue = await response.json();
     }
     const value = normalize(responseValue);
-    cache.set(cacheKey, { expiresAt: Date.now() + CACHE_TTL_MS, value });
+    const now = Date.now();
+    for (const [key, entry] of cache) {
+      if (key !== cacheKey && entry.expiresAt <= now) cache.delete(key);
+    }
+    cache.delete(cacheKey);
+    cache.set(cacheKey, { expiresAt: now + CACHE_TTL_MS, value });
+    while (cache.size > MAX_CACHE_ENTRIES) {
+      const oldestKey = cache.keys().next().value;
+      if (typeof oldestKey !== "string") break;
+      cache.delete(oldestKey);
+    }
     return { value, stale: false };
   } catch (error) {
     if (cached) return { value: cached.value as T, stale: true };
@@ -122,7 +134,7 @@ export function resolveJobJourneyDownloadUrl(
   const baseUrl = env.JOB_JOURNEY_BASE_URL?.replace(/\/$/, "");
   if (!baseUrl) throw new Error("Job Journey integration is not configured.");
   const base = validateCoverLetterProviderBase({ ...env, JOB_JOURNEY_BASE_URL: baseUrl });
-  if (!/^\/api\/assets\/cover-letters\/[A-Za-z0-9%_-]+$/.test(downloadPath)) {
+  if (!privateCoverLetterDownloadPathSchema.safeParse(downloadPath).success) {
     throw new Error("Job Journey returned an invalid cover-letter link.");
   }
   return new URL(downloadPath, base).toString();

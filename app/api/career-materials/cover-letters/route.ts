@@ -6,7 +6,7 @@ import {
   resolveJobJourneyDownloadUrl,
 } from "../../../../db/job-journey-client";
 import { resolveOwnerId } from "../../../../db/owner";
-import { getResumeLibrary } from "../../../../db/resume-revisions";
+import { getResumeRevisionReferences } from "../../../../db/resume-revisions";
 import { toRouteErrorMessage } from "../../route-helpers";
 
 const NO_STORE = { "cache-control": "private, no-store" };
@@ -41,25 +41,24 @@ export async function GET(request: Request) {
       return Response.json(unavailable, { headers: NO_STORE });
     }
 
-    const library = await getResumeLibrary(ownerId).catch(() => null);
-    const labels = new Map<string, { label: string; revisions: Set<string> }>();
-    for (const source of library?.sources ?? []) {
-      labels.set(source.resumeId, {
-        label: source.sourceLabel,
-        revisions: new Set(source.revisions.map((revision) => revision.revisionId)),
-      });
-    }
+    const references = await getResumeRevisionReferences(
+      ownerId,
+      provider.value.artifacts.map((artifact) => ({
+        resumeId: artifact.resumeId,
+        revisionId: artifact.resumeRevisionId,
+      })),
+    ).catch(() => null);
     const available = careerMaterialsCoverLetterResponseSchema.parse({
       schemaVersion: 1,
       status: "available",
       stale: provider.stale,
       generatedAt: provider.value.generatedAt,
       artifacts: provider.value.artifacts.map((artifact) => {
-        const resume = labels.get(artifact.resumeId);
+        const resume = references?.get(`${artifact.resumeId}\u0000${artifact.resumeRevisionId}`);
         return {
           ...artifact,
           resumeLabel: resume?.label ?? null,
-          resumeRevisionKnown: resume?.revisions.has(artifact.resumeRevisionId) ?? false,
+          resumeRevisionKnown: resume?.revisionKnown ?? false,
           downloadUrl: resolveJobJourneyDownloadUrl(env, artifact.downloadPath),
         };
       }),

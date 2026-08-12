@@ -233,6 +233,10 @@ test("controller verifies Arc state and advances one bounded receipt from pendin
       excludedGapClaimIds: ["claim-not-declared"],
     }],
   }).success, false);
+  assert.equal(coverLetterPublishManifestSchema.safeParse({
+    ...manifest,
+    evidenceChecks: [manifest.evidenceChecks[0], manifest.evidenceChecks[0]],
+  }).success, false);
   await writeFile(manifestPath, JSON.stringify(manifest));
   const requests = [];
   const client = {
@@ -363,19 +367,26 @@ test("controller requires the complete content and visual quality gate", async (
   }
 });
 
-test("specialist and Career Materials source stay read-only and controller-driven", async () => {
-  const [guide, component, route, controller, contract, packageJson] = await Promise.all([
+test("specialist and Career Materials source stay read-only, targeted, and controller-driven", async () => {
+  const [guide, startup, component, route, client, controller, contract, packageJson] = await Promise.all([
     readFile(new URL("../career-materials/resume-cover-letter/AGENTS.md", import.meta.url), "utf8"),
+    readFile(new URL("../docs/agents/task-startup-prompts.md", import.meta.url), "utf8"),
     readFile(new URL("../app/career-materials-workspace.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/career-materials/cover-letters/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../db/job-journey-client.ts", import.meta.url), "utf8"),
     readFile(new URL("../scripts/publish-cover-letter-to-job-journey.mjs", import.meta.url), "utf8"),
     readFile(new URL("../docs/contracts/cover-letter-publication.md", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
   assert.match(guide, /pnpm cover-letter:publish/);
   assert.match(guide, /Only `ready` is a published cover letter/);
+  assert.match(startup, /pnpm cover-letter:publish -- private-sources\/path\/to\/manifest\.private\.json/);
   assert.match(route, /private, no-store/);
   assert.match(route, /The Resume Library remains authoritative and usable/);
+  assert.match(route, /getResumeRevisionReferences/);
+  assert.doesNotMatch(route, /getResumeLibrary/);
+  assert.match(client, /MAX_CACHE_ENTRIES/);
+  assert.match(client, /privateCoverLetterDownloadPathSchema/);
   assert.doesNotMatch(controller, /save_practice_exchange|append_practice_transcript|create_loop/);
   assert.match(contract, /never an empty\s+history/);
   assert.equal(JSON.parse(packageJson).scripts["cover-letter:publish"], "node scripts/publish-cover-letter-to-job-journey.mjs");

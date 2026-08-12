@@ -23,7 +23,11 @@ const httpsUrl = z.string().url().max(2_048).refine((value) => {
   const url = new URL(value);
   return url.protocol === "https:" && !url.username && !url.password;
 });
-const privateDownloadPath = z.string().regex(/^\/api\/assets\/cover-letters\/[A-Za-z0-9%_-]+$/);
+export const privateCoverLetterDownloadPathSchema = z.string().regex(/^\/api\/assets\/cover-letters\/[A-Za-z0-9%_-]+$/);
+const coverLetterPageCursorSchema = z.object({
+  hasMore: z.boolean(),
+  nextCursor: z.string().min(1).max(2_048).nullable(),
+}).strict();
 
 export const coverLetterArtifactStateSchema = z.enum([
   "pending",
@@ -54,17 +58,14 @@ export const jobJourneyCoverLetterArtifactSchema = z.object({
   supersededAt: z.string().datetime({ offset: true }).nullable(),
   deletedAt: z.string().datetime({ offset: true }).nullable(),
   updatedAt: z.string().datetime({ offset: true }),
-  downloadPath: privateDownloadPath.nullable(),
+  downloadPath: privateCoverLetterDownloadPathSchema.nullable(),
 }).strict();
 
 export const jobJourneyCoverLetterPageSchema = z.object({
   schemaVersion: z.literal(1),
   generatedAt: z.string().datetime({ offset: true }),
   artifacts: z.array(jobJourneyCoverLetterArtifactSchema).max(100),
-  page: z.object({
-    hasMore: z.boolean(),
-    nextCursor: z.string().min(1).max(2_048).nullable(),
-  }).strict(),
+  page: coverLetterPageCursorSchema,
 }).strict().superRefine((page, context) => {
   for (const [index, artifact] of page.artifacts.entries()) {
     const downloadable = artifact.state === "ready" || artifact.state === "superseded";
@@ -93,10 +94,7 @@ const availableResponse = z.object({
   stale: z.boolean(),
   generatedAt: z.string().datetime({ offset: true }),
   artifacts: z.array(careerMaterialsCoverLetterArtifactSchema).max(100),
-  page: z.object({
-    hasMore: z.boolean(),
-    nextCursor: z.string().min(1).max(2_048).nullable(),
-  }).strict(),
+  page: coverLetterPageCursorSchema,
 }).strict();
 
 const unavailableResponse = z.object({
