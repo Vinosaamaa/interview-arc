@@ -455,6 +455,11 @@ test("commit-pinned repositories reject mismatched document revisions", () => {
   const buildInput = input();
   buildInput.trustedRepositories[0].commit = "b".repeat(40);
   assert.throws(() => buildEngineeringJournal(buildInput), (error) => error.code === "commit_pin_mismatch");
+
+  buildInput.documents[0].trustedCommit = "b".repeat(40);
+  const accepted = buildEngineeringJournal(buildInput);
+  assert.equal(accepted.index.records[0].source.commit, SOURCE_COMMIT);
+  assert.match(accepted.index.records[0].source.permalink, new RegExp(`/blob/${SOURCE_COMMIT}/`));
 });
 
 test("relations must pin an exact existing record revision", () => {

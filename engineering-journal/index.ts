@@ -33,6 +33,7 @@ export type TrustedJournalRepository = {
 
 export type EngineeringJournalDocument = {
   repository: string;
+  trustedCommit?: string;
   commit: string;
   path: string;
   markdown: string;
@@ -598,7 +599,11 @@ function normalizeDocument(
   const trusted = repositories.get(document.repository);
   if (!trusted) throw new EngineeringJournalError("repository_untrusted", safeSource);
   if (!COMMIT_PATTERN.test(document.commit)) throw new EngineeringJournalError("commit_invalid", safeSource);
-  if (trusted.commit && trusted.commit !== document.commit) {
+  if (trusted.commit && trusted.commit !== document.trustedCommit) {
+    throw new EngineeringJournalError("commit_pin_mismatch", safeSource);
+  }
+  if (!trusted.commit && document.trustedCommit) throw new EngineeringJournalError("commit_pin_mismatch", safeSource);
+  if (document.trustedCommit && !COMMIT_PATTERN.test(document.trustedCommit)) {
     throw new EngineeringJournalError("commit_pin_mismatch", safeSource);
   }
   if (!pathWithin(document.path, trusted.canonicalPath) || !document.path.endsWith(".md")) {
@@ -716,7 +721,11 @@ function normalizeReceipt(
   const trusted = repositories.get(document.repository);
   if (!trusted) throw new EngineeringJournalError("repository_untrusted", safeSource);
   if (!COMMIT_PATTERN.test(document.commit)) throw new EngineeringJournalError("commit_invalid", safeSource);
-  if (trusted.commit && trusted.commit !== document.commit) {
+  if (trusted.commit && trusted.commit !== document.trustedCommit) {
+    throw new EngineeringJournalError("commit_pin_mismatch", safeSource);
+  }
+  if (!trusted.commit && document.trustedCommit) throw new EngineeringJournalError("commit_pin_mismatch", safeSource);
+  if (document.trustedCommit && !COMMIT_PATTERN.test(document.trustedCommit)) {
     throw new EngineeringJournalError("commit_pin_mismatch", safeSource);
   }
   if (!trusted.receiptPath || !pathWithin(document.path, trusted.receiptPath) || !document.path.endsWith(".md")) {

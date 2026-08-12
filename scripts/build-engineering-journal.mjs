@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -150,11 +150,12 @@ async function sourceDocuments(repository) {
     if (repository.remoteUrl) {
       git(root, ["init", "--quiet"]);
       git(root, ["remote", "add", "origin", repository.remoteUrl]);
-      git(root, ["fetch", "--quiet", "--depth=1", "origin", commitPin]);
+      git(root, ["fetch", "--quiet", "origin", commitPin]);
       if (git(root, ["rev-parse", "FETCH_HEAD"]) !== commitPin) {
         throw new Error(`Engineering Journal remote source ${repository.repository} did not resolve to its exact commit.`);
       }
     }
+    const trustedCommit = commitPin ?? git(root, ["rev-parse", "HEAD"]);
     const pathsAt = async (canonicalPath) => commitPin
       ? git(root, ["ls-tree", "-r", "--name-only", commitPin, "--", canonicalPath]).split("\n").filter((path) => path.endsWith(".md"))
       : await markdownPaths(root, canonicalPath);
@@ -162,9 +163,13 @@ async function sourceDocuments(repository) {
       const paths = await pathsAt(canonicalPath);
       const documents = [];
       for (const path of paths) {
-        const commit = commitPin ?? git(root, ["log", "-1", "--format=%H", "--", path]);
+        const commit = git(root, ["log", "-1", "--format=%H", trustedCommit, "--", path]);
         if (!commit) throw new Error(`No committed ${kind} source revision exists for ${repository.repository}:${path}.`);
         const markdown = git(root, ["show", `${commit}:${path}`]);
+        if (git(root, ["rev-parse", `${commit}:${path}`]) !== git(root, ["rev-parse", `${trustedCommit}:${path}`]) ||
+            spawnSync("git", ["-C", root, "merge-base", "--is-ancestor", commit, trustedCommit]).status !== 0) {
+          throw new Error(`Canonical ${kind} provenance is not reachable from the trusted repository snapshot.`);
+        }
         if (!commitPin) {
           const authored = await readFile(join(root, path), "utf8");
           if (authored.replace(/\n$/, "") !== markdown) {
@@ -172,7 +177,7 @@ async function sourceDocuments(repository) {
           }
         }
         const committedAt = new Date(git(root, ["show", "-s", "--format=%cI", commit])).toISOString().replace(".000Z", "Z");
-        documents.push({ repository: repository.repository, commit, committedAt, path, markdown: `${markdown}\n` });
+        documents.push({ repository: repository.repository, trustedCommit: commitPin ?? undefined, commit, committedAt, path, markdown: `${markdown}\n` });
       }
       return documents;
     };
