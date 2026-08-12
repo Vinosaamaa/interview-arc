@@ -259,6 +259,31 @@ test("receipt ingestion is deterministic, path-allowlisted, and public-safe with
   );
 });
 
+test("receipt v1 bounds collections and public source strings", () => {
+  const tooManyUnknowns = inputWithReceipt(RECEIPT.replace(
+    "unknowns: []",
+    `unknowns: ${JSON.stringify(Array.from({ length: 33 }, (_, index) => `unknown-${index + 1}`))}`,
+  ));
+  assert.throws(() => buildEngineeringJournal(tooManyUnknowns), (error) => error.code === "field_unknowns_invalid");
+
+  const tooManyRichRefs = inputWithReceipt(RECEIPT
+    .replace("classification: none", "classification: architecture-review")
+    .replace("richRecordRefs: []", `richRecordRefs: ${JSON.stringify(Array.from({ length: 17 }, (_, index) => `record-${index + 1}@1`))}`));
+  assert.throws(() => buildEngineeringJournal(tooManyRichRefs), (error) => error.code === "field_richRecordRefs_invalid");
+
+  const overlongLabel = inputWithReceipt(RECEIPT.replace(
+    '"label":"Pull request #312"',
+    `"label":"${"x".repeat(161)}"`,
+  ));
+  assert.throws(() => buildEngineeringJournal(overlongLabel), (error) => error.code === "field_sources_invalid");
+
+  const overlongEvidence = inputWithReceipt(RECEIPT.replace(
+    '"evidenceRefs":["pull-request:312"]',
+    `"evidenceRefs":["${"e".repeat(513)}"]`,
+  ));
+  assert.throws(() => buildEngineeringJournal(overlongEvidence), (error) => error.code === "field_verification_invalid");
+});
+
 test("receipt timeline JSON, search, Statistics, and standalone HTML remain one separate projection", () => {
   const result = buildEngineeringJournal(inputWithReceipt());
   const embedded = result.standaloneHtml.match(/<script id="engineering-journal-index" type="application\/json">([\s\S]+)<\/script>/);

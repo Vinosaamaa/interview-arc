@@ -411,9 +411,16 @@ function stringValue(frontmatter: Record<string, unknown>, key: string, source: 
   return value.trim();
 }
 
-function stringArray(frontmatter: Record<string, unknown>, key: string, source: string) {
+function stringArray(
+  frontmatter: Record<string, unknown>,
+  key: string,
+  source: string,
+  limits?: { maxItems?: number; maxLength?: number },
+) {
   const value = frontmatter[key];
-  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !item.trim())) {
+  if (!Array.isArray(value) || (limits?.maxItems !== undefined && value.length > limits.maxItems) ||
+    value.some((item) => typeof item !== "string" || !item.trim() ||
+      (limits?.maxLength !== undefined && item.trim().length > limits.maxLength))) {
     throw new EngineeringJournalError(`field_${key}_invalid`, source);
   }
   return value.map((item) => String(item).trim());
@@ -455,9 +462,16 @@ function validUtcSecondTimestamp(value: string) {
   return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().replace(".000Z", "Z") === value;
 }
 
-function sourceReferences(frontmatter: Record<string, unknown>, source: string): EngineeringRecordSourceReference[] {
+function sourceReferences(
+  frontmatter: Record<string, unknown>,
+  source: string,
+  limits?: { maxItems?: number; labelMaxLength?: number; urlMaxLength?: number },
+): EngineeringRecordSourceReference[] {
   const value = frontmatter.sources;
-  if (!Array.isArray(value) || value.length === 0) throw new EngineeringJournalError("field_sources_invalid", source);
+  if (!Array.isArray(value) || value.length === 0 ||
+    (limits?.maxItems !== undefined && value.length > limits.maxItems)) {
+    throw new EngineeringJournalError("field_sources_invalid", source);
+  }
   return value.map((item) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) {
       throw new EngineeringJournalError("field_sources_invalid", source);
@@ -466,10 +480,12 @@ function sourceReferences(frontmatter: Record<string, unknown>, source: string):
     if (Object.keys(entry).some((key) => !["label", "url", "kind"].includes(key))) {
       throw new EngineeringJournalError("field_sources_invalid", source);
     }
-    if (typeof entry.label !== "string" || !entry.label.trim()) {
+    if (typeof entry.label !== "string" || !entry.label.trim() ||
+      (limits?.labelMaxLength !== undefined && entry.label.trim().length > limits.labelMaxLength)) {
       throw new EngineeringJournalError("field_sources_invalid", source);
     }
-    if (typeof entry.url !== "string" || !/^https:\/\/[^\s]+$/.test(entry.url)) {
+    if (typeof entry.url !== "string" || !/^https:\/\/[^\s]+$/.test(entry.url) ||
+      (limits?.urlMaxLength !== undefined && entry.url.length > limits.urlMaxLength)) {
       throw new EngineeringJournalError("field_sources_invalid", source);
     }
     if (!["issue", "pull-request", "commit", "release", "run", "documentation"].includes(String(entry.kind))) {
@@ -534,7 +550,11 @@ function diagramReferences(
   });
 }
 
-function verification(frontmatter: Record<string, unknown>, source: string): EngineeringRecordVerification {
+function verification(
+  frontmatter: Record<string, unknown>,
+  source: string,
+  evidenceLimits?: { maxItems?: number; maxLength?: number },
+): EngineeringRecordVerification {
   const value = frontmatter.verification;
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new EngineeringJournalError("field_verification_invalid", source);
@@ -546,7 +566,10 @@ function verification(frontmatter: Record<string, unknown>, source: string): Eng
   if (entry.state !== "verified" && entry.state !== "not-recorded") {
     throw new EngineeringJournalError("field_verification_invalid", source);
   }
-  if (!Array.isArray(entry.evidenceRefs) || entry.evidenceRefs.some((ref) => typeof ref !== "string" || !ref.trim())) {
+  if (!Array.isArray(entry.evidenceRefs) ||
+    (evidenceLimits?.maxItems !== undefined && entry.evidenceRefs.length > evidenceLimits.maxItems) ||
+    entry.evidenceRefs.some((ref) => typeof ref !== "string" || !ref.trim() ||
+      (evidenceLimits?.maxLength !== undefined && ref.trim().length > evidenceLimits.maxLength))) {
     throw new EngineeringJournalError("field_verification_invalid", source);
   }
   if (entry.state === "verified" && entry.evidenceRefs.length === 0) {
@@ -731,7 +754,7 @@ function normalizeReceipt(
   if (!RECEIPT_CLASSIFICATIONS.has(classification)) {
     throw new EngineeringJournalError("field_classification_invalid", safeSource);
   }
-  const richRecordRefs = stringArray(frontmatter, "richRecordRefs", safeSource);
+  const richRecordRefs = stringArray(frontmatter, "richRecordRefs", safeSource, { maxItems: 16, maxLength: 180 });
   if (new Set(richRecordRefs).size !== richRecordRefs.length || richRecordRefs.some((ref) => !RECORD_REF_PATTERN.test(ref))) {
     throw new EngineeringJournalError("field_richRecordRefs_invalid", safeSource);
   }
@@ -746,11 +769,11 @@ function normalizeReceipt(
   }
   const confidence = stringValue(frontmatter, "confidence", safeSource) as EngineeringPullRequestReceipt["confidence"];
   if (!CONFIDENCE.has(confidence)) throw new EngineeringJournalError("field_confidence_invalid", safeSource);
-  const unknowns = stringArray(frontmatter, "unknowns", safeSource);
+  const unknowns = stringArray(frontmatter, "unknowns", safeSource, { maxItems: 32, maxLength: 512 });
   const headCommit = nullableCommit(frontmatter, "headCommit", safeSource);
   const mergeCommit = nullableCommit(frontmatter, "mergeCommit", safeSource);
   const mergedAt = nullableTimestamp(frontmatter, "mergedAt", safeSource);
-  const receiptVerification = verification(frontmatter, safeSource);
+  const receiptVerification = verification(frontmatter, safeSource, { maxItems: 32, maxLength: 512 });
   if ((headCommit || mergeCommit || mergedAt) && receiptVerification.state !== "verified") {
     throw new EngineeringJournalError("receipt_supplied_fact_unverified", safeSource);
   }
@@ -759,7 +782,7 @@ function normalizeReceipt(
   if (visibility !== "public-safe" || publicationEligibility !== "eligible") {
     throw new EngineeringJournalError("receipt_not_public_eligible", safeSource);
   }
-  const sources = sourceReferences(frontmatter, safeSource);
+  const sources = sourceReferences(frontmatter, safeSource, { maxItems: 32, labelMaxLength: 160, urlMaxLength: 2048 });
   const pullRequestUrl = `https://github.com/${trusted.owner}/${repository}/pull/${pr}`;
   if (!sources.some((entry) => entry.kind === "pull-request" && entry.url === pullRequestUrl)) {
     throw new EngineeringJournalError("receipt_pull_request_source_missing", safeSource);
