@@ -13,15 +13,22 @@ Version 1 uses restricted one-line frontmatter, not general YAML. Each nonempty 
 
 ## Forward authoring protocol
 
-The implementation coordinator owns the receipt as part of the pull request. The user does not need to request a separate Journal operation.
+The implementation coordinator owns the receipt as part of the pull request.
+The user does not need to request a separate Journal operation. The normative
+coordinator sequence is
+[`Engineering record authorship`](../agents/issue-lifecycle.md#engineering-record-authorship):
+it begins with the materiality decision during issue work, uses a draft pull
+request to obtain the repository-local number, and blocks review until the
+numbered receipt, matching checkbox, and any exact rich-record references are
+committed.
 
-1. Open or identify the pull request so its repository-local number is known.
-2. Add exactly one compact receipt at `docs/engineering/changes/pr-<number>.md`.
-3. Record a public-safe title and one factual summary paragraph of at most 280 characters.
-4. Classify a small or non-material pull request as `none` and leave `richRecordRefs` empty.
-5. For a material pull request, add the appropriate rich record or link an exact existing record that explicitly covers the same reviewed PR cluster. Put every linked `id@revision` in `richRecordRefs`; a reviewed multi-PR case study may be shared by several receipts.
-6. Let CI validate both layers. The deterministic build projects them into separate receipt and rich-record collections, search indexes, backlinks, Statistics, and standalone HTML.
-7. Merge and deploy through the repository's normal release workflow.
+This protocol owns the content boundary: the receipt contains a public-safe
+title and one factual summary paragraph of at most 280 characters; `none`
+leaves `richRecordRefs` empty; material classifications link exact
+`id@revision` records; and a reviewed multi-PR case study may be shared by
+several receipts. CI validates those authored layers, while the deterministic
+build projects their indexes, backlinks, Statistics, immutable diagram links,
+and standalone HTML.
 
 After the pull request number is known, scaffold its forward receipt without a separate user operation:
 
@@ -32,6 +39,10 @@ pnpm engineering:receipt:new -- \
   --summary "Renamed one local navigation label without changing a Module or Interface." \
   --classification none
 ```
+
+Run `pnpm engineering:receipt:new -- --help` to see both non-material and
+material invocations. The command is intentionally non-interactive so agents
+and CI can reproduce exactly what was authored.
 
 For a material pull request, select its rich classification and repeat `--rich-record-ref <id>@<revision>` for every exact record it links; every rich record changed by that pull request must be included. The non-interactive command makes no GitHub, D1, or network call; it derives only the canonical pull-request URL and evidence reference from `--pr`, leaves head/merge facts `null`, sorts rich references, and refuses invalid, unsafe, or existing targets.
 
