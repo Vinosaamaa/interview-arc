@@ -144,6 +144,34 @@ The implementing agent reproduces reliability-sensitive failures, adds
 regression coverage, keeps unrelated scope out, updates behavior contracts,
 and tests all affected states.
 
+### Engineering record authorship
+
+Every pull request owns one compact Engineering receipt. This is implementation
+work, not a separate operation that the user must remember to request.
+
+1. During issue intake, classify the planned change as `none` or one material
+   Engineering record type from
+   [`docs/engineering/pull-request-history.md`](../engineering/pull-request-history.md).
+2. When the change is material, author its canonical public-safe rich Markdown
+   record alongside the implementation, or select an existing exact
+   `id@revision` record whose reviewed cluster already covers the change.
+   Evidence-backed diagrams are authored here only when they materially clarify
+   verified structure or flow. Neither CI nor the generator invents them.
+3. Push the first coherent public-safe commit and open a **draft pull request**
+   when its repository-local number is not yet known.
+4. Run `pnpm engineering:receipt:new -- --pr <number> ...`, commit exactly one
+   `docs/engineering/changes/pr-<number>.md`, and select the matching
+   Engineering-impact checkbox in the pull-request body.
+5. Request review only after the receipt, every required rich record/reference,
+   and the matching PR classification are present. CI validates canonical
+   authorship; build and deployment derive JSON, search, backlinks, Statistics,
+   diagram assets, standalone HTML, and the website projection automatically.
+
+Run `pnpm engineering:receipt:new -- --help` for complete non-material and
+material examples. Automatic projection never means automatic narrative:
+agents must author factual summaries, decisions, lessons, incident causality,
+and diagrams from verified implementation context and evidence.
+
 Link the PR with `Refs #<issue-number>`. Do not use an automatic closing
 keyword: merge alone is not release verification.
 

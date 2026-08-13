@@ -32,6 +32,33 @@ const PUBLIC_UNSAFE_PATTERNS = [
   /https?:\/\/[^\s/@:]+:[^\s/@]+@[^\s/]+/,
   /\b[A-Z0-9._%+-]+@(?!example\.com\b)[A-Z0-9.-]+\.[A-Z]{2,}\b/i,
 ];
+const HELP = `Create the canonical compact Engineering receipt for a pull request.
+
+Authoring order:
+  1. Decide the Engineering impact before opening the pull request.
+  2. For material work, author or select the exact rich record first.
+  3. Open a draft pull request to obtain its repository-local number.
+  4. Run this command and commit the generated pr-<number>.md file.
+  5. Select the matching Engineering-impact checkbox in the pull-request body.
+
+Non-material example:
+  pnpm engineering:receipt:new -- \\
+    --pr <number> \\
+    --title "Correct Engineering navigation labels" \\
+    --summary "Renamed one local label without changing a Module or Interface." \\
+    --classification none
+
+Material example:
+  pnpm engineering:receipt:new -- \\
+    --pr <number> \\
+    --title "Adopt the Engineering Journal boundary" \\
+    --summary "Adopted the reviewed Journal contract and deterministic projection." \\
+    --classification architecture-review \\
+    --rich-record-ref <id>@<revision>
+
+This scaffold creates canonical Markdown only. CI validates it, and the build derives
+JSON, search, backlinks, Statistics, and standalone HTML. It does not author prose or diagrams.
+`;
 
 function fail(message) {
   const error = new Error(message);
@@ -150,6 +177,10 @@ ${summary}
 }
 
 async function main(argv = process.argv.slice(2), root = process.cwd()) {
+  if (argv.length === 1 && argv[0] === "--help") {
+    process.stdout.write(HELP);
+    return;
+  }
   const arguments_ = parseArguments(argv);
   if (!/^[1-9]\d*$/u.test(arguments_["--pr"]) || !Number.isSafeInteger(Number(arguments_["--pr"]))) {
     fail("PR number must be a positive safe integer.");

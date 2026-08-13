@@ -44,6 +44,21 @@ function scaffold(root, arguments_) {
   });
 }
 
+test("help teaches the draft-PR receipt workflow without repository state", () => {
+  const result = spawnSync(process.execPath, [SCRIPT, "--help"], {
+    cwd: tmpdir(),
+    encoding: "utf8",
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Decide the Engineering impact before opening the pull request/);
+  assert.match(result.stdout, /Open a draft pull request to obtain its repository-local number/);
+  assert.match(result.stdout, /--classification none/);
+  assert.match(result.stdout, /--classification architecture-review/);
+  assert.match(result.stdout, /--rich-record-ref <id>@<revision>/);
+  assert.match(result.stdout, /does not author prose or diagrams/);
+});
+
 test("a small forward PR gets one compact receipt with null historical facts", async (t) => {
   const root = await repositoryFixture(t);
   const result = scaffold(root, [
