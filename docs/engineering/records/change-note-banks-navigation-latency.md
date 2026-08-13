@@ -28,7 +28,7 @@ verification: {"state":"verified","evidenceRefs":["issue:315","tests/bank-naviga
 visibility: public-safe
 publicationEligibility: eligible
 issue: 315
-pr: null
+pr: 317
 release: null
 run: null
 ---
