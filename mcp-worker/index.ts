@@ -98,6 +98,8 @@ import {
   assertLearningAudioForbidden,
   controlLearningSession,
   controlLearningSessionSchema,
+  controlCurrentLearningVoiceTimer,
+  controlLearningVoiceTimerSchema,
   createLearningCourseBlueprint,
   createLearningCourseBlueprintSchema,
   createLearningSession,
@@ -115,6 +117,7 @@ import {
   queryLearningWorkspace,
   queryLearningWorkspaceSchema,
   readActiveLearningVoiceSessions,
+  readCurrentLearningVoiceTimerSessions,
   reviseLearningCourseBlueprint,
   reviseLearningCourseBlueprintSchema,
   saveLearningLessonRevision,
@@ -625,12 +628,31 @@ async function voiceContext(ownerId: string, request: Request) {
   // newly started stopwatch appear several seconds—or minutes—late. Resolve
   // the one running timer directly, and load richer metadata only when it exists.
   const date = dateInPracticeTimeZone();
-  const [activity, timerInstrument, learningSessions] = await Promise.all([
+  const [activity, timerInstrument, learningSessions, learningTimerSessions] = await Promise.all([
     readActiveVoiceActivity(ownerId),
     readVoiceTimerInstrument(ownerId),
     readActiveLearningVoiceSessions(ownerId),
+    readCurrentLearningVoiceTimerSessions(ownerId),
   ]);
   const learningSession = learningSessions.length === 1 ? learningSessions[0] : null;
+  const learningTimerSession = learningTimerSessions.length === 1 ? learningTimerSessions[0] : null;
+  const serverNow = Date.now();
+  const learningTimer = learningTimerSession ? {
+    serverNow,
+    sessionId: learningTimerSession.sessionId,
+    scopeType: learningTimerSession.scopeType,
+    courseId: learningTimerSession.courseId,
+    courseTitle: learningTimerSession.courseTitle,
+    moduleId: learningTimerSession.moduleId,
+    moduleTitle: learningTimerSession.moduleTitle,
+    lessonId: learningTimerSession.lessonId,
+    lessonTitle: learningTimerSession.lessonTitle,
+    state: learningTimerSession.state,
+    accumulatedSeconds: learningTimerSession.accumulatedSeconds,
+    startedAt: learningTimerSession.startedAt,
+    runningSince: learningTimerSession.runningSince,
+    revision: learningTimerSession.revision,
+  } : null;
   const captureTarget = learningSessions.length > 1 || (activity && learningSession)
     ? "ambiguous" as const
     : learningSession
@@ -638,13 +660,14 @@ async function voiceContext(ownerId: string, request: Request) {
       : activity
         ? "interview" as const
         : null;
-  if (!activity && !learningSession && learningSessions.length === 0) {
+  if (!activity && !learningSession && learningSessions.length === 0 && learningTimerSessions.length === 0) {
     return json(request, {
       protocolVersion: VOICE_PROTOCOL_VERSION,
       date,
       captureTarget,
       focusedActivity: null,
       focusedLearningSession: null,
+      learningTimer: null,
       timerInstrument,
       specialist: null,
       message: "Start an Interview activity or Learning Session before recording linked Voice text.",
@@ -702,6 +725,7 @@ async function voiceContext(ownerId: string, request: Request) {
     captureTarget,
     focusedActivity,
     focusedLearningSession: learningSession,
+    learningTimer,
     timerInstrument,
     specialist: specialist ? {
       specialty: specialist.specialty,
@@ -711,12 +735,69 @@ async function voiceContext(ownerId: string, request: Request) {
     } : null,
     message: captureTarget === "ambiguous"
       ? ambiguityMessage
-      : specialist
-        ? null
-        : captureTarget === "learning"
-          ? "Connect the Learning Specialist task before sending Learning Voice text."
-          : `Connect the ${activity?.type} specialist task before sending a recording.`,
+      : learningTimerSession?.state === "paused"
+        ? "The Learning Session is paused. Resume it before recording linked Voice text."
+        : learningTimerSessions.length > 1
+          ? "Multiple paused Learning Sessions are open. Resume one from Learn before controlling it in Voice."
+          : specialist
+            ? null
+            : captureTarget === "learning"
+              ? "Connect the Learning Specialist task before sending Learning Voice text."
+              : `Connect the ${activity?.type} specialist task before sending a recording.`,
   });
+}
+
+function learningVoiceTimerPayload(
+  session: Awaited<ReturnType<typeof readCurrentLearningVoiceTimerSessions>>[number],
+  serverNow = Date.now(),
+) {
+  return {
+    serverNow,
+    sessionId: session.sessionId,
+    scopeType: session.scopeType,
+    courseId: session.courseId,
+    courseTitle: session.courseTitle,
+    moduleId: session.moduleId,
+    moduleTitle: session.moduleTitle,
+    lessonId: session.lessonId,
+    lessonTitle: session.lessonTitle,
+    state: session.state,
+    accumulatedSeconds: session.accumulatedSeconds,
+    startedAt: session.startedAt,
+    runningSince: session.runningSince,
+    revision: session.revision,
+  };
+}
+
+async function voiceLearningTimerMutation(ownerId: string, request: Request, env: Env) {
+  try {
+    const input = controlLearningVoiceTimerSchema.parse(await request.json());
+    const receipt = await controlCurrentLearningVoiceTimer(ownerId, input);
+    const refreshed = await readCurrentLearningVoiceTimerSessions(ownerId);
+    const session = refreshed.find((candidate) => candidate.sessionId === input.sessionId);
+    await publishOwnerLiveUpdate(env.LIVE_UPDATES, ownerId, "timer");
+    return json(request, {
+      protocolVersion: VOICE_PROTOCOL_VERSION,
+      ...receipt,
+      learningTimer: session ? learningVoiceTimerPayload(session) : null,
+    });
+  } catch (error) {
+    if (error instanceof LearningError) {
+      return json(request, {
+        error: error.message,
+        code: error.code,
+        retryable: error.retryable,
+      }, { status: 409 });
+    }
+    if (error instanceof z.ZodError || error instanceof SyntaxError) {
+      return json(request, {
+        error: "A valid Learning timer mutation is required.",
+        code: "learning_voice_timer_request_invalid",
+        retryable: false,
+      }, { status: 400 });
+    }
+    throw error;
+  }
 }
 
 async function voiceLearningTranscript(ownerId: string, request: Request, env: Env) {
@@ -5128,6 +5209,9 @@ export default {
     }
     if (url.pathname === "/voice/learning-transcripts" && request.method === "POST") {
       return voiceLearningTranscript(ownerId, request, env);
+    }
+    if (url.pathname === "/voice/learning-timers" && request.method === "POST") {
+      return voiceLearningTimerMutation(ownerId, request, env);
     }
     if (url.pathname === "/voice/timers" && request.method === "POST") {
       return voiceTimerMutation(ownerId, request, env);
