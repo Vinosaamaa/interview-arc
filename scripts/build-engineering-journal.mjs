@@ -1,6 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -13,6 +12,7 @@ const OUTPUTS = {
   standaloneHtml: join(REPOSITORY_ROOT, "engineering-journal", "generated", "standalone.html"),
 };
 const DIAGRAM_ASSET_ROOT = join(REPOSITORY_ROOT, "public", "engineering-journal", "assets");
+const SOURCE_CACHE_ROOT = join(REPOSITORY_ROOT, ".cache", "engineering-journal", "git");
 const check = process.argv.includes("--check");
 
 function git(root, args) {
@@ -141,56 +141,80 @@ async function sourceDocuments(repository) {
   if (repository.remoteUrl && (!/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\.git$/.test(repository.remoteUrl) || !repository.commit)) {
     throw new Error(`Engineering Journal remote source ${repository.repository} requires a trusted GitHub URL and exact commit.`);
   }
-  const temporaryRoot = repository.remoteUrl
-    ? await mkdtemp(join(tmpdir(), "interview-arc-engineering-"))
-    : null;
-  const root = temporaryRoot ?? resolve(REPOSITORY_ROOT, repository.localRoot);
+  if (!/^[A-Za-z0-9_.-]+$/.test(repository.repository)) {
+    throw new Error("Engineering Journal source repository identity is invalid.");
+  }
+  const root = repository.remoteUrl
+    ? join(SOURCE_CACHE_ROOT, repository.repository)
+    : resolve(REPOSITORY_ROOT, repository.localRoot);
   const commitPin = repository.commit ?? null;
-  try {
-    if (repository.remoteUrl) {
+  if (repository.remoteUrl) {
+    await mkdir(root, { recursive: true });
+    const repositoryRoot = spawnSync("git", ["-C", root, "rev-parse", "--show-toplevel"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    if (repositoryRoot.status !== 0 || resolve(repositoryRoot.stdout.trim()) !== root) {
       git(root, ["init", "--quiet"]);
+    }
+    const remote = spawnSync("git", ["-C", root, "remote", "get-url", "origin"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    if (remote.status === 0 && remote.stdout.trim() !== repository.remoteUrl) {
+      throw new Error(`Engineering Journal cache remote mismatch for ${repository.repository}.`);
+    }
+    if (remote.status !== 0) {
       git(root, ["remote", "add", "origin", repository.remoteUrl]);
-      git(root, ["fetch", "--quiet", "origin", commitPin]);
+    }
+    if (spawnSync("git", ["-C", root, "cat-file", "-e", `${commitPin}^{commit}`], { stdio: "ignore" }).status !== 0) {
+      const fetch = spawnSync("git", ["-C", root, "fetch", "--quiet", "--no-tags", "origin", commitPin], {
+        stdio: "ignore",
+      });
+      if (fetch.status !== 0) {
+        throw new Error(`Engineering Journal remote source ${repository.repository} exact commit is unavailable and not cached.`);
+      }
       if (git(root, ["rev-parse", "FETCH_HEAD"]) !== commitPin) {
         throw new Error(`Engineering Journal remote source ${repository.repository} did not resolve to its exact commit.`);
       }
     }
-    const trustedCommit = commitPin ?? git(root, ["rev-parse", "HEAD"]);
-    const pathsAt = async (canonicalPath) => commitPin
-      ? git(root, ["ls-tree", "-r", "--name-only", commitPin, "--", canonicalPath]).split("\n").filter((path) => path.endsWith(".md"))
-      : await markdownPaths(root, canonicalPath);
-    const documentsAt = async (canonicalPath, kind) => {
-      const paths = await pathsAt(canonicalPath);
-      const documents = [];
-      for (const path of paths) {
-        const commit = git(root, ["log", "-1", "--format=%H", trustedCommit, "--", path]);
-        if (!commit) throw new Error(`No committed ${kind} source revision exists for ${repository.repository}:${path}.`);
-        const markdown = git(root, ["show", `${commit}:${path}`]);
-        if (git(root, ["rev-parse", `${commit}:${path}`]) !== git(root, ["rev-parse", `${trustedCommit}:${path}`]) ||
-            spawnSync("git", ["-C", root, "merge-base", "--is-ancestor", commit, trustedCommit]).status !== 0) {
-          throw new Error(`Canonical ${kind} provenance is not reachable from the trusted repository snapshot.`);
-        }
-        if (!commitPin) {
-          const authored = await readFile(join(root, path), "utf8");
-          if (authored.replace(/\n$/, "") !== markdown) {
-            throw new Error(`Canonical ${kind} ${repository.repository}:${path} differs from its latest committed revision.`);
-          }
-        }
-        const committedAt = new Date(git(root, ["show", "-s", "--format=%cI", commit])).toISOString().replace(".000Z", "Z");
-        documents.push({ repository: repository.repository, trustedCommit: commitPin ?? undefined, commit, committedAt, path, markdown: `${markdown}\n` });
-      }
-      return documents;
-    };
-    const documents = await documentsAt(repository.canonicalPath, "Engineering record");
-    if (documents.length === 0) throw new Error(`Engineering Journal source ${repository.repository} contains no canonical records.`);
-    const diagramAssets = committedDiagramAssets(root, documents);
-    const receiptDocuments = repository.receiptPath
-      ? await documentsAt(repository.receiptPath, "pull request receipt")
-      : [];
-    return { documents, receiptDocuments, diagramAssets };
-  } finally {
-    if (temporaryRoot) await rm(temporaryRoot, { recursive: true, force: true });
+    if (git(root, ["rev-parse", commitPin]) !== commitPin) {
+      throw new Error(`Engineering Journal remote source ${repository.repository} cache does not contain its exact commit.`);
+    }
   }
+  const trustedCommit = commitPin ?? git(root, ["rev-parse", "HEAD"]);
+  const pathsAt = async (canonicalPath) => commitPin
+    ? git(root, ["ls-tree", "-r", "--name-only", commitPin, "--", canonicalPath]).split("\n").filter((path) => path.endsWith(".md"))
+    : await markdownPaths(root, canonicalPath);
+  const documentsAt = async (canonicalPath, kind) => {
+    const paths = await pathsAt(canonicalPath);
+    const documents = [];
+    for (const path of paths) {
+      const commit = git(root, ["log", "-1", "--format=%H", trustedCommit, "--", path]);
+      if (!commit) throw new Error(`No committed ${kind} source revision exists for ${repository.repository}:${path}.`);
+      const markdown = git(root, ["show", `${commit}:${path}`]);
+      if (git(root, ["rev-parse", `${commit}:${path}`]) !== git(root, ["rev-parse", `${trustedCommit}:${path}`]) ||
+          spawnSync("git", ["-C", root, "merge-base", "--is-ancestor", commit, trustedCommit]).status !== 0) {
+        throw new Error(`Canonical ${kind} provenance is not reachable from the trusted repository snapshot.`);
+      }
+      if (!commitPin) {
+        const authored = await readFile(join(root, path), "utf8");
+        if (authored.replace(/\n$/, "") !== markdown) {
+          throw new Error(`Canonical ${kind} ${repository.repository}:${path} differs from its latest committed revision.`);
+        }
+      }
+      const committedAt = new Date(git(root, ["show", "-s", "--format=%cI", commit])).toISOString().replace(".000Z", "Z");
+      documents.push({ repository: repository.repository, trustedCommit: commitPin ?? undefined, commit, committedAt, path, markdown: `${markdown}\n` });
+    }
+    return documents;
+  };
+  const documents = await documentsAt(repository.canonicalPath, "Engineering record");
+  if (documents.length === 0) throw new Error(`Engineering Journal source ${repository.repository} contains no canonical records.`);
+  const diagramAssets = committedDiagramAssets(root, documents);
+  const receiptDocuments = repository.receiptPath
+    ? await documentsAt(repository.receiptPath, "pull request receipt")
+    : [];
+  return { documents, receiptDocuments, diagramAssets };
 }
 
 async function main() {

@@ -26,6 +26,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Restore exact Engineering source cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/engineering-journal
+          key: engineering-journal-${{ runner.os }}-${{ hashFiles('engineering-journal/trusted-sources.json') }}
+
       - uses: pnpm/action-setup@v4
         with:
           version: 9
@@ -97,6 +103,12 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Restore exact Engineering source cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/engineering-journal
+          key: engineering-journal-${{ runner.os }}-${{ hashFiles('engineering-journal/trusted-sources.json') }}
 
       - uses: pnpm/action-setup@v4
         with:

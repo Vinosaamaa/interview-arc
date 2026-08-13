@@ -472,6 +472,8 @@ test("Engineering reader keys selection by immutable ref and keeps unreleased Le
   assert.match(source, /Pending the released Learn revision, commit, and symbol contract/);
   assert.match(source, /record\.source\.permalink/);
   assert.match(source, /record\.effectiveStatus/);
+  assert.match(source, /view === "capabilities"\) return record\.type === "capability-dossier"/);
+  assert.doesNotMatch(source, /view === "capabilities"\) return record\.capabilityIds\.length/);
 });
 
 test("Engineering exposes exact provenance, durable navigation memory, and complete factual Statistics", async () => {

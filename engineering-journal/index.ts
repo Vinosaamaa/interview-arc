@@ -1,3 +1,8 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
 export type EngineeringRecordType =
   | "change-note"
   | "adr"
@@ -464,6 +469,8 @@ function validUtcSecondTimestamp(value: string) {
 function sourceReferences(
   frontmatter: Record<string, unknown>,
   source: string,
+  repository?: TrustedJournalRepository,
+  sourceCommit?: string,
   limits?: { maxItems?: number; labelMaxLength?: number; urlMaxLength?: number },
 ): EngineeringRecordSourceReference[] {
   const value = frontmatter.sources;
@@ -490,9 +497,26 @@ function sourceReferences(
     if (!["issue", "pull-request", "commit", "release", "run", "documentation"].includes(String(entry.kind))) {
       throw new EngineeringJournalError("field_sources_invalid", source);
     }
+    let url = entry.url;
+    if (entry.kind === "documentation") {
+      if (!repository || !sourceCommit || !COMMIT_PATTERN.test(sourceCommit)) {
+        throw new EngineeringJournalError("field_sources_invalid", source);
+      }
+      const prefix = `https://github.com/${repository.owner}/${repository.repository}/blob/`;
+      if (!url.startsWith(prefix)) throw new EngineeringJournalError("field_sources_invalid", source);
+      const relative = url.slice(prefix.length);
+      const slash = relative.indexOf("/");
+      const revision = slash < 0 ? "" : relative.slice(0, slash);
+      const path = slash < 0 ? "" : relative.slice(slash + 1);
+      if (!path || path.startsWith("/") || path.includes("..")) {
+        throw new EngineeringJournalError("field_sources_invalid", source);
+      }
+      if (revision === "main") url = `${prefix}${sourceCommit}/${path}`;
+      else if (!COMMIT_PATTERN.test(revision)) throw new EngineeringJournalError("field_sources_invalid", source);
+    }
     return {
       label: entry.label.trim(),
-      url: entry.url,
+      url,
       kind: entry.kind as EngineeringRecordSourceReference["kind"],
     };
   });
@@ -693,7 +717,7 @@ function normalizeDocument(
       document.commit,
       new Set(recordVerification.evidenceRefs),
     ),
-    sources: sourceReferences(frontmatter, safeSource),
+    sources: sourceReferences(frontmatter, safeSource, trusted, document.commit),
     verification: recordVerification,
     visibility,
     publicationEligibility,
@@ -789,7 +813,13 @@ function normalizeReceipt(
   if (visibility !== "public-safe" || publicationEligibility !== "eligible") {
     throw new EngineeringJournalError("receipt_not_public_eligible", safeSource);
   }
-  const sources = sourceReferences(frontmatter, safeSource, { maxItems: 32, labelMaxLength: 160, urlMaxLength: 2048 });
+  const sources = sourceReferences(
+    frontmatter,
+    safeSource,
+    trusted,
+    document.commit,
+    { maxItems: 32, labelMaxLength: 160, urlMaxLength: 2048 },
+  );
   const pullRequestUrl = `https://github.com/${trusted.owner}/${repository}/pull/${pr}`;
   if (!sources.some((entry) => entry.kind === "pull-request" && entry.url === pullRequestUrl)) {
     throw new EngineeringJournalError("receipt_pull_request_source_missing", safeSource);
@@ -953,11 +983,15 @@ function renderStandalone(index: EngineeringJournalIndex, normalizedJson: string
 <h1>${escapeHtml(record.title)}</h1>
 <p>${escapeHtml(record.summary)}</p>
 ${record.diagrams.map((diagram) => `<figure><a href="${escapeHtml(diagram.renderedPermalink)}"><img src="${escapeHtml(diagram.renderedUrl)}" alt="${escapeHtml(diagram.summary)}"></a><figcaption><strong>${escapeHtml(diagram.title)}</strong> — ${escapeHtml(diagram.summary)} <a href="${escapeHtml(diagram.sourcePermalink)}">Editable source</a></figcaption></figure>`).join("\n")}
-${record.sections.map((section) => `<section id="${escapeHtml(section.id)}"><h2>${escapeHtml(section.title)}</h2><p>${escapeHtml(section.body)}</p></section>`).join("\n")}
+${record.sections.map((section) => `<section id="${escapeHtml(`${record.ref}-${section.id}`)}"><h2>${escapeHtml(section.title)}</h2>${renderMarkdown(section.body)}</section>`).join("\n")}
 <p><a href="${escapeHtml(record.source.permalink)}">Exact source</a></p>
 </article>`).join("\n");
   const embeddedJson = normalizedJson.trimEnd().replaceAll("<", "\\u003c");
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Interview Arc Engineering Journal</title></head><body><main><section aria-labelledby="pull-request-timeline"><h1 id="pull-request-timeline">Pull request timeline</h1>${receipts}</section><section aria-labelledby="rich-engineering-records"><h1 id="rich-engineering-records">Rich engineering records</h1>${records}</section></main><script id="engineering-journal-index" type="application/json">${embeddedJson}</script></body></html>\n`;
+}
+
+function renderMarkdown(source: string) {
+  return renderToStaticMarkup(createElement(Markdown, { remarkPlugins: [remarkGfm] }, source));
 }
 
 export function buildEngineeringJournal(input: EngineeringJournalBuildInput): EngineeringJournalBuild {

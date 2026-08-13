@@ -135,6 +135,32 @@ test("the Journal Module deterministically projects one commit-pinned canonical 
   );
 });
 
+test("documentation sources normalize to immutable same-repository commit links", () => {
+  const buildInput = input();
+  buildInput.documents[0].markdown = TRACER.replace(
+    'sources: [{"label":"Arc issue #278","url":"https://github.com/Vinosaamaa/interview-arc/issues/278","kind":"issue"}]',
+    'sources: [{"label":"Journal protocol","url":"https://github.com/Vinosaamaa/interview-arc/blob/main/docs/engineering/journal-protocol.md","kind":"documentation"}]',
+  );
+
+  const result = buildEngineeringJournal(buildInput);
+  assert.equal(
+    result.index.records[0].sources[0].url,
+    `https://github.com/Vinosaamaa/interview-arc/blob/${SOURCE_COMMIT}/docs/engineering/journal-protocol.md`,
+  );
+
+  for (const invalidUrl of [
+    "https://github.com/Vinosaamaa/interview-arc-voice/blob/main/docs/engineering/journal-protocol.md",
+    "https://github.com/Vinosaamaa/interview-arc/blob/feature/journal/docs/engineering/journal-protocol.md",
+  ]) {
+    const invalid = input();
+    invalid.documents[0].markdown = TRACER.replace(
+      'sources: [{"label":"Arc issue #278","url":"https://github.com/Vinosaamaa/interview-arc/issues/278","kind":"issue"}]',
+      `sources: [{"label":"Journal protocol","url":"${invalidUrl}","kind":"documentation"}]`,
+    );
+    assert.throws(() => buildEngineeringJournal(invalid), (error) => error.code === "field_sources_invalid");
+  }
+});
+
 test("rich-record diagrams require repository-native paths and recorded evidence", () => {
   const unsafePath = input();
   unsafePath.documents[0].markdown = unsafePath.documents[0].markdown.replace(
@@ -474,7 +500,13 @@ test("relations must pin an exact existing record revision", () => {
 });
 
 test("normalized JSON, standalone HTML, search, backlinks, and Statistics share one factual projection", () => {
-  const result = buildEngineeringJournal(input());
+  const buildInput = input();
+  buildInput.documents[0].markdown = TRACER.replace(
+    "Compile canonical Markdown through one deterministic Journal Module.",
+    "Compile canonical Markdown through one deterministic Journal Module.\n\n- Keep **one** normalized projection.\n- Preserve [exact evidence](https://example.com/evidence).\n\n`record@1` remains immutable.",
+  );
+  const result = buildEngineeringJournal(buildInput);
+  const visibleHtml = result.standaloneHtml.split('<script id="engineering-journal-index"')[0];
   const match = result.standaloneHtml.match(/<script id="engineering-journal-index" type="application\/json">([\s\S]+)<\/script>/);
   assert.ok(match);
   assert.deepEqual(JSON.parse(match[1]), result.index);
@@ -488,6 +520,12 @@ test("normalized JSON, standalone HTML, search, backlinks, and Statistics share 
   assert.match(result.index.search[0].text, /issue 278/);
   assert.match(result.index.search[0].text, /immutable revisions/);
   assert.deepEqual(result.index.backlinks["architecture-review-engineering-journal-module@1"], []);
+  assert.match(visibleHtml, /id="architecture-review-engineering-journal-module@1-decision"/);
+  assert.match(visibleHtml, /<ul>/);
+  assert.match(visibleHtml, /<strong>one<\/strong>/);
+  assert.match(visibleHtml, /<a href="https:\/\/example\.com\/evidence">exact evidence<\/a>/);
+  assert.match(visibleHtml, /<code>record@1<\/code>/);
+  assert.doesNotMatch(visibleHtml, /- Keep \*\*one\*\*/);
 });
 
 test("verification is explicit and never inferred from release or run references", () => {

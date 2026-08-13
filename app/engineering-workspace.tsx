@@ -115,7 +115,7 @@ function viewRecord(record: EngineeringJournalRecord, view: EngineeringView) {
   if (view === "decisions") return record.type === "adr" || record.type === "architecture-review";
   if (view === "incidents") return record.type === "postmortem";
   if (view === "case-studies") return record.type === "feature-retrospective";
-  if (view === "capabilities") return record.type === "capability-dossier" || record.capabilityIds.length > 0;
+  if (view === "capabilities") return record.type === "capability-dossier";
   return true;
 }
 
