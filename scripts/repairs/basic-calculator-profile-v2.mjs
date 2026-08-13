@@ -128,38 +128,35 @@ export function renderArtifact(profile) {
   return lines.join("\n");
 }
 
-function snapshotSql(ownerId) {
-  const owner = `owner_id = ${sqlText(ownerId)}`;
-  return `
-SELECT * FROM problem_solution_profiles
-WHERE ${owner} AND specialty = ${sqlText(TARGET.specialty)} AND question_id = ${sqlText(TARGET.questionId)};
-SELECT * FROM problem_solution_revisions
-WHERE ${owner} AND specialty = ${sqlText(TARGET.specialty)} AND question_id = ${sqlText(TARGET.questionId)} ORDER BY revision;
-SELECT * FROM activity_finalizations WHERE ${owner} AND activity_id = ${sqlText(TARGET.activityId)};
-SELECT * FROM activity_solution_links WHERE ${owner} AND activity_id = ${sqlText(TARGET.activityId)};
-SELECT * FROM leetcode_code_attempts WHERE ${owner} AND activity_id = ${sqlText(TARGET.activityId)} ORDER BY sequence, id;
-SELECT * FROM extra_activities WHERE ${owner} AND id = ${sqlText(TARGET.activityId)};
-SELECT * FROM timers WHERE ${owner} AND subject_id = ${sqlText(TARGET.activityId)} ORDER BY kind;
-SELECT * FROM outcomes WHERE ${owner} AND activity_id = ${sqlText(TARGET.activityId)};
-SELECT * FROM publication_statuses WHERE ${owner} AND activity_id = ${sqlText(TARGET.activityId)};
-SELECT * FROM activity_notes WHERE ${owner} AND activity_id = ${sqlText(TARGET.activityId)};
-SELECT * FROM practice_notes WHERE ${owner} AND activity_id = ${sqlText(TARGET.activityId)} ORDER BY id;
-SELECT * FROM practice_transcript_turns WHERE ${owner} AND activity_id = ${sqlText(TARGET.activityId)} ORDER BY sequence, turn_id;
-SELECT * FROM activity_audio_clips WHERE ${owner} AND activity_id = ${sqlText(TARGET.activityId)} ORDER BY id;
-SELECT * FROM activity_delivery_analyses WHERE ${owner} AND activity_id = ${sqlText(TARGET.activityId)} ORDER BY id;
-`;
+function snapshotQueries() {
+  const ownerLookup = `SELECT owner_id FROM problem_solution_profiles WHERE specialty = ${sqlText(TARGET.specialty)} AND question_id = ${sqlText(TARGET.questionId)} ORDER BY owner_id`;
+  const owner = `owner_id = (${ownerLookup} LIMIT 1)`;
+  return [
+    ["owners", `${ownerLookup};`],
+    ["profile", `SELECT * FROM problem_solution_profiles WHERE ${owner} AND specialty = ${sqlText(TARGET.specialty)} AND question_id = ${sqlText(TARGET.questionId)};`],
+    ["revisions", `SELECT * FROM problem_solution_revisions WHERE ${owner} AND specialty = ${sqlText(TARGET.specialty)} AND question_id = ${sqlText(TARGET.questionId)} ORDER BY revision;`],
+    ["finalization", `SELECT * FROM activity_finalizations WHERE ${owner} AND activity_id = ${sqlText(TARGET.activityId)};`],
+    ["solutionLink", `SELECT * FROM activity_solution_links WHERE ${owner} AND activity_id = ${sqlText(TARGET.activityId)};`],
+    ["codeAttempts", `SELECT * FROM leetcode_code_attempts WHERE ${owner} AND activity_id = ${sqlText(TARGET.activityId)} ORDER BY sequence, id;`],
+    ["activity", `SELECT * FROM extra_activities WHERE ${owner} AND id = ${sqlText(TARGET.activityId)};`],
+    ["timers", `SELECT * FROM timers WHERE ${owner} AND subject_id = ${sqlText(TARGET.activityId)} ORDER BY kind;`],
+    ["outcomes", `SELECT * FROM outcomes WHERE ${owner} AND activity_id = ${sqlText(TARGET.activityId)};`],
+    ["publication", `SELECT * FROM publication_statuses WHERE ${owner} AND activity_id = ${sqlText(TARGET.activityId)};`],
+    ["activityNotes", `SELECT * FROM activity_notes WHERE ${owner} AND activity_id = ${sqlText(TARGET.activityId)};`],
+    ["practiceNotes", `SELECT * FROM practice_notes WHERE ${owner} AND activity_id = ${sqlText(TARGET.activityId)} ORDER BY id;`],
+    ["transcript", `SELECT * FROM practice_transcript_turns WHERE ${owner} AND activity_id = ${sqlText(TARGET.activityId)} ORDER BY sequence, turn_id;`],
+    ["audio", `SELECT * FROM activity_audio_clips WHERE ${owner} AND activity_id = ${sqlText(TARGET.activityId)} ORDER BY id;`],
+    ["delivery", `SELECT * FROM activity_delivery_analyses WHERE ${owner} AND activity_id = ${sqlText(TARGET.activityId)} ORDER BY id;`],
+  ];
 }
 
-const snapshotLabels = [
-  "profile", "revisions", "finalization", "solutionLink", "codeAttempts", "activity",
-  "timers", "outcomes", "publication", "activityNotes", "practiceNotes", "transcript", "audio", "delivery",
-];
-
 function readSnapshot(remote) {
-  const [owners] = executeWrangler(`SELECT owner_id FROM problem_solution_profiles WHERE specialty = ${sqlText(TARGET.specialty)} AND question_id = ${sqlText(TARGET.questionId)} ORDER BY owner_id;`, { remote });
-  if (owners.length !== 1) fail("The target current Solution Profile does not resolve to exactly one owner.");
-  const sets = executeWrangler(snapshotSql(owners[0].owner_id), { remote });
-  return Object.fromEntries(snapshotLabels.map((label, index) => [label, sets[index] ?? []]));
+  const queries = snapshotQueries();
+  const sets = executeWrangler(queries.map(([, sql]) => sql).join("\n"), { remote });
+  const snapshot = Object.fromEntries(queries.map(([label], index) => [label, sets[index] ?? []]));
+  if (snapshot.owners.length !== 1) fail("The target current Solution Profile does not resolve to exactly one owner.");
+  delete snapshot.owners;
+  return snapshot;
 }
 
 function protectedFingerprint(snapshot) {

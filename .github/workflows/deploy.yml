@@ -73,7 +73,7 @@ jobs:
               scripts/repairs/basic-calculator-profile-v2.json|scripts/repairs/basic-calculator-profile-v2.mjs) repair_basic_calculator_profile=true ;;
             esac
             case "$file" in
-              data/*|practice/*|audio-answers/*|docs/*|README.md|AGENTS.md) ;;
+              data/*|practice/*|audio-answers/*|docs/*|scripts/repairs/*|README.md|AGENTS.md) ;;
               *) deploy_worker=true ;;
             esac
           done < <(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}")

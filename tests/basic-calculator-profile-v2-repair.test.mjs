@@ -104,42 +104,8 @@ function database() {
   return db;
 }
 
-test("Basic Calculator revision 2 passes the full executable LeetCode depth gate", () => {
-  validateProfile(profile);
-  assert.deepEqual(solutionProfileMissingRequirements("leetcode", profile), []);
-  const rendered = renderArtifact(profile);
-  assert.match(rendered, /not a new practice attempt/i);
-  assert.match(rendered, /### Alternative: Recursive-descent parser/);
-  assert.match(rendered, /### Alternative: Distribute accumulated sign contexts/);
-  assert.doesNotMatch(rendered, /^activity_id:/m);
-});
-
-test("every published Basic Calculator reference implementation executes high-signal cases", async () => {
-  const source = profile.sections.map((section) => section.body).join("\n");
-  const javaBlocks = [...source.matchAll(/```java\n([\s\S]*?)```/g)].map((match) => match[1].trim());
-  const pythonBlock = source.match(/```python\n([\s\S]*?)```/)?.[1].trim();
-  assert.equal(javaBlocks.length, 3);
-  assert.ok(pythonBlock);
-
-  const inputs = [
-    "1 + 1",
-    " 2-1 + 2 ",
-    "(1+(4+5+2)-3)+(6+8)",
-    "1-(2-3)",
-    "-(2+3)",
-    "1-(-2)",
-    "1-(2-(3-4))",
-    "123-(45+6)",
-    "42",
-  ];
-  const expected = [2, 3, 23, 2, -5, 3, -2, 72, 42];
-  const directory = await mkdtemp(path.join(os.tmpdir(), "basic-calculator-profile-v2-"));
-  try {
-    for (const [index, java] of javaBlocks.entries()) {
-      const implementationDirectory = path.join(directory, `java-${index}`);
-      await mkdir(implementationDirectory);
-      await writeFile(path.join(implementationDirectory, "Solution.java"), `${java}\n`);
-      await writeFile(path.join(implementationDirectory, "Main.java"), `
+function javaHarness(inputs, expected) {
+  return `
 public class Main {
     public static void main(String[] args) {
         String[] inputs = {${inputs.map((input) => JSON.stringify(input)).join(",")}};
@@ -152,14 +118,61 @@ public class Main {
         }
     }
 }
-`);
-      execFileSync("javac", ["Solution.java", "Main.java"], { cwd: implementationDirectory });
-      execFileSync("java", ["Main"], { cwd: implementationDirectory });
-    }
+`;
+}
 
-    const pythonPath = path.join(directory, "solution.py");
-    await writeFile(pythonPath, `${pythonBlock}\n\ncases = ${JSON.stringify(inputs)}\nexpected = ${JSON.stringify(expected)}\nfor expression, answer in zip(cases, expected):\n    actual = Solution().calculate(expression)\n    assert actual == answer, (expression, actual, answer)\n`);
-    execFileSync("python3", [pythonPath]);
+async function executeJavaImplementations(directory, implementations, inputs, expected) {
+  for (const [index, java] of implementations.entries()) {
+    const implementationDirectory = path.join(directory, `java-${index}`);
+    await mkdir(implementationDirectory);
+    await writeFile(path.join(implementationDirectory, "Solution.java"), `${java}\n`);
+    await writeFile(path.join(implementationDirectory, "Main.java"), javaHarness(inputs, expected));
+    execFileSync("javac", ["Solution.java", "Main.java"], { cwd: implementationDirectory });
+    execFileSync("java", ["Main"], { cwd: implementationDirectory });
+  }
+}
+
+async function executePythonImplementation(directory, implementation, inputs, expected) {
+  const pythonPath = path.join(directory, "solution.py");
+  await writeFile(pythonPath, `${implementation}\n\ncases = ${JSON.stringify(inputs)}\nexpected = ${JSON.stringify(expected)}\nfor expression, answer in zip(cases, expected):\n    actual = Solution().calculate(expression)\n    assert actual == answer, (expression, actual, answer)\n`);
+  execFileSync("python3", [pythonPath]);
+}
+
+test("Basic Calculator revision 2 passes the full executable LeetCode depth gate", () => {
+  validateProfile(profile);
+  assert.deepEqual(solutionProfileMissingRequirements("leetcode", profile), []);
+  const rendered = renderArtifact(profile);
+  assert.match(rendered, /not a new practice attempt/i);
+  assert.match(rendered, /### Alternative: Reverse scan with a token stack/);
+  assert.match(rendered, /### Alternative: Distribute accumulated sign contexts/);
+  assert.doesNotMatch(rendered, /^activity_id:/m);
+});
+
+test("every published Basic Calculator reference implementation executes high-signal cases", async () => {
+  const source = profile.sections.map((section) => section.body).join("\n");
+  const javaBlocks = [...source.matchAll(/```java\n([\s\S]*?)```/g)].map((match) => match[1].trim());
+  const pythonBlock = source.match(/```python\n([\s\S]*?)```/)?.[1].trim();
+  assert.equal(javaBlocks.length, 3);
+  assert.ok(pythonBlock);
+
+  const deeplyNested = `${"(".repeat(2_000)}1${")".repeat(2_000)}`;
+  const inputs = [
+    "1 + 1",
+    " 2-1 + 2 ",
+    "(1+(4+5+2)-3)+(6+8)",
+    "1-(2-3)",
+    "-(2+3)",
+    "1-(-2)",
+    "1-(2-(3-4))",
+    "123-(45+6)",
+    "42",
+    deeplyNested,
+  ];
+  const expected = [2, 3, 23, 2, -5, 3, -2, 72, 42, 1];
+  const directory = await mkdtemp(path.join(os.tmpdir(), "basic-calculator-profile-v2-"));
+  try {
+    await executeJavaImplementations(directory, javaBlocks, inputs, expected);
+    await executePythonImplementation(directory, pythonBlock, inputs, expected);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

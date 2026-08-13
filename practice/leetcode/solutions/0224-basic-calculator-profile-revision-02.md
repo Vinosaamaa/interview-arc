@@ -124,58 +124,84 @@ Test transitions, not only ordinary arithmetic:
 
 ## Meaningful alternatives
 
-### Alternative: Recursive-descent parser with one shared index
+### Alternative: Reverse scan with a token stack
 
 #### When and why to choose it
-Choose recursive descent when the grammar itself is the main teaching goal, the maximum nesting depth is safely bounded, or the calculator will soon grow explicit grammar functions. The control flow mirrors the rule “an expression is signed values separated by plus or minus,” so many interviewers find it easier to derive and explain than manual context restoration.
+Choose the reverse scan when you want a fully iterative parser that makes each parenthesized expression collapse into one stack value. It is a useful contrast to the preferred saved-context state machine: the algorithm stores explicit numbers and operators, then evaluates a group only when its matching opening parenthesis is reached. It remains safe for the full nesting constraint because it never recurses.
 
 #### Algorithm
-Keep one mutable index shared by recursive calls. `parseExpression` owns the subtotal, pending sign, and current number for exactly one parenthesis level. Digits extend the number; a sign commits that number and sets the next sign. When `(` appears, recursively parse until its matching `)`, treat the returned inner value as the current number, and let the next operator or end-of-level commit it. When `)` appears, stop the current call. Finally return the subtotal plus the last signed value.
+Scan from right to left. Build multi-digit numbers with a decimal place multiplier because digits arrive in reverse order. Push numbers, plus/minus operators, and closing-parenthesis markers onto one token stack. When an opening parenthesis appears, evaluate tokens from the stack top until the matching marker and push the resulting integer back as one value. After the scan, flush any pending number and evaluate the remaining top-level tokens. Start group evaluation from zero when the first token is an operator, which naturally handles unary minus.
 
 #### Invariant and correctness
-Within one invocation, before every token, `result` is the value of all complete terms in that level, while `sign * number` is its only uncommitted term. A recursive call consumes exactly one balanced parenthesized substring and returns its correct value by induction on nesting depth. Substituting that value for one number preserves the same invariant. The base level ends at input exhaustion, so its final flush proves the returned value equals the complete expression.
+After each scanned suffix, reading the token stack from top downward reconstructs that suffix in its original left-to-right order, except every fully closed parenthesized group has already been replaced by its correct integer value. Pushing a digit-complete number or operator preserves that order. At `(`, the stack segment through the nearest `)` is exactly the matching valid subexpression; left-to-right evaluation is correct because this grammar contains only equal-precedence plus and minus. Replacing the segment by its value preserves the invariant. The final evaluation therefore equals the entire expression.
 
 #### Complexity
-Time is O(n) because the shared index advances across every character exactly once. Auxiliary space is O(h) for h recursive calls, which is O(n) in the worst case. In Java, that worst case can overflow the call stack even though the algorithmic bound is correct.
+Time is O(n): each character is scanned once, and each pushed number, operator, or marker is popped once during group evaluation. Space is O(n) for the explicit token stack in the worst case. The solution is iterative, so maximum nesting consumes heap-backed stack entries rather than Java call frames.
 
 #### Edge cases
-Check an empty-looking inner prefix created by unary minus, deeply nested groups, a number immediately before `)`, spaces around every token, and a final number at end of input. The valid-input guarantee means each recursive call will encounter either its matching close or the end of the top-level expression.
+Test leading unary minus, unary minus immediately inside a group, multi-digit numbers whose digits arrive backward, whitespace around tokens, deeply nested parentheses, and nested subtraction such as `1-(2-(3-4))`. Group evaluation must stop at exactly one closing marker and must treat a leading minus as `0 - value`.
 
 #### Tradeoffs versus preferred
-This version expresses the grammar directly and becomes a natural foundation for additional precedence functions. The preferred iterative stack is safer for the stated 300,000-character limit because heap-backed stack storage avoids Java call-stack overflow. The iterative version also makes saved outer state explicit, whereas the recursive version hides that state in call frames and a shared mutable index.
+This version provides an explicit token model and avoids recursion, which can make matching-parenthesis evaluation easy to visualize. It uses heterogeneous stack entries, reverse digit construction, and deferred group evaluation, so the implementation is longer and easier to mistype. The preferred approach keeps only integer context pairs and processes digits naturally left to right, giving it lower constant factors and a simpler interview explanation.
 
 #### Reference implementation
 ```java
+import java.util.ArrayDeque;
+import java.util.Deque;
+
 class Solution {
-    private int index;
-
     public int calculate(String s) {
-        index = 0;
-        return parseExpression(s);
-    }
-
-    private int parseExpression(String s) {
-        int result = 0;
-        int sign = 1;
+        Deque<Object> tokens = new ArrayDeque<>();
         int number = 0;
+        int place = 1;
+        boolean readingNumber = false;
 
-        while (index < s.length()) {
-            char token = s.charAt(index++);
-
+        for (int index = s.length() - 1; index >= 0; index--) {
+            char token = s.charAt(index);
+            if (token == ' ') {
+                continue;
+            }
             if (Character.isDigit(token)) {
-                number = number * 10 + (token - '0');
-            } else if (token == '+' || token == '-') {
-                result += sign * number;
+                number += (token - '0') * place;
+                place *= 10;
+                readingNumber = true;
+                continue;
+            }
+            if (readingNumber) {
+                tokens.push(number);
                 number = 0;
-                sign = token == '+' ? 1 : -1;
+                place = 1;
+                readingNumber = false;
+            }
+            if (token == ')') {
+                tokens.push(token);
             } else if (token == '(') {
-                number = parseExpression(s);
-            } else if (token == ')') {
-                break;
+                tokens.push(evaluate(tokens));
+            } else {
+                tokens.push(token);
             }
         }
+        if (readingNumber) {
+            tokens.push(number);
+        }
+        return evaluate(tokens);
+    }
 
-        return result + sign * number;
+    private int evaluate(Deque<Object> tokens) {
+        int result = 0;
+        if (!tokens.isEmpty() && tokens.peek() instanceof Integer) {
+            result = (Integer) tokens.pop();
+        }
+        while (!tokens.isEmpty()
+                && !Character.valueOf(')').equals(tokens.peek())) {
+            char operator = (Character) tokens.pop();
+            int value = (Integer) tokens.pop();
+            result = operator == '+' ? result + value : result - value;
+        }
+        if (!tokens.isEmpty()) {
+            tokens.pop();
+        }
+        return result;
     }
 }
 ```
@@ -254,7 +280,7 @@ The most common failure is importing Calculator II/III state—such as a previou
 
 ## Interview walkthrough
 
-Start by narrowing the grammar: there are only plus, minus, spaces, integers, and nested parentheses, so one subtotal and one pending sign are enough per level. Define the invariant before naming the stack. Then describe the four transitions—extend a number, flush on a sign, save and reset on `(`, finish and restore on `)`—and trace `1-(2-3)`: save outer subtotal `1` and sign `-1`; compute inner `-1`; restore to obtain `1 + (-1 * -1) = 2`. Mention that the same rule handles `-(2+3)` without special casing unary minus. State O(n) time and O(h) space, with O(n) worst-case nesting. Close by naming recursive descent as the grammar-shaped alternative and explaining why the iterative stack is preferred for a possible 300,000-character nesting depth.
+Start by narrowing the grammar: there are only plus, minus, spaces, integers, and nested parentheses, so one subtotal and one pending sign are enough per level. Define the invariant before naming the stack. Then describe the four transitions—extend a number, flush on a sign, save and reset on `(`, finish and restore on `)`—and trace `1-(2-3)`: save outer subtotal `1` and sign `-1`; compute inner `-1`; restore to obtain `1 + (-1 * -1) = 2`. Mention that the same rule handles `-(2+3)` without special casing unary minus. State O(n) time and O(h) space, with O(n) worst-case nesting. Close by naming reverse-scan token evaluation and global sign distribution as fully iterative alternatives, then explain why the preferred context-pair state machine has the clearest transitions and lowest constant overhead.
 
 ## References
 
