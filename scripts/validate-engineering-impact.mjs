@@ -37,6 +37,7 @@ const HISTORICAL_BATCH_RECORD_REF_PATTERN = new RegExp(
   HISTORICAL_BATCH_SCHEMA.properties.recordRefs.items.pattern,
 );
 const MAX_ENGINEERING_DOCUMENT_BYTES = 256 * 1024;
+const MAX_ENGINEERING_BATCH_BYTES = 8 * 1024 * 1024;
 
 function selectedClassifications(body) {
   const selected = [];
@@ -436,6 +437,10 @@ function blobsAt(revision, paths) {
   const sizes = blobSizesAt(revision, paths);
   if (sizes.some((size) => size !== null && size > MAX_ENGINEERING_DOCUMENT_BYTES)) {
     throw new Error(`A canonical Engineering document exceeds the ${MAX_ENGINEERING_DOCUMENT_BYTES}-byte safety limit.`);
+  }
+  const totalBytes = sizes.reduce((sum, size) => sum + (size ?? 0), 0);
+  if (totalBytes > MAX_ENGINEERING_BATCH_BYTES) {
+    throw new Error(`Canonical Engineering documents exceed the ${MAX_ENGINEERING_BATCH_BYTES}-byte batch safety limit.`);
   }
   const requests = paths.map((path) => `${revision}:${path}`);
   const result = spawnSync("git", ["cat-file", "--batch"], {
