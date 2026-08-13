@@ -5,6 +5,7 @@ name: Validate and publish Cloudflare
 # Content/documentation-only merges skip the Worker build and deployment.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
   workflow_dispatch:
@@ -24,6 +25,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Restore exact Engineering source cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/engineering-journal
+          key: engineering-journal-${{ runner.os }}-${{ hashFiles('engineering-journal/trusted-sources.json') }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -53,6 +60,10 @@ jobs:
       - name: Build and test
         run: pnpm test
 
+      - name: Validate Engineering impact and PR receipt
+        if: github.event_name == 'pull_request'
+        run: node scripts/validate-engineering-impact.mjs
+
       - name: Classify the main-branch change
         id: changes
         shell: bash
@@ -73,6 +84,7 @@ jobs:
               scripts/repairs/basic-calculator-profile-v2.json|scripts/repairs/basic-calculator-profile-v2.mjs) repair_basic_calculator_profile=true ;;
             esac
             case "$file" in
+              docs/engineering/*) deploy_worker=true; break ;;
               data/*|practice/*|audio-answers/*|docs/*|scripts/repairs/*|README.md|AGENTS.md) ;;
               *) deploy_worker=true ;;
             esac
@@ -91,6 +103,12 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Restore exact Engineering source cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/engineering-journal
+          key: engineering-journal-${{ runner.os }}-${{ hashFiles('engineering-journal/trusted-sources.json') }}
 
       - uses: pnpm/action-setup@v4
         with:

@@ -1,0 +1,772 @@
+{
+  "schemaVersion": 1,
+  "records": [
+    {
+      "schemaVersion": 1,
+      "id": "architecture-review-engineering-journal-module",
+      "revision": 1,
+      "ref": "architecture-review-engineering-journal-module@1",
+      "type": "architecture-review",
+      "status": "accepted",
+      "effectiveStatus": "accepted",
+      "amendedBy": [],
+      "supersededBy": [],
+      "title": "Deep Engineering Journal Module",
+      "summary": "Engineering history needs one small, versioned Interface that preserves exact evidence while allowing multiple readers to evolve independently.",
+      "repository": "interview-arc",
+      "capabilityIds": [
+        "engineering-journal",
+        "engineering-workspace"
+      ],
+      "createdAt": "2026-08-12",
+      "reconstructed": false,
+      "confidence": "verified",
+      "unknowns": [
+        "The Learn workspace action remains unavailable until its runtime contract is released."
+      ],
+      "modules": [
+        "engineering-journal"
+      ],
+      "interfaces": [
+        "canonical-record-ingestion",
+        "normalized-journal-index"
+      ],
+      "seams": [
+        "repository-records-to-journal-module",
+        "journal-module-to-website",
+        "journal-module-to-standalone-html"
+      ],
+      "adapters": [
+        "git-object-reader",
+        "website-reader",
+        "standalone-html-reader"
+      ],
+      "relatedRecords": [],
+      "decisions": [],
+      "incidents": [],
+      "features": [],
+      "capabilities": [],
+      "amends": [],
+      "supersedes": [],
+      "learningRefs": [],
+      "diagrams": [
+        {
+          "title": "Engineering Journal commit-pinned publication flow",
+          "sourcePath": "docs/design/engineering-workspace/journal-module-architecture.drawio",
+          "renderedPath": "docs/design/engineering-workspace/journal-module-architecture.png",
+          "summary": "Canonical records and compact PR receipts from three repositories cross one reviewed, commit-pinned Journal Module before reaching the website and standalone reader.",
+          "evidenceRefs": [
+            "issue:278",
+            "tests/engineering-journal.test.mjs"
+          ],
+          "sourcePermalink": "https://github.com/Vinosaamaa/interview-arc/blob/df1d151c567c80e3e166135fe019abc39ca6d2c7/docs/design/engineering-workspace/journal-module-architecture.drawio",
+          "renderedPermalink": "https://github.com/Vinosaamaa/interview-arc/blob/df1d151c567c80e3e166135fe019abc39ca6d2c7/docs/design/engineering-workspace/journal-module-architecture.png",
+          "renderedUrl": "/engineering-journal/assets/interview-arc/df1d151c567c80e3e166135fe019abc39ca6d2c7/docs/design/engineering-workspace/journal-module-architecture.png"
+        }
+      ],
+      "sources": [
+        {
+          "label": "Arc issue #278",
+          "url": "https://github.com/Vinosaamaa/interview-arc/issues/278",
+          "kind": "issue"
+        },
+        {
+          "label": "Parent product issue #249",
+          "url": "https://github.com/Vinosaamaa/interview-arc/issues/249",
+          "kind": "issue"
+        }
+      ],
+      "verification": {
+        "state": "verified",
+        "evidenceRefs": [
+          "issue:278",
+          "tests/engineering-journal.test.mjs"
+        ]
+      },
+      "visibility": "public-safe",
+      "publicationEligibility": "eligible",
+      "issue": 278,
+      "pr": 284,
+      "release": null,
+      "run": null,
+      "source": {
+        "repository": "interview-arc",
+        "commit": "df1d151c567c80e3e166135fe019abc39ca6d2c7",
+        "path": "docs/engineering/records/architecture-review-engineering-journal-module.md",
+        "permalink": "https://github.com/Vinosaamaa/interview-arc/blob/df1d151c567c80e3e166135fe019abc39ca6d2c7/docs/engineering/records/architecture-review-engineering-journal-module.md"
+      },
+      "body": "Engineering history needs one small, versioned Interface that preserves exact evidence while allowing multiple readers to evolve independently.\n\n## Context\n\nInterview Arc spans the website, the native Voice companion, and the Live practice surface. Each repository may author public-safe engineering evidence, but none of the readers should reimplement provenance, correction, privacy, or indexing rules.\n\nMutable database state is intentionally outside this capability. Canonical records remain Markdown in Git, and every accepted input is read from an immutable Git object.\n\n## Module boundary\n\nThe Engineering Journal Module accepts trusted repository descriptors and commit-pinned canonical records. It validates the record Interface, rejects unsafe content, derives correction history and backlinks, and emits one deterministic normalized index.\n\nWebsite and standalone HTML are adapters over that index. They do not independently infer status, verification, release state, relationships, or Statistics.\n\n## Record Interface\n\nEach record is identified by an immutable `id@revision` reference. The six supported types are Change Note, ADR, Architecture Review, Feature Retrospective, Postmortem, and Capability Dossier. Type-specific lifecycle rules prevent a reader from presenting an impossible state.\n\nCorrections append a new record that names exact prior revisions through `amends` or `supersedes`. Accepted source revisions remain unchanged. Effective status and reverse links are projections, never edits to history.\n\n## Pull request receipt Interface\n\nEvery merged pull request owns one compact, factual receipt under `docs/engineering/changes/pr-<number>.md`, including changes classified as `none`. The receipt is the complete chronological ledger; it does not become a rich record merely because a pull request exists.\n\nA material pull request links one or more exact `id@revision` rich-record references. It may add a new record or reuse an existing record when several small pull requests belong to the same evidence-backed change. CI binds the receipt path, repository, pull-request number, current title, selected impact classification, and rich references to the reviewed Git objects. The deterministic projection keeps receipts and rich records as separate evidence layers while exposing backlinks between them.\n\nThe workflow never invents narrative prose from a diff. The pull-request coordinator authors the public-safe receipt and, when the classification is material, the supporting record; CI validates and publishes those canonical inputs automatically.\n\n## Privacy and provenance\n\nOnly allowlisted repositories and canonical paths are accepted. The module fails closed on absolute machine paths, private task identifiers, credentials, private remotes, non-example email addresses, and owner-private records marked eligible for publication. Diagnostics use fixed locators so a rejected value is not echoed into a workflow log.\n\nEvery normalized record exposes its repository, source path, exact commit, and immutable source permalink. Cross-repository sources must declare a commit pin; a checkout mismatch fails the build.\n\n## Statistics\n\nStatistics are a deterministic Journal projection: factual counts by type, effective status, repository, and capability plus chronology and explicit verification state. A release or run reference is counted as a reference only; it is never presented as verified evidence unless the record declares a verification receipt.\n\n## Consequences\n\nThe build is intentionally strict. Unknown fields, stale relation pins, unsafe content, missing verification evidence, or adapter drift stop publication. That strictness keeps the reader simple and makes failures actionable at the authoring boundary.\n\nThe Learn action remains visibly unavailable until the released Learn runtime contract defines a stable revision, commit, and symbol reference. The Engineering workspace does not duplicate Learn state.\n\n## Architecture diagram\n\nThe linked repository-native diagram is a reviewed projection of the verified boundary above. Its editable draw.io source and rendered PNG travel together, and the Journal derives immutable links to both from this record's exact source commit.",
+      "sections": [
+        {
+          "id": "context",
+          "title": "Context",
+          "body": "Interview Arc spans the website, the native Voice companion, and the Live practice surface. Each repository may author public-safe engineering evidence, but none of the readers should reimplement provenance, correction, privacy, or indexing rules.\n\nMutable database state is intentionally outside this capability. Canonical records remain Markdown in Git, and every accepted input is read from an immutable Git object."
+        },
+        {
+          "id": "module-boundary",
+          "title": "Module boundary",
+          "body": "The Engineering Journal Module accepts trusted repository descriptors and commit-pinned canonical records. It validates the record Interface, rejects unsafe content, derives correction history and backlinks, and emits one deterministic normalized index.\n\nWebsite and standalone HTML are adapters over that index. They do not independently infer status, verification, release state, relationships, or Statistics."
+        },
+        {
+          "id": "record-interface",
+          "title": "Record Interface",
+          "body": "Each record is identified by an immutable `id@revision` reference. The six supported types are Change Note, ADR, Architecture Review, Feature Retrospective, Postmortem, and Capability Dossier. Type-specific lifecycle rules prevent a reader from presenting an impossible state.\n\nCorrections append a new record that names exact prior revisions through `amends` or `supersedes`. Accepted source revisions remain unchanged. Effective status and reverse links are projections, never edits to history."
+        },
+        {
+          "id": "pull-request-receipt-interface",
+          "title": "Pull request receipt Interface",
+          "body": "Every merged pull request owns one compact, factual receipt under `docs/engineering/changes/pr-<number>.md`, including changes classified as `none`. The receipt is the complete chronological ledger; it does not become a rich record merely because a pull request exists.\n\nA material pull request links one or more exact `id@revision` rich-record references. It may add a new record or reuse an existing record when several small pull requests belong to the same evidence-backed change. CI binds the receipt path, repository, pull-request number, current title, selected impact classification, and rich references to the reviewed Git objects. The deterministic projection keeps receipts and rich records as separate evidence layers while exposing backlinks between them.\n\nThe workflow never invents narrative prose from a diff. The pull-request coordinator authors the public-safe receipt and, when the classification is material, the supporting record; CI validates and publishes those canonical inputs automatically."
+        },
+        {
+          "id": "privacy-and-provenance",
+          "title": "Privacy and provenance",
+          "body": "Only allowlisted repositories and canonical paths are accepted. The module fails closed on absolute machine paths, private task identifiers, credentials, private remotes, non-example email addresses, and owner-private records marked eligible for publication. Diagnostics use fixed locators so a rejected value is not echoed into a workflow log.\n\nEvery normalized record exposes its repository, source path, exact commit, and immutable source permalink. Cross-repository sources must declare a commit pin; a checkout mismatch fails the build."
+        },
+        {
+          "id": "statistics",
+          "title": "Statistics",
+          "body": "Statistics are a deterministic Journal projection: factual counts by type, effective status, repository, and capability plus chronology and explicit verification state. A release or run reference is counted as a reference only; it is never presented as verified evidence unless the record declares a verification receipt."
+        },
+        {
+          "id": "consequences",
+          "title": "Consequences",
+          "body": "The build is intentionally strict. Unknown fields, stale relation pins, unsafe content, missing verification evidence, or adapter drift stop publication. That strictness keeps the reader simple and makes failures actionable at the authoring boundary.\n\nThe Learn action remains visibly unavailable until the released Learn runtime contract defines a stable revision, commit, and symbol reference. The Engineering workspace does not duplicate Learn state."
+        },
+        {
+          "id": "architecture-diagram",
+          "title": "Architecture diagram",
+          "body": "The linked repository-native diagram is a reviewed projection of the verified boundary above. Its editable draw.io source and rendered PNG travel together, and the Journal derives immutable links to both from this record's exact source commit."
+        }
+      ],
+      "interviewView": {
+        "id": "interview-view",
+        "title": "Interview view",
+        "body": "The key design choice is the deep module boundary: one cohesive component owns the hard invariants, while thin adapters consume a public normalized Interface. This prevents privacy scans, correction semantics, and provenance rules from diverging across surfaces.\n\nThe design favors append-only history over in-place edits. A correction produces a new immutable revision and derived effective status, preserving what reviewers originally accepted while making current truth explicit."
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "capability-dossier-deep-interview-room-session",
+      "revision": 1,
+      "ref": "capability-dossier-deep-interview-room-session@1",
+      "type": "capability-dossier",
+      "status": "accepted",
+      "effectiveStatus": "accepted",
+      "amendedBy": [],
+      "supersededBy": [],
+      "title": "Deep Interview Room Session",
+      "summary": "Interview Arc Live centers durable technical mock interviews on one deep Interview Room Session Module bound to one stable Interview Arc Activity.",
+      "repository": "interview-arc-live",
+      "capabilityIds": [
+        "interview-room-session",
+        "durable-turns",
+        "specialty-work-surfaces"
+      ],
+      "createdAt": "2026-08-12",
+      "reconstructed": false,
+      "confidence": "verified",
+      "unknowns": [],
+      "modules": [
+        "interview-room-session"
+      ],
+      "interfaces": [
+        "session-commands",
+        "immutable-session-snapshot",
+        "session-manifest-store"
+      ],
+      "seams": [
+        "session-to-persistence",
+        "session-to-semantic-endpointing",
+        "session-to-presentations"
+      ],
+      "adapters": [
+        "file-session-manifest-store",
+        "groq-endpoint-classifier",
+        "full-presentation",
+        "compact-presentation"
+      ],
+      "relatedRecords": [],
+      "decisions": [],
+      "incidents": [],
+      "features": [],
+      "capabilities": [],
+      "amends": [],
+      "supersedes": [],
+      "learningRefs": [],
+      "diagrams": [],
+      "sources": [
+        {
+          "label": "Live domain context",
+          "url": "https://github.com/Vinosaamaa/interview-arc-live/blob/6ccb5ab9c8ca8c0306eea15eb35e1b9287220515/CONTEXT.md",
+          "kind": "documentation"
+        },
+        {
+          "label": "ADR 0001 — separate Live application",
+          "url": "https://github.com/Vinosaamaa/interview-arc-live/blob/6ccb5ab9c8ca8c0306eea15eb35e1b9287220515/docs/adr/0001-separate-live-application.md",
+          "kind": "documentation"
+        },
+        {
+          "label": "ADR 0002 — deep Interview Room Session",
+          "url": "https://github.com/Vinosaamaa/interview-arc-live/blob/6ccb5ab9c8ca8c0306eea15eb35e1b9287220515/docs/adr/0002-deep-interview-room-session.md",
+          "kind": "documentation"
+        },
+        {
+          "label": "Live adoption issue #41",
+          "url": "https://github.com/Vinosaamaa/interview-arc-live/issues/41",
+          "kind": "issue"
+        }
+      ],
+      "verification": {
+        "state": "verified",
+        "evidenceRefs": [
+          "documentation:CONTEXT.md",
+          "adr:0001-separate-live-application",
+          "adr:0002-deep-interview-room-session",
+          "issue:41"
+        ]
+      },
+      "visibility": "public-safe",
+      "publicationEligibility": "eligible",
+      "issue": 41,
+      "pr": 42,
+      "release": null,
+      "run": null,
+      "source": {
+        "repository": "interview-arc-live",
+        "commit": "6ccb5ab9c8ca8c0306eea15eb35e1b9287220515",
+        "path": "docs/engineering/records/capability-dossier-deep-interview-room-session.md",
+        "permalink": "https://github.com/Vinosaamaa/interview-arc-live/blob/6ccb5ab9c8ca8c0306eea15eb35e1b9287220515/docs/engineering/records/capability-dossier-deep-interview-room-session.md"
+      },
+      "body": "Interview Arc Live centers durable technical mock interviews on one deep Interview Room Session Module bound to one stable Interview Arc Activity.\n\n## Capability\n\nThe Session owns phase, Turn Mode, ordered Candidate and Interviewer Turns, stable operation identities, revisioned work-surface evidence, and recovery state. A provider thread is a replaceable runtime binding rather than the Session identity.\n\nCandidate silence may finalize an audio Segment but never commits a Candidate Turn. Hand off is the durable transition that closes one logical answer, even when it contains multiple speech segments or working pauses.\n\n## Module boundary\n\nThe `InterviewRoomSession` Interface accepts domain commands and returns immutable snapshots. The implementation owns transition validation, stable Turn identity, idempotency, manifest revisioning, persistence order, and recovery.\n\nCallers cannot mutate stored Session state directly. This keeps ordering and recovery rules local rather than distributing them through SwiftUI presentations, provider callbacks, and storage code.\n\n## Seams and Adapters\n\nPersistence and semantic endpointing are Seams because deterministic test and production Adapters both exist. The Session Manifest is the canonical monotonically revisioned recovery record; combined audio is a derived export.\n\nFull and compact Presentations are Adapters over one Session. They never own separate recording, model, transcript, or persistence state. Specialty work surfaces attach exact revision evidence to Candidate Turns without replacing the Turn or Session identity.\n\n## Separate application boundary\n\nLive remains a separate repository, process, bundle identity, Keychain service, Application Support root, preferences domain, hotkey namespace, and microphone owner. It does not read Voice queues or depend on the Voice application running.\n\nLive may use explicit, versioned package functionality at a compatibility-tested Seam. It does not share Voice credentials, storage, preferences, recorder ownership, or delivery state.\n\n## Privacy and recovery\n\nEvery nonempty best provider transcript candidate remains visible with an explicit quality state. A failed transcription never deletes the source recording, and a provider side effect begins only after its exact durable authorization.\n\nCredentials and runtime evidence remain in Live-owned private storage. Canonical public Engineering evidence contains no recording, transcript, credential, model artifact, private identifier, or machine-specific path.\n\n## Consequences\n\nThe Session Interface carries strong ordering and error contracts, while providers, persistence, work surfaces, and Presentations can evolve independently. State-machine failures retain locality, and recovery can resume from the Session Manifest without inventing hidden model memory or durable write receipts.\n\nThis adoption changes no native runtime or visible interface. The Arc Engineering Journal Module owns commit-pinned ingestion, privacy validation, correction history, search, Statistics, and reader parity.",
+      "sections": [
+        {
+          "id": "capability",
+          "title": "Capability",
+          "body": "The Session owns phase, Turn Mode, ordered Candidate and Interviewer Turns, stable operation identities, revisioned work-surface evidence, and recovery state. A provider thread is a replaceable runtime binding rather than the Session identity.\n\nCandidate silence may finalize an audio Segment but never commits a Candidate Turn. Hand off is the durable transition that closes one logical answer, even when it contains multiple speech segments or working pauses."
+        },
+        {
+          "id": "module-boundary",
+          "title": "Module boundary",
+          "body": "The `InterviewRoomSession` Interface accepts domain commands and returns immutable snapshots. The implementation owns transition validation, stable Turn identity, idempotency, manifest revisioning, persistence order, and recovery.\n\nCallers cannot mutate stored Session state directly. This keeps ordering and recovery rules local rather than distributing them through SwiftUI presentations, provider callbacks, and storage code."
+        },
+        {
+          "id": "seams-and-adapters",
+          "title": "Seams and Adapters",
+          "body": "Persistence and semantic endpointing are Seams because deterministic test and production Adapters both exist. The Session Manifest is the canonical monotonically revisioned recovery record; combined audio is a derived export.\n\nFull and compact Presentations are Adapters over one Session. They never own separate recording, model, transcript, or persistence state. Specialty work surfaces attach exact revision evidence to Candidate Turns without replacing the Turn or Session identity."
+        },
+        {
+          "id": "separate-application-boundary",
+          "title": "Separate application boundary",
+          "body": "Live remains a separate repository, process, bundle identity, Keychain service, Application Support root, preferences domain, hotkey namespace, and microphone owner. It does not read Voice queues or depend on the Voice application running.\n\nLive may use explicit, versioned package functionality at a compatibility-tested Seam. It does not share Voice credentials, storage, preferences, recorder ownership, or delivery state."
+        },
+        {
+          "id": "privacy-and-recovery",
+          "title": "Privacy and recovery",
+          "body": "Every nonempty best provider transcript candidate remains visible with an explicit quality state. A failed transcription never deletes the source recording, and a provider side effect begins only after its exact durable authorization.\n\nCredentials and runtime evidence remain in Live-owned private storage. Canonical public Engineering evidence contains no recording, transcript, credential, model artifact, private identifier, or machine-specific path."
+        },
+        {
+          "id": "consequences",
+          "title": "Consequences",
+          "body": "The Session Interface carries strong ordering and error contracts, while providers, persistence, work surfaces, and Presentations can evolve independently. State-machine failures retain locality, and recovery can resume from the Session Manifest without inventing hidden model memory or durable write receipts.\n\nThis adoption changes no native runtime or visible interface. The Arc Engineering Journal Module owns commit-pinned ingestion, privacy validation, correction history, search, Statistics, and reader parity."
+        }
+      ],
+      "interviewView": {
+        "id": "interview-view",
+        "title": "Interview view",
+        "body": "The deep Module prevents a common orchestration failure: putting transition rules in views and provider callbacks. One small command/snapshot Interface hides ordering, durable authorization, stable identity, and recovery complexity from every Adapter.\n\nThe durable boundary is the Session Manifest, not a provider thread or combined audio file. That choice lets the app replace endpoint, persistence, speech, and Presentation Adapters without losing the candidate's canonical interview history."
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "id": "capability-dossier-voice-capture-reliability",
+      "revision": 1,
+      "ref": "capability-dossier-voice-capture-reliability@1",
+      "type": "capability-dossier",
+      "status": "accepted",
+      "effectiveStatus": "accepted",
+      "amendedBy": [],
+      "supersededBy": [],
+      "title": "Voice Capture Reliability",
+      "summary": "Interview Arc Voice preserves one continuous local recording as the evidence boundary while separating foreground transcript insertion from background hosted delivery.",
+      "repository": "interview-arc-voice",
+      "capabilityIds": [
+        "voice-capture",
+        "recording-integrity",
+        "delivery-recovery"
+      ],
+      "createdAt": "2026-08-12",
+      "reconstructed": false,
+      "confidence": "verified",
+      "unknowns": [],
+      "modules": [
+        "voice-capture-pipeline",
+        "pending-capture-lifecycle"
+      ],
+      "interfaces": [
+        "recording-driver",
+        "transcription-provider",
+        "interview-arc-protocol-v2"
+      ],
+      "seams": [
+        "capture-to-transcription",
+        "transcript-to-cursor",
+        "accepted-capture-to-hosted-delivery"
+      ],
+      "adapters": [
+        "system-recorder",
+        "audio-engine",
+        "groq",
+        "accessibility-insertion",
+        "renderer-paste-insertion"
+      ],
+      "relatedRecords": [],
+      "decisions": [],
+      "incidents": [],
+      "features": [],
+      "capabilities": [],
+      "amends": [],
+      "supersedes": [],
+      "learningRefs": [],
+      "diagrams": [],
+      "sources": [
+        {
+          "label": "Voice architecture",
+          "url": "https://github.com/Vinosaamaa/interview-arc-voice/blob/3fc40e94436fd4071b1c6d9b30d8d414d22b2dbc/docs/architecture.md",
+          "kind": "documentation"
+        },
+        {
+          "label": "Voice protocol v2",
+          "url": "https://github.com/Vinosaamaa/interview-arc-voice/blob/3fc40e94436fd4071b1c6d9b30d8d414d22b2dbc/docs/protocol-v2.md",
+          "kind": "documentation"
+        },
+        {
+          "label": "Voice adoption issue #190",
+          "url": "https://github.com/Vinosaamaa/interview-arc-voice/issues/190",
+          "kind": "issue"
+        }
+      ],
+      "verification": {
+        "state": "not-recorded",
+        "evidenceRefs": []
+      },
+      "visibility": "public-safe",
+      "publicationEligibility": "eligible",
+      "issue": 190,
+      "pr": null,
+      "release": null,
+      "run": null,
+      "source": {
+        "repository": "interview-arc-voice",
+        "commit": "3fc40e94436fd4071b1c6d9b30d8d414d22b2dbc",
+        "path": "docs/engineering/records/capability-dossier-voice-capture-reliability.md",
+        "permalink": "https://github.com/Vinosaamaa/interview-arc-voice/blob/3fc40e94436fd4071b1c6d9b30d8d414d22b2dbc/docs/engineering/records/capability-dossier-voice-capture-reliability.md"
+      },
+      "body": "Interview Arc Voice preserves one continuous local recording as the evidence boundary while separating foreground transcript insertion from background hosted delivery.\n\n## Capability\n\nVoice begins capture from a previously verified routing snapshot, produces one canonical M4A, and validates finalization, decoded frames, media duration, and encoded payload before transcription. The capture identity does not change when a local backend recovers or hosted context refreshes.\n\nThe ordinary speech path performs one provider request. A second request is bounded to a concrete provider or transcript-integrity signal, and all derivatives remain disposable. The original recording stays available when no candidate is trustworthy.\n\n## Module boundary\n\nThe capture pipeline owns recording integrity, deterministic vocabulary selection, transcript preservation, insertion completion, and the stable identities required by delivery. Callers do not rewrite transcript text or treat provider duration as proof of lexical coverage.\n\nThe pending-capture lifecycle owns durable stage receipts for transcript commit, private audio availability, Delivery Coach work, and settled local retention. Reconciliation resumes only the first incomplete stage and never replays a stage already acknowledged by the server.\n\n## Interfaces and Adapters\n\nRecording and transcription remain behind explicit Interfaces so the system recorder, audio-engine recovery, Groq provider, and optional local diagnostic engine can evolve without changing canonical evidence semantics.\n\nCursor insertion has two Adapters: a read-back-verified Accessibility write and a guarded transient pasteboard path for renderer-backed editors. Both preserve the exact transcript and leave Send as a user action.\n\n## Privacy and recovery\n\nCredentials remain in macOS Keychain. Linked audio is stored under app-owned private storage and uploaded only after an activity-related decision. General Dictation never writes transcript, audio, or coaching data to Interview Arc.\n\nDiagnostics contain bounded enum and numeric evidence only. They exclude transcript text, prompt text, audio, credentials, private URLs, raw window titles, and filesystem paths.\n\n## Consequences\n\nForeground insertion can complete while hosted delivery continues quietly. Genuine transient failures use bounded recovery; permanent identity conflicts quarantine the capture. Unresolved evidence is retained rather than silently deleted, and a failed recording or transcription remains playable, saveable, and retryable.\n\nThe capability deliberately does not expose a Voice Engineering UI or a Learn action. Voice contributes canonical public-safe evidence to the shared Engineering Journal; the Arc Journal Module owns ingestion, correction history, search, and rendering.",
+      "sections": [
+        {
+          "id": "capability",
+          "title": "Capability",
+          "body": "Voice begins capture from a previously verified routing snapshot, produces one canonical M4A, and validates finalization, decoded frames, media duration, and encoded payload before transcription. The capture identity does not change when a local backend recovers or hosted context refreshes.\n\nThe ordinary speech path performs one provider request. A second request is bounded to a concrete provider or transcript-integrity signal, and all derivatives remain disposable. The original recording stays available when no candidate is trustworthy."
+        },
+        {
+          "id": "module-boundary",
+          "title": "Module boundary",
+          "body": "The capture pipeline owns recording integrity, deterministic vocabulary selection, transcript preservation, insertion completion, and the stable identities required by delivery. Callers do not rewrite transcript text or treat provider duration as proof of lexical coverage.\n\nThe pending-capture lifecycle owns durable stage receipts for transcript commit, private audio availability, Delivery Coach work, and settled local retention. Reconciliation resumes only the first incomplete stage and never replays a stage already acknowledged by the server."
+        },
+        {
+          "id": "interfaces-and-adapters",
+          "title": "Interfaces and Adapters",
+          "body": "Recording and transcription remain behind explicit Interfaces so the system recorder, audio-engine recovery, Groq provider, and optional local diagnostic engine can evolve without changing canonical evidence semantics.\n\nCursor insertion has two Adapters: a read-back-verified Accessibility write and a guarded transient pasteboard path for renderer-backed editors. Both preserve the exact transcript and leave Send as a user action."
+        },
+        {
+          "id": "privacy-and-recovery",
+          "title": "Privacy and recovery",
+          "body": "Credentials remain in macOS Keychain. Linked audio is stored under app-owned private storage and uploaded only after an activity-related decision. General Dictation never writes transcript, audio, or coaching data to Interview Arc.\n\nDiagnostics contain bounded enum and numeric evidence only. They exclude transcript text, prompt text, audio, credentials, private URLs, raw window titles, and filesystem paths."
+        },
+        {
+          "id": "consequences",
+          "title": "Consequences",
+          "body": "Foreground insertion can complete while hosted delivery continues quietly. Genuine transient failures use bounded recovery; permanent identity conflicts quarantine the capture. Unresolved evidence is retained rather than silently deleted, and a failed recording or transcription remains playable, saveable, and retryable.\n\nThe capability deliberately does not expose a Voice Engineering UI or a Learn action. Voice contributes canonical public-safe evidence to the shared Engineering Journal; the Arc Journal Module owns ingestion, correction history, search, and rendering."
+        }
+      ],
+      "interviewView": {
+        "id": "interview-view",
+        "title": "Interview view",
+        "body": "The architectural leverage comes from separating canonical evidence from replaceable Adapters. The recording and exact transcript remain stable while microphone backends, speech providers, editor insertion mechanisms, and hosted delivery stages recover independently.\n\nThe critical reliability rule is receipt-driven idempotency: every accepted delivery stage records durable completion, so relaunch and retry can resume without duplicating transcript turns, audio objects, or coaching work."
+      }
+    }
+  ],
+  "pullRequestReceipts": [
+    {
+      "schemaVersion": 1,
+      "ref": "pr:interview-arc:284",
+      "repository": "interview-arc",
+      "pr": 284,
+      "title": "Ship the Engineering workspace and complete pull request timeline",
+      "summary": "Added the Engineering workspace and a deterministic, commit-pinned Journal Module that publishes one receipt per PR plus curated rich records from Arc, Voice, and Live, with public-safety, provenance, correction, diagram, search, backlink, and parity gates.",
+      "classification": "architecture-review",
+      "richRecordRefs": [
+        "architecture-review-engineering-journal-module@1"
+      ],
+      "reconstructed": false,
+      "confidence": "verified",
+      "unknowns": [],
+      "headCommit": null,
+      "mergeCommit": null,
+      "mergedAt": null,
+      "timelineAt": "2026-08-13T12:25:18Z",
+      "timelineBasis": "source-commit",
+      "timelineCommit": "df1d151c567c80e3e166135fe019abc39ca6d2c7",
+      "timelineCommitBasis": "source-commit",
+      "missingFacts": [
+        "head-commit",
+        "merge-commit",
+        "merged-at"
+      ],
+      "sources": [
+        {
+          "label": "Pull request #284",
+          "url": "https://github.com/Vinosaamaa/interview-arc/pull/284",
+          "kind": "pull-request"
+        }
+      ],
+      "verification": {
+        "state": "verified",
+        "evidenceRefs": [
+          "pull-request:284"
+        ]
+      },
+      "visibility": "public-safe",
+      "publicationEligibility": "eligible",
+      "source": {
+        "repository": "interview-arc",
+        "commit": "df1d151c567c80e3e166135fe019abc39ca6d2c7",
+        "committedAt": "2026-08-13T12:25:18Z",
+        "path": "docs/engineering/changes/pr-284.md",
+        "permalink": "https://github.com/Vinosaamaa/interview-arc/blob/df1d151c567c80e3e166135fe019abc39ca6d2c7/docs/engineering/changes/pr-284.md"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "ref": "pr:interview-arc-live:42",
+      "repository": "interview-arc-live",
+      "pr": 42,
+      "title": "Adopt the Engineering Journal contract",
+      "summary": "Adopted complete pull-request receipts, strict forward CI validation, and a curated Capability Dossier for the deep Interview Room Session Module.",
+      "classification": "capability-dossier",
+      "richRecordRefs": [
+        "capability-dossier-deep-interview-room-session@1"
+      ],
+      "reconstructed": false,
+      "confidence": "verified",
+      "unknowns": [],
+      "headCommit": null,
+      "mergeCommit": null,
+      "mergedAt": null,
+      "timelineAt": "2026-08-13T12:23:59Z",
+      "timelineBasis": "source-commit",
+      "timelineCommit": "6ccb5ab9c8ca8c0306eea15eb35e1b9287220515",
+      "timelineCommitBasis": "source-commit",
+      "missingFacts": [
+        "head-commit",
+        "merge-commit",
+        "merged-at"
+      ],
+      "sources": [
+        {
+          "label": "Pull request #42",
+          "url": "https://github.com/Vinosaamaa/interview-arc-live/pull/42",
+          "kind": "pull-request"
+        },
+        {
+          "label": "Adoption issue #41",
+          "url": "https://github.com/Vinosaamaa/interview-arc-live/issues/41",
+          "kind": "issue"
+        }
+      ],
+      "verification": {
+        "state": "verified",
+        "evidenceRefs": [
+          "pull-request:42",
+          "policy-tests:engineering-impact"
+        ]
+      },
+      "visibility": "public-safe",
+      "publicationEligibility": "eligible",
+      "source": {
+        "repository": "interview-arc-live",
+        "commit": "6ccb5ab9c8ca8c0306eea15eb35e1b9287220515",
+        "committedAt": "2026-08-13T12:23:59Z",
+        "path": "docs/engineering/changes/pr-42.md",
+        "permalink": "https://github.com/Vinosaamaa/interview-arc-live/blob/6ccb5ab9c8ca8c0306eea15eb35e1b9287220515/docs/engineering/changes/pr-42.md"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "ref": "pr:interview-arc-voice:192",
+      "repository": "interview-arc-voice",
+      "pr": 192,
+      "title": "Require a compact receipt for every Voice pull request",
+      "summary": "Adopts the v1 receipt contract and makes one numbered, public-safe change receipt mandatory in the existing required Voice pull-request workflow.",
+      "classification": "capability-dossier",
+      "richRecordRefs": [
+        "capability-dossier-voice-capture-reliability@1"
+      ],
+      "reconstructed": false,
+      "confidence": "verified",
+      "unknowns": [],
+      "headCommit": null,
+      "mergeCommit": null,
+      "mergedAt": null,
+      "timelineAt": "2026-08-12T13:34:12Z",
+      "timelineBasis": "source-commit",
+      "timelineCommit": "2fd799a1e7a11ba6e83d778c8f4cae41ac52573d",
+      "timelineCommitBasis": "source-commit",
+      "missingFacts": [
+        "head-commit",
+        "merge-commit",
+        "merged-at"
+      ],
+      "sources": [
+        {
+          "label": "Pull request #192",
+          "url": "https://github.com/Vinosaamaa/interview-arc-voice/pull/192",
+          "kind": "pull-request"
+        },
+        {
+          "label": "Voice receipt adoption issue #190",
+          "url": "https://github.com/Vinosaamaa/interview-arc-voice/issues/190",
+          "kind": "issue"
+        }
+      ],
+      "verification": {
+        "state": "verified",
+        "evidenceRefs": [
+          "pull-request:192",
+          "issue:190"
+        ]
+      },
+      "visibility": "public-safe",
+      "publicationEligibility": "eligible",
+      "source": {
+        "repository": "interview-arc-voice",
+        "commit": "2fd799a1e7a11ba6e83d778c8f4cae41ac52573d",
+        "committedAt": "2026-08-12T13:34:12Z",
+        "path": "docs/engineering/changes/pr-192.md",
+        "permalink": "https://github.com/Vinosaamaa/interview-arc-voice/blob/2fd799a1e7a11ba6e83d778c8f4cae41ac52573d/docs/engineering/changes/pr-192.md"
+      }
+    }
+  ],
+  "search": [
+    {
+      "id": "architecture-review-engineering-journal-module",
+      "ref": "architecture-review-engineering-journal-module@1",
+      "revision": 1,
+      "createdAt": "2026-08-12",
+      "text": "deep engineering journal module engineering history needs one small, versioned interface that preserves exact evidence while allowing multiple readers to evolve independently. interview-arc architecture-review accepted accepted engineering-journal engineering-workspace engineering-journal canonical-record-ingestion normalized-journal-index repository-records-to-journal-module journal-module-to-website journal-module-to-standalone-html git-object-reader website-reader standalone-html-reader engineering journal commit-pinned publication flow canonical records and compact pr receipts from three repositories cross one reviewed, commit-pinned journal module before reaching the website and standalone reader. docs/design/engineering-workspace/journal-module-architecture.drawio docs/design/engineering-workspace/journal-module-architecture.png issue:278 tests/engineering-journal.test.mjs arc issue #278 issue https://github.com/vinosaamaa/interview-arc/issues/278 parent product issue #249 issue https://github.com/vinosaamaa/interview-arc/issues/249 issue 278 #278 pull request 284 pr 284   context interview arc spans the website, the native voice companion, and the live practice surface. each repository may author public-safe engineering evidence, but none of the readers should reimplement provenance, correction, privacy, or indexing rules.\n\nmutable database state is intentionally outside this capability. canonical records remain markdown in git, and every accepted input is read from an immutable git object. module boundary the engineering journal module accepts trusted repository descriptors and commit-pinned canonical records. it validates the record interface, rejects unsafe content, derives correction history and backlinks, and emits one deterministic normalized index.\n\nwebsite and standalone html are adapters over that index. they do not independently infer status, verification, release state, relationships, or statistics. record interface each record is identified by an immutable `id@revision` reference. the six supported types are change note, adr, architecture review, feature retrospective, postmortem, and capability dossier. type-specific lifecycle rules prevent a reader from presenting an impossible state.\n\ncorrections append a new record that names exact prior revisions through `amends` or `supersedes`. accepted source revisions remain unchanged. effective status and reverse links are projections, never edits to history. pull request receipt interface every merged pull request owns one compact, factual receipt under `docs/engineering/changes/pr-<number>.md`, including changes classified as `none`. the receipt is the complete chronological ledger; it does not become a rich record merely because a pull request exists.\n\na material pull request links one or more exact `id@revision` rich-record references. it may add a new record or reuse an existing record when several small pull requests belong to the same evidence-backed change. ci binds the receipt path, repository, pull-request number, current title, selected impact classification, and rich references to the reviewed git objects. the deterministic projection keeps receipts and rich records as separate evidence layers while exposing backlinks between them.\n\nthe workflow never invents narrative prose from a diff. the pull-request coordinator authors the public-safe receipt and, when the classification is material, the supporting record; ci validates and publishes those canonical inputs automatically. privacy and provenance only allowlisted repositories and canonical paths are accepted. the module fails closed on absolute machine paths, private task identifiers, credentials, private remotes, non-example email addresses, and owner-private records marked eligible for publication. diagnostics use fixed locators so a rejected value is not echoed into a workflow log.\n\nevery normalized record exposes its repository, source path, exact commit, and immutable source permalink. cross-repository sources must declare a commit pin; a checkout mismatch fails the build. statistics statistics are a deterministic journal projection: factual counts by type, effective status, repository, and capability plus chronology and explicit verification state. a release or run reference is counted as a reference only; it is never presented as verified evidence unless the record declares a verification receipt. consequences the build is intentionally strict. unknown fields, stale relation pins, unsafe content, missing verification evidence, or adapter drift stop publication. that strictness keeps the reader simple and makes failures actionable at the authoring boundary.\n\nthe learn action remains visibly unavailable until the released learn runtime contract defines a stable revision, commit, and symbol reference. the engineering workspace does not duplicate learn state. architecture diagram the linked repository-native diagram is a reviewed projection of the verified boundary above. its editable draw.io source and rendered png travel together, and the journal derives immutable links to both from this record's exact source commit. interview view the key design choice is the deep module boundary: one cohesive component owns the hard invariants, while thin adapters consume a public normalized interface. this prevents privacy scans, correction semantics, and provenance rules from diverging across surfaces.\n\nthe design favors append-only history over in-place edits. a correction produces a new immutable revision and derived effective status, preserving what reviewers originally accepted while making current truth explicit.",
+      "repository": "interview-arc",
+      "type": "architecture-review",
+      "status": "accepted",
+      "effectiveStatus": "accepted",
+      "capabilityIds": [
+        "engineering-journal",
+        "engineering-workspace"
+      ]
+    },
+    {
+      "id": "capability-dossier-deep-interview-room-session",
+      "ref": "capability-dossier-deep-interview-room-session@1",
+      "revision": 1,
+      "createdAt": "2026-08-12",
+      "text": "deep interview room session interview arc live centers durable technical mock interviews on one deep interview room session module bound to one stable interview arc activity. interview-arc-live capability-dossier accepted accepted interview-room-session durable-turns specialty-work-surfaces interview-room-session session-commands immutable-session-snapshot session-manifest-store session-to-persistence session-to-semantic-endpointing session-to-presentations file-session-manifest-store groq-endpoint-classifier full-presentation compact-presentation live domain context documentation https://github.com/vinosaamaa/interview-arc-live/blob/6ccb5ab9c8ca8c0306eea15eb35e1b9287220515/context.md adr 0001 — separate live application documentation https://github.com/vinosaamaa/interview-arc-live/blob/6ccb5ab9c8ca8c0306eea15eb35e1b9287220515/docs/adr/0001-separate-live-application.md adr 0002 — deep interview room session documentation https://github.com/vinosaamaa/interview-arc-live/blob/6ccb5ab9c8ca8c0306eea15eb35e1b9287220515/docs/adr/0002-deep-interview-room-session.md live adoption issue #41 issue https://github.com/vinosaamaa/interview-arc-live/issues/41 issue 41 #41 pull request 42 pr 42   capability the session owns phase, turn mode, ordered candidate and interviewer turns, stable operation identities, revisioned work-surface evidence, and recovery state. a provider thread is a replaceable runtime binding rather than the session identity.\n\ncandidate silence may finalize an audio segment but never commits a candidate turn. hand off is the durable transition that closes one logical answer, even when it contains multiple speech segments or working pauses. module boundary the `interviewroomsession` interface accepts domain commands and returns immutable snapshots. the implementation owns transition validation, stable turn identity, idempotency, manifest revisioning, persistence order, and recovery.\n\ncallers cannot mutate stored session state directly. this keeps ordering and recovery rules local rather than distributing them through swiftui presentations, provider callbacks, and storage code. seams and adapters persistence and semantic endpointing are seams because deterministic test and production adapters both exist. the session manifest is the canonical monotonically revisioned recovery record; combined audio is a derived export.\n\nfull and compact presentations are adapters over one session. they never own separate recording, model, transcript, or persistence state. specialty work surfaces attach exact revision evidence to candidate turns without replacing the turn or session identity. separate application boundary live remains a separate repository, process, bundle identity, keychain service, application support root, preferences domain, hotkey namespace, and microphone owner. it does not read voice queues or depend on the voice application running.\n\nlive may use explicit, versioned package functionality at a compatibility-tested seam. it does not share voice credentials, storage, preferences, recorder ownership, or delivery state. privacy and recovery every nonempty best provider transcript candidate remains visible with an explicit quality state. a failed transcription never deletes the source recording, and a provider side effect begins only after its exact durable authorization.\n\ncredentials and runtime evidence remain in live-owned private storage. canonical public engineering evidence contains no recording, transcript, credential, model artifact, private identifier, or machine-specific path. consequences the session interface carries strong ordering and error contracts, while providers, persistence, work surfaces, and presentations can evolve independently. state-machine failures retain locality, and recovery can resume from the session manifest without inventing hidden model memory or durable write receipts.\n\nthis adoption changes no native runtime or visible interface. the arc engineering journal module owns commit-pinned ingestion, privacy validation, correction history, search, statistics, and reader parity. interview view the deep module prevents a common orchestration failure: putting transition rules in views and provider callbacks. one small command/snapshot interface hides ordering, durable authorization, stable identity, and recovery complexity from every adapter.\n\nthe durable boundary is the session manifest, not a provider thread or combined audio file. that choice lets the app replace endpoint, persistence, speech, and presentation adapters without losing the candidate's canonical interview history.",
+      "repository": "interview-arc-live",
+      "type": "capability-dossier",
+      "status": "accepted",
+      "effectiveStatus": "accepted",
+      "capabilityIds": [
+        "interview-room-session",
+        "durable-turns",
+        "specialty-work-surfaces"
+      ]
+    },
+    {
+      "id": "capability-dossier-voice-capture-reliability",
+      "ref": "capability-dossier-voice-capture-reliability@1",
+      "revision": 1,
+      "createdAt": "2026-08-12",
+      "text": "voice capture reliability interview arc voice preserves one continuous local recording as the evidence boundary while separating foreground transcript insertion from background hosted delivery. interview-arc-voice capability-dossier accepted accepted voice-capture recording-integrity delivery-recovery voice-capture-pipeline pending-capture-lifecycle recording-driver transcription-provider interview-arc-protocol-v2 capture-to-transcription transcript-to-cursor accepted-capture-to-hosted-delivery system-recorder audio-engine groq accessibility-insertion renderer-paste-insertion voice architecture documentation https://github.com/vinosaamaa/interview-arc-voice/blob/3fc40e94436fd4071b1c6d9b30d8d414d22b2dbc/docs/architecture.md voice protocol v2 documentation https://github.com/vinosaamaa/interview-arc-voice/blob/3fc40e94436fd4071b1c6d9b30d8d414d22b2dbc/docs/protocol-v2.md voice adoption issue #190 issue https://github.com/vinosaamaa/interview-arc-voice/issues/190 issue 190 #190    capability voice begins capture from a previously verified routing snapshot, produces one canonical m4a, and validates finalization, decoded frames, media duration, and encoded payload before transcription. the capture identity does not change when a local backend recovers or hosted context refreshes.\n\nthe ordinary speech path performs one provider request. a second request is bounded to a concrete provider or transcript-integrity signal, and all derivatives remain disposable. the original recording stays available when no candidate is trustworthy. module boundary the capture pipeline owns recording integrity, deterministic vocabulary selection, transcript preservation, insertion completion, and the stable identities required by delivery. callers do not rewrite transcript text or treat provider duration as proof of lexical coverage.\n\nthe pending-capture lifecycle owns durable stage receipts for transcript commit, private audio availability, delivery coach work, and settled local retention. reconciliation resumes only the first incomplete stage and never replays a stage already acknowledged by the server. interfaces and adapters recording and transcription remain behind explicit interfaces so the system recorder, audio-engine recovery, groq provider, and optional local diagnostic engine can evolve without changing canonical evidence semantics.\n\ncursor insertion has two adapters: a read-back-verified accessibility write and a guarded transient pasteboard path for renderer-backed editors. both preserve the exact transcript and leave send as a user action. privacy and recovery credentials remain in macos keychain. linked audio is stored under app-owned private storage and uploaded only after an activity-related decision. general dictation never writes transcript, audio, or coaching data to interview arc.\n\ndiagnostics contain bounded enum and numeric evidence only. they exclude transcript text, prompt text, audio, credentials, private urls, raw window titles, and filesystem paths. consequences foreground insertion can complete while hosted delivery continues quietly. genuine transient failures use bounded recovery; permanent identity conflicts quarantine the capture. unresolved evidence is retained rather than silently deleted, and a failed recording or transcription remains playable, saveable, and retryable.\n\nthe capability deliberately does not expose a voice engineering ui or a learn action. voice contributes canonical public-safe evidence to the shared engineering journal; the arc journal module owns ingestion, correction history, search, and rendering. interview view the architectural leverage comes from separating canonical evidence from replaceable adapters. the recording and exact transcript remain stable while microphone backends, speech providers, editor insertion mechanisms, and hosted delivery stages recover independently.\n\nthe critical reliability rule is receipt-driven idempotency: every accepted delivery stage records durable completion, so relaunch and retry can resume without duplicating transcript turns, audio objects, or coaching work.",
+      "repository": "interview-arc-voice",
+      "type": "capability-dossier",
+      "status": "accepted",
+      "effectiveStatus": "accepted",
+      "capabilityIds": [
+        "voice-capture",
+        "recording-integrity",
+        "delivery-recovery"
+      ]
+    }
+  ],
+  "receiptSearch": [
+    {
+      "ref": "pr:interview-arc:284",
+      "pr": 284,
+      "timelineAt": "2026-08-13T12:25:18Z",
+      "text": "ship the engineering workspace and complete pull request timeline added the engineering workspace and a deterministic, commit-pinned journal module that publishes one receipt per pr plus curated rich records from arc, voice, and live, with public-safety, provenance, correction, diagram, search, backlink, and parity gates. interview-arc architecture-review architecture-review-engineering-journal-module@1 head-commit merge-commit merged-at pull request #284 pull-request https://github.com/vinosaamaa/interview-arc/pull/284 pull request 284 pr 284",
+      "repository": "interview-arc",
+      "classification": "architecture-review",
+      "richRecordRefs": [
+        "architecture-review-engineering-journal-module@1"
+      ]
+    },
+    {
+      "ref": "pr:interview-arc-live:42",
+      "pr": 42,
+      "timelineAt": "2026-08-13T12:23:59Z",
+      "text": "adopt the engineering journal contract adopted complete pull-request receipts, strict forward ci validation, and a curated capability dossier for the deep interview room session module. interview-arc-live capability-dossier capability-dossier-deep-interview-room-session@1 head-commit merge-commit merged-at pull request #42 pull-request https://github.com/vinosaamaa/interview-arc-live/pull/42 adoption issue #41 issue https://github.com/vinosaamaa/interview-arc-live/issues/41 pull request 42 pr 42",
+      "repository": "interview-arc-live",
+      "classification": "capability-dossier",
+      "richRecordRefs": [
+        "capability-dossier-deep-interview-room-session@1"
+      ]
+    },
+    {
+      "ref": "pr:interview-arc-voice:192",
+      "pr": 192,
+      "timelineAt": "2026-08-12T13:34:12Z",
+      "text": "require a compact receipt for every voice pull request adopts the v1 receipt contract and makes one numbered, public-safe change receipt mandatory in the existing required voice pull-request workflow. interview-arc-voice capability-dossier capability-dossier-voice-capture-reliability@1 head-commit merge-commit merged-at pull request #192 pull-request https://github.com/vinosaamaa/interview-arc-voice/pull/192 voice receipt adoption issue #190 issue https://github.com/vinosaamaa/interview-arc-voice/issues/190 pull request 192 pr 192",
+      "repository": "interview-arc-voice",
+      "classification": "capability-dossier",
+      "richRecordRefs": [
+        "capability-dossier-voice-capture-reliability@1"
+      ]
+    }
+  ],
+  "backlinks": {
+    "architecture-review-engineering-journal-module@1": [],
+    "capability-dossier-deep-interview-room-session@1": [],
+    "capability-dossier-voice-capture-reliability@1": []
+  },
+  "receiptBacklinks": {
+    "architecture-review-engineering-journal-module@1": [
+      "pr:interview-arc:284"
+    ],
+    "capability-dossier-deep-interview-room-session@1": [
+      "pr:interview-arc-live:42"
+    ],
+    "capability-dossier-voice-capture-reliability@1": [
+      "pr:interview-arc-voice:192"
+    ]
+  },
+  "statistics": {
+    "totalRecords": 3,
+    "earliestCreatedAt": "2026-08-12",
+    "latestCreatedAt": "2026-08-12",
+    "byType": {
+      "change-note": 0,
+      "adr": 0,
+      "architecture-review": 1,
+      "feature-retrospective": 0,
+      "postmortem": 0,
+      "capability-dossier": 2
+    },
+    "byStatus": {
+      "proposed": 0,
+      "accepted": 3,
+      "released": 0,
+      "closed": 0,
+      "amended": 0,
+      "superseded": 0
+    },
+    "byRepository": {
+      "interview-arc": 1,
+      "interview-arc-live": 1,
+      "interview-arc-voice": 1
+    },
+    "byCapability": {
+      "delivery-recovery": 1,
+      "durable-turns": 1,
+      "engineering-journal": 1,
+      "engineering-workspace": 1,
+      "interview-room-session": 1,
+      "recording-integrity": 1,
+      "specialty-work-surfaces": 1,
+      "voice-capture": 1
+    },
+    "verification": {
+      "verified": 2,
+      "notRecorded": 1
+    },
+    "recordsWithReleaseRefs": 0,
+    "recordsWithRunRefs": 0,
+    "chronology": [
+      {
+        "ref": "architecture-review-engineering-journal-module@1",
+        "createdAt": "2026-08-12",
+        "type": "architecture-review",
+        "status": "accepted",
+        "repository": "interview-arc"
+      },
+      {
+        "ref": "capability-dossier-deep-interview-room-session@1",
+        "createdAt": "2026-08-12",
+        "type": "capability-dossier",
+        "status": "accepted",
+        "repository": "interview-arc-live"
+      },
+      {
+        "ref": "capability-dossier-voice-capture-reliability@1",
+        "createdAt": "2026-08-12",
+        "type": "capability-dossier",
+        "status": "accepted",
+        "repository": "interview-arc-voice"
+      }
+    ]
+  },
+  "receiptStatistics": {
+    "totalReceipts": 3,
+    "earliestTimelineAt": "2026-08-12T13:34:12Z",
+    "latestTimelineAt": "2026-08-13T12:25:18Z",
+    "byRepository": {
+      "interview-arc": 1,
+      "interview-arc-live": 1,
+      "interview-arc-voice": 1
+    },
+    "byClassification": {
+      "none": 0,
+      "change-note": 0,
+      "adr": 0,
+      "architecture-review": 1,
+      "feature-retrospective": 0,
+      "postmortem": 0,
+      "capability-dossier": 2
+    },
+    "reconstructed": 0,
+    "withMissingFacts": 3,
+    "chronology": [
+      {
+        "ref": "pr:interview-arc-voice:192",
+        "pr": 192,
+        "timelineAt": "2026-08-12T13:34:12Z",
+        "timelineBasis": "source-commit",
+        "repository": "interview-arc-voice",
+        "classification": "capability-dossier"
+      },
+      {
+        "ref": "pr:interview-arc-live:42",
+        "pr": 42,
+        "timelineAt": "2026-08-13T12:23:59Z",
+        "timelineBasis": "source-commit",
+        "repository": "interview-arc-live",
+        "classification": "capability-dossier"
+      },
+      {
+        "ref": "pr:interview-arc:284",
+        "pr": 284,
+        "timelineAt": "2026-08-13T12:25:18Z",
+        "timelineBasis": "source-commit",
+        "repository": "interview-arc",
+        "classification": "architecture-review"
+      }
+    ]
+  }
+}
