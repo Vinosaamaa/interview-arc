@@ -16,6 +16,32 @@ hierarchy while applying the later product decisions:
 
 This asset is a design reference, not canonical Journal data or runtime UI.
 
+## Approved workspace mockups (v2)
+
+The complete desktop surface set in `mockups-v2/` was approved as the visual
+direction on 2026-08-12:
+
+- `00-overview.png` — complete seven-surface review board;
+- `01-journal-rich-records.png` — curated rich-record index and reader;
+- `02-journal-all-merged-prs.png` — complete compact pull-request timeline;
+- `03-capabilities.png` — cross-repository capability atlas;
+- `04-decisions.png` — chronological decision register;
+- `05-incidents.png` — truthful empty incident register;
+- `06-case-studies.png` — truthful empty case-study library;
+- `07-statistics.png` — separate rich-record and PR-receipt coverage ledgers.
+
+When Engineering is the selected top-level workspace, its left navigation rail
+uses a near-black surface with the lime active signal. This black rail is an
+Engineering workspace identity treatment; it does not require recoloring the
+Interview or Learn workspaces. The light content canvas, exact-evidence drawer,
+page-specific information architecture, and immutable evidence trace remain
+shared motifs across Engineering views.
+
+These raster mockups are visual targets rather than canonical data or exact-copy
+fixtures. Record contracts and generated projections remain authoritative for
+rendered facts. Visual implementation may follow the forward-contract release
+without blocking its provenance, privacy, validation, or deployment gates.
+
 `journal-module-architecture.drawio` is the editable, evidence-backed system
 diagram for the tracer Architecture Review. `journal-module-architecture.png`
 is the clean reader preview. `journal-module-architecture.drawio.png` embeds
