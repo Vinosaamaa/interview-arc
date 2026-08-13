@@ -41,6 +41,8 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+/engineering-journal/generated/
+/public/engineering-journal/assets/
 
 # local Python and model caches
 /.venv/
