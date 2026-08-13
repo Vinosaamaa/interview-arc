@@ -9,7 +9,9 @@ import test from "node:test";
 import { solutionProfileMissingRequirements } from "../app/solution-profile-policy.ts";
 import {
   TARGET,
-  buildMutationSql,
+  buildMutationBatch,
+  databaseIdFromConfig,
+  executeRemoteBatch,
   renderArtifact,
   resultSetsFromWrangler,
   validateProfile,
@@ -104,6 +106,22 @@ function database() {
   return db;
 }
 
+function executeSqliteBatchAtomically(db, batch, { failAt = -1 } = {}) {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const [index, statement] of batch.entries()) {
+      if (index === failAt) throw new Error(`Injected failure at statement ${index + 1}.`);
+      const prepared = db.prepare(statement.sql);
+      if (/^\s*SELECT\b/i.test(statement.sql)) prepared.all(...statement.params);
+      else prepared.run(...statement.params);
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
 function javaHarness(inputs, expected) {
   return `
 public class Main {
@@ -180,7 +198,7 @@ test("every published Basic Calculator reference implementation executes high-si
 
 test("guarded correction appends revision 2 and preserves the historical attempt link", () => {
   const db = database();
-  db.exec(buildMutationSql(baseSnapshot(), profile, 200));
+  executeSqliteBatchAtomically(db, buildMutationBatch(baseSnapshot(), profile, 200));
 
   const current = db.prepare("SELECT current_revision, payload FROM problem_solution_profiles").get();
   const revisions = db.prepare("SELECT revision, activity_id, payload FROM problem_solution_revisions ORDER BY revision").all();
@@ -196,18 +214,90 @@ test("guarded correction appends revision 2 and preserves the historical attempt
   assert.deepEqual(attempts, []);
 });
 
+test("transactional correction rolls back an inserted revision when a later statement fails", () => {
+  const db = database();
+  const batch = buildMutationBatch(baseSnapshot(), profile, 200);
+  assert.throws(
+    () => executeSqliteBatchAtomically(db, batch, { failAt: 6 }),
+    /Injected failure at statement 7/,
+  );
+
+  assert.equal(db.prepare("SELECT current_revision FROM problem_solution_profiles").get().current_revision, 1);
+  assert.deepEqual(
+    db.prepare("SELECT revision FROM problem_solution_revisions ORDER BY revision").all().map((row) => row.revision),
+    [1],
+  );
+});
+
 test("guarded correction rejects stale current state and a pre-existing revision 2", () => {
   const divergentPointer = baseSnapshot();
   divergentPointer.profile[0].payload = '{"diverged":true}';
-  assert.throws(() => buildMutationSql(divergentPointer, profile, 200), /pointer payload does not match/);
+  assert.throws(() => buildMutationBatch(divergentPointer, profile, 200), /pointer payload does not match/);
 
   const stale = baseSnapshot();
   stale.profile[0].current_revision = 2;
-  assert.throws(() => buildMutationSql(stale, profile, 200), /current revision must be exactly 1/);
+  assert.throws(() => buildMutationBatch(stale, profile, 200), /current revision must be exactly 1/);
 
   const duplicate = baseSnapshot();
   duplicate.revisions.push({ ...duplicate.revisions[0], revision: 2 });
-  assert.throws(() => buildMutationSql(duplicate, profile, 200), /revision 2 must be absent/);
+  assert.throws(() => buildMutationBatch(duplicate, profile, 200), /revision 2 must be absent/);
+});
+
+test("remote correction sends one parameterized Cloudflare D1 batch", async () => {
+  const batch = buildMutationBatch(baseSnapshot(), profile, 200);
+  let request;
+  const results = await executeRemoteBatch(batch, {
+    accountId: "account-fixture",
+    apiToken: "token-fixture",
+    databaseId: "database-fixture",
+    fetchImpl: async (url, init) => {
+      request = { url, init };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          result: batch.map(() => ({ success: true, results: [] })),
+        }),
+      };
+    },
+  });
+
+  assert.equal(results.length, batch.length);
+  assert.equal(request.url, "https://api.cloudflare.com/client/v4/accounts/account-fixture/d1/database/database-fixture/query");
+  assert.equal(request.init.method, "POST");
+  assert.equal(request.init.headers.Authorization, "Bearer token-fixture");
+  assert.deepEqual(JSON.parse(request.init.body), { batch });
+  assert.ok(batch.every((statement) => Array.isArray(statement.params)));
+  assert.ok(batch[5].sql.includes("VALUES (?, ?, ?, 2, ?, ?, ?)"));
+});
+
+test("remote correction rejects a failed statement result", async () => {
+  const batch = buildMutationBatch(baseSnapshot(), profile, 200);
+  await assert.rejects(
+    executeRemoteBatch(batch, {
+      accountId: "account-fixture",
+      apiToken: "token-fixture",
+      databaseId: "database-fixture",
+      fetchImpl: async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          result: batch.map((_, index) => index === 6
+            ? { success: false, errors: [{ message: "injected D1 failure" }] }
+            : { success: true, results: [] }),
+        }),
+      }),
+    }),
+    /statement 7 failed: injected D1 failure/,
+  );
+});
+
+test("repair resolves the configured production D1 database ID", async () => {
+  const source = await readFile(path.join(process.cwd(), "wrangler.jsonc"), "utf8");
+  assert.equal(databaseIdFromConfig(source), "28834aae-e412-4046-913b-02684f1e11cf");
+  assert.throws(() => databaseIdFromConfig('{"binding":"OTHER"}'), /does not define/);
 });
 
 test("Wrangler result parsing keeps every statement result set", () => {

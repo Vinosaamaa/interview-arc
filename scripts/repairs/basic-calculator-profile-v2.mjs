@@ -2,8 +2,7 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -50,25 +49,24 @@ function storedJson(value) {
   return typeof value === "string" ? value : JSON.stringify(value);
 }
 
-export function resultSetsFromWrangler(output, { file = false } = {}) {
-  if (file) return [];
+export function resultSetsFromWrangler(output) {
   const parsed = JSON.parse(output);
   const batches = Array.isArray(parsed) ? parsed : [parsed];
   return batches.map((batch) => batch?.results ?? batch?.result?.[0]?.results ?? []);
 }
 
-function executeWrangler(sqlOrFile, { remote, file = false }) {
+function executeWrangler(sql, { remote }) {
   const wrangler = path.join(root, "node_modules", ".bin", "wrangler");
   const args = [
     "d1", "execute", "DB", remote ? "--remote" : "--local",
-    file ? "--file" : "--command", sqlOrFile,
+    "--command", sql,
     "--json",
   ];
   return resultSetsFromWrangler(execFileSync(wrangler, args, {
     cwd: root,
     encoding: "utf8",
     maxBuffer: 32 * 1024 * 1024,
-  }), { file });
+  }));
 }
 
 export function validateProfile(profile) {
@@ -192,28 +190,79 @@ function assertHistoricalState(snapshot, profilePayload, { allowApplied = false 
   return { current, revision1, revision2 };
 }
 
-function guard(condition) {
-  return `SELECT json_extract(CASE WHEN (${condition}) THEN '{"allowed":1}' ELSE 'invalid' END, '$.allowed') AS allowed;`;
+function guard(condition, params = []) {
+  return {
+    sql: `SELECT json_extract(CASE WHEN (${condition}) THEN '{"allowed":1}' ELSE 'invalid' END, '$.allowed') AS allowed`,
+    params,
+  };
 }
 
-export function buildMutationSql(snapshot, profile, createdAt) {
+export function buildMutationBatch(snapshot, profile, createdAt) {
   const payload = JSON.stringify(profile);
   const tags = JSON.stringify(profile.tags);
   const { current, revision1 } = assertHistoricalState(snapshot, payload);
   return [
-    guard(`EXISTS (SELECT 1 FROM problem_solution_profiles WHERE owner_id = ${sqlText(current.owner_id)} AND specialty = ${sqlText(TARGET.specialty)} AND question_id = ${sqlText(TARGET.questionId)} AND current_revision = 1 AND updated_at = ${Number(current.updated_at)} AND payload = ${sqlText(storedJson(current.payload))})`),
-    guard(`EXISTS (SELECT 1 FROM problem_solution_revisions WHERE owner_id = ${sqlText(current.owner_id)} AND specialty = ${sqlText(TARGET.specialty)} AND question_id = ${sqlText(TARGET.questionId)} AND revision = 1 AND activity_id = ${sqlText(revision1.activity_id)} AND payload = ${sqlText(storedJson(revision1.payload))} AND created_at = ${Number(revision1.created_at)})`),
-    guard(`NOT EXISTS (SELECT 1 FROM problem_solution_revisions WHERE owner_id = ${sqlText(current.owner_id)} AND specialty = ${sqlText(TARGET.specialty)} AND question_id = ${sqlText(TARGET.questionId)} AND revision = 2)`),
-    guard(`EXISTS (SELECT 1 FROM activity_solution_links WHERE owner_id = ${sqlText(current.owner_id)} AND activity_id = ${sqlText(TARGET.activityId)} AND specialty = ${sqlText(TARGET.specialty)} AND question_id = ${sqlText(TARGET.questionId)} AND solution_revision = 1)`),
-    guard(`NOT EXISTS (SELECT 1 FROM leetcode_code_attempts WHERE owner_id = ${sqlText(current.owner_id)} AND activity_id = ${sqlText(TARGET.activityId)})`),
-    `INSERT INTO problem_solution_revisions (owner_id, specialty, question_id, revision, activity_id, payload, created_at) VALUES (${sqlText(current.owner_id)}, ${sqlText(TARGET.specialty)}, ${sqlText(TARGET.questionId)}, 2, ${sqlText(TARGET.activityId)}, ${sqlText(payload)}, ${Number(createdAt)});`,
-    `UPDATE problem_solution_profiles SET current_revision = 2, tags = ${sqlText(tags)}, payload = ${sqlText(payload)}, updated_at = ${Number(createdAt)} WHERE owner_id = ${sqlText(current.owner_id)} AND specialty = ${sqlText(TARGET.specialty)} AND question_id = ${sqlText(TARGET.questionId)} AND current_revision = 1 AND updated_at = ${Number(current.updated_at)} AND payload = ${sqlText(storedJson(current.payload))};`,
+    guard("EXISTS (SELECT 1 FROM problem_solution_profiles WHERE owner_id = ? AND specialty = ? AND question_id = ? AND current_revision = 1 AND updated_at = ? AND payload = ?)", [current.owner_id, TARGET.specialty, TARGET.questionId, Number(current.updated_at), storedJson(current.payload)]),
+    guard("EXISTS (SELECT 1 FROM problem_solution_revisions WHERE owner_id = ? AND specialty = ? AND question_id = ? AND revision = 1 AND activity_id = ? AND payload = ? AND created_at = ?)", [current.owner_id, TARGET.specialty, TARGET.questionId, revision1.activity_id, storedJson(revision1.payload), Number(revision1.created_at)]),
+    guard("NOT EXISTS (SELECT 1 FROM problem_solution_revisions WHERE owner_id = ? AND specialty = ? AND question_id = ? AND revision = 2)", [current.owner_id, TARGET.specialty, TARGET.questionId]),
+    guard("EXISTS (SELECT 1 FROM activity_solution_links WHERE owner_id = ? AND activity_id = ? AND specialty = ? AND question_id = ? AND solution_revision = 1)", [current.owner_id, TARGET.activityId, TARGET.specialty, TARGET.questionId]),
+    guard("NOT EXISTS (SELECT 1 FROM leetcode_code_attempts WHERE owner_id = ? AND activity_id = ?)", [current.owner_id, TARGET.activityId]),
+    {
+      sql: "INSERT INTO problem_solution_revisions (owner_id, specialty, question_id, revision, activity_id, payload, created_at) VALUES (?, ?, ?, 2, ?, ?, ?)",
+      params: [current.owner_id, TARGET.specialty, TARGET.questionId, TARGET.activityId, payload, Number(createdAt)],
+    },
+    {
+      sql: "UPDATE problem_solution_profiles SET current_revision = 2, tags = ?, payload = ?, updated_at = ? WHERE owner_id = ? AND specialty = ? AND question_id = ? AND current_revision = 1 AND updated_at = ? AND payload = ?",
+      params: [tags, payload, Number(createdAt), current.owner_id, TARGET.specialty, TARGET.questionId, Number(current.updated_at), storedJson(current.payload)],
+    },
     guard("changes() = 1"),
-    guard(`EXISTS (SELECT 1 FROM problem_solution_profiles WHERE owner_id = ${sqlText(current.owner_id)} AND specialty = ${sqlText(TARGET.specialty)} AND question_id = ${sqlText(TARGET.questionId)} AND current_revision = 2 AND tags = ${sqlText(tags)} AND payload = ${sqlText(payload)} AND updated_at = ${Number(createdAt)})`),
-    guard(`EXISTS (SELECT 1 FROM problem_solution_revisions WHERE owner_id = ${sqlText(current.owner_id)} AND specialty = ${sqlText(TARGET.specialty)} AND question_id = ${sqlText(TARGET.questionId)} AND revision = 2 AND activity_id = ${sqlText(TARGET.activityId)} AND payload = ${sqlText(payload)} AND created_at = ${Number(createdAt)})`),
-    guard(`EXISTS (SELECT 1 FROM problem_solution_revisions WHERE owner_id = ${sqlText(current.owner_id)} AND specialty = ${sqlText(TARGET.specialty)} AND question_id = ${sqlText(TARGET.questionId)} AND revision = 1 AND activity_id = ${sqlText(revision1.activity_id)} AND payload = ${sqlText(storedJson(revision1.payload))} AND created_at = ${Number(revision1.created_at)})`),
-    guard(`EXISTS (SELECT 1 FROM activity_solution_links WHERE owner_id = ${sqlText(current.owner_id)} AND activity_id = ${sqlText(TARGET.activityId)} AND solution_revision = 1)`),
-  ].join("\n");
+    guard("EXISTS (SELECT 1 FROM problem_solution_profiles WHERE owner_id = ? AND specialty = ? AND question_id = ? AND current_revision = 2 AND tags = ? AND payload = ? AND updated_at = ?)", [current.owner_id, TARGET.specialty, TARGET.questionId, tags, payload, Number(createdAt)]),
+    guard("EXISTS (SELECT 1 FROM problem_solution_revisions WHERE owner_id = ? AND specialty = ? AND question_id = ? AND revision = 2 AND activity_id = ? AND payload = ? AND created_at = ?)", [current.owner_id, TARGET.specialty, TARGET.questionId, TARGET.activityId, payload, Number(createdAt)]),
+    guard("EXISTS (SELECT 1 FROM problem_solution_revisions WHERE owner_id = ? AND specialty = ? AND question_id = ? AND revision = 1 AND activity_id = ? AND payload = ? AND created_at = ?)", [current.owner_id, TARGET.specialty, TARGET.questionId, revision1.activity_id, storedJson(revision1.payload), Number(revision1.created_at)]),
+    guard("EXISTS (SELECT 1 FROM activity_solution_links WHERE owner_id = ? AND activity_id = ? AND solution_revision = 1)", [current.owner_id, TARGET.activityId]),
+  ];
+}
+
+export function databaseIdFromConfig(source) {
+  const match = source.match(/"binding"\s*:\s*"DB"[\s\S]{0,500}?"database_id"\s*:\s*"([^"]+)"/);
+  if (!match?.[1]) fail("wrangler.jsonc does not define the DB database_id.");
+  return match[1];
+}
+
+function apiFailure(envelope, fallback) {
+  const messages = envelope?.errors?.map((error) => error?.message).filter(Boolean);
+  return messages?.length ? messages.join("; ") : fallback;
+}
+
+export async function executeRemoteBatch(batch, {
+  accountId = process.env.CLOUDFLARE_ACCOUNT_ID,
+  apiToken = process.env.CLOUDFLARE_API_TOKEN,
+  databaseId,
+  fetchImpl = fetch,
+} = {}) {
+  if (!accountId || !apiToken || !databaseId) fail("Cloudflare account, token, and D1 database ID are required.");
+  if (!Array.isArray(batch) || batch.length === 0) fail("The D1 mutation batch must not be empty.");
+  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/d1/database/${encodeURIComponent(databaseId)}/query`;
+  const response = await fetchImpl(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ batch }),
+  });
+  const envelope = await response.json();
+  if (!response.ok || envelope?.success !== true) {
+    fail(`Cloudflare D1 batch request failed: ${apiFailure(envelope, `HTTP ${response.status}`)}`);
+  }
+  if (!Array.isArray(envelope.result) || envelope.result.length !== batch.length) {
+    fail(`Cloudflare D1 batch returned ${envelope?.result?.length ?? "no"} results for ${batch.length} statements.`);
+  }
+  const failedIndex = envelope.result.findIndex((result) => result?.success !== true);
+  if (failedIndex !== -1) {
+    fail(`Cloudflare D1 batch statement ${failedIndex + 1} failed: ${apiFailure(envelope.result[failedIndex], "unknown D1 error")}`);
+  }
+  return envelope.result;
 }
 
 async function main() {
@@ -266,14 +315,10 @@ async function main() {
   const beforeRevision1 = sha256(storedJson(beforeState.revision1.payload));
   const beforePointer = sha256(storedJson(beforeState.current.payload));
   const createdAt = Date.now();
-  const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "basic-calculator-profile-v2-"));
-  const sqlPath = path.join(temporaryDirectory, "correction.sql");
-  try {
-    await writeFile(sqlPath, buildMutationSql(before, profile, createdAt), { mode: 0o600 });
-    executeWrangler(sqlPath, { remote: true, file: true });
-  } finally {
-    await rm(temporaryDirectory, { recursive: true, force: true });
-  }
+  const wranglerConfig = await readFile(path.join(root, "wrangler.jsonc"), "utf8");
+  await executeRemoteBatch(buildMutationBatch(before, profile, createdAt), {
+    databaseId: databaseIdFromConfig(wranglerConfig),
+  });
 
   const after = readSnapshot(true);
   const afterState = assertHistoricalState(after, payload, { allowApplied: true });
