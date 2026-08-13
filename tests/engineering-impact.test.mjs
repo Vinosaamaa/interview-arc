@@ -255,9 +255,66 @@ type: architecture-review
   assert.match(result.stdout, /historical batch: 2 receipt\(s\), 1 rich record\(s\)/);
 });
 
+test("historical receipt deletion fails with an explicit add-only diagnostic", (t) => {
+  const cwd = createRepository(t);
+  write(cwd, "docs/engineering/changes/pr-1.md", `---
+schemaVersion: 1
+repository: interview-arc
+pr: 1
+title: Accepted historical receipt
+classification: none
+richRecordRefs: []
+reconstructed: true
+---
+# Accepted historical receipt
+
+Already accepted history.
+`);
+  git(cwd, ["add", "docs/engineering/changes/pr-1.md"]);
+  git(cwd, ["commit", "--quiet", "-m", "accepted history"]);
+  const base = git(cwd, ["rev-parse", "HEAD"]);
+  git(cwd, ["rm", "--quiet", "docs/engineering/changes/pr-1.md"]);
+  write(cwd, "docs/engineering/changes/pr-312.md", `---
+schemaVersion: 1
+repository: interview-arc
+pr: 312
+title: Fixture receipt
+classification: none
+richRecordRefs: []
+reconstructed: false
+---
+# Fixture receipt
+
+Attempts an invalid historical deletion.
+`);
+  write(cwd, "docs/engineering/backfill/pr-312.json", `${JSON.stringify({
+    schemaVersion: 1,
+    repository: "interview-arc",
+    pullRequest: 312,
+    privacyAuthorizationUrl: "https://github.com/example/interview-arc/issues/313#issuecomment-123456",
+    receiptPaths: ["docs/engineering/changes/pr-1.md"],
+    recordRefs: [],
+  }, null, 2)}\n`);
+  git(cwd, ["add", "docs/engineering"]);
+  git(cwd, ["commit", "--quiet", "-m", "attempt deletion"]);
+  const head = git(cwd, ["rev-parse", "HEAD"]);
+
+  const result = runValidator(cwd, {
+    pull_request: {
+      number: 312,
+      body: "## Engineering impact\n\n- [x] None — reason: This PR attempts to publish one historical evidence batch.",
+      base: { sha: base },
+      head: { sha: head },
+    },
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /declared historical receipt must exist at the pull request head/);
+  assert.doesNotMatch(result.stderr, /TypeError/);
+});
+
 test("historical batch validation is exact, bounded, add-only, and privacy-authorized", () => {
   const manifest = {
-    path: "docs/engineering/backfill/pr-312.json",
     schemaVersion: 1,
     repository: "interview-arc",
     pullRequest: 312,
@@ -276,9 +333,10 @@ test("historical batch validation is exact, bounded, add-only, and privacy-autho
   const record = { ref: "review@1", type: "architecture-review", existsAtHead: true };
   const input = {
     manifest,
+    manifestPath: "docs/engineering/backfill/pr-312.json",
     changedFiles: [
       "docs/engineering/changes/pr-312.md",
-      manifest.path,
+      "docs/engineering/backfill/pr-312.json",
       receipt.path,
       "docs/engineering/records/review.md",
     ],
@@ -304,6 +362,14 @@ test("historical batch validation is exact, bounded, add-only, and privacy-autho
   );
   assert.throws(
     () => validateHistoricalBatch({ ...input, baseExistingPaths: [receipt.path] }),
+    /add-only/,
+  );
+  assert.throws(
+    () => validateHistoricalBatch({
+      ...input,
+      changedRecords: [{ ...record, existsAtHead: false }],
+      baseExistingPaths: ["docs/engineering/records/review.md"],
+    }),
     /add-only/,
   );
   assert.throws(

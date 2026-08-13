@@ -21,9 +21,21 @@ const PLACEHOLDER_REASONS = new Set([
 const RECORD_REF_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*@[1-9]\d*$/;
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const TRUSTED_GITHUB_REMOTE_PATTERN = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\.git$/;
-const HISTORICAL_BATCH_RECEIPT_LIMIT = 20;
-const HISTORICAL_BATCH_RECORD_LIMIT = 8;
-const HISTORICAL_BATCH_AUTHORIZATION_PATTERN = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/(?:issues|pull)\/[1-9]\d*#issuecomment-[1-9]\d*$/;
+const HISTORICAL_BATCH_SCHEMA = JSON.parse(readFileSync(new URL(
+  "../docs/contracts/engineering-historical-backfill-batch.schema.json",
+  import.meta.url,
+), "utf8"));
+const HISTORICAL_BATCH_RECEIPT_LIMIT = HISTORICAL_BATCH_SCHEMA.properties.receiptPaths.maxItems;
+const HISTORICAL_BATCH_RECORD_LIMIT = HISTORICAL_BATCH_SCHEMA.properties.recordRefs.maxItems;
+const HISTORICAL_BATCH_AUTHORIZATION_PATTERN = new RegExp(
+  HISTORICAL_BATCH_SCHEMA.properties.privacyAuthorizationUrl.pattern,
+);
+const HISTORICAL_BATCH_RECEIPT_PATH_PATTERN = new RegExp(
+  HISTORICAL_BATCH_SCHEMA.properties.receiptPaths.items.pattern,
+);
+const HISTORICAL_BATCH_RECORD_REF_PATTERN = new RegExp(
+  HISTORICAL_BATCH_SCHEMA.properties.recordRefs.items.pattern,
+);
 
 function selectedClassifications(body) {
   const selected = [];
@@ -139,6 +151,7 @@ function equalStringSets(left, right) {
 
 export function validateHistoricalBatch({
   manifest,
+  manifestPath,
   changedFiles,
   changedRecords,
   historicalReceipts,
@@ -159,15 +172,15 @@ export function validateHistoricalBatch({
   }
   if (!Array.isArray(manifest.receiptPaths) || manifest.receiptPaths.length < 1 ||
       manifest.receiptPaths.length > HISTORICAL_BATCH_RECEIPT_LIMIT ||
-      manifest.receiptPaths.some((path) => !/^docs\/engineering\/changes\/pr-[1-9]\d*\.md$/.test(path))) {
+      manifest.receiptPaths.some((path) => !HISTORICAL_BATCH_RECEIPT_PATH_PATTERN.test(path))) {
     throw new Error(`A historical batch must declare between 1 and ${HISTORICAL_BATCH_RECEIPT_LIMIT} canonical receipt paths.`);
   }
   if (!Array.isArray(manifest.recordRefs) || manifest.recordRefs.length > HISTORICAL_BATCH_RECORD_LIMIT ||
-      manifest.recordRefs.some((ref) => typeof ref !== "string" || !RECORD_REF_PATTERN.test(ref))) {
+      manifest.recordRefs.some((ref) => typeof ref !== "string" || !HISTORICAL_BATCH_RECORD_REF_PATTERN.test(ref))) {
     throw new Error(`A historical batch may declare at most ${HISTORICAL_BATCH_RECORD_LIMIT} exact rich record revisions.`);
   }
   const expectedManifestPath = `docs/engineering/backfill/pr-${pullRequestNumber}.json`;
-  if (manifest.path !== expectedManifestPath) {
+  if (manifestPath !== expectedManifestPath) {
     throw new Error("The historical batch manifest path must match the current pull request number.");
   }
   const forwardReceiptPath = `docs/engineering/changes/pr-${pullRequestNumber}.md`;
@@ -325,7 +338,7 @@ function parseReceipt(markdown, path) {
   };
 }
 
-function parseHistoricalBatchManifest(markdown, path) {
+function parseHistoricalBatchManifest(markdown) {
   let manifest;
   try {
     manifest = JSON.parse(markdown);
@@ -335,27 +348,29 @@ function parseHistoricalBatchManifest(markdown, path) {
   if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
     throw new Error("The historical batch manifest must be a JSON object.");
   }
-  const expectedKeys = [
-    "privacyAuthorizationUrl", "pullRequest", "receiptPaths", "recordRefs", "repository", "schemaVersion",
-  ];
+  const expectedKeys = HISTORICAL_BATCH_SCHEMA.required;
   if (!equalStringSets(Object.keys(manifest), expectedKeys)) {
     throw new Error("The historical batch manifest has unsupported or missing fields.");
   }
-  if (manifest.schemaVersion !== 1 || typeof manifest.repository !== "string" ||
-      !REPOSITORY_PATTERN.test(manifest.repository) || !Number.isInteger(manifest.pullRequest) ||
-      manifest.pullRequest < 1 || typeof manifest.privacyAuthorizationUrl !== "string" ||
-      manifest.privacyAuthorizationUrl.length > 2048 ||
-      !Array.isArray(manifest.receiptPaths) || manifest.receiptPaths.length < 1 ||
+  const properties = HISTORICAL_BATCH_SCHEMA.properties;
+  if (manifest.schemaVersion !== properties.schemaVersion.const || typeof manifest.repository !== "string" ||
+      !(new RegExp(properties.repository.pattern)).test(manifest.repository) || !Number.isInteger(manifest.pullRequest) ||
+      manifest.pullRequest < properties.pullRequest.minimum || typeof manifest.privacyAuthorizationUrl !== "string" ||
+      manifest.privacyAuthorizationUrl.length > properties.privacyAuthorizationUrl.maxLength ||
+      !HISTORICAL_BATCH_AUTHORIZATION_PATTERN.test(manifest.privacyAuthorizationUrl) ||
+      !Array.isArray(manifest.receiptPaths) || manifest.receiptPaths.length < properties.receiptPaths.minItems ||
       manifest.receiptPaths.length > HISTORICAL_BATCH_RECEIPT_LIMIT ||
       new Set(manifest.receiptPaths).size !== manifest.receiptPaths.length ||
-      manifest.receiptPaths.some((receiptPath) => typeof receiptPath !== "string" || receiptPath.length > 180 ||
-        !/^docs\/engineering\/changes\/pr-[1-9]\d*\.md$/.test(receiptPath)) ||
+      manifest.receiptPaths.some((receiptPath) => typeof receiptPath !== "string" ||
+        receiptPath.length > properties.receiptPaths.items.maxLength ||
+        !HISTORICAL_BATCH_RECEIPT_PATH_PATTERN.test(receiptPath)) ||
       !Array.isArray(manifest.recordRefs) || manifest.recordRefs.length > HISTORICAL_BATCH_RECORD_LIMIT ||
       new Set(manifest.recordRefs).size !== manifest.recordRefs.length ||
-      manifest.recordRefs.some((ref) => typeof ref !== "string" || ref.length > 180 || !RECORD_REF_PATTERN.test(ref))) {
+      manifest.recordRefs.some((ref) => typeof ref !== "string" ||
+        ref.length > properties.recordRefs.items.maxLength || !HISTORICAL_BATCH_RECORD_REF_PATTERN.test(ref))) {
     throw new Error("The historical batch manifest has invalid bounded fields.");
   }
-  return { ...manifest, path };
+  return manifest;
 }
 
 function parseRecord(markdown) {
@@ -455,7 +470,7 @@ function main() {
     }
     const [manifestMarkdown] = blobsAt(pullRequest.head.sha, [expectedManifestPath]);
     if (manifestMarkdown === null) throw new Error("The historical batch manifest must exist at the pull request head.");
-    manifest = parseHistoricalBatchManifest(manifestMarkdown, expectedManifestPath);
+    manifest = parseHistoricalBatchManifest(manifestMarkdown);
     const historicalReceiptMarkdown = blobsAt(pullRequest.head.sha, manifest.receiptPaths);
     historicalReceipts = historicalReceiptMarkdown.map((markdown, index) => {
       if (markdown === null) throw new Error("Every declared historical receipt must exist at the pull request head.");
@@ -499,6 +514,7 @@ function main() {
     const baseExistingPaths = historicalDocumentPaths.filter((_, index) => baseDocuments[index] !== null);
     const historicalResult = validateHistoricalBatch({
       manifest,
+      manifestPath: expectedManifestPath,
       changedFiles,
       changedRecords,
       historicalReceipts,
