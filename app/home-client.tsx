@@ -48,6 +48,12 @@ import { careerHeatLevel, type CareerJob, type CareerSummary, type JobStatus } f
 import { useLiveState, useReadOnlyLiveState } from "./live-sync";
 import { emptyJournal } from "./current-day";
 import { ArrivalRitual, PetalField } from "./arrival-ritual";
+import ReaderRenderDiagnosticsPanel from "./reader-render-diagnostics-panel";
+import {
+  recordNavigationDiagnostic,
+  recordReaderDiagnostic,
+  startNavigationDiagnostic,
+} from "./reader-render-diagnostics";
 import { useAmbientSound } from "./ambient-sound";
 import { MusicPlaylist } from "./music-playlist";
 import {
@@ -1830,6 +1836,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
       return {};
     }
   });
+  const readerMemoryRef = useRef(readerMemory);
   const readerDocumentRef = useRef<HTMLDivElement>(null);
   const highlightNoteEditorRef = useRef<HTMLTextAreaElement>(null);
   const readerScrollFrameRef = useRef(0);
@@ -1987,6 +1994,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
   }, [masterPaneOpen, readerClosing, selectedEntry, selectedProblem, view]);
 
   useEffect(() => {
+    readerMemoryRef.current = readerMemory;
     window.sessionStorage.setItem("interview-arc-reader-memory-v1", JSON.stringify(readerMemory));
   }, [readerMemory]);
 
@@ -4545,6 +4553,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
     const workspaceChanged = activeWorkspace !== "interview";
     if (workspaceChanged) setActiveWorkspace("interview");
     if (nextView === view && !workspaceChanged) return;
+    startNavigationDiagnostic(nextView, view);
     if (readerCloseTimerRef.current !== null) {
       window.clearTimeout(readerCloseTimerRef.current);
       readerCloseTimerRef.current = null;
@@ -6000,6 +6009,29 @@ export default function HomeClient({ content, today, engineering }: { content: C
         : view === "reviews"
           ? reviewNestedProblem
           : null;
+  const readerDiagnosticSurface = readerSelectedProblem
+    ? `${view}-solution`
+    : readerSelectedEntry
+      ? `${view}-attempt`
+      : null;
+  useEffect(() => {
+    recordReaderDiagnostic("react-commit", readerDiagnosticSurface ?? "none", {
+      readerOpen: Boolean(readerDiagnosticSurface),
+      closing: readerClosing,
+    });
+  });
+  useLayoutEffect(() => {
+    recordNavigationDiagnostic("commit", view);
+    let settledFrame = 0;
+    const paintFrame = window.requestAnimationFrame(() => {
+      recordNavigationDiagnostic("paint", view);
+      settledFrame = window.requestAnimationFrame(() => recordNavigationDiagnostic("settled", view));
+    });
+    return () => {
+      window.cancelAnimationFrame(paintFrame);
+      window.cancelAnimationFrame(settledFrame);
+    };
+  }, [view]);
   const ownerProblemProfile = readerSelectedProblem ? profileFor(readerSelectedProblem.type, readerSelectedProblem.question.id) : undefined;
   const canonicalProblemProfile = readerSelectedProblem?.question.solutionProfile;
   const selectedProblemProfile = ownerProblemProfile && canonicalProblemProfile ? {
@@ -6070,13 +6102,18 @@ export default function HomeClient({ content, today, engineering }: { content: C
 
   function rememberReaderGroup(groupId: string, open: boolean) {
     if (!readerMemoryKey) return;
-    setReaderMemory((current) => ({
-      ...current,
-      [readerMemoryKey]: {
-        ...(current[readerMemoryKey] ?? { groups: {} }),
-        groups: { ...(current[readerMemoryKey]?.groups ?? {}), [groupId]: open },
-      },
-    }));
+    setReaderMemory(() => {
+      const current = readerMemoryRef.current;
+      const next = {
+        ...current,
+        [readerMemoryKey]: {
+          ...(current[readerMemoryKey] ?? { groups: {} }),
+          groups: { ...(current[readerMemoryKey]?.groups ?? {}), [groupId]: open },
+        },
+      };
+      readerMemoryRef.current = next;
+      return next;
+    });
   }
 
   function rememberReaderPosition() {
@@ -6091,7 +6128,8 @@ export default function HomeClient({ content, today, engineering }: { content: C
         const offset = node.getBoundingClientRect().top - rootTop;
         return offset <= 28 ? node : best;
       }, null);
-      setReaderMemory((current) => ({
+      const current = readerMemoryRef.current;
+      const next = {
         ...current,
         [readerMemoryKey]: {
           ...(current[readerMemoryKey] ?? { groups: {} }),
@@ -6099,7 +6137,12 @@ export default function HomeClient({ content, today, engineering }: { content: C
           anchorId: anchor?.id,
           anchorOffset: anchor ? anchor.getBoundingClientRect().top - rootTop : undefined,
         },
-      }));
+      };
+      // Scroll position is persistence metadata, not render state. Keeping it
+      // in a ref avoids re-rendering the entire application on every scroll
+      // animation frame while preserving exact reader restoration.
+      readerMemoryRef.current = next;
+      window.sessionStorage.setItem("interview-arc-reader-memory-v1", JSON.stringify(next));
     });
   }
 
@@ -6107,7 +6150,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
     if (!readerMemoryKey) return;
     const frame = window.requestAnimationFrame(() => {
       const root = readerDocumentRef.current;
-      const memory = readerMemory[readerMemoryKey];
+      const memory = readerMemoryRef.current[readerMemoryKey];
       if (!root || !memory) return;
       const anchor = memory.anchorId ? document.getElementById(memory.anchorId) : null;
       if (anchor && root.contains(anchor)) {
@@ -6428,16 +6471,21 @@ export default function HomeClient({ content, today, engineering }: { content: C
   function setEveryReaderGroup(open: boolean) {
     if (!readerMemoryKey) return;
     const groups = [...(readerDocumentRef.current?.querySelectorAll<HTMLDetailsElement>("details.reader-group") ?? [])];
-    setReaderMemory((current) => ({
-      ...current,
-      [readerMemoryKey]: {
-        ...(current[readerMemoryKey] ?? { groups: {} }),
-        groups: {
-          ...(current[readerMemoryKey]?.groups ?? {}),
-          ...Object.fromEntries(groups.map((group) => [group.id, open])),
+    setReaderMemory(() => {
+      const current = readerMemoryRef.current;
+      const next = {
+        ...current,
+        [readerMemoryKey]: {
+          ...(current[readerMemoryKey] ?? { groups: {} }),
+          groups: {
+            ...(current[readerMemoryKey]?.groups ?? {}),
+            ...Object.fromEntries(groups.map((group) => [group.id, open])),
+          },
         },
-      },
-    }));
+      };
+      readerMemoryRef.current = next;
+      return next;
+    });
   }
 
   function closeReaderPanel() {
@@ -6992,6 +7040,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
       pipWindow.document.body,
     )}
     </main>
+    <ReaderRenderDiagnosticsPanel surface={readerDiagnosticSurface} />
     <PetalField quiet={arrivalState === "entered"} paused={!petalsEnabled} />
     <ArrivalRitual date={today} state={arrivalState} muted={soundMuted} trackName={trackName} trackArtist={trackArtist} playlist={ambientPlaylist} trackIndex={ambientTrackIndex} volume={musicVolume} onToggleMuted={toggleArrivalSound} onPreviousTrack={previousAmbientTrack} onNextTrack={nextAmbientTrack} onSelectTrack={chooseAmbientTrack} onVolumeChange={setMusicVolume} onEnter={enterArc} />
     </>
