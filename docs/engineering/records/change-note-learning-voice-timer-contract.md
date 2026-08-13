@@ -3,7 +3,7 @@ schemaVersion: 1
 id: change-note-learning-voice-timer-contract
 revision: 1
 type: change-note
-status: accepted
+status: released
 title: Expose the Learning Session timer to Arc Voice
 repository: interview-arc
 capabilityIds: ["learning-workspace","arc-voice"]
