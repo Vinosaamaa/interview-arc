@@ -37,33 +37,42 @@ artifact contains only an abbreviated solution.
 
 ## LeetCode
 
+Begin with an original, concise, self-contained problem restatement: objective,
+inputs/outputs, exact rules, solution-shaping constraints, material examples or
+visuals, and required API. Concision never permits a missing fact.
+
 1. Pattern recognition and constraints
 2. Best approach
 3. Reference implementation
 4. Correctness reasoning
 5. Time and space complexity
 6. Edge cases
-7. One or two meaningful alternatives
+7. Editorial-first approach catalog
 8. Common mistakes and recall cues
 9. Concise interview walkthrough
 10. References
 
+After the preferred solution, list every verified Editorial approach first as
+`### Editorial approach: <name>`, then add `### Generated alternative: <name>`
+only until there are at least three distinct valid approaches counting the
+preferred: `max(0, 3 - distinct(preferred + Editorial))`. Include all Editorial
+approaches even above three; deduplicate by algorithm, never title or cosmetic
+variation.
+
+Every catalog entry keeps the existing alternative contract: when/why to use
+it, complete algorithm and transition, invariant/proof, time/space complexity,
+edge cases, preferred comparison, and runnable Java code. Add independently
+written pseudocode when it materially improves understanding. Cite consulted
+Editorials, copy no official prose/code, and report unavailable access honestly.
+
+### Background authoring and publication reuse
+
+During final review, the parent returns the teaching answer immediately and
+delegates this complete Markdown profile to the activity's persistence child.
+The child authors and saves the D1 draft only from supplied verified facts;
+later finalization and publication reuse it without research or rewriting.
+
 The preferred implementation contains complete runnable Java and Python code.
-Each meaningful alternative is a separate `### Alternative: <name>` block and
-contains all of the following substantive `####` subsections:
-
-- when and why to choose it;
-- the complete algorithm and state transition;
-- the invariant and correctness reasoning;
-- explicit time and space complexity;
-- concrete edge cases;
-- tradeoffs versus the preferred approach; and
-- a complete runnable Java reference implementation.
-
-An alternative name or asymptotic-complexity sentence is not an alternative.
-Do not manufacture a cosmetic variant; select the strongest genuinely useful
-approach or approaches, including a simpler or more general option when that
-comparison teaches a real tradeoff.
 
 Use normalized technique tags such as `dfs`, `sliding-window`,
 `topological-sort`, or `binary-search-on-answer`.

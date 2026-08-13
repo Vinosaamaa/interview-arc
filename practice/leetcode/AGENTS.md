@@ -79,8 +79,9 @@ Use this bounded warm startup:
 
 Verify the public number, title, canonical URL, slug, and live Java API from the
 bank, user URL, or another permitted public source. Never invent them. Present
-an original concise restatement, constraints, examples, and required Java API;
-do not copy protected statement prose.
+an original concise, self-contained restatement covering the objective,
+inputs/outputs, exact rules, solution-shaping constraints, material examples,
+and required Java API. Omit no fact needed to solve and copy no protected prose.
 
 Account for every material graph, tree, grid, matrix, geometry, or diagram in
 the examples. Reproduce faithfully representable relationships as compact
@@ -238,18 +239,23 @@ review. After the permitted Editorial check:
 - ground strengths and gaps only in observed reasoning/submitted code;
 - explain the concrete correctness, implementation, or communication issue;
 - present the strongest approach;
-- for every Editorial approach mentioned, explain its full algorithm, core
-  state and transition, invariant/correctness, complexity, edge cases, and
-  tradeoff; names alone are insufficient;
+- teach the complete Editorial-first approach catalog required by
+  `solution-profiles.md` deeply enough to reconstruct every algorithm; use
+  pseudocode when it clarifies non-obvious mechanics, never a name-only summary;
 - provide a complete independently written Java reference implementation for
   Accepted and every explicit final review;
-- cover correctness invariant, time/space complexity, edge cases, meaningful
-  alternatives with complete runnable reference code, key lesson, and a
-  follow-up/reimplementation direction;
+- cover correctness invariant, time/space complexity, edge cases, key lesson,
+  and a follow-up/reimplementation direction;
 - state unavailable evidence and Editorial access honestly.
 
 Generated reference code is clearly separate from the user's attempt. Review
 does not authorize timer, outcome, or workbench mutation.
+
+The terminal review teaches the approaches; it does not dump every full
+catalog implementation. In that turn, delegate the complete Markdown profile
+to the activity's persistence child under `solution-profiles.md`, then return
+without waiting. The child authors and saves the draft from supplied verified
+facts; it never browses or invents. Do not print the full profile unless asked.
 
 ## Code Attempt Boundary
 
@@ -285,11 +291,12 @@ transcript evidence.
 - observed transcript scope and evidence-grounded review;
 - original standalone best solution and mandatory complete model answer;
 - Java-first code, correctness, complexity, and edge cases;
-- one or two meaningful alternatives, each with a complete algorithm,
-  invariant/proof, complexity, edge cases, preferred-approach comparison, and
-  runnable Java reference code;
+- the complete ordered approach catalog required by `solution-profiles.md`;
 - only references actually consulted;
 - available Delivery Coach evidence (queued/failed analysis never blocks).
+
+Promote the exact background-authored profile. If it is missing or incomplete, leave
+finalization blocked; the coordinator never fills it.
 
 Complete finalizations use the classification operation ID as a durable write
 identity. Poll `get_specialist_write_status` until the returned receipt is
