@@ -313,6 +313,60 @@ Attempts an invalid historical deletion.
   assert.doesNotMatch(result.stderr, /TypeError/);
 });
 
+test("historical receipt size is rejected before the batch body is loaded", (t) => {
+  const cwd = createRepository(t);
+  const base = git(cwd, ["rev-parse", "HEAD"]);
+  write(cwd, "docs/engineering/changes/pr-312.md", `---
+schemaVersion: 1
+repository: interview-arc
+pr: 312
+title: Fixture receipt
+classification: none
+richRecordRefs: []
+reconstructed: false
+---
+# Fixture receipt
+
+Attempts an oversized historical publication batch.
+`);
+  write(cwd, "docs/engineering/changes/pr-1.md", `---
+schemaVersion: 1
+repository: interview-arc
+pr: 1
+title: Oversized historical receipt
+classification: none
+richRecordRefs: []
+reconstructed: true
+---
+# Oversized historical receipt
+
+${"x".repeat(270_000)}
+`);
+  write(cwd, "docs/engineering/backfill/pr-312.json", `${JSON.stringify({
+    schemaVersion: 1,
+    repository: "interview-arc",
+    pullRequest: 312,
+    privacyAuthorizationUrl: "https://github.com/example/interview-arc/issues/313#issuecomment-123456",
+    receiptPaths: ["docs/engineering/changes/pr-1.md"],
+    recordRefs: [],
+  }, null, 2)}\n`);
+  git(cwd, ["add", "docs/engineering"]);
+  git(cwd, ["commit", "--quiet", "-m", "oversized history"]);
+  const head = git(cwd, ["rev-parse", "HEAD"]);
+
+  const result = runValidator(cwd, {
+    pull_request: {
+      number: 312,
+      body: "## Engineering impact\n\n- [x] None — reason: This PR attempts to publish one historical evidence batch.",
+      base: { sha: base },
+      head: { sha: head },
+    },
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /exceeds the 262144-byte safety limit/);
+});
+
 test("historical batch validation is exact, bounded, add-only, and privacy-authorized", () => {
   const manifest = {
     schemaVersion: 1,

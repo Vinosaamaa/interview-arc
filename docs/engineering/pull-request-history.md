@@ -119,9 +119,10 @@ historical evidence without asserting a new current architecture change. It also
 adds exactly one
 `docs/engineering/backfill/pr-<current-pr-number>.json` manifest conforming to
 `docs/contracts/engineering-historical-backfill-batch.schema.json`. The manifest
-binds the review to at most 20 add-only reconstructed receipts and at most eight
-add-only rich records, plus the exact GitHub issue or pull-request comment where
-the user approved the residual-link privacy disposition.
+binds the review to schema-bounded add-only reconstructed receipts and rich
+records, plus the exact GitHub issue or pull-request comment where the user
+approved the residual-link privacy disposition. The versioned schema is the
+single source for all collection limits.
 
 The required validation gate rejects unmanifested files, modifications or
 deletions of accepted history, repository/path/PR mismatches, forward receipts
