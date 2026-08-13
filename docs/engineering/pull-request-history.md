@@ -113,4 +113,41 @@ A backfill coordinator uses the same contracts; it does not author into a local 
 
 Backfill batches should be bounded and reviewable. Existing accepted history is corrected by a new reviewed Git change; published rich records continue to use their amendment and supersession model rather than silent narrative replacement.
 
+Each publication pull request keeps its own forward-authored `reconstructed: false`
+receipt and selects `None` with a concrete reason because the batch publishes
+historical evidence without asserting a new current architecture change. It also
+adds exactly one
+`docs/engineering/backfill/pr-<current-pr-number>.json` manifest conforming to
+`docs/contracts/engineering-historical-backfill-batch.schema.json`. The manifest
+binds the review to schema-bounded add-only reconstructed receipts and rich
+records, plus the exact GitHub issue or pull-request comment where the user
+approved the residual-link privacy disposition. The versioned schema is the
+single source for all collection limits.
+
+The required validation gate rejects unmanifested files, modifications or
+deletions of accepted history, repository/path/PR mismatches, forward receipts
+masquerading as reconstructed history, dangling rich records, and material
+receipts whose exact `id@revision` targets are missing or have the wrong type.
+Rich owners land before, or in the same bounded batch as, the receipts that
+depend on them. A generic receipt-first order must never leave unresolved rich
+references.
+
+`recordRefs` enumerates the exact union of rich revisions used by every receipt
+in the batch, including already-accepted owners. `addedRecordRefs` is its
+schema-bounded subset added by this pull request. This keeps the manifest
+complete without forcing an accepted cluster owner to be recreated in every
+dependent receipt batch.
+
+The authorization URL is not merely format-checked. Hosted validation reads the
+owning-repository comment, requires repository-owner authorship, and requires
+the exact sentence `I authorize publication of this bounded historical
+Engineering backfill batch under the residual-link policy.` This authorization
+approves the identified bounded batch; it does not authorize history rewrites,
+evidence deletion, visibility changes, or later batches.
+
+The batch manifest is review metadata, not narrative content and not a generated
+website input. The canonical historical receipts and rich Markdown remain the
+only content sources; normal builds still derive all JSON, search, backlinks,
+Statistics, and standalone HTML.
+
 An accepted rich record is never deleted. Corrections add a reviewed amendment or superseding revision so existing immutable links, receipts, and backlinks keep resolving to the evidence originally accepted.

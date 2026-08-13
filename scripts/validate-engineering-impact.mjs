@@ -21,6 +21,23 @@ const PLACEHOLDER_REASONS = new Set([
 const RECORD_REF_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*@[1-9]\d*$/;
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const TRUSTED_GITHUB_REMOTE_PATTERN = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\.git$/;
+const HISTORICAL_BATCH_SCHEMA = JSON.parse(readFileSync(new URL(
+  "../docs/contracts/engineering-historical-backfill-batch.schema.json",
+  import.meta.url,
+), "utf8"));
+const HISTORICAL_BATCH_RECEIPT_LIMIT = HISTORICAL_BATCH_SCHEMA.properties.receiptPaths.maxItems;
+const HISTORICAL_BATCH_AUTHORIZATION_PATTERN = new RegExp(
+  HISTORICAL_BATCH_SCHEMA.properties.privacyAuthorizationUrl.pattern,
+);
+const HISTORICAL_BATCH_RECEIPT_PATH_PATTERN = new RegExp(
+  HISTORICAL_BATCH_SCHEMA.properties.receiptPaths.items.pattern,
+);
+const HISTORICAL_BATCH_RECORD_REF_PATTERN = new RegExp(
+  HISTORICAL_BATCH_SCHEMA.properties.recordRefs.items.pattern,
+);
+const MAX_ENGINEERING_DOCUMENT_BYTES = 256 * 1024;
+const MAX_ENGINEERING_BATCH_BYTES = 8 * 1024 * 1024;
+const HISTORICAL_AUTHORIZATION_TEXT = "I authorize publication of this bounded historical Engineering backfill batch under the residual-link policy.";
 
 function selectedClassifications(body) {
   const selected = [];
@@ -124,6 +141,174 @@ export function validateEngineeringImpact({
     throw new Error("A material Pull Request Receipt must link every exact rich Engineering record revision changed by the pull request.");
   }
   return { classification: choice.classification, changedFiles };
+}
+
+function equalStringSets(left, right) {
+  const normalizedLeft = [...new Set(left)].sort();
+  const normalizedRight = [...new Set(right)].sort();
+  return normalizedLeft.length === left.length && normalizedRight.length === right.length &&
+    normalizedLeft.length === normalizedRight.length &&
+    normalizedLeft.every((value, index) => value === normalizedRight[index]);
+}
+
+function assertHistoricalManifestShape(manifest) {
+  if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
+    throw new Error("The historical batch manifest must be a JSON object.");
+  }
+  const expectedKeys = HISTORICAL_BATCH_SCHEMA.required;
+  if (!equalStringSets(Object.keys(manifest), expectedKeys)) {
+    throw new Error("The historical batch manifest has unsupported or missing fields.");
+  }
+  const properties = HISTORICAL_BATCH_SCHEMA.properties;
+  const recordRefsAreValid = (value, property) => Array.isArray(value) &&
+    value.length <= property.maxItems && new Set(value).size === value.length &&
+    value.every((ref) => typeof ref === "string" && ref.length <= property.items.maxLength &&
+      HISTORICAL_BATCH_RECORD_REF_PATTERN.test(ref));
+  if (manifest.schemaVersion !== properties.schemaVersion.const || typeof manifest.repository !== "string" ||
+      !(new RegExp(properties.repository.pattern)).test(manifest.repository) || !Number.isInteger(manifest.pullRequest) ||
+      manifest.pullRequest < properties.pullRequest.minimum || typeof manifest.privacyAuthorizationUrl !== "string" ||
+      manifest.privacyAuthorizationUrl.length > properties.privacyAuthorizationUrl.maxLength ||
+      !HISTORICAL_BATCH_AUTHORIZATION_PATTERN.test(manifest.privacyAuthorizationUrl) ||
+      !Array.isArray(manifest.receiptPaths) || manifest.receiptPaths.length < properties.receiptPaths.minItems ||
+      manifest.receiptPaths.length > HISTORICAL_BATCH_RECEIPT_LIMIT ||
+      new Set(manifest.receiptPaths).size !== manifest.receiptPaths.length ||
+      manifest.receiptPaths.some((receiptPath) => typeof receiptPath !== "string" ||
+        receiptPath.length > properties.receiptPaths.items.maxLength ||
+        !HISTORICAL_BATCH_RECEIPT_PATH_PATTERN.test(receiptPath)) ||
+      !recordRefsAreValid(manifest.recordRefs, properties.recordRefs) ||
+      !recordRefsAreValid(manifest.addedRecordRefs, properties.addedRecordRefs)) {
+    throw new Error("The historical batch manifest has invalid bounded fields.");
+  }
+}
+
+function validateHistoricalManifest({
+  manifest,
+  manifestPath,
+  pullRequestNumber,
+  repository,
+  repositoryFullName,
+}) {
+  assertHistoricalManifestShape(manifest);
+  if (!manifest || manifest.schemaVersion !== 1 || manifest.repository !== repository ||
+      manifest.pullRequest !== pullRequestNumber) {
+    throw new Error("A historical batch manifest must match the current repository and pull request.");
+  }
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repositoryFullName ?? "") ||
+      !HISTORICAL_BATCH_AUTHORIZATION_PATTERN.test(manifest.privacyAuthorizationUrl ?? "") ||
+      !manifest.privacyAuthorizationUrl.startsWith(`https://github.com/${repositoryFullName}/`)) {
+    throw new Error("A historical batch requires an explicit privacy authorization comment URL in the owning GitHub repository.");
+  }
+  if (!Array.isArray(manifest.receiptPaths) || manifest.receiptPaths.length < 1 ||
+      manifest.receiptPaths.length > HISTORICAL_BATCH_RECEIPT_LIMIT ||
+      manifest.receiptPaths.some((path) => !HISTORICAL_BATCH_RECEIPT_PATH_PATTERN.test(path))) {
+    throw new Error(`A historical batch must declare between 1 and ${HISTORICAL_BATCH_RECEIPT_LIMIT} canonical receipt paths.`);
+  }
+  const expectedManifestPath = `docs/engineering/backfill/pr-${pullRequestNumber}.json`;
+  if (manifestPath !== expectedManifestPath) {
+    throw new Error("The historical batch manifest path must match the current pull request number.");
+  }
+  const forwardReceiptPath = `docs/engineering/changes/pr-${pullRequestNumber}.md`;
+  if (manifest.receiptPaths.includes(forwardReceiptPath)) {
+    throw new Error("A historical batch manifest must not claim the current pull request's forward receipt.");
+  }
+  return { expectedManifestPath, forwardReceiptPath };
+}
+
+function validateHistoricalChangedFiles({
+  manifest,
+  manifestPath,
+  changedFiles,
+  changedRecords,
+  historicalReceipts,
+  baseExistingPaths = [],
+  pullRequestNumber,
+}) {
+  if (!equalStringSets(manifest.receiptPaths, historicalReceipts.map((receipt) => receipt.path)) ||
+      !equalStringSets(manifest.addedRecordRefs, changedRecords.map((record) => record.ref))) {
+    throw new Error("The historical batch manifest must enumerate the changed reconstructed receipts and rich records exactly.");
+  }
+  const receiptRefs = historicalReceipts.flatMap((receipt) => receipt.richRecordRefs);
+  if (!equalStringSets(manifest.recordRefs, [...new Set(receiptRefs)])) {
+    throw new Error("The historical batch manifest must enumerate exactly the rich records referenced by reconstructed receipts.");
+  }
+  const allowedChangedFiles = [`docs/engineering/changes/pr-${pullRequestNumber}.md`, manifestPath, ...manifest.receiptPaths,
+    ...manifest.addedRecordRefs.map((ref) => `docs/engineering/records/${ref.slice(0, ref.lastIndexOf("@"))}.md`)];
+  if (!equalStringSets(allowedChangedFiles, changedFiles)) {
+    throw new Error("A historical publication pull request may contain only its forward receipt, batch manifest, and declared historical documents.");
+  }
+  if (baseExistingPaths.length > 0) {
+    throw new Error("Historical batch documents are add-only; accepted receipts and records cannot be modified or deleted.");
+  }
+}
+
+function validateHistoricalReceiptLinks({
+  historicalReceipts,
+  linkedRecords,
+  pullRequestNumber,
+  repository,
+}) {
+  const linkedByRef = new Map(linkedRecords.map((record) => [record.ref, record]));
+  for (const receipt of historicalReceipts) {
+    const pathMatch = receipt.path.match(/^docs\/engineering\/changes\/pr-([1-9]\d*)\.md$/);
+    if (!pathMatch || receipt.pr !== Number(pathMatch[1]) || receipt.pr === pullRequestNumber ||
+        receipt.repository !== repository || receipt.reconstructed !== true) {
+      throw new Error("Every historical receipt must be reconstructed, repository-owned, and match its numbered path.");
+    }
+    if (receipt.classification === "none") {
+      if (receipt.richRecordRefs.length > 0) {
+        throw new Error("A historical `none` receipt must not link rich Engineering records.");
+      }
+      continue;
+    }
+    if (receipt.richRecordRefs.length === 0 || receipt.richRecordRefs.some((ref) => {
+      const record = linkedByRef.get(ref);
+      return !record || !record.existsAtHead || record.type !== receipt.classification;
+    })) {
+      throw new Error("Every material historical receipt must link exact matching rich record revisions at the pull request head.");
+    }
+  }
+}
+
+function validateHistoricalRecordLinks(changedRecords, historicalReceipts) {
+  const referenced = new Set(historicalReceipts.flatMap((receipt) => receipt.richRecordRefs));
+  if (changedRecords.some((record) => !record.existsAtHead || !referenced.has(record.ref))) {
+    throw new Error("Every rich record added by a historical batch must exist at head and be linked by a reconstructed receipt.");
+  }
+}
+
+export function validateHistoricalBatch(input) {
+  validateHistoricalManifest(input);
+  validateHistoricalChangedFiles(input);
+  validateHistoricalReceiptLinks(input);
+  validateHistoricalRecordLinks(input.changedRecords, input.historicalReceipts);
+  return {
+    historicalReceiptCount: input.historicalReceipts.length,
+    historicalRecordCount: input.changedRecords.length,
+  };
+}
+
+function loadAuthorizationComment(repositoryFullName, commentId) {
+  const result = spawnSync("gh", ["api", `repos/${repositoryFullName}/issues/comments/${commentId}`], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: 1024 * 1024,
+  });
+  if (result.status !== 0) throw new Error("Unable to verify the historical batch privacy authorization comment.");
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    throw new Error("The historical batch privacy authorization response is invalid.");
+  }
+}
+
+export function verifyHistoricalAuthorization(manifest, repositoryFullName, loadComment = loadAuthorizationComment) {
+  const match = manifest.privacyAuthorizationUrl.match(/#issuecomment-([1-9]\d*)$/);
+  if (!match) throw new Error("The historical batch privacy authorization comment URL is invalid.");
+  const comment = loadComment(repositoryFullName, match[1]);
+  if (comment?.html_url !== manifest.privacyAuthorizationUrl || comment?.author_association !== "OWNER" ||
+      comment?.body?.trim() !== HISTORICAL_AUTHORIZATION_TEXT) {
+    throw new Error("The historical batch requires an exact repository-owner privacy authorization comment.");
+  }
 }
 
 function changedFilesBetween(base, head) {
@@ -235,6 +420,17 @@ function parseReceipt(markdown, path) {
   };
 }
 
+function parseHistoricalBatchManifest(markdown) {
+  let manifest;
+  try {
+    manifest = JSON.parse(markdown);
+  } catch {
+    throw new Error("The historical batch manifest must be valid JSON.");
+  }
+  assertHistoricalManifestShape(manifest);
+  return manifest;
+}
+
 function parseRecord(markdown) {
   const fields = leadingFrontmatter(markdown, "Engineering record");
   const id = fields.get("id") ?? "";
@@ -247,8 +443,36 @@ function parseRecord(markdown) {
   return { type, ref: `${id}@${revisionValue}` };
 }
 
+function blobSizesAt(revision, paths) {
+  if (paths.length === 0) return [];
+  const requests = paths.map((path) => `${revision}:${path}`);
+  const result = spawnSync("git", ["cat-file", "--batch-check"], {
+    input: `${requests.join("\n")}\n`,
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "pipe"],
+    maxBuffer: 1024 * 1024,
+  });
+  if (result.status !== 0) throw new Error("Unable to inspect canonical Engineering document sizes.");
+  const lines = result.stdout.trimEnd().split("\n");
+  if (lines.length !== requests.length) throw new Error("Git returned an invalid canonical Engineering size response.");
+  return lines.map((line, index) => {
+    if (line === `${requests[index]} missing`) return null;
+    const match = line.match(/^[0-9a-f]{40} blob (0|[1-9]\d*)$/);
+    if (!match) throw new Error("Git returned an invalid canonical Engineering size response.");
+    return Number(match[1]);
+  });
+}
+
 function blobsAt(revision, paths) {
   if (paths.length === 0) return [];
+  const sizes = blobSizesAt(revision, paths);
+  if (sizes.some((size) => size !== null && size > MAX_ENGINEERING_DOCUMENT_BYTES)) {
+    throw new Error(`A canonical Engineering document exceeds the ${MAX_ENGINEERING_DOCUMENT_BYTES}-byte safety limit.`);
+  }
+  const totalBytes = sizes.reduce((sum, size) => sum + (size ?? 0), 0);
+  if (totalBytes > MAX_ENGINEERING_BATCH_BYTES) {
+    throw new Error(`Canonical Engineering documents exceed the ${MAX_ENGINEERING_BATCH_BYTES}-byte batch safety limit.`);
+  }
   const requests = paths.map((path) => `${revision}:${path}`);
   const result = spawnSync("git", ["cat-file", "--batch"], {
     input: `${requests.join("\n")}\n`,
@@ -304,10 +528,13 @@ function main() {
   const event = JSON.parse(readFileSync(eventPath, "utf8"));
   const pullRequest = event.pull_request;
   const repository = event.repository?.name ?? pullRequest?.base?.repo?.name;
+  const repositoryFullName = event.repository?.full_name;
   if (!pullRequest?.base?.sha || !pullRequest?.head?.sha || !Number.isInteger(pullRequest.number) ||
       pullRequest.number < 1 || typeof pullRequest.title !== "string" || !pullRequest.title ||
-      typeof repository !== "string" || !REPOSITORY_PATTERN.test(repository)) {
-    throw new Error("Pull request base, head, number, title, and repository are required.");
+      typeof repository !== "string" || !REPOSITORY_PATTERN.test(repository) ||
+      !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repositoryFullName ?? "") ||
+      !repositoryFullName.endsWith(`/${repository}`)) {
+    throw new Error("Pull request base, head, number, title, and exact event repository are required.");
   }
   ensureCommit(pullRequest.base.sha, "origin");
   ensureCommit(pullRequest.head.sha, trustedHeadRemote(pullRequest.head.repo?.clone_url));
@@ -318,38 +545,83 @@ function main() {
   }
   const expectedReceiptPath = `docs/engineering/changes/pr-${pullRequest.number}.md`;
   const receiptPaths = changedFiles.filter((path) => path.startsWith("docs/engineering/changes/") && path.endsWith(".md"));
-  const receipt = receiptPaths.length === 1 && receiptPaths[0] === expectedReceiptPath
-    ? (() => {
-        const [markdown] = blobsAt(pullRequest.head.sha, [expectedReceiptPath]);
-        return markdown === null ? null : parseReceipt(markdown, expectedReceiptPath);
-      })()
-    : null;
-  const linkedRecordPaths = receipt?.richRecordRefs.map((ref) =>
-    `docs/engineering/records/${ref.slice(0, ref.lastIndexOf("@"))}.md`) ?? [];
+  const manifestPaths = changedFiles.filter((path) => path.startsWith("docs/engineering/backfill/") && path.endsWith(".json"));
+  const expectedManifestPath = `docs/engineering/backfill/pr-${pullRequest.number}.json`;
+  const historicalMode = receiptPaths.length > 1 || manifestPaths.length > 0;
+  if (historicalMode) {
+    const canonicalChangedPaths = [...receiptPaths, ...changedRecordMarkdown];
+    if (blobSizesAt(pullRequest.head.sha, canonicalChangedPaths).some((size) => size === null)) {
+      throw new Error("Historical batch documents are add-only; changed canonical receipts and records must exist at the pull request head.");
+    }
+  }
+  const [receiptMarkdown] = blobsAt(pullRequest.head.sha, [expectedReceiptPath]);
+  const receipt = receiptMarkdown === null ? null : parseReceipt(receiptMarkdown, expectedReceiptPath);
+  let manifest = null;
+  let historicalReceipts = [];
+  if (historicalMode) {
+    if (manifestPaths.length !== 1 || manifestPaths[0] !== expectedManifestPath) {
+      throw new Error("A historical publication pull request must change its one numbered batch manifest.");
+    }
+    const [manifestMarkdown] = blobsAt(pullRequest.head.sha, [expectedManifestPath]);
+    if (manifestMarkdown === null) throw new Error("The historical batch manifest must exist at the pull request head.");
+    manifest = parseHistoricalBatchManifest(manifestMarkdown);
+    verifyHistoricalAuthorization(manifest, repositoryFullName);
+    const historicalReceiptMarkdown = blobsAt(pullRequest.head.sha, manifest.receiptPaths);
+    historicalReceipts = historicalReceiptMarkdown.map((markdown, index) => {
+      if (markdown === null) throw new Error("Every declared historical receipt must exist at the pull request head.");
+      return parseReceipt(markdown, manifest.receiptPaths[index]);
+    });
+  }
+  const allReceiptRefs = [...(receipt?.richRecordRefs ?? []), ...historicalReceipts.flatMap((entry) => entry.richRecordRefs)];
+  const linkedRecordPaths = allReceiptRefs.map((ref) =>
+    `docs/engineering/records/${ref.slice(0, ref.lastIndexOf("@"))}.md`);
   const recordPaths = [...new Set([...changedRecordMarkdown, ...linkedRecordPaths])];
   const records = recordsAt(recordPaths, pullRequest.head.sha, pullRequest.base.sha);
   const recordsByPath = new Map(recordPaths.map((path, index) => [path, records[index]]));
   const changedRecords = changedRecordMarkdown.map((path) => recordsByPath.get(path));
-  const linkedRecords = receipt?.richRecordRefs.map((ref, index) => {
+  const linkedRecords = allReceiptRefs.map((ref, index) => {
     const record = recordsByPath.get(linkedRecordPaths[index]);
     if (!record || record.ref !== ref) {
       throw new Error("A material Pull Request Receipt must link exact rich Engineering record revisions at the pull request head.");
     }
     return record;
   }) ?? [];
+  const historicalPaths = historicalMode
+    ? [expectedManifestPath, ...manifest.receiptPaths, ...changedRecordMarkdown]
+    : [];
+  const forwardChangedFiles = changedFiles.filter((path) => !historicalPaths.includes(path));
   const result = validateEngineeringImpact({
     body: pullRequest.body ?? "",
-    changedFiles,
-    recordTypes: changedRecords.map((record) => record.type),
-    recordRefs: changedRecords.map((record) => record.ref),
-    linkedRecordTypes: linkedRecords.map((record) => record.type),
-    linkedRecordRefs: linkedRecords.map((record) => record.ref),
-    deletedRecordCount: records.filter((record) => !record.existsAtHead).length,
+    changedFiles: forwardChangedFiles,
+    recordTypes: historicalMode ? [] : changedRecords.map((record) => record.type),
+    recordRefs: historicalMode ? [] : changedRecords.map((record) => record.ref),
+    linkedRecordTypes: historicalMode ? [] : linkedRecords.map((record) => record.type),
+    linkedRecordRefs: historicalMode ? [] : linkedRecords.map((record) => record.ref),
+    deletedRecordCount: historicalMode ? 0 : records.filter((record) => !record.existsAtHead).length,
     pullRequestNumber: pullRequest.number,
     pullRequestTitle: pullRequest.title,
     repository,
     receipt,
   });
+  if (historicalMode) {
+    const historicalDocumentPaths = [...manifest.receiptPaths, ...changedRecordMarkdown];
+    const baseDocuments = blobsAt(pullRequest.base.sha, historicalDocumentPaths);
+    const baseExistingPaths = historicalDocumentPaths.filter((_, index) => baseDocuments[index] !== null);
+    const historicalResult = validateHistoricalBatch({
+      manifest,
+      manifestPath: expectedManifestPath,
+      changedFiles,
+      changedRecords,
+      historicalReceipts,
+      linkedRecords,
+      baseExistingPaths,
+      pullRequestNumber: pullRequest.number,
+      repository,
+      repositoryFullName,
+    });
+    process.stdout.write(`Engineering impact: ${result.classification}; historical batch: ${historicalResult.historicalReceiptCount} receipt(s), ${historicalResult.historicalRecordCount} rich record(s).\n`);
+    return;
+  }
   process.stdout.write(`Engineering impact: ${result.classification}; ${result.changedFiles.length} changed file(s).\n`);
 }
 
