@@ -146,13 +146,16 @@ export function validateHistoricalBatch({
   baseExistingPaths = [],
   pullRequestNumber,
   repository,
+  repositoryFullName,
 }) {
   if (!manifest || manifest.schemaVersion !== 1 || manifest.repository !== repository ||
       manifest.pullRequest !== pullRequestNumber) {
     throw new Error("A historical batch manifest must match the current repository and pull request.");
   }
-  if (!HISTORICAL_BATCH_AUTHORIZATION_PATTERN.test(manifest.privacyAuthorizationUrl ?? "")) {
-    throw new Error("A historical batch requires an explicit GitHub privacy authorization comment URL.");
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repositoryFullName ?? "") ||
+      !HISTORICAL_BATCH_AUTHORIZATION_PATTERN.test(manifest.privacyAuthorizationUrl ?? "") ||
+      !manifest.privacyAuthorizationUrl.startsWith(`https://github.com/${repositoryFullName}/`)) {
+    throw new Error("A historical batch requires an explicit privacy authorization comment URL in the owning GitHub repository.");
   }
   if (!Array.isArray(manifest.receiptPaths) || manifest.receiptPaths.length < 1 ||
       manifest.receiptPaths.length > HISTORICAL_BATCH_RECEIPT_LIMIT ||
@@ -338,6 +341,20 @@ function parseHistoricalBatchManifest(markdown, path) {
   if (!equalStringSets(Object.keys(manifest), expectedKeys)) {
     throw new Error("The historical batch manifest has unsupported or missing fields.");
   }
+  if (manifest.schemaVersion !== 1 || typeof manifest.repository !== "string" ||
+      !REPOSITORY_PATTERN.test(manifest.repository) || !Number.isInteger(manifest.pullRequest) ||
+      manifest.pullRequest < 1 || typeof manifest.privacyAuthorizationUrl !== "string" ||
+      manifest.privacyAuthorizationUrl.length > 2048 ||
+      !Array.isArray(manifest.receiptPaths) || manifest.receiptPaths.length < 1 ||
+      manifest.receiptPaths.length > HISTORICAL_BATCH_RECEIPT_LIMIT ||
+      new Set(manifest.receiptPaths).size !== manifest.receiptPaths.length ||
+      manifest.receiptPaths.some((receiptPath) => typeof receiptPath !== "string" || receiptPath.length > 180 ||
+        !/^docs\/engineering\/changes\/pr-[1-9]\d*\.md$/.test(receiptPath)) ||
+      !Array.isArray(manifest.recordRefs) || manifest.recordRefs.length > HISTORICAL_BATCH_RECORD_LIMIT ||
+      new Set(manifest.recordRefs).size !== manifest.recordRefs.length ||
+      manifest.recordRefs.some((ref) => typeof ref !== "string" || ref.length > 180 || !RECORD_REF_PATTERN.test(ref))) {
+    throw new Error("The historical batch manifest has invalid bounded fields.");
+  }
   return { ...manifest, path };
 }
 
@@ -410,6 +427,7 @@ function main() {
   const event = JSON.parse(readFileSync(eventPath, "utf8"));
   const pullRequest = event.pull_request;
   const repository = event.repository?.name ?? pullRequest?.base?.repo?.name;
+  const repositoryFullName = event.repository?.full_name ?? pullRequest?.base?.repo?.full_name;
   if (!pullRequest?.base?.sha || !pullRequest?.head?.sha || !Number.isInteger(pullRequest.number) ||
       pullRequest.number < 1 || typeof pullRequest.title !== "string" || !pullRequest.title ||
       typeof repository !== "string" || !REPOSITORY_PATTERN.test(repository)) {
@@ -488,6 +506,7 @@ function main() {
       baseExistingPaths,
       pullRequestNumber: pullRequest.number,
       repository,
+      repositoryFullName,
     });
     process.stdout.write(`Engineering impact: ${result.classification}; historical batch: ${historicalResult.historicalReceiptCount} receipt(s), ${historicalResult.historicalRecordCount} rich record(s).\n`);
     return;

@@ -63,7 +63,7 @@ function createRepository(t) {
 function runValidator(cwd, event) {
   const eventPath = join(cwd, "event.json");
   const normalizedEvent = {
-    repository: { name: "interview-arc", ...(event.repository ?? {}) },
+    repository: { name: "interview-arc", full_name: "example/interview-arc", ...(event.repository ?? {}) },
     ...event,
     pull_request: { title: "Fixture receipt", ...event.pull_request },
   };
@@ -287,6 +287,7 @@ test("historical batch validation is exact, bounded, add-only, and privacy-autho
     linkedRecords: [record],
     pullRequestNumber: 312,
     repository: "interview-arc",
+    repositoryFullName: "example/interview-arc",
   };
 
   assert.deepEqual(validateHistoricalBatch(input), {
@@ -295,7 +296,11 @@ test("historical batch validation is exact, bounded, add-only, and privacy-autho
   });
   assert.throws(
     () => validateHistoricalBatch({ ...input, manifest: { ...manifest, privacyAuthorizationUrl: "" } }),
-    /privacy authorization comment URL/,
+    /privacy authorization comment URL in the owning GitHub repository/,
+  );
+  assert.throws(
+    () => validateHistoricalBatch({ ...input, repositoryFullName: "another/interview-arc" }),
+    /owning GitHub repository/,
   );
   assert.throws(
     () => validateHistoricalBatch({ ...input, baseExistingPaths: [receipt.path] }),
