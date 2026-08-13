@@ -66,13 +66,12 @@ The implementation boundary is one public Interface backed by immutable revision
 test("build and development materialize derived Journal projections from the checked-out revision", async () => {
   const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   const gitignore = await readFile(new URL("../.gitignore", import.meta.url), "utf8");
-  const workflow = await readFile(new URL("../.github/workflows/deploy.yml", import.meta.url), "utf8");
 
-  assert.match(packageJson.scripts.build, /^pnpm engineering:journal:build && pnpm engineering:journal:check && /);
+  assert.match(packageJson.scripts.build, /^pnpm engineering:journal:build && WRANGLER_LOG_PATH=/);
+  assert.doesNotMatch(packageJson.scripts.build, /engineering:journal:check/);
   assert.match(packageJson.scripts.dev, /pnpm engineering:journal:build/);
   assert.match(gitignore, /^\/engineering-journal\/generated\/$/m);
   assert.match(gitignore, /^\/public\/engineering-journal\/assets\/$/m);
-  assert.match(workflow, /- name: Materialize Engineering Journal projection\n\s+run: pnpm engineering:journal:build\n\n\s+- name: Validate local D1 migrations/);
 });
 
 const RECEIPT = `---

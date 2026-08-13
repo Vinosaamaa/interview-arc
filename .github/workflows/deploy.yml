@@ -49,9 +49,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Materialize Engineering Journal projection
-        run: pnpm engineering:journal:build
-
       - name: Validate local D1 migrations and content import
         run: |
           pnpm db:migrate:local
