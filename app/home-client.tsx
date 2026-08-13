@@ -75,6 +75,7 @@ import {
 import { readMasterPanePreference, writeMasterPanePreference } from "./ui-preferences";
 import { acquireDocumentScrollLock, documentScrollLockRequired } from "./document-scroll-policy";
 import { effectiveProfileTags, isReusableSolutionProfile } from "./solution-profile-policy";
+import { isPastAttemptArtifact } from "./past-artifact-policy";
 import BehavioralFoundation from "./behavioral-foundation";
 import BehavioralTargetBindings from "./behavioral-target-bindings";
 import BehavioralTargetDesk from "./behavioral-target-desk";
@@ -4304,7 +4305,7 @@ export default function HomeClient({ content, today }: { content: ContentIndex; 
         deliveryAnalyses: draft.deliveryAnalyses[activity.id] ?? yesterdayDraft?.deliveryAnalyses[activity.id] ?? [],
       });
     }
-    for (const artifact of content.artifacts) {
+    for (const artifact of content.artifacts.filter(isPastAttemptArtifact)) {
       if (artifact.activityId && entries.some((entry) => entry.id === artifact.activityId)) continue;
       const inferredType: ActivityType = artifact.type === "leetcode" || artifact.type === "behavioral" ? artifact.type : "system_design";
       const preview = artifact.sections.find((section) => /summary|short answer|question/i.test(section.title))?.body ?? "Published interview record";

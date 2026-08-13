@@ -4,6 +4,10 @@ A Problem Bank item owns one current Solution Profile plus immutable revisions.
 Every completed attempt in Past links to the exact revision it produced. Past
 owns attempt-specific facts: transcript, feedback, timer, outcome, notes,
 session membership, and audio. Never copy a transcript into a Solution Profile.
+An independently published canonical Solution Profile revision is not a
+practice attempt and must never become its own Past row merely because it has a
+Git artifact; only an artifact with an exact `activity_id` may represent an
+attempt in Past.
 Behavioral attempts also retain their exact final-answer snapshot under
 `behavioral-final-answer-snapshots.md`; a later Profile revision never rewrites
 that historical answer.

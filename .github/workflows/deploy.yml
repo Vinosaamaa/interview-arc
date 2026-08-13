@@ -19,6 +19,7 @@ jobs:
     outputs:
       deploy_worker: ${{ steps.changes.outputs.deploy_worker }}
       repair_vortex_profile: ${{ steps.changes.outputs.repair_vortex_profile }}
+      repair_basic_calculator_profile: ${{ steps.changes.outputs.repair_basic_calculator_profile }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -59,22 +60,26 @@ jobs:
           if [[ "${{ github.event_name }}" != "push" ]]; then
             echo "deploy_worker=true" >> "$GITHUB_OUTPUT"
             echo "repair_vortex_profile=false" >> "$GITHUB_OUTPUT"
+            echo "repair_basic_calculator_profile=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           deploy_worker=false
           repair_vortex_profile=false
+          repair_basic_calculator_profile=false
           while IFS= read -r file; do
             case "$file" in
               scripts/repairs/vortex-profile-v2.json|scripts/repairs/vortex-profile-v2.mjs) repair_vortex_profile=true ;;
+              scripts/repairs/basic-calculator-profile-v2.json|scripts/repairs/basic-calculator-profile-v2.mjs) repair_basic_calculator_profile=true ;;
             esac
             case "$file" in
-              data/*|practice/*|audio-answers/*|docs/*|README.md|AGENTS.md) ;;
+              data/*|practice/*|audio-answers/*|docs/*|scripts/repairs/*|README.md|AGENTS.md) ;;
               *) deploy_worker=true ;;
             esac
           done < <(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}")
           echo "deploy_worker=$deploy_worker" >> "$GITHUB_OUTPUT"
           echo "repair_vortex_profile=$repair_vortex_profile" >> "$GITHUB_OUTPUT"
+          echo "repair_basic_calculator_profile=$repair_basic_calculator_profile" >> "$GITHUB_OUTPUT"
 
   publish:
     if: github.event_name != 'pull_request'
@@ -115,6 +120,22 @@ jobs:
         with:
           name: vortex-profile-v2-repair-receipt
           path: ${{ runner.temp }}/vortex-profile-v2-repair-receipt.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Apply guarded Basic Calculator Solution Profile revision 2 correction
+        if: needs.validate.outputs.repair_basic_calculator_profile == 'true'
+        run: >-
+          node scripts/repairs/basic-calculator-profile-v2.mjs
+          --remote --apply --confirm-exact-target
+          --receipt "$RUNNER_TEMP/basic-calculator-profile-v2-repair-receipt.json"
+
+      - name: Upload Basic Calculator correction receipt
+        if: always() && needs.validate.outputs.repair_basic_calculator_profile == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: basic-calculator-profile-v2-repair-receipt
+          path: ${{ runner.temp }}/basic-calculator-profile-v2-repair-receipt.json
           if-no-files-found: warn
           retention-days: 7
 
