@@ -24,6 +24,7 @@ import {
   attachLearningArtifactSchema,
   approveLearningEnrollmentSchema,
   controlLearningSessionSchema,
+  controlLearningVoiceTimerSchema,
   createLearningCourseBlueprintSchema,
   createLearningSessionSchema,
   finishLearningSessionSchema,
@@ -41,6 +42,7 @@ import {
   type AppendLearningTranscriptInput,
   type AttachLearningArtifactInput,
   type ControlLearningSessionInput,
+  type ControlLearningVoiceTimerInput,
   type CreateLearningCourseBlueprintInput,
   type CreateLearningSessionInput,
   type FinishLearningSessionInput,
@@ -58,6 +60,7 @@ export {
   attachLearningArtifactSchema,
   approveLearningEnrollmentSchema,
   controlLearningSessionSchema,
+  controlLearningVoiceTimerSchema,
   createLearningCourseBlueprintSchema,
   createLearningSessionSchema,
   finishLearningSessionSchema,
@@ -769,6 +772,12 @@ export async function appendLearningTranscript(ownerId: string, inputValue: unkn
   if (!session) throw new LearningError("learning_session_not_found", "That owner-private Learning Session is unavailable.");
   if (session.state === "completed") {
     throw new LearningError("learning_session_completed", "A completed Learning Session transcript is immutable.");
+  }
+  if (input.writer === "arc_voice" && session.state !== "running") {
+    throw new LearningError(
+      "learning_voice_session_not_running",
+      "Arc Voice can append text only while the exact Learning Session is running.",
+    );
   }
   if (session.transcriptRevision !== input.expectedTranscriptRevision) {
     throw new LearningError("learning_transcript_revision_conflict", "The transcript changed; reread it before retrying.");
@@ -1837,11 +1846,11 @@ export async function queryLearningSessions(ownerId: string, inputValue: unknown
   return { sessions, truncated: rows.length === 100 };
 }
 
-export async function readActiveLearningVoiceSessions(ownerId: string) {
+async function readLearningVoiceSessionsInState(ownerId: string, state: "running" | "paused") {
   const db = getDb();
   const sessions = await db.select().from(learningSessions).where(and(
     eq(learningSessions.ownerId, ownerId),
-    eq(learningSessions.state, "running"),
+    eq(learningSessions.state, state),
   )).orderBy(desc(learningSessions.updatedAt)).limit(2);
 
   return Promise.all(sessions.map(async (session) => {
@@ -1898,6 +1907,8 @@ export async function readActiveLearningVoiceSessions(ownerId: string) {
       lessonRevision: session.lessonRevision,
       lessonTitle: lessonRevision.title,
       state: session.state,
+      accumulatedSeconds: session.accumulatedSeconds,
+      revision: session.revision,
       transcriptRevision: session.transcriptRevision,
       nextTranscriptSequence: (lastTurnRows[0]?.sequence ?? -1) + 1,
       startedAt: session.startedAt,
@@ -1905,6 +1916,44 @@ export async function readActiveLearningVoiceSessions(ownerId: string) {
       evidencePolicy: "transcript_only" as const,
     };
   }));
+}
+
+export function readActiveLearningVoiceSessions(ownerId: string) {
+  return readLearningVoiceSessionsInState(ownerId, "running");
+}
+
+// A running Session always owns the Voice timer. When none is running, one
+// unique paused Session remains visible for Resume. Multiple paused Sessions
+// fail closed because Voice has no website selection signal with which to pick.
+export async function readCurrentLearningVoiceTimerSessions(ownerId: string) {
+  const running = await readLearningVoiceSessionsInState(ownerId, "running");
+  if (running.length > 0) return running;
+  return readLearningVoiceSessionsInState(ownerId, "paused");
+}
+
+export async function controlCurrentLearningVoiceTimer(ownerId: string, inputValue: unknown) {
+  const input = controlLearningVoiceTimerSchema.parse(inputValue) as ControlLearningVoiceTimerInput;
+  const delegatedInput: ControlLearningSessionInput = {
+    operationId: input.operationId,
+    sessionId: input.sessionId,
+    expectedRevision: input.expectedRevision,
+    action: input.action,
+    authorization: "explicit_user_instruction",
+  };
+  const requestFingerprint = await fingerprint(delegatedInput);
+  const replay = await replayLearningOperation(ownerId, input.operationId, requestFingerprint);
+  if (replay) return replay;
+
+  const candidates = await readCurrentLearningVoiceTimerSessions(ownerId);
+  if (candidates.length !== 1 || candidates[0].sessionId !== input.sessionId) {
+    throw new LearningError(
+      "learning_voice_timer_not_found",
+      candidates.length > 1
+        ? "Voice cannot choose between multiple paused Learning Sessions."
+        : "That Learning Session is not the current owner-private Voice timer.",
+    );
+  }
+  return controlLearningSession(ownerId, delegatedInput);
 }
 
 export async function assertLearningAudioForbidden(ownerId: string, subjectId: string) {
