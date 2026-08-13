@@ -164,8 +164,10 @@ work, not a separate operation that the user must remember to request.
    Engineering-impact checkbox in the pull-request body.
 5. Request review only after the receipt, every required rich record/reference,
    and the matching PR classification are present. CI validates canonical
-   authorship; build and deployment derive JSON, search, backlinks, Statistics,
-   diagram assets, standalone HTML, and the website projection automatically.
+   authorship. Build and deployment derive JSON, search, backlinks, Statistics,
+   immutable links to validated authored diagram sources/renders, standalone
+   HTML, and the website projection automatically; they do not create a
+   diagram's factual content or editable/rendered assets.
 
 Run `pnpm engineering:receipt:new -- --help` for complete non-material and
 material examples. Automatic projection never means automatic narrative:

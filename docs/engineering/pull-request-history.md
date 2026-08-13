@@ -13,17 +13,22 @@ Version 1 uses restricted one-line frontmatter, not general YAML. Each nonempty 
 
 ## Forward authoring protocol
 
-The implementation coordinator owns the receipt as part of the pull request. The user does not need to request a separate Journal operation.
+The implementation coordinator owns the receipt as part of the pull request.
+The user does not need to request a separate Journal operation. The normative
+coordinator sequence is
+[`Engineering record authorship`](../agents/issue-lifecycle.md#engineering-record-authorship):
+it begins with the materiality decision during issue work, uses a draft pull
+request to obtain the repository-local number, and blocks review until the
+numbered receipt, matching checkbox, and any exact rich-record references are
+committed.
 
-1. During issue intake, classify the planned change as `none` or one material record type.
-2. Implement the change. For material work, author the canonical rich record alongside it or select an exact existing `id@revision` whose reviewed cluster already covers it. Author an evidence-backed diagram only when it materially clarifies verified structure or flow.
-3. Push the first coherent public-safe commit and open a draft pull request so its repository-local number is known. Opening a draft first is the normal bootstrap; a receipt cannot predict a number that GitHub has not assigned.
-4. Add exactly one compact receipt at `docs/engineering/changes/pr-<number>.md` and commit it to the same branch.
-5. Record a public-safe title and one factual summary paragraph of at most 280 characters.
-6. Classify a small or non-material pull request as `none` and leave `richRecordRefs` empty. For material work, put every linked exact `id@revision` in `richRecordRefs`; a reviewed multi-PR case study may be shared by several receipts.
-7. Select the matching Engineering-impact checkbox in the pull-request body and request review only after the receipt and required rich records/references are present.
-8. Let CI validate both layers. The deterministic build projects them into separate receipt and rich-record collections, search indexes, backlinks, Statistics, and standalone HTML.
-9. Merge and deploy through the repository's normal release workflow.
+This protocol owns the content boundary: the receipt contains a public-safe
+title and one factual summary paragraph of at most 280 characters; `none`
+leaves `richRecordRefs` empty; material classifications link exact
+`id@revision` records; and a reviewed multi-PR case study may be shared by
+several receipts. CI validates those authored layers, while the deterministic
+build projects their indexes, backlinks, Statistics, immutable diagram links,
+and standalone HTML.
 
 After the pull request number is known, scaffold its forward receipt without a separate user operation:
 
