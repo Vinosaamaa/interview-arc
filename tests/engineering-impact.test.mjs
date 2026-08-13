@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -10,6 +10,7 @@ import {
   trustedHeadRemote,
   validateEngineeringImpact,
   validateHistoricalBatch,
+  verifyHistoricalAuthorization,
 } from "../scripts/validate-engineering-impact.mjs";
 
 const validatorPath = fileURLToPath(new URL("../scripts/validate-engineering-impact.mjs", import.meta.url));
@@ -34,7 +35,8 @@ test("the shared receipt contract has one immutable v1 identity and bounded coll
   ), "utf8"));
   assert.equal(batchSchema.$id, "urn:interview-arc:contracts:engineering-historical-backfill-batch:1");
   assert.equal(batchSchema.properties.receiptPaths.maxItems, 20);
-  assert.equal(batchSchema.properties.recordRefs.maxItems, 8);
+  assert.equal(batchSchema.properties.recordRefs.maxItems, 32);
+  assert.equal(batchSchema.properties.addedRecordRefs.maxItems, 8);
   assert.equal(batchSchema.additionalProperties, false);
 });
 
@@ -54,6 +56,10 @@ function createRepository(t) {
   git(cwd, ["init", "--quiet", "--initial-branch=main"]);
   git(cwd, ["config", "user.name", "Engineering Impact Test"]);
   git(cwd, ["config", "user.email", "engineering-impact@example.com"]);
+  write(cwd, "bin/gh", `#!/bin/sh
+printf '%s\\n' '{"html_url":"https://github.com/example/interview-arc/issues/313#issuecomment-123456","author_association":"OWNER","body":"I authorize publication of this bounded historical Engineering backfill batch under the residual-link policy."}'
+`);
+  chmodSync(join(cwd, "bin/gh"), 0o755);
   write(cwd, "README.md", "# Fixture\n");
   git(cwd, ["add", "README.md"]);
   git(cwd, ["commit", "--quiet", "-m", "base"]);
@@ -71,7 +77,7 @@ function runValidator(cwd, event) {
   return spawnSync(process.execPath, [validatorPath], {
     cwd,
     encoding: "utf8",
-    env: { ...process.env, GITHUB_EVENT_PATH: eventPath },
+    env: { ...process.env, GITHUB_EVENT_PATH: eventPath, PATH: `${join(cwd, "bin")}:${process.env.PATH}` },
   });
 }
 
@@ -237,6 +243,7 @@ type: architecture-review
     privacyAuthorizationUrl: "https://github.com/example/interview-arc/issues/313#issuecomment-123456",
     receiptPaths: ["docs/engineering/changes/pr-1.md", "docs/engineering/changes/pr-2.md"],
     recordRefs: ["review@1"],
+    addedRecordRefs: ["review@1"],
   }, null, 2)}\n`);
   git(cwd, ["add", "docs/engineering"]);
   git(cwd, ["commit", "--quiet", "-m", "add historical batch"]);
@@ -294,6 +301,7 @@ Attempts an invalid historical deletion.
     privacyAuthorizationUrl: "https://github.com/example/interview-arc/issues/313#issuecomment-123456",
     receiptPaths: ["docs/engineering/changes/pr-1.md"],
     recordRefs: [],
+    addedRecordRefs: [],
   }, null, 2)}\n`);
   git(cwd, ["add", "docs/engineering"]);
   git(cwd, ["commit", "--quiet", "-m", "attempt deletion"]);
@@ -309,7 +317,7 @@ Attempts an invalid historical deletion.
   });
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /declared historical receipt must exist at the pull request head/);
+  assert.match(result.stderr, /add-only; changed canonical receipts and records must exist/);
   assert.doesNotMatch(result.stderr, /TypeError/);
 });
 
@@ -349,6 +357,7 @@ ${"x".repeat(270_000)}
     privacyAuthorizationUrl: "https://github.com/example/interview-arc/issues/313#issuecomment-123456",
     receiptPaths: ["docs/engineering/changes/pr-1.md"],
     recordRefs: [],
+    addedRecordRefs: [],
   }, null, 2)}\n`);
   git(cwd, ["add", "docs/engineering"]);
   git(cwd, ["commit", "--quiet", "-m", "oversized history"]);
@@ -375,6 +384,7 @@ test("historical batch validation is exact, bounded, add-only, and privacy-autho
     privacyAuthorizationUrl: "https://github.com/example/interview-arc/issues/313#issuecomment-123456",
     receiptPaths: ["docs/engineering/changes/pr-1.md"],
     recordRefs: ["review@1"],
+    addedRecordRefs: ["review@1"],
   };
   const receipt = {
     path: "docs/engineering/changes/pr-1.md",
@@ -408,7 +418,7 @@ test("historical batch validation is exact, bounded, add-only, and privacy-autho
   });
   assert.throws(
     () => validateHistoricalBatch({ ...input, manifest: { ...manifest, privacyAuthorizationUrl: "" } }),
-    /privacy authorization comment URL in the owning GitHub repository/,
+    /invalid bounded fields/,
   );
   assert.throws(
     () => validateHistoricalBatch({ ...input, repositoryFullName: "another/interview-arc" }),
@@ -438,7 +448,21 @@ test("historical batch validation is exact, bounded, add-only, and privacy-autho
         receiptPaths: Array.from({ length: 21 }, (_, index) => `docs/engineering/changes/pr-${index + 1}.md`),
       },
     }),
-    /between 1 and 20/,
+    /invalid bounded fields/,
+  );
+  assert.throws(
+    () => validateHistoricalBatch({
+      ...input,
+      manifest: { ...manifest, unsupported: true },
+    }),
+    /unsupported or missing fields/,
+  );
+  assert.throws(
+    () => validateHistoricalBatch({
+      ...input,
+      manifest: { ...manifest, recordRefs: ["review@1", "review@1"] },
+    }),
+    /invalid bounded fields/,
   );
   assert.throws(
     () => validateHistoricalBatch({
@@ -454,6 +478,27 @@ test("historical batch validation is exact, bounded, add-only, and privacy-autho
     }),
     /exact matching rich record revisions/,
   );
+});
+
+test("historical privacy authorization must be an exact owner comment", () => {
+  const manifest = {
+    privacyAuthorizationUrl: "https://github.com/example/interview-arc/issues/313#issuecomment-123456",
+  };
+  assert.doesNotThrow(() => verifyHistoricalAuthorization(manifest, "example/interview-arc", () => ({
+    html_url: manifest.privacyAuthorizationUrl,
+    author_association: "OWNER",
+    body: "I authorize publication of this bounded historical Engineering backfill batch under the residual-link policy.",
+  })));
+  assert.throws(() => verifyHistoricalAuthorization(manifest, "example/interview-arc", () => ({
+    html_url: manifest.privacyAuthorizationUrl,
+    author_association: "CONTRIBUTOR",
+    body: "I authorize publication of this bounded historical Engineering backfill batch under the residual-link policy.",
+  })), /repository-owner privacy authorization/);
+  assert.throws(() => verifyHistoricalAuthorization(manifest, "example/interview-arc", () => ({
+    html_url: manifest.privacyAuthorizationUrl,
+    author_association: "OWNER",
+    body: "Looks good",
+  })), /repository-owner privacy authorization/);
 });
 
 test("the required validation CLI accepts a modified receipt and rejects its deletion", (t) => {

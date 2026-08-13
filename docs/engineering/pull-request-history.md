@@ -132,6 +132,19 @@ Rich owners land before, or in the same bounded batch as, the receipts that
 depend on them. A generic receipt-first order must never leave unresolved rich
 references.
 
+`recordRefs` enumerates the exact union of rich revisions used by every receipt
+in the batch, including already-accepted owners. `addedRecordRefs` is its
+schema-bounded subset added by this pull request. This keeps the manifest
+complete without forcing an accepted cluster owner to be recreated in every
+dependent receipt batch.
+
+The authorization URL is not merely format-checked. Hosted validation reads the
+owning-repository comment, requires repository-owner authorship, and requires
+the exact sentence `I authorize publication of this bounded historical
+Engineering backfill batch under the residual-link policy.` This authorization
+approves the identified bounded batch; it does not authorize history rewrites,
+evidence deletion, visibility changes, or later batches.
+
 The batch manifest is review metadata, not narrative content and not a generated
 website input. The canonical historical receipts and rich Markdown remain the
 only content sources; normal builds still derive all JSON, search, backlinks,
