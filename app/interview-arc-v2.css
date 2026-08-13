@@ -331,7 +331,18 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   scrollbar-gutter: stable;
 }
 .problem-bank-entry { min-height: 124px; border-bottom-color: #dfe8e5; }
+.problem-bank-entry { content-visibility: auto; contain-intrinsic-size: auto 150px; }
 .problem-bank-entry:hover { background: #f3f8f6; }
+.bank-progressive-status {
+  min-height: 52px;
+  display: grid;
+  place-items: center;
+  padding: 12px 18px;
+  color: #536d67;
+  background: #f3f7f6;
+  border-top: 1px solid #dfe8e5;
+  font-size: .82rem;
+}
 .problem-bank-entry::before { width: 4px; }
 .problem-title-button { color: #173a37; }
 .problem-title-button:hover, .problem-bank-copy a { color: var(--primary-deep); }
