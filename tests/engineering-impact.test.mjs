@@ -6,7 +6,11 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { trustedHeadRemote, validateEngineeringImpact } from "../scripts/validate-engineering-impact.mjs";
+import {
+  trustedHeadRemote,
+  validateEngineeringImpact,
+  validateHistoricalBatch,
+} from "../scripts/validate-engineering-impact.mjs";
 
 const validatorPath = fileURLToPath(new URL("../scripts/validate-engineering-impact.mjs", import.meta.url));
 
@@ -23,6 +27,15 @@ test("the shared receipt contract has one immutable v1 identity and bounded coll
   assert.equal(schema.$defs.stringList.items.maxLength, 512);
   assert.equal(schema.$defs.recordRefs.maxItems, 16);
   assert.equal(schema.$defs.recordRefs.items.maxLength, 180);
+
+  const batchSchema = JSON.parse(readFileSync(new URL(
+    "../docs/contracts/engineering-historical-backfill-batch.schema.json",
+    import.meta.url,
+  ), "utf8"));
+  assert.equal(batchSchema.$id, "urn:interview-arc:contracts:engineering-historical-backfill-batch:1");
+  assert.equal(batchSchema.properties.receiptPaths.maxItems, 20);
+  assert.equal(batchSchema.properties.recordRefs.maxItems, 8);
+  assert.equal(batchSchema.additionalProperties, false);
 });
 
 function git(cwd, args) {
@@ -166,6 +179,156 @@ Records one small fixture change.
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Engineering impact: none/);
+});
+
+test("a bounded historical batch keeps the current PR receipt separate from reconstructed history", (t) => {
+  const cwd = createRepository(t);
+  const base = git(cwd, ["rev-parse", "HEAD"]);
+  write(cwd, "docs/engineering/changes/pr-312.md", `---
+schemaVersion: 1
+repository: interview-arc
+pr: 312
+title: Fixture receipt
+classification: none
+richRecordRefs: []
+reconstructed: false
+---
+# Fixture receipt
+
+Publishes one bounded historical evidence batch without changing current product behavior.
+`);
+  write(cwd, "docs/engineering/changes/pr-1.md", `---
+schemaVersion: 1
+repository: interview-arc
+pr: 1
+title: Historical small change
+classification: none
+richRecordRefs: []
+reconstructed: true
+---
+# Historical small change
+
+Records one verified historical change.
+`);
+  write(cwd, "docs/engineering/changes/pr-2.md", `---
+schemaVersion: 1
+repository: interview-arc
+pr: 2
+title: Historical architecture review
+classification: architecture-review
+richRecordRefs: ["review@1"]
+reconstructed: true
+---
+# Historical architecture review
+
+Links the exact reviewed architecture evidence.
+`);
+  write(cwd, "docs/engineering/records/review.md", `---
+id: review
+revision: 1
+type: architecture-review
+---
+# Review
+`);
+  write(cwd, "docs/engineering/backfill/pr-312.json", `${JSON.stringify({
+    schemaVersion: 1,
+    repository: "interview-arc",
+    pullRequest: 312,
+    privacyAuthorizationUrl: "https://github.com/example/interview-arc/issues/313#issuecomment-123456",
+    receiptPaths: ["docs/engineering/changes/pr-1.md", "docs/engineering/changes/pr-2.md"],
+    recordRefs: ["review@1"],
+  }, null, 2)}\n`);
+  git(cwd, ["add", "docs/engineering"]);
+  git(cwd, ["commit", "--quiet", "-m", "add historical batch"]);
+  const head = git(cwd, ["rev-parse", "HEAD"]);
+
+  const result = runValidator(cwd, {
+    pull_request: {
+      number: 312,
+      body: "## Engineering impact\n\n- [x] None — reason: This PR publishes reviewed historical evidence without changing current behavior.",
+      base: { sha: base },
+      head: { sha: head },
+    },
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /historical batch: 2 receipt\(s\), 1 rich record\(s\)/);
+});
+
+test("historical batch validation is exact, bounded, add-only, and privacy-authorized", () => {
+  const manifest = {
+    path: "docs/engineering/backfill/pr-312.json",
+    schemaVersion: 1,
+    repository: "interview-arc",
+    pullRequest: 312,
+    privacyAuthorizationUrl: "https://github.com/example/interview-arc/issues/313#issuecomment-123456",
+    receiptPaths: ["docs/engineering/changes/pr-1.md"],
+    recordRefs: ["review@1"],
+  };
+  const receipt = {
+    path: "docs/engineering/changes/pr-1.md",
+    repository: "interview-arc",
+    pr: 1,
+    classification: "architecture-review",
+    richRecordRefs: ["review@1"],
+    reconstructed: true,
+  };
+  const record = { ref: "review@1", type: "architecture-review", existsAtHead: true };
+  const input = {
+    manifest,
+    changedFiles: [
+      "docs/engineering/changes/pr-312.md",
+      manifest.path,
+      receipt.path,
+      "docs/engineering/records/review.md",
+    ],
+    changedRecords: [record],
+    historicalReceipts: [receipt],
+    linkedRecords: [record],
+    pullRequestNumber: 312,
+    repository: "interview-arc",
+  };
+
+  assert.deepEqual(validateHistoricalBatch(input), {
+    historicalReceiptCount: 1,
+    historicalRecordCount: 1,
+  });
+  assert.throws(
+    () => validateHistoricalBatch({ ...input, manifest: { ...manifest, privacyAuthorizationUrl: "" } }),
+    /privacy authorization comment URL/,
+  );
+  assert.throws(
+    () => validateHistoricalBatch({ ...input, baseExistingPaths: [receipt.path] }),
+    /add-only/,
+  );
+  assert.throws(
+    () => validateHistoricalBatch({ ...input, changedFiles: [...input.changedFiles, "README.md"] }),
+    /may contain only/,
+  );
+  assert.throws(
+    () => validateHistoricalBatch({
+      ...input,
+      manifest: {
+        ...manifest,
+        receiptPaths: Array.from({ length: 21 }, (_, index) => `docs/engineering/changes/pr-${index + 1}.md`),
+      },
+    }),
+    /between 1 and 20/,
+  );
+  assert.throws(
+    () => validateHistoricalBatch({
+      ...input,
+      historicalReceipts: [{ ...receipt, reconstructed: false }],
+    }),
+    /must be reconstructed/,
+  );
+  assert.throws(
+    () => validateHistoricalBatch({
+      ...input,
+      linkedRecords: [{ ...record, type: "postmortem" }],
+    }),
+    /exact matching rich record revisions/,
+  );
 });
 
 test("the required validation CLI accepts a modified receipt and rejects its deletion", (t) => {
