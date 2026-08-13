@@ -36,10 +36,12 @@ const HELP = `Create the canonical compact Engineering receipt for a pull reques
 
 Authoring order:
   1. Decide the Engineering impact before opening the pull request.
-  2. For material work, author or select the exact rich record first.
+  2. For material work, commit a new rich record to this branch first, or select
+     an existing exact revision already available at the pull-request head.
   3. Open a draft pull request to obtain its repository-local number.
   4. Run this command and commit the generated pr-<number>.md file.
   5. Select the matching Engineering-impact checkbox in the pull-request body.
+     For None, replace the placeholder with a concrete reason of at least 12 characters.
 
 Non-material example:
   pnpm engineering:receipt:new -- \\

@@ -153,15 +153,18 @@ work, not a separate operation that the user must remember to request.
    Engineering record type from
    [`docs/engineering/pull-request-history.md`](../engineering/pull-request-history.md).
 2. When the change is material, author its canonical public-safe rich Markdown
-   record alongside the implementation, or select an existing exact
-   `id@revision` record whose reviewed cluster already covers the change.
+   record alongside the implementation and commit it to the same branch before
+   its receipt refers to it, or select an existing exact `id@revision` record
+   already present at the pull-request head whose reviewed cluster covers the change.
    Evidence-backed diagrams are authored here only when they materially clarify
    verified structure or flow. Neither CI nor the generator invents them.
 3. Push the first coherent public-safe commit and open a **draft pull request**
    when its repository-local number is not yet known.
 4. Run `pnpm engineering:receipt:new -- --pr <number> ...`, commit exactly one
    `docs/engineering/changes/pr-<number>.md`, and select the matching
-   Engineering-impact checkbox in the pull-request body.
+   Engineering-impact checkbox in the pull-request body. A `None` selection
+   must replace the template placeholder with a concrete reason of at least 12
+   characters.
 5. Request review only after the receipt, every required rich record/reference,
    and the matching PR classification are present. CI validates canonical
    authorship. Build and deployment derive JSON, search, backlinks, Statistics,
