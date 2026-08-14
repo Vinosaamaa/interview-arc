@@ -1,7 +1,7 @@
 ---
 schemaVersion: 1
-id: change-note-editorial-first-solution-catalog
-revision: 2
+id: change-note-editorial-provenance-enforcement
+revision: 1
 type: change-note
 status: released
 title: Enforce Editorial provenance and correct Solution reader structure
