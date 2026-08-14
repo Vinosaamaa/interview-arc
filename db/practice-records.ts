@@ -40,7 +40,7 @@ export type PracticeRecordSemanticInput = {
   assetSet?: { operationId: string; manifestSha256: string };
 };
 
-type PracticeRecordPayload = {
+export type PracticeRecordPayload = {
   schemaVersion: 1;
   activityId: string;
   revision: number;

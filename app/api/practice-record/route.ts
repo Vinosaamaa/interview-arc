@@ -83,6 +83,8 @@ export async function GET(request: Request) {
         complexity: attempt.complexity,
         finalDeclaration: attempt.finalDeclaration,
       })),
+      practiceRecord: record.practiceRecord,
+      practiceAssets: record.practiceAssets,
     }, { headers: { "cache-control": "private, no-store" } });
   } catch (error) {
     return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 });
