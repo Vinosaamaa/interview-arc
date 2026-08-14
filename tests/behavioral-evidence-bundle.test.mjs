@@ -11,6 +11,7 @@ import {
 } from "../scripts/build-behavioral-evidence-site.mjs";
 import {
   authorizeBehavioralFilesystemSources,
+  pinBehavioralEvidenceProvenance,
   prepareBehavioralEvidenceSyncPlan,
   refreshBehavioralEvidenceSources,
   summarizeBehavioralEvidenceBundle,
@@ -375,6 +376,13 @@ test("local refresh prepares only typed remote-safe source and evidence operatio
     now: new Date("2026-08-11T18:00:00.000Z"),
   });
   assert.equal(refreshed.inspected, 1);
+  assert.deepEqual(
+    await pinBehavioralEvidenceProvenance({
+      bundleRoot: fixture.root,
+      now: new Date("2026-08-11T18:00:30.000Z"),
+    }),
+    { pinned: 1, remotePinned: 0, currentPinned: 1, unchanged: 0 },
+  );
   const { plan, planPath } = await prepareBehavioralEvidenceSyncPlan({
     bundleRoot: fixture.root,
     now: new Date("2026-08-11T18:01:00.000Z"),
@@ -408,6 +416,144 @@ test("local refresh prepares only typed remote-safe source and evidence operatio
     uncoveredPendingEvidence: 0,
     publicationCandidates: 0,
   });
+});
+
+test("source refresh preserves a pinned evidence payload and operation identity", async (t) => {
+  const fixture = await createFixture(t);
+  const sourceRoot = path.join(fixture.root, "authorized-source");
+  await mkdir(sourceRoot);
+  const sourceFile = path.join(sourceRoot, "public-safe-fixture.txt");
+  await writeFile(sourceFile, "revision one\n", "utf8");
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.sources[0].locator = sourceRoot;
+  record.sources[0].refreshMode = "filesystem";
+  record.d1Candidates = [{
+    id: "EX-D1-001",
+    kind: "evidence",
+    visibility: "owner_private",
+    content: {
+      questionLinks: [{ questionId: "QUESTION-EXAMPLE-1", relevance: "supporting" }],
+    },
+    sourceEvidenceIds: ["EX-EV-001"],
+    transformations: ["Generalized the observation for owner-private review."],
+    limitations: ["The observation does not establish personal ownership."],
+  }];
+  record.d1Exclusions = [];
+  await writeJson(recordPath, record);
+  await authorizeBehavioralFilesystemSources({ bundleRoot: fixture.root });
+  await refreshBehavioralEvidenceSources({
+    bundleRoot: fixture.root,
+    now: new Date("2026-08-11T18:00:00.000Z"),
+  });
+  await pinBehavioralEvidenceProvenance({
+    bundleRoot: fixture.root,
+    now: new Date("2026-08-11T18:00:30.000Z"),
+  });
+  const first = await prepareBehavioralEvidenceSyncPlan({
+    bundleRoot: fixture.root,
+    now: new Date("2026-08-11T18:01:00.000Z"),
+  });
+
+  await writeFile(sourceFile, "revision two with a material source change\n", "utf8");
+  const refreshed = await refreshBehavioralEvidenceSources({
+    bundleRoot: fixture.root,
+    now: new Date("2026-08-11T19:00:00.000Z"),
+  });
+  assert.equal(refreshed.changed, 1);
+  const second = await prepareBehavioralEvidenceSyncPlan({
+    bundleRoot: fixture.root,
+    now: new Date("2026-08-11T19:01:00.000Z"),
+  });
+
+  assert.equal(
+    second.plan.evidence[0].input.evidence.sourceRevision,
+    first.plan.evidence[0].input.evidence.sourceRevision,
+  );
+  assert.equal(second.plan.evidence[0].input.operationId, first.plan.evidence[0].input.operationId);
+  assert.deepEqual(second.plan.evidence[0].input, first.plan.evidence[0].input);
+});
+
+test("material evidence edits require a replacement identity after provenance is pinned", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.d1Candidates = [{
+    id: "EX-D1-001",
+    kind: "evidence",
+    visibility: "owner_private",
+    content: {
+      questionLinks: [{ questionId: "QUESTION-EXAMPLE-1", relevance: "supporting" }],
+    },
+    sourceEvidenceIds: ["EX-EV-001"],
+    transformations: ["Generalized the observation for owner-private review."],
+    limitations: ["The observation does not establish personal ownership."],
+  }];
+  record.d1Exclusions = [];
+  await writeJson(recordPath, record);
+  await pinBehavioralEvidenceProvenance({
+    bundleRoot: fixture.root,
+    now: new Date("2026-08-11T18:00:00.000Z"),
+  });
+
+  const pinned = JSON.parse(await readFile(recordPath, "utf8"));
+  pinned.evidence[0].statement = "A materially revised observation under the old identity.";
+  await writeJson(recordPath, pinned);
+
+  await assert.rejects(
+    prepareBehavioralEvidenceSyncPlan({ bundleRoot: fixture.root }),
+    /replacement evidence ID and explicit supersession/,
+  );
+});
+
+test("migration reuses an authoritative remote source revision for existing evidence", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.sources[0].revision = "newer-local-source-revision";
+  record.d1Candidates = [{
+    id: "EX-D1-001",
+    kind: "evidence",
+    visibility: "owner_private",
+    content: {
+      questionLinks: [{ questionId: "QUESTION-EXAMPLE-1", relevance: "supporting" }],
+    },
+    sourceEvidenceIds: ["EX-EV-001"],
+    transformations: ["Generalized the observation for owner-private review."],
+    limitations: ["The observation does not establish personal ownership."],
+  }];
+  record.d1Exclusions = [];
+  await writeJson(recordPath, record);
+  const remoteSourceRevision = `source-set-${"a".repeat(64)}`;
+  const snapshotPath = path.join(fixture.root, "remote-evidence-snapshot.json");
+  await writeJson(snapshotPath, {
+    schemaVersion: 1,
+    visibility: "owner_private",
+    evidence: [{ evidenceId: "ex-ev-001", sourceRevision: remoteSourceRevision }],
+  });
+
+  assert.deepEqual(
+    await pinBehavioralEvidenceProvenance({
+      bundleRoot: fixture.root,
+      remoteSnapshotPath: snapshotPath,
+      now: new Date("2026-08-11T18:00:00.000Z"),
+    }),
+    { pinned: 1, remotePinned: 1, currentPinned: 0, unchanged: 0 },
+  );
+  const pinnedBytes = await readFile(recordPath, "utf8");
+  const pinnedManifestBytes = await readFile(path.join(fixture.root, "manifest.json"), "utf8");
+  assert.deepEqual(
+    await pinBehavioralEvidenceProvenance({
+      bundleRoot: fixture.root,
+      remoteSnapshotPath: snapshotPath,
+      now: new Date("2026-08-11T19:00:00.000Z"),
+    }),
+    { pinned: 0, remotePinned: 0, currentPinned: 0, unchanged: 1 },
+  );
+  assert.equal(await readFile(recordPath, "utf8"), pinnedBytes);
+  assert.equal(await readFile(path.join(fixture.root, "manifest.json"), "utf8"), pinnedManifestBytes);
+  const { plan } = await prepareBehavioralEvidenceSyncPlan({ bundleRoot: fixture.root });
+  assert.equal(plan.evidence[0].input.evidence.sourceRevision, remoteSourceRevision);
 });
 
 test("refresh inspects only typed filesystem sources and never guesses from locator text", async (t) => {
@@ -635,6 +781,10 @@ test("one canonical source can support many independently reviewable D1 candidat
   }));
   record.d1Exclusions = [];
   await writeJson(recordPath, record);
+  await pinBehavioralEvidenceProvenance({
+    bundleRoot: fixture.root,
+    now: new Date("2026-08-11T18:00:00.000Z"),
+  });
 
   const { plan } = await prepareBehavioralEvidenceSyncPlan({ bundleRoot: fixture.root });
   assert.equal(plan.summary.evidenceCandidates, 3);

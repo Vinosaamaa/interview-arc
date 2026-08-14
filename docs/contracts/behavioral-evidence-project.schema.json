@@ -211,6 +211,14 @@
         },
         "statement": { "type": "string", "minLength": 1 },
         "sourceIds": { "$ref": "#/$defs/idList" },
+        "sourceRevision": {
+          "type": "string",
+          "pattern": "^source-set-[a-f0-9]{64}$"
+        },
+        "immutableContentFingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
         "safeLocators": { "$ref": "#/$defs/stringList" },
         "evidenceGrade": { "$ref": "#/$defs/evidenceGrade" },
         "attributionGrade": { "$ref": "#/$defs/attributionGrade" },

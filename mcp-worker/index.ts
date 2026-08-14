@@ -3189,7 +3189,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "query_behavioral_evidence_candidates",
     {
-      description: "Read a bounded owner-private queue of sanitized evidence candidates with exact review revisions and question links. Pending is the default; raw source contents and private locators are never returned.",
+      description: "Read a bounded, cursor-pageable owner-private queue of sanitized evidence candidates with exact review revisions and question links. Pending is the default; reuse both returned nextCursor fields for the next page. Raw source contents and private locators are never returned.",
       inputSchema: behavioralEvidenceCandidateQuerySchema.shape,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },

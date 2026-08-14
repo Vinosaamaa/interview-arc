@@ -151,6 +151,21 @@ or more stable question/relevance links. Source metadata is projected directly
 from the source registry, not duplicated in a candidate. Claims and Story Bank
 records use their owning D1 workflows only after evidence review.
 
+Before a pending observation can enter `prepare-sync`, its canonical evidence
+record pins two immutable values: `sourceRevision`, the opaque source-set digest
+already used by D1, and `immutableContentFingerprint`, the digest of every
+remote-material evidence field. A later source refresh changes the source
+registry revision but never either evidence pin. A material re-audit must create
+a replacement evidence ID and use the explicit owner-reviewed supersession
+operation; editing a pinned observation in place fails locally.
+
+Legacy bundles use `pin-provenance` once before their next sync. When an
+evidence identity already exists in D1, provide an ignored, owner-private remote
+snapshot containing only `evidenceId` and its authoritative `sourceRevision`;
+the migration reuses that exact revision. Unsynced observations pin the current
+authorized source set. The snapshot remains inside the ignored bundle and never
+contains statements, source text, locators, or review-site content.
+
 Every source declares a `refreshMode`. `filesystem` means its private locator
 is one real canonical source root or exact file. `remote`, `conversation`, and
 `blocked` are non-filesystem modes and are never passed to `stat()`. Every
@@ -179,6 +194,7 @@ pnpm behavioral:evidence:build
 pnpm behavioral:evidence:status
 pnpm behavioral:evidence:authorize-filesystem -- --confirm-owner-authorized-sources
 pnpm behavioral:evidence:refresh
+pnpm behavioral:evidence:pin-provenance -- --remote-snapshot private-sources/behavioral-foundation/sync/remote-evidence-snapshot.json
 pnpm behavioral:evidence:prepare-sync
 ```
 
@@ -193,7 +209,9 @@ writes only the ignored local source policy. Run it whenever the owner changes
 an authorized locator. `refresh` updates ignored source fingerprints and
 refresh state without printing locators; it leaves remote and conversation
 state to their owning connectors, and unchanged non-filesystem sources do not
-rewrite project or manifest timestamps. `prepare-sync` accepts a source
+rewrite project or manifest timestamps. `pin-provenance` is the explicit
+migration/new-observation boundary; omit `--remote-snapshot` only when every
+newly pinned identity is known not to exist in D1. `prepare-sync` accepts a source
 revision only when its state is `available` and `current` or `changed`, and it
 fails when any pending evidence is uncovered; otherwise it writes an ignored `sync/plan.json`
 containing only display-safe source snapshots and explicit typed candidate
