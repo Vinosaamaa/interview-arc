@@ -23,7 +23,7 @@ capabilities: ["persistent-engineering-selection", "responsive-evidence-drawer",
 amends: []
 supersedes: []
 learningRefs: []
-sources: [{"label":"Arc issue #329","url":"https://github.com/Vinosaamaa/interview-arc/issues/329","kind":"issue"},{"label":"Pull request #331","url":"https://github.com/Vinosaamaa/interview-arc/pull/331","kind":"pr"}]
+sources: [{"label":"Arc issue #329","url":"https://github.com/Vinosaamaa/interview-arc/issues/329","kind":"issue"},{"label":"Pull request #331","url":"https://github.com/Vinosaamaa/interview-arc/pull/331","kind":"pull-request"}]
 verification: {"state":"verified","evidenceRefs":["issue:329","tests/website-ui-regressions.test.mjs","tests/rendered-html.test.mjs"]}
 visibility: public-safe
 publicationEligibility: eligible
