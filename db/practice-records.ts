@@ -356,6 +356,12 @@ export async function persistFinalizedPracticeRecord(input: {
     throw new Error("The semantic finalization must remain pending until its immutable Practice Record is inserted.");
   }
   const activityPayload = activity.payload as Record<string, unknown>;
+  const authoritativeTitle = typeof activityPayload.title === "string"
+    ? activityPayload.title.trim()
+    : "";
+  if (!authoritativeTitle) {
+    throw new Error("A complete Practice Record needs an authoritative activity title.");
+  }
   const revision = (current?.currentRevision ?? 0) + 1;
   const completedAt = timer.completedAt;
   const payload: PracticeRecordPayload = {
@@ -377,7 +383,7 @@ export async function persistFinalizedPracticeRecord(input: {
     outcome: outcome.outcome,
     interactionMode: interactionMode((components.classifications[0]?.classification as { primaryPracticeModeId?: unknown } | undefined)?.primaryPracticeModeId),
     prompt: {
-      title: input.finalization.title,
+      title: authoritativeTitle,
       body: input.finalization.practiceRecord.prompt.body,
       canonicalUrl: input.finalization.practiceRecord.prompt.canonicalUrl ?? null,
     },
@@ -452,7 +458,7 @@ export async function persistFinalizedPracticeRecord(input: {
         currentRevision: revision,
         specialty: input.specialty,
         questionId: input.questionId,
-        title: input.finalization.title,
+        title: authoritativeTitle,
         completedAt,
         practiceDate: payload.practiceDate,
         outcome: outcome.outcome,
@@ -466,7 +472,7 @@ export async function persistFinalizedPracticeRecord(input: {
           currentRevision: revision,
           specialty: input.specialty,
           questionId: input.questionId,
-          title: input.finalization.title,
+          title: authoritativeTitle,
           completedAt,
           practiceDate: payload.practiceDate,
           outcome: outcome.outcome,

@@ -321,6 +321,7 @@ test("complete finalization becomes saved only with an exact immutable Practice 
     assert.equal(otherReceipt.result.practiceRecord.revision, 1);
     assert.notEqual(otherReceipt.result.practiceRecord.fingerprint, receipt.result.practiceRecord.fingerprint);
     const otherReadback = await call(otherClient, "get_activity_practice_record", { activityId });
+    assert.equal(otherReadback.practiceRecord.payload.prompt.title, "Other owner durable finalization");
     assert.equal(otherReadback.practiceRecord.payload.outcome, "failed");
     assert.equal(otherReadback.practiceRecord.payload.timing.source, "manual");
     assert.equal(otherReadback.turns[0].body, "Other owner answer must remain isolated.");
