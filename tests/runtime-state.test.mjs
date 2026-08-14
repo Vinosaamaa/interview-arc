@@ -441,7 +441,8 @@ test("result flags stay separate from timer completion and publication readiness
   const setOutcomeBody = liveState.slice(liveState.indexOf("export async function setOutcome"), liveState.indexOf("export async function setPublicationStatus"));
   assert.doesNotMatch(setOutcomeBody, /applyTimerAction|setPracticeFocus/);
   assert.match(snapshot, /publicationStatus === "ready" && Boolean\(activity\.outcome\)/);
-  assert.match(snapshot, /publicationStatus !== "ready" \|\| !outcome/);
+  assert.match(snapshot, /publicationStatus === "draft" \|\| !outcome/);
+  assert.match(snapshot, /activity\.publicationStatus !== "ready"/);
   assert.match(commandModule, /Start the .* before finishing it/);
 });
 

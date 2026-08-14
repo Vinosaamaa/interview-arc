@@ -27,7 +27,7 @@ const primaryToken = "ia_publication_queue_primary_276";
 const otherToken = "ia_publication_queue_other_owner_276";
 const primaryBlockedIndexes = new Set([0, 79, 80, 159, 160, 239, 240, 242]);
 const primaryPracticeRecordIndexes = new Set(
-  Array.from({ length: 110 }, (_, index) => index + 1).filter((index) => !primaryBlockedIndexes.has(index)),
+  Array.from({ length: 110 }, (_, index) => index + 1),
 );
 const otherPracticeRecordIndexes = new Set(Array.from({ length: 111 }, (_, index) => index + 120));
 
@@ -423,9 +423,11 @@ test("undated get_publication_queue returns a deterministic, exact, owner-scoped
     assert.deepEqual(primaryReplay, primaryQueue, "repeated undated reads must be deterministic");
 
     const allIndexes = Array.from({ length: activityCount }, (_, index) => index);
-    const primaryPending = allIndexes.filter((index) => !primaryPracticeRecordIndexes.has(index));
-    const primaryBlocked = primaryPending.filter((index) => primaryBlockedIndexes.has(index));
-    const primaryReady = primaryPending.filter((index) => !primaryBlockedIndexes.has(index));
+    const primaryBlocked = allIndexes.filter((index) => primaryBlockedIndexes.has(index));
+    const primaryReady = allIndexes.filter((index) => (
+      !primaryPracticeRecordIndexes.has(index) && !primaryBlockedIndexes.has(index)
+    ));
+    const primaryPending = [...primaryReady, ...primaryBlocked].sort((left, right) => left - right);
     assert.equal(primaryQueue.date, null);
     assert.equal(primaryQueue.timeZone, "America/Los_Angeles");
     assertExactPartition(primaryQueue, primaryReady, primaryBlocked, primaryPending);
@@ -461,9 +463,11 @@ test("undated get_publication_queue returns a deterministic, exact, owner-scoped
 
     assert.equal(otherQueue.date, null);
     assert.equal(otherQueue.timeZone, "America/Los_Angeles");
-    const otherPending = allIndexes.filter((index) => !otherPracticeRecordIndexes.has(index));
-    const otherReady = otherPending.filter((index) => primaryBlockedIndexes.has(index));
-    const otherBlocked = otherPending.filter((index) => !primaryBlockedIndexes.has(index));
+    const otherReady = allIndexes.filter((index) => (
+      !otherPracticeRecordIndexes.has(index) && primaryBlockedIndexes.has(index)
+    ));
+    const otherBlocked = allIndexes.filter((index) => !primaryBlockedIndexes.has(index));
+    const otherPending = [...otherReady, ...otherBlocked].sort((left, right) => left - right);
     assertExactPartition(otherQueue, otherReady, otherBlocked, otherPending);
     assert.ok(otherQueue.activities.every((activity) => activity.title.startsWith("Other backlog activity")));
     assert.ok(otherQueue.blockedActivities.every((activity) => activity.title.startsWith("Other backlog activity")));
