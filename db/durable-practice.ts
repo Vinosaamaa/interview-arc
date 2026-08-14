@@ -263,6 +263,15 @@ export type SpecialistFinalization = {
         turnIds: string[];
       }>;
     };
+    editorialResearch?: {
+      source: "leetcode_playwright_controller";
+      status: "available" | "premium_locked" | "unavailable";
+      url: string;
+      accessedAt: string;
+      contentSha256?: string;
+      reason?: string;
+      approaches: Array<{ title: string }>;
+    };
     projectDeepDive?: {
       projectId: string;
       bindingRevision: number;
@@ -334,10 +343,18 @@ function validateSolutionProfile(
   specialty: Specialty,
   payload: SpecialistFinalization["solutionProfile"],
   projectBinding: typeof behavioralProjectQuestionBindings.$inferSelect | null = null,
+  questionId?: string,
 ) {
   if (!payload) throw new Error("A complete finalization needs a reusable Solution Profile.");
   if (specialty !== "behavioral" && payload.projectDeepDive) {
     throw new Error("Project Deep Dive metadata is supported only for behavioral Solution Profiles.");
+  }
+  if (specialty !== "leetcode" && payload.editorialResearch) {
+    throw new Error("Editorial research metadata is supported only for LeetCode Solution Profiles.");
+  }
+  if (specialty === "leetcode" && questionId && payload.editorialResearch
+      && payload.editorialResearch.url !== `https://leetcode.com/problems/${questionId}/editorial/`) {
+    throw new Error("Editorial research must use the canonical URL for the finalized LeetCode question.");
   }
   validatePracticeScenariosForSpecialty(specialty, payload.practiceScenarios);
   const missing = [
@@ -383,6 +400,7 @@ export function profileFingerprint(payload: NonNullable<SpecialistFinalization["
     behavioralAnswer: payload.behavioralAnswer,
     practiceScenarios: behavioralPracticeScenariosFingerprint(payload.practiceScenarios),
     questionsAndAnswers: payload.questionsAndAnswers,
+    editorialResearch: payload.editorialResearch,
     projectDeepDive: payload.projectDeepDive,
   });
 }
@@ -4365,6 +4383,7 @@ export async function saveSpecialistFinalization(
         specialty,
         currentProfile.payload as NonNullable<SpecialistFinalization["solutionProfile"]>,
         projectBinding,
+        questionId,
       );
       if (!currentProfile) {
         const category = specialty === "system_design" ? "systemDesign" : specialty;
@@ -4378,7 +4397,7 @@ export async function saveSpecialistFinalization(
         if (!canonicalQuestion?.solutionProfile) {
           throw new Error("Cannot reuse a Solution Profile that does not exist.");
         }
-        validateSolutionProfile(specialty, canonicalQuestion.solutionProfile, projectBinding);
+        validateSolutionProfile(specialty, canonicalQuestion.solutionProfile, projectBinding, questionId);
         const profile = normalizedSolutionProfile(canonicalQuestion.solutionProfile, payload.references);
         if (behavioralFinalAnswer && behavioralFinalAnswer.snapshot.solutionProfile.revision !== 1) {
           throw new BehavioralFinalAnswerError(
@@ -4413,7 +4432,7 @@ export async function saveSpecialistFinalization(
         currentProfile = seeded[0];
       }
     } else {
-      validateSolutionProfile(specialty, payload.solutionProfile, projectBinding);
+      validateSolutionProfile(specialty, payload.solutionProfile, projectBinding, questionId);
     }
   }
   if (behavioralFinalAnswer && questionId) {

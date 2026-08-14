@@ -65,6 +65,12 @@ it, complete algorithm and transition, invariant/proof, time/space complexity,
 edge cases, preferred comparison, and runnable Java code. Add independently
 written pseudocode when it materially improves understanding. Cite consulted
 Editorials, copy no official prose/code, and report unavailable access honestly.
+Every LeetCode revision carries a structured `editorialResearch` receipt from
+the checked-in Playwright controller: canonical URL, access time, availability,
+content fingerprint when available, and the complete ordered approach titles
+identified from the rendered Editorial. Those titles must match the profile's
+Editorial panels one-for-one and in order. An unavailable or premium-locked
+receipt requires an explicit reason and permits no Editorial-labeled panel.
 
 ### Background authoring and publication reuse
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFile as execFileCallback } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   mkdir,
   open,
@@ -378,6 +378,25 @@ export function canonicalProblemIdentity(url, title) {
 
 export function canonicalEditorialUrl(identity) {
   return `https://leetcode.com/problems/${identity.slug}/editorial/`;
+}
+
+export function editorialResearchFingerprint(researchMaterial) {
+  const hash = createHash("sha256");
+  const updateText = (label, value) => {
+    const text = String(value ?? "");
+    hash.update(`${label}:${Buffer.byteLength(text, "utf8")}:`, "utf8");
+    hash.update(text, "utf8");
+  };
+  updateText("renderedText", researchMaterial.renderedText);
+  for (const [index, heading] of (researchMaterial.headings ?? []).entries()) {
+    updateText(`heading.${index}`, heading);
+  }
+  for (const [index, block] of (researchMaterial.codeBlocks ?? []).entries()) {
+    updateText(`codeBlock.${index}.index`, block.index);
+    updateText(`codeBlock.${index}.language`, block.language);
+    updateText(`codeBlock.${index}.code`, block.code);
+  }
+  return hash.digest("hex");
 }
 
 export function parseCli(argv) {
@@ -762,7 +781,12 @@ export function createPlaywrightPageAdapter(page) {
             const lockText = lockRoots
               .map((root) => root.innerText?.trim() ?? "")
               .find((text) => /\b(?:premium|subscribe|unlock)\b/i.test(text));
-            if (lockText) return { state: "premium_locked" };
+            if (lockText) {
+              return {
+                state: "premium_locked",
+                reason: "The canonical Editorial article is present, but its rendered content is premium locked.",
+              };
+            }
 
             for (let selectorIndex = 0; selectorIndex < selectors.editorialContent.length; selectorIndex += 1) {
               const roots = [...document.querySelectorAll(selectors.editorialContent[selectorIndex])]
@@ -822,7 +846,7 @@ export function createPlaywrightPageAdapter(page) {
         }
         return {
           state: "unavailable",
-          reason: "editorial_content_not_rendered",
+          reason: "The canonical Editorial page rendered no usable article content before the controller timeout.",
           actualUrl,
           actualPathname,
           recognitionDiagnostics,
@@ -1285,7 +1309,7 @@ export class LeetCodeController {
       },
       ...(state?.reason ? { reason: state.reason } : {}),
       ...(researchMaterial
-        ? { researchMaterial }
+        ? { researchMaterial, contentSha256: editorialResearchFingerprint(researchMaterial) }
         : {}),
       ...(state?.recognitionDiagnostics
         ? { recognitionDiagnostics: state.recognitionDiagnostics }

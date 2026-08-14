@@ -109,7 +109,8 @@ protected prose or official code verbatim. The controller itself writes no
 Editorial research receipt or practice state.
 
 Its structured result includes `editorialUrl`, `availability`,
-`contentAvailable`, `researchMaterial` when available, and stage timings.
+`contentAvailable`, `researchMaterial` and its SHA-256 `contentSha256`
+when available, and stage timings.
 `availability` is `available` only when actual Editorial content is rendered;
 `premium_locked` and `unavailable` are honest fail-closed results that must not
 be cited as consulted research and never include `researchMaterial`.

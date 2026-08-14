@@ -9,6 +9,8 @@ import type { InteractionModeRegistry } from "../db/interaction-mode-policy";
 import type { InteractionModeSummary } from "../db/interaction-mode-store";
 import type { InteractionModeClassification } from "../db/interaction-mode-classification";
 import type { BehavioralPracticeScenario } from "../db/behavioral-practice-scenario";
+import type { BehavioralProjectProfileBinding } from "../db/behavioral-project-deep-dive-policy";
+import type { LeetCodeEditorialResearch } from "./solution-profile-policy";
 export type { FocusBlock } from "./career-work";
 export type { InteractionModeSummary } from "../db/interaction-mode-store";
 
@@ -157,6 +159,8 @@ export type SolutionProfilePayload = {
       turnIds: string[];
     }>;
   };
+  editorialResearch?: LeetCodeEditorialResearch;
+  projectDeepDive?: BehavioralProjectProfileBinding;
 };
 export type SolutionProfile = {
   specialty: ActivityType;

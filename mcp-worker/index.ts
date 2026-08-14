@@ -423,6 +423,15 @@ const specialistSolutionProfileSchema = z.object({
       turnIds: z.array(behavioralStableIdSchema).max(100),
     })).max(100),
   }).optional(),
+  editorialResearch: z.object({
+    source: z.literal("leetcode_playwright_controller"),
+    status: z.enum(["available", "premium_locked", "unavailable"]),
+    url: z.string().url(),
+    accessedAt: z.string().datetime(),
+    contentSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    reason: z.string().trim().min(1).max(10_000).optional(),
+    approaches: z.array(z.object({ title: z.string().trim().min(1).max(300) })).max(20),
+  }).optional(),
   projectDeepDive: behavioralProjectProfileBindingSchema.optional(),
 });
 
@@ -4437,6 +4446,21 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
             code: "custom",
             path: ["finalization", "solutionProfile", "projectDeepDive"],
             message: "Project Deep Dive metadata is supported only for behavioral finalizations.",
+          });
+        }
+        if (input.specialty !== "leetcode" && input.finalization.solutionProfile?.editorialResearch) {
+          context.addIssue({
+            code: "custom",
+            path: ["finalization", "solutionProfile", "editorialResearch"],
+            message: "Editorial research metadata is supported only for LeetCode Solution Profiles.",
+          });
+        }
+        if (input.specialty === "leetcode" && input.questionId && input.finalization.solutionProfile?.editorialResearch
+            && input.finalization.solutionProfile.editorialResearch.url !== `https://leetcode.com/problems/${input.questionId}/editorial/`) {
+          context.addIssue({
+            code: "custom",
+            path: ["finalization", "solutionProfile", "editorialResearch", "url"],
+            message: "editorialResearch must use the canonical URL for questionId.",
           });
         }
         if (input.specialty !== "system_design" && input.finalization.practiceRecord?.assetSet) {

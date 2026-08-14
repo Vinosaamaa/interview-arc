@@ -2,7 +2,9 @@
 // (`app/home-client.tsx`), and the Git-to-D1 import script.
 
 import type { BehavioralPracticeScenario } from "../db/behavioral-practice-scenario";
+import type { BehavioralProjectProfileBinding } from "../db/behavioral-project-deep-dive-policy";
 import type { LoopActivityContextProjection, LoopActivityContextRequest } from "../db/loop-policy";
+import type { LeetCodeEditorialResearch } from "./solution-profile-policy";
 
 export type JournalActivity = {
   schemaVersion: number;
@@ -118,6 +120,8 @@ export type QuestionBankItem = {
         turnIds: string[];
       }>;
     };
+    editorialResearch?: LeetCodeEditorialResearch;
+    projectDeepDive?: BehavioralProjectProfileBinding;
   };
   frequency?: "low" | "medium" | "high";
   answerFormat?: "SIMPLE" | "STAR" | "STARL" | "PPF" | "IFV";
