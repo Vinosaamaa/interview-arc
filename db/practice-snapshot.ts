@@ -6,6 +6,7 @@ import { readLiveState, type PublicationStatusValue, type TimerState } from "./l
 import { derivePublicationStatus } from "./publication-state";
 import { dedupeSnapshotRows } from "./snapshot-rows";
 import { readPublicationEvidenceState } from "./durable-practice";
+import { readCurrentPracticeRecordActivityIds } from "./practice-records";
 
 export type ConnectedActivity = JournalActivity & {
   timer?: TimerState;
@@ -37,6 +38,10 @@ export async function buildPracticeSnapshot(
   const publishedActivities = options.includeAll ? content.journals.flatMap((candidate) => candidate.activities) : journal.activities;
   const liveSessionRows = options.includeAll ? live.historySessions : live.sessions;
   const liveActivityRows = options.includeAll ? live.historyActivities : live.extraActivities;
+  const practiceRecordActivityIds = await readCurrentPracticeRecordActivityIds(
+    ownerId,
+    [...publishedActivities, ...(liveActivityRows as JournalActivity[])].map((activity) => activity.id),
+  );
   const sessions = dedupeSnapshotRows([...publishedSessions, ...(liveSessionRows as PracticeSession[])]);
   const sessionForActivity = new Map<string, string>();
   sessions.forEach((session) => session.activityIds.forEach((activityId) => sessionForActivity.set(activityId, session.id)));
@@ -52,7 +57,12 @@ export async function buildPracticeSnapshot(
     const outcome = live.outcomes[activity.id] ?? activity.outcome;
     const storedPublication = live.publicationStatuses[activity.id];
     const completed = activity.status === "completed" || Boolean(timer?.completed);
-    const publicationStatus = derivePublicationStatus({ hasArtifact: Boolean(artifact), storedPublication, completed });
+    const publicationStatus = derivePublicationStatus({
+      hasArtifact: Boolean(artifact),
+      hasPracticeRecord: practiceRecordActivityIds.has(activity.id),
+      storedPublication,
+      completed,
+    });
     const practiceDate = timer?.completedAt ? practiceDateAt(timer.completedAt) : activity.date;
     const sessionId = activity.sessionId ?? sessionForActivity.get(activity.id);
     return {
@@ -113,6 +123,7 @@ export async function buildPublicationQueue(ownerId: string, requestedDate?: str
   content.journals.flatMap((journal) => journal.activities).forEach((activity) => byId.set(activity.id, activity));
   (live.historyActivities as JournalActivity[]).forEach((activity) => byId.set(activity.id, activity));
   const artifacts = new Map(content.artifacts.filter((artifact) => artifact.activityId).map((artifact) => [artifact.activityId, artifact]));
+  const practiceRecordActivityIds = await readCurrentPracticeRecordActivityIds(ownerId, [...byId.keys()]);
 
   const candidates = [...byId.values()].flatMap((activity) => {
     const timer = live.timers[activity.id];
@@ -121,6 +132,7 @@ export async function buildPublicationQueue(ownerId: string, requestedDate?: str
     const completed = activity.status === "completed" || Boolean(timer?.completed);
     const publicationStatus = derivePublicationStatus({
       hasArtifact: Boolean(artifact),
+      hasPracticeRecord: practiceRecordActivityIds.has(activity.id),
       storedPublication: live.publicationStatuses[activity.id],
       completed,
     });

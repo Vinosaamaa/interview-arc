@@ -1,8 +1,9 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { practiceDateAt } from "../app/practice-time";
 import { getDb } from "./index";
 import { sha256Hex } from "./integrations";
 import { d1TransactionalInvariantGuard, isD1TransactionalInvariantFailure } from "./d1-transactional-guard";
+import { readD1RowsInBatches } from "./d1-read-batching";
 import {
   activityFinalizations,
   activitySolutionLinks,
@@ -710,4 +711,22 @@ export async function readCurrentPracticeRecord(ownerId: string, activityId: str
     payload,
     createdAt: revision.createdAt,
   };
+}
+
+export async function readCurrentPracticeRecordActivityIds(ownerId: string, activityIds: readonly string[]) {
+  const db = getDb();
+  const rows = await readD1RowsInBatches(activityIds, (batch) => db
+    .select({ activityId: practiceRecords.activityId })
+    .from(practiceRecords)
+    .innerJoin(practiceRecordRevisions, and(
+      eq(practiceRecordRevisions.ownerId, practiceRecords.ownerId),
+      eq(practiceRecordRevisions.activityId, practiceRecords.activityId),
+      eq(practiceRecordRevisions.revision, practiceRecords.currentRevision),
+      eq(practiceRecordRevisions.recordFingerprint, practiceRecords.recordFingerprint),
+    ))
+    .where(and(
+      eq(practiceRecords.ownerId, ownerId),
+      inArray(practiceRecords.activityId, batch),
+    )));
+  return new Set(rows.map((row) => row.activityId));
 }
