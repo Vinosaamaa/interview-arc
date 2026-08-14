@@ -40,6 +40,8 @@ Linked preparation in a Hiring Loop previously reused the Past route. Opening an
 
 Loops now owns a nested reader URL and history state. Selecting completed preparation opens the shared Practice Record reader as a listless modal over the current Loop, makes the covered Loop inert, and restores the exact Loop and opener on Close, Escape, or browser history. Opening a nested reusable solution remains inside that same Loop-owned history chain.
 
+The route requires an explicit owner-scoped Loop identity. Stage identity remains optional because linked preparation may be Loop-wide; when present it is preserved exactly. A missing or unavailable Loop never falls back to the first returned Loop, so stale direct links fail closed instead of displaying an attempt over an unrelated workspace.
+
 The Job Description uses one opaque, viewport-bounded dialog with a fixed document header and independently scrolling body. Closed Problem Banks reserves the remaining desktop viewport for its internally scrolling result list and keeps a twenty-pixel edge gap.
 
 Reusing the Past route was rejected because it made a preparation action change workspace ownership. Duplicating the Practice Record reader inside Loops was also rejected because it would fork one authoritative presentation contract. The selected boundary reuses the shared reader component while giving Loops its own URL and history adapter.

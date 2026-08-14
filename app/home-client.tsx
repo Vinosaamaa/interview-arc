@@ -3468,11 +3468,19 @@ export default function HomeClient({ content, today, engineering }: { content: C
     transitionToView("reviews");
   }
 
-  function openLoopActivity(activityId: string) {
+  function openLoopActivity(activityId: string, explicitLoopId = "", explicitStageId = "") {
     const entry = libraryEntries.find((candidate) => (
       candidate.id === activityId || candidate.artifact?.activityId === activityId
     ));
-    const loopState = readLoopWorkspaceState(window.location.href) ?? { loopId: "", stageId: "" };
+    const currentLoopState = readLoopWorkspaceState(window.location.href);
+    const loopState = {
+      loopId: explicitLoopId || currentLoopState?.loopId || "",
+      stageId: explicitStageId || currentLoopState?.stageId || "",
+    };
+    if (!loopState.loopId) {
+      setReaderNotFound(activityId);
+      return;
+    }
     const currentLoopReader = readLoopReaderState(window.location.href);
     const currentDepth = currentLoopReader && Number.isInteger(window.history.state?.interviewArcLoopDepth)
       ? window.history.state.interviewArcLoopDepth as number
@@ -6001,7 +6009,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
     };
     const activeSort = sortOptions.find((option) => option.key === bankSortKey) ?? sortOptions[0];
     return (
-      <section className={`view-page banks-page ${selectedProblem ? "has-open-solution" : ""} ${listRestoring === "banks" ? "list-restoring" : ""}`}>
+      <section className={`view-page banks-page ${selectedProblem ? "has-open-solution" : ""} ${!selectedProblem && !expandedBankDesk ? "bounded-list" : ""} ${listRestoring === "banks" ? "list-restoring" : ""}`}>
         <InterviewPageHero tone="banks" eyebrow="PROBLEM BANKS · ALL PRACTICE SOURCES" title={<>Choose the next thing<br /><em>worth practicing.</em></>} description="Browse every coding, system-design, and behavioral prompt in one place. Practice today adds the question to standalone practice and takes you directly to Today." footer={<div className="bank-totals hero-bank-totals" aria-label="Question bank totals">
           {([[
             "leetcode", bankFor("leetcode").length, "Coding problems"],

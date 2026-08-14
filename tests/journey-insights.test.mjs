@@ -156,6 +156,14 @@ test("Loop attempt readers retain the exact Loop workspace and close back to it"
     stageId: "round-recruiter",
     attemptId: "attempt-exact",
   });
+  assert.equal(
+    readLoopReaderState("https://example.test/practice?view=loops&round=round-recruiter&attempt=attempt-exact"),
+    null,
+  );
+  assert.deepEqual(
+    readLoopReaderState("https://example.test/practice?view=loops&loop=loop-example-platform&attempt=attempt-exact"),
+    { loopId: "loop-example-platform", stageId: "", attemptId: "attempt-exact" },
+  );
   assert.deepEqual(readerClosePlan(`https://example.test${readerHref}`), {
     view: "loops",
     href: workspaceHref,

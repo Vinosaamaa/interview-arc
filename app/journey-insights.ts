@@ -289,11 +289,19 @@ export function loopReaderHref(currentHref: string, state: LoopReaderState) {
 
 export function readLoopReaderState(currentHref: string): LoopReaderState | null {
   const workspace = readLoopWorkspaceState(currentHref);
-  if (!workspace) return null;
+  if (!workspace?.loopId) return null;
   const url = new URL(currentHref);
   const attemptId = url.searchParams.get("attempt")?.trim() ?? "";
   const problemIdentity = readReaderProblemIdentity(url);
   return attemptId && problemIdentity ? { ...workspace, attemptId, ...problemIdentity } : null;
+}
+
+export function loopAttemptReaderHref(currentHref: string, state: LoopReaderState) {
+  return loopReaderHref(currentHref, {
+    loopId: state.loopId,
+    stageId: state.stageId,
+    attemptId: state.attemptId,
+  });
 }
 
 export function bankReaderHref(
@@ -335,11 +343,7 @@ export function readerClosePlan(currentHref: string): ReaderClosePlan | null {
     return {
       view: "loops",
       href: loopReader.specialty && loopReader.problemId
-        ? loopReaderHref(currentHref, {
-          loopId: loopReader.loopId,
-          stageId: loopReader.stageId,
-          attemptId: loopReader.attemptId,
-        })
+        ? loopAttemptReaderHref(currentHref, loopReader)
         : loopWorkspaceHref(currentHref, loopReader),
     };
   }

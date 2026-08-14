@@ -25,9 +25,11 @@ the shared attempt or solution document without mounting the Past archive or
 Problem Bank master list beside it.
 
 The covered origin remains fully obscured and inert while the reader is open.
-Close, Escape, and browser Back restore the same origin URL, selected Loop or
-other contextual state, scroll position, and opener focus. Forward may restore
-the reader. Opening a reusable solution adds one nested history depth and
+Close, Escape, and browser Back restore the same origin URL together with the
+reader invocation's selected Loop and stage identifiers, query-backed filters
+and sort, list or outline disclosure state, scroll position, and opener focus.
+Forward may restore the reader. Opening a reusable solution adds one nested
+history depth and
 closing it returns to the exact attempt before another close returns to the
 origin. Never implement contextual navigation by switching to Past and hoping
 the user can navigate back manually.

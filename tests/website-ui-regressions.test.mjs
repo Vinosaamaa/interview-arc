@@ -154,8 +154,9 @@ test("Journey Loop facts reserve their final geometry while D1 is loading", asyn
 });
 
 test("Loop preparation opens a listless Loop-owned modal reader", async () => {
-  const [source, css] = await Promise.all([
+  const [source, loopsSource, css] = await Promise.all([
     load("../app/home-client.tsx"),
+    load("../app/loops-workspace.tsx"),
     load("../app/interview-arc-v2.css"),
   ]);
   const file = parseTsx(source);
@@ -170,6 +171,9 @@ test("Loop preparation opens a listless Loop-owned modal reader", async () => {
   assert.match(renderLoops.getText(file), /loops-reader-base/);
   assert.match(renderLoops.getText(file), /inert/);
   assert.match(source, /view === "loops" && renderLoops\(\)/);
+  assert.match(loopsSource, /requestedLoopMissing/);
+  assert.match(loopsSource, /That Loop is unavailable\./);
+  assert.doesNotMatch(loopsSource, /loops\.find\(\(loop\) => loop\.loop\.loopId === selectedLoopId\) \?\? loops\[0\]/);
   assert.equal(cssRules(rules, ".loops-reader-workspace.has-open-reader::before")[0]?.declarations.position, "fixed");
   assert.equal(cssRules(rules, ".loops-reader-workspace.has-open-reader::before")[0]?.declarations.background, "var(--canvas)");
 });
@@ -184,15 +188,19 @@ test("Loop job-description dossier has one continuous opaque scroll surface", as
 });
 
 test("closed Problem Banks dedicate the remaining desktop viewport to their internal list", async () => {
-  const css = await load("../app/interview-arc-v2.css");
+  const [source, css] = await Promise.all([
+    load("../app/home-client.tsx"),
+    load("../app/interview-arc-v2.css"),
+  ]);
   const rules = parseCss(css);
-  const page = ".banks-page:not(.has-open-solution):not(:has(.bank-domain-desk-shell.open))";
+  const page = ".banks-page.bounded-list";
   const pane = `${page} .bank-master-pane`;
   const list = `${page} .problem-bank-list`;
   assert.equal(cssRules(rules, page, "min-width: 901px")[0]?.declarations.height, "calc(100dvh - 117px)");
   assert.equal(cssRules(rules, pane, "min-width: 901px")[0]?.declarations["grid-template-rows"], "auto minmax(0, 1fr)");
   assert.equal(cssRules(rules, list, "min-width: 901px")[0]?.declarations.height, "auto");
   assert.equal(cssRules(rules, list, "min-width: 901px")[0]?.declarations["max-height"], "none");
+  assert.match(source, /!selectedProblem && !expandedBankDesk \? "bounded-list"/);
 });
 
 test("Review Queue keeps filters in the menu, branches each row, and joins its folio", async () => {
