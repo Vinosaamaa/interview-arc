@@ -428,6 +428,8 @@ test("finished activities enter the journal queue without a second toggle", () =
   assert.equal(derivePublicationStatus({ hasArtifact: false, completed: true }), "ready");
   assert.equal(derivePublicationStatus({ hasArtifact: false, completed: false, storedPublication: "ready" }), "ready");
   assert.equal(derivePublicationStatus({ hasArtifact: true, completed: true }), "published");
+  assert.equal(derivePublicationStatus({ hasArtifact: false, hasPracticeRecord: true, completed: true }), "published");
+  assert.equal(derivePublicationStatus({ hasArtifact: false, hasPracticeRecord: true, completed: false }), "published");
   assert.equal(derivePublicationStatus({ hasArtifact: false, completed: true, storedPublication: "published" }), "ready");
   assert.equal(derivePublicationStatus({ hasArtifact: true, completed: true, storedPublication: "published" }), "published");
 });

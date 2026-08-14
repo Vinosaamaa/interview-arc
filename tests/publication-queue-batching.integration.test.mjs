@@ -26,6 +26,10 @@ const otherOwner = "owner-publication-queue-other";
 const primaryToken = "ia_publication_queue_primary_276";
 const otherToken = "ia_publication_queue_other_owner_276";
 const primaryBlockedIndexes = new Set([0, 79, 80, 159, 160, 239, 240, 242]);
+const primaryPracticeRecordIndexes = new Set(
+  Array.from({ length: 110 }, (_, index) => index + 1).filter((index) => !primaryBlockedIndexes.has(index)),
+);
+const otherPracticeRecordIndexes = new Set(Array.from({ length: 111 }, (_, index) => index + 120));
 
 const activityId = (index) => `activity-${String(index).padStart(3, "0")}`;
 const captureId = (index, member) => `capture-${String(index).padStart(3, "0")}-${member}`;
@@ -138,6 +142,8 @@ function fixtureSql(primaryTokenHash, otherTokenHash) {
   const groups = [];
   const groupMembers = [];
   const turns = [];
+  const practiceRecords = [];
+  const practiceRecordRevisions = [];
 
   for (const [ownerId, ownerLabel] of [[primaryOwner, "Primary"], [otherOwner, "Other"]]) {
     workbenches.push([ownerId, `workbench-${ownerLabel.toLowerCase()}`, "open", practiceDates[0], 1, null, 1]);
@@ -172,6 +178,36 @@ function fixtureSql(primaryTokenHash, otherTokenHash) {
         } : {}),
       };
       extraActivities.push([ownerId, id, date, `workbench-${ownerLabel.toLowerCase()}`, JSON.stringify(activity), 1, completedAt]);
+      const recordIndexes = ownerId === primaryOwner ? primaryPracticeRecordIndexes : otherPracticeRecordIndexes;
+      if (recordIndexes.has(index)) {
+        const recordFingerprint = ownerId === primaryOwner ? "c".repeat(64) : "d".repeat(64);
+        const operationId = `record-${ownerLabel.toLowerCase()}-${String(index).padStart(3, "0")}`;
+        practiceRecords.push([
+          ownerId,
+          id,
+          1,
+          specialty,
+          activity.questionId,
+          activity.title,
+          completedAt,
+          date,
+          outcome,
+          1,
+          recordFingerprint,
+          operationId,
+          completedAt,
+        ]);
+        practiceRecordRevisions.push([
+          ownerId,
+          id,
+          1,
+          operationId,
+          `${recordFingerprint}-request`,
+          recordFingerprint,
+          JSON.stringify({ activityId: id, revision: 1 }),
+          completedAt,
+        ]);
+      }
       if (index !== 2) timers.push([ownerId, id, "activity", 600, startedAt, null, 1, completedAt, 1, completedAt]);
       outcomes.push([ownerId, id, outcome, 1, completedAt]);
       interactionModes.push([
@@ -313,6 +349,8 @@ function fixtureSql(primaryTokenHash, otherTokenHash) {
     insertRows("voice_response_groups", ["owner_id", "response_turn_id", "activity_id", "specialty", "response_body", "response_occurred_at", "member_count", "status", "created_at", "updated_at"], groups),
     insertRows("voice_response_group_members", ["owner_id", "capture_id", "response_turn_id", "activity_id", "user_turn_id", "member_order", "transcript", "checksum", "occurred_at", "created_at", "updated_at"], groupMembers),
     insertRows("practice_transcript_turns", ["owner_id", "activity_id", "turn_id", "specialty", "speaker", "body", "source", "sequence", "occurred_at", "updated_at"], turns),
+    insertRows("practice_records", ["owner_id", "activity_id", "current_revision", "specialty", "question_id", "title", "completed_at", "practice_date", "outcome", "solution_revision", "record_fingerprint", "finalization_operation_id", "updated_at"], practiceRecords),
+    insertRows("practice_record_revisions", ["owner_id", "activity_id", "revision", "operation_id", "request_fingerprint", "record_fingerprint", "payload", "created_at"], practiceRecordRevisions),
   ].join("\n");
 }
 
@@ -331,7 +369,7 @@ async function publicationQueue(client) {
   return result.structuredContent;
 }
 
-function assertExactPartition(queue, readyIndexes, blockedIndexes) {
+function assertExactPartition(queue, readyIndexes, blockedIndexes, pendingIndexes) {
   const readyIds = readyIndexes.map(activityId);
   const blockedIds = blockedIndexes.map(activityId);
   assert.deepEqual(queue.activities.map((activity) => activity.id), readyIds);
@@ -340,10 +378,11 @@ function assertExactPartition(queue, readyIndexes, blockedIndexes) {
   assert.equal(new Set(blockedIds).size, blockedIds.length, "blocked activities must not be duplicated");
   assert.deepEqual(
     [...new Set([...readyIds, ...blockedIds])].sort(),
-    Array.from({ length: activityCount }, (_, index) => activityId(index)),
+    pendingIndexes.map(activityId).sort(),
     "the complete last batch must be returned exactly once",
   );
-  assert.deepEqual(queue.groups, practiceDates.map((date) => ({
+  const readyDates = [...new Set(queue.activities.map((activity) => activity.practiceDate))].sort();
+  assert.deepEqual(queue.groups, readyDates.map((date) => ({
     date,
     activities: queue.activities.filter((activity) => activity.practiceDate === date),
   })));
@@ -384,11 +423,12 @@ test("undated get_publication_queue returns a deterministic, exact, owner-scoped
     assert.deepEqual(primaryReplay, primaryQueue, "repeated undated reads must be deterministic");
 
     const allIndexes = Array.from({ length: activityCount }, (_, index) => index);
-    const primaryBlocked = allIndexes.filter((index) => primaryBlockedIndexes.has(index));
-    const primaryReady = allIndexes.filter((index) => !primaryBlockedIndexes.has(index));
+    const primaryPending = allIndexes.filter((index) => !primaryPracticeRecordIndexes.has(index));
+    const primaryBlocked = primaryPending.filter((index) => primaryBlockedIndexes.has(index));
+    const primaryReady = primaryPending.filter((index) => !primaryBlockedIndexes.has(index));
     assert.equal(primaryQueue.date, null);
     assert.equal(primaryQueue.timeZone, "America/Los_Angeles");
-    assertExactPartition(primaryQueue, primaryReady, primaryBlocked);
+    assertExactPartition(primaryQueue, primaryReady, primaryBlocked, primaryPending);
     assert.ok(primaryQueue.activities.every((activity) => activity.title.startsWith("Primary backlog activity")));
     assert.ok(primaryQueue.blockedActivities.every((activity) => activity.title.startsWith("Primary backlog activity")));
     assert.deepEqual(
@@ -421,7 +461,10 @@ test("undated get_publication_queue returns a deterministic, exact, owner-scoped
 
     assert.equal(otherQueue.date, null);
     assert.equal(otherQueue.timeZone, "America/Los_Angeles");
-    assertExactPartition(otherQueue, primaryBlocked, primaryReady);
+    const otherPending = allIndexes.filter((index) => !otherPracticeRecordIndexes.has(index));
+    const otherReady = otherPending.filter((index) => primaryBlockedIndexes.has(index));
+    const otherBlocked = otherPending.filter((index) => !primaryBlockedIndexes.has(index));
+    assertExactPartition(otherQueue, otherReady, otherBlocked, otherPending);
     assert.ok(otherQueue.activities.every((activity) => activity.title.startsWith("Other backlog activity")));
     assert.ok(otherQueue.blockedActivities.every((activity) => activity.title.startsWith("Other backlog activity")));
     for (const activity of otherQueue.blockedActivities) {
