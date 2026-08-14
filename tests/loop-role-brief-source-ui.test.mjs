@@ -76,7 +76,10 @@ test("the Loop detail uses a modal source reader, exact-attempt links, and inlin
   assert.match(source, /workspace\.inert = true/);
   assert.match(source, /event\.key === "Escape"/);
   assert.match(source, /data-loop-activity-id=/);
-  assert.match(source, /onOpenActivity\(attempt\.activityId\)/);
+  assert.match(
+    source,
+    /onOpenActivity\(attempt\.activityId, loop\.loop\.loopId, attempt\.stageId \?\? ""\)/,
+  );
   assert.match(source, /function InterviewMaterial/);
   assert.match(source, /material\.stageId \? "Stage material" : "Legacy Loop-wide material"/);
   assert.match(source, /material\.provenance\.sourceLabel/);
