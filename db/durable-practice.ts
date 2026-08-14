@@ -253,6 +253,16 @@ export type SpecialistFinalization = {
       }>;
     };
     practiceScenarios?: BehavioralPracticeScenario[];
+    questionsAndAnswers?: {
+      status: "included" | "not_applicable";
+      reason: string;
+      items: Array<{
+        question: string;
+        answer: string;
+        classification: "current_implementation" | "target_design" | "fictional_practice_scenario";
+        turnIds: string[];
+      }>;
+    };
     projectDeepDive?: {
       projectId: string;
       bindingRevision: number;
@@ -372,6 +382,7 @@ export function profileFingerprint(payload: NonNullable<SpecialistFinalization["
       .sort((left, right) => left.url.localeCompare(right.url)),
     behavioralAnswer: payload.behavioralAnswer,
     practiceScenarios: behavioralPracticeScenariosFingerprint(payload.practiceScenarios),
+    questionsAndAnswers: payload.questionsAndAnswers,
     projectDeepDive: payload.projectDeepDive,
   });
 }

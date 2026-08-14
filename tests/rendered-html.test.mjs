@@ -61,7 +61,7 @@ test("the Cloudflare build contains the Interview Arc dashboard", async () => {
   assert.match(bundle, /Case file contents/);
   assert.match(bundle, /Read the journey/);
   assert.match(bundle, /like a field journal/);
-  assert.match(bundle, /Open reusable solution/);
+  assert.match(bundle, /Open latest solution/);
   assert.match(bundle, /D1 DRAFT · NOT YET IN THE JOURNAL/);
   assert.match(bundle, /CONVERSATION TRANSCRIPT/);
   assert.match(bundle, /Your recording sits between the prompt and the answer it captures/);

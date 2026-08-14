@@ -156,9 +156,11 @@ async function executePythonImplementation(directory, implementation, inputs, ex
   execFileSync("python3", [pythonPath]);
 }
 
-test("Basic Calculator revision 2 passes the full executable LeetCode depth gate", () => {
+test("Basic Calculator revision 2 remains immutable and readable under the newer depth gate", () => {
   validateProfile(profile);
-  assert.deepEqual(solutionProfileMissingRequirements("leetcode", profile), []);
+  const missing = solutionProfileMissingRequirements("leetcode", profile);
+  assert.ok(missing.includes("detailed self-contained problem section"));
+  assert.ok(missing.includes("detailed Editorial-first approach catalog section"));
   const rendered = renderArtifact(profile);
   assert.match(rendered, /not a new practice attempt/i);
   assert.match(rendered, /### Alternative: Reverse scan with a token stack/);

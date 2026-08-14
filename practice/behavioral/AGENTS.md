@@ -226,12 +226,12 @@ key. Generic sentences copied across all nine keys are incomplete. The
 executable Solution Profile policy rejects shallow profiles before D1
 finalization; never fill a gap with an unsupported claim merely to pass it.
 
-When substantial project questions occurred, append one dedicated Questions
-and Answers section after the required Project Deep Dive keys. Restate each
-question clearly, preserve the final corrected specialist answer and hidden
-turn provenance, and label it `Current implementation`, `Target design`, or
-`Fictional practice scenario — not personal experience`. Do not duplicate that
-material in the dated attempt.
+Always set the typed Questions and Answers disposition. For substantial project
+questions, use `included` with each clear restatement, complete corrected
+answer, exact hidden turn IDs, and `Current implementation`, `Target design`,
+or `Fictional practice scenario — not personal experience`; otherwise use
+`not_applicable` with a truthful reason and no items. Never duplicate it in
+Past.
 
 The Past attempt renders one prompt, summary, conversation, Final Tailored
 Answer, Activity Review, and collapsed nonempty Technical Audit. Never create a
