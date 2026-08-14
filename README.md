@@ -1,9 +1,10 @@
 # Interview Arc
 
-Interview Arc is a personal interview-preparation journal. It plans the daily work, times each attempt, records what happened, and turns practice sessions into durable files that can be reviewed later.
+Interview Arc is a personal interview-preparation journal. It plans daily work,
+times attempts, and turns practice into durable owner-private records.
 
-The website is the dashboard. D1 stores live working state; the files in this
-repository remain the long-term narrative record.
+The website is the dashboard. D1 and private R2 own personal practice state and
+evidence; this repository owns public-safe product sources.
 
 ## Daily Practice
 
@@ -38,15 +39,15 @@ interview-arc/
 ├── docs/
 │   ├── agents/website.md           complete website-agent guide
 │   ├── architecture/               repository decisions
-│   └── contracts/                  shared activity and artifact formats
+│   └── contracts/                  shared record and interface formats
 ├── practice/
-│   ├── leetcode/                   question bank and attempt records
-│   ├── system-design/              system-design sessions and agent guide
-│   └── behavioral/                 behavioral sessions and agent guide
+│   ├── leetcode/                   question bank, guide, frozen legacy attempts
+│   ├── system-design/              question bank, solutions, and agent guide
+│   └── behavioral/                 question bank, guide, frozen legacy sessions
 ├── learn/                           Learning Specialist guide and reviewed reusable curriculum
 ├── loops/                           Loop Recorder specialist guide
 ├── audio-answers/                  ignored local staging for private recordings
-└── scripts/                        local artifact helpers
+└── scripts/                        local/runtime helpers
 ```
 
 The site remains at the Git repository root because the Cloudflare Worker build
@@ -71,25 +72,24 @@ practice specialists remain coaching owners.
 
 The outer workspace instructions route a task to the right guide even when every task starts from the same Interview Prep folder. The user does not need separate projects or worktrees.
 
-Use the durable D1 handoff described in
-`docs/contracts/durable-practice-publishing.md`:
+Use the owner-private handoff in
+`docs/contracts/owner-private-practice-records.md`:
 
 - A focused dashboard activity or clearly named problem starts/resumes work.
   `Start a new session` is only an override.
 - Specialists append activity-scoped turns and notes to D1 while practicing.
-- `Publish today's practice` in a specialist task flushes and finalizes that
-  specialty's pending activities in D1; it does not touch Git.
-- `Publish all pending practice` in `Interview Arc — Coordinator` contacts all
-  registered specialists, consumes their finalized bundles, creates every Git
-  artifact/daily journal by Pacific completion date, opens the journal pull
-  request, and publishes through the main workflow.
+- Finish durably queues one complete attempt/profile/asset packet; a mechanical
+  persistence child writes and rereads exact D1/R2 revisions.
+- `Publish today's practice` reconciles that specialty's eligible activities;
+  `Publish all pending practice` coordinates pending/failed reconciliation.
+  Neither command creates a routine Git artifact or deployment.
 
-Finished activities become **Ready for journal** automatically. The command is
-a checkpoint over all still-unpublished ready work, so it can be run after
-midnight. Exporting `journal-YYYY-MM-DD-draft.json` remains the portable
-fallback when the authenticated bridge is unavailable.
+The website shows **Finalization pending** until exact readback succeeds, then
+exposes the immutable record in Past. Optional ignored exports remain a
+portable convenience fallback, not durable authority.
 
-See `docs/architecture/single-project-practice-workflow.md` for the full ownership and Git model.
+See `docs/architecture/single-project-practice-workflow.md` for task ownership
+and the migration boundary.
 
 ## LeetCode Data Policy
 
@@ -133,11 +133,12 @@ In the current local umbrella workspace, run transcription from this repository 
 ```bash
 ../.venv/bin/python scripts/transcribe_audio.py path/to/answer.m4a \
   --topic tiktok-feed \
-  --prompt "Design TikTok's For You feed"
+  --prompt "Design TikTok's For You feed" \
+  --no-copy
 ```
 
-The helper copies the recording into ignored `audio-answers/` staging and
-creates its Markdown review. Upload the staged file with
+Use `--no-copy`, treat generated text as transient review input, and upload the
+source with
 `node scripts/upload-practice-audio.mjs <activity_id> <path> --turn <user_turn_id> --label "Recorded answer"`; the
 authenticated specialist environment supplies `INTERVIEW_ARC_MCP_TOKEN`. A
 standalone clone may instead create `.venv/` in this repository and run the
@@ -155,13 +156,12 @@ pnpm test
 ```
 
 `pnpm dev` first runs the idempotent `dev:prepare` step, which applies the
-migrations and imports Git-backed journals, artifacts, solutions, and question
-banks into an isolated local D1 database. Local development never reads or
-writes the production D1 database. Run `pnpm dev:prepare` directly when you
-only need to refresh that local database without starting the site.
+migrations and imports public-safe banks plus frozen legacy content into an
+isolated local D1 database. Local development never reads or writes production
+D1. Run `pnpm dev:prepare` directly to refresh local state without the site.
 
 Production runs as the `limitless` Cloudflare Worker described by
-`wrangler.jsonc`, with shared published content and owner-scoped live state in
+`wrangler.jsonc`, with public-safe shared content and owner-scoped state in
 D1. Cloudflare Access supplies verified identity. The separate `limitless-mcp`
 Worker in `wrangler.mcp.jsonc` exposes authenticated Codex MCP tools and the
 Chrome companion API against that same database. `.openai/hosting.json` is
@@ -169,15 +169,15 @@ retained only for the temporary legacy OpenAI Sites deployment; do not use it
 as the production architecture or remove it until the user explicitly retires
 that site.
 
-Git JSON/Markdown is canonical for journals, solutions, transcripts, and story
-records. `scripts/import-content.mjs` projects those files into D1 so the site
-can read new published content without compiling it into the application.
-Timers, result flags, website-created sessions, extra activities, and
-non-publishable Career Focus blocks are canonical in D1, with browser storage
-acting only as an offline cache and retry queue.
+Owner-scoped D1 is canonical for mutable practice state and immutable Practice
+Record/Solution Profile revisions; private R2 owns recordings and diagrams.
+Git is canonical only for public-safe code, contracts, banks, examples, and
+Engineering records. `scripts/import-content.mjs` retains frozen legacy content
+during migration and rejects new or changed private Git artifacts. Browser
+storage remains only an offline cache and retry queue.
 
-Published content is not compiled into one static page per artifact. Past
-attempts and Problem Bank Solution Profiles are rendered at runtime by one
+Practice content is not compiled into one static page per record. Past attempts
+and Problem Bank Solution Profiles are rendered at runtime by one
 shared reader, so typography, code-block presentation, diagram controls, and
 layout improvements update old artifacts automatically. Missing factual
 sections still require a deliberate Solution Profile revision or backfill.
@@ -187,13 +187,11 @@ for the exact boundary and template-evolution rules.
 ## Git Workflow
 
 - Code, schemas, and agent-guide changes use a feature branch and pull request.
-- Generated interview artifacts can be grouped into one daily branch such as `journal/2026-07-17`.
-- Specialist tasks do not switch branches or write publication files. They save
-  draft turns, notes, and finalization bundles to D1.
-- The coordinator alone uses the daily branch and creates the complete journal
-  pull request.
+- Specialist tasks do not switch branches or write personal practice files.
+  They save through owner-scoped D1/private R2 finalization.
+- The coordinator reconciles pending/failed private records and separately
+  authorized public exports; routine completion has no daily Git branch.
 - Timer ticks and live UI state belong in application storage, not one Git commit per click.
-- End-of-day Markdown is the durable journal record.
 - Pull requests run local-D1 validation, lint, build, and tests. A merge to
   `main` refreshes the production D1 content projection only after validation;
   content/documentation-only merges skip the Worker redeploy.

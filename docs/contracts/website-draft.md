@@ -1,8 +1,14 @@
 # Website Draft Contract
 
+> New completion and reader behavior follows
+> [`owner-private-practice-records.md`](./owner-private-practice-records.md).
+> Versioned daily manifests and personal Markdown below are frozen legacy input,
+> not the forward durable record.
+
 The website stores unpublished timer and planning state in owner-scoped D1
-tables and caches it on the current device for offline use. Versioned daily
-manifests and specialist artifacts remain the durable narrative record.
+tables and caches it on the current device for offline use. Immutable Practice
+Record/Solution Profile revisions in D1 and private assets in R2 are the forward
+durable record.
 
 ## Timers
 

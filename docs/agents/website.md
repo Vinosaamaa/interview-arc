@@ -20,24 +20,28 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
   practice activities. It shares the one-active-stopwatch rule but has no
   outcome, specialist, review, solution, Past card, Problem Bank row, or
   publication lifecycle. Follow `../contracts/career-work.md`.
-- On Today, use the masthead tally for yesterday's completed activities, recorded time, and sessions. Read owner-scoped D1 state for yesterday so unpublished work is not omitted; fall back to the versioned journal offline.
+- On Today, use the masthead tally for yesterday's completed activities,
+  recorded time, and sessions from owner-scoped D1; frozen versioned journals
+  are migration-only fallback.
 - Let locally added activities be edited and removed.
 - Store lifecycle separately from outcome.
 - Treat Today as one durable owner-scoped workbench rather than a calendar-day
   query. Pacific midnight does not clear it. `Start fresh day` confirms and
   closes started timers, archives never-started rows as not attempted, clears
   Voice focus, and opens a new workbench without marking anything published.
-- Hide published activities from Today immediately; remove a session when all
-  of its publishable activities are published. Archived ready work remains in
-  the coordinator's undated queue.
+- Hide durably finalized activities from Today immediately; remove a session
+  when every activity is finalized or archived. Pending/failed finalization
+  remains explicit and reconcilable.
 - Give coding, system-design, and behavioral activities the same cycling result-flag layout: Solved, Solved with help, and Failed. Preserve `solved_after_reviewing_approach` as the canonical stored value. The hover/focus legend must explain the colors and must not be clipped inside its activity card.
 - Open the original LeetCode page for prompt reading and submission. Never imply that code was executed or accepted locally.
-- Show system-design and behavioral transcript/review artifacts when tracked files exist.
+- Past pages through bounded finalized-record metadata from D1. Load one exact
+  transcript/review and its authenticated R2 assets only when opened.
 - Past contains every completed attempt, including failed work worth reviewing;
   it never shows planned or running activities. Keep practice-type filters
   separate from attention filters: Due now, Needs review, Solved, Solved with
   help, Failed, and Has notes.
-- Render tracked artifact Markdown as formatted headings, lists, links, tables, quotes, and code blocks rather than raw source text.
+- Render normalized immutable record content as formatted headings, lists,
+  links, tables, quotes, code, and diagrams rather than raw source text.
 - Follow `../contracts/reader-rendering.md`. The reader is one shared runtime
   template over versioned Markdown/JSON, not a generated static page per
   artifact. CSS and interaction improvements must update prior artifacts
@@ -72,7 +76,8 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
   authoritative read-back behavior. These MCP tools must reuse the same D1
   mutations and owner-scoped live-update path as the website and Voice.
 
-- Treat `data/daily/YYYY-MM-DD.json` as the canonical daily plan and finalized activity summary.
+- Treat `data/daily/*.json` and personal Markdown as frozen legacy projection
+  input only. New plans and finalized records are owner-scoped D1 state.
 - Treat `practice/leetcode/bank/questions.json` as user-maintained metadata, not scraped data.
 - Treat `practice/system-design/bank/questions.json` and `practice/behavioral/bank/questions.json` as the matching prompt banks.
 - A bank question may point to a durable `solutionPath`. The content importer
@@ -83,23 +88,20 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
   Solution Profile revision; they render the canonical profile through the
   shared reader and never duplicate its body, infer identity from text, or
   rewrite a Past attempt's immutable `projectDeepDiveLink`.
-- Treat `practice/*/sessions/*.md` and `audio-answers/*.md` as durable journal artifacts.
+- Never add or modify personal `practice/*/sessions`, `practice/*/attempts`,
+  revisioned profile, `audio-answers`, or daily-journal files. The frozen
+  manifest is migration-only.
 - Use the contracts under `docs/contracts/` as the canonical field names.
 - Follow `../contracts/live-update-reliability.md` for website, Picture-in-
   Picture, Companion, Voice-facing, and synchronization changes. D1 and REST
   mutations remain authoritative; push is owner-scoped invalidation only.
-- `scripts/import-content.mjs` mirrors versioned journals, artifacts, story files,
-  and all three banks into the shared D1 content tables. Do not generate or
-  commit a TypeScript content bundle.
-- D1 is authoritative for owner-scoped timers, outcomes, website-created
-  sessions, and extra activities. Browser storage is an offline cache and retry
-  queue; versioned daily/artifact files are authoritative for published
-  narrative content.
-- D1 also owns activity-scoped draft transcript turns, pinned notes,
-  specialist finalization bundles, review schedules, the stable specialist-task
-  registry, private audio metadata, and per-answer delivery-analysis records.
-  These rows are working state—not the
-  published journal. Follow `../contracts/durable-practice-publishing.md`.
+- `scripts/import-content.mjs` mirrors public-safe banks and frozen legacy
+  content only; its privacy validator rejects new or changed private files.
+- D1 is authoritative for owner-scoped mutable state and immutable Practice
+  Record/Solution Profile revisions. Browser storage is an offline cache and
+  retry queue. Private R2 owns recording and drawing bytes.
+- Follow `../contracts/owner-private-practice-records.md` for finalization,
+  record/profile links, assets, Past, Solution, and reconciliation.
 - Follow the owner-private LeetCode metadata enrichment and preservation rules
   in `../contracts/durable-practice-publishing.md`.
 - The Today view uses the current date in `America/Los_Angeles`. If no imported
@@ -110,7 +112,9 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
   ownership; never store raw email or trust a caller-supplied identity header.
 - Never send private interview transcripts or local audio to an external service without explicit user authorization.
 
-The website must not imply that browser draft state has already been published to Git. Give the user a file export for transferring timer/outcome data when useful, and label committed artifacts separately from local drafts.
+The website must not imply that queued work is finalized. Show
+`Finalization pending` until exact D1/R2 readback succeeds. Optional local
+exports are ignored convenience copies, not publication.
 
 ## UX Direction
 
@@ -205,11 +209,9 @@ The website must not imply that browser draft state has already been published t
   days; approach-review work in 7; successful recalls advance to 21 then 60.
 - Anchor Journey with a selectable 365-day practice heatmap. Shade only finished coding and mock work; expose failed-attempt counts in the day detail without treating them as solved output.
 - Every Journey visualization must disclose the records behind it: heatmap days and trend points select a date, topic bars reveal matching attempts, and effort/outcome points open the activity record. Do not infer mastery, productivity by time of day, or other statistics unsupported by stored evidence.
-- Present publication state in user language: `draft` is **Finish to journal**,
-  `ready` is **Ready for journal**, and `published` is **In journal**. Finishing
-  an already-started stopwatch derives `ready` automatically. Choosing or
-  clearing a result never changes completion or publication readiness; the
-  publication control is informational rather than a second user decision.
+- Present forward state as **In progress**, **Finalization pending**,
+  **Finalized**, or an actionable failure. Outcome remains independent. Frozen
+  legacy publication labels may render only for legacy records.
 
 ## Implementation And Hosting
 
@@ -238,16 +240,12 @@ The website must not imply that browser draft state has already been published t
   journal:checkpoint -- --date YYYY-MM-DD --area practice`; if unrelated code
   is also dirty, finish or explicitly separate that work instead of stashing or
   mixing it automatically.
-- For `Publish all pending practice`, first ask every relevant registered
-  specialist task to flush/finalize. Then fetch main, create or return to each
-  required `journal/YYYY-MM-DD`, merge `origin/main`, render and validate the
-  D1-backed case files, push, and open the journal PR. Never treat “behind main”
-  as a conflict by itself. Mark D1 records published only after their artifacts
-  exist and are importable.
-- Treat the pinned Solution Profile revision as a full-fidelity publication
-  source. Preserve every ordered section, implementation, meaningful
-  alternative, diagram/API/data artifact, evidence gap, and scenario label.
-  Reject a summary-only or shortened rendering even when D1 finalization is
-  ready; publication must never make the durable solution less useful.
+- For `Publish all pending practice`, reconcile exact pending/failed
+  owner-private finalizations through registered specialists. Routine recovery
+  performs no journal PR or deployment. A public export requires separate
+  explicit owner authorization.
+- Render the exact Solution Profile revision at full fidelity. Preserve every
+  ordered section, implementation, meaningful approach, diagram/API/data
+  artifact, evidence gap, Q&A entry, and fictional label.
 - The old OpenAI Sites project remains a temporary fallback. Do not deploy to
   or retire it unless the user explicitly asks.

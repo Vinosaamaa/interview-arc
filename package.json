@@ -14,6 +14,7 @@
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "test": "pnpm run build && node --experimental-strip-types --test --test-concurrency=1 tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "privacy:practice-content:check": "node scripts/validate-owner-private-content-boundary.mjs",
     "mcp:config:check": "node scripts/validate-mcp-tool-allowlist.mjs",
     "mcp:config:sync-outer": "node scripts/validate-mcp-tool-allowlist.mjs --sync-outer",
     "behavioral:evidence:validate": "node scripts/build-behavioral-evidence-site.mjs --validate-only",

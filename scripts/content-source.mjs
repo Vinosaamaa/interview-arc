@@ -37,7 +37,7 @@ function parseScalar(value) {
   return clean.replace(/^['"]|['"]$/g, "");
 }
 
-function parseMarkdown(source, relativePath, fallbackType) {
+export function parseContentMarkdownDocument(source) {
   const normalized = source.replace(/\r\n/g, "\n");
   const frontmatter = {};
   let body = normalized;
@@ -53,6 +53,12 @@ function parseMarkdown(source, relativePath, fallbackType) {
       body = normalized.slice(end + 5).trim();
     }
   }
+
+  return { body, frontmatter };
+}
+
+function parseMarkdown(source, relativePath, fallbackType) {
+  const { body, frontmatter } = parseContentMarkdownDocument(source);
 
   const firstHeading = body.match(/^#\s+(.+)$/m)?.[1]?.trim();
   const sections = [];

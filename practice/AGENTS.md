@@ -7,6 +7,8 @@ matching `practice/<specialty>/AGENTS.md`.
 
 Read these shared contracts only when the corresponding action is needed:
 
+- private finalization, Past/Solution separation, or drawing assets:
+  `../docs/contracts/owner-private-practice-records.md`;
 - persistence, Voice grouping, finalization, or publication:
   `../docs/contracts/durable-practice-publishing.md`;
 - background writes: `../docs/contracts/background-specialist-persistence.md`;
@@ -143,7 +145,7 @@ acknowledged lost. If the named tool is absent from the loaded catalog, report
 its exact name and require a full MCP/Codex reconnect; never substitute a
 similarly named operation or loop retries.
 
-## Session And Publication Commands
+## Session And Finalization Commands
 
 - A focused activity or clearly named question establishes the normal boundary;
   `Start a new session` is an explicit override.
@@ -160,11 +162,11 @@ similarly named operation or loop retries.
   reuse one stable mutation ID for an exact retry, and report every deleted or
   rejected ID from the receipt. Never substitute whole-workbench rollover or
   delete durable evidence.
-- `Publish this session` flushes and finalizes one activity in D1.
-- `Publish today's practice` finalizes every ready activity for that specialty
-  in D1, including failures. It performs no Git, PR, publication, or deploy.
-- Only the coordinator handles `Publish all pending practice`, Git artifacts,
-  journal branches/PRs, production import, and deployment.
+- `Finish`, legacy `Publish this session`, and specialty-wide reconciliation
+  follow `owner-private-practice-records.md`; this guide owns only specialty
+  meaning and exact inputs.
+- `Publish today's practice` is private reconciliation, never implicit public
+  release. Coordinator routing follows the same contract.
 - Pacific midnight assigns completion date but never splits a continuous mock
   transcript or changes `session_id`.
 

@@ -32,9 +32,11 @@ material and display-safe projections.
 
 The web workspace coordinates three practice specialists, an administrative
 Loop Recorder, a native Voice companion, Cloudflare Worker APIs, owner-isolated
-D1 state, private R2 audio, and Git-owned published narrative artifacts. The
-owner commonly uses Today while practicing, Loops around live hiring rounds,
-and Journey for factual reflection across time.
+D1 state, and private R2 recordings and drawings. Git owns public-safe product
+and Engineering sources, not private practice narrative. Frozen legacy Git
+artifacts remain readable only during the D1/R2 migration. The owner commonly
+uses Today while practicing, Loops around live hiring rounds, and Journey for
+factual reflection across time.
 
 ## Capabilities and Constraints
 
@@ -47,9 +49,11 @@ and Journey for factual reflection across time.
   and immutable Loop-owned Role Brief revisions.
 - Only the Loop Recorder creates or revises Role Briefs. Practice specialists
   consume display-safe exact revisions and may attach context when authorized.
-- D1 is authoritative for mutable owner-private state. Git is not a private
-  database, and raw job descriptions, transcripts, recordings, or credentials
-  never enter public fixtures or UI telemetry.
+- D1 is authoritative for mutable state and immutable owner-private Practice
+  Record/Solution Profile revisions; private R2 owns large private bytes. Git
+  is not a private database, and private job descriptions, transcripts,
+  recordings, diagrams, credentials, or profiles never enter public sources,
+  fixtures, or telemetry.
 - Dates, outcomes, interviewer feedback, and remembered exactness are explicit
   facts; the product never infers them from elapsed or scheduled time.
 

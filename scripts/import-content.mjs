@@ -11,11 +11,13 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { readContent } from "./content-source.mjs";
 import { buildTableRefreshSql } from "./content-import-sql.mjs";
+import { validateOwnerPrivateContentBoundary } from "./validate-owner-private-content-boundary.mjs";
 
 const root = process.cwd();
 const remote = process.argv.includes("--remote");
 const now = Date.now();
 
+await validateOwnerPrivateContentBoundary(root);
 const { journals, artifacts, stories, questionBanks } = await readContent(root);
 
 const statements = [];
