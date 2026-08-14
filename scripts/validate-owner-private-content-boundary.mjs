@@ -12,6 +12,8 @@ const privateDirectories = [
   ["practice/behavioral/story-bank/projects", ".md"],
   ["practice/leetcode/attempts", ".md"],
   ["practice/system-design/sessions", ".md"],
+  ["scripts/repairs", ".json"],
+  ["scripts/repairs", ".mjs"],
 ];
 const solutionDirectories = [
   "practice/behavioral/solutions",
