@@ -30,6 +30,7 @@ const MAX_DIRECTORY_ENTRIES = 5_000;
 const MAX_REMOTE_TEXT = 240;
 const FILESYSTEM_SOURCE_POLICY = "source-policy.json";
 const SOURCE_KINDS = new Set(["resume", "repository", "document", "chat_export", "architecture", "git_history", "user_statement", "other"]);
+const CONNECTOR_REFRESH_MODES = new Set(["remote", "conversation"]);
 const REMOTE_E1_MAX_ORIGINS = new Set(["user_statement", "resume", "generated_secondary", "derived_inference"]);
 const PROVENANCE_BY_ORIGIN = {
   user_statement: "conversation",
@@ -428,7 +429,9 @@ function projectSourceSnapshot(project, source) {
   }
   const refreshStatus = sourceRefreshStatus(source);
   const inspectionIsCurrent = source.availability === "available" && ["current", "changed"].includes(refreshStatus);
-  const projectedAvailability = source.availability === "available" && refreshStatus === "not_checked"
+  const projectedAvailability = CONNECTOR_REFRESH_MODES.has(source.refreshMode)
+    && source.availability === "available"
+    && refreshStatus === "not_checked"
     ? "not_checked"
     : source.availability;
   const snapshot = {

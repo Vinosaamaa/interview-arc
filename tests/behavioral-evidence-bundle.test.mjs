@@ -807,6 +807,21 @@ test("sync preparation projects stale non-filesystem sources as not checked", as
   assert.equal(plan.sources[0].source.lastInspectedAt, undefined);
 });
 
+test("sync preparation rejects a stale filesystem source claim", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.sources[0].locator = fixture.projectRoot;
+  record.sources[0].refreshMode = "filesystem";
+  record.sources[0].refreshStatus = "not_checked";
+  await writeJson(recordPath, record);
+
+  await assert.rejects(
+    prepareBehavioralEvidenceSyncPlan({ bundleRoot: fixture.root }),
+    /must have a current or changed refresh status/,
+  );
+});
+
 test("sync preparation accepts an explicit local-only exclusion and reports it", async (t) => {
   const fixture = await createFixture(t);
   const { plan } = await prepareBehavioralEvidenceSyncPlan({ bundleRoot: fixture.root });

@@ -41,8 +41,9 @@ are pinned, do not make exact replay depend on the source remaining currently
 available. Project a connector-owned source whose refresh state is `not_checked`
 as `not_checked` without stale revision metadata; that current source state does
 not invalidate an existing immutable pin. Read the ignored plan without printing
-it wholesale. Register sources only after reading their exact current D1 revisions; execute only its
-typed evidence writes, poll every durable receipt, and then present the pending
+it wholesale. Register sources only after reading their exact current D1
+revisions; execute only its typed evidence writes, poll every durable receipt,
+and then present the pending
 candidate queue for explicit owner review. A prepared plan is not a saved
 receipt. Never upload the bundle, plan, source bytes, local locators, or review
 site to R2. Treat `uncoveredPendingEvidence > 0` as a sync-readiness blocker:
