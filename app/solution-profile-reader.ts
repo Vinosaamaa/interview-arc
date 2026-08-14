@@ -1,3 +1,5 @@
+import type { BehavioralProjectProfileBinding } from "../db/behavioral-project-deep-dive-policy";
+
 type ReaderSection = { title: string; body: string };
 
 export type SolutionReaderGroup = {
@@ -9,7 +11,7 @@ export type SolutionReaderGroup = {
 export function groupSolutionProfileSections(
   specialty: "leetcode" | "system_design" | "behavioral",
   sections: ReaderSection[],
-  projectDeepDive?: unknown,
+  projectDeepDive?: BehavioralProjectProfileBinding,
 ): SolutionReaderGroup[] {
   if (!sections.length) return [];
   if (specialty === "leetcode") return [{ key: "reference-solution", title: "Reference solution", sections }];

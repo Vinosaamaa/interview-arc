@@ -537,8 +537,12 @@ test("editorial research reuses the verified tab, navigates same-tab, and never 
   assert.equal(result.availability, "available");
   assert.equal(result.contentAvailable, true);
   assert.deepEqual(result.researchMaterial, researchMaterial);
-  assert.match(result.researchFingerprint, /^[a-f0-9]{64}$/);
-  assert.equal(result.researchFingerprint, editorialResearchFingerprint(researchMaterial));
+  assert.match(result.contentSha256, /^[a-f0-9]{64}$/);
+  assert.equal(result.contentSha256, editorialResearchFingerprint(researchMaterial));
+  assert.notEqual(
+    editorialResearchFingerprint({ ...researchMaterial, renderedText: `${researchMaterial.renderedText} changed` }),
+    result.contentSha256,
+  );
   assert.deepEqual(adapter.calls, [
     ["navigate", canonicalEditorialUrl(identity)],
     ["editorial-content"],
@@ -551,7 +555,9 @@ test("editorial research reports locked and shell-only content without citing it
     const adapter = pageAdapter({
       waitForEditorialContent: async () => ({
         state,
-        ...(state === "unavailable" ? { reason: "editorial_content_not_rendered" } : {}),
+        reason: state === "unavailable"
+          ? "The canonical Editorial page rendered no usable article content before the controller timeout."
+          : "The canonical Editorial article is present, but its rendered content is premium locked.",
       }),
     });
     const result = await controllerWith(adapter).editorial(identity);
@@ -560,7 +566,9 @@ test("editorial research reports locked and shell-only content without citing it
     assert.equal(result.editorialUrl, canonicalEditorialUrl(identity));
     assert.equal(
       result.reason,
-      state === "unavailable" ? "editorial_content_not_rendered" : undefined,
+      state === "unavailable"
+        ? "The canonical Editorial page rendered no usable article content before the controller timeout."
+        : "The canonical Editorial article is present, but its rendered content is premium locked.",
     );
   }
 });

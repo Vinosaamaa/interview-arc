@@ -159,6 +159,49 @@ function labeledSubsection(body: string, matcher: RegExp) {
   return body.slice((heading.index ?? 0) + heading[0].length, headings[index + 1]?.index ?? body.length).trim();
 }
 
+function editorialResearchMissingRequirements(
+  profile: SolutionProfileLike,
+  blocks: LeetCodeCatalogApproach[],
+) {
+  const missing: string[] = [];
+  const editorialResearch = profile.editorialResearch;
+  if (!editorialResearch) return ["Playwright Editorial research receipt"];
+
+  const recordedTitles = editorialResearch.approaches.map((approach) => normalize(approach.title));
+  const renderedTitles = blocks.filter((block) => block.kind === "editorial").map((block) => normalize(block.title));
+  if (editorialResearch.source !== "leetcode_playwright_controller") {
+    missing.push("checked-in Playwright Editorial research source");
+  }
+  if (!/^https:\/\/leetcode\.com\/problems\/[a-z0-9-]+\/editorial\/?$/i.test(editorialResearch.url)) {
+    missing.push("canonical Editorial research URL");
+  }
+  if (!Number.isFinite(Date.parse(editorialResearch.accessedAt))) {
+    missing.push("valid Editorial research timestamp");
+  }
+  if (new Set(recordedTitles).size !== recordedTitles.length || recordedTitles.some((title) => !title)) {
+    missing.push("distinct named Editorial research approaches");
+  }
+  if (editorialResearch.status === "available") {
+    if (!/^[a-f0-9]{64}$/.test(editorialResearch.contentSha256 ?? "")) {
+      missing.push("Editorial research content fingerprint");
+    }
+    if (!recordedTitles.length) missing.push("Editorial research approach catalog");
+    if (recordedTitles.length !== renderedTitles.length
+        || recordedTitles.some((title, index) => title !== renderedTitles[index])) {
+      missing.push("exact ordered Editorial approach catalog");
+    }
+    if (!profile.references.some((reference) => reference.url === editorialResearch.url)) {
+      missing.push("exact consulted Editorial reference");
+    }
+  } else {
+    if (!hasWords(editorialResearch.reason, 8)) missing.push("Editorial unavailability reason");
+    if (editorialResearch.contentSha256 || recordedTitles.length || renderedTitles.length) {
+      missing.push("no Editorial claims when research was unavailable");
+    }
+  }
+  return missing;
+}
+
 function leetcodeMissingRequirements(profile: SolutionProfileLike) {
   const missing: string[] = [];
   const sections = profile.sections;
@@ -248,43 +291,7 @@ function leetcodeMissingRequirements(profile: SolutionProfileLike) {
   if (editorialCount > 0 && !profile.references.some((reference) => /editorial/i.test(reference.title) || /\/editorial\/?(?:[?#].*)?$/i.test(reference.url))) {
     missing.push("consulted Editorial reference");
   }
-  const editorialResearch = profile.editorialResearch;
-  if (!editorialResearch) {
-    missing.push("Playwright Editorial research receipt");
-  } else {
-    const recordedTitles = editorialResearch.approaches.map((approach) => normalize(approach.title));
-    const renderedTitles = blocks.filter((block) => block.kind === "editorial").map((block) => normalize(block.title));
-    if (editorialResearch.source !== "leetcode_playwright_controller") {
-      missing.push("checked-in Playwright Editorial research source");
-    }
-    if (!/^https:\/\/leetcode\.com\/problems\/[a-z0-9-]+\/editorial\/?$/i.test(editorialResearch.url)) {
-      missing.push("canonical Editorial research URL");
-    }
-    if (!Number.isFinite(Date.parse(editorialResearch.accessedAt))) {
-      missing.push("valid Editorial research timestamp");
-    }
-    if (new Set(recordedTitles).size !== recordedTitles.length || recordedTitles.some((title) => !title)) {
-      missing.push("distinct named Editorial research approaches");
-    }
-    if (editorialResearch.status === "available") {
-      if (!/^[a-f0-9]{64}$/.test(editorialResearch.contentSha256 ?? "")) {
-        missing.push("Editorial research content fingerprint");
-      }
-      if (!recordedTitles.length) missing.push("Editorial research approach catalog");
-      if (recordedTitles.length !== renderedTitles.length
-          || recordedTitles.some((title, index) => title !== renderedTitles[index])) {
-        missing.push("exact ordered Editorial approach catalog");
-      }
-      if (!profile.references.some((reference) => reference.url === editorialResearch.url)) {
-        missing.push("exact consulted Editorial reference");
-      }
-    } else {
-      if (!hasWords(editorialResearch.reason, 8)) missing.push("Editorial unavailability reason");
-      if (editorialResearch.contentSha256 || recordedTitles.length || renderedTitles.length) {
-        missing.push("no Editorial claims when research was unavailable");
-      }
-    }
-  }
+  missing.push(...editorialResearchMissingRequirements(profile, blocks));
   return missing;
 }
 

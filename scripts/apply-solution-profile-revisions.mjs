@@ -51,12 +51,30 @@ function targetQueries(target) {
   ];
 }
 
+export const repairTargetReadBatchSize = 4;
+
+export function repairTargetReadBatches(targets, batchSize = repairTargetReadBatchSize) {
+  if (!Number.isInteger(batchSize) || batchSize < 1) fail("Repair read batch size must be a positive integer.");
+  const batches = [];
+  for (let index = 0; index < targets.length; index += batchSize) {
+    batches.push(targets.slice(index, index + batchSize));
+  }
+  return batches;
+}
+
 function readTargets(targets, remote) {
-  return targets.map((target) => {
-    const queries = targetQueries(target);
-    const resultSets = executeWrangler(queries.map(([, sql]) => sql).join("\n"), remote);
-    return Object.fromEntries(queries.map(([label], index) => [label, resultSets[index] ?? []]));
-  });
+  const snapshots = [];
+  for (const batch of repairTargetReadBatches(targets)) {
+    const queryGroups = batch.map(targetQueries);
+    const resultSets = executeWrangler(queryGroups.flat().map(([, sql]) => sql).join("\n"), remote);
+    queryGroups.forEach((queries, targetIndex) => {
+      const offset = targetIndex * queries.length;
+      snapshots.push(Object.fromEntries(
+        queries.map(([label], queryIndex) => [label, resultSets[offset + queryIndex] ?? []]),
+      ));
+    });
+  }
+  return snapshots;
 }
 
 export function validateRepairPacket(packet) {
@@ -215,12 +233,13 @@ async function main() {
   const config = await readFile(path.join(root, "wrangler.jsonc"), "utf8");
   const databaseId = databaseIdFromConfig(config);
   const completed = [];
+  const verifiedAfter = [];
   for (let index = 0; index < packet.targets.length; index += 1) {
     const target = packet.targets[index];
     if (!applied[index]) {
       await executeRemoteBatch(buildMutationBatch({ ...packet, targets: [target] }, [before[index]], createdAt), { databaseId });
     }
-    const [targetAfter] = readTargets([target], true);
+    const targetAfter = applied[index] ? before[index] : readTargets([target], true)[0];
     const state = assertTargetState(target, targetAfter, { allowApplied: true });
     const historicalAfter = historicalFingerprint(targetAfter, target.expectedCurrentRevision);
     if (historicalAfter !== historicalBefore[index]) fail(`Target ${target.questionId} historical revisions or attempt links changed.`);
@@ -233,6 +252,7 @@ async function main() {
       historicalStateSha256: historicalAfter,
       result: applied[index] ? "already_applied_verified" : "applied",
     });
+    verifiedAfter.push(targetAfter);
     const progressiveReceipt = {
       schemaVersion: 1,
       operationId: packet.operationId,
@@ -244,10 +264,9 @@ async function main() {
     };
     await writeFile(receiptPath, `${JSON.stringify(progressiveReceipt, null, 2)}\n`, { mode: 0o600 });
   }
-  const after = readTargets(packet.targets, true);
   const targets = packet.targets.map((target, index) => {
-    const state = assertTargetState(target, after[index], { allowApplied: true });
-    const historicalAfter = historicalFingerprint(after[index], target.expectedCurrentRevision);
+    const state = assertTargetState(target, verifiedAfter[index], { allowApplied: true });
+    const historicalAfter = historicalFingerprint(verifiedAfter[index], target.expectedCurrentRevision);
     if (historicalAfter !== historicalBefore[index]) fail(`Target ${target.questionId} historical revisions or attempt links changed.`);
     return {
       questionId: target.questionId,

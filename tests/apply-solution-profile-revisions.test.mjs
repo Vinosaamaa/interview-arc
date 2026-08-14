@@ -5,9 +5,19 @@ import {
   assertTargetState,
   buildMutationBatch,
   executeRemoteBatch,
+  repairTargetReadBatchSize,
+  repairTargetReadBatches,
   resultSetsFromWrangler,
   sha256,
 } from "../scripts/apply-solution-profile-revisions.mjs";
+
+test("repair reads split large target inventories into bounded groups", () => {
+  const targets = Array.from({ length: 9 }, (_, index) => ({ questionId: `question-${index}` }));
+  assert.equal(repairTargetReadBatchSize, 4);
+  assert.deepEqual(repairTargetReadBatches(targets).map((batch) => batch.length), [4, 4, 1]);
+  assert.deepEqual(repairTargetReadBatches(targets).flat(), targets);
+  assert.throws(() => repairTargetReadBatches(targets, 0), /positive integer/);
+});
 
 const previousPayload = JSON.stringify({ summary: "previous", tags: ["graph"] });
 const nextProfile = { summary: "corrected", tags: ["graph", "bfs"] };
