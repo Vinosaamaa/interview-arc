@@ -7,6 +7,8 @@ matching `practice/<specialty>/AGENTS.md`.
 
 Read these shared contracts only when the corresponding action is needed:
 
+- private finalization, Past/Solution separation, or drawing assets:
+  `../docs/contracts/owner-private-practice-records.md`;
 - persistence, Voice grouping, finalization, or publication:
   `../docs/contracts/durable-practice-publishing.md`;
 - background writes: `../docs/contracts/background-specialist-persistence.md`;
@@ -143,7 +145,7 @@ acknowledged lost. If the named tool is absent from the loaded catalog, report
 its exact name and require a full MCP/Codex reconnect; never substitute a
 similarly named operation or loop retries.
 
-## Session And Publication Commands
+## Session And Finalization Commands
 
 - A focused activity or clearly named question establishes the normal boundary;
   `Start a new session` is an explicit override.
@@ -160,11 +162,17 @@ similarly named operation or loop retries.
   reuse one stable mutation ID for an exact retry, and report every deleted or
   rejected ID from the receipt. Never substitute whole-workbench rollover or
   delete durable evidence.
-- `Publish this session` flushes and finalizes one activity in D1.
-- `Publish today's practice` finalizes every ready activity for that specialty
-  in D1, including failures. It performs no Git, PR, publication, or deploy.
-- Only the coordinator handles `Publish all pending practice`, Git artifacts,
-  journal branches/PRs, production import, and deployment.
+- `Finish` or legacy `Publish this session` flushes and queues one complete
+  owner-private finalization packet.
+- The visible specialist owns transcript scope, factual summary/review,
+  references, and exact outcome/timing/profile/asset inputs. It may return once
+  that packet is durably queued, ending with a truthful pending status.
+- The mechanical persistence child writes and rereads exact D1/R2 revisions;
+  it never authors content. Past remains hidden until its saved receipt.
+- `Publish today's practice` means reconcile/finalize every eligible activity
+  for that specialty. It performs no Git, PR, deploy, or public release.
+- The coordinator handles pending/failed reconciliation and separately
+  authorized public exports, not routine private completion.
 - Pacific midnight assigns completion date but never splits a continuous mock
   transcript or changes `session_id`.
 

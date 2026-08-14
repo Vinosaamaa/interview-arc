@@ -33,6 +33,11 @@ and composing the complete visible answer plus its exact persistence sidecar:
    The status line is always the final non-empty line and never enters the
    durable transcript or publication.
 
+A separate bounded authoring child may expand a parent-verified source packet
+into an exhaustive Solution Profile during the visible review. It does not
+browse, coach, change evidence, or write durable state. The parent validates
+and adopts its exact bytes; the persistence child stores them mechanically.
+
 For Voice grouping, operation selection, membership, and reservation, follow
 [`durable-practice-publishing.md`](./durable-practice-publishing.md). Delegate
 the resulting singular or batch work item only after the exact visible response
@@ -70,14 +75,12 @@ required inputs to the answer, or coordinator/release actions:
   answer;
 - timer, session, workbench, planning, result, and focus mutations;
 - LeetCode browser/controller commands and submission/verdict reads;
-- `save_provisional_solution_profile` when a missing profile is needed before
-  coaching;
 - publication queue reads, publication marking, specialist-task registry,
   deployment, Git, and any coordinator-only operation.
 
-Delivery Coach audio analysis remains its own background workflow. It is not a
-reason for the visible specialist parent or this persistence child to inspect
-audio or perform R2 work.
+Delivery Coach audio analysis remains its own background workflow. A
+persistence child may perform only explicitly supplied asset staging/head/read
+operations required by the finalization packet; it never analyzes media.
 
 ## Exact child instruction
 
@@ -139,11 +142,12 @@ A parent may mention a successful background result on a later turn, but must
 surface any unresolved failure at the next natural interaction and always
 before Finish/finalization.
 
-Before activity, session, workbench, or publication Finish, the specialist
-must join every outstanding persistence child for the affected activity and
-read the authoritative D1 record. Finish remains blocked when required
-evidence is missing or a child failed. Never treat a spawn acknowledgement or
-child message as authoritative D1 evidence.
+Before enqueuing Finish, the specialist joins all earlier writes and reads the
+authoritative D1 record. Missing required evidence blocks enqueue. After the
+complete finalization packet is durably accepted, the parent may return while
+the same child performs exact D1/R2 writes and readback. Until its saved receipt,
+the activity is `Finalization pending` and must not appear in Past. Never treat
+a spawn acknowledgement or child message as authoritative storage evidence.
 
 The agent delegation is not durable across agent/process termination, but a
 successful Code Attempt, personal-bank, or complete-finalization enqueue is

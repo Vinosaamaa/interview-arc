@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted on 2026-07-17.
+Accepted task-ownership model on 2026-07-17. Its personal Git-publication model
+was superseded on 2026-08-13 by
+[`owner-private-practice-records.md`](../contracts/owner-private-practice-records.md).
+The legacy sections below describe migration input only and must not authorize
+new private Git content.
 
 ## Decision
 
@@ -14,7 +18,9 @@ and Resume & Cover Letter are administrative specialists, and the Learning
 Specialist owns tutoring; none is an Interview practice specialty or inherits
 practice transcript, review, outcome, or publication behavior.
 
-Tasks share repository files but not hidden conversational context. Durable instructions live in `AGENTS.md`; durable session evidence lives in the activity and artifact files.
+Tasks share repository files but not hidden conversational context. Durable
+instructions live in `AGENTS.md`; durable session evidence lives in
+owner-scoped D1 and private R2.
 
 ## Session Protocol
 

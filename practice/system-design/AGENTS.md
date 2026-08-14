@@ -23,6 +23,22 @@ shaped the live requirements, architecture, tradeoff, or failure-mode work.
 Exclude setup, post-attempt review, reference research, and the standalone
 model design.
 
+## Drawing Preflight
+
+For every start/resume, use the project-installed `excalidraw-skill` and the
+pinned local `excalidraw_live` v2 runtime on `127.0.0.1:3032`:
+
+1. resolve the exact activity;
+2. start or reuse one server through the skill wrapper;
+3. open exactly one Playwright-owned Chromium tab;
+4. verify health and one browser/CLI round trip;
+5. restore that activity's latest owner-private checkpoint.
+
+Never use the blocked Chrome extension, Computer Use, remote Excalidraw MCP,
+`npx`, port 3000, or a second tab/server. WebSocket state is not durable; save
+owner/activity checkpoints during the mock. Finish stores the exact owner scene
+and preview. A polished draw.io/SVG model is separate Solution material.
+
 Reuse the profile unless requirements, architecture, flows, scaling,
 reliability, or tradeoffs materially improve. Record the decision and research
 reason. Reviews schedule at 4 days for failed/full walkthrough, 7 for approach
@@ -155,7 +171,7 @@ Identify:
 
 Choose storage based on access patterns and tradeoffs, not brand-name familiarity.
 
-### 6. Draw Or Describe The High-Level Architecture
+### 6. Draw The High-Level Architecture
 
 Use the components the problem actually needs, such as:
 
@@ -169,7 +185,8 @@ Use the components the problem actually needs, such as:
 - Search indexes.
 - Object storage and a content delivery network (CDN) for media.
 
-Explain the responsibility and boundaries of each major component. Use a Mermaid diagram when it materially improves understanding.
+Explain the responsibility and boundaries of each major component. Use the
+live Excalidraw canvas; prose may accompany it but does not replace the drawing.
 
 ### 7. Walk Through Key Flows
 
@@ -295,50 +312,24 @@ The user is interested in company-targeted preparation, especially TikTok-style 
 
 Do not force every question to be TikTok-specific. Build broad system-design skill, but connect reusable concepts back to TikTok-like systems when it helps learning.
 
-## Canonical Session Artifacts
+## Durable Session Record
 
-For each full topic or substantial mock session, create:
+Follow `../../docs/contracts/owner-private-practice-records.md`. Finalize to
+owner-scoped D1/private R2; never create a new Git session Markdown file. Keep
+the complete ordered conversation and the owner's exact original diagram.
 
-```text
-practice/system-design/sessions/YYYY-MM-DD-design-<topic>.md
-```
+Past follows the shared reader order. Its **Your Design** section contains only
+the owner's requirements, estimates, APIs, model, original diagram, components,
+flows, scaling/reliability decisions, tradeoffs, and closing that were produced
+or later adopted. Keep missing stages and Mentor guidance explicit. Summary,
+Conversation, Activity Review, and Technical Audit render once outside it.
 
-From this directory, that is:
-
-```text
-sessions/YYYY-MM-DD-design-<topic>.md
-```
-
-Follow `../../docs/contracts/session-artifact.md`. Use its frontmatter fields and preserve the complete conversation in chronological order with `**User:**` and `**Coach:**` speaker labels.
-
-The complete artifact should contain the relevant sections below. Do not omit the conversation transcript, even when a polished reference answer is also included.
-
-- Question.
-- Short Answer.
-- Conversation Transcript.
-- Clarifying Questions.
-- Requirements.
-- Capacity Assumptions.
-- High-Level Architecture.
-- Core APIs.
-- Data Model.
-- Main Flows.
-- Storage Choices.
-- Caching Strategy.
-- Scaling and Reliability.
-- Observability.
-- Security and Privacy.
-- Tradeoffs.
-- Common Follow-Up Questions.
-- Interview Walkthrough.
-- One-Minute Summary.
-- What Went Well.
-- What Was Missing Or Unclear.
-- Structure Feedback.
-- Stronger Version or improved answer outline.
-- Next Drill.
-
-Use only the sections that make sense during an unfinished session, but a completed full topic should be reviewable without reopening the chat.
+The reusable Solution Profile contains the complete canonical framing,
+functional and non-functional requirements, estimates, APIs, data model,
+model diagram, responsibilities, flows, storage/cache/search, scaling,
+reliability, security, observability, alternatives/tradeoffs, Questions and
+Answers, walkthrough, follow-ups, and references. It never contains the dated
+conversation or attempt review.
 
 The reusable first-party TikTok reference solution is:
 
@@ -354,17 +345,15 @@ attempts still follow the session contract and appear separately in Past.
 
 The user may record long answers with macOS Voice Memos or another recorder.
 
-Repository-relative artifact locations:
+Optional local exports use the ignored private tree:
 
 ```text
-audio-answers/YYYY-MM-DD-<topic>-attempt-01.m4a
-audio-answers/YYYY-MM-DD-<topic>-attempt-01.md
+private-sources/exports/system-design/<activity-id>/
 ```
 
-Raw audio is ignored by Git. After local transcription, upload the source file
-through Interview Arc's authenticated audio endpoint so it is stored privately
-in R2 and attached to the dated Past activity. Legacy local-only artifacts may
-still use:
+After local transcription, upload the source file through Interview Arc's
+authenticated audio endpoint so it is stored privately in R2 and attached to
+the exact Past activity. Frozen legacy artifacts may still use:
 
 ```yaml
 audio_file: YYYY-MM-DD-<topic>-attempt-01.m4a
@@ -388,7 +377,8 @@ Use this decision process:
 - If the user provides both audio and Voice Memos transcript text, preserve the supplied transcript; do not re-transcribe unless asked.
 - If the user provides audio without transcript text, transcribe it locally.
 - If the user provides only pasted transcript text, review it directly and create the Markdown artifact for a substantial mock interview.
-- If the app does not expose the audio path, ask the user to place the file in `audio-answers/` or provide an accessible path.
+- If the app does not expose the audio path, ask for an accessible path; do not
+  copy it into a Git-tracked practice directory.
 - A recording may contain only the user's answer. Label that limitation. Do not pretend it is a full two-sided transcript.
 - When the complete Codex conversation is available, include both what the user said and what the coach said in the canonical session file.
 - Review the answer's structure like an interviewer, then teach improvements like an instructor.
@@ -410,7 +400,8 @@ Run transcription from the repository root:
   --source daily
 ```
 
-The helper copies audio into `audio-answers/` unless `--no-copy` is passed and creates a Markdown transcript/review file. After transcription, complete the interviewer/instructor feedback sections and incorporate the available session conversation into the canonical file under `practice/system-design/sessions/`.
+Always pass `--no-copy`. Treat helper output as transient input, then persist
+the accepted transcript/review through the owner-private finalization path.
 
 ## Feedback Standard
 
@@ -453,6 +444,10 @@ access patterns, bottlenecks, partial failures, recovery, and why each major
 choice wins over an alternative. Component name-drops, generic boxes-and-arrows,
 and unquantified scale claims are incomplete and fail the executable Solution
 Profile gate before D1 finalization.
+Add one dedicated Questions and Answers section when substantial design
+questions occurred. Restate each question clearly, keep the final corrected
+answer and hidden turn provenance, and do not duplicate it in the dated
+attempt.
 Do not create a new Solution Profile revision for reader styling, zoom,
 fullscreen, typography, or layout changes; those belong to the shared runtime
 reader and update older artifacts automatically. Create or backfill a revision
@@ -463,8 +458,8 @@ Do not invent things the user said. Clearly distinguish the user's original answ
 
 ## Maintenance Rules
 
-- Keep artifacts organized by ISO date and topic.
-- Never overwrite a previous attempt; increment the attempt number where needed.
+- Keep immutable records organized by exact activity and revision.
+- Never overwrite a previous attempt.
 - Use the shared contract rather than inventing incompatible frontmatter.
 - Preserve raw session evidence before adding summaries or polished answers.
 - Update this `AGENTS.md` only when the user explicitly changes the ongoing system-design role, workflow, or artifact requirements.

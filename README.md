@@ -71,25 +71,24 @@ practice specialists remain coaching owners.
 
 The outer workspace instructions route a task to the right guide even when every task starts from the same Interview Prep folder. The user does not need separate projects or worktrees.
 
-Use the durable D1 handoff described in
-`docs/contracts/durable-practice-publishing.md`:
+Use the owner-private handoff in
+`docs/contracts/owner-private-practice-records.md`:
 
 - A focused dashboard activity or clearly named problem starts/resumes work.
   `Start a new session` is only an override.
 - Specialists append activity-scoped turns and notes to D1 while practicing.
-- `Publish today's practice` in a specialist task flushes and finalizes that
-  specialty's pending activities in D1; it does not touch Git.
-- `Publish all pending practice` in `Interview Arc — Coordinator` contacts all
-  registered specialists, consumes their finalized bundles, creates every Git
-  artifact/daily journal by Pacific completion date, opens the journal pull
-  request, and publishes through the main workflow.
+- Finish durably queues one complete attempt/profile/asset packet; a mechanical
+  persistence child writes and rereads exact D1/R2 revisions.
+- `Publish today's practice` reconciles that specialty's eligible activities;
+  `Publish all pending practice` coordinates pending/failed reconciliation.
+  Neither command creates a routine Git artifact or deployment.
 
-Finished activities become **Ready for journal** automatically. The command is
-a checkpoint over all still-unpublished ready work, so it can be run after
-midnight. Exporting `journal-YYYY-MM-DD-draft.json` remains the portable
-fallback when the authenticated bridge is unavailable.
+The website shows **Finalization pending** until exact readback succeeds, then
+exposes the immutable record in Past. Optional ignored exports remain a
+portable convenience fallback, not durable authority.
 
-See `docs/architecture/single-project-practice-workflow.md` for the full ownership and Git model.
+See `docs/architecture/single-project-practice-workflow.md` for task ownership
+and the migration boundary.
 
 ## LeetCode Data Policy
 
@@ -155,10 +154,9 @@ pnpm test
 ```
 
 `pnpm dev` first runs the idempotent `dev:prepare` step, which applies the
-migrations and imports Git-backed journals, artifacts, solutions, and question
-banks into an isolated local D1 database. Local development never reads or
-writes the production D1 database. Run `pnpm dev:prepare` directly when you
-only need to refresh that local database without starting the site.
+migrations and imports public-safe banks plus frozen legacy content into an
+isolated local D1 database. Local development never reads or writes production
+D1. Run `pnpm dev:prepare` directly to refresh local state without the site.
 
 Production runs as the `limitless` Cloudflare Worker described by
 `wrangler.jsonc`, with shared published content and owner-scoped live state in
@@ -169,12 +167,12 @@ retained only for the temporary legacy OpenAI Sites deployment; do not use it
 as the production architecture or remove it until the user explicitly retires
 that site.
 
-Git JSON/Markdown is canonical for journals, solutions, transcripts, and story
-records. `scripts/import-content.mjs` projects those files into D1 so the site
-can read new published content without compiling it into the application.
-Timers, result flags, website-created sessions, extra activities, and
-non-publishable Career Focus blocks are canonical in D1, with browser storage
-acting only as an offline cache and retry queue.
+Owner-scoped D1 is canonical for mutable practice state and immutable Practice
+Record/Solution Profile revisions; private R2 owns recordings and diagrams.
+Git is canonical only for public-safe code, contracts, banks, examples, and
+Engineering records. `scripts/import-content.mjs` retains frozen legacy content
+during migration and rejects new or changed private Git artifacts. Browser
+storage remains only an offline cache and retry queue.
 
 Published content is not compiled into one static page per artifact. Past
 attempts and Problem Bank Solution Profiles are rendered at runtime by one
