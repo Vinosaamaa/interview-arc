@@ -60,6 +60,11 @@ const overviewProfile = {
     },
     alternatives: [],
   },
+  questionsAndAnswers: {
+    status: "not_applicable",
+    reason: "No substantial reusable question and answer exchange occurred in this test activity.",
+    items: [],
+  },
   projectDeepDive: {
     projectId: "sample-platform",
     bindingRevision: 1,

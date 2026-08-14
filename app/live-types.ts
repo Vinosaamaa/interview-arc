@@ -128,7 +128,7 @@ export type ProblemPreference = { specialty: ActivityType; questionId: string; s
 export type SolutionProfilePayload = {
   schemaVersion: 1;
   summary: string;
-  sections: Array<{ title: string; body: string }>;
+  sections: Array<{ sectionKey?: string; title: string; body: string }>;
   tags: string[];
   references: Array<{ title: string; url: string; accessedAt: string }>;
   behavioralAnswer?: {
@@ -147,6 +147,16 @@ export type SolutionProfilePayload = {
     }>;
   };
   practiceScenarios?: BehavioralPracticeScenario[];
+  questionsAndAnswers?: {
+    status: "included" | "not_applicable";
+    reason: string;
+    items: Array<{
+      question: string;
+      answer: string;
+      classification: "current_implementation" | "target_design" | "fictional_practice_scenario";
+      turnIds: string[];
+    }>;
+  };
 };
 export type SolutionProfile = {
   specialty: ActivityType;

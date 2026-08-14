@@ -204,6 +204,11 @@ function finalization({
           },
           alternatives: [],
         },
+        questionsAndAnswers: {
+          status: "not_applicable",
+          reason: "No substantial reusable question and answer exchange occurred in this test activity.",
+          items: [],
+        },
         practiceScenarios,
       },
       finalAnswerOperationId: operationId,

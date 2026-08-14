@@ -294,6 +294,8 @@ Specialty-wide commands only reconcile missing or failed historical work:
 - every verified Editorial approach, followed only by enough distinct generated
   alternatives to reach three total approaches counting the preferred, with
   every entry complete under `solution-profiles.md`;
+- the exact preferred `#### Algorithm` body reused by a matching Editorial so
+  the completeness gate deduplicates it deterministically;
 - only references actually consulted;
 - available Delivery Coach evidence (queued/failed analysis never blocks).
 

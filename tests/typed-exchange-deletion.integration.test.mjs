@@ -42,6 +42,11 @@ function completeSystemDesignProfile() {
     ],
     tags: ["reliability"],
     references: [],
+    questionsAndAnswers: {
+      status: "not_applicable",
+      reason: "No substantial reusable question and answer exchange occurred in this fixture.",
+      items: [],
+    },
   };
 }
 

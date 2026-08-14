@@ -413,6 +413,16 @@ const specialistSolutionProfileSchema = z.object({
     })).max(5),
   }).optional(),
   practiceScenarios: behavioralPracticeScenariosSchema.optional(),
+  questionsAndAnswers: z.object({
+    status: z.enum(["included", "not_applicable"]),
+    reason: z.string().trim().min(1).max(10_000),
+    items: z.array(z.object({
+      question: z.string().trim().min(1).max(10_000),
+      answer: z.string().trim().min(1).max(100_000),
+      classification: z.enum(["current_implementation", "target_design", "fictional_practice_scenario"]),
+      turnIds: z.array(behavioralStableIdSchema).max(100),
+    })).max(100),
+  }).optional(),
   projectDeepDive: behavioralProjectProfileBindingSchema.optional(),
 });
 

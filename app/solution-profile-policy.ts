@@ -16,6 +16,19 @@ type BehavioralAnswer = {
   }>;
 };
 
+export type SolutionProfileQuestionAnswer = {
+  question: string;
+  answer: string;
+  classification: "current_implementation" | "target_design" | "fictional_practice_scenario";
+  turnIds: string[];
+};
+
+export type SolutionProfileQuestionsAndAnswers = {
+  status: "included" | "not_applicable";
+  reason: string;
+  items: SolutionProfileQuestionAnswer[];
+};
+
 export type SolutionProfileLike = {
   summary: string;
   sections: SolutionProfileSection[];
@@ -23,6 +36,7 @@ export type SolutionProfileLike = {
   references: Array<{ title: string; url: string }>;
   behavioralAnswer?: BehavioralAnswer;
   projectDeepDive?: BehavioralProjectProfileBinding;
+  questionsAndAnswers?: SolutionProfileQuestionsAndAnswers;
 };
 
 export type SolutionProfileSpecialty = "leetcode" | "system_design" | "behavioral";
@@ -111,10 +125,17 @@ function sharedMissingRequirements(profile: SolutionProfileLike) {
   return missing;
 }
 
-function alternativeBlocks(body: string) {
-  const headings = [...body.matchAll(/^#{3,6}\s+Alternative(?:\s+\d+)?\s*:\s*(.+)$/gim)];
+type LeetCodeCatalogApproach = {
+  kind: "editorial" | "generated";
+  title: string;
+  body: string;
+};
+
+export function leetcodeCatalogApproaches(body: string): LeetCodeCatalogApproach[] {
+  const headings = [...body.matchAll(/^###\s+(Editorial approach|Generated alternative)\s*:\s*(.+)$/gim)];
   return headings.map((heading, index) => ({
-    title: heading[1].trim(),
+    kind: /^editorial/i.test(heading[1]) ? "editorial" as const : "generated" as const,
+    title: heading[2].trim(),
     body: body.slice((heading.index ?? 0) + heading[0].length, headings[index + 1]?.index ?? body.length).trim(),
   }));
 }
@@ -130,13 +151,14 @@ function labeledSubsection(body: string, matcher: RegExp) {
 function leetcodeMissingRequirements(profile: SolutionProfileLike) {
   const missing: string[] = [];
   const sections = profile.sections;
+  requireDetailedSection(missing, sections, "self-contained problem", /^problem(?: description| restatement)?$/i, 45);
   requireDetailedSection(missing, sections, "pattern recognition and constraints", /pattern|problem framing|constraints/i, 30);
-  requireDetailedSection(missing, sections, "preferred algorithm", /best approach|preferred approach|preferred algorithm/i, 60);
+  const preferred = requireDetailedSection(missing, sections, "preferred algorithm", /best approach|preferred approach|preferred algorithm/i, 60);
   const implementation = requireDetailedSection(missing, sections, "reference implementations", /reference implementations?|complete reference|preferred implementations?/i, 30);
   const correctness = requireDetailedSection(missing, sections, "correctness reasoning", /correctness|proof and invariant|invariant and proof/i, 45);
   const complexity = requireDetailedSection(missing, sections, "time and space complexity", /time and space complexity|complexity analysis/i, 20);
   const edgeCases = requireDetailedSection(missing, sections, "edge cases", /edge cases?/i, 24);
-  const alternatives = requireDetailedSection(missing, sections, "meaningful alternatives", /meaningful alternatives?|alternative approaches?/i, 100);
+  const catalog = requireDetailedSection(missing, sections, "Editorial-first approach catalog", /editorial-first approach catalog|editorial and alternative approaches|approach catalog/i, 100);
   requireDetailedSection(missing, sections, "common mistakes and recall cues", /common mistakes?|recall cues?/i, 30);
   requireDetailedSection(missing, sections, "interview walkthrough", /interview walkthrough|interview answer/i, 35);
 
@@ -157,10 +179,35 @@ function leetcodeMissingRequirements(profile: SolutionProfileLike) {
   }
   if (edgeCases && listItemCount(edgeCases.body) < 3) missing.push("at least three concrete edge cases");
 
-  const blocks = alternativeBlocks(alternatives?.body ?? "");
-  if (blocks.length < 1 || blocks.length > 2) missing.push("one or two structured meaningful alternatives");
+  const blocks = leetcodeCatalogApproaches(catalog?.body ?? "");
+  const editorialCount = blocks.filter((block) => block.kind === "editorial").length;
+  const generatedCount = blocks.filter((block) => block.kind === "generated").length;
+  const firstGenerated = blocks.findIndex((block) => block.kind === "generated");
+  if (firstGenerated >= 0 && blocks.slice(firstGenerated + 1).some((block) => block.kind === "editorial")) {
+    missing.push("all Editorial approaches before generated alternatives");
+  }
+  const preferredAlgorithm = normalize(labeledSubsection(preferred?.body ?? "", /^algorithm/i) ?? "");
+  if (!preferredAlgorithm) missing.push("preferred approach canonical Algorithm subsection");
+  const normalizedTitles = blocks.map((block) => normalize(block.title));
+  const normalizedAlgorithms = blocks.map((block) => normalize(labeledSubsection(block.body, /^algorithm/i) ?? ""));
+  const editorialAlgorithms = blocks.flatMap((block, index) => block.kind === "editorial" ? [normalizedAlgorithms[index]] : []);
+  const generatedAlgorithms = blocks.flatMap((block, index) => block.kind === "generated" ? [normalizedAlgorithms[index]] : []);
+  const preferredAndEditorial = new Set([preferredAlgorithm, ...editorialAlgorithms].filter(Boolean));
+  const requiredGeneratedCount = Math.max(0, 3 - preferredAndEditorial.size);
+  if (generatedCount !== requiredGeneratedCount) {
+    missing.push("generated alternatives only to reach three distinct total approaches");
+  }
+  if (new Set([preferredAlgorithm, ...normalizedAlgorithms].filter(Boolean)).size < 3) {
+    missing.push("at least three distinct approaches counting preferred");
+  }
+  if (new Set(normalizedTitles).size !== normalizedTitles.length
+      || normalizedAlgorithms.some((algorithm) => !algorithm)
+      || new Set(normalizedAlgorithms).size !== normalizedAlgorithms.length
+      || generatedAlgorithms.some((algorithm) => preferredAndEditorial.has(algorithm))) {
+    missing.push("distinct algorithms in approach catalog");
+  }
   blocks.forEach((block, index) => {
-    const prefix = `alternative ${index + 1}`;
+    const prefix = `catalog approach ${index + 1}`;
     const alternativeProse = block.body.replace(/```[^\n]*\n[\s\S]*?```/g, "");
     if (!block.title || !hasWords(alternativeProse, 100)) missing.push(`${prefix} substantive explanation`);
     const labels: Array<[string, RegExp, number]> = [
@@ -187,6 +234,32 @@ function leetcodeMissingRequirements(profile: SolutionProfileLike) {
     }
   });
   if (!profile.references.length) missing.push("references");
+  if (editorialCount > 0 && !profile.references.some((reference) => /editorial/i.test(reference.title) || /\/editorial\/?(?:[?#].*)?$/i.test(reference.url))) {
+    missing.push("consulted Editorial reference");
+  }
+  return missing;
+}
+
+function questionsAndAnswersMissingRequirements(profile: SolutionProfileLike) {
+  const missing: string[] = [];
+  const questionsAndAnswers = profile.questionsAndAnswers;
+  if (!questionsAndAnswers) return ["Questions and Answers disposition"];
+  if (!hasWords(questionsAndAnswers.reason, 8)) missing.push("Questions and Answers disposition reason");
+  if (questionsAndAnswers.status === "not_applicable") {
+    if (questionsAndAnswers.items.length) missing.push("no Q&A items when disposition is not applicable");
+    return missing;
+  }
+  if (!questionsAndAnswers.items.length) missing.push("Questions and Answers items");
+  const normalizedQuestions = questionsAndAnswers.items.map((item) => normalize(item.question));
+  if (new Set(normalizedQuestions).size !== normalizedQuestions.length) missing.push("distinct Questions and Answers items");
+  questionsAndAnswers.items.forEach((item, index) => {
+    const prefix = `Q&A item ${index + 1}`;
+    if (!hasWords(item.question, 5)) missing.push(`${prefix} clear restated question`);
+    if (!hasWords(item.answer, 45)) missing.push(`${prefix} detailed answer`);
+    if (item.turnIds.length < 2 || new Set(item.turnIds).size !== item.turnIds.length || item.turnIds.some((turnId) => !turnId.trim())) {
+      missing.push(`${prefix} exact turn provenance`);
+    }
+  });
   return missing;
 }
 
@@ -221,6 +294,7 @@ function systemDesignMissingRequirements(profile: SolutionProfileLike) {
   if (!architecture || !/!\[[^\]]*\]\([^)]+\.svg(?:[?#][^)]*)?\)/i.test(architecture.body)) {
     missing.push("versioned SVG architecture diagram");
   }
+  missing.push(...questionsAndAnswersMissingRequirements(profile));
   return missing;
 }
 
@@ -263,6 +337,7 @@ function behavioralMissingRequirements(profile: SolutionProfileLike) {
       missing.push(`behavioral alternative ${index + 1} evidence or explicit gaps`);
     }
   }
+  missing.push(...questionsAndAnswersMissingRequirements(profile));
   return missing;
 }
 
@@ -272,6 +347,7 @@ export function solutionProfileMissingRequirements(specialty: SolutionProfileSpe
   if (specialty === "leetcode") missing.push(...leetcodeMissingRequirements(profile));
   if (specialty === "system_design") missing.push(...systemDesignMissingRequirements(profile));
   if (specialty === "behavioral") missing.push(...behavioralMissingRequirements(profile));
+  if (specialty === "leetcode" && profile.questionsAndAnswers) missing.push("Questions and Answers only for Behavioral or System Design");
   return [...new Set(missing)];
 }
 

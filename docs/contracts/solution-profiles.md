@@ -56,7 +56,9 @@ After the preferred solution, list every verified Editorial approach first as
 only until there are at least three distinct valid approaches counting the
 preferred: `max(0, 3 - distinct(preferred + Editorial))`. Include all Editorial
 approaches even above three; deduplicate by algorithm, never title or cosmetic
-variation.
+variation. Put the preferred mechanics under `#### Algorithm`; when an
+Editorial is the preferred algorithm, reuse that exact subsection body so the
+gate can count it once.
 
 Every catalog entry keeps the existing alternative contract: when/why to use
 it, complete algorithm and transition, invariant/proof, time/space complexity,
@@ -91,6 +93,13 @@ exported SVG architecture diagram. Describe authorities, invariants, access
 patterns, bottlenecks, partial failures, recovery, and why each major choice wins
 over an alternative. Component name-drops and unquantified boxes-and-arrows do
 not pass.
+
+Every System Design and Behavioral profile records one typed
+`questionsAndAnswers` disposition. Use `included` with a clear restated
+question, complete corrected answer, boundary classification, and exact hidden
+turn IDs for each substantial exchange; otherwise use `not_applicable` with a
+truthful reason and no items. Readers render included items in one dedicated
+section and never copy them into Past.
 
 Use the `$interview-arc-system-design` skill and its solution template. Keep
 functional requirements and non-functional requirements separate. Use

@@ -36,55 +36,59 @@ const pythonCode = `class Solution:
             best = max(best, value)
         return best`;
 
+function approachBlock(title, seed) {
+  return `### Editorial approach: ${title}
+
+#### When and why to choose it
+Choose this approach when its state model matches the constraints and the interviewer values its tradeoff. ${prose(`${seed}choice`, 20)}
+
+#### Algorithm
+Initialize the state, process each transition in order, and derive the final result from the preserved state. ${prose(`${seed}algorithm`, 30)}
+
+#### Invariant and correctness
+The invariant is that every processed value is incorporated exactly once and the stored optimum matches the processed prefix. ${prose(`${seed}correctness`, 30)} Therefore the result is correct.
+
+#### Complexity
+Time O(n) processes each value once. Space O(1) retains only transition state. ${prose(`${seed}cost`, 15)}
+
+#### Edge cases
+- Minimum-size input follows the base case.
+- Duplicate values preserve the invariant.
+- Extreme values avoid overflow-producing arithmetic.
+
+#### Tradeoffs versus preferred
+This representation changes explanation and implementation costs while preserving correctness. ${prose(`${seed}tradeoff`, 22)}
+
+#### Reference implementation
+\`\`\`java
+${javaCode}
+\`\`\``;
+}
+
 function completeLeetcodeProfile() {
   return {
     schemaVersion: 1,
     summary: prose("summary", 20),
     sections: [
+      { title: "Problem", body: `${prose("objective", 55)} Required API: solve(int[] values). Example: [1, 2] returns 2. Canonical problem: https://example.test/maximum-value` },
       { title: "Pattern recognition and constraints", body: prose("pattern", 35) },
-      { title: "Best approach", body: prose("algorithm", 70) },
+      { title: "Best approach", body: `#### Algorithm\n${prose("preferredalgorithm", 70)}` },
       { title: "Reference implementations", body: `${prose("implementation", 35)}\n\n\`\`\`java\n${javaCode}\n\`\`\`\n\n\`\`\`python\n${pythonCode}\n\`\`\`` },
       { title: "Correctness reasoning", body: `The invariant is preserved before and after every transition. ${prose("proof", 45)} Therefore the algorithm is correct.` },
       { title: "Time and space complexity", body: `Time O(n) visits every value once. Space O(1) keeps only the current optimum. ${prose("complexity", 20)}` },
       { title: "Edge cases", body: `- A single value is its own maximum.\n- Duplicate values preserve the invariant.\n- Maximum integers require no arithmetic.\n${prose("edge", 25)}` },
       {
-        title: "Meaningful alternatives",
-        body: `### Alternative: Sort a defensive copy
-
-#### When and why to choose
-Choose sorting when ordered output is also needed or simple auditing matters more than linear time. ${prose("choice", 20)}
-
-#### Algorithm
-Copy the values, sort the copy, and return the final value after confirming the nonempty input contract. ${prose("algorithm", 28)}
-
-#### Invariant and correctness
-The invariant is that sorting places no larger value before a smaller final element, so the final element is maximal. ${prose("correctness", 28)}
-
-#### Complexity
-Time O(n log n) is dominated by sorting. Space O(n) preserves the caller-owned input. ${prose("cost", 15)}
-
-#### Edge cases
-- One value remains unchanged.\n- Equal values remain correct.\n- Extreme integers require no arithmetic.
-
-#### Tradeoffs versus preferred
-Sorting is slower and allocates memory, but it can reuse a required ordered representation and is straightforward to inspect. ${prose("tradeoff", 20)}
-
-#### Reference implementation
-\`\`\`java
-class Solution {
-  public int solve(int[] values) {
-    int[] copy = values.clone();
-    java.util.Arrays.sort(copy);
-    return copy[copy.length - 1];
-  }
-}
-\`\`\``,
+        title: "Editorial-first approach catalog",
+        body: [approachBlock("Ordered scan", "scan"), approachBlock("Divide and conquer", "divide")].join("\n\n"),
       },
       { title: "Common mistakes and recall cues", body: prose("mistake", 35) },
       { title: "Interview walkthrough", body: prose("walkthrough", 40) },
     ],
     tags: ["array"],
-    references: [{ title: "Maximum value problem", url: "https://example.test/maximum-value", accessedAt: "2026-08-13T18:02:00.000Z" }],
+    references: [
+      { title: "Maximum value problem", url: "https://example.test/maximum-value", accessedAt: "2026-08-13T18:02:00.000Z" },
+      { title: "LeetCode Editorial", url: "https://leetcode.com/problems/maximum-value/editorial/", accessedAt: "2026-08-13T18:02:00.000Z" },
+    ],
   };
 }
 
@@ -111,6 +115,11 @@ function completeSystemDesignProfile() {
     ],
     tags: ["event-streaming"],
     references: [],
+    questionsAndAnswers: {
+      status: "not_applicable",
+      reason: "No substantial reusable question and answer exchange occurred in this test activity.",
+      items: [],
+    },
   };
 }
 

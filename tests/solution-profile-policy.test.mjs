@@ -25,54 +25,65 @@ const pythonCode = `class Solution:
             best = max(best, value)
         return best`;
 
+function approachBlock(kind, title, seed) {
+  return `### ${kind}: ${title}
+
+#### When and why to choose it
+Choose this approach when its state model matches the constraints and the interviewer wants the tradeoff it optimizes. ${prose(`${seed}choice`, 20)}
+
+#### Algorithm
+Initialize the complete state, process each transition in its required order, and derive the result from the preserved state. ${prose(`${seed}algorithm`, 30)}
+
+#### Invariant and correctness
+The invariant is that every processed value has been incorporated exactly once and the stored optimum matches that processed prefix. ${prose(`${seed}correctness`, 30)} Therefore the returned state is correct.
+
+#### Complexity
+Time O(n) processes each value once. Space O(1) retains only the durable transition state. ${prose(`${seed}cost`, 15)}
+
+#### Edge cases
+- Minimum-size input follows the base case.
+- Duplicate values preserve the invariant.
+- Extreme values avoid overflow-producing arithmetic.
+
+#### Tradeoffs versus preferred
+This approach changes the state representation and explanation burden while preserving correctness. ${prose(`${seed}tradeoff`, 22)}
+
+#### Reference implementation
+\`\`\`java
+${javaCode}
+\`\`\``;
+}
+
+function approachAlgorithm(body) {
+  return body.match(/#### Algorithm\n([\s\S]*?)(?=\n#### Invariant)/)?.[1].trim() ?? "";
+}
+
 function completeLeetcodeProfile() {
   return {
     summary: prose("summary", 20),
     sections: [
+      { title: "Problem", body: `${prose("objective", 55)} Required API: solve(int[] values). Example: [1, 2] returns 2. Canonical problem: https://example.test/problem` },
       { title: "Pattern recognition and constraints", body: prose("pattern", 35) },
-      { title: "Best approach", body: prose("algorithm", 70) },
+      { title: "Best approach", body: `#### Algorithm\n${prose("preferredalgorithm", 70)}` },
       { title: "Reference implementations", body: `${prose("implementation", 35)}\n\n\`\`\`java\n${javaCode}\n\`\`\`\n\n\`\`\`python\n${pythonCode}\n\`\`\`` },
       { title: "Correctness reasoning", body: `The invariant is preserved before and after every transition. ${prose("proof", 45)} Therefore the algorithm is correct.` },
       { title: "Time and space complexity", body: `Time O(n) visits every value once. Space O(1) keeps only the current optimum. ${prose("complexity", 20)}` },
       { title: "Edge cases", body: `- Empty or minimum input uses the contract default.\n- Duplicate values preserve the invariant.\n- Maximum values avoid overflow.\n${prose("edge", 25)}` },
       {
-        title: "Meaningful alternatives",
-        body: `### Alternative: Sort a defensive copy
-
-#### When and why to choose
-Choose sorting when the input already needs ordered output or when a simple auditable implementation matters more than linear time. ${prose("choice", 20)}
-
-#### Algorithm
-Copy the values, sort the copy, and return the final value after confirming the input contract. ${prose("algorithm", 22)}
-
-#### Invariant and correctness
-The invariant is that the processed suffix is ordered and the final position contains a value no smaller than every earlier value. ${prose("correctness", 22)}
-
-#### Complexity
-Time O(n log n) is dominated by sorting. Space O(n) preserves the caller-owned input in a defensive copy. ${prose("cost", 15)}
-
-#### Edge cases
-- Empty input follows the stated contract.\n- Equal values remain correct.\n- Extreme integers require no arithmetic.
-
-#### Tradeoffs versus preferred
-This approach is slower and allocates memory, but it can reuse a required sorted representation and is straightforward to inspect. ${prose("tradeoff", 18)}
-
-#### Reference implementation
-\`\`\`java
-class Solution {
-  public int solve(int[] values) {
-    int[] copy = values.clone();
-    java.util.Arrays.sort(copy);
-    return copy[copy.length - 1];
-  }
-}
-\`\`\``,
+        title: "Editorial-first approach catalog",
+        body: [
+          approachBlock("Editorial approach", "Ordered scan", "scan"),
+          approachBlock("Editorial approach", "Divide and conquer", "divide"),
+        ].join("\n\n"),
       },
       { title: "Common mistakes and recall cues", body: prose("mistake", 35) },
       { title: "Interview walkthrough", body: prose("walkthrough", 40) },
     ],
     tags: ["array"],
-    references: [{ title: "Problem", url: "https://example.test/problem" }],
+    references: [
+      { title: "Problem", url: "https://example.test/problem" },
+      { title: "LeetCode Editorial", url: "https://leetcode.com/problems/example/editorial/" },
+    ],
   };
 }
 
@@ -98,6 +109,16 @@ function completeSystemDesignProfile() {
     ],
     tags: ["event-streaming"],
     references: [],
+    questionsAndAnswers: {
+      status: "included",
+      reason: "The owner asked substantial design follow-up questions during the activity.",
+      items: [{
+        question: "How does the write path recover after duplicate delivery?",
+        answer: prose("answer", 55),
+        classification: "target_design",
+        turnIds: ["turn-user-1", "turn-specialist-1"],
+      }],
+    },
   };
 }
 
@@ -121,10 +142,15 @@ function completeBehavioralProfile() {
       preferred: { answer, evidence: ["owner-confirmed activity evidence"], evidenceGaps: [] },
       alternatives: [],
     },
+    questionsAndAnswers: {
+      status: "not_applicable",
+      reason: "No substantial reusable question and answer exchange occurred in this activity.",
+      items: [],
+    },
   };
 }
 
-test("LeetCode completeness rejects keyword-only and missing-code profiles", () => {
+test("LeetCode completeness enforces the complete Editorial-first catalog and runnable code", () => {
   const complete = completeLeetcodeProfile();
   assert.equal(isReusableSolutionProfile("leetcode", complete), true, solutionProfileMissingRequirements("leetcode", complete).join("\n"));
 
@@ -139,12 +165,39 @@ test("LeetCode completeness rejects keyword-only and missing-code profiles", () 
   assert.ok(shallowMissing.includes("complete runnable Java preferred implementation"));
 
   const missingAlternativeCode = structuredClone(complete);
-  missingAlternativeCode.sections.find((section) => section.title === "Meaningful alternatives").body = missingAlternativeCode.sections.find((section) => section.title === "Meaningful alternatives").body.replace(/```java[\s\S]*?```/, "Reference implementation intentionally omitted.");
-  assert.ok(solutionProfileMissingRequirements("leetcode", missingAlternativeCode).includes("alternative 1 complete runnable Java reference code"));
+  missingAlternativeCode.sections.find((section) => section.title === "Editorial-first approach catalog").body = missingAlternativeCode.sections.find((section) => section.title === "Editorial-first approach catalog").body.replace(/```java[\s\S]*?```/, "Reference implementation intentionally omitted.");
+  assert.ok(solutionProfileMissingRequirements("leetcode", missingAlternativeCode).includes("catalog approach 1 complete runnable Java reference code"));
 
   const emptyAlternativeAlgorithm = structuredClone(complete);
-  emptyAlternativeAlgorithm.sections.find((section) => section.title === "Meaningful alternatives").body = emptyAlternativeAlgorithm.sections.find((section) => section.title === "Meaningful alternatives").body.replace(/(#### Algorithm\n)[\s\S]*?(?=\n#### Invariant)/, "$1");
-  assert.ok(solutionProfileMissingRequirements("leetcode", emptyAlternativeAlgorithm).includes("alternative 1 detailed complete algorithm"));
+  emptyAlternativeAlgorithm.sections.find((section) => section.title === "Editorial-first approach catalog").body = emptyAlternativeAlgorithm.sections.find((section) => section.title === "Editorial-first approach catalog").body.replace(/(#### Algorithm\n)[\s\S]*?(?=\n#### Invariant)/, "$1");
+  assert.ok(solutionProfileMissingRequirements("leetcode", emptyAlternativeAlgorithm).includes("catalog approach 1 detailed complete algorithm"));
+
+  const generatedDespiteEnoughEditorials = structuredClone(complete);
+  generatedDespiteEnoughEditorials.sections.find((section) => section.title === "Editorial-first approach catalog").body += `\n\n${approachBlock("Generated alternative", "Sorting", "sort")}`;
+  assert.ok(solutionProfileMissingRequirements("leetcode", generatedDespiteEnoughEditorials).includes("generated alternatives only to reach three distinct total approaches"));
+
+  const editorialAfterGenerated = structuredClone(complete);
+  editorialAfterGenerated.sections.find((section) => section.title === "Editorial-first approach catalog").body = [
+    approachBlock("Editorial approach", "Ordered scan", "scan"),
+    approachBlock("Generated alternative", "Sorting", "sort"),
+    approachBlock("Editorial approach", "Divide and conquer", "divide"),
+  ].join("\n\n");
+  assert.ok(solutionProfileMissingRequirements("leetcode", editorialAfterGenerated).includes("all Editorial approaches before generated alternatives"));
+
+  const legacyNameOnlyAlternatives = structuredClone(complete);
+  legacyNameOnlyAlternatives.sections.find((section) => section.title === "Editorial-first approach catalog").body = "### Alternative: Sorting\nUse sorting.";
+  assert.ok(solutionProfileMissingRequirements("leetcode", legacyNameOnlyAlternatives).includes("at least three distinct approaches counting preferred"));
+
+  const preferredEditorialNeedsTwoGenerated = structuredClone(complete);
+  const matchingEditorial = approachBlock("Editorial approach", "Preferred ordered scan", "preferred-match");
+  preferredEditorialNeedsTwoGenerated.sections.find((section) => section.title === "Best approach").body = `#### Algorithm\n${approachAlgorithm(matchingEditorial)}`;
+  preferredEditorialNeedsTwoGenerated.sections.find((section) => section.title === "Editorial-first approach catalog").body = [
+    matchingEditorial,
+    approachBlock("Generated alternative", "Sorting", "sort"),
+  ].join("\n\n");
+  assert.ok(solutionProfileMissingRequirements("leetcode", preferredEditorialNeedsTwoGenerated).includes("generated alternatives only to reach three distinct total approaches"));
+  preferredEditorialNeedsTwoGenerated.sections.find((section) => section.title === "Editorial-first approach catalog").body += `\n\n${approachBlock("Generated alternative", "Heap scan", "heap")}`;
+  assert.equal(isReusableSolutionProfile("leetcode", preferredEditorialNeedsTwoGenerated), true, solutionProfileMissingRequirements("leetcode", preferredEditorialNeedsTwoGenerated).join("\n"));
 });
 
 test("System Design completeness rejects prose-only skeletons and requires executable artifacts", () => {
@@ -155,6 +208,14 @@ test("System Design completeness rejects prose-only skeletons and requires execu
   assert.ok(missing.includes("detailed functional requirements section"));
   assert.ok(missing.includes("complete fenced HTTP API contracts"));
   assert.ok(missing.includes("versioned SVG architecture diagram"));
+
+  const missingQaDecision = structuredClone(complete);
+  delete missingQaDecision.questionsAndAnswers;
+  assert.ok(solutionProfileMissingRequirements("system_design", missingQaDecision).includes("Questions and Answers disposition"));
+
+  const shallowQa = structuredClone(complete);
+  shallowQa.questionsAndAnswers.items[0].answer = "Use retries.";
+  assert.ok(solutionProfileMissingRequirements("system_design", shallowQa).includes("Q&A item 1 detailed answer"));
 });
 
 test("Behavioral completeness rejects tiny answers, transcript sections, and incomplete Project Deep Dives", () => {
@@ -169,6 +230,10 @@ test("Behavioral completeness rejects tiny answers, transcript sections, and inc
   assert.ok(missing.includes("transcript-free sections"));
   assert.ok(missing.includes("detailed preferred personal answer"));
   assert.ok(missing.includes("preferred-answer evidence or explicit evidence gaps"));
+
+  const missingQaDecision = structuredClone(complete);
+  delete missingQaDecision.questionsAndAnswers;
+  assert.ok(solutionProfileMissingRequirements("behavioral", missingQaDecision).includes("Questions and Answers disposition"));
 
   const project = {
     ...complete,
@@ -186,6 +251,16 @@ test("Behavioral completeness rejects tiny answers, transcript sections, and inc
       }],
     },
     projectDeepDive: { projectId: "sample", bindingRevision: 1, focus: "project_overview" },
+    questionsAndAnswers: {
+      status: "included",
+      reason: "The project discussion contained substantial reusable questions and corrected answers.",
+      items: [{
+        question: "Which project boundary is current implementation rather than target design?",
+        answer: prose("projectAnswer", 55),
+        classification: "current_implementation",
+        turnIds: ["turn-owner-1", "turn-specialist-1"],
+      }],
+    },
   };
   assert.equal(isReusableSolutionProfile("behavioral", project), true, solutionProfileMissingRequirements("behavioral", project).join("\n"));
   project.behavioralAnswer.alternatives[0].answer = prose("thinPivot", 59);

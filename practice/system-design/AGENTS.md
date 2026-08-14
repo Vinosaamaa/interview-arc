@@ -458,10 +458,11 @@ access patterns, bottlenecks, partial failures, recovery, and why each major
 choice wins over an alternative. Component name-drops, generic boxes-and-arrows,
 and unquantified scale claims are incomplete and fail the executable Solution
 Profile gate before D1 finalization.
-Add one dedicated Questions and Answers section when substantial design
-questions occurred. Restate each question clearly, keep the final corrected
-answer and hidden turn provenance, and do not duplicate it in the dated
-attempt.
+Always set the typed Questions and Answers disposition. Use `included` for
+substantial design questions with each clear restatement, complete corrected
+answer, boundary label, and exact hidden turn IDs; otherwise use
+`not_applicable` with a truthful reason and no items. Never duplicate it in
+Past.
 Do not create a new Solution Profile revision for reader styling, zoom,
 fullscreen, typography, or layout changes; those belong to the shared runtime
 reader and update older artifacts automatically. Create or backfill a revision
