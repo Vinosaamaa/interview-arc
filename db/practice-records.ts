@@ -111,6 +111,42 @@ function exactIso(timestamp: number | null) {
   return timestamp === null ? null : new Date(timestamp).toISOString();
 }
 
+function assertResponseStageSemantics(stages: PracticeResponseStage[]) {
+  const keys = new Set<string>();
+  for (const stage of stages) {
+    if (keys.has(stage.key)) throw new Error("Practice Record response-stage keys must be unique.");
+    keys.add(stage.key);
+    if (new Set(stage.turnIds).size !== stage.turnIds.length) {
+      throw new Error("Practice Record response-stage turn IDs must be unique.");
+    }
+    const ownerResponse = stage.ownerResponse?.trim() || null;
+    if (stage.state === "no_answer_provided" && ownerResponse !== null) {
+      throw new Error("A no-answer Practice Record stage cannot claim an owner response.");
+    }
+    if (stage.state !== "no_answer_provided" && ownerResponse === null) {
+      throw new Error("An answered Practice Record stage needs the owner's exact response.");
+    }
+    if ((ownerResponse || stage.mentorGuidance?.trim() || stage.finalUnderstanding?.trim()) && stage.turnIds.length === 0) {
+      throw new Error("A material Practice Record response stage needs exact transcript turn IDs.");
+    }
+  }
+}
+
+function pointerMatchesPayload(
+  pointer: typeof practiceRecords.$inferSelect,
+  payload: PracticeRecordPayload,
+) {
+  return pointer.currentRevision === payload.revision
+    && pointer.specialty === payload.specialty
+    && pointer.questionId === payload.questionId
+    && pointer.title === payload.prompt.title
+    && pointer.completedAt === Date.parse(payload.completedAt)
+    && pointer.practiceDate === payload.practiceDate
+    && pointer.outcome === payload.outcome
+    && pointer.solutionRevision === payload.solutionLink.profileRevision
+    && pointer.finalizationOperationId === payload.finalizationOperationId;
+}
+
 export async function assertPracticeRecordFinalizationPreconditions(input: {
   ownerId: string;
   activityId: string;
@@ -122,8 +158,9 @@ export async function assertPracticeRecordFinalizationPreconditions(input: {
   if (!input.finalization.summary?.trim()) {
     throw new Error("A complete Practice Record needs an attempt summary.");
   }
+  assertResponseStageSemantics(input.finalization.practiceRecord.responseStages);
   const db = getDb();
-  const [activities, timerRows, outcomeRows] = await Promise.all([
+  const [activities, timerRows, outcomeRows, transcriptRows] = await Promise.all([
     db.select({ id: extraActivities.id }).from(extraActivities).where(and(
       eq(extraActivities.ownerId, input.ownerId),
       eq(extraActivities.id, input.activityId),
@@ -137,12 +174,21 @@ export async function assertPracticeRecordFinalizationPreconditions(input: {
       eq(outcomes.ownerId, input.ownerId),
       eq(outcomes.activityId, input.activityId),
     )).limit(1),
+    db.select({ turnId: practiceTranscriptTurns.turnId }).from(practiceTranscriptTurns).where(and(
+      eq(practiceTranscriptTurns.ownerId, input.ownerId),
+      eq(practiceTranscriptTurns.activityId, input.activityId),
+    )),
   ]);
   if (!activities[0]) throw new Error("A complete Practice Record needs authoritative owner-scoped activity metadata.");
   if (!timerRows[0]?.completed || timerRows[0].completedAt === null) {
     throw new Error("A complete Practice Record needs a finished activity timer.");
   }
   if (!outcomeRows[0]) throw new Error("A complete Practice Record needs an explicit activity outcome.");
+  const transcriptTurnIds = new Set(transcriptRows.map((turn) => turn.turnId));
+  const referencedTurnIds = input.finalization.practiceRecord.responseStages.flatMap((stage) => stage.turnIds);
+  if (referencedTurnIds.some((turnId) => !transcriptTurnIds.has(turnId))) {
+    throw new Error("Practice Record response stages may cite only turn IDs from that exact activity transcript.");
+  }
 }
 
 async function readRevisionByOperation(ownerId: string, operationId: string) {
@@ -177,20 +223,22 @@ async function exactReceipt(
   ]);
   const pointer = pointers[0];
   const finalization = finalizations[0];
+  const payload = revision.payload as PracticeRecordPayload;
+  const fingerprint = await sha256Hex(JSON.stringify(payload));
   if (!pointer
-      || pointer.currentRevision !== revision.revision
+      || !pointerMatchesPayload(pointer, payload)
       || pointer.recordFingerprint !== revision.recordFingerprint
       || pointer.finalizationOperationId !== operationId
+      || payload.activityId !== activityId
+      || payload.finalizationOperationId !== operationId
+      || payload.revision !== revision.revision
+      || fingerprint !== revision.recordFingerprint
+      || finalization?.status !== "ready"
       || finalization?.practiceRecordRevision !== revision.revision
       || finalization.practiceRecordFingerprint !== revision.recordFingerprint
       || finalization.finalizationOperationId !== operationId
       || finalization.finalizationRequestFingerprint !== requestFingerprint) {
     throw new Error("The immutable Practice Record pointer or finalization receipt failed exact readback.");
-  }
-  const payload = revision.payload as PracticeRecordPayload;
-  const fingerprint = await sha256Hex(JSON.stringify(payload));
-  if (fingerprint !== revision.recordFingerprint) {
-    throw new Error("The immutable Practice Record payload failed fingerprint readback.");
   }
   return {
     revision: revision.revision,
@@ -454,7 +502,15 @@ export async function readCurrentPracticeRecord(ownerId: string, activityId: str
     eq(practiceRecordRevisions.revision, pointer.currentRevision),
   )).limit(1);
   const revision = revisions[0];
-  if (!revision || revision.recordFingerprint !== pointer.recordFingerprint) {
+  if (!revision) {
+    throw new Error("The current Practice Record pointer does not resolve to its exact immutable revision.");
+  }
+  const payload = revision.payload as PracticeRecordPayload;
+  const fingerprint = await sha256Hex(JSON.stringify(payload));
+  if (revision.recordFingerprint !== pointer.recordFingerprint
+      || fingerprint !== revision.recordFingerprint
+      || payload.activityId !== activityId
+      || !pointerMatchesPayload(pointer, payload)) {
     throw new Error("The current Practice Record pointer does not resolve to its exact immutable revision.");
   }
   return {
@@ -462,7 +518,7 @@ export async function readCurrentPracticeRecord(ownerId: string, activityId: str
     fingerprint: revision.recordFingerprint,
     operationId: revision.operationId,
     requestFingerprint: revision.requestFingerprint,
-    payload: revision.payload as PracticeRecordPayload,
+    payload,
     createdAt: revision.createdAt,
   };
 }

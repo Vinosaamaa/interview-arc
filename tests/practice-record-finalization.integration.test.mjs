@@ -325,6 +325,49 @@ test("complete finalization becomes saved only with an exact immutable Practice 
     assert.equal(ownerReadbackAfterCollision.practiceRecord.fingerprint, receipt.result.practiceRecord.fingerprint);
     assert.equal(ownerReadbackAfterCollision.turns[0].body, "I would use an owner-scoped outbox.");
 
+    const foreignTurnPacket = await callRaw(client, "save_specialist_finalization", {
+      activityId: incompleteActivityId,
+      specialty: "system_design",
+      questionId,
+      finalization: {
+        ...finalization.finalization,
+        title: "Foreign turn identity fixture",
+        summary: "The semantic sidecar intentionally points at a turn owned by a different activity.",
+        solutionProfileAction: "reuse_current",
+        solutionProfile: undefined,
+        interactionModeClassificationOperationId: "mode-practice-record-foreign-turn",
+        interactionModeEvidence: {
+          schemaVersion: 1,
+          provenance: "recorded",
+          materialSpecialistTurnIds: ["specialist-practice-record-incomplete"],
+          assistanceEvents: [],
+        },
+        practiceRecord: {
+          prompt: {
+            body: "Design a finalization boundary with exact activity-scoped evidence.",
+            canonicalUrl: "https://example.test/design-durable-finalization",
+          },
+          responseStages: [{
+            key: "foreign_turn",
+            state: "answered",
+            ownerResponse: "This response must bind only to its own transcript.",
+            mentorGuidance: null,
+            finalUnderstanding: "Cross-activity turn identities are rejected before semantic persistence.",
+            turnIds: ["user-practice-record"],
+          }],
+          nextDrill: "Explain why owner isolation alone is insufficient without activity isolation.",
+        },
+      },
+    });
+    assert.equal(foreignTurnPacket.isError, true);
+    assert.equal(foreignTurnPacket.structuredContent.code, "specialist_write_rejected");
+    assert.match(foreignTurnPacket.structuredContent.error, /turn IDs from that exact activity transcript/);
+    const foreignTurnReadback = await call(client, "get_activity_practice_record", {
+      activityId: incompleteActivityId,
+    });
+    assert.equal(foreignTurnReadback.practiceRecord, null);
+    assert.equal(foreignTurnReadback.finalization, null);
+
     const leetcodeFinalization = {
       activityId: leetcodeActivityId,
       specialty: "leetcode",
