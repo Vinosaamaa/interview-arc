@@ -566,6 +566,17 @@ export async function pinBehavioralEvidenceProvenance({
       throw new Error("The remote evidence snapshot contains an identity outside this bundle.");
     }
   }
+  if (remoteSnapshotPath) {
+    for (const project of bundle.projects) {
+      const evidenceById = new Map(project.record.evidence.map((evidence) => [evidence.id, evidence]));
+      for (const candidate of project.record.d1Candidates) {
+        const evidence = evidenceById.get(candidate.sourceEvidenceIds[0]);
+        if (evidence && !evidence.immutableContentFingerprint && !remoteByEvidenceId.has(stableRemoteId(evidence.id))) {
+          throw new Error("The remote evidence snapshot does not cover every unpinned D1 candidate in this bundle.");
+        }
+      }
+    }
+  }
   const summary = { pinned: 0, remotePinned: 0, currentPinned: 0, unchanged: 0 };
   const changedProjects = [];
 

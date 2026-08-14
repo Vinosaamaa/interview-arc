@@ -164,7 +164,10 @@ evidence identity already exists in D1, provide an ignored, owner-private remote
 snapshot containing only `evidenceId` and its authoritative `sourceRevision`;
 the migration reuses that exact revision. Unsynced observations pin the current
 authorized source set. The snapshot remains inside the ignored bundle and never
-contains statements, source text, locators, or review-site content.
+contains statements, source text, locators, or review-site content. When a
+snapshot is supplied, it must cover every unpinned D1 candidate before any
+canonical file changes; pin known-unsynced observations in a separate no-snapshot
+pass before they become remote candidates.
 
 Every source declares a `refreshMode`. `filesystem` means its private locator
 is one real canonical source root or exact file. `remote`, `conversation`, and

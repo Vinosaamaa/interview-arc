@@ -41,7 +41,7 @@ The local Behavioral Evidence controller previously recalculated an existing obs
 
 Each canonical evidence observation now pins the opaque source-set revision it was inspected against and a fingerprint of every field that contributes to its remote immutable identity. Source refreshes continue to revise source-registry metadata, while an existing evidence payload and operation identity remain byte-identical. Editing a pinned observation's statement, grades, source references, support, limitations, or tags fails locally and requires a replacement evidence ID followed by the existing explicit owner-reviewed supersession operation.
 
-Legacy migration accepts an ignored owner-private snapshot containing only remote evidence IDs and their authoritative source revisions. Existing D1 identities reuse those revisions; identities not yet synchronized may pin the current authorized source set. The migration rejects conflicting and out-of-bundle identities before writing canonical files, remains idempotent on exact replay, and never carries statements, source text, locators, or review-site content in the snapshot.
+Legacy migration accepts an ignored owner-private snapshot containing only remote evidence IDs and their authoritative source revisions. Existing D1 identities reuse those revisions; identities not yet synchronized may pin the current authorized source set. The migration rejects incomplete, conflicting, and out-of-bundle snapshots before writing canonical files, remains idempotent on exact replay, and never carries statements, source text, locators, or review-site content in the snapshot.
 
 ## Bounded readback
 

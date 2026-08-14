@@ -556,6 +556,40 @@ test("migration reuses an authoritative remote source revision for existing evid
   assert.equal(plan.evidence[0].input.evidence.sourceRevision, remoteSourceRevision);
 });
 
+test("a remote migration snapshot must cover every unpinned D1 candidate before mutation", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.d1Candidates = [{
+    id: "EX-D1-001",
+    kind: "evidence",
+    visibility: "owner_private",
+    content: {
+      questionLinks: [{ questionId: "QUESTION-EXAMPLE-1", relevance: "supporting" }],
+    },
+    sourceEvidenceIds: ["EX-EV-001"],
+    transformations: ["Generalized the observation for owner-private review."],
+    limitations: ["The observation does not establish personal ownership."],
+  }];
+  record.d1Exclusions = [];
+  await writeJson(recordPath, record);
+  const initialRecordBytes = await readFile(recordPath, "utf8");
+  const initialManifestBytes = await readFile(path.join(fixture.root, "manifest.json"), "utf8");
+  const snapshotPath = path.join(fixture.root, "remote-evidence-snapshot.json");
+  await writeJson(snapshotPath, {
+    schemaVersion: 1,
+    visibility: "owner_private",
+    evidence: [],
+  });
+
+  await assert.rejects(
+    pinBehavioralEvidenceProvenance({ bundleRoot: fixture.root, remoteSnapshotPath: snapshotPath }),
+    /does not cover every unpinned D1 candidate/,
+  );
+  assert.equal(await readFile(recordPath, "utf8"), initialRecordBytes);
+  assert.equal(await readFile(path.join(fixture.root, "manifest.json"), "utf8"), initialManifestBytes);
+});
+
 test("refresh inspects only typed filesystem sources and never guesses from locator text", async (t) => {
   const fixture = await createFixture(t);
   const recordPath = path.join(fixture.projectRoot, "project.json");
