@@ -35,8 +35,6 @@ run: null
 ---
 # Owner-Private Practice Record Authority
 
-## Summary
-
 Move personal practice authority from Git publication to immutable
 owner-scoped D1 records and private R2 assets, with exact background readback,
 separate Past/Solution readers, and deterministic System Design drawings.
