@@ -1,8 +1,8 @@
 ---
 schemaVersion: 1
-id: change-note-engineering-evidence-workbench
+id: architecture-review-engineering-evidence-workbench
 revision: 1
-type: change-note
+type: architecture-review
 status: proposed
 title: Make Engineering an evidence workbench
 repository: interview-arc
@@ -36,13 +36,13 @@ run: null
 
 The Engineering Journal already projected immutable records, pull-request receipts, and exact Git provenance. Its website adapter placed the index, record, Contents navigation, and evidence inside one fused sheet, which made document wayfinding compete with source verification and left wide screens underused.
 
-## Change
+## Decision
 
-The Journal now opens as three independent sibling panels: a bounded record index, the authoritative record, and an Evidence & Lineage panel. The record remains the widest surface. The index collapses without discarding its filters, selected record, or scroll position; the evidence surface becomes a drawer at compact widths; mobile exposes explicit Index and Evidence controls without horizontal overflow.
+The Journal opens as three independent sibling panels: a bounded record index, the authoritative record, and an Evidence & Lineage panel. The record remains the widest surface. The index collapses without discarding its filters, selected record, or scroll position; the evidence surface becomes a drawer at compact widths; mobile exposes explicit Index and Evidence controls without horizontal overflow.
 
 Contents navigation stays inside the record panel, while exact ref, commit, source path, verification state, lineage, and pull-request receipts stay in the evidence panel. Shared reader styling also normalizes outline typography and clips the opaque reader surface at its rounded boundary.
 
-Engineering now defaults to a restrained Rain atmosphere when no owner preference exists. Petals, Rain, and Off are explicit persistent choices. Both animations are pointer-transparent, bounded, paused in hidden documents and reader overlays, and disabled by reduced-motion preferences.
+Engineering defaults to a restrained Rain atmosphere when no owner preference exists. Petals, Rain, and Off are explicit persistent choices. Both animations are pointer-transparent, bounded, paused in hidden documents and reader overlays, and disabled by reduced-motion preferences.
 
 ## Verification
 
