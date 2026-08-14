@@ -12,6 +12,7 @@ import {
   connectMcpClient,
   runMcpCommand,
   startMcpWorker,
+  stopMcpWorker,
   waitForMcpWorker,
 } from "./helpers/mcp-worker-harness.mjs";
 
@@ -152,7 +153,7 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     ], project);
     const started = startMcpWorker({ wrangler, config, persistence, project, port });
     worker = started.child;
-    await waitForMcpWorker(baseUrl, worker);
+    await waitForMcpWorker(baseUrl, worker, started.readDiagnosticTail);
     client = await connectMcpClient(baseUrl, token, "learning-session-owner");
     otherClient = await connectMcpClient(baseUrl, otherToken, "learning-session-other");
 
@@ -878,8 +879,7 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
   } finally {
     await client?.close().catch(() => {});
     await otherClient?.close().catch(() => {});
-    worker?.kill("SIGTERM");
-    if (worker && worker.exitCode === null) await new Promise((resolve) => worker.once("exit", resolve));
+    await stopMcpWorker(worker);
     if (persistence) await rm(persistence, { recursive: true, force: true });
     await releaseLock?.();
   }

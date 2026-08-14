@@ -12,6 +12,7 @@ import {
   connectMcpClient,
   runMcpCommand,
   startMcpWorker,
+  stopMcpWorker,
   waitForMcpWorker,
 } from "./helpers/mcp-worker-harness.mjs";
 
@@ -56,7 +57,7 @@ test("interaction mode MCP state is owner-private, atomic, idempotent, revision-
     await runMcpCommand(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", interactionModeFixtureSql(ownerToken, otherToken)], project);
     const startedWorker = startMcpWorker({ wrangler, config, persistence, project, port });
     worker = startedWorker.child;
-    await waitForMcpWorker(baseUrl, worker);
+    await waitForMcpWorker(baseUrl, worker, startedWorker.readDiagnosticTail);
 
     let ownerClient = await connectMcpClient(baseUrl, ownerToken, "interaction-mode-owner");
     clients.push(ownerClient);
@@ -265,7 +266,7 @@ test("interaction mode MCP state is owner-private, atomic, idempotent, revision-
     assert.equal(new Set(final.transitions.map((transition) => transition.mutationId)).size, 2);
   } finally {
     await Promise.all(clients.map((client) => client.close().catch(() => undefined)));
-    if (worker && worker.exitCode === null) worker.kill("SIGTERM");
+    await stopMcpWorker(worker);
     if (persistence) await rm(persistence, { recursive: true, force: true });
     if (releaseIntegrationLock) await releaseIntegrationLock();
   }

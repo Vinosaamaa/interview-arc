@@ -13,6 +13,7 @@ import {
   connectMcpClient,
   runMcpCommand,
   startMcpWorker,
+  stopMcpWorker,
   waitForMcpWorker,
 } from "./helpers/mcp-worker-harness.mjs";
 
@@ -345,7 +346,7 @@ test("complete finalization becomes saved only with an exact immutable Practice 
     `], project);
     const started = startMcpWorker({ wrangler, config, persistence, project, port });
     worker = started.child;
-    await waitForMcpWorker(baseUrl, worker);
+    await waitForMcpWorker(baseUrl, worker, started.readDiagnosticTail);
     client = await connectMcpClient(baseUrl, token, "practice-record-integration");
     otherClient = await connectMcpClient(baseUrl, otherToken, "practice-record-other-owner");
 
@@ -713,10 +714,7 @@ test("complete finalization becomes saved only with an exact immutable Practice 
   } finally {
     await otherClient?.close().catch(() => {});
     await client?.close().catch(() => {});
-    if (worker && worker.exitCode === null) {
-      worker.kill("SIGTERM");
-      await new Promise((resolve) => worker.once("exit", resolve));
-    }
+    await stopMcpWorker(worker);
     if (persistence) await rm(persistence, { recursive: true, force: true });
     await releaseLock?.();
   }
