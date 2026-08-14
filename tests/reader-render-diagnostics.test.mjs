@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { ReaderDiagnosticBuffer, readerDiagnosticEnabled } from "../app/reader-render-diagnostics.ts";
@@ -55,4 +56,29 @@ test("mark flash freezes the preceding rolling window until reset", () => {
   restored.record({ at: 3, kind: "reader-open", surface: "banks-solution" });
   assert.equal(restored.snapshot().frozen, false);
   assert.deepEqual(restored.snapshot().events.map((event) => event.kind), ["reader-open"]);
+});
+
+test("a reset trace accepts a fresh baseline before a later flash marker", () => {
+  const buffer = new ReaderDiagnosticBuffer();
+  buffer.record({ at: 1, kind: "visual-heartbeat", surface: "past-attempt" });
+  buffer.reset();
+  buffer.record({ at: 2, kind: "trace-reset", surface: "past-attempt" });
+  buffer.record({ at: 2, kind: "visual-baseline", surface: "past-attempt", detail: { mounted: true } });
+  buffer.markFlash("past-attempt");
+
+  assert.deepEqual(buffer.snapshot().events.map((event) => event.kind), [
+    "trace-reset",
+    "visual-baseline",
+    "flash-marker-manual",
+  ]);
+  assert.equal(buffer.snapshot().events[1].detail?.mounted, true);
+});
+
+test("the browser recorder captures stable frames, reset baselines, and the marked instant", () => {
+  const source = readFileSync(new URL("../app/reader-render-diagnostics-panel.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /recordReaderDiagnostic\("visual-heartbeat"/);
+  assert.match(source, /recordReaderDiagnostic\("visual-baseline"/);
+  assert.match(source, /recordReaderDiagnostic\("flash-capture"/);
+  assert.match(source, /const mark = \(\) => \{[\s\S]*recordReaderDiagnostic\("flash-capture"[\s\S]*markReaderFlash/);
 });

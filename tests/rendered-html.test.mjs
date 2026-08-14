@@ -245,6 +245,9 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /disabled=\{activityComplete \|\| !activityStarted \|\| \(!focusActivity && !outcome\) \|\| activityLocked\}/);
   assert.match(client, /<span aria-hidden="true">✦<\/span>Petals/);
   assert.match(css, /\.petal-field\.paused \{ opacity: 0; visibility: hidden;/);
+  assert.match(css, /body:has\(\.reader-workspace\) \.petal-field/);
+  assert.match(css, /body:has\(\.reader-workspace\) \.ambient-petal \{ animation-play-state: paused !important;/);
+  assert.match(css, /\.reader-workspace \{[\s\S]*isolation: isolate;[\s\S]*background: #fffefb;/);
   assert.match(css, /\.pip-toggle\.active \{/);
   assert.match(css, /\.pip-toggle \{[^}]*width: 124px;[^}]*min-width: 124px;/);
   assert.match(css, /\.pip-clock \.result-flag\.solved \{[^}]*background: rgba\(169, 202, 77, \.22\);/);
