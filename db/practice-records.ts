@@ -149,6 +149,64 @@ function pointerMatchesPayload(
     && pointer.finalizationOperationId === payload.finalizationOperationId;
 }
 
+async function resolveNamed<T extends Record<string, PromiseLike<unknown>>>(queries: T) {
+  const entries = await Promise.all(Object.entries(queries).map(
+    async ([key, query]) => [key, await query] as const,
+  ));
+  return Object.fromEntries(entries) as { [K in keyof T]: Awaited<T[K]> };
+}
+
+function loadPracticeRecordComponents(ownerId: string, activityId: string) {
+  const db = getDb();
+  return resolveNamed({
+    activities: db.select().from(extraActivities).where(and(
+      eq(extraActivities.ownerId, ownerId),
+      eq(extraActivities.id, activityId),
+    )).limit(1),
+    timers: db.select().from(timers).where(and(
+      eq(timers.ownerId, ownerId),
+      eq(timers.subjectId, activityId),
+      eq(timers.kind, "activity"),
+    )).limit(1),
+    outcomes: db.select().from(outcomes).where(and(
+      eq(outcomes.ownerId, ownerId),
+      eq(outcomes.activityId, activityId),
+    )).limit(1),
+    turns: db.select({ turnId: practiceTranscriptTurns.turnId }).from(practiceTranscriptTurns).where(and(
+      eq(practiceTranscriptTurns.ownerId, ownerId),
+      eq(practiceTranscriptTurns.activityId, activityId),
+    )).orderBy(asc(practiceTranscriptTurns.sequence), asc(practiceTranscriptTurns.occurredAt)),
+    noteCounts: db.select({ count: sql<number>`count(*)`.mapWith(Number) }).from(practiceNotes).where(and(
+      eq(practiceNotes.ownerId, ownerId),
+      eq(practiceNotes.activityId, activityId),
+    )),
+    classifications: db.select().from(practiceInteractionModeClassifications).where(and(
+      eq(practiceInteractionModeClassifications.ownerId, ownerId),
+      eq(practiceInteractionModeClassifications.activityId, activityId),
+    )).orderBy(desc(practiceInteractionModeClassifications.snapshotRevision)).limit(1),
+    codeAttempts: db.select({ id: leetcodeCodeAttempts.id }).from(leetcodeCodeAttempts).where(and(
+      eq(leetcodeCodeAttempts.ownerId, ownerId),
+      eq(leetcodeCodeAttempts.activityId, activityId),
+    )).orderBy(asc(leetcodeCodeAttempts.sequence), asc(leetcodeCodeAttempts.occurredAt)),
+    finalAnswers: db.select({ snapshotRevision: behavioralFinalAnswerSnapshots.snapshotRevision }).from(behavioralFinalAnswerSnapshots).where(and(
+      eq(behavioralFinalAnswerSnapshots.ownerId, ownerId),
+      eq(behavioralFinalAnswerSnapshots.activityId, activityId),
+    )).orderBy(desc(behavioralFinalAnswerSnapshots.snapshotRevision)).limit(1),
+    solutionLinks: db.select().from(activitySolutionLinks).where(and(
+      eq(activitySolutionLinks.ownerId, ownerId),
+      eq(activitySolutionLinks.activityId, activityId),
+    )).limit(1),
+    finalizations: db.select().from(activityFinalizations).where(and(
+      eq(activityFinalizations.ownerId, ownerId),
+      eq(activityFinalizations.activityId, activityId),
+    )).limit(1),
+    currentRecords: db.select().from(practiceRecords).where(and(
+      eq(practiceRecords.ownerId, ownerId),
+      eq(practiceRecords.activityId, activityId),
+    )).limit(1),
+  });
+}
+
 export async function assertPracticeRecordFinalizationPreconditions(input: {
   ownerId: string;
   activityId: string;
@@ -281,59 +339,13 @@ export async function persistFinalizedPracticeRecord(input: {
   await assertPracticeRecordFinalizationPreconditions(input);
 
   const db = getDb();
-  const [activities, timerRows, outcomeRows, turns, noteCounts, classifications, codeAttempts, finalAnswers, solutionLinks, finalizations, currentRows] = await Promise.all([
-    db.select().from(extraActivities).where(and(
-      eq(extraActivities.ownerId, input.ownerId),
-      eq(extraActivities.id, input.activityId),
-    )).limit(1),
-    db.select().from(timers).where(and(
-      eq(timers.ownerId, input.ownerId),
-      eq(timers.subjectId, input.activityId),
-      eq(timers.kind, "activity"),
-    )).limit(1),
-    db.select().from(outcomes).where(and(
-      eq(outcomes.ownerId, input.ownerId),
-      eq(outcomes.activityId, input.activityId),
-    )).limit(1),
-    db.select({ turnId: practiceTranscriptTurns.turnId }).from(practiceTranscriptTurns).where(and(
-      eq(practiceTranscriptTurns.ownerId, input.ownerId),
-      eq(practiceTranscriptTurns.activityId, input.activityId),
-    )).orderBy(asc(practiceTranscriptTurns.sequence), asc(practiceTranscriptTurns.occurredAt)),
-    db.select({ count: sql<number>`count(*)`.mapWith(Number) }).from(practiceNotes).where(and(
-      eq(practiceNotes.ownerId, input.ownerId),
-      eq(practiceNotes.activityId, input.activityId),
-    )),
-    db.select().from(practiceInteractionModeClassifications).where(and(
-      eq(practiceInteractionModeClassifications.ownerId, input.ownerId),
-      eq(practiceInteractionModeClassifications.activityId, input.activityId),
-    )).orderBy(desc(practiceInteractionModeClassifications.snapshotRevision)).limit(1),
-    db.select({ id: leetcodeCodeAttempts.id }).from(leetcodeCodeAttempts).where(and(
-      eq(leetcodeCodeAttempts.ownerId, input.ownerId),
-      eq(leetcodeCodeAttempts.activityId, input.activityId),
-    )).orderBy(asc(leetcodeCodeAttempts.sequence), asc(leetcodeCodeAttempts.occurredAt)),
-    db.select({ snapshotRevision: behavioralFinalAnswerSnapshots.snapshotRevision }).from(behavioralFinalAnswerSnapshots).where(and(
-      eq(behavioralFinalAnswerSnapshots.ownerId, input.ownerId),
-      eq(behavioralFinalAnswerSnapshots.activityId, input.activityId),
-    )).orderBy(desc(behavioralFinalAnswerSnapshots.snapshotRevision)).limit(1),
-    db.select().from(activitySolutionLinks).where(and(
-      eq(activitySolutionLinks.ownerId, input.ownerId),
-      eq(activitySolutionLinks.activityId, input.activityId),
-    )).limit(1),
-    db.select().from(activityFinalizations).where(and(
-      eq(activityFinalizations.ownerId, input.ownerId),
-      eq(activityFinalizations.activityId, input.activityId),
-    )).limit(1),
-    db.select().from(practiceRecords).where(and(
-      eq(practiceRecords.ownerId, input.ownerId),
-      eq(practiceRecords.activityId, input.activityId),
-    )).limit(1),
-  ]);
-  const activity = activities[0];
-  const timer = timerRows[0];
-  const outcome = outcomeRows[0];
-  const solutionLink = solutionLinks[0];
-  const finalization = finalizations[0];
-  const current = currentRows[0];
+  const components = await loadPracticeRecordComponents(input.ownerId, input.activityId);
+  const activity = components.activities[0];
+  const timer = components.timers[0];
+  const outcome = components.outcomes[0];
+  const solutionLink = components.solutionLinks[0];
+  const finalization = components.finalizations[0];
+  const current = components.currentRecords[0];
   if (!activity) throw new Error("A complete Practice Record needs authoritative owner-scoped activity metadata.");
   if (!timer?.completed || timer.completedAt === null) throw new Error("A complete Practice Record needs a finished activity timer.");
   if (!outcome) throw new Error("A complete Practice Record needs an explicit activity outcome.");
@@ -363,7 +375,7 @@ export async function persistFinalizedPracticeRecord(input: {
       sessionId: typeof activityPayload.sessionId === "string" ? activityPayload.sessionId : null,
     },
     outcome: outcome.outcome,
-    interactionMode: interactionMode((classifications[0]?.classification as { primaryPracticeModeId?: unknown } | undefined)?.primaryPracticeModeId),
+    interactionMode: interactionMode((components.classifications[0]?.classification as { primaryPracticeModeId?: unknown } | undefined)?.primaryPracticeModeId),
     prompt: {
       title: input.finalization.title,
       body: input.finalization.practiceRecord.prompt.body,
@@ -372,16 +384,16 @@ export async function persistFinalizedPracticeRecord(input: {
     summary: input.finalization.summary.trim(),
     transcript: {
       revision: finalization.revision,
-      turnCount: turns.length,
-      firstTurnId: turns[0]?.turnId ?? null,
-      lastTurnId: turns.at(-1)?.turnId ?? null,
+      turnCount: components.turns.length,
+      firstTurnId: components.turns[0]?.turnId ?? null,
+      lastTurnId: components.turns.at(-1)?.turnId ?? null,
     },
-    notesRevision: noteCounts[0]?.count || null,
+    notesRevision: components.noteCounts[0]?.count || null,
     specialtyOutput: {
       kind: specialtyOutputKind(input.specialty),
       responseStages: input.finalization.practiceRecord.responseStages,
-      codeAttemptIds: codeAttempts.map((attempt) => attempt.id),
-      finalAnswerRevision: finalAnswers[0]?.snapshotRevision ?? null,
+      codeAttemptIds: components.codeAttempts.map((attempt) => attempt.id),
+      finalAnswerRevision: components.finalAnswers[0]?.snapshotRevision ?? null,
       designAssetIds: [],
     },
     review: {
