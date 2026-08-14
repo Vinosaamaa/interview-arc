@@ -113,10 +113,10 @@ After resolving the stable `questionId`, every specialist calls
   automatically reuses the current revision when the submitted profile is
   substantively identical.
 
-During LeetCode final review, the parent delegates complete Markdown profile
-authoring to the activity's persistence child and returns the teaching answer
-without waiting. The child saves the D1 draft from supplied verified facts;
-later finalization and publication reuse it without research or rewriting.
+During LeetCode final review, the parent may hand its verified Editorial source
+packet to the bounded authoring child and return the teaching answer after
+handoff. A separate mechanical persistence child stores the completed profile
+unchanged. Finalization and Past remain pending until exact D1 readback.
 
 Every completed attempt links to the exact revision reused or created. Never
 create a new revision for punctuation or formatting alone.

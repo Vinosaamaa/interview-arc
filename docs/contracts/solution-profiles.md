@@ -30,10 +30,9 @@ gate. A complete specialist finalization fails before any D1 mutation when its
 profile is shallow or structurally incomplete. Legacy immutable revisions stay
 unchanged; repair them only by creating a new, evidence-grounded revision.
 
-Published artifacts are full-fidelity renderings of the exact pinned profile
-revision. The coordinator must not replace a section with a shorter paraphrase,
-drop an alternative or code block, or mark an activity published when its
-artifact contains only an abbreviated solution.
+Every durable reader and explicitly authorized export renders the exact pinned
+profile revision. It must not replace a section with a shorter paraphrase or
+drop an approach or code block.
 
 ## LeetCode
 
@@ -67,12 +66,14 @@ Editorials, copy no official prose/code, and report unavailable access honestly.
 
 ### Background authoring and publication reuse
 
-During final review, the parent returns the teaching answer immediately and
-delegates this complete Markdown profile to the activity's persistence child.
-The child authors and saves the D1 draft only from supplied verified facts;
-later finalization and publication reuse it without research or rewriting.
+During final review, the parent may delegate the complete profile to the
+bounded authoring child using only verified problem facts, independently
+summarized Editorial mechanics, and references. A separate mechanical child
+stores the completed bytes unchanged. Later finalization and readers reuse that
+profile without fresh research or a shorter rewrite.
 
-The preferred implementation contains complete runnable Java and Python code.
+The preferred implementation contains complete runnable Java and Python code
+and renders in one panel with Java/Python tabs.
 
 Use normalized technique tags such as `dfs`, `sliding-window`,
 `topological-sort`, or `binary-search-on-answer`.

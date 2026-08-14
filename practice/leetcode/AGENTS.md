@@ -239,9 +239,9 @@ review. After the permitted Editorial check:
 - ground strengths and gaps only in observed reasoning/submitted code;
 - explain the concrete correctness, implementation, or communication issue;
 - present the strongest approach;
-- teach the complete Editorial-first approach catalog required by
-  `solution-profiles.md` deeply enough to reconstruct every algorithm; use
-  pseudocode when it clarifies non-obvious mechanics, never a name-only summary;
+- teach every verified Editorial approach deeply enough to reconstruct its
+  algorithm, state transition, invariant/proof, complexity, edge cases, and
+  tradeoffs; add pseudocode when mechanics are non-obvious;
 - provide a complete independently written Java reference implementation for
   Accepted and every explicit final review;
 - cover correctness invariant, time/space complexity, edge cases, key lesson,
@@ -251,11 +251,11 @@ review. After the permitted Editorial check:
 Generated reference code is clearly separate from the user's attempt. Review
 does not authorize timer, outcome, or workbench mutation.
 
-The terminal review teaches the approaches; it does not dump every full
-catalog implementation. In that turn, delegate the complete Markdown profile
-to the activity's persistence child under `solution-profiles.md`, then return
-without waiting. The child authors and saves the draft from supplied verified
-facts; it never browses or invents. Do not print the full profile unless asked.
+The terminal review teaches the approaches without dumping the full profile.
+Hand verified problem facts, independently summarized Editorial mechanics, and
+references to the bounded authoring child, then return after handoff. A separate
+persistence child saves its complete output unchanged; neither child browses or
+invents. Do not print the full profile unless asked.
 
 ## Code Attempt Boundary
 
@@ -285,27 +285,29 @@ transcript evidence.
 
 ## Finalization And Solution Profile
 
-`Publish this session` or specialty publication saves one complete
-`save_specialist_finalization` bundle per ready activity:
+Finish/final review queues one complete `save_specialist_finalization` bundle.
+Specialty-wide commands only reconcile missing or failed historical work:
 
 - observed transcript scope and evidence-grounded review;
 - original standalone best solution and mandatory complete model answer;
 - Java-first code, correctness, complexity, and edge cases;
-- the complete ordered approach catalog required by `solution-profiles.md`;
+- every verified Editorial approach, followed only by enough distinct generated
+  alternatives to reach three total approaches counting the preferred, with
+  every entry complete under `solution-profiles.md`;
 - only references actually consulted;
 - available Delivery Coach evidence (queued/failed analysis never blocks).
 
-Promote the exact background-authored profile. If it is missing or incomplete, leave
-finalization blocked; the coordinator never fills it.
+Promote the exact background-authored profile. If it is missing or incomplete,
+leave finalization blocked; the coordinator never fills it.
 
 Complete finalizations use the classification operation ID as a durable write
 identity. Poll `get_specialist_write_status` until the returned receipt is
-`saved` or `failed`; queued, processing, and retry-wait states do not authorize
-publication. Make at most five follow-up reads after 1, 2, 4, 8, and 15 second
-waits. If the receipt is still non-terminal after that 30-second budget, report
-it pending with its job ID, status, and next-attempt time; resume that same
-receipt later. Reuse the exact operation ID and byte-for-byte payload after an
-uncertain transport result, and never create a manual retry storm.
+`saved` or `failed`; queued, processing, and retry-wait states keep Past at
+`Finalization pending`. Make at most five follow-up reads after 1, 2, 4, 8,
+and 15 second waits. If the receipt is still non-terminal after that 30-second
+budget, report it pending with its job ID, status, and next-attempt time; resume
+that same receipt later. Reuse the exact operation ID and byte-for-byte payload
+after uncertain transport, and never create a manual retry storm.
 
 For the shared interaction-mode sidecar, count only live problem-solving
 responses. Exclude harness setup, submission bookkeeping, post-submit review,
@@ -321,15 +323,6 @@ distinct, and understandable without the chat. Include the summary,
 pattern/constraints, preferred algorithm, proof, complete runnable Java then
 Python implementations, complexity, at least three edge cases, common
 mistakes/recall cues, and a concise interview walkthrough.
-
-Include one or two genuinely meaningful alternatives as separate
-`### Alternative: <name>` blocks. Use substantive `####` subsections for when
-and why to choose it, the complete algorithm/state transition, invariant and
-correctness reasoning, time/space complexity, concrete edge cases, tradeoffs
-versus the preferred approach, and complete runnable Java reference code. A
-name-drop, empty label, keyword list, pseudocode fragment, or complexity-only
-comparison is incomplete. Do not add a cosmetic alternative merely to fill
-space; choose an approach that teaches a real use-case or tradeoff.
 
 The executable Solution Profile policy rejects shallow or structurally
 incomplete content before finalization mutates D1. Reuse the current profile
@@ -366,11 +359,7 @@ consulted.
 
 ## Files
 
-- Bank: `bank/questions.json`
-- Import template: `bank/import-template.csv`
-- Working solution: `solutions/<four-digit-number>-<slug>.java`
-- Attempt/walkthrough artifact: `attempts/YYYY-MM-DD-<problem-id>.md`
-- Daily manifest: `../../data/daily/YYYY-MM-DD.json`
-
-Preserve prior D1 attempts. An Accepted working source may later be published by
-the coordinator; unfinished local source is not a journal artifact.
+Public-safe question metadata may use `bank/questions.json` and
+`bank/import-template.csv`. Owner attempts, code, reviews, Solution Profiles,
+recordings, and journals stay in D1/private R2. Frozen legacy Git files are
+read-only migration inputs; never add a new personal file beside them.

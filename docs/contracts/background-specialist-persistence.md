@@ -9,8 +9,7 @@ uninterrupted MCP request.
 ## Parent specialist path
 
 The useful coaching answer is latency-critical. After resolving the activity
-and composing the complete visible answer plus its exact persistence sidecar,
-except for the bounded profile-authoring work below:
+and composing the complete visible answer plus its exact persistence sidecar:
 
 1. Reuse the activity's one persistence sub-agent. Spawn it only when no live
    child exists; otherwise send the exact work as an ordered follow-up task.
@@ -54,16 +53,6 @@ order. At the eight-item limit, join the child before delegating more work;
 never create another child, reorder evidence, or silently drop persistence.
 After Finish verification, stop reusing that activity's child.
 
-### LeetCode profile-authoring work
-
-During final review, the parent may delegate one Solution Profile work item
-containing stable activity/question identity, current profile, verified problem
-facts, independently summarized Editorial mechanics, and references. The child
-authors the full Markdown profile under `solution-profiles.md` and saves a draft
-`save_specialist_finalization`; the parent returns after handoff and joins the
-child before complete finalization. This permits no browser use, fresh research,
-invented facts, copied Editorial prose/code, or attempt-evidence mutation.
-
 ## MCP routing boundary
 
 These post-response persistence calls are dedicated to the activity child:
@@ -100,8 +89,6 @@ The parent supplies, verbatim:
 - ordered MCP tool names;
 - complete tool arguments, including stable capture, user-turn, response-turn,
   Code Attempt, and review identities where applicable;
-- for LeetCode profile authoring, the verified inputs listed above instead of
-  an already-authored profile;
 - the exact visible specialist response body and occurrence time;
 - the required final report shape.
 
@@ -115,9 +102,8 @@ paraphrase.
 The child instruction must say:
 
 ```text
-You are a persistence sub-agent; content authoring is limited to a labeled
-LeetCode profile-authoring item. Execute only the supplied Interview Arc MCP
-operations, in order, with the arguments and stable IDs verbatim. For
+You are a persistence-only sub-agent. Execute only the supplied Interview Arc
+MCP operations, in order, with the arguments and stable IDs verbatim. For
 save_leetcode_code_attempt and upsert_personal_bank_question, supply one stable
 operationId per logical write. For save_specialist_finalization, use the stable
 interactionModeClassificationOperationId as the immutable finalization
@@ -126,10 +112,10 @@ saved or failed. Make at most five follow-up reads, waiting 1, 2, 4, 8, and 15
 seconds before them. If a receipt is still non-terminal after that 30-second
 budget, return it as pending with jobId, status, and nextAttemptAt so the parent
 or coordinator can resume from the same durable identity later. A queued
-receipt is not a saved result. Only a labeled LeetCode profile-authoring item
-may author Markdown, strictly from supplied verified inputs. Otherwise do not
-research, coach, rewrite, infer, use a browser, submit code, mutate
-timers/results, publish, edit files, or perform Git work. Retry an
+receipt is not a saved result. Do not
+research, coach, rewrite content, infer missing fields, summarize or paraphrase
+a complete Code Attempt review, use a browser, submit
+code, mutate timers/results, publish, edit files, or perform Git work. Retry an
 enqueue after uncertain transport at most once and only with the exact original
 operationId and payload. The Worker owns bounded retries after a receipt exists;
 never create a manual retry storm. Use retry_specialist_writes only for a
