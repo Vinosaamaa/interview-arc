@@ -8,6 +8,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { evidenceProvenanceViolations } from "./behavioral-evidence-provenance.mjs";
+
 const STABLE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const CLAIM_STATUSES = new Set(["unverified", "partial", "verified", "contradicted"]);
 const CLAIM_STRENGTHS = new Set([
@@ -218,6 +220,9 @@ function validateEvidence(evidence, sources, location) {
     requireArray(item.supports, `${location}.evidence.${id}.supports`);
     requireArray(item.limitations, `${location}.evidence.${id}.limitations`);
     requireKnownIds(item.contraryEvidenceIds ?? [], evidence, `${location}.evidence.${id}.contraryEvidenceIds`);
+    for (const violation of evidenceProvenanceViolations(item)) {
+      fail(`${location}.evidence.${id}.${violation.field}`, violation.message);
+    }
   }
 }
 

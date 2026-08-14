@@ -193,8 +193,14 @@ wording. A `d1Candidates` entry uses `kind: evidence`, links exactly one pending
 canonical evidence record through `sourceEvidenceIds`, and contains only stable
 `content.questionLinks` with supporting/contrary relevance. Source registration
 is derived separately. `publicationCandidates` remain explicit approved
-derivatives. Assign stable IDs to every material record and retain the project
-source revision in its project/source context.
+derivatives. Assign stable IDs to every material record. Before preparing a
+remote write, run `pin-provenance` so every evidence record receives its opaque
+`immutableContentFingerprint` and every non-conversation record also receives
+its opaque `sourceRevision`. Owner-statement records use exact conversation
+attestation and must never carry a filesystem source revision. Never calculate
+or rewrite those pins in prose. A later source refresh does not revise an
+existing observation; a material re-audit creates a replacement evidence ID
+and waits for explicit owner-reviewed supersession.
 
 Every source must declare its exact `refreshMode`: `filesystem`, `remote`,
 `conversation`, or `blocked`. A filesystem locator identifies one real

@@ -330,6 +330,13 @@
       "when": 1786678789077,
       "tag": "0046_exotic_thunderball",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "6",
+      "when": 1786742161872,
+      "tag": "0047_behavioral_evidence_cursor_indexes",
+      "breakpoints": true
     }
   ]
 }

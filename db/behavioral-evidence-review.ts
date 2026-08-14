@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 
 import { d1TransactionalInvariantGuard } from "./d1-transactional-guard";
 import {
@@ -240,12 +240,23 @@ export async function queryBehavioralEvidenceCandidates(
   const db = getDb();
   const limit = input.limit ?? DEFAULT_CANDIDATE_LIMIT;
   const state = input.state ?? "pending";
+  const cursor = input.beforeUpdatedAt !== undefined && input.beforeEvidenceId
+    ? or(
+        lt(behavioralEvidenceItems.updatedAt, input.beforeUpdatedAt),
+        and(
+          eq(behavioralEvidenceItems.updatedAt, input.beforeUpdatedAt),
+          lt(behavioralEvidenceItems.evidenceId, input.beforeEvidenceId),
+        ),
+      )
+    : undefined;
   const rows = await db.select().from(behavioralEvidenceItems).where(and(
     eq(behavioralEvidenceItems.ownerId, ownerId),
     eq(behavioralEvidenceItems.candidateState, state),
     input.projectKey ? eq(behavioralEvidenceItems.projectKey, input.projectKey) : undefined,
+    cursor,
   )).orderBy(desc(behavioralEvidenceItems.updatedAt), desc(behavioralEvidenceItems.evidenceId)).limit(limit + 1);
   const visible = rows.slice(0, limit);
+  const lastVisible = visible.at(-1);
   const ids = visible.map((row) => row.evidenceId);
   const links = ids.length
     ? await db.select().from(behavioralEvidenceQuestionLinks).where(and(
@@ -280,6 +291,9 @@ export async function queryBehavioralEvidenceCandidates(
     })),
     truncated: rows.length > limit,
     limit,
+    nextCursor: rows.length > limit && lastVisible
+      ? { beforeUpdatedAt: lastVisible.updatedAt, beforeEvidenceId: lastVisible.evidenceId }
+      : null,
   };
 }
 

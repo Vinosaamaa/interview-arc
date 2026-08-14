@@ -33,7 +33,11 @@ Never commit private sources or copy employer source code into D1/artifacts.
 
 For an explicit evidence-foundation refresh, use the local controller in this
 order: `status`, `refresh`, regenerate the private projection when useful, then
-`prepare-sync`. Read the ignored plan without printing it wholesale. Register
+`pin-provenance`, then `prepare-sync`. For an evidence identity already present
+in D1, `pin-provenance` must consume an ignored owner-private snapshot containing
+only its authoritative evidence ID and source revision; never derive that old
+revision from the latest source registry. Read the ignored plan without printing
+it wholesale. Register
 sources only after reading their exact current D1 revisions; execute only its
 typed evidence writes, poll every durable receipt, and then present the pending
 candidate queue for explicit owner review. A prepared plan is not a saved

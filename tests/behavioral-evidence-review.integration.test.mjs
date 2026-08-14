@@ -171,6 +171,28 @@ test("source revisions and candidate review are owner-isolated, atomic, and exac
       ["evidence-candidate-2", 1, "pending"],
       ["evidence-candidate-1", 1, "pending"],
     ]);
+    assert.equal(queue.nextCursor, null);
+    const firstPage = await call(client, "query_behavioral_evidence_candidates", { limit: 2 });
+    assert.equal(firstPage.truncated, true);
+    assert.deepEqual(firstPage.candidates.map(({ evidenceId }) => evidenceId), [
+      "evidence-candidate-3",
+      "evidence-candidate-2",
+    ]);
+    assert.deepEqual(firstPage.nextCursor, {
+      beforeUpdatedAt: firstPage.candidates[1].updatedAt,
+      beforeEvidenceId: "evidence-candidate-2",
+    });
+    const secondPage = await call(client, "query_behavioral_evidence_candidates", {
+      limit: 2,
+      ...firstPage.nextCursor,
+    });
+    assert.equal(secondPage.truncated, false);
+    assert.deepEqual(secondPage.candidates.map(({ evidenceId }) => evidenceId), ["evidence-candidate-1"]);
+    assert.equal(secondPage.nextCursor, null);
+    const incompleteCursor = await callRaw(client, "query_behavioral_evidence_candidates", {
+      beforeEvidenceId: "evidence-candidate-2",
+    });
+    assert.equal(incompleteCursor.isError, true);
     assert.equal((await call(otherClient, "query_behavioral_evidence_candidates", {})).candidates.length, 0);
     const foundation = await call(client, "get_behavioral_foundation_status", {});
     assert.equal(foundation.schemaVersion, 2);

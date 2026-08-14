@@ -67,8 +67,18 @@ export const behavioralEvidenceSourceQuerySchema = z.object({
 export const behavioralEvidenceCandidateQuerySchema = z.object({
   state: z.enum(["pending", "accepted", "rejected", "superseded"]).optional(),
   projectKey: stableId.optional(),
+  beforeUpdatedAt: z.number().int().nonnegative().optional(),
+  beforeEvidenceId: stableId.optional(),
   limit: z.number().int().min(1).max(50).optional(),
-}).strict();
+}).strict().superRefine((input, context) => {
+  if ((input.beforeUpdatedAt === undefined) !== (input.beforeEvidenceId === undefined)) {
+    context.addIssue({
+      code: "custom",
+      path: [input.beforeUpdatedAt === undefined ? "beforeUpdatedAt" : "beforeEvidenceId"],
+      message: "Candidate pagination requires both cursor fields.",
+    });
+  }
+});
 
 export const behavioralEvidenceCandidateDecisionSchema = z.object({
   evidenceId: stableId,

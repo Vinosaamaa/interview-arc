@@ -1,0 +1,2 @@
+CREATE INDEX `behavioral_evidence_owner_state_cursor_idx` ON `behavioral_evidence_items` (`owner_id`,`candidate_state`,`updated_at`,`evidence_id`);--> statement-breakpoint
+CREATE INDEX `behavioral_evidence_owner_state_project_cursor_idx` ON `behavioral_evidence_items` (`owner_id`,`candidate_state`,`project_key`,`updated_at`,`evidence_id`);

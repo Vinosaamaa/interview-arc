@@ -20,6 +20,10 @@ import {
   buildBehavioralEvidenceSite,
   validateBehavioralEvidenceBundle,
 } from "./build-behavioral-evidence-site.mjs";
+import {
+  assertEvidenceProvenanceShape,
+  EVIDENCE_SOURCE_REVISION_PATTERN,
+} from "./behavioral-evidence-provenance.mjs";
 
 const execFileAsync = promisify(execFile);
 const MAX_DIRECTORY_ENTRIES = 5_000;
@@ -54,6 +58,28 @@ function stableRemoteId(value) {
 
 function sourceRemoteId(projectId, sourceId) {
   return stableRemoteId(`${projectId}.${sourceId}`);
+}
+
+function evidenceImmutableMaterial(project, evidence, sourceRevision) {
+  return {
+    schemaVersion: 1,
+    evidenceId: stableRemoteId(evidence.id),
+    projectKey: stableRemoteId(project.record.project.id),
+    origin: evidence.origin,
+    statement: evidence.statement,
+    ...(sourceRevision ? { sourceRevision } : {}),
+    evidenceGrade: evidence.evidenceGrade,
+    attributionGrade: evidence.attributionGrade,
+    claimStrength: evidence.claimStrength,
+    sourceIds: evidence.sourceIds.map((sourceId) => sourceRemoteId(project.record.project.id, sourceId)),
+    supports: evidence.supports,
+    limitations: evidence.limitations,
+    tags: evidence.tags ?? [],
+  };
+}
+
+function evidenceImmutableFingerprint(project, evidence, sourceRevision) {
+  return sha256(JSON.stringify(evidenceImmutableMaterial(project, evidence, sourceRevision)));
 }
 
 function boundedSafeText(value, label, max = MAX_REMOTE_TEXT) {
@@ -432,18 +458,191 @@ function projectSourceSnapshot(project, source) {
   return snapshot;
 }
 
-function evidenceSourceRevision(project, evidence, sourceById) {
-  if (evidence.origin === "user_statement") return undefined;
-  const revisions = evidence.sourceIds.map((sourceId) => {
+function availableEvidenceSources(evidence, sourceById) {
+  return evidence.sourceIds.map((sourceId) => {
     const source = sourceById.get(sourceId);
     if (!source) throw new Error("Evidence references an unavailable source.");
     if (source.availability !== "available" || !["current", "changed"].includes(sourceRefreshStatus(source))) {
       throw new Error("Non-conversation evidence requires an available source with a current or changed refresh status before sync preparation.");
     }
-    return source.revision ?? source.fingerprint;
+    return source;
   });
+}
+
+function currentEvidenceSourceRevision(evidence, sourceById) {
+  if (evidence.origin === "user_statement") return undefined;
+  const revisions = availableEvidenceSources(evidence, sourceById).map(
+    (source) => source.revision ?? source.fingerprint,
+  );
   if (revisions.some((revision) => !revision)) throw new Error("Non-conversation evidence requires refreshed source revisions before sync preparation.");
   return `source-set-${sha256(JSON.stringify(revisions.sort()))}`;
+}
+
+function pinnedEvidenceSourceRevision(project, evidence, sourceById) {
+  assertEvidenceProvenanceShape(evidence);
+  if (evidence.origin === "user_statement") {
+    const expectedFingerprint = evidenceImmutableFingerprint(project, evidence, undefined);
+    if (!evidence.immutableContentFingerprint) {
+      throw new Error("Evidence immutable content is not pinned. Run pin-provenance before prepare-sync.");
+    }
+    if (evidence.immutableContentFingerprint !== expectedFingerprint) {
+      throw new Error("Material evidence changed after provenance was pinned; this requires a replacement evidence ID and explicit supersession.");
+    }
+    return undefined;
+  }
+  availableEvidenceSources(evidence, sourceById);
+  if (!EVIDENCE_SOURCE_REVISION_PATTERN.test(evidence.sourceRevision ?? "")) {
+    throw new Error("Evidence provenance is not pinned. Run pin-provenance before prepare-sync.");
+  }
+  const expectedFingerprint = evidenceImmutableFingerprint(project, evidence, evidence.sourceRevision);
+  if (!evidence.immutableContentFingerprint) {
+    throw new Error("Evidence immutable content is not pinned. Run pin-provenance before prepare-sync.");
+  }
+  if (evidence.immutableContentFingerprint !== expectedFingerprint) {
+    throw new Error("Material evidence changed after provenance was pinned; this requires a replacement evidence ID and explicit supersession.");
+  }
+  return evidence.sourceRevision;
+}
+
+function readRemoteSnapshotEntry(value, position) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Remote evidence snapshot entry ${position} is invalid.`);
+  }
+  const allowed = new Set(["evidenceId", "sourceRevision"]);
+  if (Object.keys(value).some((key) => !allowed.has(key))) {
+    throw new Error(`Remote evidence snapshot entry ${position} contains an unsupported field.`);
+  }
+  if (typeof value.evidenceId !== "string" || !/^[a-z0-9][a-z0-9._-]*$/.test(value.evidenceId)) {
+    throw new Error(`Remote evidence snapshot entry ${position} has an invalid evidence identity.`);
+  }
+  if (value.sourceRevision !== undefined && !EVIDENCE_SOURCE_REVISION_PATTERN.test(value.sourceRevision)) {
+    throw new Error(`Remote evidence snapshot entry ${position} has an invalid source revision.`);
+  }
+  return value;
+}
+
+async function readRemoteEvidenceSnapshot(bundleRoot, remoteSnapshotPath) {
+  if (!remoteSnapshotPath) return new Map();
+  const resolved = path.resolve(remoteSnapshotPath);
+  if (!resolved.startsWith(`${path.resolve(bundleRoot)}${path.sep}`)) {
+    throw new Error("The remote evidence snapshot must stay inside the ignored bundle.");
+  }
+  let snapshot;
+  try {
+    snapshot = JSON.parse(await readFile(resolved, "utf8"));
+  } catch {
+    throw new Error("The remote evidence snapshot is unreadable or invalid.");
+  }
+  if (
+    !snapshot
+    || typeof snapshot !== "object"
+    || Array.isArray(snapshot)
+    || snapshot.schemaVersion !== 1
+    || snapshot.visibility !== "owner_private"
+    || !Array.isArray(snapshot.evidence)
+    || Object.keys(snapshot).some((key) => !["schemaVersion", "visibility", "evidence"].includes(key))
+  ) {
+    throw new Error("The remote evidence snapshot contract is invalid.");
+  }
+  const entries = new Map();
+  for (const [position, raw] of snapshot.evidence.entries()) {
+    const entry = readRemoteSnapshotEntry(raw, position);
+    if (entries.has(entry.evidenceId)) throw new Error("The remote evidence snapshot contains a duplicate evidence identity.");
+    entries.set(entry.evidenceId, entry);
+  }
+  return entries;
+}
+
+export async function pinBehavioralEvidenceProvenance({
+  bundleRoot,
+  remoteSnapshotPath = null,
+  now = new Date(),
+}) {
+  const bundle = await validateBehavioralEvidenceBundle({ bundleRoot });
+  const remoteByEvidenceId = await readRemoteEvidenceSnapshot(bundle.bundleRoot, remoteSnapshotPath);
+  const localEvidenceIds = new Set(bundle.projects.flatMap((project) => (
+    project.record.evidence.map((evidence) => stableRemoteId(evidence.id))
+  )));
+  for (const evidenceId of remoteByEvidenceId.keys()) {
+    if (!localEvidenceIds.has(evidenceId)) {
+      throw new Error("The remote evidence snapshot contains an identity outside this bundle.");
+    }
+  }
+  if (remoteSnapshotPath) {
+    for (const project of bundle.projects) {
+      const evidenceById = new Map(project.record.evidence.map((evidence) => [evidence.id, evidence]));
+      for (const candidate of project.record.d1Candidates) {
+        const evidence = evidenceById.get(candidate.sourceEvidenceIds[0]);
+        if (evidence && !evidence.immutableContentFingerprint && !remoteByEvidenceId.has(stableRemoteId(evidence.id))) {
+          throw new Error("The remote evidence snapshot does not cover every unpinned D1 candidate in this bundle.");
+        }
+      }
+    }
+  }
+  const summary = { pinned: 0, remotePinned: 0, currentPinned: 0, unchanged: 0 };
+  const changedProjects = [];
+
+  for (const project of bundle.projects) {
+    const sourceById = new Map(project.record.sources.map((source) => [source.id, source]));
+    let projectChanged = false;
+    for (const evidence of project.record.evidence) {
+      let evidenceChanged = false;
+      const remoteEvidenceId = stableRemoteId(evidence.id);
+      const remote = remoteByEvidenceId.get(remoteEvidenceId);
+      if (evidence.origin === "user_statement" && (evidence.sourceRevision || remote?.sourceRevision)) {
+        throw new Error("Owner-statement evidence cannot be pinned to a filesystem source revision.");
+      }
+      if (evidence.sourceRevision && remote?.sourceRevision && evidence.sourceRevision !== remote.sourceRevision) {
+        throw new Error("Pinned local evidence conflicts with the authoritative remote source revision.");
+      }
+      let sourceRevision = evidence.sourceRevision;
+      let source = null;
+      if (evidence.origin !== "user_statement" && !sourceRevision) {
+        if (remote?.sourceRevision) {
+          sourceRevision = remote.sourceRevision;
+          source = "remote";
+        } else {
+          sourceRevision = currentEvidenceSourceRevision(evidence, sourceById);
+          source = "current";
+        }
+        evidence.sourceRevision = sourceRevision;
+        evidenceChanged = true;
+      }
+      const fingerprint = evidenceImmutableFingerprint(project, evidence, sourceRevision);
+      if (evidence.immutableContentFingerprint && evidence.immutableContentFingerprint !== fingerprint) {
+        throw new Error("Material evidence changed after provenance was pinned; this requires a replacement evidence ID and explicit supersession.");
+      }
+      if (!evidence.immutableContentFingerprint) {
+        evidence.immutableContentFingerprint = fingerprint;
+        evidenceChanged = true;
+      }
+      if (evidenceChanged && (!evidence.immutableContentFingerprint || (evidence.origin !== "user_statement" && !evidence.sourceRevision))) {
+        throw new Error("Evidence provenance migration did not settle completely.");
+      }
+      if (source === "remote") summary.remotePinned += 1;
+      else if (source === "current") summary.currentPinned += 1;
+      if (evidenceChanged) summary.pinned += 1;
+      else summary.unchanged += 1;
+      projectChanged = projectChanged || evidenceChanged;
+    }
+    if (projectChanged) {
+      changedProjects.push(project);
+    }
+  }
+  const writeConcurrency = 8;
+  for (let offset = 0; offset < changedProjects.length; offset += writeConcurrency) {
+    await Promise.all(changedProjects.slice(offset, offset + writeConcurrency).map(
+      (project) => atomicJson(project.recordPath, project.record),
+    ));
+  }
+  if (changedProjects.length > 0) {
+    const manifestPath = path.join(bundle.bundleRoot, "manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.updatedAt = now.toISOString();
+    await atomicJson(manifestPath, manifest);
+  }
+  await validateBehavioralEvidenceBundle({ bundleRoot });
+  return summary;
 }
 
 function remoteEvidenceWrites(project, sourceSnapshots) {
@@ -463,7 +662,7 @@ function remoteEvidenceWrites(project, sourceSnapshots) {
     }
     const provenanceKind = PROVENANCE_BY_ORIGIN[evidence.origin];
     if (!provenanceKind) throw new Error("The evidence origin has no remote provenance mapping.");
-    const sourceRevision = evidenceSourceRevision(project, evidence, sourceById);
+    const sourceRevision = pinnedEvidenceSourceRevision(project, evidence, sourceById);
     const evidencePayload = {
       evidenceId: stableRemoteId(evidence.id),
       projectKey: stableRemoteId(project.record.project.id),
@@ -588,7 +787,14 @@ async function main() {
     console.log(JSON.stringify(result.plan.summary));
     return;
   }
-  throw new Error("Use status, authorize-filesystem, refresh, project, or prepare-sync.");
+  if (command === "pin-provenance") {
+    console.log(JSON.stringify(await pinBehavioralEvidenceProvenance({
+      bundleRoot,
+      remoteSnapshotPath: argumentValue("--remote-snapshot"),
+    })));
+    return;
+  }
+  throw new Error("Use status, authorize-filesystem, refresh, pin-provenance, project, or prepare-sync.");
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

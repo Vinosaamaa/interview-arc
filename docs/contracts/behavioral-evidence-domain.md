@@ -19,8 +19,9 @@ remain local and are never copied to R2.
 
 ## Local connector
 
-The controller supports `status`, `authorize-filesystem`, `refresh`, `project`,
-and `prepare-sync`. `status` prints aggregate counts only.
+The controller supports `status`, `authorize-filesystem`, `refresh`,
+`pin-provenance`, `project`, and `prepare-sync`. `status` prints aggregate
+counts only.
 `authorize-filesystem` requires an explicit owner-confirmation flag and writes
 a mode-`0600`, gitignored policy containing exact source identities, declared
 paths, and canonical real paths. `refresh` preflights every eligible source
@@ -35,6 +36,14 @@ do not rewrite timestamps. Sync preparation includes revisions only for
 `available` sources whose connector state is `current` or `changed`, so stale
 non-filesystem metadata cannot enter a plan. Blocked, unknown, or
 authorization-required sources are blocked without inspection.
+
+`pin-provenance` binds each remote-eligible canonical observation to the exact
+opaque source-set revision it was inspected against and fingerprints its
+remote-material content. Existing D1 identities must be migrated from an
+ignored owner-private snapshot of their authoritative `evidenceId` and
+`sourceRevision`; unsynced identities may pin the current authorized source
+set. The command rejects unknown remote identities, conflicting revisions, and
+material edits under a pinned evidence ID.
 
 `prepare-sync` accepts only typed `kind: evidence` candidates. Each candidate
 projects exactly one canonical pending evidence record and one or more stable
@@ -55,8 +64,11 @@ prepared above `E1`.
 ## Mutation flow
 
 1. Run `pnpm behavioral:evidence:refresh` only for sources the owner authorized.
-   Then run `pnpm behavioral:evidence:prepare-sync` to create the ignored,
-   remote-safe `sync/plan.json`.
+   Pin every new or migrated observation with
+   `pnpm behavioral:evidence:pin-provenance`; for an identity already in D1,
+   provide its ignored authoritative remote snapshot. Then run
+   `pnpm behavioral:evidence:prepare-sync` to create the ignored, remote-safe
+   `sync/plan.json`.
 2. Read `get_behavioral_evidence_registry` before each source write. Call
    `upsert_behavioral_evidence_source` with the exact current revision (or zero
    for a new source), the plan's display-safe snapshot, and an operation ID
@@ -101,6 +113,12 @@ Candidate review changes only state and the append-only review ledger;
 immutable evidence content is never rewritten. Rejected and superseded states
 are terminal. Accepted evidence may only be superseded by a same-owner,
 same-project pending or accepted replacement.
+
+Candidate reads are bounded and cursor-pageable. When `truncated` is true, the
+caller reuses both `nextCursor.beforeUpdatedAt` and
+`nextCursor.beforeEvidenceId` with the same state/project filters. Omitting one
+cursor field fails validation, and the descending composite cursor prevents
+duplicates or skipped rows when several candidates share an update timestamp.
 
 ## Ordinary preflight
 
