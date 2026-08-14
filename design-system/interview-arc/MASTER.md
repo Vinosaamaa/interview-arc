@@ -169,6 +169,46 @@ for its index, icon, and label, plus a quiet tinted rail/background. Unselected
 rows stay neutral. Page accents must pass contrast requirements in their exact
 rendering context and remain a redundant signal rather than the only state cue.
 
+### Workspace atmospheres and destination tokens
+
+Interview, Learn, and Engineering share one shell geometry, navigation order,
+typography hierarchy, breakpoint system, focus behavior, and accessibility
+contract. They do not share one visual atmosphere. Theme changes are expressed
+through tokens, never by duplicating shell markup or changing its dimensions.
+
+- **Interview** is deep evergreen with botanical color and restrained paper
+  surfaces. Its seven destination accents remain defined by the table above.
+- **Learn** is warm ivory and dark ink with a blue secondary voice. Today,
+  Courses, History, and Statistics each own a distinct destination accent.
+- **Engineering** is near-black graphite with alpine teal, oxidized copper,
+  mist, and technical paper. Journal, Capabilities, Decisions, Incidents, Case
+  Studies, and Statistics each own a distinct destination accent. Its local
+  navigation uses the same numbered grammar as Interview and Learn; it does not
+  substitute decorative icons for navigation order.
+
+Token ownership has four explicit layers:
+
+1. global geometry and typography;
+2. workspace canvas, sidebar, ink, keyline, and focus tokens;
+3. destination accent, pale surface, and strong-on-dark accent tokens;
+4. semantic state and specialty tokens, which always override decoration.
+
+The active destination carries its accent into the hero, major panels,
+keylines, selected controls, buttons, focus rings, disclosures, and restrained
+highlights. Do not recolor failure, success, evidence, warning, Coding, System
+Design, or Behavioral semantics merely to match the destination.
+
+Direct links, refreshes, browser Back/Forward, and workspace switching must
+paint the correct workspace and destination atmosphere on the first rendered
+frame. Server and client initialize from the same URL state; a later effect may
+restore session-only preferences only when the URL does not explicitly own the
+choice. Never flash Interview styling while loading Learn or Engineering.
+
+Forced-colors mode retains visible selection and focus boundaries. Reduced
+motion removes theme transitions without changing state. Color remains a
+redundant cue: active navigation also carries `aria-current`, text, and a
+structural keyline.
+
 ### Loops stage interaction
 
 The Loops dossier uses one continuous in-flow chronology. Role context, linked

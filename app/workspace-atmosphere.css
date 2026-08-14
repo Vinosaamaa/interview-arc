@@ -1,0 +1,279 @@
+/* Shared shell geometry, workspace atmospheres, and destination accents.
+ * Status and specialty colors remain authoritative over these decorative tokens. */
+.app-shell {
+  --workspace-canvas: #edf3f1;
+  --workspace-canvas-deep: #dfe9e6;
+  --workspace-sidebar-surface: #102d2d;
+  --workspace-sidebar-ink: #edf7f4;
+  --workspace-sidebar-muted: #8ea7a2;
+  --workspace-sidebar-border: rgba(15, 95, 90, .22);
+  --workspace-selection-surface: #174942;
+  --workspace-selection-ink: #ffffff;
+  --workspace-keyline: #55d7ca;
+  --workspace-focus: #0d9488;
+  --workspace-paper: #fbfcfa;
+  --workspace-rule: #c8d8d3;
+  --destination-accent: var(--page-accent, #667a0f);
+  --destination-accent-soft: var(--page-accent-soft, #f1f7d5);
+  --destination-accent-strong: var(--page-accent-dark, #c7df65);
+}
+
+.app-shell.active-workspace-interview {
+  --workspace-canvas: #edf3f1;
+  --workspace-canvas-deep: #dfe9e6;
+  --workspace-sidebar-surface: #102d2d;
+  --workspace-sidebar-ink: #edf7f4;
+  --workspace-sidebar-muted: #8ea7a2;
+  --workspace-sidebar-border: rgba(15, 95, 90, .22);
+  --workspace-selection-surface: #174942;
+  --workspace-selection-ink: #ffffff;
+  --workspace-keyline: #55d7ca;
+  --workspace-focus: #0d9488;
+  --workspace-paper: #fbfcfa;
+  --workspace-rule: #c8d8d3;
+}
+
+.app-shell.active-workspace-learn {
+  --workspace-canvas: #f5f1e8;
+  --workspace-canvas-deep: #ebe5d8;
+  --workspace-sidebar-surface: #fffdf7;
+  --workspace-sidebar-ink: #192d48;
+  --workspace-sidebar-muted: #66738a;
+  --workspace-sidebar-border: #d8d1c2;
+  --workspace-selection-surface: #e7edf8;
+  --workspace-selection-ink: #18345e;
+  --workspace-keyline: #315ca8;
+  --workspace-focus: #315ca8;
+  --workspace-paper: #fffdf8;
+  --workspace-rule: #d5d1c7;
+  --page-accent: var(--destination-accent);
+  --page-accent-soft: var(--destination-accent-soft);
+  --page-accent-dark: var(--destination-accent-strong);
+}
+
+.app-shell.active-workspace-engineering {
+  --workspace-canvas: #e8eeee;
+  --workspace-canvas-deep: #d7e0df;
+  --workspace-sidebar-surface: #171d1f;
+  --workspace-sidebar-ink: #eef5f3;
+  --workspace-sidebar-muted: #90a39f;
+  --workspace-sidebar-border: #2d393b;
+  --workspace-selection-surface: #232d2f;
+  --workspace-selection-ink: #f2f8f6;
+  --workspace-keyline: #4ac7b7;
+  --workspace-focus: #2aa99a;
+  --workspace-paper: #f6f7f3;
+  --workspace-rule: #bbc9c6;
+  --page-accent: var(--destination-accent);
+  --page-accent-soft: var(--destination-accent-soft);
+  --page-accent-dark: var(--destination-accent-strong);
+}
+
+/* Learn destinations */
+.app-shell.active-workspace-learn.active-destination-today {
+  --destination-accent: #b4513d;
+  --destination-accent-soft: #f8e8df;
+  --destination-accent-strong: #e9977f;
+}
+.app-shell.active-workspace-learn.active-destination-courses {
+  --destination-accent: #315ca8;
+  --destination-accent-soft: #e9effc;
+  --destination-accent-strong: #9dbced;
+}
+.app-shell.active-workspace-learn.active-destination-history {
+  --destination-accent: #6a4aa3;
+  --destination-accent-soft: #eee8f8;
+  --destination-accent-strong: #bda8df;
+}
+.app-shell.active-workspace-learn.active-destination-analytics {
+  --destination-accent: #087d91;
+  --destination-accent-soft: #e0f2f3;
+  --destination-accent-strong: #76c6cf;
+}
+
+/* Engineering destinations */
+.app-shell.active-workspace-engineering.active-destination-journal {
+  --destination-accent: #0f766e;
+  --destination-accent-soft: #dcefeb;
+  --destination-accent-strong: #64c4b8;
+}
+.app-shell.active-workspace-engineering.active-destination-capabilities {
+  --destination-accent: #a45a34;
+  --destination-accent-soft: #f3e5dc;
+  --destination-accent-strong: #d89a74;
+}
+.app-shell.active-workspace-engineering.active-destination-decisions {
+  --destination-accent: #85691f;
+  --destination-accent-soft: #f2ecd7;
+  --destination-accent-strong: #cbb46c;
+}
+.app-shell.active-workspace-engineering.active-destination-incidents {
+  --destination-accent: #a43e42;
+  --destination-accent-soft: #f6e3e3;
+  --destination-accent-strong: #db8588;
+}
+.app-shell.active-workspace-engineering.active-destination-case-studies {
+  --destination-accent: #4c648d;
+  --destination-accent-soft: #e5eaf2;
+  --destination-accent-strong: #94a8c8;
+}
+.app-shell.active-workspace-engineering.active-destination-statistics {
+  --destination-accent: #4d6b50;
+  --destination-accent-soft: #e4ede2;
+  --destination-accent-strong: #93b08f;
+}
+
+/* One shell: atmosphere changes, geometry does not. */
+.app-shell .sidebar {
+  border-right-color: var(--workspace-sidebar-border);
+  background: var(--workspace-sidebar-surface);
+  color: var(--workspace-sidebar-ink);
+}
+.app-shell .brand,
+.app-shell .local-nav-label > span,
+.app-shell .sidebar-status strong,
+.app-shell .profile strong { color: var(--workspace-sidebar-ink); }
+.app-shell .workspace-nav button,
+.app-shell .primary-nav button,
+.app-shell .materials-nav button,
+.app-shell .local-nav-label small,
+.app-shell .sidebar-status small,
+.app-shell .profile small { color: var(--workspace-sidebar-muted); }
+.app-shell .workspace-nav button:hover:not(:disabled),
+.app-shell .primary-nav button:hover,
+.app-shell .materials-nav button:hover {
+  border-color: color-mix(in srgb, var(--workspace-keyline) 28%, transparent);
+  background: color-mix(in srgb, var(--workspace-selection-surface) 72%, transparent);
+  color: var(--workspace-selection-ink);
+}
+.app-shell .workspace-nav button.active {
+  border-color: color-mix(in srgb, var(--workspace-keyline) 44%, transparent);
+  background: var(--workspace-selection-surface);
+  color: var(--workspace-selection-ink);
+  box-shadow: inset 3px 0 var(--workspace-keyline);
+}
+.app-shell .workspace-nav button.active > span {
+  border-color: var(--workspace-keyline);
+  color: var(--workspace-keyline);
+}
+.app-shell .primary-nav button.active,
+.app-shell .materials-nav button.active {
+  border-color: color-mix(in srgb, var(--destination-accent) 36%, var(--workspace-sidebar-border));
+  background: color-mix(in srgb, var(--destination-accent) 28%, var(--workspace-selection-surface));
+  color: var(--workspace-selection-ink);
+  box-shadow: inset 3px 0 var(--destination-accent-strong);
+}
+.app-shell .primary-nav button.active > span,
+.app-shell .materials-nav button.active > span { color: var(--destination-accent-strong); }
+.app-shell .sidebar-status {
+  border-color: color-mix(in srgb, var(--workspace-keyline) 15%, var(--workspace-sidebar-border));
+  background: color-mix(in srgb, var(--workspace-selection-surface) 56%, transparent);
+}
+.app-shell .profile { border-color: var(--workspace-sidebar-border); }
+.app-shell .main-column {
+  background: color-mix(in srgb, var(--workspace-canvas) 82%, transparent);
+}
+.app-shell .topbar {
+  border-bottom-color: color-mix(in srgb, var(--workspace-focus) 16%, transparent);
+  background: color-mix(in srgb, var(--workspace-paper) 90%, transparent);
+}
+.app-shell :is(button, a, summary, input, select, textarea):focus-visible {
+  outline-color: color-mix(in srgb, var(--workspace-focus) 55%, transparent);
+}
+
+/* Learn is a light teaching environment, with destination color carried into
+ * its durable course instruments rather than painted over semantic states. */
+.app-shell.active-workspace-learn .sidebar { box-shadow: 12px 0 34px rgba(43, 51, 67, .06); }
+.app-shell.active-workspace-learn .brand-mark {
+  border-color: color-mix(in srgb, var(--destination-accent) 28%, #c9c2b4);
+  background: var(--destination-accent-soft);
+  color: var(--destination-accent);
+  box-shadow: none;
+}
+.app-shell.active-workspace-learn .workspace-nav button > span { border-color: #d5d0c6; }
+.app-shell.active-workspace-learn .primary-nav button.active,
+.app-shell.active-workspace-learn .materials-nav button.active {
+  border-color: color-mix(in srgb, var(--destination-accent) 28%, #cbc5b9);
+  background: var(--destination-accent-soft);
+  color: #182d49;
+  box-shadow: inset 3px 0 var(--destination-accent);
+}
+.app-shell.active-workspace-learn .primary-nav button.active > span { color: var(--destination-accent); }
+.app-shell.active-workspace-learn :is(
+  .learn-hero,
+  .learn-course-workspace,
+  .learn-course-index,
+  .learn-history-index,
+  .learn-history-record,
+  .learn-homework-panel,
+  .learn-course-analytics,
+  .learn-time-chart,
+  .learn-recent-topics
+) {
+  border-color: color-mix(in srgb, var(--destination-accent) 24%, var(--workspace-rule));
+  background-color: color-mix(in srgb, var(--destination-accent-soft) 30%, var(--workspace-paper));
+}
+.app-shell.active-workspace-learn .learn-eyebrow,
+.app-shell.active-workspace-learn .learn-course-nav button[aria-pressed="true"],
+.app-shell.active-workspace-learn .learn-mobile-pane-switcher button[aria-pressed="true"] { color: var(--destination-accent); }
+
+/* Engineering is graphite and paper with a quiet technical keyline. */
+.app-shell.active-workspace-engineering .brand-mark {
+  border-color: #3c4a4c;
+  background: #222d2f;
+  color: var(--workspace-keyline);
+  box-shadow: none;
+}
+.app-shell.active-workspace-engineering .engineering-primary-nav button {
+  grid-template-columns: 30px minmax(0, 1fr);
+}
+.app-shell.active-workspace-engineering .engineering-primary-nav button.active {
+  border-color: color-mix(in srgb, var(--destination-accent-strong) 30%, #303c3e);
+  background: #232d2f;
+  color: #f2f8f6;
+  box-shadow: inset 3px 0 var(--destination-accent-strong);
+}
+.app-shell.active-workspace-engineering .engineering-primary-nav button.active > span {
+  color: var(--destination-accent-strong);
+}
+.app-shell.active-workspace-engineering .mobile-engineering-nav button.active {
+  border-color: color-mix(in srgb, var(--destination-accent-strong) 38%, #303c3e);
+  background: #232d2f;
+  color: #f2f8f6;
+  box-shadow: inset 0 3px var(--destination-accent-strong);
+}
+.app-shell.active-workspace-engineering :is(.engineering-workspace, .engineering-statistics) {
+  border-color: color-mix(in srgb, var(--destination-accent) 27%, var(--workspace-rule));
+  background: color-mix(in srgb, var(--destination-accent-soft) 28%, var(--workspace-paper));
+}
+.app-shell.active-workspace-engineering :is(.engineering-records, .engineering-filters, .engineering-reader, .engineering-stat-section) {
+  border-color: color-mix(in srgb, var(--destination-accent) 20%, var(--workspace-rule));
+}
+.app-shell.active-workspace-engineering .engineering-record-list > button.active,
+.app-shell.active-workspace-engineering .engineering-journal-layers button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--destination-accent) 34%, var(--workspace-rule));
+  background: color-mix(in srgb, var(--destination-accent-soft) 58%, white);
+  color: color-mix(in srgb, var(--destination-accent) 82%, #102a2a);
+}
+.app-shell.active-workspace-engineering :is(.engineering-search, .engineering-actions button, .engineering-lineage-links button):focus-within {
+  border-color: var(--destination-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--destination-accent) 17%, transparent);
+}
+
+@media (forced-colors: active) {
+  .app-shell .workspace-nav button.active,
+  .app-shell .primary-nav button.active,
+  .app-shell .materials-nav button.active {
+    border: 2px solid Highlight;
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell .sidebar,
+  .app-shell .main-column,
+  .app-shell .topbar,
+  .app-shell .workspace-nav button,
+  .app-shell .primary-nav button,
+  .app-shell .materials-nav button { transition: none !important; }
+}
