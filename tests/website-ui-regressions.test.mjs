@@ -491,6 +491,48 @@ test("Engineering exposes exact provenance, durable navigation memory, and compl
   assert.match(source, /onNavigateView\("journal"\)/);
 });
 
+test("Engineering Journal is a persistent three-panel evidence workbench", async () => {
+  const source = await load("../app/engineering-workspace.tsx");
+  const styles = await load("../app/engineering-workspace.css");
+  assert.match(source, /engineering-index-panel/);
+  assert.match(source, /engineering-record-panel/);
+  assert.match(source, /engineering-evidence-panel/);
+  assert.match(source, /engineering-contents-nav/);
+  assert.match(source, /indexCollapsed/);
+  assert.match(source, /evidenceOpen/);
+  assert.match(source, /indexScrollTop/);
+  assert.match(source, /aria-label="Collapse Journal index"/);
+  assert.match(source, /aria-label="Open evidence and lineage"/);
+  assert.match(styles, /grid-template-columns:\s*minmax\(270px, 300px\) minmax\(0, 1fr\) minmax\(250px, 280px\)/);
+  assert.match(styles, /gap:\s*20px/);
+  assert.match(styles, /\.active-workspace-engineering \.page-content \{ width: 100%; max-width: none; padding-inline: 24px; \}/);
+  assert.match(styles, /height:\s*max\(180px, calc\(100dvh - 244px\)\)/);
+  assert.match(source, /matchMedia\("\(max-width: 1320px\)"\)/);
+  assert.match(source, /typeof parsed\.evidenceOpen === "boolean" \? parsed\.evidenceOpen : undefined/);
+  assert.match(styles, /\.engineering-search \.sr-only/);
+  assert.match(styles, /\.engineering-record-panel \.engineering-facts \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
+  assert.match(styles, /\.engineering-workspace\.index-collapsed/);
+  assert.match(styles, /@media \(max-width: 1320px\)/);
+  assert.match(styles, /@media \(max-width: 760px\)/);
+});
+
+test("workspace atmosphere is persistent, bounded, and reader-safe", async () => {
+  const home = await load("../app/home-client.tsx");
+  const atmosphere = await load("../app/arrival-ritual.tsx");
+  const globalStyles = await load("../app/globals.css");
+  const readerStyles = await load("../app/interview-arc-v2.css");
+  assert.match(home, /interview-arc-atmosphere-v1/);
+  assert.match(home, /interview-arc-petals-paused/);
+  assert.match(home, /!atmosphereReady \? "off"/);
+  assert.match(home, /activeWorkspace === "engineering" \? "rain" : "petals"/);
+  assert.match(home, /<AtmosphereField[^>]*mode=\{atmosphereMode\}/);
+  assert.match(atmosphere, /Array\.from\(\{ length: 40 \}/);
+  assert.match(atmosphere, /visibilitychange/);
+  assert.match(globalStyles, /\.ambient-rain-drop/);
+  assert.match(globalStyles, /prefers-reduced-motion: reduce/);
+  assert.match(readerStyles, /body:has\(\.reader-workspace\) \.ambient-rain-drop/);
+});
+
 test("Engineering keeps the complete PR timeline separate from rich records", async () => {
   const source = await load("../app/engineering-workspace.tsx");
   const styles = await load("../app/engineering-workspace.css");
@@ -747,4 +789,7 @@ test("an open reader owns an opaque paint layer and suspends ambient petals", as
   assert.equal(petals?.["animation-play-state"], "paused !important");
   assert.equal(reader?.isolation, "isolate");
   assert.equal(reader?.background, "#fffefb");
+  assert.equal(reader?.["border-radius"], "14px");
+  assert.equal(reader?.overflow, "hidden");
+  assert.equal(cssRules(rules, ".reader-outline .toc-parent")[0]?.declarations["font-weight"], "inherit");
 });

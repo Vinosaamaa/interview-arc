@@ -231,7 +231,8 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /const sessionOvertime = session \? overtime\(sessionTimer, now, sessionAllocated\) : 0/);
   assert.match(client, /sessionOvertime \? `\+\$\{formatClock\(sessionOvertime\)\}` : formatClock\(sessionLeft\)/);
   assert.match(client, /disabled=\{activityComplete \|\| !activityStarted \|\| \(!focusActivity && !outcome\) \|\| activityLocked\}/);
-  assert.match(client, /<span aria-hidden="true">✦<\/span>Petals/);
+  assert.match(client, /Atmosphere: \$\{atmosphereMode\}\. Switch atmosphere/);
+  assert.match(client, /atmosphereMode === "rain" \? "Rain" : atmosphereMode === "petals" \? "Petals" : "Atmosphere off"/);
   assert.match(css, /\.petal-field\.paused \{ opacity: 0; visibility: hidden;/);
   assert.match(css, /\.pip-toggle\.active \{/);
   assert.match(css, /\.pip-toggle \{[^}]*width: 124px;[^}]*min-width: 124px;/);

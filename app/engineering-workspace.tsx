@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -62,6 +62,7 @@ const RECEIPT_CLASSIFICATION_LABELS: Record<EngineeringPullRequestClassification
 };
 
 type EngineeringJournalLayer = "records" | "receipts";
+type EngineeringContentsSection = "overview" | "architecture" | "record" | "interview";
 
 export type EngineeringIconName =
   | "interview"
@@ -172,28 +173,38 @@ function ReceiptTimeline({
 
 function RecordReader({
   record,
-  index,
-  onSelect,
   onBack,
+  onOpenEvidence,
+  contentsSection,
+  onContentsSectionChange,
 }: {
   record: EngineeringJournalRecord;
-  index: EngineeringJournalIndex;
-  onSelect: (ref: string) => void;
   onBack: () => void;
+  onOpenEvidence: () => void;
+  contentsSection: EngineeringContentsSection;
+  onContentsSectionChange: (section: EngineeringContentsSection) => void;
 }) {
+  const readerRef = useRef<HTMLElement>(null);
   const readerBody = record.body.startsWith(record.summary)
     ? record.body.slice(record.summary.length).trim()
     : record.body;
-  const corrections = [...record.amendedBy, ...record.supersededBy];
-  const outgoing = [...record.amends, ...record.supersedes, ...record.relatedRecords, ...record.decisions, ...record.incidents, ...record.features];
-  const backlinks = index.backlinks[record.ref] ?? [];
-  const lineageRefs = [...new Set([...corrections, ...outgoing, ...backlinks])];
-  const relatedReceipts = (index.receiptBacklinks[record.ref] ?? [])
-    .map((ref) => index.pullRequestReceipts.find((receipt) => receipt.ref === ref))
-    .filter((receipt): receipt is EngineeringPullRequestReceipt => Boolean(receipt));
-  return <article className="engineering-reader" aria-labelledby="engineering-record-title">
-    <header className="engineering-reader-header">
-      <button type="button" className="engineering-mobile-back" onClick={onBack}>Back to records</button>
+  const contents: Array<[EngineeringContentsSection, string]> = [
+    ["overview", "Overview"],
+    ...(record.diagrams.length > 0 ? [["architecture", "Architecture"] as [EngineeringContentsSection, string]] : []),
+    ["record", "Record"],
+    ...(record.interviewView ? [["interview", "Interview view"] as [EngineeringContentsSection, string]] : []),
+  ];
+  const visit = (section: EngineeringContentsSection) => {
+    onContentsSectionChange(section);
+    readerRef.current?.querySelector<HTMLElement>(`[data-engineering-section="${section}"]`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
+  return <article ref={readerRef} className="engineering-reader engineering-record-panel" aria-labelledby="engineering-record-title">
+    <nav className="engineering-contents-nav" aria-label="Record contents">
+      <span>Contents</span>
+      <div>{contents.map(([id, label]) => <button type="button" key={id} className={contentsSection === id ? "active" : ""} aria-current={contentsSection === id ? "location" : undefined} onClick={() => visit(id)}>{label}</button>)}</div>
+      <div className="engineering-reader-panel-actions"><button type="button" onClick={onBack}>Index</button><button type="button" onClick={onOpenEvidence} aria-label="Open evidence and lineage">Evidence</button></div>
+    </nav>
+    <header className="engineering-reader-header" data-engineering-section="overview">
       <div className="engineering-record-classification">
         <span>{TYPE_LABELS[record.type]}</span>
         <i data-status={record.effectiveStatus}>{STATUS_LABELS[record.effectiveStatus]}</i>
@@ -201,19 +212,6 @@ function RecordReader({
       </div>
       <h1 id="engineering-record-title">{record.title}</h1>
       <p>{record.summary}</p>
-      <div className="engineering-provenance">
-        <span aria-hidden="true" />
-        <dl>
-          <div><dt>Record</dt><dd><code>{record.ref}</code><CopyControl key={`record:${record.ref}`} value={record.ref} label="record reference" /></dd></div>
-          <div><dt>Commit</dt><dd><code>{record.source.commit}</code><CopyControl key={`commit:${record.source.commit}`} value={record.source.commit} label="full commit" /></dd></div>
-          <div><dt>Source path</dt><dd><code>{record.source.path}</code><CopyControl key={`path:${record.source.path}`} value={record.source.path} label="source path" /></dd></div>
-        </dl>
-        <a href={record.source.permalink} target="_blank" rel="noreferrer"><EngineeringIcon name="source" />Exact source</a>
-      </div>
-      <div className="engineering-lineage-compact">
-        <div><EngineeringIcon name="lineage" /><span>Immutable lineage</span><strong>{record.ref}</strong></div>
-        {lineageRefs.length > 0 ? <div>{lineageRefs.slice(0, 3).map((ref) => <button type="button" key={ref} onClick={() => onSelect(ref)} title={`Open ${ref} in Journal`}>{ref}</button>)}{lineageRefs.length > 3 ? <small>+{lineageRefs.length - 3} more below</small> : null}</div> : <small>No linked revisions or backlinks.</small>}
-      </div>
     </header>
 
     <div className="engineering-reader-body">
@@ -224,7 +222,7 @@ function RecordReader({
         <div><dt>Verification</dt><dd>{record.verification.state === "verified" ? "Explicit evidence recorded" : "Not recorded"}</dd></div>
       </dl>
 
-      {record.diagrams.length > 0 ? <section className="engineering-diagrams" aria-labelledby="engineering-diagrams-title">
+      {record.diagrams.length > 0 ? <section className="engineering-diagrams" data-engineering-section="architecture" aria-labelledby="engineering-diagrams-title">
         <header><h2 id="engineering-diagrams-title">Architecture diagrams</h2><p>Evidence-backed assets bundled from this record&apos;s exact Git revision.</p></header>
         {record.diagrams.map((diagram) => <figure key={`${diagram.sourcePath}:${diagram.renderedPath}`}>
           <a className="engineering-diagram-preview" href={diagram.renderedPermalink} target="_blank" rel="noreferrer">
@@ -235,34 +233,14 @@ function RecordReader({
         </figure>)}
       </section> : null}
 
-      <div className="engineering-markdown">
+      <div className="engineering-markdown" data-engineering-section="record">
         <Markdown remarkPlugins={[remarkGfm]}>{readerBody}</Markdown>
       </div>
 
-      {record.interviewView ? <details className="engineering-interview-view">
+      {record.interviewView ? <details className="engineering-interview-view" data-engineering-section="interview">
         <summary>Interview view</summary>
         <Markdown remarkPlugins={[remarkGfm]}>{record.interviewView.body}</Markdown>
       </details> : null}
-
-      <section className="engineering-lineage" aria-labelledby="engineering-lineage-title">
-        <h2 id="engineering-lineage-title">Revision lineage</h2>
-        <p>Exact immutable references only. Derived state never rewrites an accepted source.</p>
-        <div className="engineering-lineage-current"><span aria-hidden="true" /><strong>{record.ref}</strong><small>{STATUS_LABELS[record.effectiveStatus]}</small></div>
-        {lineageRefs.length > 0 ? <div className="engineering-lineage-links">
-          {lineageRefs.map((ref) => <button type="button" key={ref} onClick={() => onSelect(ref)}><EngineeringIcon name="lineage" />{ref}</button>)}
-        </div> : <small>No amendments, supersessions, or related backlinks recorded.</small>}
-      </section>
-
-      <section className="engineering-evidence" aria-labelledby="engineering-evidence-title">
-        <h2 id="engineering-evidence-title">Evidence</h2>
-        <ul>{record.sources.map((source) => <li key={`${source.kind}:${source.url}`}><a href={source.url} target="_blank" rel="noreferrer">{source.label}<EngineeringIcon name="source" /></a><span>{source.kind}</span></li>)}</ul>
-      </section>
-
-      {relatedReceipts.length > 0 ? <section className="engineering-record-receipts" aria-labelledby="engineering-record-receipts-title">
-        <h2 id="engineering-record-receipts-title">Pull request history</h2>
-        <p>Compact receipts that cite this rich record. Receipt coverage remains independent from record status and verification.</p>
-        <ul>{relatedReceipts.map((receipt) => <li key={receipt.ref}><div><span>{receipt.repository} · PR #{receipt.pr}</span><strong>{receipt.title}</strong></div><a href={receipt.source.permalink} target="_blank" rel="noreferrer">Exact receipt<EngineeringIcon name="source" /></a></li>)}</ul>
-      </section> : null}
 
       <div className="engineering-actions">
         <button type="button" disabled aria-disabled="true" title="Available after the Learn runtime contract is released">Learn this</button>
@@ -270,6 +248,38 @@ function RecordReader({
       </div>
     </div>
   </article>;
+}
+
+function EngineeringEvidencePanel({ record, index, onSelect, onClose }: { record: EngineeringJournalRecord; index: EngineeringJournalIndex; onSelect: (ref: string) => void; onClose: () => void }) {
+  const corrections = [...record.amendedBy, ...record.supersededBy];
+  const outgoing = [...record.amends, ...record.supersedes, ...record.relatedRecords, ...record.decisions, ...record.incidents, ...record.features];
+  const backlinks = index.backlinks[record.ref] ?? [];
+  const lineageRefs = [...new Set([...corrections, ...outgoing, ...backlinks])];
+  const relatedReceipts = (index.receiptBacklinks[record.ref] ?? [])
+    .map((ref) => index.pullRequestReceipts.find((receipt) => receipt.ref === ref))
+    .filter((receipt): receipt is EngineeringPullRequestReceipt => Boolean(receipt));
+  return <aside className="engineering-evidence-panel" aria-label="Evidence and lineage">
+    <header><div><span>Evidence desk</span><h2>Exact evidence</h2></div><button type="button" onClick={onClose} aria-label="Close evidence and lineage">×</button></header>
+    <dl className="engineering-evidence-ledger">
+      <div><dt>Record ref</dt><dd><code>{record.ref}</code><CopyControl value={record.ref} label="record reference" /></dd></div>
+      <div><dt>Commit</dt><dd><code>{record.source.commit}</code><CopyControl value={record.source.commit} label="full commit" /></dd></div>
+      <div><dt>Source path</dt><dd><code>{record.source.path}</code><CopyControl value={record.source.path} label="source path" /></dd></div>
+      <div><dt>Verification</dt><dd><strong>{record.verification.state === "verified" ? "Explicit evidence" : "Not recorded"}</strong></dd></div>
+    </dl>
+    <a className="engineering-exact-source" href={record.source.permalink} target="_blank" rel="noreferrer"><EngineeringIcon name="source" />Open exact source</a>
+    <section className="engineering-evidence-facts" aria-label="Record scope">
+      <div><span>Modules</span><p>{record.modules.join(", ") || "Not recorded"}</p></div>
+      <div><span>Interfaces</span><p>{record.interfaces.join(", ") || "Not recorded"}</p></div>
+      <div><span>Capabilities</span><p>{record.capabilityIds.join(", ") || "Not recorded"}</p></div>
+    </section>
+    <section className="engineering-lineage" aria-labelledby="engineering-lineage-title">
+      <h2 id="engineering-lineage-title">Immutable lineage</h2>
+      <div className="engineering-lineage-current"><span aria-hidden="true" /><strong>{record.ref}</strong><small>{STATUS_LABELS[record.effectiveStatus]}</small></div>
+      {lineageRefs.length > 0 ? <div className="engineering-lineage-links">{lineageRefs.map((ref) => <button type="button" key={ref} onClick={() => onSelect(ref)}>{ref}</button>)}</div> : <small>No linked revisions or backlinks.</small>}
+    </section>
+    <section className="engineering-evidence" aria-labelledby="engineering-evidence-title"><h2 id="engineering-evidence-title">Sources</h2><ul>{record.sources.map((source) => <li key={`${source.kind}:${source.url}`}><a href={source.url} target="_blank" rel="noreferrer">{source.label}<EngineeringIcon name="source" /></a><span>{source.kind}</span></li>)}</ul></section>
+    {relatedReceipts.length > 0 ? <section className="engineering-record-receipts" aria-labelledby="engineering-record-receipts-title"><h2 id="engineering-record-receipts-title">Pull requests</h2><ul>{relatedReceipts.map((receipt) => <li key={receipt.ref}><div><span>{receipt.repository} · PR #{receipt.pr}</span><strong>{receipt.title}</strong></div><a href={receipt.source.permalink} target="_blank" rel="noreferrer">Receipt<EngineeringIcon name="source" /></a></li>)}</ul></section> : null}
+  </aside>;
 }
 
 function EngineeringStatistics({ index }: { index: EngineeringJournalIndex }) {
@@ -334,6 +344,10 @@ type EngineeringWorkspaceMemory = {
   receiptRepository: string;
   selectedRef: string;
   mobileReaderOpen: boolean;
+  indexCollapsed: boolean;
+  evidenceOpen: boolean;
+  contentsSection: EngineeringContentsSection;
+  indexScrollTop: number;
 };
 
 const ENGINEERING_MEMORY_KEY = "interview-arc-engineering-workspace-v1";
@@ -355,7 +369,11 @@ function readEngineeringMemory(): Partial<EngineeringWorkspaceMemory> {
       receiptClassification,
       receiptRepository: typeof parsed.receiptRepository === "string" ? parsed.receiptRepository : "all",
       selectedRef: typeof parsed.selectedRef === "string" ? parsed.selectedRef : "",
-      mobileReaderOpen: parsed.mobileReaderOpen === true,
+      mobileReaderOpen: parsed.mobileReaderOpen !== false,
+      indexCollapsed: parsed.indexCollapsed === true,
+      evidenceOpen: typeof parsed.evidenceOpen === "boolean" ? parsed.evidenceOpen : undefined,
+      contentsSection: parsed.contentsSection === "architecture" || parsed.contentsSection === "record" || parsed.contentsSection === "interview" ? parsed.contentsSection : "overview",
+      indexScrollTop: typeof parsed.indexScrollTop === "number" && Number.isFinite(parsed.indexScrollTop) ? Math.max(0, parsed.indexScrollTop) : 0,
     };
   } catch {
     return {};
@@ -372,8 +390,13 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   const [receiptClassification, setReceiptClassification] = useState<EngineeringPullRequestClassification | "all">("all");
   const [receiptRepository, setReceiptRepository] = useState("all");
   const [selectedRef, setSelectedRef] = useState(index.records[0]?.ref ?? "");
-  const [mobileReaderOpen, setMobileReaderOpen] = useState(false);
+  const [mobileReaderOpen, setMobileReaderOpen] = useState(true);
+  const [indexCollapsed, setIndexCollapsed] = useState(false);
+  const [evidenceOpen, setEvidenceOpen] = useState(true);
+  const [contentsSection, setContentsSection] = useState<EngineeringContentsSection>("overview");
+  const [indexScrollTop, setIndexScrollTop] = useState(0);
   const [memoryReady, setMemoryReady] = useState(false);
+  const recordListRef = useRef<HTMLDivElement>(null);
   const searchByRef = useMemo(() => new Map(index.search.map((entry) => [entry.ref, entry])), [index.search]);
   const repositories = useMemo(() => [...new Set(index.records.map((record) => record.repository))].sort(), [index.records]);
   const receiptSearchByRef = useMemo(() => new Map(index.receiptSearch.map((entry) => [entry.ref, entry])), [index.receiptSearch]);
@@ -393,9 +416,11 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
       && (!receiptQuery.trim() || search?.text.includes(receiptQuery.trim().toLowerCase()));
   }), [index.pullRequestReceipts, receiptClassification, receiptQuery, receiptRepository, receiptSearchByRef]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const memory = readEngineeringMemory();
-    const frame = window.requestAnimationFrame(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
       const rememberedLayer = memory.journalLayer ?? "records";
       setJournalLayer(rememberedLayer);
       setQuery(memory.query ?? "");
@@ -407,25 +432,34 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
       setReceiptRepository(memory.receiptRepository ?? "all");
       if (index.records.some((record) => record.ref === memory.selectedRef)) setSelectedRef(memory.selectedRef!);
       setMobileReaderOpen(rememberedLayer === "receipts" ? false : memory.mobileReaderOpen ?? false);
+      setIndexCollapsed(memory.indexCollapsed ?? false);
+      setEvidenceOpen(memory.evidenceOpen ?? !window.matchMedia("(max-width: 1320px)").matches);
+      setContentsSection(memory.contentsSection ?? "overview");
+      setIndexScrollTop(memory.indexScrollTop ?? 0);
       setMemoryReady(true);
     });
-    return () => window.cancelAnimationFrame(frame);
+    return () => { cancelled = true; };
   }, [index.records]);
+
+  useLayoutEffect(() => {
+    if (!memoryReady || !recordListRef.current) return;
+    recordListRef.current.scrollTop = indexScrollTop;
+  }, [indexScrollTop, memoryReady]);
 
   useEffect(() => {
     if (!memoryReady) return;
     try {
-      const next: EngineeringWorkspaceMemory = { journalLayer, query, type, status, repository, receiptQuery, receiptClassification, receiptRepository, selectedRef, mobileReaderOpen };
+      const next: EngineeringWorkspaceMemory = { journalLayer, query, type, status, repository, receiptQuery, receiptClassification, receiptRepository, selectedRef, mobileReaderOpen, indexCollapsed, evidenceOpen, contentsSection, indexScrollTop };
       window.sessionStorage.setItem(ENGINEERING_MEMORY_KEY, JSON.stringify(next));
     } catch {
       // Session storage can be unavailable in hardened browsing contexts; in-memory state remains active.
     }
-  }, [journalLayer, memoryReady, mobileReaderOpen, query, receiptClassification, receiptQuery, receiptRepository, repository, selectedRef, status, type]);
+  }, [contentsSection, evidenceOpen, indexCollapsed, indexScrollTop, journalLayer, memoryReady, mobileReaderOpen, query, receiptClassification, receiptQuery, receiptRepository, repository, selectedRef, status, type]);
 
   if (view === "statistics") return <EngineeringStatistics index={index} />;
   const activeSelectedRef = records.some((record) => record.ref === selectedRef) ? selectedRef : records[0]?.ref;
   const selected = index.records.find((record) => record.ref === activeSelectedRef) ?? null;
-  const select = (ref: string) => { setSelectedRef(ref); setMobileReaderOpen(true); };
+  const select = (ref: string) => { setSelectedRef(ref); setContentsSection("overview"); setMobileReaderOpen(true); };
   const openRelation = (ref: string) => {
     setJournalLayer("records");
     setQuery("");
@@ -433,6 +467,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
     setStatus("all");
     setRepository("all");
     setSelectedRef(ref);
+    setContentsSection("overview");
     setMobileReaderOpen(true);
     if (view !== "journal") onNavigateView("journal");
   };
@@ -442,9 +477,9 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
     if (next === "receipts") setMobileReaderOpen(false);
   };
 
-  return <section className={`engineering-workspace ${mobileReaderOpen ? "mobile-reader-open" : ""}`}>
-    <aside className="engineering-records" aria-label={`${ENGINEERING_VIEW_TITLES[view]} ${showReceipts ? "pull-request receipts" : "rich records"}`}>
-      <header><h1>{ENGINEERING_VIEW_TITLES[view].replace("Engineering · ", "")}</h1><p>{showReceipts ? `${receipts.length} of ${index.receiptStatistics.totalReceipts} pull-request receipts` : `${records.length} factual ${records.length === 1 ? "record" : "records"}`}</p></header>
+  return <section className={`engineering-workspace ${mobileReaderOpen ? "mobile-reader-open" : ""} ${indexCollapsed ? "index-collapsed" : ""} ${evidenceOpen ? "evidence-open" : "evidence-closed"}`}>
+    <aside className="engineering-index-panel engineering-records" aria-label={`${ENGINEERING_VIEW_TITLES[view]} ${showReceipts ? "pull-request receipts" : "rich records"}`}>
+      <header><div><h1>{ENGINEERING_VIEW_TITLES[view].replace("Engineering · ", "")}</h1><p>{showReceipts ? `${receipts.length} of ${index.receiptStatistics.totalReceipts} pull-request receipts` : `${records.length} factual ${records.length === 1 ? "record" : "records"}`}</p></div><button type="button" onClick={() => setIndexCollapsed(true)} aria-label="Collapse Journal index" title="Collapse Journal index">←</button></header>
       {view === "journal" ? <div className="engineering-journal-layers" role="group" aria-label="Journal evidence layer">
         <button type="button" aria-pressed={journalLayer === "records"} onClick={() => chooseJournalLayer("records")}><span>Rich records</span><strong>{index.statistics.totalRecords}</strong></button>
         <button type="button" aria-pressed={journalLayer === "receipts"} onClick={() => chooseJournalLayer("receipts")}><span>All merged PRs</span><strong>{index.receiptStatistics.totalReceipts}</strong></button>
@@ -462,7 +497,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
         <label><span>Classification</span><select value={receiptClassification} onChange={(event) => setReceiptClassification(event.target.value as EngineeringPullRequestClassification | "all")}><option value="all">All classifications</option>{Object.entries(RECEIPT_CLASSIFICATION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label><span>Repository</span><select value={receiptRepository} onChange={(event) => setReceiptRepository(event.target.value)}><option value="all">All repositories</option>{receiptRepositories.map((value) => <option key={value}>{value}</option>)}</select></label>
       </div> : null}
-      {showReceipts ? <ReceiptTimeline receipts={receipts} onOpenRecord={openRelation} /> : <div className="engineering-record-list">
+      {showReceipts ? <ReceiptTimeline receipts={receipts} onOpenRecord={openRelation} /> : <div ref={recordListRef} className="engineering-record-list" onScroll={(event) => setIndexScrollTop(event.currentTarget.scrollTop)}>
         {records.map((record) => <button type="button" key={record.ref} className={record.ref === selected?.ref ? "active" : ""} aria-current={record.ref === selected?.ref ? "true" : undefined} onClick={() => select(record.ref)}>
           <span><i>{TYPE_LABELS[record.type]}</i><time>{record.createdAt}</time></span>
           <strong>{record.title}</strong>
@@ -472,6 +507,8 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
         {records.length === 0 ? <EmptyEngineeringView view={view} /> : null}
       </div>}
     </aside>
-    {selected ? <RecordReader record={selected} index={index} onSelect={openRelation} onBack={() => setMobileReaderOpen(false)} /> : <div className="engineering-reader engineering-reader-empty"><EmptyEngineeringView view={view} /></div>}
+    {indexCollapsed ? <button type="button" className="engineering-index-restore" onClick={() => setIndexCollapsed(false)} aria-label="Open Journal index" title="Open Journal index">→</button> : null}
+    {selected ? <RecordReader record={selected} onBack={() => setMobileReaderOpen(false)} onOpenEvidence={() => setEvidenceOpen(true)} contentsSection={contentsSection} onContentsSectionChange={setContentsSection} /> : <div className="engineering-reader engineering-record-panel engineering-reader-empty"><EmptyEngineeringView view={view} /></div>}
+    {selected ? <EngineeringEvidencePanel record={selected} index={index} onSelect={openRelation} onClose={() => setEvidenceOpen(false)} /> : null}
   </section>;
 }

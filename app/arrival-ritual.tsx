@@ -71,6 +71,16 @@ const PETALS = Array.from({ length: 72 }, (_, index) => ({
   rotate: (index * 47) % 180,
 }));
 
+const RAIN_DROPS = Array.from({ length: 40 }, (_, index) => ({
+  left: (index * 29 + 7) % 101,
+  delay: -((index * .73) % 8),
+  duration: 2.8 + (index % 7) * .22,
+  length: 18 + (index * 11) % 30,
+  opacity: .18 + (index % 5) * .07,
+}));
+
+export type AtmosphereMode = "petals" | "rain" | "off";
+
 function quoteFor(date: string) {
   const value = date.split("").reduce((sum, character) => sum + character.charCodeAt(0), 0);
   return DAILY_LINES[value % DAILY_LINES.length];
@@ -101,9 +111,20 @@ function displayDate(date: string) {
 }
 
 export function PetalField({ quiet, paused }: { quiet: boolean; paused: boolean }) {
+  return <AtmosphereField quiet={quiet} mode={paused ? "off" : "petals"} />;
+}
+
+export function AtmosphereField({ quiet, mode }: { quiet: boolean; mode: AtmosphereMode }) {
+  const [documentHidden, setDocumentHidden] = useState(false);
+  useEffect(() => {
+    const synchronize = () => setDocumentHidden(document.hidden);
+    synchronize();
+    document.addEventListener("visibilitychange", synchronize);
+    return () => document.removeEventListener("visibilitychange", synchronize);
+  }, []);
   return (
-    <div className={`petal-field ${quiet ? "quiet" : "full"} ${paused ? "paused" : ""}`} aria-hidden="true">
-      {PETALS.map((petal, index) => (
+    <div className={`petal-field atmosphere-field atmosphere-${mode} ${quiet ? "quiet" : "full"} ${mode === "off" || documentHidden ? "paused" : ""}`} aria-hidden="true">
+      {mode === "petals" ? PETALS.map((petal, index) => (
         <i
           key={index}
           className="ambient-petal"
@@ -116,7 +137,14 @@ export function PetalField({ quiet, paused }: { quiet: boolean; paused: boolean 
             "--petal-rotate": `${petal.rotate}deg`,
           } as CSSProperties}
         />
-      ))}
+      )) : null}
+      {mode === "rain" ? RAIN_DROPS.map((drop, index) => <i key={index} className="ambient-rain-drop" style={{
+        "--rain-left": `${drop.left}%`,
+        "--rain-delay": `${drop.delay}s`,
+        "--rain-duration": `${drop.duration}s`,
+        "--rain-length": `${drop.length}px`,
+        "--rain-opacity": drop.opacity,
+      } as CSSProperties}><span /></i>) : null}
     </div>
   );
 }

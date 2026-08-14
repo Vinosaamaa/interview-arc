@@ -48,7 +48,7 @@ import {
 import { careerHeatLevel, type CareerJob, type CareerSummary, type JobStatus } from "./career-work";
 import { useLiveState, useReadOnlyLiveState } from "./live-sync";
 import { emptyJournal } from "./current-day";
-import { ArrivalRitual, PetalField } from "./arrival-ritual";
+import { ArrivalRitual, AtmosphereField, type AtmosphereMode } from "./arrival-ritual";
 import ReaderRenderDiagnosticsPanel from "./reader-render-diagnostics-panel";
 import {
   recordNavigationDiagnostic,
@@ -1951,7 +1951,8 @@ export default function HomeClient({ content, today, engineering }: { content: C
   const [pipSupported, setPipSupported] = useState(false);
   const [arrivalState, setArrivalState] = useState<"show" | "leaving" | "entered">("show");
   const [soundMuted, setSoundMuted] = useState(false);
-  const [petalsEnabled, setPetalsEnabled] = useState(true);
+  const [atmospherePreference, setAtmospherePreference] = useState<AtmosphereMode | "auto">("auto");
+  const [atmosphereReady, setAtmosphereReady] = useState(false);
   const [integrationOpen, setIntegrationOpen] = useState(false);
   const [integrationToken, setIntegrationToken] = useState("");
   const [integrationBusy, setIntegrationBusy] = useState(false);
@@ -2043,7 +2044,10 @@ export default function HomeClient({ content, today, engineering }: { content: C
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       setSoundMuted(window.localStorage.getItem("interview-arc-sound-muted") === "true");
-      setPetalsEnabled(window.localStorage.getItem("interview-arc-petals-paused") !== "true");
+      const storedAtmosphere = window.localStorage.getItem("interview-arc-atmosphere-v1");
+      const legacyPetalsPaused = window.localStorage.getItem("interview-arc-petals-paused") === "true";
+      setAtmospherePreference(storedAtmosphere === "petals" || storedAtmosphere === "rain" || storedAtmosphere === "off" ? storedAtmosphere : legacyPetalsPaused ? "off" : "auto");
+      setAtmosphereReady(true);
     });
     return () => window.cancelAnimationFrame(frame);
   }, [today]);
@@ -2366,11 +2370,14 @@ export default function HomeClient({ content, today, engineering }: { content: C
     window.localStorage.setItem("interview-arc-sound-muted", "false");
   }
 
-  function togglePetals() {
-    setPetalsEnabled((current) => {
-      window.localStorage.setItem("interview-arc-petals-paused", String(current));
-      return !current;
-    });
+  const atmosphereMode: AtmosphereMode = !atmosphereReady ? "off" : atmospherePreference === "auto"
+    ? activeWorkspace === "engineering" ? "rain" : "petals"
+    : atmospherePreference;
+
+  function cycleAtmosphere() {
+    const next: AtmosphereMode = atmosphereMode === "petals" ? "rain" : atmosphereMode === "rain" ? "off" : "petals";
+    setAtmospherePreference(next);
+    window.localStorage.setItem("interview-arc-atmosphere-v1", next);
   }
 
   const allTodayActivities = useMemo(() => {
@@ -7065,7 +7072,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
           ? <nav className="primary-nav learn-local-nav" aria-label="Learn navigation">{LEARN_NAV_ITEMS.map(([id, label], index) => <button key={id} className={learnDestination === id ? "active" : ""} aria-current={learnDestination === id ? "page" : undefined} onClick={() => navigateToLearn(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
           : activeWorkspace === "interview"
             ? <nav className="primary-nav" aria-label="Interview navigation">{INTERVIEW_NAV_ITEMS.map(([id, label], index) => <button key={id} className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
-            : <nav className="primary-nav engineering-primary-nav" aria-label="Engineering navigation">{ENGINEERING_NAV_ITEMS.map(([id, label]) => <button key={id} className={engineeringView === id ? "active" : ""} aria-current={engineeringView === id ? "page" : undefined} onClick={() => setEngineeringView(id)}><span><EngineeringIcon name={id} /></span>{label}</button>)}</nav>}
+            : <nav className="primary-nav engineering-primary-nav" aria-label="Engineering navigation">{ENGINEERING_NAV_ITEMS.map(([id, label], index) => <button key={id} className={engineeringView === id ? "active" : ""} aria-current={engineeringView === id ? "page" : undefined} onClick={() => setEngineeringView(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>}
         {activeWorkspace === "interview" ? <nav className="materials-nav" aria-label="Career Materials navigation"><button type="button" className={view === "materials" ? "active" : ""} aria-current={view === "materials" ? "page" : undefined} onClick={() => navigateToPrimaryView("materials")}><span aria-hidden="true">CM</span><strong>Career Materials</strong><small>Private</small></button></nav> : null}
         <div className="sidebar-status"><span className={activeWorkspace === "interview" && [...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "live" : ""} /><div><strong>{activeWorkspace === "learn" ? "Private Learning record" : activeWorkspace === "engineering" ? "Static Git projection" : [...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "Timer running" : hydrated ? "Draft saved locally" : "Loading draft"}</strong><small>{activeWorkspace === "learn" ? "Transcript-only sessions · no cloud audio" : activeWorkspace === "engineering" ? "No mutable Journal state" : "Session countdown + one activity stopwatch"}</small></div></div>
         <div className="profile"><span>IA</span><div><strong>Interview Arc owner</strong><small>Private preparation record</small></div></div>
@@ -7082,7 +7089,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
               <label><span>Volume</span><input type="range" min="0" max="1" step="0.05" value={musicVolume} onChange={(event) => setMusicVolume(Number(event.target.value))} aria-label="Music volume" /></label>
               <MusicPlaylist playlist={ambientPlaylist} currentIndex={ambientTrackIndex} onSelect={chooseAmbientTrack} />
             </div>
-            <button className={`atmosphere-toggle ${petalsEnabled ? "active" : ""}`} onClick={togglePetals} aria-pressed={petalsEnabled} title={petalsEnabled ? "Pause cherry blossoms" : "Resume cherry blossoms"}><span aria-hidden="true">✦</span>Petals</button>
+            <button className={`atmosphere-toggle ${atmosphereMode !== "off" ? "active" : ""}`} onClick={cycleAtmosphere} title={`Atmosphere: ${atmosphereMode}. Switch atmosphere`}><span aria-hidden="true">{atmosphereMode === "rain" ? "⌁" : atmosphereMode === "petals" ? "✦" : "○"}</span>{atmosphereMode === "rain" ? "Rain" : atmosphereMode === "petals" ? "Petals" : "Atmosphere off"}</button>
             {activeWorkspace === "interview" && view === "today" && pipSupported && <button className={`secondary-action pip-toggle ${pipWindow && !pipWindow.closed ? "active" : ""}`} onClick={openNowWindow} aria-pressed={Boolean(pipWindow && !pipWindow.closed)}>{pipWindow && !pipWindow.closed ? "Close timer" : "Pop out timer"}</button>}
             {activeWorkspace !== "engineering" ? <button className="secondary-action" onClick={() => setIntegrationOpen(true)}>Connect</button> : null}
             {activeWorkspace === "interview" ? <button className="secondary-action" onClick={() => void exportDraft()}>Export today</button> : null}
@@ -7290,7 +7297,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
     )}
     </main>
     <ReaderRenderDiagnosticsPanel surface={readerDiagnosticSurface} />
-    <PetalField quiet={arrivalState === "entered"} paused={!petalsEnabled} />
+    <AtmosphereField quiet={arrivalState === "entered"} mode={atmosphereMode} />
     <ArrivalRitual date={today} state={arrivalState} muted={soundMuted} trackName={trackName} trackArtist={trackArtist} playlist={ambientPlaylist} trackIndex={ambientTrackIndex} volume={musicVolume} onToggleMuted={toggleArrivalSound} onPreviousTrack={previousAmbientTrack} onNextTrack={nextAmbientTrack} onSelectTrack={chooseAmbientTrack} onVolumeChange={setMusicVolume} onEnter={enterArc} />
     </>
   );

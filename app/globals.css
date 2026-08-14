@@ -1761,6 +1761,44 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 }
 .ambient-petal:nth-child(3n) { background: linear-gradient(135deg, #fff 0%, #ffc4d8 45%, #f36b9f 100%); }
 .ambient-petal:nth-child(4n) { border-color: rgba(115, 24, 67, .42); filter: saturate(1.4); }
+.ambient-rain-drop {
+  position: absolute;
+  left: var(--rain-left);
+  top: calc(-1 * var(--rain-length));
+  width: 1px;
+  height: var(--rain-length);
+  border-radius: 999px;
+  opacity: var(--rain-opacity);
+  background: linear-gradient(to bottom, transparent, #74bfc8 68%, #d8f5f5);
+  transform: rotate(8deg);
+  animation: ambientRainFall var(--rain-duration) linear var(--rain-delay) infinite;
+  will-change: transform, opacity;
+}
+.ambient-rain-drop span {
+  position: absolute;
+  left: 50%;
+  bottom: -3px;
+  width: 12px;
+  height: 4px;
+  border: 1px solid rgba(80, 166, 177, .28);
+  border-radius: 50%;
+  opacity: 0;
+  transform: translateX(-50%) scale(.2);
+  animation: ambientRainRipple var(--rain-duration) ease-out var(--rain-delay) infinite;
+}
+@keyframes ambientRainFall {
+  0% { transform: translate3d(0, -8vh, 0) rotate(8deg); opacity: 0; }
+  12% { opacity: var(--rain-opacity); }
+  92% { opacity: var(--rain-opacity); }
+  100% { transform: translate3d(-28px, 108vh, 0) rotate(8deg); opacity: 0; }
+}
+@keyframes ambientRainRipple {
+  0%, 92% { opacity: 0; transform: translateX(-50%) scale(.2); }
+  96% { opacity: .45; }
+  100% { opacity: 0; transform: translateX(-50%) scale(1.8); }
+}
+.petal-field.paused .ambient-rain-drop,
+.petal-field.paused .ambient-rain-drop span { animation-play-state: paused !important; }
 
 @keyframes arrivalBreath {
   from { transform: scale(1.025) translate3d(-.4%, 0, 0); }
@@ -1975,7 +2013,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .arrival-image, .arrival-content, .ambient-petal { animation: none !important; }
+  .arrival-image, .arrival-content, .ambient-petal, .ambient-rain-drop, .ambient-rain-drop span { animation: none !important; }
   .petal-field { display: none; }
   .arrival-ritual { transition-duration: .01ms; }
 }

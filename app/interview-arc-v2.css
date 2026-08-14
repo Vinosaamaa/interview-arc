@@ -378,7 +378,9 @@ body:has(.reader-workspace) .petal-field {
   visibility: hidden;
   transition: none;
 }
-body:has(.reader-workspace) .ambient-petal { animation-play-state: paused !important; }
+body:has(.reader-workspace) .ambient-petal,
+body:has(.reader-workspace) .ambient-rain-drop,
+body:has(.reader-workspace) .ambient-rain-drop span { animation-play-state: paused !important; }
 .reader-diagnostics-panel {
   position: fixed;
   right: 16px;
@@ -1728,7 +1730,7 @@ body:has(.reader-workspace) .ambient-petal { animation-play-state: paused !impor
 .reader-outline a { padding: 7px 9px; border-radius: 7px; color: #536c67; font-size: .72rem; line-height: 1.3; text-decoration: none; }
 .reader-outline a:hover { background: #edf5f2; color: var(--primary-deep); }
 .reader-outline .toc-group { display: grid; }
-.reader-outline .toc-parent { color: #244c45; font-weight: 800; }
+.reader-outline .toc-parent { color: #244c45; font-weight: inherit; }
 .reader-outline .toc-child { padding-left: 20px; font-size: .67rem; }
 .workspace-reader-scroll.case-document { min-height: 0; max-height: none; height: 100%; padding: 42px 64px 52px; background: #fffefb; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .workspace-reader-scroll.case-document > header > div:first-child { gap: 12px; }
@@ -1928,7 +1930,9 @@ body:has(.reader-workspace) .ambient-petal { animation-play-state: paused !impor
   transform: translateX(-50%);
   z-index: 26;
   isolation: isolate;
+  border-radius: 14px;
   background: #fffefb;
+  overflow: hidden;
   animation: reader-workspace-enter .2s cubic-bezier(.2,.8,.2,1) both;
 }
 .library-page.has-open-entry::before,
