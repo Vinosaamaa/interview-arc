@@ -27,9 +27,11 @@ const primaryToken = "ia_publication_queue_primary_276";
 const otherToken = "ia_publication_queue_other_owner_276";
 const primaryBlockedIndexes = new Set([0, 79, 80, 159, 160, 239, 240, 242]);
 const primaryPracticeRecordIndexes = new Set(
-  Array.from({ length: 110 }, (_, index) => index + 1).filter((index) => !primaryBlockedIndexes.has(index)),
+  Array.from({ length: 110 }, (_, index) => index + 1),
 );
 const otherPracticeRecordIndexes = new Set(Array.from({ length: 111 }, (_, index) => index + 120));
+const artifactBackedIndex = 159;
+const clearedRecordOutcomeIndex = 79;
 
 const activityId = (index) => `activity-${String(index).padStart(3, "0")}`;
 const captureId = (index, member) => `capture-${String(index).padStart(3, "0")}-${member}`;
@@ -144,6 +146,7 @@ function fixtureSql(primaryTokenHash, otherTokenHash) {
   const turns = [];
   const practiceRecords = [];
   const practiceRecordRevisions = [];
+  const contentArtifacts = [];
 
   for (const [ownerId, ownerLabel] of [[primaryOwner, "Primary"], [otherOwner, "Other"]]) {
     workbenches.push([ownerId, `workbench-${ownerLabel.toLowerCase()}`, "open", practiceDates[0], 1, null, 1]);
@@ -209,7 +212,9 @@ function fixtureSql(primaryTokenHash, otherTokenHash) {
         ]);
       }
       if (index !== 2) timers.push([ownerId, id, "activity", 600, startedAt, null, 1, completedAt, 1, completedAt]);
-      outcomes.push([ownerId, id, outcome, 1, completedAt]);
+      if (ownerId !== primaryOwner || index !== clearedRecordOutcomeIndex) {
+        outcomes.push([ownerId, id, outcome, 1, completedAt]);
+      }
       interactionModes.push([
         ownerId,
         id,
@@ -332,6 +337,26 @@ function fixtureSql(primaryTokenHash, otherTokenHash) {
     }
   }
 
+  const artifactActivityId = activityId(artifactBackedIndex);
+  contentArtifacts.push([
+    `practice/legacy/${artifactActivityId}.md`,
+    "leetcode-attempt",
+    practiceDates[1],
+    "Legacy published artifact",
+    JSON.stringify({
+      path: `practice/legacy/${artifactActivityId}.md`,
+      type: "leetcode-attempt",
+      title: "Legacy published artifact",
+      date: practiceDates[1],
+      activityId: artifactActivityId,
+      status: "published",
+      audioFile: "",
+      audioAvailability: "unavailable",
+      sections: [],
+    }),
+    completionBases[1],
+  ]);
+
   return [
     insertRows("integration_tokens", ["token_hash", "owner_id", "label", "created_at", "last_used_at", "revoked_at"], [
       [primaryTokenHash, primaryOwner, "Publication queue primary integration", 1, null, null],
@@ -351,6 +376,7 @@ function fixtureSql(primaryTokenHash, otherTokenHash) {
     insertRows("practice_transcript_turns", ["owner_id", "activity_id", "turn_id", "specialty", "speaker", "body", "source", "sequence", "occurred_at", "updated_at"], turns),
     insertRows("practice_records", ["owner_id", "activity_id", "current_revision", "specialty", "question_id", "title", "completed_at", "practice_date", "outcome", "solution_revision", "record_fingerprint", "finalization_operation_id", "updated_at"], practiceRecords),
     insertRows("practice_record_revisions", ["owner_id", "activity_id", "revision", "operation_id", "request_fingerprint", "record_fingerprint", "payload", "created_at"], practiceRecordRevisions),
+    insertRows("content_artifacts", ["path", "type", "date", "title", "payload", "updated_at"], contentArtifacts),
   ].join("\n");
 }
 
@@ -423,9 +449,13 @@ test("undated get_publication_queue returns a deterministic, exact, owner-scoped
     assert.deepEqual(primaryReplay, primaryQueue, "repeated undated reads must be deterministic");
 
     const allIndexes = Array.from({ length: activityCount }, (_, index) => index);
-    const primaryPending = allIndexes.filter((index) => !primaryPracticeRecordIndexes.has(index));
-    const primaryBlocked = primaryPending.filter((index) => primaryBlockedIndexes.has(index));
-    const primaryReady = primaryPending.filter((index) => !primaryBlockedIndexes.has(index));
+    const primaryBlocked = allIndexes.filter((index) => (
+      primaryBlockedIndexes.has(index) && index !== artifactBackedIndex
+    ));
+    const primaryReady = allIndexes.filter((index) => (
+      !primaryPracticeRecordIndexes.has(index) && !primaryBlockedIndexes.has(index)
+    ));
+    const primaryPending = [...primaryReady, ...primaryBlocked].sort((left, right) => left - right);
     assert.equal(primaryQueue.date, null);
     assert.equal(primaryQueue.timeZone, "America/Los_Angeles");
     assertExactPartition(primaryQueue, primaryReady, primaryBlocked, primaryPending);
@@ -441,7 +471,6 @@ test("undated get_publication_queue returns a deterministic, exact, owner-scoped
         [activityId(0)]: [{ captureId: captureId(0, "s0"), kind: "transcript_not_materialized", status: "provisional" }],
         [activityId(79)]: [{ captureId: captureId(79, "s0"), kind: "audio_not_available", status: "local_only" }],
         [activityId(80)]: [{ captureId: captureId(80, "s0"), kind: "audio_lost_unacknowledged", status: "audio_lost" }],
-        [activityId(159)]: [{ captureId: captureId(159, "s0"), kind: "delivery_review_pending", status: "queued" }],
         [activityId(160)]: [{ captureId: captureId(160, "g0"), kind: "delivery_review_failed", status: "failed" }],
         [activityId(239)]: [
           { captureId: captureId(239, "g0"), kind: "transcript_not_materialized", status: "provisional" },
@@ -461,9 +490,13 @@ test("undated get_publication_queue returns a deterministic, exact, owner-scoped
 
     assert.equal(otherQueue.date, null);
     assert.equal(otherQueue.timeZone, "America/Los_Angeles");
-    const otherPending = allIndexes.filter((index) => !otherPracticeRecordIndexes.has(index));
-    const otherReady = otherPending.filter((index) => primaryBlockedIndexes.has(index));
-    const otherBlocked = otherPending.filter((index) => !primaryBlockedIndexes.has(index));
+    const otherReady = allIndexes.filter((index) => (
+      !otherPracticeRecordIndexes.has(index)
+      && primaryBlockedIndexes.has(index)
+      && index !== artifactBackedIndex
+    ));
+    const otherBlocked = allIndexes.filter((index) => !primaryBlockedIndexes.has(index));
+    const otherPending = [...otherReady, ...otherBlocked].sort((left, right) => left - right);
     assertExactPartition(otherQueue, otherReady, otherBlocked, otherPending);
     assert.ok(otherQueue.activities.every((activity) => activity.title.startsWith("Other backlog activity")));
     assert.ok(otherQueue.blockedActivities.every((activity) => activity.title.startsWith("Other backlog activity")));
