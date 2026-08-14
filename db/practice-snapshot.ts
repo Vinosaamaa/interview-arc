@@ -136,7 +136,8 @@ export async function buildPublicationQueue(ownerId: string, requestedDate?: str
       storedPublication: live.publicationStatuses[activity.id],
       completed,
     });
-    if (publicationStatus === "draft" || !outcome) return [];
+    const hasPracticeRecord = practiceRecordActivityIds.has(activity.id);
+    if (publicationStatus === "draft" || (!outcome && !hasPracticeRecord)) return [];
     const practiceDate = timer?.completedAt ? practiceDateAt(timer.completedAt) : activity.date;
     if (requestedDate && practiceDate !== requestedDate) return [];
     const sessionId = activity.sessionId ?? sessionForActivity.get(activity.id);
@@ -171,17 +172,21 @@ export async function buildPublicationQueue(ownerId: string, requestedDate?: str
       || (leftStartedAt ?? Number.MAX_SAFE_INTEGER) - (rightStartedAt ?? Number.MAX_SAFE_INTEGER)
       || left.id.localeCompare(right.id);
   });
-  const evidence = await readPublicationEvidenceState(ownerId, eligibleActivities.map((activity) => activity.id));
-  const blockersByActivity = new Map<string, typeof evidence.blockers>();
-  evidence.blockers.forEach((blocker) => blockersByActivity.set(
-    blocker.activityId,
-    [...(blockersByActivity.get(blocker.activityId) ?? []), blocker],
+  const publicationCandidates = eligibleActivities.filter((activity) => (
+    activity.publicationStatus === "ready" || practiceRecordActivityIds.has(activity.id)
   ));
-  const blockedActivities = eligibleActivities.flatMap((activity) => {
+  const evidence = await readPublicationEvidenceState(ownerId, publicationCandidates.map((activity) => activity.id));
+  const blockersByActivity = new Map<string, typeof evidence.blockers>();
+  evidence.blockers.forEach((blocker) => {
+    const blockers = blockersByActivity.get(blocker.activityId);
+    if (blockers) blockers.push(blocker);
+    else blockersByActivity.set(blocker.activityId, [blocker]);
+  });
+  const blockedActivities = publicationCandidates.flatMap((activity) => {
     const blockers = blockersByActivity.get(activity.id) ?? [];
     return blockers.length ? [{ activityId: activity.id, title: activity.title, blockers }] : [];
   });
-  const activities = eligibleActivities.flatMap((activity) => blockersByActivity.has(activity.id) || activity.publicationStatus !== "ready"
+  const activities = publicationCandidates.flatMap((activity) => blockersByActivity.has(activity.id) || activity.publicationStatus !== "ready"
     ? []
     : [{
       ...activity,
