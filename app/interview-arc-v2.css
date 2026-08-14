@@ -1961,6 +1961,8 @@ body:has(.review-queue-workspace) { padding-bottom: 0; overflow: hidden; }
 
 .library-page.has-open-entry .past-master-detail,
 .banks-page.has-open-solution .bank-master-detail {
+  border-radius: 0;
+  background: transparent;
   overflow: visible;
 }
 .library-page.has-open-entry .past-master-detail.reader-closing,

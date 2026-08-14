@@ -372,6 +372,16 @@ test("Past, Banks, and Journey share a centered bounded scrollable reader shell"
     assert.equal(shell.left, "calc(var(--sidebar-size) + (100vw - var(--sidebar-size)) / 2)");
     assert.equal(shell.transform, "translateX(-50%)");
   }
+  const multiPaneShell = cssRules(rules, ".library-page.has-open-entry .past-master-detail")
+    .find((rule) => rule.declarations.background === "transparent")?.declarations;
+  const multiPaneBankShell = cssRules(rules, ".banks-page.has-open-solution .bank-master-detail")
+    .find((rule) => rule.declarations.background === "transparent")?.declarations;
+  for (const shell of [multiPaneShell, multiPaneBankShell]) {
+    assert.ok(shell, "the outer multi-pane frame must not paint through its rounded child corners");
+    assert.equal(shell.background, "transparent");
+    assert.equal(shell["border-radius"], "0");
+    assert.equal(shell.overflow, "visible");
+  }
   for (const frame of ["from", "to"]) {
     const declarations = cssRules(rules, frame, "@keyframes master-detail-in")[0]?.declarations;
     assert.ok(declarations, `master-detail-in ${frame} frame is required`);
