@@ -56,8 +56,10 @@ import {
   startNavigationDiagnostic,
 } from "./reader-render-diagnostics";
 import {
+  normalizeReaderMemoryState,
   rememberEveryReaderGroup as rememberEveryReaderGroupInMemory,
   rememberReaderGroup as rememberReaderGroupInMemory,
+  rememberReaderPosition as rememberReaderPositionInMemory,
   type ReaderMemory,
 } from "./reader-memory";
 import { useAmbientSound } from "./ambient-sound";
@@ -1976,7 +1978,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
   const [initialReaderMemory] = useState<Record<string, ReaderMemory>>(() => {
     if (typeof window === "undefined") return {};
     try {
-      return JSON.parse(window.sessionStorage.getItem("interview-arc-reader-memory-v1") ?? "{}") as Record<string, ReaderMemory>;
+      return normalizeReaderMemoryState(JSON.parse(window.sessionStorage.getItem("interview-arc-reader-memory-v1") ?? "{}"));
     } catch {
       return {};
     }
@@ -6346,16 +6348,11 @@ export default function HomeClient({ content, today, engineering }: { content: C
         const offset = node.getBoundingClientRect().top - rootTop;
         return offset <= 28 ? node : best;
       }, null);
-      const current = readerMemoryRef.current;
-      const next = {
-        ...current,
-        [readerMemoryKey]: {
-          ...(current[readerMemoryKey] ?? { groups: {} }),
-          scrollTop: root.scrollTop,
-          anchorId: anchor?.id,
-          anchorOffset: anchor ? anchor.getBoundingClientRect().top - rootTop : undefined,
-        },
-      };
+      const next = rememberReaderPositionInMemory(readerMemoryRef.current, readerMemoryKey, {
+        scrollTop: root.scrollTop,
+        anchorId: anchor?.id,
+        anchorOffset: anchor ? anchor.getBoundingClientRect().top - rootTop : undefined,
+      });
       // Scroll position is persistence metadata, not render state. Keeping it
       // in a ref avoids re-rendering the entire application on every scroll
       // animation frame while preserving exact reader restoration.

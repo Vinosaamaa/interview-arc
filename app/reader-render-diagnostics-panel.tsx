@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
+  captureReaderFlash,
   getReaderDiagnosticBuffer,
   markReaderFlash,
   persistReaderDiagnosticBuffer,
   readerDiagnosticEnabled,
   recordReaderDiagnostic,
-  resetReaderDiagnosticBuffer,
+  recordReaderVisualHeartbeat,
+  resetReaderTrace,
   type ReaderDiagnosticSnapshot,
 } from "./reader-render-diagnostics";
 
@@ -41,15 +43,22 @@ function visualSnapshot(node: HTMLElement | null) {
 function animationSnapshot() {
   try {
     const animations = document.getAnimations();
-    const petalAnimations = animations.filter((animation) => {
+    let runningAnimations = 0;
+    let petalAnimations = 0;
+    let runningPetalAnimations = 0;
+    for (const animation of animations) {
+      const running = animation.playState === "running";
+      if (running) runningAnimations += 1;
       const target = animation.effect instanceof KeyframeEffect ? animation.effect.target : null;
-      return target instanceof Element && target.classList.contains("ambient-petal");
-    });
+      if (!(target instanceof Element) || !target.classList.contains("ambient-petal")) continue;
+      petalAnimations += 1;
+      if (running) runningPetalAnimations += 1;
+    }
     return {
       animations: animations.length,
-      runningAnimations: animations.filter((animation) => animation.playState === "running").length,
-      petalAnimations: petalAnimations.length,
-      runningPetalAnimations: petalAnimations.filter((animation) => animation.playState === "running").length,
+      runningAnimations,
+      petalAnimations,
+      runningPetalAnimations,
     };
   } catch {
     return {
@@ -97,7 +106,7 @@ function useReaderFrameDiagnostics(enabled: boolean, surface: string | null) {
         };
         const serialized = JSON.stringify(visual);
         const establishedReader = Boolean(surface) && now - openedAt > 1_000;
-        recordReaderDiagnostic("visual-heartbeat", activeSurface, visual);
+        recordReaderVisualHeartbeat(activeSurface, visual);
         if (node !== priorNodeRef.current) {
           recordReaderDiagnostic(node ? "reader-node-mounted" : "reader-node-unmounted", activeSurface, visual);
           if (establishedReader && priorNodeRef.current && node) markReaderFlash(activeSurface, true);
@@ -223,15 +232,11 @@ export default function ReaderRenderDiagnosticsPanel({ surface }: { surface: str
     URL.revokeObjectURL(url);
   };
   const mark = () => {
-    recordReaderDiagnostic("flash-capture", surface ?? "none", diagnosticSnapshot());
-    markReaderFlash(surface ?? "none");
+    captureReaderFlash(surface ?? "none", diagnosticSnapshot());
     setSnapshot(getReaderDiagnosticBuffer().snapshot());
   };
   const reset = () => {
-    resetReaderDiagnosticBuffer();
-    recordReaderDiagnostic("trace-reset", surface ?? "none");
-    recordReaderDiagnostic("visual-baseline", surface ?? "none", diagnosticSnapshot());
-    persistReaderDiagnosticBuffer();
+    resetReaderTrace(surface ?? "none", diagnosticSnapshot());
     setSnapshot(getReaderDiagnosticBuffer().snapshot());
   };
 

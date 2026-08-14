@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { ReaderDiagnosticBuffer, readerDiagnosticEnabled } from "../app/reader-render-diagnostics.ts";
@@ -60,25 +59,20 @@ test("mark flash freezes the preceding rolling window until reset", () => {
 
 test("a reset trace accepts a fresh baseline before a later flash marker", () => {
   const buffer = new ReaderDiagnosticBuffer();
-  buffer.record({ at: 1, kind: "visual-heartbeat", surface: "past-attempt" });
-  buffer.reset();
-  buffer.record({ at: 2, kind: "trace-reset", surface: "past-attempt" });
-  buffer.record({ at: 2, kind: "visual-baseline", surface: "past-attempt", detail: { mounted: true } });
-  buffer.markFlash("past-attempt");
+  buffer.recordVisualHeartbeat("past-attempt", { mounted: true }, 1);
+  buffer.resetWithBaseline("past-attempt", { mounted: true, runningPetalAnimations: 0 }, 2);
+  buffer.captureFlash("past-attempt", { mounted: true, opacity: 1 }, false, 3);
 
   assert.deepEqual(buffer.snapshot().events.map((event) => event.kind), [
     "trace-reset",
     "visual-baseline",
+    "flash-capture",
     "flash-marker-manual",
   ]);
   assert.equal(buffer.snapshot().events[1].detail?.mounted, true);
-});
+  assert.equal(buffer.snapshot().events[2].detail?.opacity, 1);
+  assert.equal(buffer.snapshot().frozen, true);
 
-test("the browser recorder captures stable frames, reset baselines, and the marked instant", () => {
-  const source = readFileSync(new URL("../app/reader-render-diagnostics-panel.tsx", import.meta.url), "utf8");
-
-  assert.match(source, /recordReaderDiagnostic\("visual-heartbeat"/);
-  assert.match(source, /recordReaderDiagnostic\("visual-baseline"/);
-  assert.match(source, /recordReaderDiagnostic\("flash-capture"/);
-  assert.match(source, /const mark = \(\) => \{[\s\S]*recordReaderDiagnostic\("flash-capture"[\s\S]*markReaderFlash/);
+  buffer.recordVisualHeartbeat("past-attempt", { opacity: 0 }, 4);
+  assert.equal(buffer.snapshot().events.length, 4);
 });

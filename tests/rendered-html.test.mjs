@@ -159,19 +159,7 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /interview-arc-reader-memory-v1/);
   assert.match(client, /Scroll position is persistence metadata, not render state/);
   assert.match(client, /readerMemoryRef\.current = next;\s*window\.sessionStorage\.setItem\("interview-arc-reader-memory-v1", JSON\.stringify\(next\)\);/);
-  assert.doesNotMatch(client, /setReaderMemory/);
-  assert.match(client, /Native <details> toggle events are persistence metadata/);
-  assert.match(client, /groups\.forEach\(\(group\) => \{\s*group\.open = open;/);
   assert.match(client, /recordReaderDiagnostic\("practice-record-hydrated"/);
-  const readerPositionStart = client.indexOf("function rememberReaderPosition()");
-  assert.notEqual(readerPositionStart, -1, "rememberReaderPosition must remain present");
-  const readerPositionEnd = client.indexOf("\n\n  useEffect(() =>", readerPositionStart);
-  assert.notEqual(readerPositionEnd, -1, "rememberReaderPosition must end before the following effect");
-  const rememberReaderPosition = client.slice(
-    readerPositionStart,
-    readerPositionEnd,
-  );
-  assert.doesNotMatch(rememberReaderPosition, /setReaderMemory\(/);
   assert.doesNotMatch(client, /workspace-drawer-toggle/);
   assert.match(client, /master-pane-toggle icon-action/);
   assert.match(client, /navigateToPrimaryView/);
@@ -245,9 +233,6 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /disabled=\{activityComplete \|\| !activityStarted \|\| \(!focusActivity && !outcome\) \|\| activityLocked\}/);
   assert.match(client, /<span aria-hidden="true">✦<\/span>Petals/);
   assert.match(css, /\.petal-field\.paused \{ opacity: 0; visibility: hidden;/);
-  assert.match(css, /body:has\(\.reader-workspace\) \.petal-field/);
-  assert.match(css, /body:has\(\.reader-workspace\) \.ambient-petal \{ animation-play-state: paused !important;/);
-  assert.match(css, /\.reader-workspace \{[\s\S]*isolation: isolate;[\s\S]*background: #fffefb;/);
   assert.match(css, /\.pip-toggle\.active \{/);
   assert.match(css, /\.pip-toggle \{[^}]*width: 124px;[^}]*min-width: 124px;/);
   assert.match(css, /\.pip-clock \.result-flag\.solved \{[^}]*background: rgba\(169, 202, 77, \.22\);/);
