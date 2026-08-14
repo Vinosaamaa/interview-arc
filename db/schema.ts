@@ -505,9 +505,9 @@ export const leetcodeCodeAttemptReviewBackfills = sqliteTable(
   ],
 );
 
-// A specialist writes one ready bundle after flushing its draft. The
-// coordinator consumes this JSON payload to render versioned Markdown; writing
-// this row is finalization, not publication.
+// A specialist writes one semantic finalization bundle after flushing its
+// draft. Complete writes are not visible in Past until their exact immutable
+// Practice Record revision has been inserted and reread.
 export const activityFinalizations = sqliteTable(
   "activity_finalizations",
   {
@@ -519,9 +519,61 @@ export const activityFinalizations = sqliteTable(
     finalizedAt: integer("finalized_at"),
     publishedAt: integer("published_at"),
     revision: integer("revision").notNull().default(0),
+    finalizationOperationId: text("finalization_operation_id"),
+    finalizationRequestFingerprint: text("finalization_request_fingerprint"),
+    practiceRecordRevision: integer("practice_record_revision"),
+    practiceRecordFingerprint: text("practice_record_fingerprint"),
     updatedAt,
   },
   (table) => [primaryKey({ columns: [table.ownerId, table.activityId] })],
+);
+
+// One current pointer supports bounded Past listing. The immutable revision
+// row below owns the exact normalized Practice Record bytes and fingerprint.
+export const practiceRecords = sqliteTable(
+  "practice_records",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    currentRevision: integer("current_revision").notNull(),
+    specialty: text("specialty", { enum: ["leetcode", "system_design", "behavioral"] }).notNull(),
+    questionId: text("question_id").notNull(),
+    title: text("title").notNull(),
+    completedAt: integer("completed_at").notNull(),
+    practiceDate: text("practice_date").notNull(),
+    outcome: text("outcome", { enum: ["solved", "solved_after_reviewing_approach", "failed"] }),
+    solutionRevision: integer("solution_revision").notNull(),
+    recordFingerprint: text("record_fingerprint").notNull(),
+    finalizationOperationId: text("finalization_operation_id").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.activityId] }),
+    index("practice_records_owner_date_idx").on(
+      table.ownerId,
+      table.practiceDate,
+      table.completedAt,
+      table.activityId,
+    ),
+  ],
+);
+
+export const practiceRecordRevisions = sqliteTable(
+  "practice_record_revisions",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    revision: integer("revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    recordFingerprint: text("record_fingerprint").notNull(),
+    payload: text("payload", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.activityId, table.revision] }),
+    uniqueIndex("practice_record_revisions_operation_idx").on(table.ownerId, table.operationId),
+  ],
 );
 
 // Completed behavioral answers are append-only attempt evidence. A correction
@@ -2587,6 +2639,8 @@ export type VoiceResponseGroupRepairEventRow = typeof voiceResponseGroupRepairEv
 export type LeetCodeCodeAttemptRow = typeof leetcodeCodeAttempts.$inferSelect;
 export type LeetCodeCodeAttemptReviewBackfillRow = typeof leetcodeCodeAttemptReviewBackfills.$inferSelect;
 export type ActivityFinalizationRow = typeof activityFinalizations.$inferSelect;
+export type PracticeRecordRow = typeof practiceRecords.$inferSelect;
+export type PracticeRecordRevisionRow = typeof practiceRecordRevisions.$inferSelect;
 export type BehavioralFinalAnswerSnapshotRow = typeof behavioralFinalAnswerSnapshots.$inferSelect;
 export type ReviewScheduleRow = typeof reviewSchedules.$inferSelect;
 export type SpecialistTaskRow = typeof specialistTasks.$inferSelect;

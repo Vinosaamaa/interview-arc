@@ -324,6 +324,9 @@ request, mark an activity published, or deploy.
 Every complete bundle contains:
 
 - title and concise summary;
+- one exact `practiceRecord` sidecar containing the self-contained prompt,
+  material response-stage classifications, separated owner response/Mentor
+  guidance/adopted understanding, exact turn IDs, and supported next drill;
 - transcript scope;
 - what the user did well;
 - what to improve;
@@ -391,6 +394,13 @@ Its completeness policy is a mutation gate, not optional coaching guidance.
 The specialist must correct every reported missing requirement before marking a
 finalization complete; the coordinator must leave the activity blocked rather
 than invent or compress missing profile content.
+
+The durable finalization job is `saved` only after its owner-scoped immutable
+Practice Record revision, request fingerprint, record fingerprint, current
+pointer, and completion-time Solution Profile link are reread exactly. Missing
+activity metadata, finished timing, explicit outcome, prompt, semantic sidecar,
+or solution link fails before the record becomes visible in Past. Exact retries
+reuse the same bytes and revision; changed retries conflict.
 
 System-design and behavioral bundles use `transcript_scope: full_activity` and
 include the complete two-sided activity transcript. LeetCode uses

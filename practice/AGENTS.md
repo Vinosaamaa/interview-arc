@@ -87,6 +87,26 @@ with `scope: turn_override`, its exact specialist response-turn ID, the current
 unchanged revision, and the triggering owner turn when available. Read back the
 override; never fabricate a switch-away/switch-back pair.
 
+## Finish Packet
+
+At Finish, freeze one exact semantic packet before returning. Give its verified
+facts and source summaries to the bounded authoring child; give only the
+child's completed bytes and stable identities to the mechanical persistence
+child. `save_specialist_finalization` must include:
+
+- the self-contained problem/prompt body and canonical URL when available;
+- the evidence-grounded summary, review, references, and complete Solution
+  Profile decision/content;
+- each material response stage as `answered`, `partially_answered`,
+  `no_answer_provided`, or `needs_correction`, keeping owner response, Mentor
+  guidance, adopted understanding, and exact turn IDs distinct;
+- the next drill, or explicit null when none is supported.
+
+Do not infer a missing response, prompt, outcome, timing, code, answer, or
+drawing. A complete packet is durably queued before the visible parent returns;
+Past remains `Finalization pending` until immutable D1/R2 write and exact
+readback succeed.
+
 ## Solution Profile Quality Gate
 
 Every new or revised Solution Profile is a complete durable reference, not a

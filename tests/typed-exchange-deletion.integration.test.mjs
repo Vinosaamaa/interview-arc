@@ -100,13 +100,19 @@ const fixtureSql = (ownerTokenHash, otherTokenHash) => `
   VALUES ('owner-typed-delete','workbench-typed-delete','open','2026-08-09',1,NULL,1);
   INSERT INTO extra_activities
     (owner_id,id,date,workbench_id,payload,revision,updated_at)
-  VALUES ('owner-typed-delete','activity-delete','2026-08-09','workbench-typed-delete','{"id":"activity-delete","type":"leetcode","title":"Deletion fixture","source":"extra","targetMinutes":40}',0,1);
+  VALUES
+    ('owner-typed-delete','activity-delete','2026-08-09','workbench-typed-delete','{"id":"activity-delete","type":"leetcode","title":"Deletion fixture","source":"extra","targetMinutes":40}',0,1),
+    ('owner-typed-delete','activity-finalize-race','2026-08-09','workbench-typed-delete','{"schemaVersion":2,"id":"activity-finalize-race","questionId":"finalization-race-question","date":"2026-08-09","source":"extra","type":"systemDesign","title":"Finalization race fixture","timingSource":"website","status":"completed"}',1,900);
   INSERT INTO timers
     (owner_id,subject_id,kind,accumulated_seconds,started_at,running_since,completed,completed_at,revision,updated_at)
-  VALUES ('owner-typed-delete','activity-delete','activity',123,10,NULL,0,NULL,4,500);
+  VALUES
+    ('owner-typed-delete','activity-delete','activity',123,10,NULL,0,NULL,4,500),
+    ('owner-typed-delete','activity-finalize-race','activity',500,100,NULL,1,900,2,900);
   INSERT INTO outcomes
     (owner_id,activity_id,outcome,revision,updated_at)
-  VALUES ('owner-typed-delete','activity-delete','failed',2,500);
+  VALUES
+    ('owner-typed-delete','activity-delete','failed',2,500),
+    ('owner-typed-delete','activity-finalize-race','solved_after_reviewing_approach',1,900);
   INSERT INTO practice_notes
     (owner_id,id,activity_id,date,body,kind,pinned,created_at,updated_at)
   VALUES ('owner-typed-delete','note-delete','activity-delete','2026-08-09','Keep this note.','remember',1,400,400);
@@ -545,6 +551,7 @@ test("typed exchange deletion is exact, atomic, owner-scoped, and identity-idemp
       finalization: {
         title: "Finalization race fixture",
         complete: true,
+        summary: "The exact typed exchange was removed before finalization, so the immutable record preserves an empty conversation without reconstructing it.",
         transcriptScope: "activity_exchanges",
         review: { didWell: ["Preserved the intended evidence."], improve: [] },
         modelAnswer: "A durable model answer.",
@@ -558,6 +565,18 @@ test("typed exchange deletion is exact, atomic, owner-scoped, and identity-idemp
         },
         solutionProfileAction: "create_or_revise",
         solutionProfile: completeSystemDesignProfile(),
+        practiceRecord: {
+          prompt: { body: "Design a deletion-safe finalization boundary.", canonicalUrl: null },
+          responseStages: [{
+            key: "deleted_exchange",
+            state: "no_answer_provided",
+            ownerResponse: null,
+            mentorGuidance: null,
+            finalUnderstanding: null,
+            turnIds: [],
+          }],
+          nextDrill: "Explain why deletion and finalization must share an evidence fence.",
+        },
       },
     });
     assert.equal(finalizationAfterDeletion.status, "ready");
