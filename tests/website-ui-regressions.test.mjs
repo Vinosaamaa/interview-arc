@@ -372,6 +372,16 @@ test("Past, Banks, and Journey share a centered bounded scrollable reader shell"
     assert.equal(shell.left, "calc(var(--sidebar-size) + (100vw - var(--sidebar-size)) / 2)");
     assert.equal(shell.transform, "translateX(-50%)");
   }
+  const multiPaneShell = cssRules(rules, ".library-page.has-open-entry .past-master-detail")
+    .find((rule) => rule.declarations.background === "transparent")?.declarations;
+  const multiPaneBankShell = cssRules(rules, ".banks-page.has-open-solution .bank-master-detail")
+    .find((rule) => rule.declarations.background === "transparent")?.declarations;
+  for (const shell of [multiPaneShell, multiPaneBankShell]) {
+    assert.ok(shell, "the outer multi-pane frame must not paint through its rounded child corners");
+    assert.equal(shell.background, "transparent");
+    assert.equal(shell["border-radius"], "0");
+    assert.equal(shell.overflow, "visible");
+  }
   for (const frame of ["from", "to"]) {
     const declarations = cssRules(rules, frame, "@keyframes master-detail-in")[0]?.declarations;
     assert.ok(declarations, `master-detail-in ${frame} frame is required`);
@@ -489,6 +499,60 @@ test("Engineering exposes exact provenance, durable navigation memory, and compl
   assert.match(source, /statistics\.byRepository/);
   assert.match(source, /statistics\.byCapability/);
   assert.match(source, /onNavigateView\("journal"\)/);
+});
+
+test("Engineering Journal is a persistent three-panel evidence workbench", async () => {
+  const source = await load("../app/engineering-workspace.tsx");
+  const styles = await load("../app/engineering-workspace.css");
+  const rules = parseCss(styles);
+  assert.match(source, /engineering-index-panel/);
+  assert.match(source, /engineering-record-panel/);
+  assert.match(source, /engineering-evidence-panel/);
+  assert.match(source, /engineering-contents-nav/);
+  assert.match(source, /indexCollapsed/);
+  assert.match(source, /evidenceOpen/);
+  assert.match(source, /indexScrollTop/);
+  assert.match(source, /aria-label="Collapse Journal index"/);
+  assert.match(source, /aria-label="Open evidence and lineage"/);
+  assert.match(styles, /grid-template-columns:\s*minmax\(270px, 300px\) minmax\(0, 1fr\) minmax\(250px, 280px\)/);
+  assert.match(styles, /gap:\s*20px/);
+  assert.match(styles, /\.active-workspace-engineering \.page-content \{ width: 100%; max-width: none; padding-inline: 24px; \}/);
+  assert.match(styles, /height:\s*max\(180px, calc\(100dvh - 244px\)\)/);
+  assert.match(source, /matchMedia\("\(max-width: 1320px\)"\)/);
+  assert.match(source, /typeof parsed\.evidenceOpen === "boolean" \? parsed\.evidenceOpen : undefined/);
+  assert.match(styles, /\.engineering-search \.sr-only/);
+  assert.match(styles, /\.engineering-record-panel \.engineering-facts \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
+  assert.match(styles, /\.engineering-workspace\.index-collapsed/);
+  assert.match(styles, /@media \(max-width: 1320px\)/);
+  assert.match(styles, /@media \(max-width: 760px\)/);
+  assert.equal((styles.match(/^\.engineering-workspace \{/gm) ?? []).length, 1, "the Engineering workbench must have one authoritative base rule");
+  assert.equal((styles.match(/^@media \(max-width: 760px\) \{/gm) ?? []).length, 1, "mobile workbench behavior must stay in one breakpoint block");
+  assert.equal(cssRules(rules, ".engineering-contents-nav")[0]?.declarations["backdrop-filter"], undefined);
+  assert.equal(cssRules(rules, ".engineering-evidence-panel > header")[0]?.declarations["backdrop-filter"], undefined);
+  assert.match(source, /const receiptByRef = useMemo/);
+  assert.match(source, /\.map\(\(ref\) => receiptByRef\.get\(ref\)\)/);
+  assert.match(source, /const indexScrollTopRef = useRef\(0\)/);
+  assert.match(source, /scrollPersistTimerRef/);
+  assert.doesNotMatch(source, /setIndexScrollTop/);
+});
+
+test("workspace atmosphere is persistent, bounded, and reader-safe", async () => {
+  const home = await load("../app/home-client.tsx");
+  const atmosphere = await load("../app/arrival-ritual.tsx");
+  const globalStyles = await load("../app/globals.css");
+  const globalRules = parseCss(globalStyles);
+  const readerStyles = await load("../app/interview-arc-v2.css");
+  assert.match(home, /interview-arc-atmosphere-v1/);
+  assert.match(home, /interview-arc-petals-paused/);
+  assert.match(home, /!atmosphereReady \? "off"/);
+  assert.match(home, /activeWorkspace === "engineering" \? "rain" : "petals"/);
+  assert.match(home, /<AtmosphereField[^>]*mode=\{atmosphereMode\}/);
+  assert.match(atmosphere, /Array\.from\(\{ length: 40 \}/);
+  assert.match(atmosphere, /visibilitychange/);
+  assert.match(globalStyles, /\.ambient-rain-drop/);
+  assert.match(globalStyles, /prefers-reduced-motion: reduce/);
+  assert.equal(cssRules(globalRules, ".ambient-rain-drop")[0]?.declarations["will-change"], undefined);
+  assert.match(readerStyles, /body:has\(\.reader-workspace\) \.ambient-rain-drop/);
 });
 
 test("Engineering keeps the complete PR timeline separate from rich records", async () => {
@@ -747,4 +811,7 @@ test("an open reader owns an opaque paint layer and suspends ambient petals", as
   assert.equal(petals?.["animation-play-state"], "paused !important");
   assert.equal(reader?.isolation, "isolate");
   assert.equal(reader?.background, "#fffefb");
+  assert.equal(reader?.["border-radius"], "14px");
+  assert.equal(reader?.overflow, "hidden");
+  assert.equal(cssRules(rules, ".reader-outline .toc-parent")[0]?.declarations["font-weight"], "inherit");
 });
