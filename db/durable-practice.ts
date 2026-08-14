@@ -156,7 +156,7 @@ import {
   readCurrentPracticeRecord,
   type PracticeRecordSemanticInput,
 } from "./practice-records";
-import type { PreparedPracticeAsset } from "./practice-assets";
+import { readPracticeAssetRevision, type PreparedPracticeAsset } from "./practice-assets";
 
 export type Specialty = "leetcode" | "system_design" | "behavioral";
 export type SpecialistTaskType = Specialty | "loop_recorder" | "learning_specialist" | "resume_cover_letter";
@@ -5676,6 +5676,22 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
   const resumeContext = finalAnswer?.source === "snapshot_v1"
     ? resumeContextHistory.find((context) => context.snapshotRevision === finalAnswer.snapshotRevision) ?? null
     : null;
+  const practiceAssets = practiceRecord ? await Promise.all(practiceRecord.payload.assetLinks.map(async (link) => {
+    const asset = await readPracticeAssetRevision(ownerId, link.assetId, link.revision);
+    if (!asset || asset.activityId !== activityId || asset.role !== link.role) {
+      throw new Error("The immutable Practice Record asset link failed exact owner-scoped readback.");
+    }
+    return {
+      assetId: asset.assetId,
+      revision: asset.revision,
+      role: asset.role,
+      mimeType: asset.mimeType,
+      sha256: asset.sha256,
+      byteSize: asset.byteSize,
+      altText: asset.altText,
+      authorship: asset.authorship,
+    };
+  })) : [];
   let transitionIndex = 0;
   const modeOverrideByTurn = new Map(modeTurnOverrides.map((override) => [
     override.responseTurnId,
@@ -5752,6 +5768,7 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
     deliveryAnalyses,
     codeAttempts,
     practiceRecord,
+    practiceAssets,
     projectDeepDiveLink: projectLinks[0] ?? null,
   };
 }

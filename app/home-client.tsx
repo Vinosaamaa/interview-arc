@@ -88,6 +88,7 @@ import {
   nextBankVisibleCount,
 } from "./bank-navigation-performance";
 import { isPastAttemptArtifact } from "./past-artifact-policy";
+import { orderedPracticeRecordSections, practiceRecordTechnicalAudit } from "./practice-record-reader";
 import BehavioralFoundation from "./behavioral-foundation";
 import BehavioralTargetBindings from "./behavioral-target-bindings";
 import BehavioralTargetDesk from "./behavioral-target-desk";
@@ -130,6 +131,7 @@ import type { BehavioralPracticeScenarioProjection } from "../db/behavioral-prac
 import type { BehavioralAttemptAnalysisProjection } from "../db/behavioral-attempt-analysis";
 import type { ActivityResumeContext } from "../db/activity-resume-context";
 import type { InteractionModeClassification } from "../db/interaction-mode-classification";
+import type { PracticeRecordWriteReceipt } from "../db/practice-records";
 
 type InterviewView = "today" | "loops" | "journey" | "reviews" | "library" | "banks" | "materials";
 type View = InterviewView | "learn";
@@ -322,6 +324,17 @@ type LogEntry = {
     classification: InteractionModeClassification;
   } | null;
   interactionModeTransitions?: InteractionModeTransitionProjection[];
+  practiceRecord?: PracticeRecordWriteReceipt | null;
+  practiceAssets?: Array<{
+    assetId: string;
+    revision: number;
+    role: string;
+    mimeType: string;
+    sha256: string;
+    byteSize: number;
+    altText: string;
+    authorship: "owner";
+  }>;
 };
 
 const EMPTY_COMPOSER: ComposerState = {
@@ -1250,12 +1263,14 @@ function ActivityTranscript({
   deliveryAnalyses,
   codeAttempts,
   modeTransitions = [],
+  renderCodeAttempts = true,
 }: {
   turns: TranscriptTurn[];
   clips: AudioClip[];
   deliveryAnalyses: DeliveryAnalysis[];
   codeAttempts: LeetCodeCodeAttempt[];
   modeTransitions?: InteractionModeTransitionProjection[];
+  renderCodeAttempts?: boolean;
 }) {
   const groups = useMemo(() => groupTranscriptTurns(turns), [turns]);
   const groupOccurredAt = (group: (typeof groups)[number]) => (
@@ -1295,7 +1310,7 @@ function ActivityTranscript({
             {turn.speaker === "user" && answerClips.length > 0 && <GroupedAnswerPlayback clips={answerClips} deliveryAnalyses={deliveryAnalyses} />}
             <article aria-label={turn.speaker === "specialist" && modeId ? `Specialist response in ${modeId} mode` : undefined}>
               <header><span>{turn.speaker === "specialist" ? "Specialist" : "Your answer"}{turn.speaker === "specialist" && turn.interactionMode?.turnOverride ? <small className="mode-turn-override-note">One-turn {turn.interactionMode.interactionModeId.replaceAll("_", " ")} override</small> : null}</span><time>{formatPracticeTimestamp(new Date(turn.occurredAt).toISOString())}</time></header>
-              {turnCodeAttempts.map((attempt) => <details className="code-attempt-card compact" key={attempt.id}><summary><strong>Code Attempt {attempt.sequence} · {attempt.language} · {attempt.lineCount} lines</strong><span>Expand code</span></summary><CodeAttemptBody attempt={attempt} /></details>)}
+              {renderCodeAttempts && turnCodeAttempts.map((attempt) => <details className="code-attempt-card compact" key={attempt.id}><summary><strong>Code Attempt {attempt.sequence} · {attempt.language} · {attempt.lineCount} lines</strong><span>Expand code</span></summary><CodeAttemptBody attempt={attempt} /></details>)}
               {transcriptBody.trim() && <MarkdownBody source={transcriptBody} />}
             </article>
           </div></Fragment>;
@@ -1303,6 +1318,72 @@ function ActivityTranscript({
       </div>
     </section>
   );
+}
+
+type PracticeRecordResponseStage = PracticeRecordWriteReceipt["payload"]["specialtyOutput"]["responseStages"][number];
+
+function PracticeRecordResponseStages({ stages }: { stages: PracticeRecordResponseStage[] }) {
+  if (!stages.length) return null;
+  return <div className="practice-response-stages">{stages.map((stage) => <article key={stage.key}>
+    <header><strong>{stage.key.replaceAll("_", " ")}</strong><span>{stage.state.replaceAll("_", " ")}</span></header>
+    {stage.ownerResponse ? <section><h4>Your response</h4><MarkdownBody source={stage.ownerResponse} /></section> : <section className="no-owner-answer"><h4>Your response</h4><p>No owner answer was provided for this stage.</p></section>}
+    {stage.mentorGuidance && <section><h4>Mentor guidance</h4><MarkdownBody source={stage.mentorGuidance} /></section>}
+    {stage.finalUnderstanding && <section><h4>Final understanding</h4><MarkdownBody source={stage.finalUnderstanding} /></section>}
+  </article>)}</div>;
+}
+
+function PracticeRecordProblem({ record }: { record: PracticeRecordWriteReceipt }) {
+  return <section className="practice-record-section" id="case-problem"><h3>Problem</h3><h4>{record.payload.prompt.title}</h4><MarkdownBody source={record.payload.prompt.body} />{record.payload.prompt.canonicalUrl && <a href={record.payload.prompt.canonicalUrl} target="_blank" rel="noreferrer">Open canonical problem ↗</a>}</section>;
+}
+
+function PracticeRecordSummary({ record }: { record: PracticeRecordWriteReceipt }) {
+  return <section className="practice-record-section" id="case-attempt-summary"><h3>Attempt Summary</h3><MarkdownBody source={record.payload.summary} /></section>;
+}
+
+function PracticeRecordReview({ record }: { record: PracticeRecordWriteReceipt }) {
+  const { review } = record.payload;
+  return <details className="reader-group activity-review-group" id="case-activity-review" open><summary><span>Activity Review</span><small>What worked · improve · next drill</small></summary><div className="practice-record-review"><section><h4>What worked</h4>{review.didWell.length ? <ul>{review.didWell.map((item) => <li key={item}>{item}</li>)}</ul> : <p>None recorded.</p>}</section><section><h4>Improve</h4>{review.improve.length ? <ul>{review.improve.map((item) => <li key={item}>{item}</li>)}</ul> : <p>None recorded.</p>}</section>{review.nextDrill && <section><h4>Next drill</h4><p>{review.nextDrill}</p></section>}</div></details>;
+}
+
+function PracticeRecordAssets({ assets }: { assets: NonNullable<LogEntry["practiceAssets"]> }) {
+  if (!assets.length) return null;
+  const preview = assets.find((asset) => asset.role === "attempt_original_svg")
+    ?? assets.find((asset) => asset.role === "attempt_original_png");
+  return <section className="practice-record-assets" aria-label="Owner-authored design assets">
+    {preview && <figure><object data={`/practice-assets/files/${encodeURIComponent(preview.assetId)}/${preview.revision}`} type={preview.mimeType} aria-label={preview.altText}><a href={`/practice-assets/files/${encodeURIComponent(preview.assetId)}/${preview.revision}`}>Open design preview</a></object><figcaption>{preview.altText}</figcaption></figure>}
+    <div>{assets.map((asset) => <a href={`/practice-assets/files/${encodeURIComponent(asset.assetId)}/${asset.revision}`} key={`${asset.assetId}:${asset.revision}`} download={asset.role === "attempt_original_excalidraw" ? "attempt.excalidraw" : undefined}>{asset.role === "attempt_original_excalidraw" ? "Download editable original" : `Open ${asset.role.replaceAll("_", " ")}`} · revision {asset.revision}</a>)}</div>
+  </section>;
+}
+
+function PracticeRecordTechnicalAudit({ record }: { record: PracticeRecordWriteReceipt }) {
+  const audit = practiceRecordTechnicalAudit(record);
+  return <details className="reader-group technical-audit-group" id="case-technical-audit"><summary><span>Technical Audit</span><small>Exact immutable revisions and provenance</small></summary><dl>
+    <div><dt>Practice Record</dt><dd>Revision {audit.practiceRecordRevision}</dd></div>
+    <div><dt>Record fingerprint</dt><dd><code>{audit.fingerprint}</code></dd></div>
+    <div><dt>Transcript</dt><dd>Revision {audit.transcriptRevision} · {audit.transcriptTurnCount} turns</dd></div>
+    <div><dt>Transcript bounds</dt><dd><code>{audit.firstTurnId ?? "none"}</code> → <code>{audit.lastTurnId ?? "none"}</code></dd></div>
+    <div><dt>Notes</dt><dd>{audit.notesRevision === null ? "No linked note revision" : `Revision ${audit.notesRevision}`}</dd></div>
+    <div><dt>Solution at completion</dt><dd>Revision {audit.solutionRevisionAtCompletion}</dd></div>
+    <div><dt>Code attempts</dt><dd>{audit.codeAttemptCount}</dd></div>
+    <div><dt>Assets</dt><dd>{audit.assetCount}</dd></div>
+    <div><dt>References</dt><dd>{audit.referenceCount}</dd></div>
+    <div><dt>Finalization operation</dt><dd><code>{audit.finalizationOperationId}</code></dd></div>
+    <div><dt>Created</dt><dd>{formatPracticeTimestamp(new Date(audit.createdAt).toISOString())}</dd></div>
+  </dl></details>;
+}
+
+function PracticeRecordOutlineLinks({ sections }: { sections: ReturnType<typeof orderedPracticeRecordSections> }) {
+  const links: Record<(typeof sections)[number], [string, string]> = {
+    problem: ["#case-problem", "Problem"],
+    attempt_summary: ["#case-attempt-summary", "Attempt Summary"],
+    conversation: ["#case-transcript", "Conversation"],
+    code_attempts: ["#case-code-attempts", "Code Attempts"],
+    final_answer: ["#case-final-answer", "Final Tailored Answer"],
+    your_design: ["#case-your-design", "Your Design"],
+    activity_review: ["#case-activity-review", "Activity Review"],
+    technical_audit: ["#case-technical-audit", "Technical Audit"],
+  };
+  return <>{sections.map((section) => <a href={links[section][0]} key={section}>{links[section][1]}</a>)}</>;
 }
 
 function FinalAnswerCard({ finalAnswer }: { finalAnswer: BehavioralFinalAnswerProjection }) {
@@ -1789,6 +1870,10 @@ export default function HomeClient({ content, today, engineering }: { content: C
   const [pastReaderOrderIds, setPastReaderOrderIds] = useState<string[]>([]);
   const [reviewReaderOrderIds, setReviewReaderOrderIds] = useState<string[]>([]);
   const [readerNotFound, setReaderNotFound] = useState("");
+  const [practiceRecordReadState, setPracticeRecordReadState] = useState<{
+    activityId: string;
+    status: "loading" | "loaded" | "error";
+  } | null>(null);
   const [chartTooltip, setChartTooltip] = useState<ChartTooltipModel | null>(null);
   const workspaceUrlHydratedRef = useRef(false);
   const restoreWorkspaceLocationRef = useRef<() => void>(() => {});
@@ -6142,6 +6227,17 @@ export default function HomeClient({ content, today, engineering }: { content: C
   const selectedEntryPracticeScenarios = readerSelectedEntry?.practiceScenarios ?? null;
   const selectedEntryBehavioralAnalysis = readerSelectedEntry?.behavioralAnalysis ?? null;
   const selectedEntryResumeContext = readerSelectedEntry?.resumeContext ?? null;
+  const selectedEntryPracticeRecord = readerSelectedEntry?.practiceRecord ?? null;
+  const selectedEntryPracticeAssets = readerSelectedEntry?.practiceAssets ?? [];
+  const selectedEntryPracticeRecordSections = selectedEntryPracticeRecord ? orderedPracticeRecordSections(selectedEntryPracticeRecord.payload, {
+    hasConversation: selectedEntryTurns.length > 0,
+    hasCodeAttempts: selectedEntryCodeAttempts.length > 0,
+    hasFinalAnswer: Boolean(selectedEntryFinalAnswer),
+    hasDesign: selectedEntryPracticeRecord.payload.specialtyOutput.responseStages.length > 0 || selectedEntryPracticeAssets.length > 0,
+  }) : [];
+  const selectedEntryPracticeRecordReadStatus = practiceRecordReadState?.activityId === selectedEntryActivityId
+    ? practiceRecordReadState.status
+    : selectedEntryActivityId ? "loading" : "loaded";
   const selectedCaseSections = dedupeReaderSections(readerSelectedEntry?.artifact?.sections.filter((section) => !(selectedEntryTurns.length && isTranscriptSection(section.title))) ?? []);
   const selectedCaseGroups = groupReaderSections(selectedCaseSections);
   const selectedSolutionGroups = groupReaderSections(selectedProblemProfileReusable ? selectedProblemProfile?.payload.sections ?? [] : []);
@@ -6512,20 +6608,24 @@ export default function HomeClient({ content, today, engineering }: { content: C
         resumeContext: ActivityResumeContext | null;
         interactionModeClassification: LogEntry["interactionModeClassification"];
         interactionModeTransitions: InteractionModeTransitionProjection[];
+        practiceRecord: PracticeRecordWriteReceipt | null;
+        practiceAssets: NonNullable<LogEntry["practiceAssets"]>;
       }> : null)
       .then((record) => {
-        if (!record) return;
+        if (!record) throw new Error("The practice record could not be read.");
         const enrich = (current: LogEntry | null) => current && (current.artifact?.activityId || current.id) === selectedEntryActivityId
-          ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips, deliveryAnalyses: record.deliveryAnalyses, codeAttempts: record.codeAttempts, finalAnswer: record.finalAnswer, practiceScenarios: record.practiceScenarios, behavioralAnalysis: record.behavioralAnalysis, resumeContext: record.resumeContext, interactionModeClassification: record.interactionModeClassification, interactionModeTransitions: record.interactionModeTransitions }
+          ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips, deliveryAnalyses: record.deliveryAnalyses, codeAttempts: record.codeAttempts, finalAnswer: record.finalAnswer, practiceScenarios: record.practiceScenarios, behavioralAnalysis: record.behavioralAnalysis, resumeContext: record.resumeContext, interactionModeClassification: record.interactionModeClassification, interactionModeTransitions: record.interactionModeTransitions, practiceRecord: record.practiceRecord, practiceAssets: record.practiceAssets }
           : current;
         if (view === "banks") setBankNestedEntry(enrich);
         else if (view === "journey") setJourneyNestedEntry(enrich);
         else if (view === "reviews") setReviewNestedEntry(enrich);
         else setSelectedEntry(enrich);
+        setPracticeRecordReadState({ activityId: selectedEntryActivityId, status: "loaded" });
       })
       .catch((error: unknown) => {
         if (!(error instanceof DOMException && error.name === "AbortError")) {
           console.error("Unable to load the practice transcript.");
+          setPracticeRecordReadState({ activityId: selectedEntryActivityId, status: "error" });
         }
       });
     return () => controller.abort();
@@ -6760,10 +6860,20 @@ export default function HomeClient({ content, today, engineering }: { content: C
   function renderCaseReader() {
     const selectedEntry = readerSelectedEntry;
     if (!selectedEntry) return null;
+    const immutableSections = selectedEntryPracticeRecord ? selectedEntryPracticeRecordSections.map((section) => {
+      if (section === "problem") return <PracticeRecordProblem record={selectedEntryPracticeRecord} key={section} />;
+      if (section === "attempt_summary") return <PracticeRecordSummary record={selectedEntryPracticeRecord} key={section} />;
+      if (section === "conversation") return <details className="reader-group conversation-group" id="case-transcript" open={readerGroupOpen("case-transcript", true)} onToggle={(event) => rememberReaderGroup("case-transcript", event.currentTarget.open)} key={section}><summary><span>Conversation</span><small>{selectedEntryTurns.length} exchange{selectedEntryTurns.length === 1 ? "" : "s"} · recordings and coaching inline</small></summary><div id="case-transcript-thread">{selectedEntryTurns.length ? <ActivityTranscript turns={selectedEntryTurns} clips={selectedEntryClips} deliveryAnalyses={selectedEntryDeliveryAnalyses} codeAttempts={selectedEntryCodeAttempts} modeTransitions={selectedEntryModeTransitions} renderCodeAttempts={false} /> : <p className="practice-record-integrity-error" role="alert">This immutable record references {selectedEntryPracticeRecord.payload.transcript.turnCount} transcript turns, but none were returned. Reload the record before relying on it.</p>}</div></details>;
+      if (section === "code_attempts") return <details className="reader-group code-attempts-group" id="case-code-attempts" open={readerGroupOpen("case-code-attempts", true)} onToggle={(event) => rememberReaderGroup("case-code-attempts", event.currentTarget.open)} key={section}><summary><span>Code Attempts</span><small>{selectedEntryCodeAttempts.length} exact owner submission{selectedEntryCodeAttempts.length === 1 ? "" : "s"}</small></summary><div>{selectedEntryCodeAttempts.length ? selectedEntryCodeAttempts.map((attempt) => <article className="code-attempt-card" key={attempt.id}><header><strong>Code Attempt {attempt.sequence} · {attempt.language}</strong><span>{attempt.lineCount} lines</span></header><CodeAttemptBody attempt={attempt} /></article>) : <p className="practice-record-integrity-error" role="alert">No authoritative owner code submission is linked to this attempt. The reader will not substitute reference code.</p>}</div></details>;
+      if (section === "final_answer") return <details className="reader-group final-answer-group" id="case-final-answer" open={readerGroupOpen("case-final-answer", true)} onToggle={(event) => rememberReaderGroup("case-final-answer", event.currentTarget.open)} key={section}><summary><span>Final Tailored Answer</span><small>Exact completion snapshot</small></summary><div><PracticeRecordResponseStages stages={selectedEntryPracticeRecord.payload.specialtyOutput.responseStages} />{selectedEntryFinalAnswer ? <FinalAnswerCard finalAnswer={selectedEntryFinalAnswer} /> : <p className="practice-record-integrity-error" role="alert">The immutable record references a final answer that is not available. Reload the record before relying on it.</p>}</div></details>;
+      if (section === "your_design") return <details className="reader-group your-design-group" id="case-your-design" open={readerGroupOpen("case-your-design", true)} onToggle={(event) => rememberReaderGroup("case-your-design", event.currentTarget.open)} key={section}><summary><span>Your Design</span><small>Owner decisions and original drawing</small></summary><div><PracticeRecordResponseStages stages={selectedEntryPracticeRecord.payload.specialtyOutput.responseStages} /><PracticeRecordAssets assets={selectedEntryPracticeAssets} /></div></details>;
+      if (section === "activity_review") return <PracticeRecordReview record={selectedEntryPracticeRecord} key={section} />;
+      return <PracticeRecordTechnicalAudit record={selectedEntryPracticeRecord} key={section} />;
+    }) : null;
     return (
       <article className={`workspace-reader journal-case-reader ${nestedReaderFocus ? "nested-reader" : ""}`} aria-labelledby="journal-reader-title" aria-label="Case file contents">
         <div className="reader-chrome">
-          <div className="reader-chrome-leading">{!nestedReaderFocus && <button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button>}<ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <div className="toc-group"><a className="toc-parent" href="#case-transcript">Conversation</a><a className="toc-child" href="#case-transcript-thread">Transcript and recordings</a></div>}{selectedEntryFinalAnswer && <a href="#case-final-answer">Final tailored answer</a>}{selectedEntryResumeContext && <a href="#case-resume-context">Resume context</a>}{selectedEntryPracticeScenarios && <a href="#case-practice-scenarios">Practice scenarios</a>}{selectedEntryBehavioralAnalysis && <a href="#case-behavioral-analysis">Behavioral Attempt</a>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}</ReaderOutline></div>
+          <div className="reader-chrome-leading">{!nestedReaderFocus && <button type="button" className={`master-pane-toggle icon-action ${masterPaneOpen ? "active" : ""}`} onClick={toggleMasterPane} aria-expanded={masterPaneOpen} aria-label={masterPaneOpen ? "Hide problem list" : "Show problem list"} title={masterPaneOpen ? "Hide problem list" : "Show problem list"}><Icon name="sidebar" /></button>}<ReaderOutline><a href="#case-summary">Overview</a>{Boolean(selectedEntry.personalNote?.trim() || selectedEntry.pinnedNotes?.length) && <a href="#case-notes">Notes</a>}<a href="#case-facts">Timeline</a>{selectedEntryPracticeRecord ? <PracticeRecordOutlineLinks sections={selectedEntryPracticeRecordSections} /> : <>{selectedCaseGroups.filter((group) => group.key === "record").map((group) => <div className="toc-group" key={group.key}><a className="toc-parent" href={`#case-group-${group.key}`}>{group.title}</a>{group.sections.map((section, index) => <a className="toc-child" key={`${section.title}-${index}`} href={`#case-${slugify(section.title)}-${index}`}>{section.title}</a>)}</div>)}{selectedEntryTurns.length > 0 && <a href="#case-transcript">Conversation</a>}{selectedEntryFinalAnswer && <a href="#case-final-answer">Final tailored answer</a>}{selectedCaseGroups.filter((group) => group.key !== "record").map((group) => <a href={`#case-group-${group.key}`} key={group.key}>{group.title}</a>)}</>}</ReaderOutline></div>
           <div className="reader-chrome-actions">{readerNavigationIndex >= 0 && <div className="reader-attempt-navigation" aria-label="Past practice records"><button type="button" onClick={() => navigateReaderEntry(readerNavigationEntries[readerNavigationIndex - 1])} disabled={readerNavigationIndex <= 0} aria-label="Previous practice record" title={readerNavigationIndex <= 0 ? "First record in this list" : "Previous practice record"}>←</button><span>{readerNavigationIndex + 1} / {readerNavigationEntries.length}</span><button type="button" onClick={() => navigateReaderEntry(readerNavigationEntries[readerNavigationIndex + 1])} disabled={readerNavigationIndex >= readerNavigationEntries.length - 1} aria-label="Next practice record" title={readerNavigationIndex >= readerNavigationEntries.length - 1 ? "Last record in this list" : "Next practice record"}>→</button></div>}<button className="icon-action" onClick={() => setEveryReaderGroup(false)} aria-label="Collapse all sections" title="Collapse all"><Icon name="minus" /></button><button className="icon-action" onClick={() => setEveryReaderGroup(true)} aria-label="Expand all sections" title="Expand all"><Icon name="plus" /></button><button className="reader-close icon-action" onClick={closeReaderPanel} aria-label="Close case file" title="Close"><Icon name="close" /></button></div>
         </div>
         <div className="case-document workspace-reader-scroll" ref={readerDocumentRef} onScroll={rememberReaderPosition} onMouseUp={(event) => captureHighlightSelection(event.clientX, event.clientY)} onKeyUp={() => captureHighlightSelection()}>
@@ -6772,7 +6882,9 @@ export default function HomeClient({ content, today, engineering }: { content: C
           {noteComposerOpen && <form className="case-note-composer" onSubmit={(event) => { event.preventDefault(); void saveCaseNote(); }}><label htmlFor="case-note">{editingNoteId ? "Edit note" : "Add a note"}</label><textarea id="case-note" autoFocus value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} placeholder="A concise reminder, mistake, or pattern to keep visible…" /><div><button type="button" onClick={() => { setNoteComposerOpen(false); setEditingNoteId(""); setNoteDraft(""); }}>Cancel</button><button type="submit" disabled={noteBusy || !noteDraft.trim()}>{noteBusy ? "Saving…" : "Save note"}</button></div></form>}
           <div className="letter-facts" id="case-facts"><div><span>Status</span><strong>{selectedEntry.status}</strong></div><div><span>Time recorded</span><strong>{selectedEntry.elapsedSeconds ? formatClock(selectedEntry.elapsedSeconds) : "Not recorded"}</strong></div>{selectedEntry.startedAt && <div><span>Started</span><strong>{formatPracticeTimestamp(selectedEntry.startedAt)}</strong></div>}{selectedEntry.endedAt && <div><span>Finished</span><strong>{formatPracticeTimestamp(selectedEntry.endedAt)}</strong></div>}{selectedEntry.sessionId && <div><span>Session</span><strong>{selectedEntry.sessionId}</strong></div>}{selectedEntry.outcome && <div><span>Result</span><strong>{resultLabel(selectedEntry.outcome, selectedEntry.type)}</strong></div>}{selectedEntry.review && <div className="review-fact"><span>{selectedEntry.review.status === "due" ? "Review due" : "Next review"}</span><strong>{selectedEntry.review.dueDate}</strong><small>{selectedEntry.review.reason.replaceAll("_", " ")} · {selectedEntry.review.intervalDays} day interval</small></div>}</div>
           <div className="letter-sections layered-reader">
-            {selectedEntry.artifact
+            {selectedEntryPracticeRecordReadStatus === "loading" && <div className="practice-record-read-state" role="status">Loading the immutable Practice Record…</div>}
+            {selectedEntryPracticeRecordReadStatus === "error" && <div className="practice-record-read-state error" role="alert">The immutable Practice Record could not be loaded. Check the connection, then reopen this attempt.</div>}
+            {selectedEntryPracticeRecordReadStatus === "loaded" && (immutableSections ?? <>{selectedEntry.artifact
               ? selectedCaseGroups.filter((group) => group.key === "record").map((group) => { const groupId = `case-group-${group.key}`; return <details className="reader-group record-group" id={groupId} open={readerGroupOpen(groupId, true)} onToggle={(event) => rememberReaderGroup(groupId, event.currentTarget.open)} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></div></details>; })
               : <div className="unpublished-letter" id="case-draft"><span className="eyebrow">D1 DRAFT · NOT YET IN THE JOURNAL</span><h3>The attempt is saved; its case file is still waiting for finalization.</h3><p>The coordinator will ask the matching specialist to finalize the transcript, review, solution, and consulted references. No unrelated task conversation is included.</p>{selectedEntry.finalization && <p><strong>Specialist bundle:</strong> {selectedEntry.finalization.status}</p>}{selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noreferrer">Open original problem ↗</a>}</div>}
             {orderPastReaderSections({
@@ -6783,7 +6895,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
               behavioralAnalysis: selectedEntryBehavioralAnalysis ? <details className="reader-group behavioral-analysis-group" id="case-behavioral-analysis" open={readerGroupOpen("case-behavioral-analysis", true)} onToggle={(event) => rememberReaderGroup("case-behavioral-analysis", event.currentTarget.open)} key="behavioral-analysis"><summary><span>Behavioral Attempt</span><small>Claim audit · coaching · next drill</small></summary><div><BehavioralAttemptAnalysisCard projection={selectedEntryBehavioralAnalysis} /></div></details> : null,
               codeAttempts: selectedEntryCodeAttempts.length > 0 ? <details className="reader-group code-attempts-group" id="case-code-attempts" open={readerGroupOpen("case-code-attempts", true)} onToggle={(event) => rememberReaderGroup("case-code-attempts", event.currentTarget.open)} key="code-attempts"><summary><span>User Code Attempts</span><small>{selectedEntryCodeAttempts.length} version{selectedEntryCodeAttempts.length === 1 ? "" : "s"}</small></summary><div>{selectedEntryCodeAttempts.map((attempt) => <article className="code-attempt-card" key={attempt.id}><header><strong>Code Attempt {attempt.sequence} · {attempt.language}</strong><span>{attempt.lineCount} lines</span></header><CodeAttemptBody attempt={attempt} /></article>)}</div></details> : null,
               reviewSections: selectedEntry.artifact ? selectedCaseGroups.filter((group) => group.key !== "record").map((group) => { const groupId = `case-group-${group.key}`; return <details className={`reader-group ${group.key}-group`} id={groupId} open={readerGroupOpen(groupId, group.key !== "conversation")} onToggle={(event) => rememberReaderGroup(groupId, event.currentTarget.open)} key={group.key}><summary><span>{group.title}</span><small>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</small></summary><div><ReaderGroupSections sections={group.sections} idPrefix="case" coding={selectedEntry.type === "leetcode"} /></div></details>; }) : [],
-            })}
+            })}</>)}
           </div>
           <footer>Interview Arc · {selectedEntry.id}</footer>
         </div>

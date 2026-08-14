@@ -329,7 +329,7 @@ test("D1 atomically protects one attempt sequence per owner and activity", async
   );
 });
 
-test("the shared Code Attempt card renders the same normalized review inline and in User Code Attempts", async () => {
+test("the shared Code Attempt body renders the same normalized review without duplicating immutable reader code", async () => {
   const [route, client, css, types] = await Promise.all([
     readFile(new URL("../app/api/practice-record/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8"),
@@ -343,7 +343,8 @@ test("the shared Code Attempt card renders the same normalized review inline and
   for (const label of ["Attempt Review", "Review pending", "Review not recorded", "What Went Well", "What To Improve", "Testing Evidence", "Next Step"]) {
     assert.match(client, new RegExp(label));
   }
-  assert.equal((client.match(/<CodeAttemptBody attempt=\{attempt\}/g) ?? []).length, 2);
+  assert.equal((client.match(/<CodeAttemptBody attempt=\{attempt\}/g) ?? []).length, 3);
+  assert.match(client, /renderCodeAttempts=\{false\}/);
   assert.match(css, /\.attempt-review-columns/);
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*\.attempt-review-columns/);
 });

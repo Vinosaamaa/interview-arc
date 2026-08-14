@@ -410,6 +410,13 @@ test("complete finalization becomes saved only with an exact immutable Practice 
     assert.deepEqual(readback.practiceRecord.payload.specialtyOutput.codeAttemptIds, []);
     assert.equal(readback.practiceRecord.payload.specialtyOutput.designAssetIds.length, 2);
     assert.equal(readback.practiceRecord.payload.assetLinks.length, 2);
+    assert.equal(readback.practiceAssets.length, 2);
+    assert.deepEqual(
+      readback.practiceAssets.map((asset) => ({ assetId: asset.assetId, revision: asset.revision, role: asset.role })),
+      readback.practiceRecord.payload.assetLinks,
+    );
+    assert.ok(readback.practiceAssets.every((asset) => asset.altText && asset.authorship === "owner"));
+    assert.doesNotMatch(JSON.stringify(readback.practiceAssets), /privateLocator|practice-assets\//);
     assert.equal(readback.practiceRecord.payload.specialtyOutput.kind, "your_design");
     assert.deepEqual(readback.practiceRecord.payload.solutionLink, { questionId, profileRevision: 1 });
     assert.equal(readback.finalization.practiceRecordRevision, 1);
