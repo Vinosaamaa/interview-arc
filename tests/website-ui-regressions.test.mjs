@@ -203,6 +203,76 @@ test("closed Problem Banks dedicate the remaining desktop viewport to their inte
   assert.match(source, /!selectedProblem && !expandedBankDesk \? "bounded-list"/);
 });
 
+test("each released Interview workspace carries its accent into major body surfaces", async () => {
+  const css = await load("../app/interview-page-hero.css");
+  const rules = parseCss(css);
+  const expected = [
+    ".app-shell.active-view-today .orchestrator-rail",
+    ".app-shell.active-view-library .past-master-pane",
+    ".app-shell.active-view-banks .problem-bank-list",
+    ".app-shell.active-view-journey .chart-sheet",
+    ".app-shell.active-view-materials .materials-revision",
+  ];
+  expected.forEach((selector) => {
+    const declarations = cssRules(rules, selector)[0]?.declarations ?? {};
+    assert.match(declarations["border-color"] ?? "", /--page-accent/);
+    assert.match(declarations.background ?? "", /--page-accent-soft/);
+  });
+});
+
+test("workspace atmospheres keep shared geometry while destinations own distinct accents", async () => {
+  const [homeSource, pageSource, layoutSource, css] = await Promise.all([
+    load("../app/home-client.tsx"),
+    load("../app/page.tsx"),
+    load("../app/layout.tsx"),
+    load("../app/workspace-atmosphere.css"),
+  ]);
+  const rules = parseCss(css);
+  assert.match(homeSource, /active-destination-/);
+  assert.match(homeSource, /ENGINEERING_NAV_ITEMS\.map\(\(\[id, label\], index\)/);
+  assert.match(homeSource, /String\(index \+ 1\)\.padStart\(2, "0"\)/);
+  assert.match(pageSource, /initialLocation/);
+  assert.match(layoutSource, /workspace-atmosphere\.css/);
+
+  [
+    ".app-shell",
+    ".app-shell.active-workspace-learn",
+    ".app-shell.active-workspace-engineering",
+  ].forEach((selector) => {
+    const declarations = cssRules(rules, selector)[0]?.declarations ?? {};
+    assert.ok(declarations["--workspace-sidebar-surface"]);
+    assert.ok(declarations["--workspace-sidebar-ink"]);
+    assert.ok(declarations["--workspace-focus"]);
+  });
+
+  const sharedTokens = cssRules(rules, ".app-shell")[0]?.declarations ?? {};
+  assert.doesNotMatch(sharedTokens["--destination-accent"] ?? "", /--page-accent/);
+  assert.equal(
+    cssRules(rules, ".app-shell.active-workspace-learn")[0]?.declarations["--page-accent"],
+    undefined,
+  );
+
+  [
+    ".app-shell.active-workspace-learn.active-destination-today",
+    ".app-shell.active-workspace-learn.active-destination-courses",
+    ".app-shell.active-workspace-learn.active-destination-history",
+    ".app-shell.active-workspace-learn.active-destination-analytics",
+    ".app-shell.active-workspace-engineering.active-destination-journal",
+    ".app-shell.active-workspace-engineering.active-destination-capabilities",
+    ".app-shell.active-workspace-engineering.active-destination-decisions",
+    ".app-shell.active-workspace-engineering.active-destination-incidents",
+    ".app-shell.active-workspace-engineering.active-destination-case-studies",
+    ".app-shell.active-workspace-engineering.active-destination-statistics",
+  ].forEach((selector) => {
+    const declarations = cssRules(rules, selector)[0]?.declarations ?? {};
+    assert.ok(declarations["--destination-accent"]);
+    assert.ok(declarations["--destination-accent-soft"]);
+  });
+
+  assert.match(css, /@media \(forced-colors: active\)/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+});
+
 test("Review Queue keeps filters in the menu, branches each row, and joins its folio", async () => {
   const [source, css] = await Promise.all([load("../app/review-queue-view.tsx"), load("../app/review-queue.css")]);
   const file = parseTsx(source);

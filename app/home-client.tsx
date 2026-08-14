@@ -181,6 +181,39 @@ function readLearnDestination(currentHref: string): LearnDestination {
   const destination = new URL(currentHref).searchParams.get("learn");
   return destination === "courses" || destination === "history" || destination === "analytics" ? destination : "today";
 }
+
+type InitialLocation = {
+  workspace?: string;
+  view?: string;
+  learn?: string;
+  engineering?: string;
+};
+
+function initialWorkspace(location: InitialLocation): Workspace {
+  if (location.workspace === "engineering") return "engineering";
+  if (location.view === "learn") return "learn";
+  return "interview";
+}
+
+function initialInterviewView(location: InitialLocation): View {
+  if (location.view === "learn") return "learn";
+  if (location.view === "loops" || location.view === "journey" || location.view === "reviews" || location.view === "banks" || location.view === "today") return location.view;
+  if (location.view === "past") return "library";
+  if (location.view === "career-materials") return "materials";
+  return "today";
+}
+
+function initialLearnDestination(location: InitialLocation): LearnDestination {
+  return location.learn === "courses" || location.learn === "history" || location.learn === "analytics" ? location.learn : "today";
+}
+
+function parseEngineeringDestination(value: string | null | undefined): EngineeringView {
+  return ENGINEERING_NAV_ITEMS.some(([id]) => id === value) ? value as EngineeringView : "journal";
+}
+
+function readEngineeringDestination(currentHref: string): EngineeringView {
+  return parseEngineeringDestination(new URL(currentHref).searchParams.get("engineering"));
+}
 type ComposerMode = "session" | "activity";
 type JourneyRange = 30 | 90 | 365 | "all";
 type JourneyMetric = "activities" | "time";
@@ -1833,7 +1866,7 @@ function AnimatedComposerStage({ children, motionKey }: { children: ReactNode; m
   );
 }
 
-export default function HomeClient({ content, today, engineering }: { content: ContentIndex; today: string; engineering: EngineeringJournalIndex }) {
+export default function HomeClient({ content, today, engineering, initialLocation }: { content: ContentIndex; today: string; engineering: EngineeringJournalIndex; initialLocation: InitialLocation }) {
   const journal = useMemo(
     () => content.journals.find((candidate) => candidate.date === today) ?? emptyJournal(today),
     [content.journals, today],
@@ -1841,10 +1874,10 @@ export default function HomeClient({ content, today, engineering }: { content: C
   // Keep the server and first client render identical. The arrival screen masks
   // the one-time restoration, so the remembered workspace is ready before the
   // user enters without forcing React to discard a mismatched server tree.
-  const [view, setView] = useState<View>("today");
-  const [learnDestination, setLearnDestination] = useState<LearnDestination>("today");
-  const [activeWorkspace, setActiveWorkspace] = useState<Workspace>("interview");
-  const [engineeringView, setEngineeringView] = useState<EngineeringView>("journal");
+  const [view, setView] = useState<View>(() => initialInterviewView(initialLocation));
+  const [learnDestination, setLearnDestination] = useState<LearnDestination>(() => initialLearnDestination(initialLocation));
+  const [activeWorkspace, setActiveWorkspace] = useState<Workspace>(() => initialWorkspace(initialLocation));
+  const [engineeringView, setEngineeringView] = useState<EngineeringView>(() => parseEngineeringDestination(initialLocation.engineering));
   const [engineeringViewMemoryReady, setEngineeringViewMemoryReady] = useState(false);
   const [viewMemoryReady, setViewMemoryReady] = useState(false);
   const {
@@ -4732,8 +4765,11 @@ export default function HomeClient({ content, today, engineering }: { content: C
   useEffect(() => {
     const remembered = readSessionJson<unknown>("interview-arc-engineering-view-v1", "journal");
     const frame = window.requestAnimationFrame(() => {
-      if (new URL(window.location.href).searchParams.get("workspace") === "engineering") setActiveWorkspace("engineering");
-      if (typeof remembered === "string" && ENGINEERING_NAV_ITEMS.some(([id]) => id === remembered)) {
+      const route = new URL(window.location.href);
+      if (route.searchParams.get("workspace") === "engineering") {
+        setActiveWorkspace("engineering");
+        setEngineeringView(readEngineeringDestination(window.location.href));
+      } else if (typeof remembered === "string" && ENGINEERING_NAV_ITEMS.some(([id]) => id === remembered)) {
         setEngineeringView(remembered as EngineeringView);
       }
       setEngineeringViewMemoryReady(true);
@@ -4874,6 +4910,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
     setReaderClosing(false);
     const route = new URL(workspaceViewHref(window.location.href, routeViewFor(nextView)), window.location.origin);
     route.searchParams.delete("workspace");
+    route.searchParams.delete("engineering");
     if (nextView !== "learn") route.searchParams.delete("learn");
     window.history.pushState(
       { interviewArcWorkspaceView: routeViewFor(nextView) },
@@ -4887,6 +4924,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
     if (activeWorkspace === "learn" && view === "learn" && learnDestination === nextDestination) return;
     const route = new URL(workspaceViewHref(window.location.href, "learn"), window.location.origin);
     route.searchParams.delete("workspace");
+    route.searchParams.delete("engineering");
     route.searchParams.set("learn", nextDestination);
     window.history.pushState(
       { interviewArcWorkspaceView: "learn", interviewArcLearnDestination: nextDestination },
@@ -4898,6 +4936,22 @@ export default function HomeClient({ content, today, engineering }: { content: C
     transitionToView("learn");
   }
 
+  function navigateToEngineering(nextDestination: EngineeringView) {
+    if (activeWorkspace === "engineering" && engineeringView === nextDestination) return;
+    const route = new URL(workspaceViewHref(window.location.href, "today"), window.location.origin);
+    route.searchParams.delete("view");
+    route.searchParams.delete("learn");
+    route.searchParams.set("workspace", "engineering");
+    route.searchParams.set("engineering", nextDestination);
+    window.history.pushState(
+      { interviewArcWorkspace: "engineering", interviewArcEngineeringDestination: nextDestination },
+      "",
+      `${route.pathname}${route.search}${route.hash}`,
+    );
+    setActiveWorkspace("engineering");
+    setEngineeringView(nextDestination);
+  }
+
   function selectWorkspace(nextWorkspace: Workspace) {
     if (nextWorkspace === "learn") {
       navigateToLearn(learnDestination);
@@ -4907,10 +4961,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
       navigateToPrimaryView(view === "learn" ? "today" : view);
       return;
     }
-    setActiveWorkspace(nextWorkspace);
-    const url = new URL(window.location.href);
-    url.searchParams.set("workspace", "engineering");
-    window.history.pushState({ interviewArcWorkspace: nextWorkspace }, "", url);
+    navigateToEngineering(engineeringView);
   }
 
   function startFreshPracticeDay() {
@@ -5151,6 +5202,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
     const restoreWorkspaceLocation = () => {
       if (new URL(window.location.href).searchParams.get("workspace") === "engineering") {
         setActiveWorkspace("engineering");
+        setEngineeringView(readEngineeringDestination(window.location.href));
         return;
       }
       setActiveWorkspace(readWorkspaceRouteView(window.location.href) === "learn" ? "learn" : "interview");
@@ -7187,7 +7239,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
   return (
     <>
     {chartTooltip && <ChartTooltip model={chartTooltip} onDismiss={() => setChartTooltip(null)} />}
-    <main className={`app-shell active-view-${activeWorkspace === "engineering" ? "engineering" : view} active-workspace-${activeWorkspace}`} aria-hidden={arrivalState !== "entered"}>
+    <main className={`app-shell active-view-${activeWorkspace === "engineering" ? "engineering" : view} active-workspace-${activeWorkspace} active-destination-${activeWorkspace === "engineering" ? engineeringView : activeWorkspace === "learn" ? learnDestination : view}`} aria-hidden={arrivalState !== "entered"}>
       <a className="skip-link" href="#practice-content">Skip to practice</a>
       <aside className="sidebar">
         <button className="brand" onClick={() => navigateToPrimaryView("today")}><span className="brand-mark" aria-hidden="true" /><span>Interview Arc</span></button>
@@ -7201,7 +7253,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
           ? <nav className="primary-nav learn-local-nav" aria-label="Learn navigation">{LEARN_NAV_ITEMS.map(([id, label], index) => <button key={id} className={learnDestination === id ? "active" : ""} aria-current={learnDestination === id ? "page" : undefined} onClick={() => navigateToLearn(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
           : activeWorkspace === "interview"
             ? <nav className="primary-nav" aria-label="Interview navigation">{INTERVIEW_NAV_ITEMS.map(([id, label], index) => <button key={id} className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
-            : <nav className="primary-nav engineering-primary-nav" aria-label="Engineering navigation">{ENGINEERING_NAV_ITEMS.map(([id, label], index) => <button key={id} className={engineeringView === id ? "active" : ""} aria-current={engineeringView === id ? "page" : undefined} onClick={() => setEngineeringView(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>}
+             : <nav className="primary-nav engineering-primary-nav" aria-label="Engineering navigation">{ENGINEERING_NAV_ITEMS.map(([id, label], index) => <button key={id} className={engineeringView === id ? "active" : ""} aria-current={engineeringView === id ? "page" : undefined} onClick={() => navigateToEngineering(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>}
         {activeWorkspace === "interview" ? <nav className="materials-nav" aria-label="Career Materials navigation"><button type="button" className={view === "materials" ? "active" : ""} aria-current={view === "materials" ? "page" : undefined} onClick={() => navigateToPrimaryView("materials")}><span aria-hidden="true">CM</span><strong>Career Materials</strong><small>Private</small></button></nav> : null}
         <div className="sidebar-status"><span className={activeWorkspace === "interview" && [...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "live" : ""} /><div><strong>{activeWorkspace === "learn" ? "Private Learning record" : activeWorkspace === "engineering" ? "Static Git projection" : [...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "Timer running" : hydrated ? "Draft saved locally" : "Loading draft"}</strong><small>{activeWorkspace === "learn" ? "Transcript-only sessions · no cloud audio" : activeWorkspace === "engineering" ? "No mutable Journal state" : "Session countdown + one activity stopwatch"}</small></div></div>
         <div className="profile"><span>IA</span><div><strong>Interview Arc owner</strong><small>Private preparation record</small></div></div>
@@ -7224,14 +7276,14 @@ export default function HomeClient({ content, today, engineering }: { content: C
             {activeWorkspace === "interview" ? <button className="secondary-action" onClick={() => void exportDraft()}>Export today</button> : null}
           </div>
         </header>
-        <div className="page-content" id="practice-content">{activeWorkspace === "engineering" ? <EngineeringWorkspace index={engineering} view={engineeringView} onNavigateView={setEngineeringView} /> : activeWorkspace === "learn" ? <LearnWorkspace destination={learnDestination} /> : <>{view === "today" && renderToday()}{view === "loops" && renderLoops()}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}{view === "materials" && <CareerMaterialsWorkspace />}</>}</div>
+        <div className="page-content" id="practice-content">{activeWorkspace === "engineering" ? <EngineeringWorkspace index={engineering} view={engineeringView} onNavigateView={navigateToEngineering} /> : activeWorkspace === "learn" ? <LearnWorkspace destination={learnDestination} /> : <>{view === "today" && renderToday()}{view === "loops" && renderLoops()}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}{view === "materials" && <CareerMaterialsWorkspace />}</>}</div>
       </section>
 
       {activeWorkspace === "learn"
         ? <nav className="mobile-interview-nav mobile-learn-nav" aria-label="Learn navigation">{LEARN_NAV_ITEMS.map(([id, label]) => <button key={id} type="button" className={learnDestination === id ? "active" : ""} aria-current={learnDestination === id ? "page" : undefined} onClick={() => navigateToLearn(id)}>{label}</button>)}</nav>
         : activeWorkspace === "interview"
           ? <nav className="mobile-interview-nav" aria-label="Interview navigation">{INTERVIEW_NAV_ITEMS.map(([id, label]) => <button key={id} type="button" className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}>{label}</button>)}<button type="button" className={view === "materials" ? "active materials" : "materials"} aria-current={view === "materials" ? "page" : undefined} onClick={() => navigateToPrimaryView("materials")}>Materials</button></nav>
-          : <nav className="mobile-interview-nav mobile-engineering-nav" aria-label="Engineering navigation">{ENGINEERING_NAV_ITEMS.map(([id, label]) => <button key={id} type="button" className={engineeringView === id ? "active" : ""} aria-current={engineeringView === id ? "page" : undefined} onClick={() => setEngineeringView(id)}>{label}</button>)}</nav>}
+          : <nav className="mobile-interview-nav mobile-engineering-nav" aria-label="Engineering navigation">{ENGINEERING_NAV_ITEMS.map(([id, label]) => <button key={id} type="button" className={engineeringView === id ? "active" : ""} aria-current={engineeringView === id ? "page" : undefined} onClick={() => navigateToEngineering(id)}>{label}</button>)}</nav>}
 
       {composer.open && <div className={`modal-backdrop ${composerClosing ? "closing" : ""}`} role="presentation" onMouseDown={closeComposer} onAnimationEnd={finishComposerClose}>
         <section className={`composer ${composer.mode === "activity" && !composer.editingId ? "activity-composer-dialog" : ""} ${composerClosing ? "closing" : ""}`} role="dialog" aria-modal="true" aria-labelledby="composer-title" onMouseDown={(event) => event.stopPropagation()}>

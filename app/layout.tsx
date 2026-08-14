@@ -8,6 +8,7 @@ import "./behavioral-targets.css";
 import "./interview-page-hero.css";
 import "./loops-redesign.css";
 import "./engineering-workspace.css";
+import "./workspace-atmosphere.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

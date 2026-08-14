@@ -143,7 +143,7 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.doesNotMatch(client, /function returnFromCrossReader\(\)/);
   assert.doesNotMatch(client, /Go forward in reader history/);
   assert.match(client, /interview-arc-list-position-v2/);
-  assert.match(client, /const \[view, setView\] = useState<View>\("today"\)/);
+  assert.match(client, /const \[view, setView\] = useState<View>\(\(\) => initialInterviewView\(initialLocation\)\)/);
   assert.match(client, /setViewMemoryReady\(true\)/);
   assert.match(client, /pendingListRestoreRef\.current = \{ surface: "library", \.\.\.position \}/);
   assert.match(client, /ref=\{pastListRef\}/);
