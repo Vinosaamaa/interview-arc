@@ -18,6 +18,10 @@ const SESSION_KEY = "interview-arc-reader-trace-v1";
 let browserBuffer: ReaderDiagnosticBuffer | null = null;
 let pendingNavigation: { destination: string; startedAt: number } | null = null;
 
+function diagnosticNow() {
+  return typeof performance === "undefined" ? 0 : performance.now();
+}
+
 function safeToken(value: unknown, fallback = "unknown") {
   return typeof value === "string" && SAFE_TOKEN.test(value) ? value : fallback;
 }
@@ -61,10 +65,39 @@ export class ReaderDiagnosticBuffer {
     if (this.events.length > MAX_EVENTS) this.events.splice(0, this.events.length - MAX_EVENTS);
   }
 
-  markFlash(surface: string, automatic = false) {
+  recordVisualHeartbeat(
+    surface: string,
+    detail: ReaderDiagnosticEvent["detail"],
+    at = diagnosticNow(),
+  ) {
+    this.record({ at, kind: "visual-heartbeat", surface, detail });
+  }
+
+  resetWithBaseline(
+    surface: string,
+    detail: ReaderDiagnosticEvent["detail"],
+    at = diagnosticNow(),
+  ) {
+    this.reset();
+    this.record({ at, kind: "trace-reset", surface });
+    this.record({ at, kind: "visual-baseline", surface, detail });
+  }
+
+  captureFlash(
+    surface: string,
+    detail: ReaderDiagnosticEvent["detail"],
+    automatic = false,
+    at = diagnosticNow(),
+  ) {
+    if (this.frozen) return;
+    this.record({ at, kind: "flash-capture", surface, detail });
+    this.markFlash(surface, automatic, at);
+  }
+
+  markFlash(surface: string, automatic = false, at = diagnosticNow()) {
     if (this.frozen) return;
     this.record({
-      at: typeof performance === "undefined" ? 0 : performance.now(),
+      at,
       kind: automatic ? "flash-marker-auto" : "flash-marker-manual",
       surface,
     }, true);
@@ -128,10 +161,30 @@ export function markReaderFlash(surface: string, automatic = false) {
   persistReaderDiagnosticBuffer();
 }
 
-export function resetReaderDiagnosticBuffer() {
-  if (typeof window === "undefined") return;
-  getReaderDiagnosticBuffer().reset();
-  window.sessionStorage.removeItem(SESSION_KEY);
+export function recordReaderVisualHeartbeat(
+  surface: string,
+  detail: ReaderDiagnosticEvent["detail"],
+) {
+  if (typeof window === "undefined" || !readerDiagnosticEnabled(window.location.search)) return;
+  getReaderDiagnosticBuffer().recordVisualHeartbeat(safeToken(surface), detail);
+}
+
+export function resetReaderTrace(
+  surface: string,
+  detail: ReaderDiagnosticEvent["detail"],
+) {
+  if (typeof window === "undefined" || !readerDiagnosticEnabled(window.location.search)) return;
+  getReaderDiagnosticBuffer().resetWithBaseline(safeToken(surface), detail);
+  persistReaderDiagnosticBuffer();
+}
+
+export function captureReaderFlash(
+  surface: string,
+  detail: ReaderDiagnosticEvent["detail"],
+) {
+  if (typeof window === "undefined" || !readerDiagnosticEnabled(window.location.search)) return;
+  getReaderDiagnosticBuffer().captureFlash(safeToken(surface), detail);
+  persistReaderDiagnosticBuffer();
 }
 
 export function recordReaderDiagnostic(

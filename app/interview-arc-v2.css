@@ -373,6 +373,12 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .petal-field.quiet { opacity: .78; }
 .petal-field.paused { opacity: 0; visibility: hidden; }
 .petal-field.paused .ambient-petal { animation-play-state: paused !important; }
+body:has(.reader-workspace) .petal-field {
+  opacity: 0;
+  visibility: hidden;
+  transition: none;
+}
+body:has(.reader-workspace) .ambient-petal { animation-play-state: paused !important; }
 .reader-diagnostics-panel {
   position: fixed;
   right: 16px;
@@ -1921,6 +1927,8 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   left: calc(var(--sidebar-size) + (100vw - var(--sidebar-size)) / 2);
   transform: translateX(-50%);
   z-index: 26;
+  isolation: isolate;
+  background: #fffefb;
   animation: reader-workspace-enter .2s cubic-bezier(.2,.8,.2,1) both;
 }
 .library-page.has-open-entry::before,

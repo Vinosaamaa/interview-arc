@@ -729,3 +729,22 @@ test("Loop interview materials animate open and closed without a fixed content h
   assert.equal(cssRules(rules, ".loop-material-body")[0]?.declarations["min-height"], "0");
   assert.equal(cssRules(rules, ".loop-material-body-shell.closed > .loop-material-body")[0]?.declarations["padding-block"], "0");
 });
+
+test("an open reader owns an opaque paint layer and suspends ambient petals", async () => {
+  const rules = parseCss(await load("../app/interview-arc-v2.css"));
+  const petalField = cssRules(rules, "body:has(.reader-workspace) .petal-field")[0]?.declarations;
+  const petals = cssRules(rules, "body:has(.reader-workspace) .ambient-petal")[0]?.declarations;
+  const reader = cssRules(rules, ".reader-workspace")[0]?.declarations;
+
+  assert.deepEqual(
+    {
+      opacity: petalField?.opacity,
+      visibility: petalField?.visibility,
+      transition: petalField?.transition,
+    },
+    { opacity: "0", visibility: "hidden", transition: "none" },
+  );
+  assert.equal(petals?.["animation-play-state"], "paused !important");
+  assert.equal(reader?.isolation, "isolate");
+  assert.equal(reader?.background, "#fffefb");
+});

@@ -55,6 +55,13 @@ import {
   recordReaderDiagnostic,
   startNavigationDiagnostic,
 } from "./reader-render-diagnostics";
+import {
+  normalizeReaderMemoryState,
+  rememberEveryReaderGroup as rememberEveryReaderGroupInMemory,
+  rememberReaderGroup as rememberReaderGroupInMemory,
+  rememberReaderPosition as rememberReaderPositionInMemory,
+  type ReaderMemory,
+} from "./reader-memory";
 import { useAmbientSound } from "./ambient-sound";
 import { MusicPlaylist } from "./music-playlist";
 import {
@@ -213,12 +220,6 @@ type ChartTooltipModel = {
   anchor: { left: number; right: number; top: number; bottom: number; width: number };
 };
 type PendingHighlight = { quote: string; prefix: string; suffix: string; position: AnnotationPosition };
-type ReaderMemory = {
-  groups: Record<string, boolean>;
-  anchorId?: string;
-  anchorOffset?: number;
-  scrollTop?: number;
-};
 type ListSurface = "library" | "banks";
 type ListPosition = {
   pageScrollTop: number;
@@ -1974,15 +1975,15 @@ export default function HomeClient({ content, today, engineering }: { content: C
     return stored === "green" || stored === "pink" ? stored : "yellow";
   });
   const [highlightBusy, setHighlightBusy] = useState(false);
-  const [readerMemory, setReaderMemory] = useState<Record<string, ReaderMemory>>(() => {
+  const [initialReaderMemory] = useState<Record<string, ReaderMemory>>(() => {
     if (typeof window === "undefined") return {};
     try {
-      return JSON.parse(window.sessionStorage.getItem("interview-arc-reader-memory-v1") ?? "{}") as Record<string, ReaderMemory>;
+      return normalizeReaderMemoryState(JSON.parse(window.sessionStorage.getItem("interview-arc-reader-memory-v1") ?? "{}"));
     } catch {
       return {};
     }
   });
-  const readerMemoryRef = useRef(readerMemory);
+  const readerMemoryRef = useRef(initialReaderMemory);
   const readerDocumentRef = useRef<HTMLDivElement>(null);
   const highlightNoteEditorRef = useRef<HTMLTextAreaElement>(null);
   const readerScrollFrameRef = useRef(0);
@@ -2147,11 +2148,6 @@ export default function HomeClient({ content, today, engineering }: { content: C
     });
     return () => window.cancelAnimationFrame(frame);
   }, [masterPaneOpen, readerClosing, selectedEntry, selectedProblem, view]);
-
-  useEffect(() => {
-    readerMemoryRef.current = readerMemory;
-    window.sessionStorage.setItem("interview-arc-reader-memory-v1", JSON.stringify(readerMemory));
-  }, [readerMemory]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -6318,7 +6314,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
     : readerSelectedProblem
       ? `solution:${readerSelectedProblem.type}:${readerSelectedProblem.question.id}`
       : "";
-  const activeReaderMemory = readerMemoryKey ? readerMemory[readerMemoryKey] : undefined;
+  const activeReaderMemory = readerMemoryKey ? readerMemoryRef.current[readerMemoryKey] : undefined;
 
   function readerGroupOpen(groupId: string, defaultOpen: boolean) {
     return activeReaderMemory?.groups[groupId] ?? defaultOpen;
@@ -6326,18 +6322,18 @@ export default function HomeClient({ content, today, engineering }: { content: C
 
   function rememberReaderGroup(groupId: string, open: boolean) {
     if (!readerMemoryKey) return;
-    setReaderMemory(() => {
-      const current = readerMemoryRef.current;
-      const next = {
-        ...current,
-        [readerMemoryKey]: {
-          ...(current[readerMemoryKey] ?? { groups: {} }),
-          groups: { ...(current[readerMemoryKey]?.groups ?? {}), [groupId]: open },
-        },
-      };
-      readerMemoryRef.current = next;
-      return next;
-    });
+    const next = rememberReaderGroupInMemory(
+      readerMemoryRef.current,
+      readerMemoryKey,
+      groupId,
+      open,
+    );
+    if (next === readerMemoryRef.current) return;
+    // Native <details> toggle events are persistence metadata. Updating React
+    // state here rerenders the entire application once per mounted section,
+    // which can produce a visible reader flash when a Practice Record arrives.
+    readerMemoryRef.current = next;
+    window.sessionStorage.setItem("interview-arc-reader-memory-v1", JSON.stringify(next));
   }
 
   function rememberReaderPosition() {
@@ -6352,16 +6348,11 @@ export default function HomeClient({ content, today, engineering }: { content: C
         const offset = node.getBoundingClientRect().top - rootTop;
         return offset <= 28 ? node : best;
       }, null);
-      const current = readerMemoryRef.current;
-      const next = {
-        ...current,
-        [readerMemoryKey]: {
-          ...(current[readerMemoryKey] ?? { groups: {} }),
-          scrollTop: root.scrollTop,
-          anchorId: anchor?.id,
-          anchorOffset: anchor ? anchor.getBoundingClientRect().top - rootTop : undefined,
-        },
-      };
+      const next = rememberReaderPositionInMemory(readerMemoryRef.current, readerMemoryKey, {
+        scrollTop: root.scrollTop,
+        anchorId: anchor?.id,
+        anchorOffset: anchor ? anchor.getBoundingClientRect().top - rootTop : undefined,
+      });
       // Scroll position is persistence metadata, not render state. Keeping it
       // in a ref avoids re-rendering the entire application on every scroll
       // animation frame while preserving exact reader restoration.
@@ -6386,7 +6377,6 @@ export default function HomeClient({ content, today, engineering }: { content: C
     return () => window.cancelAnimationFrame(frame);
     // Restore only when the reader identity changes. Scroll updates write new
     // memory continuously and must not yank the reader back mid-scroll.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readerMemoryKey]);
 
   useEffect(() => {
@@ -6678,6 +6668,10 @@ export default function HomeClient({ content, today, engineering }: { content: C
       }> : null)
       .then((record) => {
         if (!record) throw new Error("The practice record could not be read.");
+        recordReaderDiagnostic("practice-record-hydrated", `${view}-attempt`, {
+          transcriptTurns: record.turns.length,
+          codeAttempts: record.codeAttempts.length,
+        });
         const enrich = (current: LogEntry | null) => current && (current.artifact?.activityId || current.id) === selectedEntryActivityId
           ? { ...current, transcriptTurns: record.turns, pinnedNotes: record.notes, audioClips: record.audioClips, deliveryAnalyses: record.deliveryAnalyses, codeAttempts: record.codeAttempts, finalAnswer: record.finalAnswer, practiceScenarios: record.practiceScenarios, behavioralAnalysis: record.behavioralAnalysis, resumeContext: record.resumeContext, interactionModeClassification: record.interactionModeClassification, interactionModeTransitions: record.interactionModeTransitions, practiceRecord: record.practiceRecord, practiceAssets: record.practiceAssets }
           : current;
@@ -6699,20 +6693,18 @@ export default function HomeClient({ content, today, engineering }: { content: C
   function setEveryReaderGroup(open: boolean) {
     if (!readerMemoryKey) return;
     const groups = [...(readerDocumentRef.current?.querySelectorAll<HTMLDetailsElement>("details.reader-group") ?? [])];
-    setReaderMemory(() => {
-      const current = readerMemoryRef.current;
-      const next = {
-        ...current,
-        [readerMemoryKey]: {
-          ...(current[readerMemoryKey] ?? { groups: {} }),
-          groups: {
-            ...(current[readerMemoryKey]?.groups ?? {}),
-            ...Object.fromEntries(groups.map((group) => [group.id, open])),
-          },
-        },
-      };
+    const next = rememberEveryReaderGroupInMemory(
+      readerMemoryRef.current,
+      readerMemoryKey,
+      groups.map((group) => group.id),
+      open,
+    );
+    if (next !== readerMemoryRef.current) {
       readerMemoryRef.current = next;
-      return next;
+      window.sessionStorage.setItem("interview-arc-reader-memory-v1", JSON.stringify(next));
+    }
+    groups.forEach((group) => {
+      group.open = open;
     });
   }
 

@@ -56,3 +56,23 @@ test("mark flash freezes the preceding rolling window until reset", () => {
   assert.equal(restored.snapshot().frozen, false);
   assert.deepEqual(restored.snapshot().events.map((event) => event.kind), ["reader-open"]);
 });
+
+test("a reset trace accepts a fresh baseline before a later flash marker", () => {
+  const buffer = new ReaderDiagnosticBuffer();
+  buffer.recordVisualHeartbeat("past-attempt", { mounted: true }, 1);
+  buffer.resetWithBaseline("past-attempt", { mounted: true, runningPetalAnimations: 0 }, 2);
+  buffer.captureFlash("past-attempt", { mounted: true, opacity: 1 }, false, 3);
+
+  assert.deepEqual(buffer.snapshot().events.map((event) => event.kind), [
+    "trace-reset",
+    "visual-baseline",
+    "flash-capture",
+    "flash-marker-manual",
+  ]);
+  assert.equal(buffer.snapshot().events[1].detail?.mounted, true);
+  assert.equal(buffer.snapshot().events[2].detail?.opacity, 1);
+  assert.equal(buffer.snapshot().frozen, true);
+
+  buffer.recordVisualHeartbeat("past-attempt", { opacity: 0 }, 4);
+  assert.equal(buffer.snapshot().events.length, 4);
+});
