@@ -150,6 +150,12 @@ import {
   readCurrentBehavioralProjectBinding,
 } from "./behavioral-project-deep-dive";
 import type { BehavioralProjectFocus } from "./behavioral-project-deep-dive-policy";
+import {
+  assertPracticeRecordFinalizationPreconditions,
+  persistFinalizedPracticeRecord,
+  readCurrentPracticeRecord,
+  type PracticeRecordSemanticInput,
+} from "./practice-records";
 
 export type Specialty = "leetcode" | "system_design" | "behavioral";
 export type SpecialistTaskType = Specialty | "loop_recorder" | "learning_specialist" | "resume_cover_letter";
@@ -253,6 +259,7 @@ export type SpecialistFinalization = {
       sourceClaimId?: string;
     };
   };
+  practiceRecord?: PracticeRecordSemanticInput;
 };
 
 const TRANSCRIPT_SECTION = /transcript|conversation|raw exchange|verbatim/i;
@@ -4239,6 +4246,7 @@ export async function saveSpecialistFinalization(
   questionId: string | null,
   payload: SpecialistFinalization,
   nowMs: number,
+  durableIdentity?: { operationId: string; requestFingerprint: string },
 ) {
   const db = getDb();
   // Preserve the established behavioral validation precedence before checking
@@ -4259,6 +4267,9 @@ export async function saveSpecialistFinalization(
     evidence: payload.interactionModeEvidence,
     correction: payload.interactionModeClassificationCorrection,
   });
+  if (payload.complete) {
+    await assertPracticeRecordFinalizationPreconditions({ ownerId, activityId, finalization: payload });
+  }
   if (behavioralFinalAnswer?.replay || interactionModeClassification?.replay) {
     if (
       (behavioralFinalAnswer && !behavioralFinalAnswer.replay)
@@ -4266,9 +4277,25 @@ export async function saveSpecialistFinalization(
     ) {
       throw new Error("Finalization replay identities do not refer to the same immutable write.");
     }
+    if (payload.complete && (!questionId || !durableIdentity)) {
+      throw new Error("A complete finalization needs its durable operation identity and stable questionId.");
+    }
+    const practiceRecord = payload.complete
+      ? await persistFinalizedPracticeRecord({
+          ownerId,
+          activityId,
+          specialty,
+          questionId: questionId!,
+          finalization: payload,
+          operationId: durableIdentity!.operationId,
+          requestFingerprint: durableIdentity!.requestFingerprint,
+          nowMs,
+        })
+      : null;
     return {
       finalAnswer: behavioralFinalAnswer?.result ?? null,
       interactionModeClassification: interactionModeClassification?.classification ?? null,
+      practiceRecord,
     };
   }
   const transcriptState = payload.complete
@@ -4507,7 +4534,9 @@ export async function saveSpecialistFinalization(
       })
     : null;
 
-  const status = payload.complete ? "ready" : "draft";
+  // A complete semantic bundle remains draft/pending until its immutable
+  // Practice Record batch and exact readback promote it to ready.
+  const status = "draft";
   const finalizationWrite = db
     .insert(activityFinalizations)
     .values({
@@ -4853,9 +4882,25 @@ export async function saveSpecialistFinalization(
     }
     throw error;
   }
+  if (payload.complete && (!questionId || !durableIdentity)) {
+    throw new Error("A complete finalization needs its durable operation identity and stable questionId.");
+  }
+  const practiceRecord = payload.complete
+    ? await persistFinalizedPracticeRecord({
+        ownerId,
+        activityId,
+        specialty,
+        questionId: questionId!,
+        finalization: payload,
+        operationId: durableIdentity!.operationId,
+        requestFingerprint: durableIdentity!.requestFingerprint,
+        nowMs,
+      })
+    : null;
   return {
     finalAnswer: behavioralFinalAnswer?.result ?? null,
     interactionModeClassification: interactionModeClassification?.classification ?? null,
+    practiceRecord,
   };
 }
 
@@ -5512,7 +5557,7 @@ export async function readSpecialistTasks(ownerId: string) {
 
 export async function readActivityPracticeRecord(ownerId: string, activityId: string) {
   const db = getDb();
-  const [turns, notes, finalizations, classificationRows, modeTransitions, modeTurnOverrides, finalAnswerRows, resumeContextRows, reviews, clips, deliveryAnalyses, codeAttempts, typedExchangeDeletions, solutionLinks, projectLinks] = await Promise.all([
+  const [turns, notes, finalizations, classificationRows, modeTransitions, modeTurnOverrides, finalAnswerRows, resumeContextRows, reviews, clips, deliveryAnalyses, codeAttempts, typedExchangeDeletions, solutionLinks, projectLinks, practiceRecord] = await Promise.all([
     db
       .select()
       .from(practiceTranscriptTurns)
@@ -5559,6 +5604,7 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
       eq(behavioralProjectActivityLinks.ownerId, ownerId),
       eq(behavioralProjectActivityLinks.activityId, activityId),
     )).limit(1),
+    readCurrentPracticeRecord(ownerId, activityId),
   ]);
   const finalAnswerSnapshots: StoredBehavioralFinalAnswerSnapshot[] = finalAnswerRows.slice(0, 100).reverse().map((row) => ({
     snapshotRevision: row.snapshotRevision,
@@ -5690,6 +5736,7 @@ export async function readActivityPracticeRecord(ownerId: string, activityId: st
     audioClips: clips,
     deliveryAnalyses,
     codeAttempts,
+    practiceRecord,
     projectDeepDiveLink: projectLinks[0] ?? null,
   };
 }

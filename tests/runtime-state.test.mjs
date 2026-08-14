@@ -607,6 +607,7 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   const behavioralEvidence = await readFile(new URL("../drizzle/0024_dazzling_blink.sql", import.meta.url), "utf8");
   const behavioralTargets = await readFile(new URL("../drizzle/0030_powerful_the_enforcers.sql", import.meta.url), "utf8");
   const behavioralStories = await readFile(new URL("../drizzle/0033_powerful_cargill.sql", import.meta.url), "utf8");
+  const practiceRecords = await readFile(new URL("../drizzle/0045_lethal_celestials.sql", import.meta.url), "utf8");
   for (const table of ["timers", "outcomes", "extra_activities", "live_sessions"]) {
     assert.match(live, new RegExp("CREATE TABLE `" + table + "`"));
   }
@@ -628,6 +629,12 @@ test("D1 migrations cover owner-scoped live state and shared published content",
   for (const table of ["problem_preferences", "problem_solution_profiles", "problem_solution_revisions", "activity_solution_links", "owner_bank_questions"]) {
     assert.match(knowledge, new RegExp("CREATE TABLE `" + table + "`"));
   }
+  assert.match(practiceRecords, /CREATE TABLE `practice_record_revisions`/);
+  assert.match(practiceRecords, /CREATE UNIQUE INDEX `practice_record_revisions_operation_idx`/);
+  assert.match(practiceRecords, /CREATE TABLE `practice_records`/);
+  assert.match(practiceRecords, /CREATE INDEX `practice_records_owner_date_idx`/);
+  assert.match(practiceRecords, /ALTER TABLE `activity_finalizations` ADD `practice_record_revision` integer/);
+  assert.match(practiceRecords, /ALTER TABLE `activity_finalizations` ADD `practice_record_fingerprint` text/);
   assert.match(answerAudio, /ALTER TABLE `activity_audio_clips` ADD `transcript_turn_id` text/);
   assert.match(deliveryCoach, /CREATE TABLE `activity_delivery_analyses`/);
   assert.match(workbenches, /CREATE TABLE `practice_workbenches`/);

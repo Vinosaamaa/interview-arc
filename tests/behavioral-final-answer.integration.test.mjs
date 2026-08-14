@@ -117,6 +117,7 @@ function finalization({
     finalization: {
       title: "Tell me about a reliability improvement",
       complete: true,
+      summary: "The attempt explained the retry boundary, separated verified ownership from the unresolved result metric, and identified the next evidence gap.",
       transcriptScope: "full_activity",
       review: { didWell: ["Scoped the decision."], improve: ["Add a measured outcome."] },
       behavioralAnalysis: {
@@ -214,6 +215,21 @@ function finalization({
         materialSpecialistTurnIds: [responseTurnId],
         assistanceEvents: [],
       },
+      practiceRecord: {
+        prompt: {
+          body: "Tell me about a time you improved reliability.",
+          canonicalUrl: null,
+        },
+        responseStages: [{
+          key: "behavioral_answer",
+          state: "partially_answered",
+          ownerResponse: answer,
+          mentorGuidance: "Keep the retry decision specific and leave the unmeasured production result explicit.",
+          finalUnderstanding: "The final answer preserves the verified retry mechanism without inventing a metric.",
+          turnIds: [responseTurnId],
+        }],
+        nextDrill: "Rehearse the measured-outcome follow-up in two minutes.",
+      },
       finalAnswerSnapshot: {
         schemaVersion: 1,
         answer,
@@ -242,6 +258,7 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
   const token = "ia_behavioral_final_answer_owner";
   const otherToken = "ia_behavioral_final_answer_other";
   const activityId = "activity-behavioral-final-answer";
+  const roleBriefActivityId = "activity-behavioral-role-brief";
   const questionId = "behavioral-reliability-1";
   const responseTurnId = "behavioral-response-1";
   const answer = "I stabilized delivery by making retries identity-idempotent.";
@@ -328,7 +345,11 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
         ('owner-final-answer','activity-loop-behavioral-other','2026-08-10',NULL,
         '{"schemaVersion":2,"id":"activity-loop-behavioral-other","questionId":"behavioral-other-question","date":"2026-08-10","source":"extra","type":"behavioral","title":"Different behavioral question","allocatedSeconds":1800,"timingSource":"website","status":"planned"}',1,1),
         ('owner-final-answer','activity-loop-legacy-envelope','2026-08-10',NULL,
-        '{"schemaVersion":2,"id":"activity-loop-legacy-envelope","questionId":"${questionId}","date":"2026-08-10","source":"extra","type":"behavioral","title":"Legacy Role Brief envelope","allocatedSeconds":1800,"timingSource":"website","status":"planned"}',1,1);
+        '{"schemaVersion":2,"id":"activity-loop-legacy-envelope","questionId":"${questionId}","date":"2026-08-10","source":"extra","type":"behavioral","title":"Legacy Role Brief envelope","allocatedSeconds":1800,"timingSource":"website","status":"planned"}',1,1),
+        ('owner-final-answer','activity-behavioral-voice','2026-08-10',NULL,
+        '{"schemaVersion":2,"id":"activity-behavioral-voice","questionId":"behavioral-reliability-voice","date":"2026-08-10","source":"extra","type":"behavioral","title":"Voice reliability answer","allocatedSeconds":1800,"timingSource":"website","status":"completed"}',1,1786364110000),
+        ('owner-final-answer','${roleBriefActivityId}','2026-08-10','workbench-final-answer',
+        '{"schemaVersion":2,"id":"${roleBriefActivityId}","questionId":"${questionId}","date":"2026-08-10","source":"extra","type":"behavioral","title":"Role-tailored reliability answer","allocatedSeconds":1800,"timingSource":"website","status":"planned"}',1,1786364110000);
       INSERT INTO loop_activity_bindings
         (owner_id,activity_id,loop_id,stage_id,loop_revision,role_brief_revision,specialty,question_id,
          role_brief_display_snapshot,binding_revision,created_at,updated_at)
@@ -339,6 +360,19 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
       INSERT INTO live_sessions (owner_id,id,date,workbench_id,payload,revision,updated_at)
       VALUES ('owner-final-answer','session-final-answer','2026-08-10',NULL,
         '{"schemaVersion":1,"id":"session-final-answer","date":"2026-08-10","source":"extra","label":"Behavioral final answer","allocatedSeconds":3600,"activityIds":["${activityId}"]}',0,1);
+      INSERT INTO timers
+        (owner_id,subject_id,kind,accumulated_seconds,started_at,running_since,completed,completed_at,revision,updated_at)
+      VALUES ('owner-final-answer','${activityId}','activity',900,1786363200000,NULL,1,1786364100000,2,1786364100000);
+      INSERT INTO timers
+        (owner_id,subject_id,kind,accumulated_seconds,started_at,running_since,completed,completed_at,revision,updated_at)
+      VALUES ('owner-final-answer','activity-behavioral-voice','activity',600,1786363210000,NULL,1,1786363810000,2,1786363810000);
+      INSERT INTO outcomes (owner_id,activity_id,outcome,revision,updated_at)
+      VALUES
+        ('owner-final-answer','${activityId}','solved_after_reviewing_approach',1,1786364100000),
+        ('owner-final-answer','activity-behavioral-voice','solved_after_reviewing_approach',1,1786363810000);
+      INSERT INTO practice_workbenches
+        (owner_id,id,status,opened_pacific_date,opened_at,closed_at,updated_at)
+      VALUES ('owner-final-answer','workbench-final-answer','open','2026-08-10',1786363000000,NULL,1786364110000);
     `]);
     worker = spawn(wrangler, ["dev", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
       cwd: project,
@@ -735,9 +769,20 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     }));
     assert.equal(unboundRoleBrief.isError, true);
     assert.equal(unboundRoleBrief.structuredContent.code, "behavioral_role_brief_binding_mismatch");
-    const activityBinding = await call(client, "bind_planned_activity_to_loop", {
+    const completedActivityBinding = await callRaw(client, "bind_planned_activity_to_loop", {
       operationId: "loop-final-answer-bind-1",
       activityId,
+      loopId,
+      stageId: "behavioral-round",
+      expectedActivityRevision: 1,
+      authorization: "explicit_user_instruction",
+    });
+    assert.equal(completedActivityBinding.isError, true);
+    assert.equal(completedActivityBinding.structuredContent.code, "loop_activity_already_started");
+
+    const activityBinding = await call(client, "bind_planned_activity_to_loop", {
+      operationId: "loop-final-answer-bind-role-brief-1",
+      activityId: roleBriefActivityId,
       loopId,
       stageId: "behavioral-round",
       expectedActivityRevision: 1,
@@ -748,7 +793,7 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     const roleBriefPreflight = await call(client, "get_behavioral_practice_preflight", {
       boundary: "finalization",
       questionId,
-      activityId,
+      activityId: roleBriefActivityId,
     });
     assert.equal(roleBriefPreflight.targeting.mode, "target_tailored");
     assert.equal(roleBriefPreflight.targeting.source, "loop_role_brief");
@@ -756,40 +801,78 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     assert.equal(roleBriefPreflight.roleBriefResolution.roleBrief.loopId, loopId);
     assert.deepEqual(roleBriefPreflight.acceptedRoleBriefVariants, []);
 
+    await call(client, "save_practice_exchange", {
+      activityId: roleBriefActivityId,
+      activityTitle: "Role-tailored reliability answer",
+      specialty: "behavioral",
+      userTurn: {
+        turnId: "behavioral-role-brief-user",
+        body: "I improved retry reliability for a distributed service.",
+        occurredAt: 1786364120000,
+      },
+      specialistTurn: {
+        turnId: "behavioral-role-brief-response",
+        body: correctedAnswer,
+        occurredAt: 1786364121000,
+      },
+    });
+    await call(client, "set_practice_result", {
+      expectedWorkbenchId: "workbench-final-answer",
+      mutationId: "role-brief-result",
+      activityId: roleBriefActivityId,
+      expectedRevision: 0,
+      result: "solved_after_reviewing_approach",
+      authorization: "explicit_user_instruction",
+    });
+    await call(client, "control_practice_timer", {
+      expectedWorkbenchId: "workbench-final-answer",
+      mutationId: "role-brief-start",
+      activityId: roleBriefActivityId,
+      expectedRevision: 0,
+      action: "start",
+      authorization: "explicit_user_instruction",
+    });
+    await call(client, "control_practice_timer", {
+      expectedWorkbenchId: "workbench-final-answer",
+      mutationId: "role-brief-finish",
+      activityId: roleBriefActivityId,
+      expectedRevision: 1,
+      action: "finish",
+      authorization: "explicit_user_instruction",
+    });
+
     const roleBriefMismatch = await callRaw(client, "save_specialist_finalization", finalization({
-      activityId,
+      activityId: roleBriefActivityId,
       questionId,
       operationId: "final-answer-operation-role-brief-mismatch",
       answer: correctedAnswer,
-      responseTurnId: "behavioral-response-2",
+      responseTurnId: "behavioral-role-brief-response",
       solutionRevision: 2,
       scope: "target_tailored",
       roleBrief: {
         ...roleBriefReference,
         label: "Wrong Role Brief label",
       },
-      correction: { replacesSnapshotRevision: 2, reason: "Tailor for the bound Loop Role Brief." },
     }));
     assert.equal(roleBriefMismatch.isError, true);
     assert.equal(roleBriefMismatch.structuredContent.code, "behavioral_role_brief_snapshot_mismatch");
 
     const roleBriefFinalization = finalization({
-      activityId,
+      activityId: roleBriefActivityId,
       questionId,
       operationId: "final-answer-operation-role-brief",
       answer: correctedAnswer,
-      responseTurnId: "behavioral-response-2",
+      responseTurnId: "behavioral-role-brief-response",
       solutionRevision: 2,
       scope: "target_tailored",
       roleBrief: roleBriefReference,
-      correction: { replacesSnapshotRevision: 2, reason: "Tailor for the bound Loop Role Brief." },
     });
     roleBriefFinalization.finalization.review.didWell[0] = "  Scoped the decision.  ";
     roleBriefFinalization.finalization.review.improve[0] = "  Add a measured outcome.  ";
     const roleBriefSaved = await call(client, "save_specialist_finalization", roleBriefFinalization);
-    assert.equal(roleBriefSaved.finalAnswer.status, "corrected");
-    assert.equal(roleBriefSaved.finalAnswer.snapshotRevision, 3);
-    const roleBriefRecord = await call(client, "get_activity_practice_record", { activityId });
+    assert.equal(roleBriefSaved.finalAnswer.status, "created");
+    assert.equal(roleBriefSaved.finalAnswer.snapshotRevision, 1);
+    const roleBriefRecord = await call(client, "get_activity_practice_record", { activityId: roleBriefActivityId });
     assert.equal(roleBriefRecord.finalAnswer.scope, "target_tailored");
     assert.equal(roleBriefRecord.finalAnswer.target, null);
     assert.deepEqual(roleBriefRecord.finalAnswer.roleBrief, {
@@ -805,19 +888,15 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
     const acceptedRoleBriefPreflight = await call(client, "get_behavioral_practice_preflight", {
       boundary: "reconnect_handoff",
       questionId,
-      activityId,
+      activityId: roleBriefActivityId,
     });
     assert.equal(acceptedRoleBriefPreflight.acceptedRoleBriefVariants.length, 1);
     assert.equal(acceptedRoleBriefPreflight.acceptedRoleBriefVariants[0].stale, false);
     assert.equal(acceptedRoleBriefPreflight.acceptedRoleBriefVariants[0].review.assistance.level, "probing");
-    const roleBriefExactRetry = await call(
-      client,
-      "save_specialist_finalization",
-      roleBriefFinalization,
-    );
+    const roleBriefExactRetry = await call(client, "save_specialist_finalization", roleBriefFinalization);
     assert.deepEqual(roleBriefExactRetry.finalAnswer, {
-      status: "corrected",
-      snapshotRevision: 3,
+      status: "created",
+      snapshotRevision: 1,
     });
     assert.equal(roleBriefExactRetry.writeReceipt.duplicate, true);
 

@@ -87,6 +87,17 @@ with `scope: turn_override`, its exact specialist response-turn ID, the current
 unchanged revision, and the triggering owner turn when available. Read back the
 override; never fabricate a switch-away/switch-back pair.
 
+## Finish Packet
+
+Follow the Finish boundary in
+[`owner-private-practice-records.md`](../docs/contracts/owner-private-practice-records.md)
+and bundle contract in
+[`durable-practice-publishing.md`](../docs/contracts/durable-practice-publishing.md).
+Freeze the exact prompt, supported review/profile content, response-stage
+owner/Mentor/adopted split with turn IDs, and next drill; never infer missing
+evidence. Queue before returning. Past stays `Finalization pending` until exact
+immutable readback.
+
 ## Solution Profile Quality Gate
 
 Every new or revised Solution Profile is a complete durable reference, not a

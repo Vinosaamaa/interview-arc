@@ -2344,6 +2344,7 @@ async function executeSpecialistWriteJob(job: SpecialistWriteJobRow) {
         input.questionId,
         input.finalization,
         Date.now(),
+        { operationId: job.jobId, requestFingerprint: job.payloadHash },
       );
     } catch (error) {
       // Domain-level retryable errors require a reread and a newly prepared
@@ -2359,6 +2360,7 @@ async function executeSpecialistWriteJob(job: SpecialistWriteJobRow) {
       status: input.finalization.complete ? "ready" as const : "draft" as const,
       finalAnswer: result.finalAnswer,
       interactionModeClassification: result.interactionModeClassification,
+      practiceRecord: result.practiceRecord,
     };
   }
   throw new SpecialistWriteJobError(
@@ -4309,7 +4311,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "save_specialist_finalization",
     {
-      description: "Durably serialize a complete specialist finalization bundle and immutable interaction-mode classification in D1. Reuse the exact classification operation ID after transport uncertainty. A queued or retry_wait receipt is not proof of finalization; poll get_specialist_write_status until saved. Drafts remain synchronous. This does not publish Git artifacts, open a PR, or deploy.",
+      description: "Durably queue a complete semantic finalization, exact Practice Record sidecar, Solution Profile decision, and immutable interaction-mode classification. Saved means the immutable Practice Record revision, fingerprint, and links passed exact D1 readback; queued or retry_wait remains Finalization pending. Reuse the exact classification operation ID after transport uncertainty. Drafts remain synchronous. This does not publish Git artifacts, open a PR, or deploy.",
       inputSchema: z.object({
         activityId: z.string().min(1),
         specialty: z.enum(["leetcode", "system_design", "behavioral"]),
@@ -4357,6 +4359,21 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
             sourcesChecked: z.array(z.string()),
           }).optional(),
           solutionProfile: specialistSolutionProfileSchema.optional(),
+          practiceRecord: z.object({
+            prompt: z.object({
+              body: z.string().trim().min(1).max(20_000),
+              canonicalUrl: z.string().url().nullable().optional(),
+            }),
+            responseStages: z.array(z.object({
+              key: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/).max(240),
+              state: z.enum(["answered", "partially_answered", "no_answer_provided", "needs_correction"]),
+              ownerResponse: z.string().min(1).max(20_000).nullable(),
+              mentorGuidance: z.string().min(1).max(20_000).nullable(),
+              finalUnderstanding: z.string().min(1).max(20_000).nullable(),
+              turnIds: z.array(z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/).max(240)).max(64),
+            })).max(32),
+            nextDrill: z.string().trim().min(1).max(20_000).nullable().optional(),
+          }).optional(),
         }),
       }).superRefine((input, context) => {
         if (input.specialty !== "leetcode" && input.finalization.questionMetadata) {
@@ -4421,6 +4438,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
               status: "ready" | "draft";
               finalAnswer: unknown;
               interactionModeClassification: unknown;
+              practiceRecord: unknown;
             };
             return {
               content: [{ type: "text" as const, text: `${activityId} specialist bundle saved as ready.` }],
@@ -4522,7 +4540,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
   server.registerTool(
     "get_activity_practice_record",
     {
-      description: "Read one activity's ordered transcript, pinned notes, specialist finalization, review schedule, and audio metadata. Large records are returned once as compact JSON in content with a bounded structuredContent receipt; parse content when delivery=content_json.",
+      description: "Read one activity's current immutable Practice Record revision plus ordered transcript, pinned notes, specialist finalization, review schedule, Code Attempts, and private-audio metadata. Large records are returned once as compact JSON in content with a bounded structuredContent receipt; parse content when delivery=content_json.",
       inputSchema: { activityId: z.string().min(1) },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },

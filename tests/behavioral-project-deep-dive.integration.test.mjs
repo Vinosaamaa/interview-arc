@@ -105,6 +105,7 @@ function finalization(activityId, questionId, responseTurnId) {
     finalization: {
       title: "Experience Map: Sample Platform",
       complete: true,
+      summary: "The attempt mapped the platform boundary, preserved the unresolved result metric, and separated personal ownership from project facts.",
       transcriptScope: "full_activity",
       review: { didWell: analysis.strengths, improve: analysis.improvements },
       behavioralAnalysis: analysis,
@@ -136,6 +137,18 @@ function finalization(activityId, questionId, responseTurnId) {
         provenance: "recorded",
         materialSpecialistTurnIds: [responseTurnId],
         assistanceEvents: [],
+      },
+      practiceRecord: {
+        prompt: { body: "Walk through this project.", canonicalUrl: null },
+        responseStages: [{
+          key: "project_overview",
+          state: "partially_answered",
+          ownerResponse: answer,
+          mentorGuidance: "Keep the project boundary and unresolved metric explicit.",
+          finalUnderstanding: "The walkthrough separates personal ownership from project facts.",
+          turnIds: [responseTurnId],
+        }],
+        nextDrill: "Rehearse the end-to-end flow in two minutes.",
       },
     },
   };
