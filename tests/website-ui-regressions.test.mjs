@@ -153,6 +153,48 @@ test("Journey Loop facts reserve their final geometry while D1 is loading", asyn
   assert.equal(loading.display, "block");
 });
 
+test("Loop preparation opens a listless Loop-owned modal reader", async () => {
+  const [source, css] = await Promise.all([
+    load("../app/home-client.tsx"),
+    load("../app/interview-arc-v2.css"),
+  ]);
+  const file = parseTsx(source);
+  const rules = parseCss(css);
+  const openLoopActivity = functionNamed(file, "openLoopActivity");
+  const renderLoops = functionNamed(file, "renderLoops");
+  assert.ok(openLoopActivity);
+  assert.ok(renderLoops);
+  assert.match(openLoopActivity.getText(file), /loopReaderHref/);
+  assert.doesNotMatch(openLoopActivity.getText(file), /openPastEntry|transitionToView\("library"\)/);
+  assert.match(renderLoops.getText(file), /ModalReaderPane/);
+  assert.match(renderLoops.getText(file), /loops-reader-base/);
+  assert.match(renderLoops.getText(file), /inert/);
+  assert.match(source, /view === "loops" && renderLoops\(\)/);
+  assert.equal(cssRules(rules, ".loops-reader-workspace.has-open-reader::before")[0]?.declarations.position, "fixed");
+  assert.equal(cssRules(rules, ".loops-reader-workspace.has-open-reader::before")[0]?.declarations.background, "var(--canvas)");
+});
+
+test("Loop job-description dossier has one continuous opaque scroll surface", async () => {
+  const css = await load("../app/loops-redesign.css");
+  const rules = parseCss(css);
+  assert.equal(cssRules(rules, ".loop-jd-dialog")[0]?.declarations.isolation, "isolate");
+  assert.equal(cssRules(rules, ".loop-jd-dialog-header")[0]?.declarations.position, "relative");
+  assert.equal(cssRules(rules, ".loop-jd-dialog-body")[0]?.declarations.padding, "0 18px 18px");
+  assert.equal(cssRules(rules, ".loop-jd-dialog-body")[0]?.declarations["overscroll-behavior"], "contain");
+});
+
+test("closed Problem Banks dedicate the remaining desktop viewport to their internal list", async () => {
+  const css = await load("../app/interview-arc-v2.css");
+  const rules = parseCss(css);
+  const page = ".banks-page:not(.has-open-solution):not(:has(.bank-domain-desk-shell.open))";
+  const pane = `${page} .bank-master-pane`;
+  const list = `${page} .problem-bank-list`;
+  assert.equal(cssRules(rules, page, "min-width: 901px")[0]?.declarations.height, "calc(100dvh - 117px)");
+  assert.equal(cssRules(rules, pane, "min-width: 901px")[0]?.declarations["grid-template-rows"], "auto minmax(0, 1fr)");
+  assert.equal(cssRules(rules, list, "min-width: 901px")[0]?.declarations.height, "auto");
+  assert.equal(cssRules(rules, list, "min-width: 901px")[0]?.declarations["max-height"], "none");
+});
+
 test("Review Queue keeps filters in the menu, branches each row, and joins its folio", async () => {
   const [source, css] = await Promise.all([load("../app/review-queue-view.tsx"), load("../app/review-queue.css")]);
   const file = parseTsx(source);

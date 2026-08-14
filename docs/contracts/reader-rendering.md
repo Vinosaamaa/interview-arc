@@ -15,6 +15,23 @@ The immutable D1 revision is durable content. The page layout, typography, code
 presentation, diagram controls, responsive behavior, highlights, notes, and
 section interactions are shared application code.
 
+## Origin-Preserving Readers
+
+An attempt reader opened from a contextual surface preserves that surface as
+its URL and navigation origin. Reviews stays `view=reviews`, Journey stays
+`view=journey`, and Loops stays `view=loops` with the exact Loop identity plus
+the exact attempt identity. These contextual readers are listless: they show
+the shared attempt or solution document without mounting the Past archive or
+Problem Bank master list beside it.
+
+The covered origin remains fully obscured and inert while the reader is open.
+Close, Escape, and browser Back restore the same origin URL, selected Loop or
+other contextual state, scroll position, and opener focus. Forward may restore
+the reader. Opening a reusable solution adds one nested history depth and
+closing it returns to the exact attempt before another close returns to the
+origin. Never implement contextual navigation by switching to Past and hoping
+the user can navigate back manually.
+
 ## What Updates Existing Artifacts Automatically
 
 The following changes update old and new artifacts together after the Worker is

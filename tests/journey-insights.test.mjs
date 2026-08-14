@@ -5,6 +5,7 @@ import {
   bankReaderHref,
   journeyHrefWithoutReader,
   journeyReaderHref,
+  loopReaderHref,
   loopWorkspaceHref,
   pastReaderHref,
   pastSolutionReaderHref,
@@ -13,6 +14,7 @@ import {
   readerDepthAfterNestedClose,
   readerClosePlan,
   readJourneyReaderState,
+  readLoopReaderState,
   readLoopWorkspaceState,
   readBankReaderState,
   readPastReaderState,
@@ -132,6 +134,44 @@ test("Loop routes preserve exact Loop and round selection while Past links retai
     "/practice?keep=yes&view=past&loop=loop-example-platform&round=round-recruiter&attempt=attempt-exact",
   );
   assert.equal(readLoopWorkspaceState(`https://example.test${pastHref}`), null);
+});
+
+test("Loop attempt readers retain the exact Loop workspace and close back to it", () => {
+  const workspaceHref = loopWorkspaceHref("https://example.test/practice?keep=yes", {
+    loopId: "loop-example-platform",
+    stageId: "round-recruiter",
+  });
+  const readerHref = loopReaderHref(`https://example.test${workspaceHref}`, {
+    loopId: "loop-example-platform",
+    stageId: "round-recruiter",
+    attemptId: "attempt-exact",
+  });
+
+  assert.equal(
+    readerHref,
+    "/practice?keep=yes&view=loops&loop=loop-example-platform&round=round-recruiter&attempt=attempt-exact",
+  );
+  assert.deepEqual(readLoopReaderState(`https://example.test${readerHref}`), {
+    loopId: "loop-example-platform",
+    stageId: "round-recruiter",
+    attemptId: "attempt-exact",
+  });
+  assert.deepEqual(readerClosePlan(`https://example.test${readerHref}`), {
+    view: "loops",
+    href: workspaceHref,
+  });
+
+  const solutionHref = loopReaderHref(`https://example.test${readerHref}`, {
+    loopId: "loop-example-platform",
+    stageId: "round-recruiter",
+    attemptId: "attempt-exact",
+    specialty: "behavioral",
+    problemId: "tell-me-about-yourself",
+  });
+  assert.deepEqual(readerClosePlan(`https://example.test${solutionHref}`), {
+    view: "loops",
+    href: readerHref,
+  });
 });
 
 test("Problem Bank URLs preserve stable problem and nested attempt identity", () => {

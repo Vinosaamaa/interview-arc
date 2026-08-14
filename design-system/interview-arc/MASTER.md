@@ -106,6 +106,12 @@ does not exempt it from this geometry.
 - Major panels below every page hero begin after one exact `20px` gap. The
   Today orchestration rail is a major panel and follows this rule even when it
   is empty.
+- On desktop, the closed Banks discovery surface consumes the viewport space
+  below its `350px` top panel and exact `20px` panel gap. Its outer border ends
+  about `20px` above the browser edge, its controls remain in the panel, and
+  the problem rows scroll inside the remaining track. The page itself must not
+  grow merely because the bank contains more rows. Expanded domain desks,
+  readers, and mobile layouts keep their own documented flow behavior.
 - Loops uses one workspace-owned `1px` chronology spine from the hero boundary
   to the center of the terminal state. Child panels and the stage list must not
   draw overlapping spine segments; nodes cover the line at intersections and

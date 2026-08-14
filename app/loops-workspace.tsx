@@ -8,7 +8,7 @@ import {
   parseJobDescription,
   type RoleBriefSourcePayload,
 } from "./loop-role-brief-source";
-import { loopWorkspaceHref, readLoopWorkspaceState } from "./journey-insights";
+import { loopWorkspaceHref, readLoopReaderState, readLoopWorkspaceState } from "./journey-insights";
 import { acquireDocumentScrollLock } from "./document-scroll-policy";
 import {
   groupLoopPreparation,
@@ -390,6 +390,7 @@ export function LoopsWorkspace({ onOpenActivity }: { onOpenActivity: (activityId
 
   useEffect(() => {
     if (!selectedLoop) return;
+    if (readLoopReaderState(window.location.href)) return;
     const href = loopWorkspaceHref(window.location.href, { loopId: selectedLoop.loop.loopId, stageId: "" });
     if (`${window.location.pathname}${window.location.search}${window.location.hash}` !== href) window.history.replaceState({ ...window.history.state, interviewArcWorkspaceView: "loops" }, "", href);
   }, [selectedLoop]);

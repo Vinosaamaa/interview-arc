@@ -123,15 +123,15 @@
 
 /* Private source reader: a bounded pink Loop dossier with one scrolling body. */
 .loop-jd-overlay { --page-accent: #a8415c; --page-accent-soft: #fbe8ee; background: rgba(45, 25, 32, .68); backdrop-filter: blur(10px) saturate(.8); }
-.loop-jd-dialog { width: min(1080px, 100%); border-color: color-mix(in srgb, var(--page-accent) 38%, #fff); background: color-mix(in srgb, var(--page-accent-soft) 38%, #fff); box-shadow: 0 34px 100px rgba(55, 20, 31, .42); }
-.loop-jd-dialog-header { min-height: 132px; padding: 25px 30px; border-bottom: 0; background: linear-gradient(118deg, #fff 0%, color-mix(in srgb, var(--page-accent-soft) 88%, white) 100%); box-shadow: inset 6px 0 var(--page-accent); }
+.loop-jd-dialog { width: min(1080px, 100%); border-color: color-mix(in srgb, var(--page-accent) 38%, #fff); background: color-mix(in srgb, var(--page-accent-soft) 38%, #fff); box-shadow: 0 34px 100px rgba(55, 20, 31, .42); isolation: isolate; }
+.loop-jd-dialog-header { min-height: 132px; padding: 25px 30px; border-bottom: 0; background: linear-gradient(118deg, #fff 0%, color-mix(in srgb, var(--page-accent-soft) 88%, white) 100%); box-shadow: inset 6px 0 var(--page-accent); position: relative; z-index: 3; }
 .loop-jd-dialog-header > div { gap: 6px; }
 .loop-jd-dialog-header span { color: var(--page-accent); font-weight: 820; letter-spacing: .11em; }
 .loop-jd-dialog-header h2 { color: #35242a; font-size: clamp(1.8rem, 3vw, 2.55rem); }
 .loop-jd-dialog-header p { color: #735d65; font-size: .82rem; }
 .loop-jd-close { border-color: color-mix(in srgb, var(--page-accent) 42%, #d8cbd0); color: var(--page-accent); }
 .loop-jd-close:hover { background: var(--page-accent-soft); }
-.loop-jd-dialog-body { padding: 18px; background: color-mix(in srgb, var(--page-accent-soft) 50%, #f7f5f3); }
+.loop-jd-dialog-body { padding: 0 18px 18px; background: color-mix(in srgb, var(--page-accent-soft) 50%, #f7f5f3); overscroll-behavior: contain; scrollbar-gutter: stable; }
 .loop-jd-provenance { max-width: 820px; margin: 0 auto; padding: 14px 18px; border: 1px solid color-mix(in srgb, var(--page-accent) 22%, #d9d0d2); border-radius: 13px 13px 0 0; background: color-mix(in srgb, var(--page-accent-soft) 72%, white); position: sticky; top: 0; z-index: 2; }
 .loop-jd-provenance strong { color: #442e36; }
 .loop-jd-provenance span { color: #806b73; }
