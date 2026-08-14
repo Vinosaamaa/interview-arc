@@ -18,6 +18,8 @@ import {
   timers,
 } from "./schema";
 
+const MAX_PRACTICE_RECORD_SEMANTIC_BYTES = 512 * 1_024;
+
 export type PracticeResponseStage = {
   key: string;
   state: "answered" | "partially_answered" | "no_answer_provided" | "needs_correction";
@@ -158,6 +160,15 @@ export async function assertPracticeRecordFinalizationPreconditions(input: {
   if (!input.finalization.summary?.trim()) {
     throw new Error("A complete Practice Record needs an attempt summary.");
   }
+  const semanticBytes = new TextEncoder().encode(JSON.stringify({
+    summary: input.finalization.summary,
+    review: input.finalization.review,
+    references: input.finalization.references,
+    practiceRecord: input.finalization.practiceRecord,
+  })).byteLength;
+  if (semanticBytes > MAX_PRACTICE_RECORD_SEMANTIC_BYTES) {
+    throw new Error("The Practice Record semantic packet exceeds its bounded byte limit.");
+  }
   assertResponseStageSemantics(input.finalization.practiceRecord.responseStages);
   const db = getDb();
   const [activities, timerRows, outcomeRows, transcriptRows] = await Promise.all([
@@ -270,7 +281,7 @@ export async function persistFinalizedPracticeRecord(input: {
   await assertPracticeRecordFinalizationPreconditions(input);
 
   const db = getDb();
-  const [activities, timerRows, outcomeRows, turns, notes, classifications, codeAttempts, finalAnswers, solutionLinks, finalizations, currentRows] = await Promise.all([
+  const [activities, timerRows, outcomeRows, turns, noteCounts, classifications, codeAttempts, finalAnswers, solutionLinks, finalizations, currentRows] = await Promise.all([
     db.select().from(extraActivities).where(and(
       eq(extraActivities.ownerId, input.ownerId),
       eq(extraActivities.id, input.activityId),
@@ -284,11 +295,11 @@ export async function persistFinalizedPracticeRecord(input: {
       eq(outcomes.ownerId, input.ownerId),
       eq(outcomes.activityId, input.activityId),
     )).limit(1),
-    db.select().from(practiceTranscriptTurns).where(and(
+    db.select({ turnId: practiceTranscriptTurns.turnId }).from(practiceTranscriptTurns).where(and(
       eq(practiceTranscriptTurns.ownerId, input.ownerId),
       eq(practiceTranscriptTurns.activityId, input.activityId),
     )).orderBy(asc(practiceTranscriptTurns.sequence), asc(practiceTranscriptTurns.occurredAt)),
-    db.select().from(practiceNotes).where(and(
+    db.select({ count: sql<number>`count(*)`.mapWith(Number) }).from(practiceNotes).where(and(
       eq(practiceNotes.ownerId, input.ownerId),
       eq(practiceNotes.activityId, input.activityId),
     )),
@@ -365,7 +376,7 @@ export async function persistFinalizedPracticeRecord(input: {
       firstTurnId: turns[0]?.turnId ?? null,
       lastTurnId: turns.at(-1)?.turnId ?? null,
     },
-    notesRevision: notes.length || null,
+    notesRevision: noteCounts[0]?.count || null,
     specialtyOutput: {
       kind: specialtyOutputKind(input.specialty),
       responseStages: input.finalization.practiceRecord.responseStages,

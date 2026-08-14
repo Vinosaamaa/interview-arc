@@ -89,23 +89,14 @@ override; never fabricate a switch-away/switch-back pair.
 
 ## Finish Packet
 
-At Finish, freeze one exact semantic packet before returning. Give its verified
-facts and source summaries to the bounded authoring child; give only the
-child's completed bytes and stable identities to the mechanical persistence
-child. `save_specialist_finalization` must include:
-
-- the self-contained problem/prompt body and canonical URL when available;
-- the evidence-grounded summary, review, references, and complete Solution
-  Profile decision/content;
-- each material response stage as `answered`, `partially_answered`,
-  `no_answer_provided`, or `needs_correction`, keeping owner response, Mentor
-  guidance, adopted understanding, and exact turn IDs distinct;
-- the next drill, or explicit null when none is supported.
-
-Do not infer a missing response, prompt, outcome, timing, code, answer, or
-drawing. A complete packet is durably queued before the visible parent returns;
-Past remains `Finalization pending` until immutable D1/R2 write and exact
-readback succeed.
+Follow the Finish boundary in
+[`owner-private-practice-records.md`](../docs/contracts/owner-private-practice-records.md)
+and bundle contract in
+[`durable-practice-publishing.md`](../docs/contracts/durable-practice-publishing.md).
+Freeze the exact prompt, supported review/profile content, response-stage
+owner/Mentor/adopted split with turn IDs, and next drill; never infer missing
+evidence. Queue before returning. Past stays `Finalization pending` until exact
+immutable readback.
 
 ## Solution Profile Quality Gate
 

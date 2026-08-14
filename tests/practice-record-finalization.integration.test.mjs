@@ -123,10 +123,13 @@ async function call(client, name, args) {
 const callRaw = (client, name, args) => client.callTool({ name, arguments: args });
 
 async function settledJob(client, jobId) {
-  for (let attempt = 0; attempt < 120; attempt += 1) {
+  const deadline = Date.now() + 6_000;
+  let delayMs = 25;
+  while (Date.now() < deadline) {
     const result = await call(client, "get_specialist_write_status", { jobIds: [jobId] });
     if (["saved", "failed"].includes(result.jobs[0].status)) return result.jobs[0];
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    delayMs = Math.min(delayMs * 2, 250);
   }
   throw new Error(`Specialist write ${jobId} did not settle.`);
 }
@@ -324,6 +327,50 @@ test("complete finalization becomes saved only with an exact immutable Practice 
     const ownerReadbackAfterCollision = await call(client, "get_activity_practice_record", { activityId });
     assert.equal(ownerReadbackAfterCollision.practiceRecord.fingerprint, receipt.result.practiceRecord.fingerprint);
     assert.equal(ownerReadbackAfterCollision.turns[0].body, "I would use an owner-scoped outbox.");
+
+    const boundedDetail = "detail ".repeat(2_857);
+    const oversizedPacket = await callRaw(client, "save_specialist_finalization", {
+      activityId: incompleteActivityId,
+      specialty: "system_design",
+      questionId,
+      finalization: {
+        ...finalization.finalization,
+        title: "Oversized semantic packet fixture",
+        summary: "The structured sidecar intentionally exceeds the bounded immutable Practice Record row budget.",
+        solutionProfileAction: "reuse_current",
+        solutionProfile: undefined,
+        interactionModeClassificationOperationId: "mode-practice-record-oversized",
+        interactionModeEvidence: {
+          schemaVersion: 1,
+          provenance: "recorded",
+          materialSpecialistTurnIds: ["specialist-practice-record-incomplete"],
+          assistanceEvents: [],
+        },
+        practiceRecord: {
+          prompt: {
+            body: "Design a bounded immutable finalization record.",
+            canonicalUrl: "https://example.test/design-durable-finalization",
+          },
+          responseStages: Array.from({ length: 9 }, (_, index) => ({
+            key: `oversized_stage_${index + 1}`,
+            state: "answered",
+            ownerResponse: boundedDetail,
+            mentorGuidance: boundedDetail,
+            finalUnderstanding: boundedDetail,
+            turnIds: ["user-practice-record-incomplete", "specialist-practice-record-incomplete"],
+          })),
+          nextDrill: "Keep the durable semantic packet bounded before enqueue.",
+        },
+      },
+    });
+    assert.equal(oversizedPacket.isError, true);
+    assert.equal(oversizedPacket.structuredContent.code, "specialist_write_rejected");
+    assert.match(oversizedPacket.structuredContent.error, /bounded byte limit/);
+    const oversizedReadback = await call(client, "get_activity_practice_record", {
+      activityId: incompleteActivityId,
+    });
+    assert.equal(oversizedReadback.practiceRecord, null);
+    assert.equal(oversizedReadback.finalization, null);
 
     const foreignTurnPacket = await callRaw(client, "save_specialist_finalization", {
       activityId: incompleteActivityId,
