@@ -5,12 +5,12 @@ import { fileURLToPath } from "node:url";
 
 const manifestPath = "docs/contracts/legacy-owner-private-content-manifest.json";
 const privateDirectories = [
-  "data/daily",
-  "audio-answers",
-  "practice/behavioral/sessions",
-  "practice/behavioral/story-bank/projects",
-  "practice/leetcode/attempts",
-  "practice/system-design/sessions",
+  ["data/daily", ".json"],
+  ["audio-answers", ".md"],
+  ["practice/behavioral/sessions", ".md"],
+  ["practice/behavioral/story-bank/projects", ".md"],
+  ["practice/leetcode/attempts", ".md"],
+  ["practice/system-design/sessions", ".md"],
 ];
 const solutionDirectories = [
   "practice/behavioral/solutions",
@@ -41,9 +41,16 @@ async function filesBelow(root, relativeDirectory) {
 }
 
 async function detectedPrivatePaths(root) {
-  const paths = (await Promise.all(privateDirectories.map((directory) => filesBelow(root, directory)))).flat();
+  const paths = (await Promise.all(privateDirectories.map(async ([directory, extension]) =>
+    (await filesBelow(root, directory)).filter((relativePath) => path.extname(relativePath) === extension)
+  ))).flat();
   const solutions = (await Promise.all(solutionDirectories.map((directory) => filesBelow(root, directory)))).flat();
-  paths.push(...solutions.filter((relativePath) => /profile-revision/i.test(path.basename(relativePath))));
+  for (const relativePath of solutions.filter((candidate) => path.extname(candidate) === ".md")) {
+    const source = await readFile(path.join(root, relativePath), "utf8");
+    if (/profile-revision/i.test(path.basename(relativePath)) || /^solution_profile_revision:/m.test(source)) {
+      paths.push(relativePath);
+    }
+  }
   return [...new Set(paths)].sort();
 }
 

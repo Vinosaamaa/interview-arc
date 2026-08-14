@@ -51,11 +51,19 @@ test("rejects a new owner-private Git artifact", async () => {
 
 test("rejects a new revisioned Solution Profile artifact", async () => {
   const { root } = await fixture();
-  const added = "practice/leetcode/solutions/example-profile-revision-03.md";
+  const added = "practice/system-design/solutions/example.md";
   await mkdir(path.join(root, path.dirname(added)), { recursive: true });
-  await writeFile(path.join(root, added), "new private profile\n");
+  await writeFile(path.join(root, added), "---\nsolution_profile_revision: 3\n---\nnew private profile\n");
   await assert.rejects(
     validateOwnerPrivateContentBoundary(root),
     /New owner-private Git content is forbidden under a protected content root/,
   );
+});
+
+test("does not treat an ignored local recording as Git narrative", async () => {
+  const { root } = await fixture();
+  const recording = "audio-answers/local-recording.m4a";
+  await mkdir(path.join(root, path.dirname(recording)), { recursive: true });
+  await writeFile(path.join(root, recording), "local bytes");
+  assert.equal((await validateOwnerPrivateContentBoundary(root)).checked, 1);
 });
