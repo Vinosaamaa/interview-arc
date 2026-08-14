@@ -11,7 +11,7 @@ createdAt: 2026-08-14
 reconstructed: false
 confidence: verified
 unknowns: []
-modules: ["interview-loops", "practice-readers", "problem-banks", "interview-visual-system"]
+modules: ["interview-loops", "practice-readers", "problem-banks"]
 interfaces: ["loop-preparation-reader", "job-description-reader", "problem-bank-list"]
 seams: ["loop-preparation-to-practice-record", "role-brief-to-private-source", "viewport-to-bank-list"]
 adapters: ["loops-workspace", "shared-reader-shell", "banks-workspace"]
@@ -23,8 +23,8 @@ capabilities: ["loop-owned-reader-history", "bounded-private-source-reader", "ad
 amends: []
 supersedes: []
 learningRefs: []
-sources: [{"label":"Arc issue #301","url":"https://github.com/Vinosaamaa/interview-arc/issues/301","kind":"issue"},{"label":"Arc issue #308","url":"https://github.com/Vinosaamaa/interview-arc/issues/308","kind":"issue"},{"label":"Pull request #332","url":"https://github.com/Vinosaamaa/interview-arc/pull/332","kind":"pull-request"}]
-verification: {"state":"verified","evidenceRefs":["issue:301","issue:308","tests/website-ui-regressions.test.mjs","tests/document-scroll-policy.test.mjs","tests/journey-insights.test.mjs"]}
+sources: [{"label":"Arc issue #301","url":"https://github.com/Vinosaamaa/interview-arc/issues/301","kind":"issue"},{"label":"Pull request #332","url":"https://github.com/Vinosaamaa/interview-arc/pull/332","kind":"pull-request"}]
+verification: {"state":"verified","evidenceRefs":["issue:301","tests/website-ui-regressions.test.mjs","tests/document-scroll-policy.test.mjs","tests/journey-insights.test.mjs"]}
 visibility: public-safe
 publicationEligibility: eligible
 issue: 301
@@ -40,7 +40,7 @@ Linked preparation in a Hiring Loop previously reused the Past route. Opening an
 
 Loops now owns a nested reader URL and history state. Selecting completed preparation opens the shared Practice Record reader as a listless modal over the current Loop, makes the covered Loop inert, and restores the exact Loop and opener on Close, Escape, or browser history. Opening a nested reusable solution remains inside that same Loop-owned history chain.
 
-The Job Description uses one opaque, viewport-bounded dialog with a fixed document header and independently scrolling body. Closed Problem Banks reserves the remaining desktop viewport for its internally scrolling result list and keeps a twenty-pixel edge gap. Interview destination accents now reach major body surfaces instead of stopping at the hero.
+The Job Description uses one opaque, viewport-bounded dialog with a fixed document header and independently scrolling body. Closed Problem Banks reserves the remaining desktop viewport for its internally scrolling result list and keeps a twenty-pixel edge gap.
 
 Reusing the Past route was rejected because it made a preparation action change workspace ownership. Duplicating the Practice Record reader inside Loops was also rejected because it would fork one authoritative presentation contract. The selected boundary reuses the shared reader component while giving Loops its own URL and history adapter.
 
