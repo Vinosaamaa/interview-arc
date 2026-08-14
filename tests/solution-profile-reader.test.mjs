@@ -77,6 +77,17 @@ test("Solution Profile grouping is specialty-aware and never invents an Attempt 
     title: "Reference design",
     sections: projectSections,
   }]);
+  assert.deepEqual(groupSolutionProfileSections("behavioral", projectSections), [{
+    key: "reference-answer",
+    title: "Reference answer",
+    sections: projectSections,
+  }]);
+  assert.ok([
+    ...groupSolutionProfileSections("behavioral", projectSections, { focus: "project_overview" }),
+    ...groupSolutionProfileSections("leetcode", projectSections),
+    ...groupSolutionProfileSections("system_design", projectSections),
+    ...groupSolutionProfileSections("behavioral", projectSections),
+  ].every((group) => group.title !== "Attempt record"));
 });
 
 test("the shared reader exposes latest revision, approach panels, Q&A, and incomplete historical content", async () => {
@@ -91,7 +102,6 @@ test("the shared reader exposes latest revision, approach panels, Q&A, and incom
   assert.match(client, /href="#solution-preferred-answer"/);
   assert.match(client, /href="#solution-practice-scenarios"/);
   assert.match(client, /href="#solution-references"/);
-  assert.doesNotMatch(client.slice(client.indexOf("function renderSolutionReader()"), client.indexOf("function renderLifecycleDialog()")), /Attempt record/);
   assert.match(client, /selectedProblemProfileAvailable && !selectedProblemProfileReusable/);
   assert.match(client, /historical revision predates the current completeness gate/i);
   assert.match(css, /\.approach-panel/);
