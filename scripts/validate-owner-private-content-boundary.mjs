@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseContentMarkdownDocument } from "./content-source.mjs";
 
 const manifestPath = "docs/contracts/legacy-owner-private-content-manifest.json";
 const privateDirectories = [
@@ -23,21 +24,24 @@ function normalize(relativePath) {
 }
 
 async function filesBelow(root, relativeDirectory) {
-  const directory = path.join(root, relativeDirectory);
-  let entries;
-  try {
-    entries = await readdir(directory, { withFileTypes: true });
-  } catch (error) {
-    if (error?.code === "ENOENT") return [];
-    throw error;
+  const files = [];
+  const pending = [relativeDirectory];
+  while (pending.length) {
+    const current = pending.pop();
+    let entries;
+    try {
+      entries = await readdir(path.join(root, current), { withFileTypes: true });
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw error;
+    }
+    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+      const relativePath = normalize(path.join(current, entry.name));
+      if (entry.isDirectory()) pending.push(relativePath);
+      else if (entry.isFile() && entry.name !== ".gitkeep" && entry.name !== "README.md") files.push(relativePath);
+    }
   }
-  const nested = await Promise.all(entries.map(async (entry) => {
-    const relativePath = normalize(path.join(relativeDirectory, entry.name));
-    if (entry.isDirectory()) return filesBelow(root, relativePath);
-    if (!entry.isFile() || entry.name === ".gitkeep" || entry.name === "README.md") return [];
-    return [relativePath];
-  }));
-  return nested.flat();
+  return files.sort();
 }
 
 async function detectedPrivatePaths(root) {
@@ -47,7 +51,8 @@ async function detectedPrivatePaths(root) {
   const solutions = (await Promise.all(solutionDirectories.map((directory) => filesBelow(root, directory)))).flat();
   for (const relativePath of solutions.filter((candidate) => path.extname(candidate) === ".md")) {
     const source = await readFile(path.join(root, relativePath), "utf8");
-    if (/profile-revision/i.test(path.basename(relativePath)) || /^solution_profile_revision:/m.test(source)) {
+    const { frontmatter } = parseContentMarkdownDocument(source);
+    if (/profile-revision/i.test(path.basename(relativePath)) || frontmatter.solution_profile_revision !== undefined) {
       paths.push(relativePath);
     }
   }
@@ -78,6 +83,7 @@ export async function validateOwnerPrivateContentBoundary(root) {
   }
 
   const actualPaths = await detectedPrivatePaths(root);
+  const actualPathSet = new Set(actualPaths);
   for (const relativePath of actualPaths) {
     const expectedHash = expected.get(relativePath);
     if (!expectedHash) {
@@ -89,7 +95,7 @@ export async function validateOwnerPrivateContentBoundary(root) {
     }
   }
   for (const relativePath of expected.keys()) {
-    if (!actualPaths.includes(relativePath)) {
+    if (!actualPathSet.has(relativePath)) {
       throw new Error("Legacy owner-private content manifest contains a missing frozen file.");
     }
   }

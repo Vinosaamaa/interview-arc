@@ -34,8 +34,8 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
   remains explicit and reconcilable.
 - Give coding, system-design, and behavioral activities the same cycling result-flag layout: Solved, Solved with help, and Failed. Preserve `solved_after_reviewing_approach` as the canonical stored value. The hover/focus legend must explain the colors and must not be clipped inside its activity card.
 - Open the original LeetCode page for prompt reading and submission. Never imply that code was executed or accepted locally.
-- Show every finalized owner-private Practice Record from D1, including its
-  transcript/review and authenticated R2 assets.
+- Past pages through bounded finalized-record metadata from D1. Load one exact
+  transcript/review and its authenticated R2 assets only when opened.
 - Past contains every completed attempt, including failed work worth reviewing;
   it never shows planned or running activities. Keep practice-type filters
   separate from attention filters: Due now, Needs review, Solved, Solved with

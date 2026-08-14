@@ -162,17 +162,11 @@ similarly named operation or loop retries.
   reuse one stable mutation ID for an exact retry, and report every deleted or
   rejected ID from the receipt. Never substitute whole-workbench rollover or
   delete durable evidence.
-- `Finish` or legacy `Publish this session` flushes and queues one complete
-  owner-private finalization packet.
-- The visible specialist owns transcript scope, factual summary/review,
-  references, and exact outcome/timing/profile/asset inputs. It may return once
-  that packet is durably queued, ending with a truthful pending status.
-- The mechanical persistence child writes and rereads exact D1/R2 revisions;
-  it never authors content. Past remains hidden until its saved receipt.
-- `Publish today's practice` means reconcile/finalize every eligible activity
-  for that specialty. It performs no Git, PR, deploy, or public release.
-- The coordinator handles pending/failed reconciliation and separately
-  authorized public exports, not routine private completion.
+- `Finish`, legacy `Publish this session`, and specialty-wide reconciliation
+  follow `owner-private-practice-records.md`; this guide owns only specialty
+  meaning and exact inputs.
+- `Publish today's practice` is private reconciliation, never implicit public
+  release. Coordinator routing follows the same contract.
 - Pacific midnight assigns completion date but never splits a continuous mock
   transcript or changes `session_id`.
 

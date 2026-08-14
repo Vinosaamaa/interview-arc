@@ -25,14 +25,19 @@ model design.
 
 ## Drawing Preflight
 
-For every start/resume, use the project-installed `excalidraw-skill` and the
-pinned local `excalidraw_live` v2 runtime on `127.0.0.1:3032`:
+At a new activity, reconnect, or missing/expired/unhealthy lease, use the
+project-installed `excalidraw-skill` and pinned local `excalidraw_live` v2
+runtime on `127.0.0.1:3032`:
 
 1. resolve the exact activity;
 2. start or reuse one server through the skill wrapper;
 3. open exactly one Playwright-owned Chromium tab;
 4. verify health and one browser/CLI round trip;
 5. restore that activity's latest owner-private checkpoint.
+
+A healthy lease is bound to the exact server, tab, activity, and checkpoint
+revision and expires after five minutes without a successful scene exchange.
+Resume within that lease reuses it without another tab or round trip.
 
 Never use the blocked Chrome extension, Computer Use, remote Excalidraw MCP,
 `npx`, port 3000, or a second tab/server. WebSocket state is not durable; save
@@ -324,12 +329,9 @@ flows, scaling/reliability decisions, tradeoffs, and closing that were produced
 or later adopted. Keep missing stages and Mentor guidance explicit. Summary,
 Conversation, Activity Review, and Technical Audit render once outside it.
 
-The reusable Solution Profile contains the complete canonical framing,
-functional and non-functional requirements, estimates, APIs, data model,
-model diagram, responsibilities, flows, storage/cache/search, scaling,
-reliability, security, observability, alternatives/tradeoffs, Questions and
-Answers, walkthrough, follow-ups, and references. It never contains the dated
-conversation or attempt review.
+Reusable content follows `../../docs/contracts/solution-profiles.md`. Keep the
+owner's original Excalidraw asset attempt-only; the separately attributed
+draw.io/SVG model and substantial Q&A are Solution material.
 
 The reusable first-party TikTok reference solution is:
 

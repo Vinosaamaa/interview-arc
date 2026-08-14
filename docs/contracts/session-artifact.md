@@ -18,6 +18,10 @@ activity or requests finalization.
    boundary. `Start a new session` remains a supported explicit override, not a
    phrase the user must repeat every day.
 2. Append each meaningful user/coach exchange to D1 in chronological order.
+   The parent durably enqueues each response before returning. The persistence
+   child may drain at most eight ordered items together and flushes on one
+   second idle, eight items, checkpoint, Finish, or shutdown; batching never
+   leaves the only copy in agent memory.
 3. Finish closes the specialist draft and durably queues the exact Practice
    Record, Solution Profile, review, references, and supplied asset packet.
 4. A mechanical persistence child verifies D1/R2 readback. Past remains hidden

@@ -56,7 +56,8 @@ paraphrases, researches, fills gaps, changes results, edits Git, or deploys. It:
 2. stages and verifies supplied R2 assets;
 3. inserts immutable Practice Record/Profile/asset revisions and exact links;
 4. compare-and-sets only current pointers;
-5. rereads every stored revision, hash, and link;
+5. batch-rereads only revisions, hashes, and links written or referenced by the
+   current packet, within platform query limits;
 6. marks the job `saved` only after exact readback.
 
 The visible specialist may return after the complete packet is durably queued.
@@ -124,8 +125,9 @@ separate Mentor guidance.
 
 ## Solution Profiles
 
-All profiles remain subject to `solution-profiles.md` and its executable depth
-gate. LeetCode uses one Reference Implementation panel with Java/Python tabs,
+All profiles remain subject to
+[`solution-profiles.md`](./solution-profiles.md) and the executable gate in
+`app/solution-profile-policy.ts`. LeetCode uses one Reference Implementation panel with Java/Python tabs,
 then one collapsible panel per verified Editorial or generated approach.
 Behavioral Project Deep Dives and System Design profiles include a dedicated
 Questions and Answers section when substantial questions occurred. Restate a
@@ -148,6 +150,9 @@ Never replace the original drawing with the model.
 
 Both readers provide alt text, zoom, pan, reset, enlarged view, keyboard and
 narrow-screen support, and exact revision attribution.
+
+Past reads bounded pages of record metadata. It lazy-loads one exact Practice
+Record revision and authenticated asset bytes only when that record opens.
 
 ## Record schemas
 

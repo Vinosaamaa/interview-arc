@@ -65,6 +65,7 @@
         "kind": { "enum": ["code_attempts", "final_tailored_answer", "your_design"] },
         "responseStages": {
           "type": "array",
+          "maxItems": 32,
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -75,13 +76,13 @@
               "ownerResponse": { "type": ["string", "null"] },
               "mentorGuidance": { "type": ["string", "null"] },
               "finalUnderstanding": { "type": ["string", "null"] },
-              "turnIds": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true }
+              "turnIds": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true }
             }
           }
         },
-        "codeAttemptIds": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true },
+        "codeAttemptIds": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true },
         "finalAnswerRevision": { "type": ["integer", "null"], "minimum": 1 },
-        "designAssetIds": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true }
+        "designAssetIds": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true }
       }
     },
     "review": {
@@ -96,6 +97,7 @@
     },
     "references": {
       "type": "array",
+      "maxItems": 64,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -118,6 +120,7 @@
     },
     "assetLinks": {
       "type": "array",
+      "maxItems": 32,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -135,7 +138,7 @@
   "$defs": {
     "stableId": { "type": "string", "minLength": 1, "maxLength": 240, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
     "dateTime": { "type": "string", "format": "date-time" },
-    "nonempty": { "type": "string", "minLength": 1 },
-    "stringList": { "type": "array", "items": { "$ref": "#/$defs/nonempty" } }
+    "nonempty": { "type": "string", "minLength": 1, "maxLength": 20000 },
+    "stringList": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/nonempty" } }
   }
 }

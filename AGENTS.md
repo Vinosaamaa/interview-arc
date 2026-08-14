@@ -91,12 +91,9 @@ Interview Arc, and perform its design-plan and self-critique passes.
   JavaScript, or lint configuration changes require `pnpm lint`. Validate D1
   changes locally with `pnpm db:migrate:local` and
   `pnpm content:import:local`.
-- Legacy private Git artifacts are frozen by
-  `docs/contracts/legacy-owner-private-content-manifest.json`. Do not add or
-  modify one; remove it only after authenticated D1/R2 parity is proven.
-- The coordinator reconciles pending finalizations and separately authorized
-  public exports. Routine private completion needs no Git branch, PR, deploy,
-  or publication mark.
+- Private finalization, legacy migration, reconciliation, and public-export
+  routing are owned exclusively by
+  `docs/contracts/owner-private-practice-records.md`.
 - Never merge/deploy another task's uncommitted work. Production publishing is
   owned by the main-branch workflow and follows successful validation.
 - Follow the exact execution-ledger and hosted-run reporting rules in

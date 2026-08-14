@@ -33,10 +33,9 @@ and composing the complete visible answer plus its exact persistence sidecar:
    The status line is always the final non-empty line and never enters the
    durable transcript or publication.
 
-A separate bounded authoring child may expand a parent-verified source packet
-into an exhaustive Solution Profile during the visible review. It does not
-browse, coach, change evidence, or write durable state. The parent validates
-and adopts its exact bytes; the persistence child stores them mechanically.
+The bounded authoring-child policy lives in
+[`owner-private-practice-records.md`](./owner-private-practice-records.md).
+This child receives only the parent's accepted bytes and storage operations.
 
 For Voice grouping, operation selection, membership, and reservation, follow
 [`durable-practice-publishing.md`](./durable-practice-publishing.md). Delegate
