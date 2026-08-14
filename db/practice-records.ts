@@ -11,12 +11,16 @@ import {
   leetcodeCodeAttempts,
   outcomes,
   practiceInteractionModeClassifications,
+  practiceAssets,
+  practiceAssetRevisions,
+  practiceAssetSetOperations,
   practiceNotes,
   practiceRecordRevisions,
   practiceRecords,
   practiceTranscriptTurns,
   timers,
 } from "./schema";
+import type { PreparedPracticeAsset } from "./practice-assets";
 
 const MAX_PRACTICE_RECORD_SEMANTIC_BYTES = 512 * 1_024;
 
@@ -33,6 +37,7 @@ export type PracticeRecordSemanticInput = {
   prompt: { body: string; canonicalUrl?: string | null };
   responseStages: PracticeResponseStage[];
   nextDrill?: string | null;
+  assetSet?: { operationId: string; manifestSha256: string };
 };
 
 type PracticeRecordPayload = {
@@ -273,6 +278,7 @@ async function exactReceipt(
   activityId: string,
   operationId: string,
   requestFingerprint: string,
+  allowPending = false,
 ): Promise<PracticeRecordWriteReceipt | null> {
   const db = getDb();
   const revision = await readRevisionByOperation(ownerId, operationId);
@@ -294,6 +300,12 @@ async function exactReceipt(
   const finalization = finalizations[0];
   const payload = revision.payload as PracticeRecordPayload;
   const fingerprint = await sha256Hex(JSON.stringify(payload));
+  const exactPendingFinalization = finalization?.status === "draft"
+    && finalization.practiceRecordRevision === revision.revision
+    && finalization.practiceRecordFingerprint === revision.recordFingerprint
+    && finalization.finalizationOperationId === operationId
+    && finalization.finalizationRequestFingerprint === requestFingerprint;
+  if (!allowPending && exactPendingFinalization) return null;
   if (!pointer
       || !pointerMatchesPayload(pointer, payload)
       || pointer.recordFingerprint !== revision.recordFingerprint
@@ -302,7 +314,8 @@ async function exactReceipt(
       || payload.finalizationOperationId !== operationId
       || payload.revision !== revision.revision
       || fingerprint !== revision.recordFingerprint
-      || finalization?.status !== "ready"
+      || (!allowPending && finalization?.status !== "ready")
+      || (allowPending && !["draft", "ready"].includes(finalization?.status ?? ""))
       || finalization?.practiceRecordRevision !== revision.revision
       || finalization.practiceRecordFingerprint !== revision.recordFingerprint
       || finalization.finalizationOperationId !== operationId
@@ -319,6 +332,37 @@ async function exactReceipt(
   };
 }
 
+async function promotePendingPracticeRecord(input: {
+  ownerId: string;
+  activityId: string;
+  operationId: string;
+  requestFingerprint: string;
+  revision: number;
+  fingerprint: string;
+  nowMs: number;
+}) {
+  const db = getDb();
+  await db.batch([
+    d1TransactionalInvariantGuard(db, sql`EXISTS (
+      SELECT 1 FROM ${activityFinalizations}
+      WHERE ${activityFinalizations.ownerId} = ${input.ownerId}
+        AND ${activityFinalizations.activityId} = ${input.activityId}
+        AND ${activityFinalizations.status} = 'draft'
+        AND ${activityFinalizations.finalizationOperationId} = ${input.operationId}
+        AND ${activityFinalizations.finalizationRequestFingerprint} = ${input.requestFingerprint}
+        AND ${activityFinalizations.practiceRecordRevision} = ${input.revision}
+        AND ${activityFinalizations.practiceRecordFingerprint} = ${input.fingerprint}
+    )`),
+    db.update(activityFinalizations).set({
+      status: "ready",
+      updatedAt: input.nowMs,
+    }).where(and(
+      eq(activityFinalizations.ownerId, input.ownerId),
+      eq(activityFinalizations.activityId, input.activityId),
+    )),
+  ] as unknown as Parameters<typeof db.batch>[0]);
+}
+
 export async function persistFinalizedPracticeRecord(input: {
   ownerId: string;
   activityId: string;
@@ -328,6 +372,10 @@ export async function persistFinalizedPracticeRecord(input: {
   operationId: string;
   requestFingerprint: string;
   nowMs: number;
+  preparedAssets?: PreparedPracticeAsset[];
+  assetSetOperationId?: string;
+  assetSetManifestSha256?: string;
+  verifyPreparedAssets?: () => Promise<void>;
 }): Promise<PracticeRecordWriteReceipt> {
   const prior = await exactReceipt(
     input.ownerId,
@@ -336,6 +384,31 @@ export async function persistFinalizedPracticeRecord(input: {
     input.requestFingerprint,
   );
   if (prior) return prior;
+  const pending = await exactReceipt(
+    input.ownerId,
+    input.activityId,
+    input.operationId,
+    input.requestFingerprint,
+    true,
+  );
+  if (pending) {
+    if (!input.verifyPreparedAssets) {
+      throw new Error("The pending Practice Record needs exact private-asset verification before promotion.");
+    }
+    await input.verifyPreparedAssets();
+    await promotePendingPracticeRecord({
+      ownerId: input.ownerId,
+      activityId: input.activityId,
+      operationId: input.operationId,
+      requestFingerprint: input.requestFingerprint,
+      revision: pending.revision,
+      fingerprint: pending.fingerprint,
+      nowMs: input.nowMs,
+    });
+    const promoted = await exactReceipt(input.ownerId, input.activityId, input.operationId, input.requestFingerprint);
+    if (!promoted) throw new Error("The immutable Practice Record was not ready after private-asset promotion.");
+    return promoted;
+  }
   await assertPracticeRecordFinalizationPreconditions(input);
 
   const db = getDb();
@@ -363,6 +436,21 @@ export async function persistFinalizedPracticeRecord(input: {
     throw new Error("A complete Practice Record needs an authoritative activity title.");
   }
   const revision = (current?.currentRevision ?? 0) + 1;
+  const preparedAssets = input.preparedAssets ?? [];
+  const semanticRecord = input.finalization.practiceRecord!;
+  const summary = input.finalization.summary!;
+  if (preparedAssets.length > 0) {
+    if (input.specialty !== "system_design"
+        || !input.assetSetOperationId
+        || !input.assetSetManifestSha256
+        || !input.verifyPreparedAssets) {
+      throw new Error("Prepared drawing assets require an exact System Design asset-set identity and verifier.");
+    }
+    if (new Set(preparedAssets.map((asset) => asset.assetId)).size !== preparedAssets.length
+        || new Set(preparedAssets.map((asset) => asset.role)).size !== preparedAssets.length) {
+      throw new Error("Prepared drawing assets must have unique stable IDs and roles.");
+    }
+  }
   const completedAt = timer.completedAt;
   const payload: PracticeRecordPayload = {
     schemaVersion: 1,
@@ -384,10 +472,10 @@ export async function persistFinalizedPracticeRecord(input: {
     interactionMode: interactionMode((components.classifications[0]?.classification as { primaryPracticeModeId?: unknown } | undefined)?.primaryPracticeModeId),
     prompt: {
       title: authoritativeTitle,
-      body: input.finalization.practiceRecord.prompt.body,
-      canonicalUrl: input.finalization.practiceRecord.prompt.canonicalUrl ?? null,
+      body: semanticRecord.prompt.body,
+      canonicalUrl: semanticRecord.prompt.canonicalUrl ?? null,
     },
-    summary: input.finalization.summary.trim(),
+    summary: summary.trim(),
     transcript: {
       revision: finalization.revision,
       turnCount: components.turns.length,
@@ -397,22 +485,26 @@ export async function persistFinalizedPracticeRecord(input: {
     notesRevision: components.noteCounts[0]?.count || null,
     specialtyOutput: {
       kind: specialtyOutputKind(input.specialty),
-      responseStages: input.finalization.practiceRecord.responseStages,
+      responseStages: semanticRecord.responseStages,
       codeAttemptIds: components.codeAttempts.map((attempt) => attempt.id),
       finalAnswerRevision: components.finalAnswers[0]?.snapshotRevision ?? null,
-      designAssetIds: [],
+      designAssetIds: preparedAssets.map((asset) => asset.assetId),
     },
     review: {
       didWell: input.finalization.review.didWell,
       improve: input.finalization.review.improve,
-      nextDrill: input.finalization.practiceRecord.nextDrill ?? null,
+      nextDrill: semanticRecord.nextDrill ?? null,
     },
     references: input.finalization.references,
     solutionLink: {
       questionId: solutionLink.questionId,
       profileRevision: solutionLink.solutionRevision,
     },
-    assetLinks: [],
+    assetLinks: preparedAssets.map((asset) => ({
+      assetId: asset.assetId,
+      revision: asset.revision,
+      role: asset.role,
+    })),
     finalizationOperationId: input.operationId,
     createdAt: new Date(input.nowMs).toISOString(),
   };
@@ -438,10 +530,21 @@ export async function persistFinalizedPracticeRecord(input: {
       AND ${activityFinalizations.revision} = ${finalization.revision}
       AND ${activityFinalizations.updatedAt} = ${finalization.updatedAt}
   )`;
+  const assetSetCondition = preparedAssets.length > 0
+    ? sql`EXISTS (
+        SELECT 1 FROM ${practiceAssetSetOperations}
+        WHERE ${practiceAssetSetOperations.ownerId} = ${input.ownerId}
+          AND ${practiceAssetSetOperations.operationId} = ${input.assetSetOperationId!}
+          AND ${practiceAssetSetOperations.activityId} = ${input.activityId}
+          AND ${practiceAssetSetOperations.manifestSha256} = ${input.assetSetManifestSha256!}
+          AND ${practiceAssetSetOperations.status} = 'staged'
+      )`
+    : sql`1 = 1`;
   try {
     await db.batch([
       d1TransactionalInvariantGuard(db, currentCondition),
       d1TransactionalInvariantGuard(db, finalizationCondition),
+      d1TransactionalInvariantGuard(db, assetSetCondition),
       db.insert(practiceRecordRevisions).values({
         ownerId: input.ownerId,
         activityId: input.activityId,
@@ -482,8 +585,50 @@ export async function persistFinalizedPracticeRecord(input: {
           updatedAt: input.nowMs,
         },
       }),
+      ...preparedAssets.flatMap((asset) => [
+        db.insert(practiceAssetRevisions).values({
+          ownerId: input.ownerId,
+          assetId: asset.assetId,
+          revision: asset.revision,
+          activityId: input.activityId,
+          questionId: input.questionId,
+          practiceRecordRevision: revision,
+          role: asset.role,
+          mimeType: asset.mimeType,
+          sha256: asset.sha256,
+          byteSize: asset.byteSize,
+          privateLocator: asset.privateLocator,
+          altText: asset.altText,
+          authorship: asset.authorship,
+          createdAt: input.nowMs,
+        }),
+        db.insert(practiceAssets).values({
+          ownerId: input.ownerId,
+          assetId: asset.assetId,
+          activityId: input.activityId,
+          currentRevision: asset.revision,
+          role: asset.role,
+          updatedAt: input.nowMs,
+        }).onConflictDoUpdate({
+          target: [practiceAssets.ownerId, practiceAssets.assetId],
+          set: {
+            activityId: input.activityId,
+            currentRevision: asset.revision,
+            role: asset.role,
+            updatedAt: input.nowMs,
+          },
+        }),
+      ]),
+      ...(preparedAssets.length > 0 ? [db.update(practiceAssetSetOperations).set({
+        status: "bound",
+        practiceRecordRevision: revision,
+        updatedAt: input.nowMs,
+      }).where(and(
+        eq(practiceAssetSetOperations.ownerId, input.ownerId),
+        eq(practiceAssetSetOperations.operationId, input.assetSetOperationId!),
+      ))] : []),
       db.update(activityFinalizations).set({
-        status: "ready",
+        status: preparedAssets.length > 0 ? "draft" : "ready",
         finalizationOperationId: input.operationId,
         finalizationRequestFingerprint: input.requestFingerprint,
         practiceRecordRevision: revision,
@@ -507,13 +652,28 @@ export async function persistFinalizedPracticeRecord(input: {
     }
     throw error;
   }
-  const receipt = await exactReceipt(
+  const inserted = await exactReceipt(
     input.ownerId,
     input.activityId,
     input.operationId,
     input.requestFingerprint,
+    preparedAssets.length > 0,
   );
-  if (!receipt) throw new Error("The immutable Practice Record was not readable after insertion.");
+  if (!inserted) throw new Error("The immutable Practice Record was not readable after insertion.");
+  if (preparedAssets.length > 0) {
+    await input.verifyPreparedAssets!();
+    await promotePendingPracticeRecord({
+      ownerId: input.ownerId,
+      activityId: input.activityId,
+      operationId: input.operationId,
+      requestFingerprint: input.requestFingerprint,
+      revision: inserted.revision,
+      fingerprint: inserted.fingerprint,
+      nowMs: input.nowMs,
+    });
+  }
+  const receipt = await exactReceipt(input.ownerId, input.activityId, input.operationId, input.requestFingerprint);
+  if (!receipt) throw new Error("The immutable Practice Record was not ready after exact readback.");
   return receipt;
 }
 

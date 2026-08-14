@@ -148,6 +148,13 @@ PNG preview as immutable owner-authored attempt assets. A polished reusable
 model is separately attributed Solution material using draw.io source and SVG.
 Never replace the original drawing with the model.
 
+The visible specialist runs the fixed controller preflight and freezes the
+required editable `.excalidraw` scene and SVG preview, plus the optional PNG
+preview when present, before delegating. The persistence child receives only
+the exact staged manifest identity; it cannot redraw, browse, or infer diagram
+bytes. A second server or connected canvas client is a preflight failure, not a
+reason to close the user's browser automatically.
+
 Both readers provide alt text, zoom, pan, reset, enlarged view, keyboard and
 narrow-screen support, and exact revision attribution.
 

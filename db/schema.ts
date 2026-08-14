@@ -576,6 +576,122 @@ export const practiceRecordRevisions = sqliteTable(
   ],
 );
 
+// System Design canvas drafts are mutable only through this append-only
+// checkpoint log. R2 locators stay server-private; clients receive integrity
+// metadata plus the authenticated scene bytes.
+export const practiceDesignCheckpointRevisions = sqliteTable(
+  "practice_design_checkpoint_revisions",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    revision: integer("revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    sha256: text("sha256").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    privateLocator: text("private_locator").notNull(),
+    altText: text("alt_text").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.activityId, table.revision] }),
+    uniqueIndex("practice_design_checkpoint_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
+export const practiceDesignCheckpoints = sqliteTable(
+  "practice_design_checkpoints",
+  {
+    ownerId,
+    activityId: text("activity_id").notNull(),
+    currentRevision: integer("current_revision").notNull(),
+    sha256: text("sha256").notNull(),
+    updatedAt,
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.activityId] })],
+);
+
+export const practiceAssetSetOperations = sqliteTable(
+  "practice_asset_set_operations",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    activityId: text("activity_id").notNull(),
+    questionId: text("question_id").notNull(),
+    checkpointRevision: integer("checkpoint_revision").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    manifestSha256: text("manifest_sha256").notNull(),
+    status: text("status", { enum: ["preparing", "staged", "bound"] }).notNull(),
+    practiceRecordRevision: integer("practice_record_revision"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.operationId] }),
+    index("practice_asset_set_activity_idx").on(table.ownerId, table.activityId, table.createdAt),
+  ],
+);
+
+export const practiceAssetStagingRows = sqliteTable(
+  "practice_asset_staging_rows",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    activityId: text("activity_id").notNull(),
+    assetId: text("asset_id").notNull(),
+    revision: integer("revision").notNull(),
+    role: text("role", { enum: ["attempt_original_excalidraw", "attempt_original_svg", "attempt_original_png"] }).notNull(),
+    mimeType: text("mime_type").notNull(),
+    sha256: text("sha256").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    privateLocator: text("private_locator").notNull(),
+    altText: text("alt_text").notNull(),
+    authorship: text("authorship", { enum: ["owner"] }).notNull().default("owner"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.operationId, table.assetId] }),
+    uniqueIndex("practice_asset_staging_role_idx").on(table.ownerId, table.operationId, table.role),
+  ],
+);
+
+export const practiceAssetRevisions = sqliteTable(
+  "practice_asset_revisions",
+  {
+    ownerId,
+    assetId: text("asset_id").notNull(),
+    revision: integer("revision").notNull(),
+    activityId: text("activity_id").notNull(),
+    questionId: text("question_id").notNull(),
+    practiceRecordRevision: integer("practice_record_revision").notNull(),
+    role: text("role", { enum: ["attempt_original_excalidraw", "attempt_original_svg", "attempt_original_png"] }).notNull(),
+    mimeType: text("mime_type").notNull(),
+    sha256: text("sha256").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    privateLocator: text("private_locator").notNull(),
+    altText: text("alt_text").notNull(),
+    authorship: text("authorship", { enum: ["owner"] }).notNull().default("owner"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.assetId, table.revision] })],
+);
+
+export const practiceAssets = sqliteTable(
+  "practice_assets",
+  {
+    ownerId,
+    assetId: text("asset_id").notNull(),
+    activityId: text("activity_id").notNull(),
+    currentRevision: integer("current_revision").notNull(),
+    role: text("role", { enum: ["attempt_original_excalidraw", "attempt_original_svg", "attempt_original_png"] }).notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.assetId] }),
+    index("practice_assets_activity_idx").on(table.ownerId, table.activityId, table.role),
+  ],
+);
+
 // Completed behavioral answers are append-only attempt evidence. A correction
 // creates another revision and names the revision it replaces; it never edits
 // or backfills the historical snapshot. The payload contains only sanitized,
@@ -2641,6 +2757,12 @@ export type LeetCodeCodeAttemptReviewBackfillRow = typeof leetcodeCodeAttemptRev
 export type ActivityFinalizationRow = typeof activityFinalizations.$inferSelect;
 export type PracticeRecordRow = typeof practiceRecords.$inferSelect;
 export type PracticeRecordRevisionRow = typeof practiceRecordRevisions.$inferSelect;
+export type PracticeDesignCheckpointRevisionRow = typeof practiceDesignCheckpointRevisions.$inferSelect;
+export type PracticeDesignCheckpointRow = typeof practiceDesignCheckpoints.$inferSelect;
+export type PracticeAssetSetOperationRow = typeof practiceAssetSetOperations.$inferSelect;
+export type PracticeAssetStagingRow = typeof practiceAssetStagingRows.$inferSelect;
+export type PracticeAssetRevisionRow = typeof practiceAssetRevisions.$inferSelect;
+export type PracticeAssetRow = typeof practiceAssets.$inferSelect;
 export type BehavioralFinalAnswerSnapshotRow = typeof behavioralFinalAnswerSnapshots.$inferSelect;
 export type ReviewScheduleRow = typeof reviewSchedules.$inferSelect;
 export type SpecialistTaskRow = typeof specialistTasks.$inferSelect;
