@@ -836,7 +836,7 @@ test("Interview Arc Voice persists exact turns, idempotent clips, and per-answer
   const durableStore = await readFile(new URL("../db/durable-practice.ts", import.meta.url), "utf8");
   const snapshot = await readFile(new URL("../db/practice-snapshot.ts", import.meta.url), "utf8");
   const client = await readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8");
-  for (const route of ["/voice/context", "/voice/learning-transcripts", "/voice/timers", "/voice/captures", "/voice/delivery"]) {
+  for (const route of ["/voice/context", "/voice/learning-transcripts", "/voice/learning-timers", "/voice/timers", "/voice/captures", "/voice/delivery"]) {
     assert.match(bridge, new RegExp(route.replace("/", "\\/")));
   }
   assert.match(bridge, /audio-loss/);

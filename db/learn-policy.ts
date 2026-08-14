@@ -370,6 +370,17 @@ export const appendLearningVoiceTranscriptSchema = z.object({
   occurredAt: z.number().int().positive(),
 }).strict();
 
+// Native Arc Voice may control only the reversible Learning timer transitions.
+// Finish remains Learning Specialist-owned because it commits recap and
+// evidence-bearing checkpoint state in addition to closing the timer.
+export const controlLearningVoiceTimerSchema = z.object({
+  protocolVersion: z.literal(2),
+  operationId: learningStableIdSchema,
+  sessionId: learningStableIdSchema,
+  expectedRevision: z.number().int().nonnegative(),
+  action: z.enum(["pause", "resume"]),
+}).strict();
+
 export const queryLearningSessionsSchema = z.object({
   sessionId: learningStableIdSchema.optional(),
   lessonId: learningStableIdSchema.optional(),
@@ -394,6 +405,7 @@ export type CreateLearningSessionInput = z.infer<typeof createLearningSessionSch
 export type ControlLearningSessionInput = z.infer<typeof controlLearningSessionSchema>;
 export type AppendLearningTranscriptInput = z.infer<typeof appendLearningTranscriptSchema>;
 export type AppendLearningVoiceTranscriptInput = z.infer<typeof appendLearningVoiceTranscriptSchema>;
+export type ControlLearningVoiceTimerInput = z.infer<typeof controlLearningVoiceTimerSchema>;
 export type FinishLearningSessionInput = z.infer<typeof finishLearningSessionSchema>;
 export type AttachLearningArtifactInput = z.infer<typeof attachLearningArtifactSchema>;
 export type SetLearningHomeworkStateInput = z.infer<typeof setLearningHomeworkStateSchema>;

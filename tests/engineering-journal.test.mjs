@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { buildEngineeringJournal } from "../engineering-journal/index.ts";
@@ -61,6 +62,17 @@ Compile canonical Markdown through one deterministic Journal Module.
 
 The implementation boundary is one public Interface backed by immutable revisions.
 `;
+
+test("build and development materialize derived Journal projections from the checked-out revision", async () => {
+  const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  const gitignore = await readFile(new URL("../.gitignore", import.meta.url), "utf8");
+
+  assert.match(packageJson.scripts.build, /^pnpm engineering:journal:build && WRANGLER_LOG_PATH=/);
+  assert.doesNotMatch(packageJson.scripts.build, /engineering:journal:check/);
+  assert.match(packageJson.scripts.dev, /pnpm engineering:journal:build/);
+  assert.match(gitignore, /^\/engineering-journal\/generated\/$/m);
+  assert.match(gitignore, /^\/public\/engineering-journal\/assets\/$/m);
+});
 
 const RECEIPT = `---
 schemaVersion: 1

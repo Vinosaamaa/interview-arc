@@ -1,5 +1,12 @@
 # Durable Practice Publishing Contract
 
+> **Forward privacy boundary:**
+> [`owner-private-practice-records.md`](./owner-private-practice-records.md) is
+> authoritative for new personal practice. Routine completion now means
+> owner-private D1/R2 finalization, not Git publication. The queue/journal flow
+> below applies only to frozen legacy reconciliation or a separately explicit
+> owner-authorized public export. It must not receive new private content.
+
 Interview Arc separates **draft capture**, **specialist finalization**, and
 **publication**. Saving a record to D1 is not publication. Publication means a
 versioned artifact and daily journal have been merged, imported, and marked in

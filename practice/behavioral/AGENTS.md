@@ -8,6 +8,8 @@ Load only what the current action needs:
 
 - artifact creation: `../../docs/contracts/session-artifact.md`;
 - Solution Profile/finalization: `../../docs/contracts/solution-profiles.md`;
+- private Attempt layout and background finalization:
+  `../../docs/contracts/owner-private-practice-records.md`;
 - completed final answer/correction:
   `../../docs/contracts/behavioral-final-answer-snapshots.md`;
 - completed-attempt résumé context:
@@ -223,6 +225,18 @@ decisions, operations, results/gaps, walkthrough, or follow-ups implied by that
 key. Generic sentences copied across all nine keys are incomplete. The
 executable Solution Profile policy rejects shallow profiles before D1
 finalization; never fill a gap with an unsupported claim merely to pass it.
+
+When substantial project questions occurred, append one dedicated Questions
+and Answers section after the required Project Deep Dive keys. Restate each
+question clearly, preserve the final corrected specialist answer and hidden
+turn provenance, and label it `Current implementation`, `Target design`, or
+`Fictional practice scenario — not personal experience`. Do not duplicate that
+material in the dated attempt.
+
+The Past attempt renders one prompt, summary, conversation, Final Tailored
+Answer, Activity Review, and collapsed nonempty Technical Audit. Never create a
+second Attempt Record, notes copy, evidence audit, follow-up list, or final
+answer copy.
 
 Never put transcript or exchange-by-exchange review into the profile. Reuse the
 current profile when a mock adds no material evidence; revise only for stronger

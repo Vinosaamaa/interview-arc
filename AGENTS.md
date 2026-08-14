@@ -62,8 +62,8 @@ Interview Arc, and perform its design-plan and self-critique passes.
   mock, and 1 behavioral mock; website-created sessions may change counts.
   Allocate 40 minutes per coding problem and 60 minutes per mock.
 - The session owns the countdown; each activity has an elapsed-time stopwatch.
-- Practice dates use `America/Los_Angeles`. Completion date determines the
-  daily artifact; preserve exact timestamps and `session_id` across midnight.
+- Practice dates use `America/Los_Angeles`. Completion date groups the private
+  Practice Record; preserve exact timestamps and `session_id` across midnight.
 - Starting an activity focuses it and pauses another running activity. Parent
   session and child activity pause/resume together as defined by Today controls.
 - Today uses one durable owner-scoped workbench. `Start fresh day` archives it
@@ -76,6 +76,9 @@ Interview Arc, and perform its design-plan and self-critique passes.
   full transcript with only a summary.
 - Never commit secrets, credentials, local databases, model caches, or raw
   audio.
+- Follow `docs/contracts/owner-private-practice-records.md`. New personal
+  attempts, transcripts, reviews, answers, profiles, journals, recordings, and
+  diagrams stay in owner-scoped D1/private R2 and never enter Git.
 
 ## Source Control And Verification
 
@@ -88,10 +91,9 @@ Interview Arc, and perform its design-plan and self-critique passes.
   JavaScript, or lint configuration changes require `pnpm lint`. Validate D1
   changes locally with `pnpm db:migrate:local` and
   `pnpm content:import:local`.
-- Only the coordinator renders/checkpoints journal artifacts, manages journal
-  branches/PRs, publishes, deploys, and marks D1 activities published.
-- Merge current `origin/main` into a journal branch before its PR. Being
-  behind is not a conflict; stop only for overlapping changes Git reports.
+- Private finalization, legacy migration, reconciliation, and public-export
+  routing are owned exclusively by
+  `docs/contracts/owner-private-practice-records.md`.
 - Never merge/deploy another task's uncommitted work. Production publishing is
   owned by the main-branch workflow and follows successful validation.
 - Follow the exact execution-ledger and hosted-run reporting rules in

@@ -3,17 +3,17 @@
 Interview Arc does **not** generate one hand-built static webpage for every
 attempt or solution. It separates durable content from the shared reader:
 
-1. Git Markdown/JSON stores published attempt evidence and reusable Solution
-   Profile content.
-2. `scripts/import-content.mjs` projects that content into D1.
-3. The shared React reader in `app/home-client.tsx` renders the D1 content at
-   runtime.
+1. Owner-scoped D1 stores immutable Practice Record and Solution Profile
+   revisions; private R2 stores recording/drawing bytes.
+2. Frozen legacy Git Markdown/JSON remains a temporary read source only.
+3. The shared React reader in `app/home-client.tsx` renders normalized D1
+   content at runtime.
 4. Shared reader styling lives in `app/globals.css` and
    `app/interview-arc-v2.css`.
 
-The Markdown/JSON is static, versioned content. The page layout, typography,
-code presentation, diagram controls, responsive behavior, highlights, notes,
-and section interactions are shared application code.
+The immutable D1 revision is durable content. The page layout, typography, code
+presentation, diagram controls, responsive behavior, highlights, notes, and
+section interactions are shared application code.
 
 ## What Updates Existing Artifacts Automatically
 
@@ -115,6 +115,6 @@ Reader changes require:
   code presentation changes;
 - desktop and narrow-screen checks when layout changes.
 
-Production publication remains the main-branch GitHub workflow. Content-only
-updates refresh the D1 projection; reader code or CSS updates rebuild and
-deploy the Worker.
+Routine private finalization performs no Git publication. Reader code or CSS
+still follows the main-branch deployment workflow. A separately authorized
+public export uses its own explicit release receipt.

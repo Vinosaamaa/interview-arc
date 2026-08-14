@@ -1,10 +1,14 @@
 # Session Artifact Contract
 
+> **Forward contract:** New personal sessions follow
+> [`owner-private-practice-records.md`](./owner-private-practice-records.md).
+> They finalize to immutable owner-scoped D1 records and private R2 assets; they
+> do not create Git Markdown. The file format below is frozen legacy input only.
+
 System-design and behavioral specialists maintain one durable D1 record per
-completed mock or substantial coached session. The coordinator later renders
-one Markdown artifact from that record. The specialist maintains its transcript
-incrementally and finalizes the D1 bundle when the user says `Publish this
-session` or the coordinator requests a flush.
+completed mock or substantial coached session. The specialist maintains its
+transcript incrementally and finalizes the D1 bundle when the user finishes the
+activity or requests finalization.
 
 ## Session Boundaries
 
@@ -14,22 +18,25 @@ session` or the coordinator requests a flush.
    boundary. `Start a new session` remains a supported explicit override, not a
    phrase the user must repeat every day.
 2. Append each meaningful user/coach exchange to D1 in chronological order.
-3. `Publish this session` closes the specialist draft and saves feedback,
-   stronger answer, and references with `save_specialist_finalization`.
-4. The coordinator reads that bundle, writes the Markdown/daily journal, and
-   performs Git publication.
+   The parent durably enqueues each response before returning. The persistence
+   child may drain at most eight ordered items together and flushes on one
+   second idle, eight items, checkpoint, Finish, or shutdown; batching never
+   leaves the only copy in agent memory.
+3. Finish closes the specialist draft and durably queues the exact Practice
+   Record, Solution Profile, review, references, and supplied asset packet.
+4. A mechanical persistence child verifies D1/R2 readback. Past remains hidden
+   and says `Finalization pending` until that receipt is saved.
 
 Only messages after the resolved activity boundary belong to the transcript.
 If no focused activity exists, the specialist must ask which prompt to use.
-Specialist finalization writes no files. The coordinator handles files, pull
-requests, import, and deployment.
+Routine finalization writes no Git files and needs no coordinator release.
 
 The journal date is the Pacific (`America/Los_Angeles`) date when the activity
 finishes. A mock may begin before midnight and finish after it without creating
 a second transcript; the artifact belongs to the finish date while preserving
 both exact timestamps and its original session ID.
 
-## Naming
+## Frozen legacy naming
 
 ```text
 practice/system-design/sessions/YYYY-MM-DD-design-<topic>.md

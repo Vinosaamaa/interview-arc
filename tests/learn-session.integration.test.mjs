@@ -236,11 +236,118 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     assert.equal(learningContext.focusedLearningSession.transcriptRevision, 0);
     assert.equal(learningContext.focusedLearningSession.nextTranscriptSequence, 0);
     assert.equal(learningContext.focusedLearningSession.evidencePolicy, "transcript_only");
+    assert.equal(learningContext.learningTimer.sessionId, createSessionInput.sessionId);
+    assert.equal(learningContext.learningTimer.lessonId, lesson.lessonId);
+    assert.equal(learningContext.learningTimer.lessonTitle, lesson.title);
+    assert.equal(learningContext.learningTimer.courseTitle, courseBlueprint.title);
+    assert.equal(learningContext.learningTimer.moduleTitle, "Session core");
+    assert.equal(learningContext.learningTimer.state, "running");
+    assert.equal(learningContext.learningTimer.accumulatedSeconds, 0);
+    assert.equal(learningContext.learningTimer.revision, 1);
+    assert.equal(typeof learningContext.learningTimer.runningSince, "number");
+    assert.ok(learningContext.learningTimer.serverNow >= learningContext.learningTimer.runningSince);
     assert.equal(learningContext.specialist.specialty, "learning_specialist");
 
     const otherLearningContext = await voiceRequest(baseUrl, otherToken, "/voice/context");
     assert.equal(otherLearningContext.status, 200);
-    assert.equal((await otherLearningContext.json()).focusedLearningSession, null);
+    const otherLearningContextBody = await otherLearningContext.json();
+    assert.equal(otherLearningContextBody.focusedLearningSession, null);
+    assert.equal(otherLearningContextBody.learningTimer, null);
+
+    const pauseVoiceTimerInput = {
+      protocolVersion: 2,
+      operationId: "learning-voice-timer-pause-1",
+      sessionId: createSessionInput.sessionId,
+      expectedRevision: 1,
+      action: "pause",
+    };
+    const pausedVoiceTimerResponse = await voiceRequest(baseUrl, token, "/voice/learning-timers", {
+      method: "POST",
+      body: JSON.stringify(pauseVoiceTimerInput),
+    });
+    assert.equal(pausedVoiceTimerResponse.status, 200);
+    const pausedVoiceTimer = await pausedVoiceTimerResponse.json();
+    assert.equal(pausedVoiceTimer.duplicate, false);
+    assert.equal(pausedVoiceTimer.learningTimer.state, "paused");
+    assert.equal(pausedVoiceTimer.learningTimer.revision, 2);
+    assert.equal(pausedVoiceTimer.learningTimer.runningSince, null);
+
+    const exactPauseVoiceTimerRetry = await voiceRequest(baseUrl, token, "/voice/learning-timers", {
+      method: "POST",
+      body: JSON.stringify(pauseVoiceTimerInput),
+    });
+    assert.equal(exactPauseVoiceTimerRetry.status, 200);
+    assert.equal((await exactPauseVoiceTimerRetry.json()).duplicate, true);
+
+    const changedPauseVoiceTimerRetry = await voiceRequest(baseUrl, token, "/voice/learning-timers", {
+      method: "POST",
+      body: JSON.stringify({ ...pauseVoiceTimerInput, action: "resume", expectedRevision: 2 }),
+    });
+    assert.equal(changedPauseVoiceTimerRetry.status, 409);
+    assert.equal((await changedPauseVoiceTimerRetry.json()).code, "learning_operation_conflict");
+
+    const staleResumeVoiceTimer = await voiceRequest(baseUrl, token, "/voice/learning-timers", {
+      method: "POST",
+      body: JSON.stringify({
+        ...pauseVoiceTimerInput,
+        operationId: "learning-voice-timer-resume-stale-1",
+        action: "resume",
+      }),
+    });
+    assert.equal(staleResumeVoiceTimer.status, 409);
+    assert.equal((await staleResumeVoiceTimer.json()).code, "learning_session_revision_conflict");
+
+    const otherOwnerPauseVoiceTimer = await voiceRequest(baseUrl, otherToken, "/voice/learning-timers", {
+      method: "POST",
+      body: JSON.stringify({
+        ...pauseVoiceTimerInput,
+        operationId: "learning-voice-timer-other-owner-1",
+      }),
+    });
+    assert.equal(otherOwnerPauseVoiceTimer.status, 409);
+    assert.equal((await otherOwnerPauseVoiceTimer.json()).code, "learning_voice_timer_not_found");
+
+    const pausedContextResponse = await voiceRequest(baseUrl, token, "/voice/context");
+    assert.equal(pausedContextResponse.status, 200);
+    const pausedContext = await pausedContextResponse.json();
+    assert.equal(pausedContext.captureTarget, null);
+    assert.equal(pausedContext.focusedLearningSession, null);
+    assert.equal(pausedContext.learningTimer.state, "paused");
+    assert.equal(pausedContext.learningTimer.revision, 2);
+
+    const pausedVoiceTranscript = await voiceRequest(baseUrl, token, "/voice/learning-transcripts", {
+      method: "POST",
+      body: JSON.stringify({
+        protocolVersion: 2,
+        operationId: "learning-voice-paused-rejected-1",
+        sessionId: createSessionInput.sessionId,
+        expectedTranscriptRevision: 0,
+        turnId: "learning-voice-paused-turn-0",
+        sequence: 0,
+        transcript: "A paused Learning Session must not accept Arc Voice text.",
+        checksum: sha256("A paused Learning Session must not accept Arc Voice text."),
+        occurredAt: 1_786_399_999_000,
+      }),
+    });
+    assert.equal(pausedVoiceTranscript.status, 409);
+    assert.equal((await pausedVoiceTranscript.json()).code, "learning_voice_session_not_running");
+
+    const resumeVoiceTimerInput = {
+      protocolVersion: 2,
+      operationId: "learning-voice-timer-resume-1",
+      sessionId: createSessionInput.sessionId,
+      expectedRevision: 2,
+      action: "resume",
+    };
+    const resumedVoiceTimerResponse = await voiceRequest(baseUrl, token, "/voice/learning-timers", {
+      method: "POST",
+      body: JSON.stringify(resumeVoiceTimerInput),
+    });
+    assert.equal(resumedVoiceTimerResponse.status, 200);
+    const resumedVoiceTimer = await resumedVoiceTimerResponse.json();
+    assert.equal(resumedVoiceTimer.learningTimer.state, "running");
+    assert.equal(resumedVoiceTimer.learningTimer.revision, 3);
+    assert.equal(typeof resumedVoiceTimer.learningTimer.runningSince, "number");
 
     const typedTurns = {
       operationId: "learning-transcript-typed-1",
@@ -355,7 +462,7 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     const paused = await call(client, "control_learning_session", {
       operationId: "learning-session-pause-2",
       sessionId: createSessionInput.sessionId,
-      expectedRevision: 1,
+      expectedRevision: 3,
       action: "pause",
       authorization: "explicit_user_instruction",
     });
@@ -365,7 +472,7 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     client = await connectMcpClient(baseUrl, token, "learning-session-owner-reconnected");
     const reconnected = await call(client, "query_learning_sessions", { sessionId: createSessionInput.sessionId });
     assert.equal(reconnected.sessions[0].session.state, "paused");
-    assert.equal(reconnected.sessions[0].session.revision, 2);
+    assert.equal(reconnected.sessions[0].session.revision, 4);
     assert.equal(reconnected.sessions[0].session.transcriptRevision, 2);
     const staleResume = await callRaw(client, "control_learning_session", {
       operationId: "learning-session-stale-resume",
@@ -379,7 +486,7 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     const resumed = await call(client, "control_learning_session", {
       operationId: "learning-session-resume-3",
       sessionId: createSessionInput.sessionId,
-      expectedRevision: 2,
+      expectedRevision: 4,
       action: "resume",
       authorization: "explicit_user_instruction",
     });
@@ -439,7 +546,7 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     const finishInput = {
       operationId: "learning-session-finish-4",
       sessionId: createSessionInput.sessionId,
-      expectedRevision: 3,
+      expectedRevision: 5,
       expectedTranscriptRevision: 2,
       authorization: "explicit_user_instruction",
       finalization: {
@@ -460,7 +567,7 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     };
     const finished = await call(client, "finish_learning_session", finishInput);
     assert.equal(finished.state, "completed");
-    assert.equal(finished.revision, 4);
+    assert.equal(finished.revision, 6);
     assert.equal(finished.finalizationRevision, 1);
     assert.equal(finished.checkpointResults[0].status, "needs_another_pass");
     assert.equal(finished.lessonCompletion.completed, false);
@@ -474,7 +581,7 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
     const resumeFinished = await callRaw(client, "control_learning_session", {
       operationId: "learning-session-resume-after-finish",
       sessionId: createSessionInput.sessionId,
-      expectedRevision: 4,
+      expectedRevision: 6,
       action: "resume",
       authorization: "explicit_user_instruction",
     });
@@ -506,7 +613,7 @@ test("Learning Sessions keep exact timers and transcripts while rejecting all le
       "specialist-turn-1",
       "learner-voice-turn-2",
     ]);
-    assert.equal(read.sessions[0].intervals.length, 2);
+    assert.equal(read.sessions[0].intervals.length, 3);
     assert.ok(read.sessions[0].intervals.every((interval) => interval.endedAt !== null));
     assert.doesNotMatch(JSON.stringify(read), /audioClip|objectKey|deliveryAnalysis|finishBlocker/);
     assert.doesNotMatch(JSON.stringify(read), /"ownerId"|"operationId"|"requestFingerprint"/);

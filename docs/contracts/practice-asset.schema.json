@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Vinosaamaa/interview-arc/blob/main/docs/contracts/practice-asset.schema.json",
+  "title": "Immutable owner-private practice asset metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "assetId", "revision", "role", "activityId",
+    "practiceRecordRevision", "questionId", "solutionProfileRevision",
+    "authorship", "mimeType", "byteSize", "sha256", "storageObjectId",
+    "altText", "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "assetId": { "$ref": "#/$defs/stableId" },
+    "revision": { "type": "integer", "minimum": 1 },
+    "role": { "$ref": "#/$defs/role" },
+    "activityId": { "oneOf": [{ "$ref": "#/$defs/stableId" }, { "type": "null" }] },
+    "practiceRecordRevision": { "type": ["integer", "null"], "minimum": 1 },
+    "questionId": { "oneOf": [{ "$ref": "#/$defs/stableId" }, { "type": "null" }] },
+    "solutionProfileRevision": { "type": ["integer", "null"], "minimum": 1 },
+    "authorship": { "enum": ["owner", "specialist"] },
+    "mimeType": {
+      "enum": ["application/vnd.excalidraw+json", "application/vnd.jgraph.mxfile", "image/svg+xml", "image/png"]
+    },
+    "byteSize": { "type": "integer", "minimum": 1 },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "storageObjectId": { "$ref": "#/$defs/stableId" },
+    "altText": { "type": "string", "minLength": 1, "maxLength": 1000 },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "role": { "pattern": "^attempt_" } } },
+      "then": {
+        "properties": {
+          "activityId": { "$ref": "#/$defs/stableId" },
+          "practiceRecordRevision": { "type": "integer", "minimum": 1 },
+          "authorship": { "const": "owner" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "role": { "pattern": "^solution_" } } },
+      "then": {
+        "properties": {
+          "questionId": { "$ref": "#/$defs/stableId" },
+          "solutionProfileRevision": { "type": "integer", "minimum": 1 },
+          "authorship": { "const": "specialist" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "stableId": { "type": "string", "minLength": 1, "maxLength": 240, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
+    "role": {
+      "enum": [
+        "attempt_original_excalidraw", "attempt_original_svg", "attempt_original_png",
+        "solution_canonical_drawio", "solution_canonical_svg"
+      ]
+    }
+  }
+}

@@ -331,7 +331,18 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   scrollbar-gutter: stable;
 }
 .problem-bank-entry { min-height: 124px; border-bottom-color: #dfe8e5; }
+.problem-bank-entry { content-visibility: auto; contain-intrinsic-size: auto 150px; }
 .problem-bank-entry:hover { background: #f3f8f6; }
+.bank-progressive-status {
+  min-height: 52px;
+  display: grid;
+  place-items: center;
+  padding: 12px 18px;
+  color: #536d67;
+  background: #f3f7f6;
+  border-top: 1px solid #dfe8e5;
+  font-size: .82rem;
+}
 .problem-bank-entry::before { width: 4px; }
 .problem-title-button { color: #173a37; }
 .problem-title-button:hover, .problem-bank-copy a { color: var(--primary-deep); }
@@ -362,6 +373,36 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .petal-field.quiet { opacity: .78; }
 .petal-field.paused { opacity: 0; visibility: hidden; }
 .petal-field.paused .ambient-petal { animation-play-state: paused !important; }
+.reader-diagnostics-panel {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 220;
+  width: min(280px, calc(100vw - 32px));
+  padding: 12px;
+  display: grid;
+  gap: 5px;
+  border: 1px solid #9fb7b1;
+  border-radius: 12px;
+  background: rgba(247, 251, 249, .96);
+  box-shadow: 0 12px 34px rgba(20, 56, 50, .18);
+  color: #173a37;
+  font: 700 .75rem/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.reader-diagnostics-panel span,
+.reader-diagnostics-panel small { color: #5f756f; overflow-wrap: anywhere; }
+.reader-diagnostics-panel > div { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.reader-diagnostics-panel button {
+  min-height: 36px;
+  border: 1px solid #9fb7b1;
+  border-radius: 8px;
+  background: #fff;
+  color: #173a37;
+  cursor: pointer;
+  font: inherit;
+}
+.reader-diagnostics-panel button:disabled { cursor: default; opacity: .52; }
+.reader-diagnostics-panel .reader-diagnostics-reset { min-height: 28px; border: 0; background: transparent; text-decoration: underline; }
 .pip-body { background: radial-gradient(120% 80% at 100% 0%, rgba(13,148,136,.28), transparent 55%), linear-gradient(160deg, #143a38, #0d2423); }
 .pip-btn.primary { background: #58c9be; color: #0b2d2b; }
 .pip-track i { background: #58c9be; }

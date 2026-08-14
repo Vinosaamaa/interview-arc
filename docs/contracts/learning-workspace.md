@@ -94,6 +94,17 @@ changed operation identities, transcript revisions, sequences, checksums, and
 owners fail without a partial write. This route never accepts audio or delivery
 metadata.
 
+The same context response exposes a separate `learningTimer` only when one
+owner-scoped running Session, or one unique paused Session, can be selected
+without inference. It carries authoritative server time, accumulated seconds,
+running interval, exact Session revision, and display-safe Course/Module/Lesson
+identity. Arc Voice uses authenticated `POST /voice/learning-timers` for only
+Pause and Resume. The route supplies explicit-user authorization to the shared
+`controlLearningSession` transaction, preserves one stable operation identity,
+and fails closed on changed retries, stale revisions, another owner, or
+ambiguous paused Sessions. Finish remains Learning Specialist-owned because it
+also commits recap and checkpoint evidence.
+
 Native routing is owned by a paired `interview-arc-voice` issue and separate
 signed-application release.
 

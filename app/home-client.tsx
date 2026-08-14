@@ -48,6 +48,12 @@ import { careerHeatLevel, type CareerJob, type CareerSummary, type JobStatus } f
 import { useLiveState, useReadOnlyLiveState } from "./live-sync";
 import { emptyJournal } from "./current-day";
 import { ArrivalRitual, PetalField } from "./arrival-ritual";
+import ReaderRenderDiagnosticsPanel from "./reader-render-diagnostics-panel";
+import {
+  recordNavigationDiagnostic,
+  recordReaderDiagnostic,
+  startNavigationDiagnostic,
+} from "./reader-render-diagnostics";
 import { useAmbientSound } from "./ambient-sound";
 import { MusicPlaylist } from "./music-playlist";
 import {
@@ -75,6 +81,12 @@ import {
 import { readMasterPanePreference, writeMasterPanePreference } from "./ui-preferences";
 import { acquireDocumentScrollLock, documentScrollLockRequired } from "./document-scroll-policy";
 import { effectiveProfileTags, isReusableSolutionProfile } from "./solution-profile-policy";
+import {
+  BANK_INITIAL_VISIBLE_COUNT,
+  buildLatestBankAttemptIndex,
+  findLatestBankAttempt,
+  nextBankVisibleCount,
+} from "./bank-navigation-performance";
 import { isPastAttemptArtifact } from "./past-artifact-policy";
 import BehavioralFoundation from "./behavioral-foundation";
 import BehavioralTargetBindings from "./behavioral-target-bindings";
@@ -1759,6 +1771,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
   const [bankTagFilters, setBankTagFilters] = useState<string[]>(workspaceUiMemory.bankTagFilters ?? []);
   const [bankStarFilter, setBankStarFilter] = useState<"all" | "starred">(workspaceUiMemory.bankStarFilter ?? "all");
   const [bankTopicsExpanded, setBankTopicsExpanded] = useState(workspaceUiMemory.bankTopicsExpanded ?? false);
+  const [bankVisibleCount, setBankVisibleCount] = useState(BANK_INITIAL_VISIBLE_COUNT);
   const [expandedBankDesk, setExpandedBankDesk] = useState<ActivityType | null>(null);
   const composerSpecialtyViewsRef = useRef<ComposerSpecialtyViews>(createComposerSpecialtyViews());
   const [composerAttentionFilters, setComposerAttentionFilters] = useState<ComposerAttentionFilter[]>([]);
@@ -1830,6 +1843,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
       return {};
     }
   });
+  const readerMemoryRef = useRef(readerMemory);
   const readerDocumentRef = useRef<HTMLDivElement>(null);
   const highlightNoteEditorRef = useRef<HTMLTextAreaElement>(null);
   const readerScrollFrameRef = useRef(0);
@@ -1934,6 +1948,15 @@ export default function HomeClient({ content, today, engineering }: { content: C
     const pending = pendingListRestoreRef.current;
     if (!listRestoring || !pending || pending.surface !== listRestoring) return;
     const list = pending.surface === "library" ? pastListRef.current : bankListRef.current;
+    if (pending.surface === "banks" && list) {
+      const requiredCount = Math.ceil((pending.listScrollTop + list.clientHeight) / 150) + 4;
+      if (bankVisibleCount < requiredCount) {
+        const frame = window.requestAnimationFrame(() => {
+          setBankVisibleCount((current) => nextBankVisibleCount(current, requiredCount));
+        });
+        return () => window.cancelAnimationFrame(frame);
+      }
+    }
     window.scrollTo({ top: pending.pageScrollTop, behavior: "instant" });
     if (list) {
       list.scrollTop = pending.listScrollTop;
@@ -1957,7 +1980,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
     }
     pendingListRestoreRef.current = null;
     setListRestoring(null);
-  }, [listRestoring]);
+  }, [bankVisibleCount, listRestoring]);
 
   useLayoutEffect(() => {
     if (readerClosing) return;
@@ -1987,6 +2010,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
   }, [masterPaneOpen, readerClosing, selectedEntry, selectedProblem, view]);
 
   useEffect(() => {
+    readerMemoryRef.current = readerMemory;
     window.sessionStorage.setItem("interview-arc-reader-memory-v1", JSON.stringify(readerMemory));
   }, [readerMemory]);
 
@@ -2513,8 +2537,18 @@ export default function HomeClient({ content, today, engineering }: { content: C
 
   const bankFor = useCallback((type: ActivityType) => questionBanks[type], [questionBanks]);
 
+  const starredBankQuestions = useMemo(() => new Set(
+    draft.problemPreferences
+      .filter((preference) => preference.starred)
+      .map((preference) => `${preference.specialty}:${preference.questionId}`),
+  ), [draft.problemPreferences]);
+
+  const solutionProfileByQuestion = useMemo(() => new Map(
+    draft.solutionProfiles.map((profile) => [`${profile.specialty}:${profile.questionId}`, profile]),
+  ), [draft.solutionProfiles]);
+
   function isStarred(type: ActivityType, questionId?: string) {
-    return Boolean(questionId && draft.problemPreferences.some((preference) => preference.specialty === type && preference.questionId === questionId && preference.starred));
+    return Boolean(questionId && starredBankQuestions.has(`${type}:${questionId}`));
   }
 
   function toggleProblemStar(type: ActivityType, questionId?: string) {
@@ -2531,7 +2565,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
   }
 
   function profileFor(type: ActivityType, questionId?: string) {
-    return questionId ? draft.solutionProfiles.find((profile) => profile.specialty === type && profile.questionId === questionId) : undefined;
+    return questionId ? solutionProfileByQuestion.get(`${type}:${questionId}`) : undefined;
   }
 
   function hasReusableSolution(type: ActivityType, question: QuestionBankItem) {
@@ -4344,6 +4378,57 @@ export default function HomeClient({ content, today, engineering }: { content: C
     [logEntries],
   );
 
+  const latestBankAttemptIndex = useMemo(
+    () => buildLatestBankAttemptIndex(libraryEntries),
+    [libraryEntries],
+  );
+
+  const bankTagsByQuestion = useMemo(() => {
+    const tags = new Map<string, string[]>();
+    for (const type of ["leetcode", "system_design", "behavioral"] as const) {
+      for (const question of bankFor(type)) {
+        tags.set(`${type}:${question.id}`, [...new Set([
+          ...inferredQuestionTags(type, question),
+          ...(solutionProfileByQuestion.get(`${type}:${question.id}`)?.tags ?? []),
+        ])]);
+      }
+    }
+    return tags;
+  }, [bankFor, solutionProfileByQuestion]);
+
+  const bankCatalogEntries = useMemo(() => ([
+    ...bankFor("leetcode").map((question) => ({ type: "leetcode" as const, question })),
+    ...bankFor("system_design").map((question) => ({ type: "system_design" as const, question })),
+    ...bankFor("behavioral").map((question) => ({ type: "behavioral" as const, question })),
+  ].map((entry) => {
+    const latestAttempt = findLatestBankAttempt(latestBankAttemptIndex, entry.type, entry.question);
+    const needsReview = Boolean(latestAttempt?.review && latestAttempt.review.status !== "dismissed" && latestAttempt.review.status !== "completed");
+    const dueNow = Boolean(latestAttempt?.review && (latestAttempt.review.status === "due" || (latestAttempt.review.status === "scheduled" && latestAttempt.review.dueDate <= journal.date)));
+    return {
+      ...entry,
+      latestAttempt,
+      finished: Boolean(latestAttempt),
+      needsReview,
+      dueNow,
+      hasNotes: Boolean(latestAttempt?.personalNote?.trim() || latestAttempt?.pinnedNotes?.length),
+      tags: bankTagsByQuestion.get(`${entry.type}:${entry.question.id}`) ?? [],
+    };
+  })), [bankFor, bankTagsByQuestion, journal.date, latestBankAttemptIndex]);
+
+  const bankTagCatalog = useMemo(() => (["leetcode", "system_design", "behavioral"] as const).map((type) => {
+    const counts = new Map<string, number>();
+    bankCatalogEntries.forEach((entry) => {
+      if (entry.type !== type) return;
+      entry.tags.forEach((tag) => counts.set(tag, (counts.get(tag) ?? 0) + 1));
+    });
+    return {
+      type,
+      tags: [...counts.entries()]
+        .map(([tag, count]) => ({ tag, count }))
+        .sort((left, right) => right.count - left.count || left.tag.localeCompare(right.tag)),
+    };
+  }), [bankCatalogEntries]);
+
   const reviewQueueAttempts = useMemo<ReviewQueueAttempt[]>(() => libraryEntries.map((entry) => ({
     id: entry.id,
     questionId: entry.questionId,
@@ -4545,6 +4630,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
     const workspaceChanged = activeWorkspace !== "interview";
     if (workspaceChanged) setActiveWorkspace("interview");
     if (nextView === view && !workspaceChanged) return;
+    startNavigationDiagnostic(nextView, view);
     if (readerCloseTimerRef.current !== null) {
       window.clearTimeout(readerCloseTimerRef.current);
       readerCloseTimerRef.current = null;
@@ -4568,6 +4654,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
       setBankNestedEntry(null);
     }
     if (nextView === "library" || nextView === "banks") {
+      if (nextView === "banks") setBankVisibleCount(BANK_INITIAL_VISIBLE_COUNT);
       const nextMode: ListMode = nextView === "library"
         ? selectedEntry ? "pane" : "main"
         : selectedProblem ? "pane" : "main";
@@ -5572,37 +5659,8 @@ export default function HomeClient({ content, today, engineering }: { content: C
 
   function renderBanks() {
     const todayBlocked = todayBlockedQuestions();
-    const bankEntries = [
-      ...bankFor("leetcode").map((question) => ({ type: "leetcode" as const, question })),
-      ...bankFor("system_design").map((question) => ({ type: "system_design" as const, question })),
-      ...bankFor("behavioral").map((question) => ({ type: "behavioral" as const, question })),
-    ].map((entry) => {
-      const latestAttempt = latestFinishedAttempt(libraryEntries, entry.type, entry.question);
-      const needsReview = Boolean(latestAttempt?.review && latestAttempt.review.status !== "dismissed" && latestAttempt.review.status !== "completed");
-      const dueNow = Boolean(latestAttempt?.review && (latestAttempt.review.status === "due" || (latestAttempt.review.status === "scheduled" && latestAttempt.review.dueDate <= journal.date)));
-      return {
-        ...entry,
-        latestAttempt,
-        finished: Boolean(latestAttempt),
-        needsReview,
-        dueNow,
-        hasNotes: Boolean(latestAttempt?.personalNote?.trim() || latestAttempt?.pinnedNotes?.length),
-      };
-    });
-    const tagsForEntry = (type: ActivityType, question: QuestionBankItem) => [...new Set([
-      ...inferredQuestionTags(type, question),
-      ...(profileFor(type, question.id)?.tags ?? []),
-    ])];
-    const tagCatalog = (["leetcode", "system_design", "behavioral"] as const).map((type) => {
-      const counts = new Map<string, number>();
-      bankEntries.filter((entry) => entry.type === type).forEach((entry) => {
-        tagsForEntry(type, entry.question).forEach((tag) => counts.set(tag, (counts.get(tag) ?? 0) + 1));
-      });
-      return {
-        type,
-        tags: [...counts.entries()].map(([tag, count]) => ({ tag, count })).sort((left, right) => right.count - left.count || left.tag.localeCompare(right.tag)),
-      };
-    });
+    const bankEntries = bankCatalogEntries;
+    const tagCatalog = bankTagCatalog;
     const searchNeedle = bankSearch.toLowerCase().trim();
     const filteredEntries = bankEntries.filter((entry) => {
       const level = questionLevel(entry.question);
@@ -5623,11 +5681,11 @@ export default function HomeClient({ content, today, engineering }: { content: C
         && (!bankAttentionFilters.includes("notes") || attentionMatch("notes"))
         && (bankLevelFilters.length === 0 || (level !== null && bankLevelFilters.includes(level)))
         && (bankStarFilter === "all" || isStarred(entry.type, entry.question.id))
-        && (bankTagFilters.length === 0 || tagsForEntry(entry.type, entry.question).some((tag) => bankTagFilters.includes(`${entry.type}:${tag}`)))
+        && (bankTagFilters.length === 0 || entry.tags.some((tag) => bankTagFilters.includes(`${entry.type}:${tag}`)))
         && (!searchNeedle
           || entry.question.title.toLowerCase().includes(searchNeedle)
           || (entry.question.prompt?.toLowerCase().includes(searchNeedle) ?? false)
-          || tagsForEntry(entry.type, entry.question).some((tag) => tag.toLowerCase().includes(searchNeedle))
+          || entry.tags.some((tag) => tag.toLowerCase().includes(searchNeedle))
           || (profileFor(entry.type, entry.question.id)?.tags.some((tag) => tag.includes(searchNeedle)) ?? false)
           || (entry.question.problemNumber !== undefined && String(entry.question.problemNumber).includes(searchNeedle))
           || (entry.question.companyTags?.some((tag) => tag.toLowerCase().includes(searchNeedle)) ?? false));
@@ -5644,6 +5702,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
       if (cmp === 0) cmp = left.question.title.localeCompare(right.question.title);
       return bankSortDir === "asc" ? cmp : -cmp;
     });
+    const mountedEntries = visibleEntries.slice(0, bankVisibleCount);
     function toggleSort(key: typeof bankSortKey) {
       if (bankSortKey === key) {
         setBankSortDir((current) => (current === "asc" ? "desc" : "asc"));
@@ -5659,7 +5718,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
     ];
     const behavioralCurriculum = bankFor("behavioral").filter(isResumeCurriculumQuestion);
     const completedBehavioralCurriculum = behavioralCurriculum
-      .filter((question) => Boolean(latestFinishedAttempt(libraryEntries, "behavioral", question)))
+      .filter((question) => Boolean(findLatestBankAttempt(latestBankAttemptIndex, "behavioral", question)))
       .map((question) => question.id);
     const bankOverviewFor = (type: Extract<ActivityType, "leetcode" | "system_design">) => {
       const entries = bankEntries.filter((entry) => entry.type === type);
@@ -5670,7 +5729,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
         needsReview: entries.filter((entry) => entry.needsReview).length,
         reusableSolutions: entries.filter((entry) => hasReusableSolution(type, entry.question)).length,
         starred: entries.filter((entry) => isStarred(type, entry.question.id)).length,
-        topicCount: new Set(entries.flatMap((entry) => tagsForEntry(type, entry.question))).size,
+        topicCount: new Set(entries.flatMap((entry) => entry.tags)).size,
       };
     };
     const activeBankFilterCount = bankLevelFilters.length + bankAttentionFilters.length;
@@ -5749,12 +5808,20 @@ export default function HomeClient({ content, today, engineering }: { content: C
             <input
               type="search"
               value={bankSearch}
-              onChange={(event) => setBankSearch(event.target.value)}
+              onChange={(event) => {
+                setBankSearch(event.target.value);
+                setBankVisibleCount(BANK_INITIAL_VISIBLE_COUNT);
+                if (bankListRef.current) bankListRef.current.scrollTop = 0;
+              }}
               placeholder="Search title, topic, company, or #…"
               aria-label="Search problem banks"
             />
             {bankSearch ? (
-              <button type="button" className="bank-search-clear" onClick={() => setBankSearch("")} aria-label="Clear search">×</button>
+              <button type="button" className="bank-search-clear" onClick={() => {
+                setBankSearch("");
+                setBankVisibleCount(BANK_INITIAL_VISIBLE_COUNT);
+                if (bankListRef.current) bankListRef.current.scrollTop = 0;
+              }} aria-label="Clear search">×</button>
             ) : <span className="bank-search-clear-spacer" aria-hidden="true" />}
             <span className="bank-result-count" aria-live="polite">{visibleEntries.length} result{visibleEntries.length === 1 ? "" : "s"}</span>
           </label></div>
@@ -5804,13 +5871,18 @@ export default function HomeClient({ content, today, engineering }: { content: C
             listScrollTop: bankListRef.current?.scrollTop ?? 0,
           };
           listPositionMemoryRef.current.banks[selectedProblem ? "pane" : "main"] = position;
+          const list = bankListRef.current;
+          if (list && list.scrollTop + list.clientHeight >= list.scrollHeight - 240 && bankVisibleCount < visibleEntries.length) {
+            setBankVisibleCount((current) => nextBankVisibleCount(current, visibleEntries.length));
+          }
         }} tabIndex={0} aria-label="Problem bank results">
-          {visibleEntries.map(({ type, question, finished, latestAttempt }) => { const blockedToday = isQuestionBlocked(question, todayBlocked); const active = selectedProblem?.type === type && selectedProblem.question.id === question.id; const reusableSolution = hasReusableSolution(type, question); return <article className={`problem-bank-entry ${type} ${active ? "selected" : ""}`} data-list-item-id={`banks:${type}:${question.id}`} role="button" tabIndex={0} aria-label={`View solution for ${question.title}`} onClick={(event) => { if (event.target instanceof Element && event.target.closest("button, a, input, summary")) return; openProblemProfile(type, question); }} onKeyDown={(event) => { if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) { event.preventDefault(); openProblemProfile(type, question); } }} key={`${type}-${question.id}`}>
+          {mountedEntries.map(({ type, question, finished, latestAttempt, tags }) => { const blockedToday = isQuestionBlocked(question, todayBlocked); const active = selectedProblem?.type === type && selectedProblem.question.id === question.id; const reusableSolution = hasReusableSolution(type, question); return <article className={`problem-bank-entry ${type} ${active ? "selected" : ""}`} data-list-item-id={`banks:${type}:${question.id}`} role="button" tabIndex={0} aria-label={`View solution for ${question.title}`} onClick={(event) => { if (event.target instanceof Element && event.target.closest("button, a, input, summary")) return; openProblemProfile(type, question); }} onKeyDown={(event) => { if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) { event.preventDefault(); openProblemProfile(type, question); } }} key={`${type}-${question.id}`}>
             <span className={`type-mark ${type}`}>{typeMark(type)}</span>
             <div className="problem-bank-copy"><small>{typeLabel(type)}{question.difficulty ? ` · ${question.difficulty}` : ""}{question.complexity ? ` · ${displayComplexity(question.complexity)}` : ""} · {finished ? "finished" : "to practice"}</small><strong className="problem-title">{question.title}</strong>{question.prompt && question.prompt !== question.title && <p>{question.prompt}</p>}{question.url && <a className="nested-card-link" href={question.url} target="_blank" rel="noreferrer">{question.solutionReference ? "Open question & solution references ↗" : "Open problem ↗"}</a>}</div>
-            <div className="bank-entry-meta"><span>{question.targetMinutes} min estimate</span>{question.problemNumber && <small>#{question.problemNumber}{typeof question.acceptanceRate === "number" ? ` · ${question.acceptanceRate.toFixed(1)}% acceptance` : ""}</small>}{question.companySignals?.[0] && <small>{question.companySignals[0].company} frequency {question.companySignals[0].frequencyScore}/{question.companySignals[0].frequencyScale} · {question.companySignals[0].window}</small>}{question.answerFormat && <small>{question.answerFormat} answer · {question.frequency ?? "medium"} frequency</small>}{question.solutionReference && <small>Reference solution{question.referenceAccess === "may_require_sign_in" ? " may require sign-in" : " available"}</small>}<small className={`content-tags ${type}`}>{tagsForEntry(type, question).slice(0, 4).map((tag) => `#${tag}`).join("  ")}</small></div>
+            <div className="bank-entry-meta"><span>{question.targetMinutes} min estimate</span>{question.problemNumber && <small>#{question.problemNumber}{typeof question.acceptanceRate === "number" ? ` · ${question.acceptanceRate.toFixed(1)}% acceptance` : ""}</small>}{question.companySignals?.[0] && <small>{question.companySignals[0].company} frequency {question.companySignals[0].frequencyScore}/{question.companySignals[0].frequencyScale} · {question.companySignals[0].window}</small>}{question.answerFormat && <small>{question.answerFormat} answer · {question.frequency ?? "medium"} frequency</small>}{question.solutionReference && <small>Reference solution{question.referenceAccess === "may_require_sign_in" ? " may require sign-in" : " available"}</small>}<small className={`content-tags ${type}`}>{tags.slice(0, 4).map((tag) => `#${tag}`).join("  ")}</small></div>
             <div className="bank-entry-actions"><StaticResultFlag outcome={latestAttempt?.outcome} /><button className={`icon-action ${isStarred(type, question.id) ? "active starred" : ""}`} onClick={() => toggleProblemStar(type, question.id)} aria-label={`${isStarred(type, question.id) ? "Unstar" : "Star"} ${question.title}`} title={isStarred(type, question.id) ? "Unstar" : "Star"}><Icon name="star" /></button><button className={`icon-action solution-control ${reusableSolution ? "solution-available" : ""}`} onClick={() => openProblemProfile(type, question)} disabled={!reusableSolution} aria-label={reusableSolution ? `View solution for ${question.title}` : `No reusable solution for ${question.title}`} title={reusableSolution ? "View solution" : "No reusable solution yet"}><Icon name="book" /></button><button className="icon-action practice" onClick={() => addBankQuestionToToday(question, type)} disabled={blockedToday} aria-label={blockedToday ? `${question.title} is already on Today` : `Practice ${question.title} today`} title={blockedToday ? "Already on Today" : "Practice today"}><Icon name="plus" /></button></div>
           </article>; })}
+          {mountedEntries.length < visibleEntries.length && <div className="bank-progressive-status" role="status">Showing {mountedEntries.length} of {visibleEntries.length} matching questions. Scroll for more.</div>}
           {!visibleEntries.length && <div className="quiet-empty bank-empty"><strong>No questions match these filters.</strong><span>Change type, progress, level, or search text.</span></div>}
         </div>
         </div>
@@ -6000,6 +6072,29 @@ export default function HomeClient({ content, today, engineering }: { content: C
         : view === "reviews"
           ? reviewNestedProblem
           : null;
+  const readerDiagnosticSurface = readerSelectedProblem
+    ? `${view}-solution`
+    : readerSelectedEntry
+      ? `${view}-attempt`
+      : null;
+  useEffect(() => {
+    recordReaderDiagnostic("react-commit", readerDiagnosticSurface ?? "none", {
+      readerOpen: Boolean(readerDiagnosticSurface),
+      closing: readerClosing,
+    });
+  });
+  useLayoutEffect(() => {
+    recordNavigationDiagnostic("commit", view);
+    let settledFrame = 0;
+    const paintFrame = window.requestAnimationFrame(() => {
+      recordNavigationDiagnostic("paint", view);
+      settledFrame = window.requestAnimationFrame(() => recordNavigationDiagnostic("settled", view));
+    });
+    return () => {
+      window.cancelAnimationFrame(paintFrame);
+      window.cancelAnimationFrame(settledFrame);
+    };
+  }, [view]);
   const ownerProblemProfile = readerSelectedProblem ? profileFor(readerSelectedProblem.type, readerSelectedProblem.question.id) : undefined;
   const canonicalProblemProfile = readerSelectedProblem?.question.solutionProfile;
   const selectedProblemProfile = ownerProblemProfile && canonicalProblemProfile ? {
@@ -6070,13 +6165,18 @@ export default function HomeClient({ content, today, engineering }: { content: C
 
   function rememberReaderGroup(groupId: string, open: boolean) {
     if (!readerMemoryKey) return;
-    setReaderMemory((current) => ({
-      ...current,
-      [readerMemoryKey]: {
-        ...(current[readerMemoryKey] ?? { groups: {} }),
-        groups: { ...(current[readerMemoryKey]?.groups ?? {}), [groupId]: open },
-      },
-    }));
+    setReaderMemory(() => {
+      const current = readerMemoryRef.current;
+      const next = {
+        ...current,
+        [readerMemoryKey]: {
+          ...(current[readerMemoryKey] ?? { groups: {} }),
+          groups: { ...(current[readerMemoryKey]?.groups ?? {}), [groupId]: open },
+        },
+      };
+      readerMemoryRef.current = next;
+      return next;
+    });
   }
 
   function rememberReaderPosition() {
@@ -6091,7 +6191,8 @@ export default function HomeClient({ content, today, engineering }: { content: C
         const offset = node.getBoundingClientRect().top - rootTop;
         return offset <= 28 ? node : best;
       }, null);
-      setReaderMemory((current) => ({
+      const current = readerMemoryRef.current;
+      const next = {
         ...current,
         [readerMemoryKey]: {
           ...(current[readerMemoryKey] ?? { groups: {} }),
@@ -6099,7 +6200,12 @@ export default function HomeClient({ content, today, engineering }: { content: C
           anchorId: anchor?.id,
           anchorOffset: anchor ? anchor.getBoundingClientRect().top - rootTop : undefined,
         },
-      }));
+      };
+      // Scroll position is persistence metadata, not render state. Keeping it
+      // in a ref avoids re-rendering the entire application on every scroll
+      // animation frame while preserving exact reader restoration.
+      readerMemoryRef.current = next;
+      window.sessionStorage.setItem("interview-arc-reader-memory-v1", JSON.stringify(next));
     });
   }
 
@@ -6107,7 +6213,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
     if (!readerMemoryKey) return;
     const frame = window.requestAnimationFrame(() => {
       const root = readerDocumentRef.current;
-      const memory = readerMemory[readerMemoryKey];
+      const memory = readerMemoryRef.current[readerMemoryKey];
       if (!root || !memory) return;
       const anchor = memory.anchorId ? document.getElementById(memory.anchorId) : null;
       if (anchor && root.contains(anchor)) {
@@ -6428,16 +6534,21 @@ export default function HomeClient({ content, today, engineering }: { content: C
   function setEveryReaderGroup(open: boolean) {
     if (!readerMemoryKey) return;
     const groups = [...(readerDocumentRef.current?.querySelectorAll<HTMLDetailsElement>("details.reader-group") ?? [])];
-    setReaderMemory((current) => ({
-      ...current,
-      [readerMemoryKey]: {
-        ...(current[readerMemoryKey] ?? { groups: {} }),
-        groups: {
-          ...(current[readerMemoryKey]?.groups ?? {}),
-          ...Object.fromEntries(groups.map((group) => [group.id, open])),
+    setReaderMemory(() => {
+      const current = readerMemoryRef.current;
+      const next = {
+        ...current,
+        [readerMemoryKey]: {
+          ...(current[readerMemoryKey] ?? { groups: {} }),
+          groups: {
+            ...(current[readerMemoryKey]?.groups ?? {}),
+            ...Object.fromEntries(groups.map((group) => [group.id, open])),
+          },
         },
-      },
-    }));
+      };
+      readerMemoryRef.current = next;
+      return next;
+    });
   }
 
   function closeReaderPanel() {
@@ -6992,6 +7103,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
       pipWindow.document.body,
     )}
     </main>
+    <ReaderRenderDiagnosticsPanel surface={readerDiagnosticSurface} />
     <PetalField quiet={arrivalState === "entered"} paused={!petalsEnabled} />
     <ArrivalRitual date={today} state={arrivalState} muted={soundMuted} trackName={trackName} trackArtist={trackArtist} playlist={ambientPlaylist} trackIndex={ambientTrackIndex} volume={musicVolume} onToggleMuted={toggleArrivalSound} onPreviousTrack={previousAmbientTrack} onNextTrack={nextAmbientTrack} onSelectTrack={chooseAmbientTrack} onVolumeChange={setMusicVolume} onEnter={enterArc} />
     </>
