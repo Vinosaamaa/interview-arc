@@ -24,12 +24,12 @@ amends: []
 supersedes: []
 learningRefs: []
 diagrams: []
-sources: [{"label":"Arc issue #266","url":"https://github.com/Vinosaamaa/interview-arc/issues/266","kind":"issue"}]
-verification: {"state":"verified","evidenceRefs":["issue:266","tests/behavioral-evidence-bundle.test.mjs","tests/behavioral-evidence-review.integration.test.mjs"]}
+sources: [{"label":"Arc issue #266","url":"https://github.com/Vinosaamaa/interview-arc/issues/266","kind":"issue"},{"label":"Pull request #334","url":"https://github.com/Vinosaamaa/interview-arc/pull/334","kind":"pull-request"}]
+verification: {"state":"verified","evidenceRefs":["issue:266","pull-request:334","tests/behavioral-evidence-bundle.test.mjs","tests/behavioral-evidence-review.integration.test.mjs"]}
 visibility: public-safe
 publicationEligibility: eligible
 issue: 266
-pr: null
+pr: 334
 release: null
 run: null
 ---
