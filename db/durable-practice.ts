@@ -156,6 +156,7 @@ import {
   readCurrentPracticeRecord,
   type PracticeRecordSemanticInput,
 } from "./practice-records";
+import type { PreparedPracticeAsset } from "./practice-assets";
 
 export type Specialty = "leetcode" | "system_design" | "behavioral";
 export type SpecialistTaskType = Specialty | "loop_recorder" | "learning_specialist" | "resume_cover_letter";
@@ -4247,6 +4248,12 @@ export async function saveSpecialistFinalization(
   payload: SpecialistFinalization,
   nowMs: number,
   durableIdentity?: { operationId: string; requestFingerprint: string },
+  practiceAssetSet?: {
+    operationId: string;
+    manifestSha256: string;
+    assets: PreparedPracticeAsset[];
+    verify: () => Promise<void>;
+  },
 ) {
   const db = getDb();
   // Preserve the established behavioral validation precedence before checking
@@ -4290,6 +4297,10 @@ export async function saveSpecialistFinalization(
           operationId: durableIdentity!.operationId,
           requestFingerprint: durableIdentity!.requestFingerprint,
           nowMs,
+          preparedAssets: practiceAssetSet?.assets,
+          assetSetOperationId: practiceAssetSet?.operationId,
+          assetSetManifestSha256: practiceAssetSet?.manifestSha256,
+          verifyPreparedAssets: practiceAssetSet?.verify,
         })
       : null;
     return {
@@ -4895,6 +4906,10 @@ export async function saveSpecialistFinalization(
         operationId: durableIdentity!.operationId,
         requestFingerprint: durableIdentity!.requestFingerprint,
         nowMs,
+        preparedAssets: practiceAssetSet?.assets,
+        assetSetOperationId: practiceAssetSet?.operationId,
+        assetSetManifestSha256: practiceAssetSet?.manifestSha256,
+        verifyPreparedAssets: practiceAssetSet?.verify,
       })
     : null;
   return {

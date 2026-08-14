@@ -183,6 +183,8 @@ import {
 } from "../db/practice-state-commands";
 import { readPracticeActivityIdentity } from "../db/practice-activity-identity";
 import { leetCodeQuestionMetadataSchema } from "../db/question-metadata";
+import { readPreparedPracticeAssetSet } from "../db/practice-assets";
+import { routePracticeAssets } from "./practice-assets";
 import {
   connectOwnerLiveUpdates,
   publishOwnerLiveUpdate as publishOwnerLiveUpdateRequest,
@@ -2278,7 +2280,7 @@ function activityPracticeRecordToolResult(
   };
 }
 
-async function executeSpecialistWriteJob(job: SpecialistWriteJobRow) {
+async function executeSpecialistWriteJob(job: SpecialistWriteJobRow, env?: Env) {
   if (job.operation === "leetcode_code_attempt_recovery") {
     const input = job.payload as Parameters<typeof recoverLeetCodeCodeAttempt>[1];
     const saved = await recoverLeetCodeCodeAttempt(job.ownerId, input, Date.now());
@@ -2335,6 +2337,25 @@ async function executeSpecialistWriteJob(job: SpecialistWriteJobRow) {
       questionId: string | null;
       finalization: SpecialistFinalization;
     };
+    const assetSetIdentity = input.finalization.practiceRecord?.assetSet;
+    if (assetSetIdentity && input.specialty !== "system_design") {
+      throw new SpecialistWriteJobError(
+        "practice_asset_specialty_mismatch",
+        "Practice drawing assets may be finalized only for System Design activities.",
+      );
+    }
+    if (assetSetIdentity && !env) {
+      throw new Error("The private Practice asset binding is unavailable in this execution context.");
+    }
+    const preparedAssetSet = assetSetIdentity
+      ? await readPreparedPracticeAssetSet({
+          ownerId: job.ownerId,
+          activityId: input.activityId,
+          operationId: assetSetIdentity.operationId,
+          manifestSha256: assetSetIdentity.manifestSha256,
+          bucket: env!.AUDIO,
+        })
+      : null;
     let result: Awaited<ReturnType<typeof saveSpecialistFinalization>>;
     try {
       result = await saveSpecialistFinalization(
@@ -2345,6 +2366,20 @@ async function executeSpecialistWriteJob(job: SpecialistWriteJobRow) {
         input.finalization,
         Date.now(),
         { operationId: job.jobId, requestFingerprint: job.payloadHash },
+        preparedAssetSet ? {
+          operationId: assetSetIdentity!.operationId,
+          manifestSha256: assetSetIdentity!.manifestSha256,
+          assets: preparedAssetSet.assets,
+          verify: async () => {
+            await readPreparedPracticeAssetSet({
+              ownerId: job.ownerId,
+              activityId: input.activityId,
+              operationId: assetSetIdentity!.operationId,
+              manifestSha256: assetSetIdentity!.manifestSha256,
+              bucket: env!.AUDIO,
+            });
+          },
+        } : undefined,
       );
     } catch (error) {
       // Domain-level retryable errors require a reread and a newly prepared
@@ -2369,8 +2404,8 @@ async function executeSpecialistWriteJob(job: SpecialistWriteJobRow) {
   );
 }
 
-function scheduleSpecialistWriteProcessing(ctx: ExecutionContext) {
-  ctx.waitUntil(processSpecialistWriteJobs(executeSpecialistWriteJob, {
+function scheduleSpecialistWriteProcessing(ctx: ExecutionContext, env: Env) {
+  ctx.waitUntil(processSpecialistWriteJobs((job) => executeSpecialistWriteJob(job, env), {
     maxJobs: SPECIALIST_WRITE_REQUEST_DRAIN_LIMIT,
   }));
 }
@@ -3119,7 +3154,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
           operation: "behavioral_evidence_item",
           payload,
         });
-        if (!["saved", "failed"].includes(receipt.status)) scheduleSpecialistWriteProcessing(ctx);
+        if (!["saved", "failed"].includes(receipt.status)) scheduleSpecialistWriteProcessing(ctx, env);
         return {
           content: [{ type: "text", text: receipt.status === "saved"
             ? `Behavioral evidence ${payload.evidence.evidenceId} is durably saved.`
@@ -3187,7 +3222,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
           operation: "behavioral_claim_status",
           payload,
         });
-        if (!["saved", "failed"].includes(receipt.status)) scheduleSpecialistWriteProcessing(ctx);
+        if (!["saved", "failed"].includes(receipt.status)) scheduleSpecialistWriteProcessing(ctx, env);
         return {
           content: [{ type: "text", text: receipt.status === "saved"
             ? `Behavioral claim ${payload.claim.claimId} is durably saved.`
@@ -4180,7 +4215,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
           operation: "leetcode_code_attempt",
           payload,
         });
-        if (!["saved", "failed"].includes(receipt.status)) scheduleSpecialistWriteProcessing(ctx);
+        if (!["saved", "failed"].includes(receipt.status)) scheduleSpecialistWriteProcessing(ctx, env);
         return {
           content: [{ type: "text", text: receipt.status === "saved"
             ? `Code Attempt ${input.sequence} is durably saved.`
@@ -4226,7 +4261,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
           operation: "leetcode_code_attempt_recovery",
           payload,
         });
-        if (!["saved", "failed"].includes(receipt.status)) scheduleSpecialistWriteProcessing(ctx);
+        if (!["saved", "failed"].includes(receipt.status)) scheduleSpecialistWriteProcessing(ctx, env);
         return {
           content: [{ type: "text", text: receipt.status === "saved"
             ? `Recovered Code Attempt ${input.sequence} is durably saved.`
@@ -4273,7 +4308,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
     async ({ jobIds }) => {
       try {
         const jobs = await retrySpecialistWriteJobs(ownerId, jobIds);
-        scheduleSpecialistWriteProcessing(ctx);
+        scheduleSpecialistWriteProcessing(ctx, env);
         return {
           content: [{ type: "text", text: `Requeued ${jobs.length} eligible specialist write${jobs.length === 1 ? "" : "s"}.` }],
           structuredContent: { jobs },
@@ -4373,6 +4408,10 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
               turnIds: z.array(z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/).max(240)).max(64),
             })).max(32),
             nextDrill: z.string().trim().min(1).max(20_000).nullable().optional(),
+            assetSet: z.object({
+              operationId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,239}$/),
+              manifestSha256: z.string().regex(/^[a-f0-9]{64}$/),
+            }).optional(),
           }).optional(),
         }),
       }).superRefine((input, context) => {
@@ -4388,6 +4427,13 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
             code: "custom",
             path: ["finalization", "solutionProfile", "projectDeepDive"],
             message: "Project Deep Dive metadata is supported only for behavioral finalizations.",
+          });
+        }
+        if (input.specialty !== "system_design" && input.finalization.practiceRecord?.assetSet) {
+          context.addIssue({
+            code: "custom",
+            path: ["finalization", "practiceRecord", "assetSet"],
+            message: "Practice drawing assets are supported only for System Design finalizations.",
           });
         }
       }),
@@ -4410,14 +4456,14 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
             },
           });
           if (!["saved", "failed"].includes(enqueued.status)) {
-            await processSpecialistWriteJobs(executeSpecialistWriteJob, {
+            await processSpecialistWriteJobs((job) => executeSpecialistWriteJob(job, env), {
               maxJobs: SPECIALIST_WRITE_REQUEST_DRAIN_LIMIT,
             });
           }
           let receipt = (await readSpecialistWriteJobs(ownerId, [jobId]))[0];
           receipt = { ...receipt, duplicate: enqueued.duplicate };
           if (!["saved", "failed"].includes(receipt.status)) {
-            scheduleSpecialistWriteProcessing(ctx);
+            scheduleSpecialistWriteProcessing(ctx, env);
           }
           if (receipt.status === "failed") {
             return {
@@ -4577,7 +4623,7 @@ function createServer(ownerId: string, env: Env, ctx: ExecutionContext) {
           operation: "personal_bank_question",
           payload: { specialty, question },
         });
-        if (!["saved", "failed"].includes(receipt.status)) scheduleSpecialistWriteProcessing(ctx);
+        if (!["saved", "failed"].includes(receipt.status)) scheduleSpecialistWriteProcessing(ctx, env);
         return {
           content: [{ type: "text", text: receipt.status === "saved"
             ? `${question.title} is durably saved in the private ${specialty} bank.`
@@ -5180,6 +5226,10 @@ export default {
     if (url.pathname === "/audio/upload" && request.method === "POST") {
       return uploadPracticeAudio(ownerId, request, env);
     }
+    if (url.pathname.startsWith("/practice-assets/")) {
+      const practiceAssetResponse = await routePracticeAssets(ownerId, request, env.AUDIO);
+      if (practiceAssetResponse) return practiceAssetResponse;
+    }
     if (url.pathname === "/resume/imports" && request.method === "POST") {
       return uploadResumeRevision(ownerId, request, env);
     }
@@ -5288,8 +5338,8 @@ export default {
     }
     return json(request, { error: "Not found" }, { status: 404 });
   },
-  async scheduled(_controller: ScheduledController, _env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(processSpecialistWriteJobs(executeSpecialistWriteJob, {
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(processSpecialistWriteJobs((job) => executeSpecialistWriteJob(job, env), {
       maxJobs: SPECIALIST_WRITE_SCHEDULED_DRAIN_LIMIT,
     }));
   },

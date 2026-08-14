@@ -134,6 +134,123 @@ async function settledJob(client, jobId) {
   throw new Error(`Specialist write ${jobId} did not settle.`);
 }
 
+async function assetRequest(baseUrl, token, path, init = {}) {
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...init,
+    headers: { authorization: `Bearer ${token}`, ...init.headers },
+  });
+  const contentType = response.headers.get("content-type") ?? "";
+  const body = contentType.includes("application/json")
+    ? await response.json()
+    : await response.text();
+  return { response, body };
+}
+
+async function stageDesignAssets(baseUrl, token, activityId, questionId, label) {
+  const scene = JSON.stringify({ type: "excalidraw", version: 2, elements: [], appState: { name: label } });
+  const checkpoint = new FormData();
+  checkpoint.set("metadata", JSON.stringify({
+    operationId: "checkpoint-practice-record",
+    expectedRevision: 0,
+    altText: `${label} original system design checkpoint`,
+  }));
+  checkpoint.set("scene", new Blob([scene], { type: "application/vnd.excalidraw+json" }), "attempt.excalidraw");
+  const savedCheckpoint = await assetRequest(
+    baseUrl,
+    token,
+    `/practice-assets/checkpoints/${encodeURIComponent(activityId)}`,
+    { method: "PUT", body: checkpoint },
+  );
+  assert.equal(savedCheckpoint.response.status, 200);
+  assert.equal(savedCheckpoint.body.checkpoint.revision, 1);
+  assert.match(savedCheckpoint.body.checkpoint.sha256, /^[a-f0-9]{64}$/);
+  assert.equal(savedCheckpoint.body.duplicate, false);
+
+  const duplicateCheckpoint = await assetRequest(
+    baseUrl,
+    token,
+    `/practice-assets/checkpoints/${encodeURIComponent(activityId)}`,
+    { method: "PUT", body: checkpoint },
+  );
+  assert.equal(duplicateCheckpoint.response.status, 200);
+  assert.equal(duplicateCheckpoint.body.duplicate, true);
+
+  const restored = await assetRequest(
+    baseUrl,
+    token,
+    `/practice-assets/checkpoints/${encodeURIComponent(activityId)}`,
+  );
+  assert.equal(restored.response.status, 200);
+  assert.equal(restored.body.scene, scene);
+  assert.equal(restored.body.checkpoint.revision, 1);
+  assert.doesNotMatch(JSON.stringify(restored.body), /practice-assets\//);
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg"><text>${label}</text></svg>`;
+  const assets = new FormData();
+  assets.set("metadata", JSON.stringify({
+    operationId: "asset-set-practice-record",
+    questionId,
+    checkpointRevision: 1,
+    assets: [
+      { role: "attempt_original_excalidraw", altText: `${label} editable original design` },
+      { role: "attempt_original_svg", altText: `${label} original design preview` },
+    ],
+  }));
+  assets.set("attempt_original_excalidraw", new Blob([scene], { type: "application/vnd.excalidraw+json" }), "attempt.excalidraw");
+  assets.set("attempt_original_svg", new Blob([svg], { type: "image/svg+xml" }), "attempt.svg");
+  const staged = await assetRequest(
+    baseUrl,
+    token,
+    `/practice-assets/sets/${encodeURIComponent(activityId)}`,
+    { method: "POST", body: assets },
+  );
+  assert.equal(staged.response.status, 200);
+  assert.equal(staged.body.status, "staged");
+  assert.match(staged.body.manifestSha256, /^[a-f0-9]{64}$/);
+  assert.equal(staged.body.assets.length, 2);
+  assert.doesNotMatch(JSON.stringify(staged.body), /practice-assets\//);
+  const replayAssets = new FormData();
+  replayAssets.set("metadata", JSON.stringify({
+    operationId: "asset-set-practice-record",
+    questionId,
+    checkpointRevision: 1,
+    assets: [
+      { role: "attempt_original_excalidraw", altText: `${label} editable original design` },
+      { role: "attempt_original_svg", altText: `${label} original design preview` },
+    ],
+  }));
+  replayAssets.set("attempt_original_excalidraw", new Blob([scene], { type: "application/vnd.excalidraw+json" }), "attempt.excalidraw");
+  replayAssets.set("attempt_original_svg", new Blob([svg], { type: "image/svg+xml" }), "attempt.svg");
+  const assetReplay = await assetRequest(baseUrl, token, `/practice-assets/sets/${encodeURIComponent(activityId)}`, {
+    method: "POST",
+    body: replayAssets,
+  });
+  assert.equal(assetReplay.response.status, 200);
+  assert.equal(assetReplay.body.duplicate, true);
+  assert.equal(assetReplay.body.manifestSha256, staged.body.manifestSha256);
+  const changedAssets = new FormData();
+  changedAssets.set("metadata", JSON.stringify({
+    operationId: "asset-set-practice-record",
+    questionId,
+    checkpointRevision: 1,
+    assets: [
+      { role: "attempt_original_excalidraw", altText: `${label} editable original design` },
+      { role: "attempt_original_svg", altText: `${label} original design preview` },
+    ],
+  }));
+  changedAssets.set("attempt_original_excalidraw", new Blob([scene], { type: "application/vnd.excalidraw+json" }), "attempt.excalidraw");
+  changedAssets.set("attempt_original_svg", new Blob([`${svg}<!-- changed -->`], { type: "image/svg+xml" }), "attempt.svg");
+  const conflict = await assetRequest(
+    baseUrl,
+    token,
+    `/practice-assets/sets/${encodeURIComponent(activityId)}`,
+    { method: "POST", body: changedAssets },
+  );
+  assert.equal(conflict.response.status, 400);
+  assert.match(conflict.body.error, /different immutable bytes/);
+  return { scene, svg, staged };
+}
+
 test("complete finalization becomes saved only with an exact immutable Practice Record readback", { timeout: 180_000 }, async () => {
   const token = "ia_practice_record_owner_token_01";
   const otherToken = "ia_practice_record_other_token_01";
@@ -223,6 +340,9 @@ test("complete finalization becomes saved only with an exact immutable Practice 
     client = await connectMcpClient(baseUrl, token, "practice-record-integration");
     otherClient = await connectMcpClient(baseUrl, otherToken, "practice-record-other-owner");
 
+    const primaryAssets = await stageDesignAssets(baseUrl, token, activityId, questionId, "Primary owner");
+    const otherAssets = await stageDesignAssets(baseUrl, otherToken, activityId, questionId, "Other owner");
+
     const finalization = {
       activityId,
       specialty: "system_design",
@@ -261,6 +381,10 @@ test("complete finalization becomes saved only with an exact immutable Practice 
             turnIds: ["user-practice-record", "specialist-practice-record"],
           }],
           nextDrill: "Explain crash recovery between pointer update and receipt completion.",
+          assetSet: {
+            operationId: "asset-set-practice-record",
+            manifestSha256: primaryAssets.staged.body.manifestSha256,
+          },
         },
       },
     };
@@ -292,10 +416,19 @@ test("complete finalization becomes saved only with an exact immutable Practice 
     assert.equal(readback.practiceRecord.payload.transcript.firstTurnId, "user-practice-record");
     assert.equal(readback.practiceRecord.payload.transcript.lastTurnId, "specialist-practice-record");
     assert.deepEqual(readback.practiceRecord.payload.specialtyOutput.codeAttemptIds, []);
+    assert.equal(readback.practiceRecord.payload.specialtyOutput.designAssetIds.length, 2);
+    assert.equal(readback.practiceRecord.payload.assetLinks.length, 2);
     assert.equal(readback.practiceRecord.payload.specialtyOutput.kind, "your_design");
     assert.deepEqual(readback.practiceRecord.payload.solutionLink, { questionId, profileRevision: 1 });
     assert.equal(readback.finalization.practiceRecordRevision, 1);
     assert.equal(readback.finalization.practiceRecordFingerprint, receipt.result.practiceRecord.fingerprint);
+    for (const asset of primaryAssets.staged.body.assets) {
+      const file = await assetRequest(baseUrl, token, `/practice-assets/files/${asset.assetId}/${asset.revision}`);
+      assert.equal(file.response.status, 200);
+      assert.equal(file.body, asset.role === "attempt_original_excalidraw" ? primaryAssets.scene : primaryAssets.svg);
+      const foreign = await assetRequest(baseUrl, otherToken, `/practice-assets/files/${asset.assetId}/${asset.revision}`);
+      assert.equal(foreign.response.status, 404);
+    }
 
     const replay = await call(client, "save_specialist_finalization", finalization);
     assert.equal(replay.writeReceipt.status, "saved");
@@ -312,7 +445,20 @@ test("complete finalization becomes saved only with an exact immutable Practice 
     assert.equal(changedReplay.structuredContent.code, "specialist_write_identity_conflict");
     assert.equal(changedReplay.structuredContent.retryable, false);
 
-    const otherQueued = await call(otherClient, "save_specialist_finalization", finalization);
+    const otherFinalization = {
+      ...finalization,
+      finalization: {
+        ...finalization.finalization,
+        practiceRecord: {
+          ...finalization.finalization.practiceRecord,
+          assetSet: {
+            operationId: "asset-set-practice-record",
+            manifestSha256: otherAssets.staged.body.manifestSha256,
+          },
+        },
+      },
+    };
+    const otherQueued = await call(otherClient, "save_specialist_finalization", otherFinalization);
     const otherJobId = otherQueued.writeReceipt?.jobId ?? otherQueued.jobId;
     const otherReceipt = otherQueued.writeReceipt?.status === "saved"
       ? otherQueued.writeReceipt
@@ -325,6 +471,11 @@ test("complete finalization becomes saved only with an exact immutable Practice 
     assert.equal(otherReadback.practiceRecord.payload.outcome, "failed");
     assert.equal(otherReadback.practiceRecord.payload.timing.source, "manual");
     assert.equal(otherReadback.turns[0].body, "Other owner answer must remain isolated.");
+    for (const asset of otherAssets.staged.body.assets) {
+      const otherFile = await assetRequest(baseUrl, otherToken, `/practice-assets/files/${asset.assetId}/${asset.revision}`);
+      assert.equal(otherFile.response.status, 200);
+      assert.equal(otherFile.body, asset.role === "attempt_original_excalidraw" ? otherAssets.scene : otherAssets.svg);
+    }
     const ownerReadbackAfterCollision = await call(client, "get_activity_practice_record", { activityId });
     assert.equal(ownerReadbackAfterCollision.practiceRecord.fingerprint, receipt.result.practiceRecord.fingerprint);
     assert.equal(ownerReadbackAfterCollision.turns[0].body, "I would use an owner-scoped outbox.");

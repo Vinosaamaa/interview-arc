@@ -35,14 +35,26 @@ runtime on `127.0.0.1:3032`:
 4. verify health and one browser/CLI round trip;
 5. restore that activity's latest owner-private checkpoint.
 
+Run the repository controller; do not improvise browser setup:
+
+```text
+node scripts/system-design-excalidraw-controller.mjs preflight <activityId>
+```
+
+If it reports another connected client, ask the user to close any manually
+opened `127.0.0.1:3032` tab. Never close or kill the user's browser.
+
 A healthy lease is bound to the exact server, tab, activity, and checkpoint
 revision and expires after five minutes without a successful scene exchange.
 Resume within that lease reuses it without another tab or round trip.
 
 Never use the blocked Chrome extension, Computer Use, remote Excalidraw MCP,
 `npx`, port 3000, or a second tab/server. WebSocket state is not durable; save
-owner/activity checkpoints during the mock. Finish stores the exact owner scene
-and preview. A polished draw.io/SVG model is separate Solution material.
+owner/activity checkpoints during the mock with the controller's `checkpoint`
+command. At Finish, the visible specialist freezes the exact state with
+`finish-assets`; it passes the returned operation and manifest identities
+unchanged to the persistence child. Finish stores the exact owner scene and
+preview. A polished draw.io/SVG model is separate Solution material.
 
 Reuse the profile unless requirements, architecture, flows, scaling,
 reliability, or tradeoffs materially improve. Record the decision and research
