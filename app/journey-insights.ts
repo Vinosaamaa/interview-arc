@@ -53,6 +53,12 @@ export type LoopWorkspaceState = {
   stageId: string;
 };
 
+export type LoopReaderState = LoopWorkspaceState & {
+  attemptId: string;
+  specialty?: ReaderSpecialty;
+  problemId?: string;
+};
+
 export type BankReaderState = {
   specialty: ReaderSpecialty;
   problemId: string;
@@ -62,7 +68,7 @@ export type BankReaderState = {
 export type WorkspaceRouteView = "today" | "loops" | "journey" | "reviews" | "past" | "banks" | "career-materials" | "learn";
 
 export type ReaderClosePlan = {
-  view: "journey" | "reviews" | "past" | "banks";
+  view: "loops" | "journey" | "reviews" | "past" | "banks";
   href: string;
 };
 
@@ -271,6 +277,33 @@ export function readLoopWorkspaceState(currentHref: string): LoopWorkspaceState 
   };
 }
 
+export function loopReaderHref(currentHref: string, state: LoopReaderState) {
+  const url = new URL(loopWorkspaceHref(currentHref, state), new URL(currentHref).origin);
+  url.searchParams.set("attempt", state.attemptId);
+  if (state.specialty && state.problemId) {
+    url.searchParams.set("specialty", state.specialty);
+    url.searchParams.set("problem", state.problemId);
+  }
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+export function readLoopReaderState(currentHref: string): LoopReaderState | null {
+  const workspace = readLoopWorkspaceState(currentHref);
+  if (!workspace?.loopId) return null;
+  const url = new URL(currentHref);
+  const attemptId = url.searchParams.get("attempt")?.trim() ?? "";
+  const problemIdentity = readReaderProblemIdentity(url);
+  return attemptId && problemIdentity ? { ...workspace, attemptId, ...problemIdentity } : null;
+}
+
+export function loopAttemptReaderHref(currentHref: string, state: LoopReaderState) {
+  return loopReaderHref(currentHref, {
+    loopId: state.loopId,
+    stageId: state.stageId,
+    attemptId: state.attemptId,
+  });
+}
+
 export function bankReaderHref(
   currentHref: string,
   specialty: BankReaderState["specialty"],
@@ -305,6 +338,15 @@ export function workspaceViewHref(currentHref: string, view: WorkspaceRouteView)
 }
 
 export function readerClosePlan(currentHref: string): ReaderClosePlan | null {
+  const loopReader = readLoopReaderState(currentHref);
+  if (loopReader) {
+    return {
+      view: "loops",
+      href: loopReader.specialty && loopReader.problemId
+        ? loopAttemptReaderHref(currentHref, loopReader)
+        : loopWorkspaceHref(currentHref, loopReader),
+    };
+  }
   const journeyReader = readJourneyReaderState(currentHref);
   if (journeyReader) {
     if (journeyReader.specialty && journeyReader.problemId) {

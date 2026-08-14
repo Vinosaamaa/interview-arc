@@ -15,6 +15,7 @@ type DocumentScrollLockInput = {
   bankReaderOpen: boolean;
   journeyReaderOpen: boolean;
   reviewReaderOpen: boolean;
+  loopReaderOpen: boolean;
 };
 
 type OverflowStyle = { overflow: string };
@@ -28,12 +29,14 @@ export function documentScrollLockRequired({
   bankReaderOpen,
   journeyReaderOpen,
   reviewReaderOpen,
+  loopReaderOpen,
 }: DocumentScrollLockInput) {
   if (arrivalState !== "entered") return true;
   if (view === "library") return pastReaderOpen;
   if (view === "banks") return bankReaderOpen;
   if (view === "journey") return journeyReaderOpen;
   if (view === "reviews") return reviewReaderOpen;
+  if (view === "loops") return loopReaderOpen;
   return false;
 }
 

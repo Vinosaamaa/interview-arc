@@ -69,6 +69,7 @@ import {
   bankReaderHref,
   journeyHrefWithoutReader,
   journeyReaderHref,
+  loopReaderHref,
   loopWorkspaceHref,
   pastReaderHref,
   pastSolutionReaderHref,
@@ -78,6 +79,7 @@ import {
   readerClosePlan,
   readBankReaderState,
   readJourneyReaderState,
+  readLoopReaderState,
   readLoopWorkspaceState,
   readPastReaderState,
   readReviewReaderState,
@@ -1866,11 +1868,14 @@ export default function HomeClient({ content, today, engineering }: { content: C
   const [bankNestedEntry, setBankNestedEntry] = useState<LogEntry | null>(null);
   const [journeyNestedEntry, setJourneyNestedEntry] = useState<LogEntry | null>(null);
   const [journeyNestedProblem, setJourneyNestedProblem] = useState<{ type: ActivityType; question: QuestionBankItem } | null>(null);
+  const [loopNestedEntry, setLoopNestedEntry] = useState<LogEntry | null>(null);
+  const [loopNestedProblem, setLoopNestedProblem] = useState<{ type: ActivityType; question: QuestionBankItem } | null>(null);
   const [reviewNestedEntry, setReviewNestedEntry] = useState<LogEntry | null>(null);
   const [reviewNestedProblem, setReviewNestedProblem] = useState<{ type: ActivityType; question: QuestionBankItem } | null>(null);
   const nestedReaderFocus = (view === "library" && Boolean(libraryNestedProblem))
     || (view === "banks" && Boolean(bankNestedEntry))
     || (view === "journey" && Boolean(journeyNestedEntry || journeyNestedProblem))
+    || (view === "loops" && Boolean(loopNestedEntry || loopNestedProblem))
     || (view === "reviews" && Boolean(reviewNestedEntry || reviewNestedProblem));
   const [masterPaneState, setMasterPaneState] = useState<MasterPaneState>({ library: false, banks: false });
   const activeListSurface: ListSurface | null = view === "library" || view === "banks" ? view : null;
@@ -1933,6 +1938,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
   const workspaceUrlHydratedRef = useRef(false);
   const restoreWorkspaceLocationRef = useRef<() => void>(() => {});
   const reviewReaderOpenerRef = useRef<HTMLElement | null>(null);
+  const loopReaderOpenerRef = useRef<HTMLElement | null>(null);
   const [careerWork, setCareerWork] = useState<CareerWorkPayload | null>(null);
   const [careerLoading, setCareerLoading] = useState(false);
   const [careerLoadingMore, setCareerLoadingMore] = useState(false);
@@ -2161,6 +2167,11 @@ export default function HomeClient({ content, today, engineering }: { content: C
         return;
       }
       const routeView = readWorkspaceRouteView(window.location.href);
+      if (readLoopReaderState(window.location.href)) {
+        setView("loops");
+        setViewMemoryReady(true);
+        return;
+      }
       if (readJourneyReaderState(window.location.href)) {
         setActiveWorkspace("interview");
         setView("journey");
@@ -2286,6 +2297,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
     bankReaderOpen: Boolean(selectedProblem),
     journeyReaderOpen: Boolean(journeyNestedEntry || journeyNestedProblem),
     reviewReaderOpen: Boolean(reviewNestedEntry || reviewNestedProblem),
+    loopReaderOpen: Boolean(loopNestedEntry || loopNestedProblem),
   });
 
   useLayoutEffect(() => {
@@ -2314,7 +2326,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
   }, [closeComposer, composer.open, integrationOpen]);
 
   useEffect(() => {
-    if (!selectedEntry && !selectedProblem && !journeyNestedEntry && !journeyNestedProblem && !reviewNestedEntry && !reviewNestedProblem) return;
+    if (!selectedEntry && !selectedProblem && !journeyNestedEntry && !journeyNestedProblem && !loopNestedEntry && !loopNestedProblem && !reviewNestedEntry && !reviewNestedProblem) return;
     const closeReader = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (!nestedReaderFocus && masterPaneOpen && window.matchMedia("(max-width: 1976px)").matches) {
@@ -2325,7 +2337,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
     };
     window.addEventListener("keydown", closeReader);
     return () => window.removeEventListener("keydown", closeReader);
-  }, [bankNestedEntry, journeyNestedEntry, journeyNestedProblem, libraryNestedProblem, masterPaneOpen, nestedReaderFocus, reviewNestedEntry, reviewNestedProblem, selectedEntry, selectedProblem, setMasterPaneOpen]);
+  }, [bankNestedEntry, journeyNestedEntry, journeyNestedProblem, libraryNestedProblem, loopNestedEntry, loopNestedProblem, masterPaneOpen, nestedReaderFocus, reviewNestedEntry, reviewNestedProblem, selectedEntry, selectedProblem, setMasterPaneOpen]);
 
   useEffect(() => {
     if (!masterPaneOpen) return;
@@ -3463,34 +3475,53 @@ export default function HomeClient({ content, today, engineering }: { content: C
     transitionToView("reviews");
   }
 
-  function openLoopActivity(activityId: string) {
+  function openLoopActivity(activityId: string, explicitLoopId = "", explicitStageId = "") {
     const entry = libraryEntries.find((candidate) => (
       candidate.id === activityId || candidate.artifact?.activityId === activityId
     ));
-    const loopState = readLoopWorkspaceState(window.location.href) ?? { loopId: "", stageId: "" };
-    window.history.replaceState(
+    const currentLoopState = readLoopWorkspaceState(window.location.href);
+    const loopState = {
+      loopId: explicitLoopId || currentLoopState?.loopId || "",
+      stageId: explicitStageId || currentLoopState?.stageId || "",
+    };
+    if (!loopState.loopId) {
+      setReaderNotFound(activityId);
+      return;
+    }
+    const currentLoopReader = readLoopReaderState(window.location.href);
+    const currentDepth = currentLoopReader && Number.isInteger(window.history.state?.interviewArcLoopDepth)
+      ? window.history.state.interviewArcLoopDepth as number
+      : 0;
+    const originScrollY = currentLoopReader && typeof window.history.state?.interviewArcLoopScrollY === "number"
+      ? window.history.state.interviewArcLoopScrollY as number
+      : window.scrollY;
+    if (!currentLoopReader) window.history.replaceState(
       {
         ...window.history.state,
         interviewArcWorkspaceView: "loops",
-        interviewArcLoopScrollY: window.scrollY,
+        interviewArcLoopDepth: 0,
+        interviewArcLoopScrollY: originScrollY,
         interviewArcLoopFocusActivity: activityId,
       },
       "",
       loopWorkspaceHref(window.location.href, loopState),
     );
     window.history.pushState(
-      { interviewArcPastReader: true, interviewArcPastDepth: 1, interviewArcLoopOrigin: true },
+      {
+        interviewArcLoopReader: true,
+        interviewArcLoopDepth: currentDepth + 1,
+        interviewArcLoopScrollY: originScrollY,
+        interviewArcLoopFocusActivity: activityId,
+      },
       "",
-      pastReaderHref(window.location.href, activityId),
+      loopReaderHref(window.location.href, { ...loopState, attemptId: activityId }),
     );
-    setPastReaderOrderIds(entry ? [entry.id] : []);
-    setJourneyReaderOrderIds([]);
     setReaderClosing(false);
     setReaderNotFound(entry ? "" : activityId);
-    if (!entry) window.sessionStorage.removeItem("interview-arc-selected-past");
-    setSelectedEntry(entry ?? null);
-    setLibraryNestedProblem(null);
-    transitionToView("library");
+    if (document.activeElement instanceof HTMLElement) loopReaderOpenerRef.current = document.activeElement;
+    setLoopNestedEntry(entry ?? null);
+    setLoopNestedProblem(null);
+    transitionToView("loops");
   }
 
   function showChartTooltip(target: Element, model: Omit<ChartTooltipModel, "anchor">) {
@@ -3707,6 +3738,10 @@ export default function HomeClient({ content, today, engineering }: { content: C
       openJourneyEntry(exactEntry, selectedProblemAttempts);
       return;
     }
+    if (view === "loops") {
+      openLoopActivity(exactEntry.id);
+      return;
+    }
     if (view === "reviews") {
       openReviewEntry(exactEntry, selectedProblemAttempts);
       return;
@@ -3740,6 +3775,24 @@ export default function HomeClient({ content, today, engineering }: { content: C
       );
       setReaderClosing(false);
       setJourneyNestedProblem({ type: entry.type, question });
+      return;
+    }
+    if (view === "loops" && loopNestedEntry) {
+      const loopState = readLoopReaderState(window.location.href);
+      if (!loopState) return;
+      const currentDepth = Number(window.history.state?.interviewArcLoopDepth ?? 1);
+      window.history.pushState(
+        {
+          interviewArcLoopReader: true,
+          interviewArcLoopDepth: currentDepth + 1,
+          interviewArcLoopScrollY: window.history.state?.interviewArcLoopScrollY,
+          interviewArcLoopFocusActivity: entry.id,
+        },
+        "",
+        loopReaderHref(window.location.href, { ...loopState, specialty: entry.type, problemId: question.id }),
+      );
+      setReaderClosing(false);
+      setLoopNestedProblem({ type: entry.type, question });
       return;
     }
     if (view === "reviews" && reviewNestedEntry) {
@@ -4700,7 +4753,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
   useEffect(() => {
     if (!viewMemoryReady || !workspaceUrlHydratedRef.current) return;
     if (activeWorkspace !== "interview") return;
-    if (readJourneyReaderState(window.location.href) || readReviewReaderState(window.location.href) || readPastReaderState(window.location.href) || readBankReaderState(window.location.href)) return;
+    if (readLoopReaderState(window.location.href) || readJourneyReaderState(window.location.href) || readReviewReaderState(window.location.href) || readPastReaderState(window.location.href) || readBankReaderState(window.location.href)) return;
     if (view === "library" && selectedEntry) {
       window.history.replaceState(
         { interviewArcPastReader: true, interviewArcPastDepth: 0 },
@@ -4795,6 +4848,10 @@ export default function HomeClient({ content, today, engineering }: { content: C
       setJourneyNestedEntry(null);
       setJourneyNestedProblem(null);
       setJourneyReaderOrderIds([]);
+    }
+    if (view === "loops") {
+      setLoopNestedEntry(null);
+      setLoopNestedProblem(null);
     }
     if (view === "reviews") {
       setReviewNestedEntry(null);
@@ -5097,6 +5154,29 @@ export default function HomeClient({ content, today, engineering }: { content: C
         return;
       }
       setActiveWorkspace(readWorkspaceRouteView(window.location.href) === "learn" ? "learn" : "interview");
+      const loopState = readLoopReaderState(window.location.href);
+      if (loopState) {
+        const entry = libraryEntries.find((candidate) => (
+          candidate.id === loopState.attemptId || candidate.artifact?.activityId === loopState.attemptId
+        ));
+        const nestedProblem = loopState.specialty && loopState.problemId
+          ? bankFor(loopState.specialty).find((candidate) => candidate.id === loopState.problemId)
+          : undefined;
+        if (!entry || (loopState.problemId && (!nestedProblem || entry.type !== loopState.specialty
+          || (entry.questionId !== loopState.problemId && normalizedIdentity(entry.title) !== normalizedIdentity(nestedProblem.title))))) {
+          setLoopNestedEntry(null);
+          setLoopNestedProblem(null);
+          setReaderNotFound(loopState.attemptId);
+          setView("loops");
+          return;
+        }
+        setReaderNotFound("");
+        setReaderClosing(false);
+        setLoopNestedEntry((current) => retainLoadedPastSnapshot(current, entry));
+        setLoopNestedProblem(nestedProblem && loopState.specialty ? { type: loopState.specialty, question: nestedProblem } : null);
+        setView("loops");
+        return;
+      }
       const journeyState = readJourneyReaderState(window.location.href);
       if (journeyState) {
         const range = journeyState.range === "all" ? "all" : Number(journeyState.range) as JourneyRange;
@@ -5255,6 +5335,11 @@ export default function HomeClient({ content, today, engineering }: { content: C
         setReviewReaderOrderIds([]);
         setReaderNotFound("");
       }
+      if (routeView === "loops") {
+        setLoopNestedEntry(null);
+        setLoopNestedProblem(null);
+        setReaderNotFound("");
+      }
       if (routeView === "learn") setLearnDestination(readLearnDestination(window.location.href));
       setView(routeView === "past" ? "library" : routeView === "career-materials" ? "materials" : routeView);
       if (routeView === "journey") {
@@ -5265,7 +5350,8 @@ export default function HomeClient({ content, today, engineering }: { content: C
     };
     restoreWorkspaceLocationRef.current = restoreWorkspaceLocation;
     const readerRouteUnavailable = Boolean(readerNotFound) && Boolean(
-      readJourneyReaderState(window.location.href)
+      readLoopReaderState(window.location.href)
+      || readJourneyReaderState(window.location.href)
       || readReviewReaderState(window.location.href)
       || readPastReaderState(window.location.href)
       || readBankReaderState(window.location.href)
@@ -5668,6 +5754,17 @@ export default function HomeClient({ content, today, engineering }: { content: C
     );
   }
 
+  function renderLoops() {
+    const readerOpen = Boolean(loopNestedEntry || loopNestedProblem);
+    return <section className={`loops-reader-workspace ${readerOpen ? "has-open-reader" : ""}`}>
+      <div className="loops-reader-base" inert={readerOpen ? true : undefined}>
+        <LoopsWorkspace onOpenActivity={openLoopActivity} />
+      </div>
+      {readerNotFound && <div className="journey-reader-not-found" role="alert"><strong>That Loop practice record is unavailable.</strong><span>The saved reader link points to <code>{readerNotFound}</code>, which is not present in the current authoritative record.</span></div>}
+      {arrivalState === "entered" && readerOpen && <div className={`loop-reader-detail reader-workspace focused-attempt-workspace ${readerClosing ? "reader-closing" : ""}`}><ModalReaderPane focusKey={loopNestedProblem ? `loop-solution-${loopNestedProblem.type}-${loopNestedProblem.question.id}` : `loop-attempt-${loopNestedEntry?.id ?? "unknown"}`} restoreFocusRef={loopReaderOpenerRef} className="loop-reader-pane focused-attempt-pane" label="Selected Loop practice reader">{loopNestedProblem ? renderSolutionReader() : renderCaseReader()}</ModalReaderPane></div>}
+    </section>;
+  }
+
   function scrollToLogDate(date: string) {
     document.getElementById(`log-date-${date}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -5919,7 +6016,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
     };
     const activeSort = sortOptions.find((option) => option.key === bankSortKey) ?? sortOptions[0];
     return (
-      <section className={`view-page banks-page ${selectedProblem ? "has-open-solution" : ""} ${listRestoring === "banks" ? "list-restoring" : ""}`}>
+      <section className={`view-page banks-page ${selectedProblem ? "has-open-solution" : ""} ${!selectedProblem && !expandedBankDesk ? "bounded-list" : ""} ${listRestoring === "banks" ? "list-restoring" : ""}`}>
         <InterviewPageHero tone="banks" eyebrow="PROBLEM BANKS · ALL PRACTICE SOURCES" title={<>Choose the next thing<br /><em>worth practicing.</em></>} description="Browse every coding, system-design, and behavioral prompt in one place. Practice today adds the question to standalone practice and takes you directly to Today." footer={<div className="bank-totals hero-bank-totals" aria-label="Question bank totals">
           {([[
             "leetcode", bankFor("leetcode").length, "Coding problems"],
@@ -6172,8 +6269,10 @@ export default function HomeClient({ content, today, engineering }: { content: C
     ? libraryNestedProblem ? null : selectedEntry
     : view === "banks"
       ? bankNestedEntry
-      : view === "journey"
-        ? journeyNestedProblem ? null : journeyNestedEntry
+        : view === "journey"
+          ? journeyNestedProblem ? null : journeyNestedEntry
+        : view === "loops"
+          ? loopNestedProblem ? null : loopNestedEntry
         : view === "reviews"
           ? reviewNestedProblem ? null : reviewNestedEntry
           : null;
@@ -6191,6 +6290,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
   });
   const currentReaderHref = typeof window === "undefined" ? "https://interview-arc.invalid/" : window.location.href;
   const currentJourneyReaderState = readJourneyReaderState(currentReaderHref);
+  const currentLoopReaderState = readLoopReaderState(currentReaderHref);
   const currentPastReaderState = readPastReaderState(currentReaderHref);
   const currentReviewReaderState = readReviewReaderState(currentReaderHref);
   const currentBankReaderState = readBankReaderState(currentReaderHref);
@@ -6211,6 +6311,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
     : -1;
   const navigateReaderEntry = (entry: LibraryEntry) => {
     if (currentJourneyReaderState) openJourneyEntry(entry, readerNavigationEntries);
+    else if (currentLoopReaderState) openLoopActivity(entry.id);
     else if (currentReviewReaderState) openReviewEntry(entry, readerNavigationEntries);
     else if (currentBankReaderState?.attemptId) openAttemptFromSolution(entry);
     else openPastEntry(entry, readerNavigationEntries);
@@ -6221,6 +6322,8 @@ export default function HomeClient({ content, today, engineering }: { content: C
       ? libraryNestedProblem
       : view === "journey"
         ? journeyNestedProblem
+      : view === "loops"
+        ? loopNestedProblem
         : view === "reviews"
           ? reviewNestedProblem
           : null;
@@ -6688,6 +6791,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
           : current;
         if (view === "banks") setBankNestedEntry(enrich);
         else if (view === "journey") setJourneyNestedEntry(enrich);
+        else if (view === "loops") setLoopNestedEntry(enrich);
         else if (view === "reviews") setReviewNestedEntry(enrich);
         else setSelectedEntry(enrich);
         setPracticeRecordReadState({ activityId: selectedEntryActivityId, status: "loaded" });
@@ -6721,16 +6825,41 @@ export default function HomeClient({ content, today, engineering }: { content: C
 
   function closeReaderPanel() {
     const closePlan = readerClosePlan(window.location.href);
-    if (view === "library" && window.history.state?.interviewArcLoopOrigin) {
-      window.sessionStorage.removeItem("interview-arc-selected-past");
-      const storedDepth = Number(window.history.state?.interviewArcPastDepth ?? 1);
-      const depth = Number.isInteger(storedDepth) && storedDepth > 0 ? storedDepth : 1;
-      setSelectedEntry(null);
-      setLibraryNestedProblem(null);
-      setPastReaderOrderIds([]);
+    if (view === "loops" && closePlan?.view === "loops") {
+      const loopState = readLoopReaderState(window.location.href);
+      const depth = Number(window.history.state?.interviewArcLoopDepth ?? 0);
+      const scrollY = window.history.state?.interviewArcLoopScrollY;
       setReaderNotFound("");
       setReaderClosing(false);
-      window.history.go(-depth);
+      if (loopState?.problemId) {
+        setLoopNestedProblem(null);
+        if (window.history.state?.interviewArcLoopReader && depth > 1) window.history.go(-1);
+        else window.history.replaceState(
+          {
+            interviewArcLoopReader: true,
+            interviewArcLoopDepth: readerDepthAfterNestedClose(depth),
+            interviewArcLoopScrollY: scrollY,
+            interviewArcLoopFocusActivity: loopState.attemptId,
+          },
+          "",
+          closePlan.href,
+        );
+        return;
+      }
+      setLoopNestedEntry(null);
+      setLoopNestedProblem(null);
+      restorePageScroll(scrollY);
+      if (window.history.state?.interviewArcLoopReader && depth > 0) window.history.go(-depth);
+      else window.history.replaceState(
+        {
+          interviewArcWorkspaceView: "loops",
+          interviewArcLoopDepth: 0,
+          interviewArcLoopScrollY: scrollY,
+          interviewArcLoopFocusActivity: loopState?.attemptId,
+        },
+        "",
+        closePlan.href,
+      );
       return;
     }
     if (view === "journey" && closePlan?.view === "journey") {
@@ -7095,7 +7224,7 @@ export default function HomeClient({ content, today, engineering }: { content: C
             {activeWorkspace === "interview" ? <button className="secondary-action" onClick={() => void exportDraft()}>Export today</button> : null}
           </div>
         </header>
-        <div className="page-content" id="practice-content">{activeWorkspace === "engineering" ? <EngineeringWorkspace index={engineering} view={engineeringView} onNavigateView={setEngineeringView} /> : activeWorkspace === "learn" ? <LearnWorkspace destination={learnDestination} /> : <>{view === "today" && renderToday()}{view === "loops" && <LoopsWorkspace onOpenActivity={openLoopActivity} />}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}{view === "materials" && <CareerMaterialsWorkspace />}</>}</div>
+        <div className="page-content" id="practice-content">{activeWorkspace === "engineering" ? <EngineeringWorkspace index={engineering} view={engineeringView} onNavigateView={setEngineeringView} /> : activeWorkspace === "learn" ? <LearnWorkspace destination={learnDestination} /> : <>{view === "today" && renderToday()}{view === "loops" && renderLoops()}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}{view === "materials" && <CareerMaterialsWorkspace />}</>}</div>
       </section>
 
       {activeWorkspace === "learn"

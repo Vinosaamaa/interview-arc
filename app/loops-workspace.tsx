@@ -8,7 +8,7 @@ import {
   parseJobDescription,
   type RoleBriefSourcePayload,
 } from "./loop-role-brief-source";
-import { loopWorkspaceHref, readLoopWorkspaceState } from "./journey-insights";
+import { loopWorkspaceHref, readLoopReaderState, readLoopWorkspaceState } from "./journey-insights";
 import { acquireDocumentScrollLock } from "./document-scroll-policy";
 import {
   groupLoopPreparation,
@@ -195,7 +195,7 @@ function useLoopPayload(includeArchived = false) {
 
 function PreparationLedger({ loop, onOpenActivity }: {
   loop: LoopProjection;
-  onOpenActivity: (activityId: string) => void;
+  onOpenActivity: (activityId: string, loopId: string, stageId: string) => void;
 }) {
   const groups = useMemo(() => groupLoopPreparation(loop), [loop]);
   return <section className="loop-preparation" aria-labelledby="loop-preparation-title">
@@ -210,10 +210,10 @@ function PreparationLedger({ loop, onOpenActivity }: {
           const exactAttempts = question.attempts.filter((attempt) => attempt.history);
           if (question.attempts.length > 1) return <details className="loop-preparation-question" key={question.questionId}>
             <summary><span className={`loop-preparation-check ${question.completed ? "completed" : "planned"}`} aria-hidden="true">{question.completed ? <svg viewBox="0 0 20 20"><path d="m5 10 3.2 3.2L15 6.8" /></svg> : null}</span><strong>{question.title}</strong><small>{question.attempts.length} attempts</small><svg className="loop-disclosure" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" /></svg></summary>
-            <div>{question.attempts.map((attempt, index) => attempt.history ? <button type="button" key={attempt.activityId} data-loop-activity-id={attempt.activityId} onClick={() => onOpenActivity(attempt.activityId)}><span>Attempt {question.attempts.length - index}</span><strong>{sentenceId(attempt.history.result)}</strong><time>{formatDate(attempt.history.completedAt)}</time></button> : <span className="loop-planned-attempt" key={attempt.activityId}>Planned · no Past record yet</span>)}</div>
+            <div>{question.attempts.map((attempt, index) => attempt.history ? <button type="button" key={attempt.activityId} data-loop-activity-id={attempt.activityId} onClick={() => onOpenActivity(attempt.activityId, loop.loop.loopId, attempt.stageId ?? "")}><span>Attempt {question.attempts.length - index}</span><strong>{sentenceId(attempt.history.result)}</strong><time>{formatDate(attempt.history.completedAt)}</time></button> : <span className="loop-planned-attempt" key={attempt.activityId}>Planned · no Past record yet</span>)}</div>
           </details>;
           const attempt = exactAttempts[0];
-          return attempt ? <button type="button" className="loop-preparation-question single" key={question.questionId} data-loop-activity-id={attempt.activityId} onClick={() => onOpenActivity(attempt.activityId)}><span className="loop-preparation-check completed" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5 10 3.2 3.2L15 6.8" /></svg></span><strong>{question.title}</strong><small>{formatDate(attempt.history?.completedAt)}</small><svg className="loop-row-arrow" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11m-4-4 4 4-4 4" /></svg></button>
+          return attempt ? <button type="button" className="loop-preparation-question single" key={question.questionId} data-loop-activity-id={attempt.activityId} onClick={() => onOpenActivity(attempt.activityId, loop.loop.loopId, attempt.stageId ?? "")}><span className="loop-preparation-check completed" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5 10 3.2 3.2L15 6.8" /></svg></span><strong>{question.title}</strong><small>{formatDate(attempt.history?.completedAt)}</small><svg className="loop-row-arrow" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11m-4-4 4 4-4 4" /></svg></button>
             : <div className="loop-preparation-question single planned" key={question.questionId}><span className="loop-preparation-check planned" aria-hidden="true" /><strong>{question.title}</strong><small>Planned</small></div>;
         }) : <p>No linked preparation.</p>}
       </div>
@@ -378,7 +378,7 @@ function StageChronology({ loop }: { loop: LoopProjection }) {
   return <ol className={`loop-stage-chronology outcome-${terminal}`} aria-label="Interview stage chronology">{stages.map((stage, index) => <StageRecord stage={stage} materials={stageMaterials(materialIndex, stage.stageId, index === 0)} key={stage.stageId} />)}<li className={`loop-stage-terminal ${terminal}`}><span aria-hidden="true">{terminal === "rejected" || terminal === "withdrawn" || terminal === "closed" ? "×" : ""}</span><strong>{terminal === "open" ? "To be continued" : sentenceId(terminal)}</strong></li></ol>;
 }
 
-export function LoopsWorkspace({ onOpenActivity }: { onOpenActivity: (activityId: string) => void }) {
+export function LoopsWorkspace({ onOpenActivity }: { onOpenActivity: (activityId: string, loopId: string, stageId: string) => void }) {
   const [includeArchived, setIncludeArchived] = useState(false);
   const { payload, error, loading, reload } = useLoopPayload(includeArchived);
   const [selectedLoopId, setSelectedLoopId] = useState(() => (typeof window === "undefined" ? "" : readLoopWorkspaceState(window.location.href)?.loopId ?? ""));
@@ -386,10 +386,13 @@ export function LoopsWorkspace({ onOpenActivity }: { onOpenActivity: (activityId
   const [sourceDialog, setSourceDialog] = useState<{ loop: LoopProjection; opener: HTMLButtonElement } | null>(null);
   const closeSourceDialog = useCallback(() => setSourceDialog(null), []);
   const loops = payload?.loops ?? [];
-  const selectedLoop = loops.find((loop) => loop.loop.loopId === selectedLoopId) ?? loops[0];
+  const requestedLoop = selectedLoopId ? loops.find((loop) => loop.loop.loopId === selectedLoopId) : undefined;
+  const requestedLoopMissing = Boolean(selectedLoopId && !requestedLoop);
+  const selectedLoop = requestedLoop ?? (selectedLoopId ? undefined : loops[0]);
 
   useEffect(() => {
     if (!selectedLoop) return;
+    if (readLoopReaderState(window.location.href)?.loopId === selectedLoop.loop.loopId) return;
     const href = loopWorkspaceHref(window.location.href, { loopId: selectedLoop.loop.loopId, stageId: "" });
     if (`${window.location.pathname}${window.location.search}${window.location.hash}` !== href) window.history.replaceState({ ...window.history.state, interviewArcWorkspaceView: "loops" }, "", href);
   }, [selectedLoop]);
@@ -406,6 +409,7 @@ export function LoopsWorkspace({ onOpenActivity }: { onOpenActivity: (activityId
 
   if (loading && !payload) return <section className="loops-state" aria-live="polite"><span className="loops-loader" /><strong>Reading owner-private Loops…</strong></section>;
   if (error) return <section className="loops-state error" role="alert"><strong>Loops could not be loaded.</strong><span>{error}</span><button type="button" onClick={() => void reload()}>Try again</button></section>;
+  if (requestedLoopMissing) return <section className="loops-state error" role="alert"><strong>That Loop is unavailable.</strong><span>The saved link does not match a Loop in the current owner-scoped result.</span>{loops[0] ? <button type="button" onClick={() => setSelectedLoopId(loops[0].loop.loopId)}>Open the current Loop</button> : null}</section>;
   if (!selectedLoop) return <section className="loops-empty"><div><h1>Your first Loop starts with a real role.</h1><p>Ask <strong>Interview Arc — Loop Recorder</strong> to record the company, role, job description, and hiring stages you actually know.</p></div><aside><strong>{payload?.migrationInbox.length ?? 0} standalone Target Profiles await a decision</strong><p>Nothing is guessed or deleted.</p></aside></section>;
 
   const completedStages = selectedLoop.loop.stages.filter((stage) => stage.status === "completed").length;

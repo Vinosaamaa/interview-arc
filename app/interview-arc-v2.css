@@ -1832,6 +1832,43 @@ body:has(.reader-workspace) .ambient-rain-drop span { animation-play-state: paus
 .bank-master-detail { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
 .bank-master-pane { min-width: 0; }
 .bank-solution-pane { display: none; }
+
+@media (min-width: 901px) and (min-height: 760px) {
+  .page-content:has(> .banks-page.bounded-list) {
+    height: calc(100dvh - 72px);
+    min-height: 0;
+    padding-bottom: 20px;
+    overflow: hidden;
+  }
+  .banks-page.bounded-list {
+    height: calc(100dvh - 117px);
+    min-height: 0;
+    display: grid;
+    grid-template-rows: 350px 20px minmax(0, 1fr);
+  }
+  .banks-page.bounded-list > .interview-page-hero {
+    grid-row: 1;
+    margin: 0;
+  }
+  .banks-page.bounded-list > .bank-domain-desks {
+    display: none;
+  }
+  .banks-page.bounded-list .bank-master-detail {
+    min-height: 0;
+    grid-row: 3;
+    align-items: stretch;
+  }
+  .banks-page.bounded-list .bank-master-pane {
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .banks-page.bounded-list .problem-bank-list {
+    height: auto;
+    min-height: 0;
+    max-height: none;
+  }
+}
 .banks-page.has-open-solution > .view-masthead,
 .banks-page.has-open-solution > .bank-totals { display: none; }
 .banks-page.has-open-solution .bank-control-deck { margin: 0; padding: 10px; border-bottom: 1px solid var(--line-soft); background: #f7faf8; }
@@ -1939,6 +1976,14 @@ body:has(.reader-workspace) .ambient-rain-drop span { animation-play-state: paus
 .banks-page.has-open-solution::before,
 .journey-page.has-open-reader::before,
 .review-queue-workspace.has-open-reader::before {
+  content: "";
+  position: fixed;
+  inset: 72px 0 0 var(--sidebar-size);
+  z-index: 25;
+  background: var(--canvas);
+}
+
+.loops-reader-workspace.has-open-reader::before {
   content: "";
   position: fixed;
   inset: 72px 0 0 var(--sidebar-size);
