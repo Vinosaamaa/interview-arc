@@ -16,7 +16,8 @@ or Git worktree per specialist.
 
 Tasks share repository files but not hidden conversation context. Durable role
 instructions live in `AGENTS.md`. The three practice specialists own coaching;
-Loop Recorder, Learning, and Career Materials keep their separate contracts.
+Loop Recorder and Resume & Cover Letter are administrative specialists;
+Learning Specialist owns tutoring; none is an Interview practice specialty.
 
 ## Session protocol
 
