@@ -8,6 +8,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { evidenceProvenanceViolations } from "./behavioral-evidence-provenance.mjs";
+
 const STABLE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const CLAIM_STATUSES = new Set(["unverified", "partial", "verified", "contradicted"]);
 const CLAIM_STRENGTHS = new Set([
@@ -218,14 +220,8 @@ function validateEvidence(evidence, sources, location) {
     requireArray(item.supports, `${location}.evidence.${id}.supports`);
     requireArray(item.limitations, `${location}.evidence.${id}.limitations`);
     requireKnownIds(item.contraryEvidenceIds ?? [], evidence, `${location}.evidence.${id}.contraryEvidenceIds`);
-    if (item.sourceRevision !== undefined && !/^source-set-[a-f0-9]{64}$/.test(item.sourceRevision)) {
-      fail(`${location}.evidence.${id}.sourceRevision`, "must be an immutable source-set digest");
-    }
-    if (item.origin === "user_statement" && item.sourceRevision !== undefined) {
-      fail(`${location}.evidence.${id}.sourceRevision`, "owner statements use exact conversation attestation instead of a source revision");
-    }
-    if (item.immutableContentFingerprint !== undefined && !/^[a-f0-9]{64}$/.test(item.immutableContentFingerprint)) {
-      fail(`${location}.evidence.${id}.immutableContentFingerprint`, "must be a SHA-256 digest");
+    for (const violation of evidenceProvenanceViolations(item)) {
+      fail(`${location}.evidence.${id}.${violation.field}`, violation.message);
     }
   }
 }

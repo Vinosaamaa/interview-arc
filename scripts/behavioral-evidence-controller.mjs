@@ -20,6 +20,10 @@ import {
   buildBehavioralEvidenceSite,
   validateBehavioralEvidenceBundle,
 } from "./build-behavioral-evidence-site.mjs";
+import {
+  assertEvidenceProvenanceShape,
+  EVIDENCE_SOURCE_REVISION_PATTERN,
+} from "./behavioral-evidence-provenance.mjs";
 
 const execFileAsync = promisify(execFile);
 const MAX_DIRECTORY_ENTRIES = 5_000;
@@ -454,25 +458,29 @@ function projectSourceSnapshot(project, source) {
   return snapshot;
 }
 
-function currentEvidenceSourceRevision(evidence, sourceById) {
-  if (evidence.origin === "user_statement") return undefined;
-  const revisions = evidence.sourceIds.map((sourceId) => {
+function availableEvidenceSources(evidence, sourceById) {
+  return evidence.sourceIds.map((sourceId) => {
     const source = sourceById.get(sourceId);
     if (!source) throw new Error("Evidence references an unavailable source.");
     if (source.availability !== "available" || !["current", "changed"].includes(sourceRefreshStatus(source))) {
       throw new Error("Non-conversation evidence requires an available source with a current or changed refresh status before sync preparation.");
     }
-    return source.revision ?? source.fingerprint;
+    return source;
   });
+}
+
+function currentEvidenceSourceRevision(evidence, sourceById) {
+  if (evidence.origin === "user_statement") return undefined;
+  const revisions = availableEvidenceSources(evidence, sourceById).map(
+    (source) => source.revision ?? source.fingerprint,
+  );
   if (revisions.some((revision) => !revision)) throw new Error("Non-conversation evidence requires refreshed source revisions before sync preparation.");
   return `source-set-${sha256(JSON.stringify(revisions.sort()))}`;
 }
 
 function pinnedEvidenceSourceRevision(project, evidence, sourceById) {
+  assertEvidenceProvenanceShape(evidence);
   if (evidence.origin === "user_statement") {
-    if (evidence.sourceRevision !== undefined) {
-      throw new Error("Owner-statement evidence cannot carry a filesystem source revision.");
-    }
     const expectedFingerprint = evidenceImmutableFingerprint(project, evidence, undefined);
     if (!evidence.immutableContentFingerprint) {
       throw new Error("Evidence immutable content is not pinned. Run pin-provenance before prepare-sync.");
@@ -482,14 +490,8 @@ function pinnedEvidenceSourceRevision(project, evidence, sourceById) {
     }
     return undefined;
   }
-  for (const sourceId of evidence.sourceIds) {
-    const source = sourceById.get(sourceId);
-    if (!source) throw new Error("Evidence references an unavailable source.");
-    if (source.availability !== "available" || !["current", "changed"].includes(sourceRefreshStatus(source))) {
-      throw new Error("Non-conversation evidence requires an available source with a current or changed refresh status before sync preparation.");
-    }
-  }
-  if (!/^source-set-[a-f0-9]{64}$/.test(evidence.sourceRevision ?? "")) {
+  availableEvidenceSources(evidence, sourceById);
+  if (!EVIDENCE_SOURCE_REVISION_PATTERN.test(evidence.sourceRevision ?? "")) {
     throw new Error("Evidence provenance is not pinned. Run pin-provenance before prepare-sync.");
   }
   const expectedFingerprint = evidenceImmutableFingerprint(project, evidence, evidence.sourceRevision);
@@ -513,7 +515,7 @@ function readRemoteSnapshotEntry(value, position) {
   if (typeof value.evidenceId !== "string" || !/^[a-z0-9][a-z0-9._-]*$/.test(value.evidenceId)) {
     throw new Error(`Remote evidence snapshot entry ${position} has an invalid evidence identity.`);
   }
-  if (value.sourceRevision !== undefined && !/^source-set-[a-f0-9]{64}$/.test(value.sourceRevision)) {
+  if (value.sourceRevision !== undefined && !EVIDENCE_SOURCE_REVISION_PATTERN.test(value.sourceRevision)) {
     throw new Error(`Remote evidence snapshot entry ${position} has an invalid source revision.`);
   }
   return value;
@@ -627,8 +629,11 @@ export async function pinBehavioralEvidenceProvenance({
       changedProjects.push(project);
     }
   }
-  for (const project of changedProjects) {
-    await atomicJson(project.recordPath, project.record);
+  const writeConcurrency = 8;
+  for (let offset = 0; offset < changedProjects.length; offset += writeConcurrency) {
+    await Promise.all(changedProjects.slice(offset, offset + writeConcurrency).map(
+      (project) => atomicJson(project.recordPath, project.record),
+    ));
   }
   if (changedProjects.length > 0) {
     const manifestPath = path.join(bundle.bundleRoot, "manifest.json");

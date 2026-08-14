@@ -1084,6 +1084,19 @@ export const behavioralEvidenceItems = sqliteTable(
     primaryKey({ columns: [table.ownerId, table.evidenceId] }),
     index("behavioral_evidence_owner_project_idx").on(table.ownerId, table.projectKey),
     index("behavioral_evidence_owner_state_idx").on(table.ownerId, table.candidateState),
+    index("behavioral_evidence_owner_state_cursor_idx").on(
+      table.ownerId,
+      table.candidateState,
+      table.updatedAt,
+      table.evidenceId,
+    ),
+    index("behavioral_evidence_owner_state_project_cursor_idx").on(
+      table.ownerId,
+      table.candidateState,
+      table.projectKey,
+      table.updatedAt,
+      table.evidenceId,
+    ),
   ],
 );
 

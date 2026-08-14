@@ -47,6 +47,8 @@ Legacy migration accepts an ignored owner-private snapshot containing only remot
 
 Candidate reads retain the 50-record limit and now return a descending composite cursor. Reusing both cursor fields with the same owner-scoped state and project filters retrieves the next page without duplication when rows share an update timestamp. Supplying only half of the cursor fails validation. This makes a complete authoritative migration possible without unbounded reads or direct private-database access.
 
+The D1 schema includes additive composite indexes for both owner/state cursor reads and owner/state/project cursor reads. Provenance format and owner-statement restrictions are defined once for the local controller and review-site validator, while source availability and refresh-state checks share one controller path. Project-file updates use bounded concurrency before the manifest timestamp is committed.
+
 ## Verification
 
 Focused bundle tests reproduce the source-refresh conflict, prove stable prepared payload and operation identity after refresh, reject in-place material edits, verify authoritative legacy migration, and verify idempotent replay. The local D1/MCP integration verifies cursor pagination, incomplete-cursor rejection, owner isolation, exact retries, and explicit supersession behavior.
