@@ -24,12 +24,12 @@ amends: ["change-note-immutable-behavioral-evidence-provenance@1"]
 supersedes: []
 learningRefs: []
 diagrams: []
-sources: [{"label":"Arc issue #266","url":"https://github.com/Vinosaamaa/interview-arc/issues/266","kind":"issue"}]
+sources: [{"label":"Arc issue #266","url":"https://github.com/Vinosaamaa/interview-arc/issues/266","kind":"issue"},{"label":"Arc pull request #335","url":"https://github.com/Vinosaamaa/interview-arc/pull/335","kind":"pull-request"}]
 verification: {"state":"verified","evidenceRefs":["issue:266","tests/behavioral-evidence-bundle.test.mjs"]}
 visibility: public-safe
 publicationEligibility: eligible
 issue: 266
-pr: null
+pr: 335
 release: null
 run: null
 ---
