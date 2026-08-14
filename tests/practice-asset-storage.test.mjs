@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   practiceAssetObjectKey,
   practiceActivityAssetId,
+  readVerifiedPrivatePracticeAsset,
   servePrivatePracticeAsset,
   stagePrivatePracticeAsset,
   verifyPrivatePracticeAsset,
@@ -65,6 +66,52 @@ test("post-stage verification hashes the exact stored R2 bytes", async () => {
   await assert.rejects(
     () => verifyPrivatePracticeAsset(bucket, "practice-assets/opaque/hash", metadata),
     /failed exact byte verification/,
+  );
+});
+
+test("exact-byte readback preserves bytes and wraps transient R2 failures as retryable", async () => {
+  const verified = await readVerifiedPrivatePracticeAsset({
+    async head() {
+      return {
+        size: bytes.byteLength,
+        customMetadata: { namespace: "practice-asset", role: metadata.role, sha256 },
+      };
+    },
+    async get() { return { arrayBuffer: async () => bytes }; },
+  }, "practice-assets/opaque/hash", metadata);
+  assert.deepEqual(new Uint8Array(verified), new Uint8Array(bytes));
+
+  await assert.rejects(
+    () => readVerifiedPrivatePracticeAsset({
+      async head() { throw new Error("temporary R2 outage"); },
+      async get() { throw new Error("unreachable"); },
+    }, "practice-assets/opaque/hash", metadata),
+    (error) => error.code === "practice_asset_storage_unavailable" && error.retryable === true,
+  );
+});
+
+test("staging hashes only the supplied Uint8Array view and wraps transient writes", async () => {
+  const padded = new Uint8Array(bytes.byteLength + 2);
+  padded.set(new Uint8Array(bytes), 1);
+  const view = padded.subarray(1, padded.length - 1);
+  let stored;
+  await stagePrivatePracticeAsset({
+    async put(_key, value) { stored = value; },
+    async head() {
+      return {
+        size: view.byteLength,
+        customMetadata: { namespace: "practice-asset", role: metadata.role, sha256 },
+      };
+    },
+  }, "practice-assets/opaque/hash", view, metadata);
+  assert.equal(stored, view);
+
+  await assert.rejects(
+    () => stagePrivatePracticeAsset({
+      async put() { throw new Error("temporary R2 outage"); },
+      async head() { throw new Error("unreachable"); },
+    }, "practice-assets/opaque/hash", view, metadata),
+    (error) => error.code === "practice_asset_storage_unavailable" && error.retryable === true,
   );
 });
 

@@ -37,6 +37,19 @@ async function formFile(form: FormData, name: string, expectedMimeType: string, 
   return new Uint8Array(await entry.arrayBuffer());
 }
 
+function assertExcalidrawScene(bytes: Uint8Array) {
+  let scene: unknown;
+  try {
+    scene = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  } catch {
+    throw new Error("The editable Excalidraw scene must be valid UTF-8 JSON.");
+  }
+  if (!scene || typeof scene !== "object" || (scene as { type?: unknown }).type !== "excalidraw") {
+    throw new Error("The editable Excalidraw scene must use the Excalidraw document format.");
+  }
+  return bytes;
+}
+
 function formMetadata(form: FormData) {
   const entry = form.get("metadata");
   if (typeof entry !== "string" || new TextEncoder().encode(entry).byteLength > 64 * 1_024) {
@@ -77,7 +90,7 @@ export async function routePracticeAssets(
         operationId: exactString(metadata.operationId, "operationId"),
         expectedRevision,
         altText: altText(metadata.altText),
-        bytes: await formFile(form, "scene", "application/vnd.excalidraw+json", MAX_SCENE_BYTES),
+        bytes: assertExcalidrawScene(await formFile(form, "scene", "application/vnd.excalidraw+json", MAX_SCENE_BYTES)),
         bucket,
         nowMs: Date.now(),
       });
@@ -114,7 +127,9 @@ export async function routePracticeAssets(
         assets.push({
           ...declaration,
           mimeType,
-          bytes: await formFile(form, declaration.role, mimeType, maxBytes),
+          bytes: declaration.role === "attempt_original_excalidraw"
+            ? assertExcalidrawScene(await formFile(form, declaration.role, mimeType, maxBytes))
+            : await formFile(form, declaration.role, mimeType, maxBytes),
         });
       }
       const checkpointRevision = Number(metadata.checkpointRevision);

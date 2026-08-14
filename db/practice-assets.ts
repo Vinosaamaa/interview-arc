@@ -14,6 +14,7 @@ import {
 import {
   practiceAssetObjectKey,
   practiceActivityAssetId,
+  readVerifiedPrivatePracticeAsset,
   stagePrivatePracticeAsset,
   verifyPrivatePracticeAsset,
   type PracticeAssetBucket,
@@ -51,7 +52,7 @@ function canonicalJson(value: unknown): string {
 }
 
 async function sha256Bytes(value: Uint8Array) {
-  const digest = await crypto.subtle.digest("SHA-256", Uint8Array.from(value).buffer);
+  const digest = await crypto.subtle.digest("SHA-256", value as Uint8Array<ArrayBuffer>);
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
@@ -184,6 +185,31 @@ export async function savePracticeDesignCheckpoint(input: {
       }),
     ] as unknown as Parameters<typeof db.batch>[0]);
   } catch (error) {
+    const concurrent = await db.select().from(practiceDesignCheckpointRevisions).where(and(
+      eq(practiceDesignCheckpointRevisions.ownerId, input.ownerId),
+      eq(practiceDesignCheckpointRevisions.operationId, input.operationId),
+    )).limit(1);
+    if (concurrent[0]) {
+      if (concurrent[0].activityId !== input.activityId || concurrent[0].requestFingerprint !== requestFingerprint) {
+        throw new Error("That checkpoint operation is already bound to different immutable bytes.");
+      }
+      await verifyPrivatePracticeAsset(input.bucket, concurrent[0].privateLocator, {
+        role: "checkpoint_excalidraw",
+        sha256: concurrent[0].sha256,
+        byteSize: concurrent[0].byteSize,
+      });
+      return {
+        duplicate: true,
+        checkpoint: {
+          activityId: concurrent[0].activityId,
+          revision: concurrent[0].revision,
+          sha256: concurrent[0].sha256,
+          byteSize: concurrent[0].byteSize,
+          altText: concurrent[0].altText,
+          createdAt: new Date(concurrent[0].createdAt).toISOString(),
+        },
+      };
+    }
     if (isD1TransactionalInvariantFailure(error)) {
       throw new Error("The System Design checkpoint changed during insertion; restore before retrying.");
     }
@@ -218,17 +244,12 @@ export async function readCurrentPracticeDesignCheckpoint(ownerId: string, activ
   if (!revision || revision.sha256 !== pointers[0].sha256) {
     throw new Error("The current System Design checkpoint pointer failed exact readback.");
   }
-  await verifyPrivatePracticeAsset(bucket, revision.privateLocator, {
+  const bytes = await readVerifiedPrivatePracticeAsset(bucket, revision.privateLocator, {
     role: "checkpoint_excalidraw",
     sha256: revision.sha256,
     byteSize: revision.byteSize,
   });
-  const object = await bucket.get(revision.privateLocator);
-  if (!object?.body) throw new Error("The current System Design checkpoint bytes are unavailable.");
-  const scene = await new Response(object.body).text();
-  if (await sha256Hex(scene) !== revision.sha256) {
-    throw new Error("The current System Design checkpoint bytes failed exact readback.");
-  }
+  const scene = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   return {
     checkpoint: {
       activityId,
@@ -251,7 +272,12 @@ export async function stagePracticeAssetSet(input: {
   assets: Array<{ role: PracticeAssetRole; altText: string; mimeType: string; bytes: Uint8Array }>;
   bucket: PracticeAssetBucket;
   nowMs: number;
-}) {
+}): Promise<{
+  status: string;
+  manifestSha256: string;
+  assets: Array<ReturnType<typeof safeAsset>>;
+  duplicate: boolean;
+}> {
   assertStableIdentity(input.activityId, "activityId");
   assertStableIdentity(input.questionId, "questionId");
   assertStableIdentity(input.operationId, "operationId");
@@ -351,10 +377,10 @@ export async function stagePracticeAssetSet(input: {
   };
   const manifestSha256 = await sha256Hex(canonicalJson(manifest));
   const requestFingerprint = await sha256Hex(canonicalJson({ operationId: input.operationId, ...manifest }));
-  for (const row of prepared) {
+  await Promise.all(prepared.map(async (row) => {
     const bytes = input.assets.find((asset) => asset.role === row.role)!.bytes;
     await stagePrivatePracticeAsset(input.bucket, row.privateLocator, bytes, row);
-  }
+  }));
   try {
     const stageFence = sql`NOT EXISTS (
       SELECT 1 FROM ${practiceAssetSetOperations}
@@ -402,6 +428,11 @@ export async function stagePracticeAssetSet(input: {
       })),
     ] as unknown as Parameters<typeof db.batch>[0]);
   } catch (error) {
+    const concurrent = await db.select({ operationId: practiceAssetSetOperations.operationId }).from(practiceAssetSetOperations).where(and(
+      eq(practiceAssetSetOperations.ownerId, input.ownerId),
+      eq(practiceAssetSetOperations.operationId, input.operationId),
+    )).limit(1);
+    if (concurrent[0]) return stagePracticeAssetSet(input);
     if (isD1TransactionalInvariantFailure(error)) {
       throw new Error("The System Design checkpoint or asset-set pointer changed while staging final assets; reread before retrying.");
     }

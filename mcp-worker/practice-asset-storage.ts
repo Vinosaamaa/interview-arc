@@ -15,11 +15,29 @@ export class PracticeAssetStorageError extends Error {
 async function sha256Hex(value: ArrayBuffer | Uint8Array | string) {
   const bytes = typeof value === "string"
     ? new TextEncoder().encode(value)
-    : value instanceof Uint8Array
-      ? Uint8Array.from(value)
-      : new Uint8Array(value);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
+    : value;
+  const digest = await crypto.subtle.digest("SHA-256", bytes as BufferSource);
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function metadataMatches(
+  stored: R2Object | R2ObjectBody | null,
+  metadata: { role: string; sha256: string; byteSize: number },
+) {
+  return Boolean(stored
+    && stored.size === metadata.byteSize
+    && stored.customMetadata?.namespace === PRACTICE_ASSET_NAMESPACE
+    && stored.customMetadata?.role === metadata.role
+    && stored.customMetadata?.sha256 === metadata.sha256);
+}
+
+async function storageOperation<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof PracticeAssetStorageError) throw error;
+    throw new PracticeAssetStorageError("Private Practice asset storage is temporarily unavailable. Retry the exact operation.");
+  }
 }
 
 export async function practiceAssetObjectKey(
@@ -47,29 +65,40 @@ export async function stagePrivatePracticeAsset(
     byteSize: number;
   },
 ) {
-  const bytes = bytesValue instanceof Uint8Array
-    ? Uint8Array.from(bytesValue).buffer
-    : bytesValue;
-  const actualHash = await sha256Hex(bytes);
-  if (bytes.byteLength !== metadata.byteSize || actualHash !== metadata.sha256) {
+  const actualHash = await sha256Hex(bytesValue);
+  if (bytesValue.byteLength !== metadata.byteSize || actualHash !== metadata.sha256) {
     throw new PracticeAssetStorageError("The supplied Practice asset bytes do not match their immutable integrity metadata.");
   }
-  await bucket.put(key, bytes, {
+  await storageOperation(() => bucket.put(key, bytesValue, {
     httpMetadata: { contentType: metadata.mimeType },
     customMetadata: {
       namespace: PRACTICE_ASSET_NAMESPACE,
       role: metadata.role,
       sha256: metadata.sha256,
     },
-  });
-  const stored = await bucket.head(key);
-  if (!stored
-      || stored.size !== metadata.byteSize
-      || stored.customMetadata?.namespace !== PRACTICE_ASSET_NAMESPACE
-      || stored.customMetadata?.role !== metadata.role
-      || stored.customMetadata?.sha256 !== metadata.sha256) {
+  }));
+  const stored = await storageOperation(() => bucket.head(key));
+  if (!metadataMatches(stored, metadata)) {
     throw new PracticeAssetStorageError("The private Practice asset was not durably verified. Retry the exact operation.");
   }
+}
+
+export async function readVerifiedPrivatePracticeAsset(
+  bucket: PracticeAssetBucket,
+  key: string,
+  metadata: { role: string; sha256: string; byteSize: number },
+) {
+  const stored = await storageOperation(() => bucket.head(key));
+  if (!metadataMatches(stored, metadata)) {
+    throw new PracticeAssetStorageError("The private Practice asset failed durable verification. Retry the exact operation.");
+  }
+  const object = await storageOperation(() => bucket.get(key));
+  if (!object) throw new PracticeAssetStorageError("The private Practice asset failed exact byte verification. Retry the exact operation.");
+  const bytes = await storageOperation(() => object.arrayBuffer());
+  if (bytes.byteLength !== metadata.byteSize || await sha256Hex(bytes) !== metadata.sha256) {
+    throw new PracticeAssetStorageError("The private Practice asset failed exact byte verification. Retry the exact operation.");
+  }
+  return bytes;
 }
 
 export async function verifyPrivatePracticeAsset(
@@ -77,20 +106,7 @@ export async function verifyPrivatePracticeAsset(
   key: string,
   metadata: { role: string; sha256: string; byteSize: number },
 ) {
-  const stored = await bucket.head(key);
-  if (!stored
-      || stored.size !== metadata.byteSize
-      || stored.customMetadata?.namespace !== PRACTICE_ASSET_NAMESPACE
-      || stored.customMetadata?.role !== metadata.role
-      || stored.customMetadata?.sha256 !== metadata.sha256) {
-    throw new PracticeAssetStorageError("The private Practice asset failed durable verification. Retry the exact operation.");
-  }
-  const object = await bucket.get(key);
-  if (!object) throw new PracticeAssetStorageError("The private Practice asset failed exact byte verification. Retry the exact operation.");
-  const bytes = await object.arrayBuffer();
-  if (bytes.byteLength !== metadata.byteSize || await sha256Hex(bytes) !== metadata.sha256) {
-    throw new PracticeAssetStorageError("The private Practice asset failed exact byte verification. Retry the exact operation.");
-  }
+  await readVerifiedPrivatePracticeAsset(bucket, key, metadata);
 }
 
 function privateFailure() {
@@ -121,18 +137,7 @@ export async function servePrivatePracticeAsset(
       asset.sha256,
     );
     if (asset.privateLocator !== expectedKey) return privateFailure();
-    const head = await bucket.head(expectedKey);
-    if (!head
-        || head.size !== asset.byteSize
-        || head.customMetadata?.namespace !== PRACTICE_ASSET_NAMESPACE
-        || head.customMetadata?.role !== asset.role
-        || head.customMetadata?.sha256 !== asset.sha256) {
-      return privateFailure();
-    }
-    const object = await bucket.get(expectedKey);
-    if (!object) return privateFailure();
-    const bytes = await object.arrayBuffer();
-    if (bytes.byteLength !== asset.byteSize || await sha256Hex(bytes) !== asset.sha256) return privateFailure();
+    const bytes = await readVerifiedPrivatePracticeAsset(bucket, expectedKey, asset);
     return new Response(bytes, {
       headers: {
         "content-type": asset.mimeType,

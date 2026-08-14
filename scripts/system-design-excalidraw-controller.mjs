@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,6 +16,8 @@ const outerRoot = process.env.INTERVIEW_PREP_ROOT ?? resolve(repositoryRoot, "..
 const wrapperPath = join(outerRoot, ".agents", "skills", "excalidraw-skill", "scripts", "excalidraw-v2.sh");
 const browserStateRoot = join(outerRoot, "browser-profiles", "system-design-canvas");
 const leasePath = join(browserStateRoot, "preflight-lease.json");
+const daemonStartLockPath = join(browserStateRoot, "daemon-start.lock");
+const MAX_CONTROL_REQUEST_BYTES = 4 * 1_024;
 
 function assertStableActivityId(activityId) {
   if (typeof activityId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,239}$/.test(activityId)) {
@@ -175,22 +177,35 @@ async function ensureBrowserDaemon() {
     return await browserControl("/status");
   } catch {
     await mkdir(browserStateRoot, { recursive: true });
-    const child = spawn(process.execPath, [scriptPath, "browser-daemon"], {
-      detached: true,
-      stdio: "ignore",
-      cwd: outerRoot,
-      env: { ...process.env, INTERVIEW_PREP_ROOT: outerRoot },
-    });
-    child.unref();
-    const deadline = Date.now() + 15_000;
-    while (Date.now() < deadline) {
-      try {
-        return await browserControl("/status");
-      } catch {
-        await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
-      }
+    let ownsStartLock = false;
+    try {
+      await mkdir(daemonStartLockPath);
+      ownsStartLock = true;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
     }
-    throw new Error("The dedicated Playwright Chromium canvas did not become ready within 15 seconds.");
+    try {
+      if (ownsStartLock) {
+        const child = spawn(process.execPath, [scriptPath, "browser-daemon"], {
+          detached: true,
+          stdio: "ignore",
+          cwd: outerRoot,
+          env: { ...process.env, INTERVIEW_PREP_ROOT: outerRoot },
+        });
+        child.unref();
+      }
+      const deadline = Date.now() + 15_000;
+      while (Date.now() < deadline) {
+        try {
+          return await browserControl("/status");
+        } catch {
+          await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
+        }
+      }
+      throw new Error("The dedicated Playwright Chromium canvas did not become ready within 15 seconds.");
+    } finally {
+      if (ownsStartLock) await rm(daemonStartLockPath, { recursive: true, force: true });
+    }
   }
 }
 
@@ -341,6 +356,16 @@ async function runBrowserDaemon() {
     };
   };
   await ensurePage();
+  const readBoundedJson = async (request) => {
+    const chunks = [];
+    let byteLength = 0;
+    for await (const chunk of request) {
+      byteLength += chunk.byteLength;
+      if (byteLength > MAX_CONTROL_REQUEST_BYTES) throw new Error("The browser-control request is too large.");
+      chunks.push(chunk);
+    }
+    return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+  };
   const server = createServer(async (request, response) => {
     try {
       if (request.method === "GET" && request.url === "/status") {
@@ -349,9 +374,7 @@ async function runBrowserDaemon() {
         return;
       }
       if (request.method === "POST" && request.url === "/ensure") {
-        let body = "";
-        for await (const chunk of request) body += chunk;
-        const input = JSON.parse(body || "{}");
+        const input = await readBoundedJson(request);
         if (input.url !== SYSTEM_DESIGN_CANVAS_URL) throw new Error("Only the fixed loopback Excalidraw canvas is allowed.");
         const state = await ensurePage(input.url);
         response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(state));

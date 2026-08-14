@@ -148,32 +148,35 @@ async function assetRequest(baseUrl, token, path, init = {}) {
 
 async function stageDesignAssets(baseUrl, token, activityId, questionId, label) {
   const scene = JSON.stringify({ type: "excalidraw", version: 2, elements: [], appState: { name: label } });
-  const checkpoint = new FormData();
-  checkpoint.set("metadata", JSON.stringify({
-    operationId: "checkpoint-practice-record",
-    expectedRevision: 0,
-    altText: `${label} original system design checkpoint`,
-  }));
-  checkpoint.set("scene", new Blob([scene], { type: "application/vnd.excalidraw+json" }), "attempt.excalidraw");
-  const savedCheckpoint = await assetRequest(
-    baseUrl,
-    token,
-    `/practice-assets/checkpoints/${encodeURIComponent(activityId)}`,
-    { method: "PUT", body: checkpoint },
-  );
-  assert.equal(savedCheckpoint.response.status, 200);
-  assert.equal(savedCheckpoint.body.checkpoint.revision, 1);
-  assert.match(savedCheckpoint.body.checkpoint.sha256, /^[a-f0-9]{64}$/);
-  assert.equal(savedCheckpoint.body.duplicate, false);
+  const checkpointForm = (body = scene) => {
+    const checkpoint = new FormData();
+    checkpoint.set("metadata", JSON.stringify({
+      operationId: "checkpoint-practice-record",
+      expectedRevision: 0,
+      altText: `${label} original system design checkpoint`,
+    }));
+    checkpoint.set("scene", new Blob([body], { type: "application/vnd.excalidraw+json" }), "attempt.excalidraw");
+    return checkpoint;
+  };
+  const invalidCheckpoint = await assetRequest(baseUrl, token, `/practice-assets/checkpoints/${encodeURIComponent(activityId)}`, {
+    method: "PUT",
+    body: checkpointForm(new Uint8Array([0xff, 0xfe, 0xfd])),
+  });
+  assert.equal(invalidCheckpoint.response.status, 400);
+  assert.match(invalidCheckpoint.body.error, /valid UTF-8 JSON/);
 
-  const duplicateCheckpoint = await assetRequest(
+  const checkpointResults = await Promise.all([checkpointForm(), checkpointForm()].map((body) => assetRequest(
     baseUrl,
     token,
     `/practice-assets/checkpoints/${encodeURIComponent(activityId)}`,
-    { method: "PUT", body: checkpoint },
-  );
-  assert.equal(duplicateCheckpoint.response.status, 200);
-  assert.equal(duplicateCheckpoint.body.duplicate, true);
+    { method: "PUT", body },
+  )));
+  for (const result of checkpointResults) {
+    assert.equal(result.response.status, 200);
+    assert.equal(result.body.checkpoint.revision, 1);
+    assert.match(result.body.checkpoint.sha256, /^[a-f0-9]{64}$/);
+  }
+  assert.deepEqual(checkpointResults.map((result) => result.body.duplicate).sort(), [false, true]);
 
   const restored = await assetRequest(
     baseUrl,
@@ -186,48 +189,37 @@ async function stageDesignAssets(baseUrl, token, activityId, questionId, label) 
   assert.doesNotMatch(JSON.stringify(restored.body), /practice-assets\//);
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg"><text>${label}</text></svg>`;
-  const assets = new FormData();
-  assets.set("metadata", JSON.stringify({
-    operationId: "asset-set-practice-record",
-    questionId,
-    checkpointRevision: 1,
-    assets: [
-      { role: "attempt_original_excalidraw", altText: `${label} editable original design` },
-      { role: "attempt_original_svg", altText: `${label} original design preview` },
-    ],
-  }));
-  assets.set("attempt_original_excalidraw", new Blob([scene], { type: "application/vnd.excalidraw+json" }), "attempt.excalidraw");
-  assets.set("attempt_original_svg", new Blob([svg], { type: "image/svg+xml" }), "attempt.svg");
-  const staged = await assetRequest(
+  const assetForm = (svgBody = svg) => {
+    const assets = new FormData();
+    assets.set("metadata", JSON.stringify({
+      operationId: "asset-set-practice-record",
+      questionId,
+      checkpointRevision: 1,
+      assets: [
+        { role: "attempt_original_excalidraw", altText: `${label} editable original design` },
+        { role: "attempt_original_svg", altText: `${label} original design preview` },
+      ],
+    }));
+    assets.set("attempt_original_excalidraw", new Blob([scene], { type: "application/vnd.excalidraw+json" }), "attempt.excalidraw");
+    assets.set("attempt_original_svg", new Blob([svgBody], { type: "image/svg+xml" }), "attempt.svg");
+    return assets;
+  };
+  const assetResults = await Promise.all([assetForm(), assetForm()].map((body) => assetRequest(
     baseUrl,
     token,
     `/practice-assets/sets/${encodeURIComponent(activityId)}`,
-    { method: "POST", body: assets },
-  );
-  assert.equal(staged.response.status, 200);
-  assert.equal(staged.body.status, "staged");
-  assert.match(staged.body.manifestSha256, /^[a-f0-9]{64}$/);
-  assert.equal(staged.body.assets.length, 2);
-  assert.doesNotMatch(JSON.stringify(staged.body), /practice-assets\//);
-  const replayAssets = new FormData();
-  replayAssets.set("metadata", JSON.stringify({
-    operationId: "asset-set-practice-record",
-    questionId,
-    checkpointRevision: 1,
-    assets: [
-      { role: "attempt_original_excalidraw", altText: `${label} editable original design` },
-      { role: "attempt_original_svg", altText: `${label} original design preview` },
-    ],
-  }));
-  replayAssets.set("attempt_original_excalidraw", new Blob([scene], { type: "application/vnd.excalidraw+json" }), "attempt.excalidraw");
-  replayAssets.set("attempt_original_svg", new Blob([svg], { type: "image/svg+xml" }), "attempt.svg");
-  const assetReplay = await assetRequest(baseUrl, token, `/practice-assets/sets/${encodeURIComponent(activityId)}`, {
-    method: "POST",
-    body: replayAssets,
-  });
-  assert.equal(assetReplay.response.status, 200);
-  assert.equal(assetReplay.body.duplicate, true);
-  assert.equal(assetReplay.body.manifestSha256, staged.body.manifestSha256);
+    { method: "POST", body },
+  )));
+  for (const result of assetResults) {
+    assert.equal(result.response.status, 200);
+    assert.equal(result.body.status, "staged");
+    assert.match(result.body.manifestSha256, /^[a-f0-9]{64}$/);
+    assert.equal(result.body.assets.length, 2);
+    assert.doesNotMatch(JSON.stringify(result.body), /practice-assets\//);
+  }
+  assert.deepEqual(assetResults.map((result) => result.body.duplicate).sort(), [false, true]);
+  assert.equal(assetResults[0].body.manifestSha256, assetResults[1].body.manifestSha256);
+  const staged = assetResults.find((result) => result.body.duplicate === false);
   const changedAssets = new FormData();
   changedAssets.set("metadata", JSON.stringify({
     operationId: "asset-set-practice-record",
