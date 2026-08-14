@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -255,8 +255,9 @@ function EngineeringEvidencePanel({ record, index, onSelect, onClose }: { record
   const outgoing = [...record.amends, ...record.supersedes, ...record.relatedRecords, ...record.decisions, ...record.incidents, ...record.features];
   const backlinks = index.backlinks[record.ref] ?? [];
   const lineageRefs = [...new Set([...corrections, ...outgoing, ...backlinks])];
+  const receiptByRef = useMemo(() => new Map(index.pullRequestReceipts.map((receipt) => [receipt.ref, receipt])), [index.pullRequestReceipts]);
   const relatedReceipts = (index.receiptBacklinks[record.ref] ?? [])
-    .map((ref) => index.pullRequestReceipts.find((receipt) => receipt.ref === ref))
+    .map((ref) => receiptByRef.get(ref))
     .filter((receipt): receipt is EngineeringPullRequestReceipt => Boolean(receipt));
   return <aside className="engineering-evidence-panel" aria-label="Evidence and lineage">
     <header><div><span>Evidence desk</span><h2>Exact evidence</h2></div><button type="button" onClick={onClose} aria-label="Close evidence and lineage">×</button></header>
@@ -394,9 +395,10 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   const [indexCollapsed, setIndexCollapsed] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(true);
   const [contentsSection, setContentsSection] = useState<EngineeringContentsSection>("overview");
-  const [indexScrollTop, setIndexScrollTop] = useState(0);
   const [memoryReady, setMemoryReady] = useState(false);
   const recordListRef = useRef<HTMLDivElement>(null);
+  const indexScrollTopRef = useRef(0);
+  const scrollPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchByRef = useMemo(() => new Map(index.search.map((entry) => [entry.ref, entry])), [index.search]);
   const repositories = useMemo(() => [...new Set(index.records.map((record) => record.repository))].sort(), [index.records]);
   const receiptSearchByRef = useMemo(() => new Map(index.receiptSearch.map((entry) => [entry.ref, entry])), [index.receiptSearch]);
@@ -435,7 +437,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
       setIndexCollapsed(memory.indexCollapsed ?? false);
       setEvidenceOpen(memory.evidenceOpen ?? !window.matchMedia("(max-width: 1320px)").matches);
       setContentsSection(memory.contentsSection ?? "overview");
-      setIndexScrollTop(memory.indexScrollTop ?? 0);
+      indexScrollTopRef.current = memory.indexScrollTop ?? 0;
       setMemoryReady(true);
     });
     return () => { cancelled = true; };
@@ -443,18 +445,35 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
 
   useLayoutEffect(() => {
     if (!memoryReady || !recordListRef.current) return;
-    recordListRef.current.scrollTop = indexScrollTop;
-  }, [indexScrollTop, memoryReady]);
+    recordListRef.current.scrollTop = indexScrollTopRef.current;
+  }, [journalLayer, memoryReady]);
 
-  useEffect(() => {
+  const writeMemory = useCallback(() => {
     if (!memoryReady) return;
     try {
-      const next: EngineeringWorkspaceMemory = { journalLayer, query, type, status, repository, receiptQuery, receiptClassification, receiptRepository, selectedRef, mobileReaderOpen, indexCollapsed, evidenceOpen, contentsSection, indexScrollTop };
+      const next: EngineeringWorkspaceMemory = { journalLayer, query, type, status, repository, receiptQuery, receiptClassification, receiptRepository, selectedRef, mobileReaderOpen, indexCollapsed, evidenceOpen, contentsSection, indexScrollTop: indexScrollTopRef.current };
       window.sessionStorage.setItem(ENGINEERING_MEMORY_KEY, JSON.stringify(next));
     } catch {
       // Session storage can be unavailable in hardened browsing contexts; in-memory state remains active.
     }
-  }, [contentsSection, evidenceOpen, indexCollapsed, indexScrollTop, journalLayer, memoryReady, mobileReaderOpen, query, receiptClassification, receiptQuery, receiptRepository, repository, selectedRef, status, type]);
+  }, [contentsSection, evidenceOpen, indexCollapsed, journalLayer, memoryReady, mobileReaderOpen, query, receiptClassification, receiptQuery, receiptRepository, repository, selectedRef, status, type]);
+
+  useEffect(() => {
+    writeMemory();
+  }, [writeMemory]);
+
+  useEffect(() => () => {
+    if (scrollPersistTimerRef.current) window.clearTimeout(scrollPersistTimerRef.current);
+  }, []);
+
+  const rememberIndexScroll = (scrollTop: number) => {
+    indexScrollTopRef.current = scrollTop;
+    if (scrollPersistTimerRef.current) window.clearTimeout(scrollPersistTimerRef.current);
+    scrollPersistTimerRef.current = window.setTimeout(() => {
+      scrollPersistTimerRef.current = null;
+      writeMemory();
+    }, 160);
+  };
 
   if (view === "statistics") return <EngineeringStatistics index={index} />;
   const activeSelectedRef = records.some((record) => record.ref === selectedRef) ? selectedRef : records[0]?.ref;
@@ -497,7 +516,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
         <label><span>Classification</span><select value={receiptClassification} onChange={(event) => setReceiptClassification(event.target.value as EngineeringPullRequestClassification | "all")}><option value="all">All classifications</option>{Object.entries(RECEIPT_CLASSIFICATION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label><span>Repository</span><select value={receiptRepository} onChange={(event) => setReceiptRepository(event.target.value)}><option value="all">All repositories</option>{receiptRepositories.map((value) => <option key={value}>{value}</option>)}</select></label>
       </div> : null}
-      {showReceipts ? <ReceiptTimeline receipts={receipts} onOpenRecord={openRelation} /> : <div ref={recordListRef} className="engineering-record-list" onScroll={(event) => setIndexScrollTop(event.currentTarget.scrollTop)}>
+      {showReceipts ? <ReceiptTimeline receipts={receipts} onOpenRecord={openRelation} /> : <div ref={recordListRef} className="engineering-record-list" onScroll={(event) => rememberIndexScroll(event.currentTarget.scrollTop)}>
         {records.map((record) => <button type="button" key={record.ref} className={record.ref === selected?.ref ? "active" : ""} aria-current={record.ref === selected?.ref ? "true" : undefined} onClick={() => select(record.ref)}>
           <span><i>{TYPE_LABELS[record.type]}</i><time>{record.createdAt}</time></span>
           <strong>{record.title}</strong>

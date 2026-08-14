@@ -1772,7 +1772,6 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   background: linear-gradient(to bottom, transparent, #74bfc8 68%, #d8f5f5);
   transform: rotate(8deg);
   animation: ambientRainFall var(--rain-duration) linear var(--rain-delay) infinite;
-  will-change: transform, opacity;
 }
 .ambient-rain-drop span {
   position: absolute;

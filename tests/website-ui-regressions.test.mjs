@@ -504,6 +504,7 @@ test("Engineering exposes exact provenance, durable navigation memory, and compl
 test("Engineering Journal is a persistent three-panel evidence workbench", async () => {
   const source = await load("../app/engineering-workspace.tsx");
   const styles = await load("../app/engineering-workspace.css");
+  const rules = parseCss(styles);
   assert.match(source, /engineering-index-panel/);
   assert.match(source, /engineering-record-panel/);
   assert.match(source, /engineering-evidence-panel/);
@@ -524,12 +525,22 @@ test("Engineering Journal is a persistent three-panel evidence workbench", async
   assert.match(styles, /\.engineering-workspace\.index-collapsed/);
   assert.match(styles, /@media \(max-width: 1320px\)/);
   assert.match(styles, /@media \(max-width: 760px\)/);
+  assert.equal((styles.match(/^\.engineering-workspace \{/gm) ?? []).length, 1, "the Engineering workbench must have one authoritative base rule");
+  assert.equal((styles.match(/^@media \(max-width: 760px\) \{/gm) ?? []).length, 1, "mobile workbench behavior must stay in one breakpoint block");
+  assert.equal(cssRules(rules, ".engineering-contents-nav")[0]?.declarations["backdrop-filter"], undefined);
+  assert.equal(cssRules(rules, ".engineering-evidence-panel > header")[0]?.declarations["backdrop-filter"], undefined);
+  assert.match(source, /const receiptByRef = useMemo/);
+  assert.match(source, /\.map\(\(ref\) => receiptByRef\.get\(ref\)\)/);
+  assert.match(source, /const indexScrollTopRef = useRef\(0\)/);
+  assert.match(source, /scrollPersistTimerRef/);
+  assert.doesNotMatch(source, /setIndexScrollTop/);
 });
 
 test("workspace atmosphere is persistent, bounded, and reader-safe", async () => {
   const home = await load("../app/home-client.tsx");
   const atmosphere = await load("../app/arrival-ritual.tsx");
   const globalStyles = await load("../app/globals.css");
+  const globalRules = parseCss(globalStyles);
   const readerStyles = await load("../app/interview-arc-v2.css");
   assert.match(home, /interview-arc-atmosphere-v1/);
   assert.match(home, /interview-arc-petals-paused/);
@@ -540,6 +551,7 @@ test("workspace atmosphere is persistent, bounded, and reader-safe", async () =>
   assert.match(atmosphere, /visibilitychange/);
   assert.match(globalStyles, /\.ambient-rain-drop/);
   assert.match(globalStyles, /prefers-reduced-motion: reduce/);
+  assert.equal(cssRules(globalRules, ".ambient-rain-drop")[0]?.declarations["will-change"], undefined);
   assert.match(readerStyles, /body:has\(\.reader-workspace\) \.ambient-rain-drop/);
 });
 
