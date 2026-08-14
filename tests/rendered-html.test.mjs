@@ -159,6 +159,10 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(client, /interview-arc-reader-memory-v1/);
   assert.match(client, /Scroll position is persistence metadata, not render state/);
   assert.match(client, /readerMemoryRef\.current = next;\s*window\.sessionStorage\.setItem\("interview-arc-reader-memory-v1", JSON\.stringify\(next\)\);/);
+  assert.doesNotMatch(client, /setReaderMemory/);
+  assert.match(client, /Native <details> toggle events are persistence metadata/);
+  assert.match(client, /groups\.forEach\(\(group\) => \{\s*group\.open = open;/);
+  assert.match(client, /recordReaderDiagnostic\("practice-record-hydrated"/);
   const readerPositionStart = client.indexOf("function rememberReaderPosition()");
   assert.notEqual(readerPositionStart, -1, "rememberReaderPosition must remain present");
   const readerPositionEnd = client.indexOf("\n\n  useEffect(() =>", readerPositionStart);
