@@ -195,23 +195,6 @@ test("closed Problem Banks dedicate the remaining desktop viewport to their inte
   assert.equal(cssRules(rules, list, "min-width: 901px")[0]?.declarations["max-height"], "none");
 });
 
-test("each released Interview workspace carries its accent into major body surfaces", async () => {
-  const css = await load("../app/interview-page-hero.css");
-  const rules = parseCss(css);
-  const expected = [
-    ".app-shell.active-view-today .orchestrator-rail",
-    ".app-shell.active-view-library .past-master-pane",
-    ".app-shell.active-view-banks .problem-bank-list",
-    ".app-shell.active-view-journey .chart-sheet",
-    ".app-shell.active-view-materials .materials-revision",
-  ];
-  expected.forEach((selector) => {
-    const declarations = cssRules(rules, selector)[0]?.declarations ?? {};
-    assert.match(declarations["border-color"] ?? "", /--page-accent/);
-    assert.match(declarations.background ?? "", /--page-accent-soft/);
-  });
-});
-
 test("Review Queue keeps filters in the menu, branches each row, and joins its folio", async () => {
   const [source, css] = await Promise.all([load("../app/review-queue-view.tsx"), load("../app/review-queue.css")]);
   const file = parseTsx(source);

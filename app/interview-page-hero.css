@@ -72,59 +72,6 @@
 .app-shell :is(.chart-sheet, .coding-ledger, .mock-sheet, .bank-master-detail, .past-master-detail, .materials-import-register, .materials-cover-letters, .materials-revision, .loop-stage-record > article) {
   border-color: color-mix(in srgb, var(--page-accent) 22%, #c5d0c8);
 }
-
-/* Page accents continue through the body; status and specialty colors remain semantic. */
-.app-shell.active-view-today .orchestrator-rail,
-.app-shell.active-view-today .interaction-mode-selector,
-.app-shell.active-view-today .session-sheet,
-.app-shell.active-view-today .coding-ledger,
-.app-shell.active-view-today .mock-sheet {
-  border-color: color-mix(in srgb, var(--page-accent) 30%, #c5d0c8);
-  background: linear-gradient(135deg, #fff 0%, color-mix(in srgb, var(--page-accent-soft) 30%, white) 100%);
-}
-.app-shell.active-view-library .past-control-deck,
-.app-shell.active-view-library .past-master-pane,
-.app-shell.active-view-library .log-day {
-  border-color: color-mix(in srgb, var(--page-accent) 28%, #c5d0c8);
-  background: linear-gradient(135deg, #fff 0%, color-mix(in srgb, var(--page-accent-soft) 44%, white) 100%);
-}
-.app-shell.active-view-banks .bank-control-deck,
-.app-shell.active-view-banks .topic-ribbon,
-.app-shell.active-view-banks .problem-bank-list {
-  border-color: color-mix(in srgb, var(--page-accent) 28%, #c5d0c8);
-  background: linear-gradient(135deg, #fff 0%, color-mix(in srgb, var(--page-accent-soft) 46%, white) 100%);
-}
-.app-shell.active-view-journey .stat-ledger,
-.app-shell.active-view-journey .chart-sheet,
-.app-shell.active-view-journey .career-work-panel,
-.app-shell.active-view-journey .loop-journey-facts {
-  border-color: color-mix(in srgb, var(--page-accent) 28%, #c5d0c8);
-  background: linear-gradient(135deg, #fff 0%, color-mix(in srgb, var(--page-accent-soft) 40%, white) 100%);
-}
-.app-shell.active-view-materials .materials-trust-strip,
-.app-shell.active-view-materials .materials-import-register,
-.app-shell.active-view-materials .materials-revision-rail,
-.app-shell.active-view-materials .materials-revision,
-.app-shell.active-view-materials .materials-cover-letters,
-.app-shell.active-view-materials .materials-specialist-handoff {
-  border-color: color-mix(in srgb, var(--page-accent) 28%, #c5d0c8);
-  background: linear-gradient(135deg, #fff 0%, color-mix(in srgb, var(--page-accent-soft) 44%, white) 100%);
-}
-.app-shell.active-view-today .page-content :is(.secondary-action, .icon-action, summary):hover,
-.app-shell.active-view-library .page-content :is(.icon-action, .filter-toggle, summary):hover,
-.app-shell.active-view-banks .page-content :is(.icon-action, .filter-toggle, .topic-pill, summary):hover,
-.app-shell.active-view-journey .page-content :is(button, summary):hover,
-.app-shell.active-view-materials .page-content :is(button, summary):hover {
-  border-color: color-mix(in srgb, var(--page-accent) 48%, #bdc9c2);
-  background-color: color-mix(in srgb, var(--page-accent-soft) 70%, white);
-}
-.app-shell.active-view-library .page-content :is(.log-entry.selected, [aria-pressed="true"], [aria-current="true"]),
-.app-shell.active-view-banks .page-content :is(.problem-bank-entry.selected, [aria-pressed="true"], [aria-current="true"]),
-.app-shell.active-view-journey .page-content :is([aria-pressed="true"], [aria-current="true"]),
-.app-shell.active-view-materials .page-content :is([aria-pressed="true"], [aria-current="true"]) {
-  border-color: color-mix(in srgb, var(--page-accent) 48%, #bdc9c2);
-  background-color: color-mix(in srgb, var(--page-accent-soft) 76%, white);
-}
 .view-page.has-open-reader > .interview-page-hero,
 .library-page.has-open-entry > .interview-page-hero,
 .banks-page.has-open-solution > .interview-page-hero { display: none; }
