@@ -12,8 +12,7 @@ const privateDirectories = [
   ["practice/behavioral/story-bank/projects", ".md"],
   ["practice/leetcode/attempts", ".md"],
   ["practice/system-design/sessions", ".md"],
-  ["scripts/repairs", ".json"],
-  ["scripts/repairs", ".mjs"],
+  ["scripts/repairs", null],
 ];
 const solutionDirectories = [
   "practice/behavioral/solutions",
@@ -48,7 +47,9 @@ async function filesBelow(root, relativeDirectory) {
 
 async function detectedPrivatePaths(root) {
   const paths = (await Promise.all(privateDirectories.map(async ([directory, extension]) =>
-    (await filesBelow(root, directory)).filter((relativePath) => path.extname(relativePath) === extension)
+    (await filesBelow(root, directory)).filter(
+      (relativePath) => extension === null || path.extname(relativePath).toLowerCase() === extension,
+    )
   ))).flat();
   const solutions = (await Promise.all(solutionDirectories.map((directory) => filesBelow(root, directory)))).flat();
   for (const relativePath of solutions.filter((candidate) => path.extname(candidate) === ".md")) {
