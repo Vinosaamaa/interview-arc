@@ -474,6 +474,47 @@ test("source refresh preserves a pinned evidence payload and operation identity"
   assert.deepEqual(second.plan.evidence[0].input, first.plan.evidence[0].input);
 });
 
+test("pinned evidence remains replayable when its current source becomes unavailable", async (t) => {
+  const fixture = await createFixture(t);
+  const recordPath = path.join(fixture.projectRoot, "project.json");
+  const record = JSON.parse(await readFile(recordPath, "utf8"));
+  record.d1Candidates = [{
+    id: "EX-D1-001",
+    kind: "evidence",
+    visibility: "owner_private",
+    content: {
+      questionLinks: [{ questionId: "QUESTION-EXAMPLE-1", relevance: "supporting" }],
+    },
+    sourceEvidenceIds: ["EX-EV-001"],
+    transformations: ["Generalized the observation for owner-private review."],
+    limitations: ["The observation does not establish personal ownership."],
+  }];
+  record.d1Exclusions = [];
+  await writeJson(recordPath, record);
+  await pinBehavioralEvidenceProvenance({
+    bundleRoot: fixture.root,
+    now: new Date("2026-08-11T18:00:00.000Z"),
+  });
+  const first = await prepareBehavioralEvidenceSyncPlan({
+    bundleRoot: fixture.root,
+    now: new Date("2026-08-11T18:01:00.000Z"),
+  });
+
+  const pinned = JSON.parse(await readFile(recordPath, "utf8"));
+  pinned.sources[0].availability = "missing";
+  pinned.sources[0].refreshStatus = "unavailable";
+  delete pinned.sources[0].revision;
+  delete pinned.sources[0].fingerprint;
+  delete pinned.sources[0].inspectedAt;
+  await writeJson(recordPath, pinned);
+
+  const replay = await prepareBehavioralEvidenceSyncPlan({
+    bundleRoot: fixture.root,
+    now: new Date("2026-08-11T19:01:00.000Z"),
+  });
+  assert.deepEqual(replay.plan.evidence[0].input, first.plan.evidence[0].input);
+});
+
 test("material evidence edits require a replacement identity after provenance is pinned", async (t) => {
   const fixture = await createFixture(t);
   const recordPath = path.join(fixture.projectRoot, "project.json");
@@ -750,18 +791,20 @@ test("repeated refresh leaves an unchanged blocked source byte-identical", async
   assert.equal(await readFile(manifestPath, "utf8"), initialManifestBytes);
 });
 
-test("sync preparation rejects stale non-filesystem revisions before writing a plan", async (t) => {
+test("sync preparation projects stale non-filesystem sources as not checked", async (t) => {
   const fixture = await createFixture(t);
   const recordPath = path.join(fixture.projectRoot, "project.json");
   const record = JSON.parse(await readFile(recordPath, "utf8"));
   record.sources[0].refreshStatus = "not_checked";
   await writeJson(recordPath, record);
 
-  await assert.rejects(
-    prepareBehavioralEvidenceSyncPlan({ bundleRoot: fixture.root }),
-    /must have a current or changed refresh status/,
-  );
-  await assert.rejects(access(path.join(fixture.root, "sync", "plan.json")), { code: "ENOENT" });
+  const { plan } = await prepareBehavioralEvidenceSyncPlan({ bundleRoot: fixture.root });
+
+  assert.equal(plan.sources[0].source.availability, "not_checked");
+  assert.equal(plan.sources[0].source.refreshStatus, "not_checked");
+  assert.equal(plan.sources[0].source.contentRevision, undefined);
+  assert.equal(plan.sources[0].source.contentFingerprint, undefined);
+  assert.equal(plan.sources[0].source.lastInspectedAt, undefined);
 });
 
 test("sync preparation accepts an explicit local-only exclusion and reports it", async (t) => {

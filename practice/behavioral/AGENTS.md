@@ -36,9 +36,12 @@ order: `status`, `refresh`, regenerate the private projection when useful, then
 `pin-provenance`, then `prepare-sync`. For an evidence identity already present
 in D1, `pin-provenance` must consume an ignored owner-private snapshot containing
 only its authoritative evidence ID and source revision; never derive that old
-revision from the latest source registry. Read the ignored plan without printing
-it wholesale. Register
-sources only after reading their exact current D1 revisions; execute only its
+revision from the latest source registry. Once historical provenance and content
+are pinned, do not make exact replay depend on the source remaining currently
+available. Project a connector-owned source whose refresh state is `not_checked`
+as `not_checked` without stale revision metadata; that current source state does
+not invalidate an existing immutable pin. Read the ignored plan without printing
+it wholesale. Register sources only after reading their exact current D1 revisions; execute only its
 typed evidence writes, poll every durable receipt, and then present the pending
 candidate queue for explicit owner review. A prepared plan is not a saved
 receipt. Never upload the bundle, plan, source bytes, local locators, or review
