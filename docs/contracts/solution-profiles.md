@@ -30,12 +30,15 @@ gate. A complete specialist finalization fails before any D1 mutation when its
 profile is shallow or structurally incomplete. Legacy immutable revisions stay
 unchanged; repair them only by creating a new, evidence-grounded revision.
 
-Published artifacts are full-fidelity renderings of the exact pinned profile
-revision. The coordinator must not replace a section with a shorter paraphrase,
-drop an alternative or code block, or mark an activity published when its
-artifact contains only an abbreviated solution.
+Every durable reader and explicitly authorized export renders the exact pinned
+profile revision. It must not replace a section with a shorter paraphrase or
+drop an approach or code block.
 
 ## LeetCode
+
+Begin with an original, concise, self-contained problem restatement: objective,
+inputs/outputs, exact rules, solution-shaping constraints, material examples or
+visuals, and required API. Concision never permits a missing fact.
 
 1. Pattern recognition and constraints
 2. Best approach
@@ -43,27 +46,34 @@ artifact contains only an abbreviated solution.
 4. Correctness reasoning
 5. Time and space complexity
 6. Edge cases
-7. One or two meaningful alternatives
+7. Editorial-first approach catalog
 8. Common mistakes and recall cues
 9. Concise interview walkthrough
 10. References
 
-The preferred implementation contains complete runnable Java and Python code.
-Each meaningful alternative is a separate `### Alternative: <name>` block and
-contains all of the following substantive `####` subsections:
+After the preferred solution, list every verified Editorial approach first as
+`### Editorial approach: <name>`, then add `### Generated alternative: <name>`
+only until there are at least three distinct valid approaches counting the
+preferred: `max(0, 3 - distinct(preferred + Editorial))`. Include all Editorial
+approaches even above three; deduplicate by algorithm, never title or cosmetic
+variation.
 
-- when and why to choose it;
-- the complete algorithm and state transition;
-- the invariant and correctness reasoning;
-- explicit time and space complexity;
-- concrete edge cases;
-- tradeoffs versus the preferred approach; and
-- a complete runnable Java reference implementation.
+Every catalog entry keeps the existing alternative contract: when/why to use
+it, complete algorithm and transition, invariant/proof, time/space complexity,
+edge cases, preferred comparison, and runnable Java code. Add independently
+written pseudocode when it materially improves understanding. Cite consulted
+Editorials, copy no official prose/code, and report unavailable access honestly.
 
-An alternative name or asymptotic-complexity sentence is not an alternative.
-Do not manufacture a cosmetic variant; select the strongest genuinely useful
-approach or approaches, including a simpler or more general option when that
-comparison teaches a real tradeoff.
+### Background authoring and publication reuse
+
+During final review, the parent may delegate the complete profile to the
+bounded authoring child using only verified problem facts, independently
+summarized Editorial mechanics, and references. A separate mechanical child
+stores the completed bytes unchanged. Later finalization and readers reuse that
+profile without fresh research or a shorter rewrite.
+
+The preferred implementation contains complete runnable Java and Python code
+and renders in one panel with Java/Python tabs.
 
 Use normalized technique tags such as `dfs`, `sliding-window`,
 `topological-sort`, or `binary-search-on-answer`.

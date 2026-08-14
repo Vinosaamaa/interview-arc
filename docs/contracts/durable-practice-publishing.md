@@ -102,7 +102,8 @@ After resolving the stable `questionId`, every specialist calls
   user asks for the answer.
 - Fresh web research is not the default on a revisit. Use it only when the
   stored profile is incomplete, plausibly outdated, disputed, missing needed
-  support, or the user explicitly requests fresh research.
+  support, or explicitly requested. This does not waive LeetCode's mandatory
+  final-review Editorial check.
 - After the attempt, use `solutionProfileAction: reuse_current` when the
   canonical solution did not materially change. Use `create_or_revise` with a
   complete profile when the discussion adds verified facts, a better approach,
@@ -111,6 +112,11 @@ After resolving the stable `questionId`, every specialist calls
   whether fresh research occurred, and the sources checked. The D1 write path
   automatically reuses the current revision when the submitted profile is
   substantively identical.
+
+During LeetCode final review, the parent may hand its verified Editorial source
+packet to the bounded authoring child and return the teaching answer after
+handoff. A separate mechanical persistence child stores the completed profile
+unchanged. Finalization and Past remain pending until exact D1 readback.
 
 Every completed attempt links to the exact revision reused or created. Never
 create a new revision for punctuation or formatting alone.
