@@ -218,6 +218,10 @@ consulted only when the controller returns `availability: "available"`,
 that material. Paraphrase approaches and independently rewrite code. Never
 persist or reproduce raw rendered editorial prose/official code. Report locked,
 shell-only, unavailable, identity, and transport states exactly.
+Persist the controller URL, access time, availability, content fingerprint, and
+complete ordered Editorial approach titles in `editorialResearch`; its catalog
+must match the profile's Editorial panels exactly. Never label an approach
+Editorial when the receipt is unavailable or premium-locked.
 
 Do not bulk-crawl LeetCode, export cookies, inspect account/submission history,
 or call undocumented authenticated/private endpoints.

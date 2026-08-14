@@ -1,5 +1,23 @@
 type ReaderSection = { title: string; body: string };
 
+export type SolutionReaderGroup = {
+  key: "reference-solution" | "reference-design" | "reference-answer" | "project-deep-dive";
+  title: "Reference solution" | "Reference design" | "Reference answer" | "Project Deep Dive";
+  sections: ReaderSection[];
+};
+
+export function groupSolutionProfileSections(
+  specialty: "leetcode" | "system_design" | "behavioral",
+  sections: ReaderSection[],
+  projectDeepDive?: unknown,
+): SolutionReaderGroup[] {
+  if (!sections.length) return [];
+  if (specialty === "leetcode") return [{ key: "reference-solution", title: "Reference solution", sections }];
+  if (specialty === "system_design") return [{ key: "reference-design", title: "Reference design", sections }];
+  if (projectDeepDive) return [{ key: "project-deep-dive", title: "Project Deep Dive", sections }];
+  return [{ key: "reference-answer", title: "Reference answer", sections }];
+}
+
 export type PreferredImplementation = {
   label: "Java" | "Python";
   language: string;

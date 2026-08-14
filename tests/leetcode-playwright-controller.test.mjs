@@ -15,6 +15,7 @@ import {
   controllerStatePathsForProfile,
   createPlaywrightPageAdapter,
   createRuntimeDependencies,
+  editorialResearchFingerprint,
   ensureBrowserController,
   executeWithDurableReceipt,
   firstUtf8Difference,
@@ -536,6 +537,8 @@ test("editorial research reuses the verified tab, navigates same-tab, and never 
   assert.equal(result.availability, "available");
   assert.equal(result.contentAvailable, true);
   assert.deepEqual(result.researchMaterial, researchMaterial);
+  assert.match(result.researchFingerprint, /^[a-f0-9]{64}$/);
+  assert.equal(result.researchFingerprint, editorialResearchFingerprint(researchMaterial));
   assert.deepEqual(adapter.calls, [
     ["navigate", canonicalEditorialUrl(identity)],
     ["editorial-content"],

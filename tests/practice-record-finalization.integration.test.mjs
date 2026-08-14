@@ -65,7 +65,7 @@ ${javaCode}
 \`\`\``;
 }
 
-function completeLeetcodeProfile() {
+function completeLeetcodeProfile(questionId = "maximum-value-fixture") {
   return {
     schemaVersion: 1,
     summary: prose("summary", 20),
@@ -87,8 +87,16 @@ function completeLeetcodeProfile() {
     tags: ["array"],
     references: [
       { title: "Maximum value problem", url: "https://example.test/maximum-value", accessedAt: "2026-08-13T18:02:00.000Z" },
-      { title: "LeetCode Editorial", url: "https://leetcode.com/problems/maximum-value/editorial/", accessedAt: "2026-08-13T18:02:00.000Z" },
+      { title: "LeetCode Editorial", url: `https://leetcode.com/problems/${questionId}/editorial/`, accessedAt: "2026-08-13T18:02:00.000Z" },
     ],
+    editorialResearch: {
+      source: "leetcode_playwright_controller",
+      status: "available",
+      url: `https://leetcode.com/problems/${questionId}/editorial/`,
+      accessedAt: "2026-08-13T18:02:00.000Z",
+      contentSha256: "b".repeat(64),
+      approaches: [{ title: "Ordered scan" }, { title: "Divide and conquer" }],
+    },
   };
 }
 
@@ -616,6 +624,12 @@ test("complete finalization becomes saved only with an exact immutable Practice 
         },
       },
     };
+    const wrongEditorialIdentity = structuredClone(leetcodeFinalization);
+    wrongEditorialIdentity.finalization.solutionProfile.editorialResearch.url = "https://leetcode.com/problems/different-question/editorial/";
+    const wrongEditorialResult = await callRaw(client, "save_specialist_finalization", wrongEditorialIdentity);
+    assert.equal(wrongEditorialResult.isError, true);
+    assert.match(JSON.stringify(wrongEditorialResult.structuredContent ?? wrongEditorialResult.content), /canonical URL for questionId/);
+
     const leetcodeSaved = await call(client, "save_specialist_finalization", leetcodeFinalization);
     assert.equal(leetcodeSaved.writeReceipt.status, "saved");
     const leetcodeReadback = await call(client, "get_activity_practice_record", { activityId: leetcodeActivityId });

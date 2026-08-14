@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFile as execFileCallback } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   mkdir,
   open,
@@ -378,6 +378,14 @@ export function canonicalProblemIdentity(url, title) {
 
 export function canonicalEditorialUrl(identity) {
   return `https://leetcode.com/problems/${identity.slug}/editorial/`;
+}
+
+export function editorialResearchFingerprint(researchMaterial) {
+  return createHash("sha256").update(JSON.stringify({
+    renderedText: researchMaterial.renderedText,
+    headings: researchMaterial.headings,
+    codeBlocks: researchMaterial.codeBlocks,
+  })).digest("hex");
 }
 
 export function parseCli(argv) {
@@ -1285,7 +1293,7 @@ export class LeetCodeController {
       },
       ...(state?.reason ? { reason: state.reason } : {}),
       ...(researchMaterial
-        ? { researchMaterial }
+        ? { researchMaterial, researchFingerprint: editorialResearchFingerprint(researchMaterial) }
         : {}),
       ...(state?.recognitionDiagnostics
         ? { recognitionDiagnostics: state.recognitionDiagnostics }

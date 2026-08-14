@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 
 import {
   extractPreferredImplementations,
+  groupSolutionProfileSections,
   latestSolutionActionLabel,
   solutionProfileIsAvailable,
 } from "../app/solution-profile-reader.ts";
@@ -55,6 +56,29 @@ test("historical profile existence remains independent from the new completeness
   assert.equal(latestSolutionActionLabel(7), "Open latest solution · Revision 7");
 });
 
+test("Solution Profile grouping is specialty-aware and never invents an Attempt record", () => {
+  const projectSections = [
+    { title: "Orientation", body: "Project context" },
+    { title: "Architecture", body: "Service boundaries" },
+    { title: "End-to-end flows", body: "Request flow" },
+  ];
+  assert.deepEqual(groupSolutionProfileSections("behavioral", projectSections, { focus: "project_overview" }), [{
+    key: "project-deep-dive",
+    title: "Project Deep Dive",
+    sections: projectSections,
+  }]);
+  assert.deepEqual(groupSolutionProfileSections("leetcode", projectSections), [{
+    key: "reference-solution",
+    title: "Reference solution",
+    sections: projectSections,
+  }]);
+  assert.deepEqual(groupSolutionProfileSections("system_design", projectSections), [{
+    key: "reference-design",
+    title: "Reference design",
+    sections: projectSections,
+  }]);
+});
+
 test("the shared reader exposes latest revision, approach panels, Q&A, and incomplete historical content", async () => {
   const [client, css] = await Promise.all([
     readFile(new URL("../app/home-client.tsx", import.meta.url), "utf8"),
@@ -64,6 +88,10 @@ test("the shared reader exposes latest revision, approach panels, Q&A, and incom
   assert.match(client, /function PreferredImplementationTabs/);
   assert.match(client, /function LeetCodeApproachCatalog/);
   assert.match(client, /function SolutionQuestionsAndAnswers/);
+  assert.match(client, /href="#solution-preferred-answer"/);
+  assert.match(client, /href="#solution-practice-scenarios"/);
+  assert.match(client, /href="#solution-references"/);
+  assert.doesNotMatch(client.slice(client.indexOf("function renderSolutionReader()"), client.indexOf("function renderLifecycleDialog()")), /Attempt record/);
   assert.match(client, /selectedProblemProfileAvailable && !selectedProblemProfileReusable/);
   assert.match(client, /historical revision predates the current completeness gate/i);
   assert.match(css, /\.approach-panel/);

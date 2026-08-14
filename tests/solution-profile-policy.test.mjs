@@ -84,6 +84,14 @@ function completeLeetcodeProfile() {
       { title: "Problem", url: "https://example.test/problem" },
       { title: "LeetCode Editorial", url: "https://leetcode.com/problems/example/editorial/" },
     ],
+    editorialResearch: {
+      source: "leetcode_playwright_controller",
+      status: "available",
+      url: "https://leetcode.com/problems/example/editorial/",
+      accessedAt: "2026-08-14T15:00:00.000Z",
+      contentSha256: "a".repeat(64),
+      approaches: [{ title: "Ordered scan" }, { title: "Divide and conquer" }],
+    },
   };
 }
 
@@ -197,7 +205,38 @@ test("LeetCode completeness enforces the complete Editorial-first catalog and ru
   ].join("\n\n");
   assert.ok(solutionProfileMissingRequirements("leetcode", preferredEditorialNeedsTwoGenerated).includes("generated alternatives only to reach three distinct total approaches"));
   preferredEditorialNeedsTwoGenerated.sections.find((section) => section.title === "Editorial-first approach catalog").body += `\n\n${approachBlock("Generated alternative", "Heap scan", "heap")}`;
+  preferredEditorialNeedsTwoGenerated.editorialResearch.approaches = [{ title: "Preferred ordered scan" }];
   assert.equal(isReusableSolutionProfile("leetcode", preferredEditorialNeedsTwoGenerated), true, solutionProfileMissingRequirements("leetcode", preferredEditorialNeedsTwoGenerated).join("\n"));
+
+  const missingResearchReceipt = structuredClone(complete);
+  delete missingResearchReceipt.editorialResearch;
+  assert.ok(solutionProfileMissingRequirements("leetcode", missingResearchReceipt).includes("Playwright Editorial research receipt"));
+
+  const incompleteEditorialCatalog = structuredClone(complete);
+  incompleteEditorialCatalog.editorialResearch.approaches = [{ title: "Ordered scan" }];
+  assert.ok(solutionProfileMissingRequirements("leetcode", incompleteEditorialCatalog).includes("exact ordered Editorial approach catalog"));
+
+  const unavailableEditorial = structuredClone(complete);
+  unavailableEditorial.sections.find((section) => section.title === "Editorial-first approach catalog").body = [
+    approachBlock("Generated alternative", "Sorting", "sort"),
+    approachBlock("Generated alternative", "Heap scan", "heap"),
+  ].join("\n\n");
+  unavailableEditorial.references = [{ title: "Problem", url: "https://example.test/problem" }];
+  unavailableEditorial.editorialResearch = {
+    source: "leetcode_playwright_controller",
+    status: "unavailable",
+    url: "https://leetcode.com/problems/example/editorial/",
+    accessedAt: "2026-08-14T15:00:00.000Z",
+    reason: "The controller reached the canonical page but no Editorial article content rendered.",
+    approaches: [],
+  };
+  assert.equal(isReusableSolutionProfile("leetcode", unavailableEditorial), true, solutionProfileMissingRequirements("leetcode", unavailableEditorial).join("\n"));
+
+  unavailableEditorial.sections.find((section) => section.title === "Editorial-first approach catalog").body = [
+    approachBlock("Editorial approach", "Sorting", "sort"),
+    approachBlock("Generated alternative", "Heap scan", "heap"),
+  ].join("\n\n");
+  assert.ok(solutionProfileMissingRequirements("leetcode", unavailableEditorial).includes("no Editorial claims when research was unavailable"));
 });
 
 test("System Design completeness rejects prose-only skeletons and requires executable artifacts", () => {
