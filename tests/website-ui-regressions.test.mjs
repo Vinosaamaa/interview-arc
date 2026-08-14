@@ -235,7 +235,7 @@ test("workspace atmospheres keep shared geometry while destinations own distinct
   assert.match(layoutSource, /workspace-atmosphere\.css/);
 
   [
-    ".app-shell.active-workspace-interview",
+    ".app-shell",
     ".app-shell.active-workspace-learn",
     ".app-shell.active-workspace-engineering",
   ].forEach((selector) => {
@@ -244,6 +244,13 @@ test("workspace atmospheres keep shared geometry while destinations own distinct
     assert.ok(declarations["--workspace-sidebar-ink"]);
     assert.ok(declarations["--workspace-focus"]);
   });
+
+  const sharedTokens = cssRules(rules, ".app-shell")[0]?.declarations ?? {};
+  assert.doesNotMatch(sharedTokens["--destination-accent"] ?? "", /--page-accent/);
+  assert.equal(
+    cssRules(rules, ".app-shell.active-workspace-learn")[0]?.declarations["--page-accent"],
+    undefined,
+  );
 
   [
     ".app-shell.active-workspace-learn.active-destination-today",

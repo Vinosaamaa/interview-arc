@@ -52,6 +52,26 @@ Use four token layers with explicit precedence:
 3. destination accent, pale surface, and strong-on-dark tokens;
 4. semantic status and specialty tokens, which override decoration.
 
+The canonical workspace tokens are `--workspace-canvas`,
+`--workspace-canvas-deep`, `--workspace-sidebar-surface`,
+`--workspace-sidebar-ink`, `--workspace-sidebar-muted`,
+`--workspace-sidebar-border`, `--workspace-selection-surface`,
+`--workspace-selection-ink`, `--workspace-keyline`, `--workspace-focus`,
+`--workspace-paper`, and `--workspace-rule`. The shell owns their defaults;
+an `.active-workspace-*` class may override only values that differ.
+
+The canonical destination tokens are `--destination-accent`,
+`--destination-accent-soft`, and `--destination-accent-strong`. The shell
+provides concrete defaults and the active workspace/destination selector
+overrides them directly. Destination tokens never resolve through
+`--page-accent*`; this one-way ownership prevents circular custom-property
+dependencies. Existing Interview-only `--page-accent*` tokens remain a legacy
+adapter for Interview views and do not own Learn or Engineering colors.
+
+Components consume the resolved workspace and destination tokens. Semantic
+status and specialty selectors keep their own authoritative colors and must
+not be included in broad destination selected-state selectors.
+
 One application shell consumes these tokens. Workspaces do not fork the shell markup or its dimensions. Learn and Engineering local navigation uses the same numbered grammar as Interview, while each active destination retains `aria-current` and a structural keyline so color is never the sole state cue.
 
 ## First-paint ownership

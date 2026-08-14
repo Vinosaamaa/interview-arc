@@ -13,24 +13,9 @@
   --workspace-focus: #0d9488;
   --workspace-paper: #fbfcfa;
   --workspace-rule: #c8d8d3;
-  --destination-accent: var(--page-accent, #667a0f);
-  --destination-accent-soft: var(--page-accent-soft, #f1f7d5);
-  --destination-accent-strong: var(--page-accent-dark, #c7df65);
-}
-
-.app-shell.active-workspace-interview {
-  --workspace-canvas: #edf3f1;
-  --workspace-canvas-deep: #dfe9e6;
-  --workspace-sidebar-surface: #102d2d;
-  --workspace-sidebar-ink: #edf7f4;
-  --workspace-sidebar-muted: #8ea7a2;
-  --workspace-sidebar-border: rgba(15, 95, 90, .22);
-  --workspace-selection-surface: #174942;
-  --workspace-selection-ink: #ffffff;
-  --workspace-keyline: #55d7ca;
-  --workspace-focus: #0d9488;
-  --workspace-paper: #fbfcfa;
-  --workspace-rule: #c8d8d3;
+  --destination-accent: #667a0f;
+  --destination-accent-soft: #f1f7d5;
+  --destination-accent-strong: #c7df65;
 }
 
 .app-shell.active-workspace-learn {
@@ -46,9 +31,6 @@
   --workspace-focus: #315ca8;
   --workspace-paper: #fffdf8;
   --workspace-rule: #d5d1c7;
-  --page-accent: var(--destination-accent);
-  --page-accent-soft: var(--destination-accent-soft);
-  --page-accent-dark: var(--destination-accent-strong);
 }
 
 .app-shell.active-workspace-engineering {
@@ -64,9 +46,6 @@
   --workspace-focus: #2aa99a;
   --workspace-paper: #f6f7f3;
   --workspace-rule: #bbc9c6;
-  --page-accent: var(--destination-accent);
-  --page-accent-soft: var(--destination-accent-soft);
-  --page-accent-dark: var(--destination-accent-strong);
 }
 
 /* Learn destinations */

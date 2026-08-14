@@ -118,8 +118,8 @@
   border-color: color-mix(in srgb, var(--page-accent) 48%, #bdc9c2);
   background-color: color-mix(in srgb, var(--page-accent-soft) 70%, white);
 }
-.app-shell.active-view-library .page-content :is(.log-entry.selected, [aria-pressed="true"], [aria-current="true"]),
-.app-shell.active-view-banks .page-content :is(.problem-bank-entry.selected, [aria-pressed="true"], [aria-current="true"]),
+.app-shell.active-view-library .page-content :is(.log-entry.selected, [aria-current="true"]),
+.app-shell.active-view-banks .page-content :is(.problem-bank-entry.selected, [aria-current="true"]),
 .app-shell.active-view-journey .page-content :is([aria-pressed="true"], [aria-current="true"]),
 .app-shell.active-view-materials .page-content :is([aria-pressed="true"], [aria-current="true"]) {
   border-color: color-mix(in srgb, var(--page-accent) 48%, #bdc9c2);
