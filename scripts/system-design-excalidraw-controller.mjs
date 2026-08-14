@@ -72,7 +72,7 @@ export async function finalizeSystemDesignDrawingAssets(input, dependencies) {
   });
 }
 
-function reusableLease(lease, activityId, nowMs, server) {
+function reusableLease(lease, activityId, nowMs, server, browser) {
   return Boolean(
     lease
     && lease.activityId === activityId
@@ -82,7 +82,11 @@ function reusableLease(lease, activityId, nowMs, server) {
     && typeof lease.expiresAt === "number"
     && lease.expiresAt >= nowMs
     && server?.healthy === true
-    && server.browserClients === 1,
+    && server.browserClients === 1
+    && browser?.healthy === true
+    && browser.browserId === lease.browserId
+    && browser.pageId === lease.pageId
+    && browser.pageCount === 1,
   );
 }
 
@@ -90,7 +94,8 @@ export async function runSystemDesignDrawingPreflight(input, dependencies) {
   assertStableActivityId(input.activityId);
   const lease = await dependencies.readLease(input.activityId);
   const server = await dependencies.probeServer();
-  if (reusableLease(lease, input.activityId, input.nowMs, server)) {
+  const browser = lease ? await dependencies.probeOwnedBrowser() : null;
+  if (reusableLease(lease, input.activityId, input.nowMs, server, browser)) {
     return { ...lease, reused: true };
   }
 
@@ -189,6 +194,14 @@ async function ensureBrowserDaemon() {
   }
 }
 
+async function probeOwnedBrowser() {
+  try {
+    return await browserControl("/status");
+  } catch {
+    return { healthy: false };
+  }
+}
+
 async function ensureSingleCanvasPage() {
   await ensureBrowserDaemon();
   return browserControl("/ensure", {
@@ -280,6 +293,7 @@ async function runConcretePreflight(activityId) {
   return runSystemDesignDrawingPreflight({ activityId, nowMs: Date.now() }, {
     readLease,
     probeServer,
+    probeOwnedBrowser,
     startServer: () => cliJson(["start"]),
     ensureSingleCanvasPage,
     probeExclusiveCanvas: probeServer,

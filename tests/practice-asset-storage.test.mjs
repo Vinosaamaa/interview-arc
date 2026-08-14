@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   practiceAssetObjectKey,
+  practiceActivityAssetId,
   servePrivatePracticeAsset,
   stagePrivatePracticeAsset,
   verifyPrivatePracticeAsset,
@@ -40,6 +41,15 @@ test("practice asset keys and R2 metadata are opaque and owner-isolated", async 
     sha256,
   });
   assert.doesNotMatch(JSON.stringify(stored.options), /owner-a|asset-1/);
+});
+
+test("maximum-length activity identities still derive bounded stable asset IDs", async () => {
+  const activityId = `a${"b".repeat(239)}`;
+  const first = await practiceActivityAssetId(activityId, "attempt_original_excalidraw");
+  const second = await practiceActivityAssetId(activityId, "attempt_original_svg");
+  assert.match(first, /^asset-[a-f0-9]{64}$/);
+  assert.ok(first.length <= 240);
+  assert.notEqual(first, second);
 });
 
 test("post-stage verification hashes the exact stored R2 bytes", async () => {

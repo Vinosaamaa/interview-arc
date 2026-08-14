@@ -17,6 +17,7 @@ function dependencies(overrides = {}) {
     calls,
     readLease: async () => null,
     probeServer: async () => ({ healthy: false }),
+    probeOwnedBrowser: async () => ({ healthy: false }),
     startServer: async () => calls.push("start-server"),
     ensureSingleCanvasPage: async () => {
       calls.push("single-page");
@@ -107,10 +108,33 @@ test("a healthy exact-activity lease is reused without another tab or scene roun
       expiresAt: nowMs + 1,
     }),
     probeServer: async () => ({ healthy: true, browserClients: 1 }),
+    probeOwnedBrowser: async () => ({
+      healthy: true,
+      browserId: "browser-1",
+      pageId: "page-1",
+      pageCount: 1,
+    }),
   });
   const result = await runSystemDesignDrawingPreflight({ activityId, nowMs }, deps);
   assert.equal(result.reused, true);
   assert.deepEqual(deps.calls, []);
+});
+
+test("a lease cannot be reused after its exact Playwright browser disappears", async () => {
+  const deps = dependencies({
+    readLease: async () => ({
+      activityId,
+      serverUrl: "http://127.0.0.1:3032",
+      browserId: "browser-1",
+      pageId: "page-1",
+      expiresAt: nowMs + PREFLIGHT_LEASE_MS,
+    }),
+    probeServer: async () => ({ healthy: true, browserClients: 1 }),
+    probeOwnedBrowser: async () => ({ healthy: false }),
+  });
+  const result = await runSystemDesignDrawingPreflight({ activityId, nowMs }, deps);
+  assert.equal(result.reused, false);
+  assert.equal(deps.calls[0], "single-page");
 });
 
 test("an expired or other-activity lease cannot bypass deterministic preflight", async () => {

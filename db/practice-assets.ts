@@ -13,6 +13,7 @@ import {
 } from "./schema";
 import {
   practiceAssetObjectKey,
+  practiceActivityAssetId,
   stagePrivatePracticeAsset,
   verifyPrivatePracticeAsset,
   type PracticeAssetBucket,
@@ -65,10 +66,6 @@ function safeAsset(row: PreparedPracticeAsset) {
     altText: row.altText,
     authorship: row.authorship,
   };
-}
-
-function activityAssetId(activityId: string, role: PracticeAssetRole) {
-  return `${activityId}--${role.replaceAll("_", "-")}`;
 }
 
 function assertStableIdentity(value: string, label: string) {
@@ -329,7 +326,7 @@ export async function stagePracticeAssetSet(input: {
     if (asset.role === "attempt_original_excalidraw" && sha256 !== checkpoint.sha256) {
       throw new Error("The final editable original must match the exact selected checkpoint bytes.");
     }
-    const assetId = activityAssetId(input.activityId, asset.role);
+    const assetId = await practiceActivityAssetId(input.activityId, asset.role);
     const revision = (currentById.get(assetId)?.currentRevision ?? 0) + 1;
     const privateLocator = await practiceAssetObjectKey(input.ownerId, assetId, revision, sha256);
     prepared.push({
@@ -359,12 +356,31 @@ export async function stagePracticeAssetSet(input: {
     await stagePrivatePracticeAsset(input.bucket, row.privateLocator, bytes, row);
   }
   try {
+    const stageFence = sql`NOT EXISTS (
+      SELECT 1 FROM ${practiceAssetSetOperations}
+      WHERE ${practiceAssetSetOperations.ownerId} = ${input.ownerId}
+        AND ${practiceAssetSetOperations.activityId} = ${input.activityId}
+        AND ${practiceAssetSetOperations.status} != 'bound'
+    )`;
+    const assetPointerFences = prepared.map((asset) => {
+      const current = currentById.get(asset.assetId);
+      return current
+        ? sql`EXISTS (SELECT 1 FROM ${practiceAssets}
+            WHERE ${practiceAssets.ownerId} = ${input.ownerId}
+              AND ${practiceAssets.assetId} = ${asset.assetId}
+              AND ${practiceAssets.currentRevision} = ${current.currentRevision})`
+        : sql`NOT EXISTS (SELECT 1 FROM ${practiceAssets}
+            WHERE ${practiceAssets.ownerId} = ${input.ownerId}
+              AND ${practiceAssets.assetId} = ${asset.assetId})`;
+    });
     await db.batch([
       d1TransactionalInvariantGuard(db, sql`EXISTS (SELECT 1 FROM ${practiceDesignCheckpoints}
         WHERE ${practiceDesignCheckpoints.ownerId} = ${input.ownerId}
           AND ${practiceDesignCheckpoints.activityId} = ${input.activityId}
           AND ${practiceDesignCheckpoints.currentRevision} = ${input.checkpointRevision}
           AND ${practiceDesignCheckpoints.sha256} = ${checkpoint.sha256})`),
+      d1TransactionalInvariantGuard(db, stageFence),
+      ...assetPointerFences.map((fence) => d1TransactionalInvariantGuard(db, fence)),
       db.insert(practiceAssetSetOperations).values({
         ownerId: input.ownerId,
         operationId: input.operationId,
@@ -387,7 +403,7 @@ export async function stagePracticeAssetSet(input: {
     ] as unknown as Parameters<typeof db.batch>[0]);
   } catch (error) {
     if (isD1TransactionalInvariantFailure(error)) {
-      throw new Error("The System Design checkpoint changed while staging final assets; restore before retrying.");
+      throw new Error("The System Design checkpoint or asset-set pointer changed while staging final assets; reread before retrying.");
     }
     throw error;
   }

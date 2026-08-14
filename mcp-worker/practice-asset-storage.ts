@@ -32,6 +32,10 @@ export async function practiceAssetObjectKey(
   return `practice-assets/${root}/${contentHash}`;
 }
 
+export async function practiceActivityAssetId(activityId: string, role: string) {
+  return `asset-${await sha256Hex(`${activityId}\u0000${role}`)}`;
+}
+
 export async function stagePrivatePracticeAsset(
   bucket: PracticeAssetBucket,
   key: string,
