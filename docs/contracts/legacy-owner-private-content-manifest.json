@@ -1,31 +1,5 @@
 {
   "schemaVersion": 1,
   "frozenAtCommit": "0cdbbb021dfe1b3770b3f2ab911857365a536ce8",
-  "entries": [
-    { "path": "data/daily/2026-08-03.json", "sha256": "2570245d727442b9489712af2a1bd88a08be87c9ef69ccbcbae34a756af76b44" },
-    { "path": "data/daily/2026-08-04.json", "sha256": "5b6335926c79e82fc2328c0362d15c706a41b663d11ac26e14ce1b4af888b9b3" },
-    { "path": "data/daily/2026-08-05.json", "sha256": "f958db4e9e51d980ac22725dfbd0722c775136bafc80cad3f4df50c164b45694" },
-    { "path": "data/daily/2026-08-06.json", "sha256": "d7bc6b6d1862276517c92b344c27b33316c4a78906e4380bd16865d268fe3fda" },
-    { "path": "data/daily/2026-08-07.json", "sha256": "b72113ebd7d631851a8409b264ae0be737681706a39ed7e35847e0d3a64c37af" },
-    { "path": "data/daily/2026-08-11.json", "sha256": "34f671ebb4b175bc4e527477a28bbeeb2d8a1d5895777feaaa8289c9cd5ccf98" },
-    { "path": "practice/behavioral/sessions/2026-08-11-career-walkthrough-attempt-01.md", "sha256": "a5e396ed304f2b14f3ac3b73626790758cdd9f630ded0dfbea064af33ce99f4d" },
-    { "path": "practice/behavioral/sessions/2026-08-11-experience-map-vortexnettech-attempt-01.md", "sha256": "62bd63a2487910e3c134ebd09039cdac9699d5355f459b13355b2da2e3d8237b" },
-    { "path": "practice/behavioral/sessions/2026-08-12-experience-map-vortexnettech-solution-profile-revision-02.md", "sha256": "62c086ecd45ed078e4e42a29d83b50f377f3530e5570543cd53fff8f29bcf5b2" },
-    { "path": "practice/leetcode/attempts/2026-08-03-serialize-and-deserialize-binary-tree.md", "sha256": "99366e30cf7fe28ffcfa7484dc62b93111761fa5a10e909dc53cac683d997f5b" },
-    { "path": "practice/leetcode/attempts/2026-08-04-subarray-with-elements-greater-than-varying-threshold.md", "sha256": "5baff5fb84e795a0628b971e2e8932924a56312ac5bd0493ccd9784bcfc4bbb9" },
-    { "path": "practice/leetcode/attempts/2026-08-04-trapping-rain-water.md", "sha256": "a6d5d309d88c8d9012f8ab166a51135aa961e4b444added656b6d0c52334d8fb" },
-    { "path": "practice/leetcode/attempts/2026-08-05-basic-calculator.md", "sha256": "918e06ccca60cddfb9de354ac6e11b37ed02cb7d3e02a257f48ade2c61801a37" },
-    { "path": "practice/leetcode/attempts/2026-08-05-binary-tree-maximum-path-sum.md", "sha256": "c40eba5fd7adccaf47a31face0ee7805f0a83ef4ef3df79dd27e2f2e8dbc3e46" },
-    { "path": "practice/leetcode/attempts/2026-08-05-minimum-window-substring.md", "sha256": "b8ce14c1234286540bc557ecfc2314cae2a98b3ae7297ce132dd0150a63b4b18" },
-    { "path": "practice/leetcode/attempts/2026-08-05-n-queens.md", "sha256": "08a48d7e26edad92de99c0f240d4c4363bd412861de76fb00852d948e51687b0" },
-    { "path": "practice/leetcode/attempts/2026-08-05-text-justification.md", "sha256": "accc2e25b8964719c7743cd1377345ec890ca32efde8b4ca0d53d56d7390b3d5" },
-    { "path": "practice/leetcode/attempts/2026-08-06-24-game.md", "sha256": "13b446571e78b36c54c420a9ffb2e74956af65ec6063aafbd66c7b11e92637f7" },
-    { "path": "practice/leetcode/attempts/2026-08-06-basic-calculator-iii.md", "sha256": "573ef1d4496af3077f8d28317f5f56685deae7a6e1c204b94adb63715708d92a" },
-    { "path": "practice/leetcode/attempts/2026-08-06-word-ladder-ii.md", "sha256": "20b3fbec5d29b996038d0e031f8ed17aa9e9949e977a0d72779d5f07c7d79478" },
-    { "path": "practice/leetcode/attempts/2026-08-06-word-ladder.md", "sha256": "4a919980a7e7da06c746187ebc8c255ee75b4c634bfc2ae3ce20e23b45637d66" },
-    { "path": "practice/leetcode/attempts/2026-08-07-basic-calculator-iv.md", "sha256": "d98d53e95c83bd79093006c5e4d07dd90cf4050311cdef5418a38e3162896999" },
-    { "path": "practice/leetcode/attempts/2026-08-07-concatenated-words.md", "sha256": "37e31bb33c87d549ca17759d15c6afc0f1f1f8fa076d77765f5b8c18c04777d8" },
-    { "path": "practice/leetcode/attempts/2026-08-07-word-break-ii.md", "sha256": "0e987517522845bb95847e4847dfb22b8618ca5935dc031e585572187b6a1258" },
-    { "path": "practice/leetcode/solutions/0224-basic-calculator-profile-revision-02.md", "sha256": "1fa113ff6d9b609c47228839833f5971a7b0d7a61e1080163e2f095badb330b7" }
-  ]
+  "entries": []
 }

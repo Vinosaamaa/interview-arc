@@ -61,6 +61,17 @@ test("rejects a new revisioned Solution Profile artifact", async (t) => {
   );
 });
 
+test("rejects a one-time owner repair packet in Git", async (t) => {
+  const { root } = await fixture(t);
+  const added = "scripts/repairs/owner-practice-repair.JSON";
+  await mkdir(path.join(root, path.dirname(added)), { recursive: true });
+  await writeFile(path.join(root, added), '{"private":"practice bytes"}');
+  await assert.rejects(
+    validateOwnerPrivateContentBoundary(root),
+    /New owner-private Git content is forbidden under a protected content root/,
+  );
+});
+
 test("does not treat an ignored local recording as Git narrative", async (t) => {
   const { root } = await fixture(t);
   const recording = "audio-answers/local-recording.m4a";
