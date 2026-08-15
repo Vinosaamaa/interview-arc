@@ -5,7 +5,7 @@
 }
 
 .workspace-nav .engineering-icon { width: 15px; height: 15px; }
-.engineering-primary-nav button { grid-template-columns: 30px minmax(0, 1fr); }
+.engineering-primary-nav button { grid-template-columns: 28px minmax(0, 1fr); }
 .engineering-primary-nav button > span { display: grid; place-items: center; }
 .engineering-primary-nav button .engineering-icon { width: 17px; height: 17px; }
 .engineering-primary-nav button.active { border-color: rgba(92, 212, 198, .6); background: rgba(48, 111, 103, .24); color: #f2fbf8; box-shadow: inset 3px 0 #5cd4c6; }
@@ -14,7 +14,7 @@
 .active-workspace-engineering .sidebar { background: #091817; }
 .active-workspace-engineering .workspace-nav button.active { border-color: rgba(92, 212, 198, .35); background: rgba(34, 86, 80, .5); }
 .active-workspace-engineering .local-nav-label { border-color: rgba(176, 219, 210, .14); }
-.active-workspace-engineering .main-column { background: linear-gradient(145deg, #eaf3f0, #f7f2e8); }
+.active-workspace-engineering .main-column { background: var(--workspace-canvas, #e8eeee); }
 .active-workspace-engineering .page-content { width: 100%; max-width: none; padding-inline: 24px; }
 
 .engineering-workspace {
@@ -446,6 +446,10 @@
 .engineering-evidence-panel .engineering-evidence li,
 .engineering-evidence-panel .engineering-record-receipts li { align-items: flex-start; flex-direction: column; padding-block: 10px; }
 .engineering-evidence-panel .engineering-evidence li a { overflow-wrap: anywhere; }
+.engineering-evidence-empty { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.engineering-evidence-empty-copy { min-height: 0; padding: 28px 2px; display: grid; align-content: center; gap: 8px; text-align: left; }
+.engineering-evidence-empty-copy strong { color: var(--engineering-basalt); font-family: var(--font-newsreader); font-size: 1.35rem; }
+.engineering-evidence-empty-copy p { margin: 0; color: #657973; font-size: .8rem; line-height: 1.55; }
 
 @media (max-width: 1320px) {
   .engineering-workspace,
@@ -573,6 +577,7 @@
   .engineering-destination .engineering-workspace.evidence-closed { grid-template-columns: minmax(280px, 320px) minmax(0, 1fr); }
   .engineering-destination .engineering-workspace.index-collapsed,
   .engineering-destination .engineering-workspace.index-collapsed.evidence-closed { grid-template-columns: 52px minmax(0, 1fr); }
+  .engineering-evidence-empty { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

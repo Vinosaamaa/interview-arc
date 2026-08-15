@@ -47,7 +47,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .profile > span { width: 36px; height: 36px; border-radius: 50%; background: var(--signal); display: grid; place-items: center; font-size: .75rem; font-weight: 820; }
 
 .main-column { min-width: 0; }
-.topbar { min-height: 64px; padding: 0 clamp(24px, 4vw, 64px); border-bottom: 1px solid var(--line); background: rgba(233, 237, 231, .92); backdrop-filter: blur(14px); position: sticky; top: 0; z-index: 20; display: grid; grid-template-columns: minmax(170px, 1fr) 330px minmax(170px, 1fr); grid-template-areas: "context switch actions"; grid-template-rows: 42px; align-items: center; gap: 0 22px; }
+.topbar { min-height: 54px; padding: 0 clamp(24px, 4vw, 64px); border-bottom: 1px solid var(--line); background: rgba(233, 237, 231, .92); backdrop-filter: blur(14px); position: sticky; top: 0; z-index: 20; display: grid; grid-template-columns: minmax(170px, 1fr) 330px minmax(170px, 1fr); grid-template-areas: "context switch actions"; grid-template-rows: 40px; align-items: center; gap: 0 22px; }
 .topbar > .topbar-context { grid-area: context; align-self: center; }
 .topbar > .topbar-workspace-switch { grid-area: switch; align-self: center; }
 .topbar > .topbar-actions { grid-area: actions; width: 100%; align-self: center; }
@@ -917,11 +917,11 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 @keyframes letterOpen { from { opacity: 0; transform: translateY(30px) scale(.94) rotate(-1deg); } to { opacity: 1; transform: none; } }
 
 @media (min-width: 1900px) {
-  .topbar { min-height: 64px; grid-template-columns: minmax(220px, 1fr) 330px minmax(220px, 1fr); grid-template-areas: "context switch actions"; grid-template-rows: 42px; row-gap: 0; }
+  .topbar { min-height: 54px; grid-template-columns: minmax(220px, 1fr) 330px minmax(220px, 1fr); grid-template-areas: "context switch actions"; grid-template-rows: 40px; row-gap: 0; }
 }
 
 @media (max-width: 1320px) {
-  .topbar { padding-block: 10px; grid-template-columns: minmax(170px, 1fr) 288px minmax(170px, 1fr); }
+  .topbar { padding-block: 0; grid-template-columns: minmax(170px, 1fr) 288px minmax(170px, 1fr); }
   .topbar > .topbar-workspace-switch { width: 288px; }
 }
 

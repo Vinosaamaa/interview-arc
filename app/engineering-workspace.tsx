@@ -343,6 +343,16 @@ function EngineeringEvidencePanel({ record, index, onSelect, onClose }: { record
   </aside>;
 }
 
+function EngineeringEmptyEvidencePanel({ view }: { view: EngineeringView }) {
+  return <aside className="engineering-evidence-panel engineering-evidence-empty" aria-label="Exact evidence">
+    <header><div><span>Evidence desk</span><h2>Exact evidence</h2></div></header>
+    <div className="engineering-evidence-empty-copy" role="status">
+      <strong>No eligible record selected.</strong>
+      <p>{view === "case-studies" ? "A released Feature Retrospective will open here with its exact commit, source path, and lineage." : "Choose an eligible record to inspect its exact evidence and lineage."}</p>
+    </div>
+  </aside>;
+}
+
 function EngineeringStatistics({ index }: { index: EngineeringJournalIndex }) {
   const statistics = index.statistics;
   const receiptStatistics = index.receiptStatistics;
@@ -560,7 +570,9 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
     if (next === "receipts") setMobileReaderOpen(false);
   };
 
-  return <div className={`engineering-destination engineering-destination-${view}`}><EngineeringDestinationHero index={index} view={view} /><section className={`engineering-workspace ${mobileReaderOpen ? "mobile-reader-open" : ""} ${evidenceOpen ? "evidence-open" : "evidence-closed"}`}>
+  const displayEvidence = selected ? evidenceOpen : true;
+
+  return <div className={`engineering-destination engineering-destination-${view}`}><EngineeringDestinationHero index={index} view={view} /><section className={`engineering-workspace ${mobileReaderOpen ? "mobile-reader-open" : ""} ${displayEvidence ? "evidence-open" : "evidence-closed"}`}>
     <aside className="engineering-index-panel engineering-records" aria-label={`${ENGINEERING_VIEW_TITLES[view]} ${showReceipts ? "pull-request receipts" : "rich records"}`}>
       <header><div><h1>{ENGINEERING_VIEW_TITLES[view].replace("Engineering · ", "")}</h1><p>{showReceipts ? `${receipts.length} of ${index.receiptStatistics.totalReceipts} pull-request receipts` : `${records.length} factual ${records.length === 1 ? "record" : "records"}`}</p></div></header>
       {view === "journal" ? <div className="engineering-journal-layers" role="group" aria-label="Journal evidence layer">
@@ -605,6 +617,6 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
       </div>}
     </aside>
     {selected ? <RecordReader record={selected} onBack={() => setMobileReaderOpen(false)} onOpenEvidence={() => setEvidenceOpen(true)} contentsSection={contentsSection} onContentsSectionChange={setContentsSection} /> : <div className="engineering-reader engineering-record-panel engineering-reader-empty"><EmptyEngineeringView view={view} /></div>}
-    {selected ? <EngineeringEvidencePanel record={selected} index={index} onSelect={openRelation} onClose={() => setEvidenceOpen(false)} /> : null}
+    {selected ? <EngineeringEvidencePanel record={selected} index={index} onSelect={openRelation} onClose={() => setEvidenceOpen(false)} /> : <EngineeringEmptyEvidencePanel view={view} />}
   </section></div>;
 }
