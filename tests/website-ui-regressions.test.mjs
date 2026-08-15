@@ -647,7 +647,7 @@ test("Engineering Journal is a persistent three-panel evidence workbench", async
   assert.match(styles, /\.engineering-search \.sr-only/);
   assert.match(styles, /\.engineering-record-panel \.engineering-facts \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
   assert.doesNotMatch(styles, /\.engineering-workspace\.index-collapsed/);
-  assert.match(styles, /\.engineering-hero\s*\{[\s\S]*height:\s*350px/);
+  assert.equal(cssRules(rules, ".engineering-hero")[0]?.declarations.height, "350px");
   assert.match(styles, /\.engineering-hero-stats\s*\{[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(styles, /@media \(max-width: 1320px\)/);
   assert.match(styles, /@media \(max-width: 760px\)/);

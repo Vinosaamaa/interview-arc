@@ -475,9 +475,11 @@
 .engineering-hero-stats dt { color: #687a75; font-size: .75rem; line-height: 1.2; }
 .engineering-hero-stats dd { margin: 0; color: var(--destination-accent); font: 760 1.45rem/1 var(--font-geist-mono); }
 
-.engineering-page > .engineering-workspace,
-.engineering-page > .engineering-statistics { height: clamp(560px, calc(100dvh - 520px), 820px); min-height: 560px; }
-.engineering-page > .engineering-statistics { min-height: 560px; height: auto; border-color: color-mix(in srgb, var(--destination-accent) 28%, var(--workspace-rule)); background: color-mix(in srgb, var(--destination-accent-soft) 20%, var(--workspace-paper)); }
+@media (min-width: 761px) {
+  .engineering-page > .engineering-workspace,
+  .engineering-page > .engineering-statistics { height: clamp(560px, calc(100dvh - 520px), 820px); min-height: 560px; }
+  .engineering-page > .engineering-statistics { min-height: 560px; height: auto; border-color: color-mix(in srgb, var(--destination-accent) 28%, var(--workspace-rule)); background: color-mix(in srgb, var(--destination-accent-soft) 20%, var(--workspace-paper)); }
+}
 .active-workspace-engineering .engineering-index-panel,
 .active-workspace-engineering .engineering-record-panel,
 .active-workspace-engineering .engineering-evidence-panel {
