@@ -109,7 +109,6 @@ import InterviewPageHero from "./interview-page-hero";
 import LearnWorkspace from "./learn-workspace";
 import type { LearnDestination } from "./learn-workspace-model";
 import EngineeringWorkspace, {
-  EngineeringIcon,
   ENGINEERING_NAV_ITEMS,
   ENGINEERING_VIEW_TITLES,
   type EngineeringView,
@@ -7243,11 +7242,6 @@ export default function HomeClient({ content, today, engineering, initialLocatio
       <a className="skip-link" href="#practice-content">Skip to practice</a>
       <aside className="sidebar">
         <button className="brand" onClick={() => navigateToPrimaryView("today")}><span className="brand-mark" aria-hidden="true" /><span>Interview Arc</span></button>
-        <nav className="workspace-nav" aria-label="Workspaces">
-          <button type="button" className={activeWorkspace === "interview" ? "active" : ""} aria-current={activeWorkspace === "interview" ? "page" : undefined} onClick={() => selectWorkspace("interview")}><span aria-hidden="true"><EngineeringIcon name="interview" /></span><strong>Interview</strong></button>
-          <button type="button" className={activeWorkspace === "learn" ? "active learn" : "learn"} aria-current={activeWorkspace === "learn" ? "page" : undefined} onClick={() => selectWorkspace("learn")}><span aria-hidden="true"><EngineeringIcon name="learn" /></span><strong>Learn</strong></button>
-          <button type="button" className={activeWorkspace === "engineering" ? "active" : ""} aria-current={activeWorkspace === "engineering" ? "page" : undefined} onClick={() => selectWorkspace("engineering")}><span aria-hidden="true"><EngineeringIcon name="engineering" /></span><strong>Engineering</strong></button>
-        </nav>
         <div className="local-nav-label"><span>{activeWorkspace === "engineering" ? "Engineering" : activeWorkspace === "learn" ? "Learn" : "Interview"}</span><small>Workspace</small></div>
         {activeWorkspace === "learn"
           ? <nav className="primary-nav learn-local-nav" aria-label="Learn navigation">{LEARN_NAV_ITEMS.map(([id, label], index) => <button key={id} className={learnDestination === id ? "active" : ""} aria-current={learnDestination === id ? "page" : undefined} onClick={() => navigateToLearn(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
@@ -7262,6 +7256,11 @@ export default function HomeClient({ content, today, engineering, initialLocatio
       <section className="main-column">
         <header className="topbar">
           <div className="topbar-context"><strong>{activeWorkspace === "engineering" ? ENGINEERING_VIEW_TITLES[engineeringView] : activeWorkspace === "learn" ? LEARN_VIEW_TITLES[learnDestination] : INTERVIEW_VIEW_TITLES[view]}</strong><span>{activeWorkspace === "engineering" ? `${engineering.statistics.totalRecords} eligible record${engineering.statistics.totalRecords === 1 ? "" : "s"}` : readableDate(journal.date)}</span></div>
+          <nav className="workspace-switcher" aria-label="Workspaces">
+            <button type="button" className={activeWorkspace === "interview" ? "active" : ""} aria-current={activeWorkspace === "interview" ? "page" : undefined} onClick={() => selectWorkspace("interview")}><strong>Interview</strong></button>
+            <button type="button" className={activeWorkspace === "learn" ? "active" : ""} aria-current={activeWorkspace === "learn" ? "page" : undefined} onClick={() => selectWorkspace("learn")}><strong>Learn</strong></button>
+            <button type="button" className={activeWorkspace === "engineering" ? "active" : ""} aria-current={activeWorkspace === "engineering" ? "page" : undefined} onClick={() => selectWorkspace("engineering")}><strong>Engineering</strong></button>
+          </nav>
           <div>
             <div className={`music-dock ${ambientPlaying ? "active" : ""}`}>
               <button onClick={toggleAmbientSound} aria-pressed={ambientPlaying} title={ambientPlaying ? "Pause music" : "Play music"}><span aria-hidden="true">{ambientPlaying ? "Ⅱ" : "▶"}</span><i><small>{ambientPlaying ? "PLAYING" : "PAUSED"}</small><strong>{trackName}</strong></i></button>

@@ -551,12 +551,16 @@ test("workspace selector contains exactly Interview, Learn, and Engineering", as
   const workspaceNav = visit(file, (node) => ts.isJsxElement(node)
     && node.openingElement.attributes.properties.some((attribute) => ts.isJsxAttribute(attribute)
       && attribute.name.getText(file) === "className"
-      && attribute.initializer?.getText(file) === '"workspace-nav"'))[0];
+      && attribute.initializer?.getText(file) === '"workspace-switcher"'))[0];
   assert.ok(workspaceNav);
   const workspaceLabels = visit(workspaceNav, (node) => ts.isJsxText(node))
     .map((node) => node.text.trim())
     .filter((value) => ["Interview", "Learn", "Engineering", "Journey"].includes(value));
   assert.deepEqual(workspaceLabels, ["Interview", "Learn", "Engineering"]);
+  assert.equal(visit(file, (node) => ts.isJsxElement(node)
+    && node.openingElement.attributes.properties.some((attribute) => ts.isJsxAttribute(attribute)
+      && attribute.name.getText(file) === "className"
+      && attribute.initializer?.getText(file) === '"workspace-nav"')).length, 0);
   assert.equal(literals.has("Statistics"), true);
   const engineeringNav = visit(file, (node) => ts.isIdentifier(node)
     && node.text === "ENGINEERING_NAV_ITEMS");
@@ -629,10 +633,10 @@ test("Engineering Journal is a persistent three-panel evidence workbench", async
   assert.match(source, /engineering-record-panel/);
   assert.match(source, /engineering-evidence-panel/);
   assert.match(source, /engineering-contents-nav/);
-  assert.match(source, /indexCollapsed/);
   assert.match(source, /evidenceOpen/);
   assert.match(source, /indexScrollTop/);
-  assert.match(source, /aria-label="Collapse Journal index"/);
+  assert.doesNotMatch(source, /indexCollapsed/);
+  assert.doesNotMatch(source, /aria-label="Collapse Journal index"/);
   assert.match(source, /aria-label="Open evidence and lineage"/);
   assert.match(styles, /grid-template-columns:\s*minmax\(270px, 300px\) minmax\(0, 1fr\) minmax\(250px, 280px\)/);
   assert.match(styles, /gap:\s*20px/);
@@ -642,7 +646,9 @@ test("Engineering Journal is a persistent three-panel evidence workbench", async
   assert.match(source, /typeof parsed\.evidenceOpen === "boolean" \? parsed\.evidenceOpen : undefined/);
   assert.match(styles, /\.engineering-search \.sr-only/);
   assert.match(styles, /\.engineering-record-panel \.engineering-facts \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
-  assert.match(styles, /\.engineering-workspace\.index-collapsed/);
+  assert.doesNotMatch(styles, /\.engineering-workspace\.index-collapsed/);
+  assert.equal(cssRules(rules, ".engineering-hero")[0]?.declarations.height, "350px");
+  assert.match(styles, /\.engineering-hero-stats\s*\{[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(styles, /@media \(max-width: 1320px\)/);
   assert.match(styles, /@media \(max-width: 760px\)/);
   assert.equal((styles.match(/^\.engineering-workspace \{/gm) ?? []).length, 1, "the Engineering workbench must have one authoritative base rule");
