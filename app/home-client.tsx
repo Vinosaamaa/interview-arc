@@ -7257,9 +7257,9 @@ export default function HomeClient({ content, today, engineering, initialLocatio
         <header className="topbar">
           <div className="topbar-context"><strong>{activeWorkspace === "engineering" ? ENGINEERING_VIEW_TITLES[engineeringView] : activeWorkspace === "learn" ? LEARN_VIEW_TITLES[learnDestination] : INTERVIEW_VIEW_TITLES[view]}</strong><span>{activeWorkspace === "engineering" ? `${engineering.statistics.totalRecords} eligible record${engineering.statistics.totalRecords === 1 ? "" : "s"}` : readableDate(journal.date)}</span></div>
           <nav className="workspace-switcher" aria-label="Workspaces">
-            <button type="button" className={activeWorkspace === "interview" ? "active" : ""} aria-current={activeWorkspace === "interview" ? "page" : undefined} onClick={() => selectWorkspace("interview")}>Interview</button>
-            <button type="button" className={activeWorkspace === "learn" ? "active" : ""} aria-current={activeWorkspace === "learn" ? "page" : undefined} onClick={() => selectWorkspace("learn")}>Learn</button>
-            <button type="button" className={activeWorkspace === "engineering" ? "active" : ""} aria-current={activeWorkspace === "engineering" ? "page" : undefined} onClick={() => selectWorkspace("engineering")}>Engineering</button>
+            <button type="button" className={activeWorkspace === "interview" ? "active" : ""} aria-current={activeWorkspace === "interview" ? "page" : undefined} onClick={() => selectWorkspace("interview")}><strong>Interview</strong></button>
+            <button type="button" className={activeWorkspace === "learn" ? "active" : ""} aria-current={activeWorkspace === "learn" ? "page" : undefined} onClick={() => selectWorkspace("learn")}><strong>Learn</strong></button>
+            <button type="button" className={activeWorkspace === "engineering" ? "active" : ""} aria-current={activeWorkspace === "engineering" ? "page" : undefined} onClick={() => selectWorkspace("engineering")}><strong>Engineering</strong></button>
           </nav>
           <div>
             <div className={`music-dock ${ambientPlaying ? "active" : ""}`}>
