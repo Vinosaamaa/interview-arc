@@ -263,6 +263,8 @@
 @media (max-width: 760px) {
   .engineering-workspace,
   .engineering-workspace.evidence-closed { height: max(180px, calc(100dvh - 244px)); min-height: 0; display: block; }
+  .engineering-page > .engineering-workspace,
+  .engineering-page > .engineering-statistics { height: max(180px, calc(100dvh - 244px)); min-height: 0; }
   .engineering-records { border-right: 0; }
   .engineering-record-list, .engineering-receipt-list { max-height: none; }
   .engineering-reader { display: none; }
