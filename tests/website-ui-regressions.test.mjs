@@ -642,10 +642,15 @@ test("Engineering Journal is a persistent three-panel evidence workbench", async
   assert.doesNotMatch(source, />Contents<\/span>/);
   assert.match(source, /evidenceOpen/);
   assert.match(source, /indexScrollTop/);
-  assert.match(source, /aria-label="Open evidence and lineage"/);
+  assert.match(source, /onToggleEvidence/);
+  assert.match(source, /aria-pressed=\{evidenceOpen\}/);
+  assert.doesNotMatch(source, /aria-label="Close evidence and lineage"/);
+  assert.match(source, /aria-label="Return to Engineering record"/);
+  assert.match(source, /const displayEvidence = evidenceOpen/);
   assert.match(styles, /grid-template-columns:\s*minmax\(290px, 316px\) minmax\(0, 1120px\) minmax\(260px, 288px\)/);
   assert.match(styles, /gap:\s*20px/);
-  assert.match(styles, /height:\s*max\(680px, calc\(100dvh - 40px\)\)/);
+  assert.match(styles, /height:\s*calc\(100dvh - 90px\)/);
+  assert.match(styles, /\.engineering-destination \.engineering-record-panel,[\s\S]*?\.engineering-destination \.engineering-evidence-panel \{ overflow-y: auto;/);
   assert.match(source, /matchMedia\("\(max-width: 1320px\)"\)/);
   assert.match(source, /typeof parsed\.evidenceOpen === "boolean" \? parsed\.evidenceOpen : undefined/);
   assert.match(styles, /\.engineering-search \.sr-only/);
@@ -669,7 +674,7 @@ test("Engineering Case Studies preserves the three-panel workbench before select
   const source = await load("../app/engineering-workspace.tsx");
   const styles = await load("../app/engineering-workspace.css");
   assert.match(source, /EngineeringEmptyEvidencePanel/);
-  assert.match(source, /displayEvidence = selected \? evidenceOpen : true/);
+  assert.match(source, /displayEvidence = evidenceOpen/);
   assert.match(source, /No eligible record selected\./);
   assert.match(styles, /\.engineering-evidence-empty/);
 });

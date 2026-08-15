@@ -510,3 +510,45 @@
   .learn-animal-sketch svg > * { stroke-dashoffset: 0; }
   .learn-hero-pulse { opacity: .82; transform: scale(.76); }
 }
+
+/* #341 — stable, readable metrics at every Learn breakpoint. */
+.learn-hero { grid-template-rows: minmax(0, 1fr) 64px; }
+.learn-hero-metrics {
+  height: 64px;
+  min-height: 64px;
+  align-items: stretch;
+  border-top: 0;
+}
+.learn-hero-metrics > div {
+  height: 64px;
+  min-width: 0;
+  padding: 8px 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-content: center;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+}
+.learn-hero-metrics dt {
+  min-width: 0;
+  font-size: .68rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.learn-hero-metrics dd { margin: 0; font-size: 1rem; line-height: 1; }
+
+@media (max-width: 760px) {
+  .learn-hero { grid-template-rows: minmax(0, 1fr) 64px; }
+  .learn-hero-metrics { height: 64px; min-height: 64px; }
+  .learn-hero-metrics > div {
+    height: 64px;
+    padding: 7px 8px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 5px;
+    text-align: left;
+  }
+  .learn-hero-metrics dt { font-size: .58rem; }
+  .learn-hero-metrics dd { margin: 0; font-size: .86rem; }
+}

@@ -235,3 +235,15 @@
   .review-queue-workspace, .review-queue-base, .review-queue-container, .review-queue-page { height: auto; min-height: 0; overflow: visible; }
   .review-queue-sheet { height: min(62dvh, 620px); min-height: 320px; }
 }
+
+/* #341 — the selection folio is a sibling panel, not a fused overlay. */
+.review-queue-sheet {
+  border-bottom: 1px solid #b7c7bc;
+  border-radius: 0 0 14px 14px;
+}
+.review-selection-folio {
+  margin-top: 12px;
+  border: 1px solid #93a59a;
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+}
