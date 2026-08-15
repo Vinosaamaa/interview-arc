@@ -204,7 +204,7 @@
   box-shadow: none;
 }
 .app-shell.active-workspace-engineering .engineering-primary-nav button {
-  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-columns: 28px minmax(0, 1fr);
 }
 .app-shell.active-workspace-engineering .engineering-primary-nav button.active {
   border-color: color-mix(in srgb, var(--destination-accent-strong) 30%, #303c3e);
@@ -221,10 +221,11 @@
   color: #f2f8f6;
   box-shadow: inset 0 3px var(--destination-accent-strong);
 }
-.app-shell.active-workspace-engineering :is(.engineering-workspace, .engineering-statistics) {
+.app-shell.active-workspace-engineering .engineering-statistics {
   border-color: color-mix(in srgb, var(--destination-accent) 27%, var(--workspace-rule));
   background: color-mix(in srgb, var(--destination-accent-soft) 28%, var(--workspace-paper));
 }
+.app-shell.active-workspace-engineering .engineering-workspace { background: transparent; }
 .app-shell.active-workspace-engineering :is(.engineering-records, .engineering-filters, .engineering-reader, .engineering-stat-section) {
   border-color: color-mix(in srgb, var(--destination-accent) 20%, var(--workspace-rule));
 }
@@ -237,6 +238,89 @@
 .app-shell.active-workspace-engineering :is(.engineering-search, .engineering-actions button, .engineering-lineage-links button):focus-within {
   border-color: var(--destination-accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--destination-accent) 17%, transparent);
+}
+
+/* Issue #329 fastlane: one invariant shell geometry with destination-aware
+   hover/selection accents. Each local nav item previews its own destination. */
+.app-shell .primary-nav button,
+.app-shell .materials-nav button { --nav-accent: var(--destination-accent); }
+.app-shell.active-workspace-interview .primary-nav button:nth-child(1) { --nav-accent: #88a21f; }
+.app-shell.active-workspace-interview .primary-nav button:nth-child(2) { --nav-accent: #bd496d; }
+.app-shell.active-workspace-interview .primary-nav button:nth-child(3) { --nav-accent: #b98218; }
+.app-shell.active-workspace-interview .primary-nav button:nth-child(4) { --nav-accent: #63706b; }
+.app-shell.active-workspace-interview .primary-nav button:nth-child(5) { --nav-accent: #5368b7; }
+.app-shell.active-workspace-interview .primary-nav button:nth-child(6) { --nav-accent: #178b82; }
+.app-shell.active-workspace-interview .materials-nav button { --nav-accent: #9a547d; }
+.app-shell.active-workspace-learn .primary-nav button:nth-child(1) { --nav-accent: #b4513d; }
+.app-shell.active-workspace-learn .primary-nav button:nth-child(2) { --nav-accent: #315ca8; }
+.app-shell.active-workspace-learn .primary-nav button:nth-child(3) { --nav-accent: #6a4aa3; }
+.app-shell.active-workspace-learn .primary-nav button:nth-child(4) { --nav-accent: #087d91; }
+.app-shell.active-workspace-engineering .primary-nav button:nth-child(1) { --nav-accent: #d86742; }
+.app-shell.active-workspace-engineering .primary-nav button:nth-child(2) { --nav-accent: #25856c; }
+.app-shell.active-workspace-engineering .primary-nav button:nth-child(3) { --nav-accent: #566cc6; }
+.app-shell.active-workspace-engineering .primary-nav button:nth-child(4) { --nav-accent: #d65d63; }
+.app-shell.active-workspace-engineering .primary-nav button:nth-child(5) { --nav-accent: #c5872b; }
+.app-shell.active-workspace-engineering .primary-nav button:nth-child(6) { --nav-accent: #49a6a8; }
+.app-shell .primary-nav button:hover,
+.app-shell .materials-nav button:hover {
+  border-color: color-mix(in srgb, var(--nav-accent) 52%, var(--workspace-sidebar-border));
+  background: color-mix(in srgb, var(--nav-accent) 18%, var(--workspace-sidebar-surface));
+  color: var(--workspace-selection-ink);
+}
+.app-shell .primary-nav button.active,
+.app-shell .materials-nav button.active,
+.app-shell.active-workspace-engineering .engineering-primary-nav button.active {
+  border-color: color-mix(in srgb, var(--nav-accent) 58%, var(--workspace-sidebar-border));
+  background: color-mix(in srgb, var(--nav-accent) 54%, var(--workspace-sidebar-surface));
+  color: var(--workspace-selection-ink);
+  box-shadow: inset 3px 0 var(--nav-accent);
+}
+.app-shell .primary-nav button.active > span,
+.app-shell .materials-nav button.active > span,
+.app-shell.active-workspace-engineering .engineering-primary-nav button.active > span { color: currentColor; }
+
+.topbar-workspace-switch button:nth-child(1) { --workspace-tab-accent: #178b82; }
+.topbar-workspace-switch button:nth-child(2) { --workspace-tab-accent: #315ca8; }
+.topbar-workspace-switch button:nth-child(3) { --workspace-tab-accent: #d86742; }
+.topbar-workspace-switch button:hover {
+  background: color-mix(in srgb, var(--workspace-tab-accent) 15%, white);
+  color: color-mix(in srgb, var(--workspace-tab-accent) 82%, #173631);
+}
+.topbar-workspace-switch button.active {
+  background: color-mix(in srgb, var(--workspace-tab-accent) 72%, #102d2d);
+  color: #fff;
+}
+
+/* Gaps reveal the common canvas, never a second tinted wrapper panel. */
+.app-shell.active-workspace-engineering :is(.engineering-destination, .engineering-workspace),
+.app-shell.active-workspace-learn .learn-course-workspace,
+.app-shell.active-view-library :is(.library-page, .past-master-detail),
+.app-shell.active-view-banks :is(.banks-page, .bank-master-detail) {
+  background: transparent;
+}
+.app-shell.active-workspace-learn .learn-course-workspace {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+.app-shell.active-workspace-learn .learn-hero-metrics {
+  height: 62px;
+  min-height: 0;
+  border-top: 0;
+  align-items: center;
+}
+
+@media (min-width: 761px) {
+  .app-shell .topbar-context {
+    grid-template-rows: 18px 14px;
+    align-content: center;
+    gap: 1px;
+  }
+  .app-shell .topbar-context strong { font-size: .9rem; line-height: 18px; }
+  .app-shell .topbar-context time { font-size: .67rem; line-height: 14px; }
+  .app-shell .topbar-workspace-switch { min-height: 38px; }
+  .app-shell .topbar-workspace-switch button { min-height: 28px; }
 }
 
 @media (forced-colors: active) {

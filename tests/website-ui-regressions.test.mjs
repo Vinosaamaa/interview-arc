@@ -570,8 +570,8 @@ test("the fixed header owns the only workspace selector", async () => {
     .filter((rule) => rule.ancestors.length === 0 && rule.declarations["grid-template-areas"])
     .at(-1).declarations;
   assert.equal(fixedHeader["grid-template-areas"], '"context switch actions"');
-  assert.equal(fixedHeader["grid-template-rows"], "42px");
-  assert.equal(fixedHeader["min-height"], "64px");
+  assert.equal(fixedHeader["grid-template-rows"], "40px");
+  assert.equal(fixedHeader["min-height"], "54px");
   assert.ok(cssRules(rules, ".brand-mark").some((rule) => rule.declarations.background?.includes('/favicon.svg')));
 });
 
@@ -663,6 +663,27 @@ test("Engineering Journal is a persistent three-panel evidence workbench", async
   assert.match(source, /const indexScrollTopRef = useRef\(0\)/);
   assert.match(source, /scrollPersistTimerRef/);
   assert.doesNotMatch(source, /setIndexScrollTop/);
+});
+
+test("Engineering Case Studies preserves the three-panel workbench before selection", async () => {
+  const source = await load("../app/engineering-workspace.tsx");
+  const styles = await load("../app/engineering-workspace.css");
+  assert.match(source, /EngineeringEmptyEvidencePanel/);
+  assert.match(source, /displayEvidence = selected \? evidenceOpen : true/);
+  assert.match(source, /No eligible record selected\./);
+  assert.match(styles, /\.engineering-evidence-empty/);
+});
+
+test("workspace gutters stay transparent and Learn removes its underpanel", async () => {
+  const [atmosphere, learn] = await Promise.all([
+    load("../app/workspace-atmosphere.css"),
+    load("../app/learn-workspace.css"),
+  ]);
+  assert.match(atmosphere, /active-view-library[\s\S]*\.past-master-detail/);
+  assert.match(atmosphere, /active-view-banks[\s\S]*\.bank-master-detail/);
+  assert.match(atmosphere, /active-workspace-engineering[\s\S]*\.engineering-workspace[\s\S]*background:\s*transparent/);
+  assert.match(learn, /\.learn-course-workspace\s*\{[\s\S]*background:\s*transparent;[\s\S]*border:\s*0;[\s\S]*padding:\s*0;/);
+  assert.match(learn, /\.learn-hero-metrics\s*\{[\s\S]*border-top:\s*0;/);
 });
 
 test("workspace atmosphere is persistent, bounded, and reader-safe", async () => {

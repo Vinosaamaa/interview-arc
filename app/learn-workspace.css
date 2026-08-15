@@ -133,12 +133,13 @@
 
 .learn-hero-metrics {
   align-items: stretch;
-  border-top: 1px solid var(--learn-rule);
+  border-top: 0;
   display: grid;
   grid-column: 1 / -1;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  height: 62px;
   margin: 0;
-  min-height: 62px;
+  min-height: 0;
   position: relative;
   z-index: 1;
 }
@@ -216,10 +217,13 @@
 }
 
 .learn-course-workspace {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   display: grid;
   gap: 14px;
   min-width: 0;
-  padding: 16px;
+  padding: 0;
 }
 
 .learn-quick-study-header {
@@ -464,7 +468,7 @@
   .learn-hero-metrics > div { display: block; padding: 9px 10px; text-align: center; }
   .learn-hero-metrics dt { font-size: 0.55rem; }
   .learn-hero-metrics dd { font-size: 0.84rem; margin-top: 3px; }
-  .learn-course-workspace { padding: 10px; }
+  .learn-course-workspace { padding: 0; }
   .learn-course-nav { overflow-x: auto; }
   .learn-session-instrument { align-items: start; grid-template-columns: 1fr; }
   .learn-session-actions { width: 100%; }
