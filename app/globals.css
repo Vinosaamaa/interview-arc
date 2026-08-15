@@ -48,9 +48,9 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 
 .main-column { min-width: 0; }
 .topbar { min-height: 134px; padding: 0 clamp(24px, 4vw, 64px); border-bottom: 1px solid var(--line); background: rgba(233, 237, 231, .92); backdrop-filter: blur(14px); position: sticky; top: 0; z-index: 20; display: grid; grid-template-columns: minmax(170px, 1fr) 330px minmax(170px, 1fr); grid-template-areas: "context switch ." "actions actions actions"; grid-template-rows: 42px 42px; align-items: center; gap: 8px 22px; }
-.topbar > .topbar-context { grid-area: context; }
-.topbar > .topbar-workspace-switch { grid-area: switch; }
-.topbar > .topbar-actions { grid-area: actions; width: 100%; }
+.topbar > .topbar-context { grid-area: context; align-self: center; }
+.topbar > .topbar-workspace-switch { grid-area: switch; align-self: center; }
+.topbar > .topbar-actions { grid-area: actions; width: 100%; align-self: center; }
 .primary-action, .secondary-action, .text-action { min-height: 42px; padding: 0 16px; border-radius: 9px; font-size: .82rem; font-weight: 730; cursor: pointer; transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
 .primary-action { border: 1px solid var(--ink); background: var(--ink); color: white; }
 .primary-action:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(24,32,25,.13); }
@@ -1067,7 +1067,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .topbar-workspace-switch button { min-width: 0; min-height: 32px; padding: 0 10px; border: 0; border-radius: 9px; background: transparent; color: #60726c; font-size: .74rem; font-weight: 760; cursor: pointer; transition: color .18s ease, background .18s ease, box-shadow .18s ease; }
 .topbar-workspace-switch button:hover { background: #edf3f0; color: #173631; }
 .topbar-workspace-switch button.active { background: #123c37; color: #fff; box-shadow: 0 2px 8px rgba(14,51,46,.14); }
-.topbar-actions { min-width: 0; display: flex; justify-content: flex-end; gap: 9px; }
+.topbar-actions { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 9px; }
 
 /* Practice console repair: one compact icon language across planning, catalog, and case files. */
 .ui-icon { width: 18px; height: 18px; display: block; }

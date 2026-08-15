@@ -76,6 +76,7 @@ export type EngineeringIconName =
   | "case-studies"
   | "statistics"
   | "search"
+  | "filter"
   | "source"
   | "copy"
   | "lineage";
@@ -92,6 +93,7 @@ export function EngineeringIcon({ name }: { name: EngineeringIconName }) {
     if (name === "case-studies") return <><path d="m4.5 8 7.5-4 7.5 4-7.5 4-7.5-4Z" /><path d="m4.5 12 7.5 4 7.5-4M4.5 16l7.5 4 7.5-4" /></>;
     if (name === "statistics") return <><path d="M5 19V9h3v10M10.5 19V5h3v14M16 19v-7h3v7M3.5 19.5h17" /></>;
     if (name === "search") return <><circle cx="10.8" cy="10.8" r="6.3" /><path d="m15.5 15.5 4.2 4.2" /></>;
+    if (name === "filter") return <><path d="M4 6h16M7 12h10M10 18h4" /></>;
     if (name === "source") return <><path d="M14 4h6v6M20 4l-9 9" /><path d="M18 13v6H5V6h6" /></>;
     if (name === "copy") return <><rect x="8" y="8" width="11" height="11" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></>;
     return <><circle cx="6" cy="7" r="2" /><circle cx="18" cy="7" r="2" /><circle cx="12" cy="18" r="2" /><path d="M8 7h8M7.3 8.7l3.4 7.6M16.7 8.7l-3.4 7.6" /></>;
@@ -356,52 +358,55 @@ function EngineeringStatistics({ index }: { index: EngineeringJournalIndex }) {
       : `${receiptStatistics.earliestTimelineAt} — ${receiptStatistics.latestTimelineAt}`
     : "No projected receipts";
   return <section className="engineering-statistics" aria-labelledby="engineering-statistics-title">
-    <header><h1 id="engineering-statistics-title">Statistics</h1><p>Deterministic facts from the same normalized Journal projection used by every reader. Rich records and complete pull-request coverage remain separate measures.</p></header>
-    <section className="engineering-stat-section" aria-labelledby="engineering-record-statistics-title">
-      <header><h2 id="engineering-record-statistics-title">Rich engineering records</h2><p>Curated architecture, decision, incident, capability, and retrospective narratives.</p></header>
-      <div className="engineering-stat-ledger">
-        <dl>
-          <div><dt>Eligible records</dt><dd>{statistics.totalRecords}</dd></div>
-          <div><dt>Explicitly verified</dt><dd>{statistics.verification.verified}</dd></div>
-          <div><dt>With release refs</dt><dd>{statistics.recordsWithReleaseRefs}</dd></div>
-          <div><dt>With run refs</dt><dd>{statistics.recordsWithRunRefs}</dd></div>
-        </dl>
-        <section><h2>Record types</h2><table><tbody>{Object.entries(statistics.byType).map(([type, count]) => <tr key={type}><th>{TYPE_LABELS[type as EngineeringRecordType]}</th><td>{count}</td></tr>)}</tbody></table></section>
-        <section><h2>Effective status</h2><table><tbody>{Object.entries(statistics.byStatus).map(([status, count]) => <tr key={status}><th>{STATUS_LABELS[status as EngineeringRecordEffectiveStatus]}</th><td>{count}</td></tr>)}</tbody></table></section>
-        <section className="engineering-date-range"><h2>Date range</h2><p>{dateRange}</p></section>
-        <section><h2>Repositories</h2>{Object.keys(statistics.byRepository).length > 0 ? <table><tbody>{Object.entries(statistics.byRepository).map(([repository, count]) => <tr key={repository}><th>{repository}</th><td>{count}</td></tr>)}</tbody></table> : <p>No eligible repositories.</p>}</section>
-        <section><h2>Capabilities</h2>{Object.keys(statistics.byCapability).length > 0 ? <table><tbody>{Object.entries(statistics.byCapability).map(([capability, count]) => <tr key={capability}><th>{capability}</th><td>{count}</td></tr>)}</tbody></table> : <p>No capability tags recorded.</p>}</section>
-        <section className="engineering-chronology"><h2>Chronology</h2>{statistics.chronology.length > 0 ? <ol>{statistics.chronology.map((entry) => <li key={entry.ref}><span>{entry.createdAt}</span><strong>{entry.ref}</strong><small>{TYPE_LABELS[entry.type]} · {STATUS_LABELS[entry.status]}</small></li>)}</ol> : <p>No eligible records.</p>}</section>
+    <h1 id="engineering-statistics-title" className="sr-only">Engineering statistics</h1>
+    <aside className="engineering-stat-panel engineering-stat-overview" aria-labelledby="engineering-stat-overview-title">
+      <header><span>Coverage summary</span><h2 id="engineering-stat-overview-title">Truth at a glance</h2><p>Only explicit facts in the normalized Journal projection are counted.</p></header>
+      <dl className="engineering-stat-metrics">
+        <div><dt>Eligible records</dt><dd>{statistics.totalRecords}</dd></div>
+        <div><dt>Explicitly verified</dt><dd>{statistics.verification.verified}</dd></div>
+        <div><dt>With release refs</dt><dd>{statistics.recordsWithReleaseRefs}</dd></div>
+        <div><dt>With run refs</dt><dd>{statistics.recordsWithRunRefs}</dd></div>
+      </dl>
+      <section className="engineering-stat-table engineering-date-range"><h3>Record range</h3><p>{dateRange}</p></section>
+      <section className="engineering-stat-table"><h3>Effective status</h3><table><tbody>{Object.entries(statistics.byStatus).map(([status, count]) => <tr key={status}><th>{STATUS_LABELS[status as EngineeringRecordEffectiveStatus]}</th><td>{count}</td></tr>)}</tbody></table></section>
+      <p className="engineering-stat-note">Release and run references are lineage, not verification receipts.</p>
+    </aside>
+
+    <section className="engineering-stat-panel engineering-stat-landscape" aria-labelledby="engineering-record-statistics-title">
+      <header><span>Record landscape</span><h2 id="engineering-record-statistics-title">What the Journal can prove</h2><p>Curated architecture, decision, incident, capability, and retrospective records—kept distinct from compact pull-request receipts.</p></header>
+      <div className="engineering-stat-landscape-grid">
+        <section className="engineering-stat-table"><h3>Record types</h3><table><tbody>{Object.entries(statistics.byType).map(([type, count]) => <tr key={type}><th>{TYPE_LABELS[type as EngineeringRecordType]}</th><td>{count}</td></tr>)}</tbody></table></section>
+        <section className="engineering-stat-table"><h3>Repositories</h3>{Object.keys(statistics.byRepository).length > 0 ? <table><tbody>{Object.entries(statistics.byRepository).map(([repository, count]) => <tr key={repository}><th>{repository}</th><td>{count}</td></tr>)}</tbody></table> : <p>No eligible repositories.</p>}</section>
+        <section className="engineering-stat-table engineering-stat-capabilities"><h3>Capabilities</h3>{Object.keys(statistics.byCapability).length > 0 ? <table><tbody>{Object.entries(statistics.byCapability).map(([capability, count]) => <tr key={capability}><th>{capability}</th><td>{count}</td></tr>)}</tbody></table> : <p>No capability tags recorded.</p>}</section>
       </div>
+      <section className="engineering-chronology"><h3>Record chronology</h3>{statistics.chronology.length > 0 ? <ol>{statistics.chronology.map((entry) => <li key={entry.ref}><span>{entry.createdAt}</span><strong>{entry.ref}</strong><small>{TYPE_LABELS[entry.type]} · {STATUS_LABELS[entry.status]}</small></li>)}</ol> : <p>No eligible records.</p>}</section>
     </section>
-    <section className="engineering-stat-section engineering-receipt-stat-section" aria-labelledby="engineering-receipt-statistics-title">
-      <header><h2 id="engineering-receipt-statistics-title">Pull request coverage</h2><p>One compact factual receipt per ingested merged PR, including small changes that do not warrant rich narrative.</p></header>
-      <div className="engineering-stat-ledger engineering-receipt-stat-ledger">
-        <dl>
-          <div><dt>Projected receipts</dt><dd>{receiptStatistics.totalReceipts}</dd></div>
-          <div><dt>Complete merge facts</dt><dd>{receiptStatistics.totalReceipts - receiptStatistics.withMissingFacts}</dd></div>
-          <div><dt>Reconstructed</dt><dd>{receiptStatistics.reconstructed}</dd></div>
-          <div><dt>With missing facts</dt><dd>{receiptStatistics.withMissingFacts}</dd></div>
-        </dl>
-        <section><h2>Classification</h2><table><tbody>{Object.entries(receiptStatistics.byClassification).map(([classification, count]) => <tr key={classification}><th>{RECEIPT_CLASSIFICATION_LABELS[classification as EngineeringPullRequestClassification]}</th><td>{count}</td></tr>)}</tbody></table></section>
-        <section><h2>Repositories</h2>{Object.keys(receiptStatistics.byRepository).length > 0 ? <table><tbody>{Object.entries(receiptStatistics.byRepository).map(([repository, count]) => <tr key={repository}><th>{repository}</th><td>{count}</td></tr>)}</tbody></table> : <p>No projected repositories.</p>}</section>
-        <section className="engineering-date-range"><h2>Timeline range</h2><p>{receiptDateRange}</p></section>
-        <section className="engineering-chronology engineering-receipt-chronology"><h2>Complete receipt chronology</h2>{receiptStatistics.chronology.length > 0 ? <ol>{receiptStatistics.chronology.map((entry) => <li key={entry.ref}><time dateTime={entry.timelineAt}>{entry.timelineAt}</time><strong>{entry.repository} · PR #{entry.pr}</strong><small>{RECEIPT_CLASSIFICATION_LABELS[entry.classification]} · {entry.timelineBasis === "verified-merge" ? "verified merge" : "source commit"}</small></li>)}</ol> : <p>No projected receipts.</p>}</section>
-      </div>
-    </section>
-    <p className="engineering-stat-note">Release and run references are not verification receipts. Verification is counted only from an explicit record state.</p>
+
+    <aside className="engineering-stat-panel engineering-stat-receipts" aria-labelledby="engineering-receipt-statistics-title">
+      <header><span>Release coverage</span><h2 id="engineering-receipt-statistics-title">Pull-request receipts</h2><p>Every ingested merged PR stays visible, even when it does not warrant a rich narrative.</p></header>
+      <dl className="engineering-stat-metrics">
+        <div><dt>Projected</dt><dd>{receiptStatistics.totalReceipts}</dd></div>
+        <div><dt>Complete facts</dt><dd>{receiptStatistics.totalReceipts - receiptStatistics.withMissingFacts}</dd></div>
+        <div><dt>Reconstructed</dt><dd>{receiptStatistics.reconstructed}</dd></div>
+        <div><dt>Missing facts</dt><dd>{receiptStatistics.withMissingFacts}</dd></div>
+      </dl>
+      <section className="engineering-stat-table engineering-date-range"><h3>Timeline range</h3><p>{receiptDateRange}</p></section>
+      <section className="engineering-stat-table"><h3>Classification</h3><table><tbody>{Object.entries(receiptStatistics.byClassification).map(([classification, count]) => <tr key={classification}><th>{RECEIPT_CLASSIFICATION_LABELS[classification as EngineeringPullRequestClassification]}</th><td>{count}</td></tr>)}</tbody></table></section>
+      <section className="engineering-stat-table"><h3>Repositories</h3>{Object.keys(receiptStatistics.byRepository).length > 0 ? <table><tbody>{Object.entries(receiptStatistics.byRepository).map(([repository, count]) => <tr key={repository}><th>{repository}</th><td>{count}</td></tr>)}</tbody></table> : <p>No projected repositories.</p>}</section>
+      <section className="engineering-chronology engineering-receipt-chronology"><h3>Complete receipt chronology</h3>{receiptStatistics.chronology.length > 0 ? <ol>{receiptStatistics.chronology.map((entry) => <li key={entry.ref}><time dateTime={entry.timelineAt}>{entry.timelineAt.slice(0, 10)}</time><strong>{entry.repository} · PR #{entry.pr}</strong><small>{RECEIPT_CLASSIFICATION_LABELS[entry.classification]}</small></li>)}</ol> : <p>No projected receipts.</p>}</section>
+    </aside>
   </section>;
 }
 
 type EngineeringWorkspaceMemory = {
   journalLayer: EngineeringJournalLayer;
   query: string;
-  type: EngineeringRecordType | "all";
-  status: EngineeringRecordEffectiveStatus | "all";
-  repository: string;
+  types: EngineeringRecordType[];
+  statuses: EngineeringRecordEffectiveStatus[];
+  repositories: string[];
   receiptQuery: string;
-  receiptClassification: EngineeringPullRequestClassification | "all";
-  receiptRepository: string;
+  receiptClassifications: EngineeringPullRequestClassification[];
+  receiptRepositories: string[];
   selectedRef: string;
   mobileReaderOpen: boolean;
   evidenceOpen: boolean;
@@ -411,22 +416,27 @@ type EngineeringWorkspaceMemory = {
 
 const ENGINEERING_MEMORY_KEY = "interview-arc-engineering-workspace-v1";
 
+function toggleFacet<T extends string>(selected: T[], value: T, setSelected: (next: T[]) => void) {
+  setSelected(selected.includes(value) ? selected.filter((entry) => entry !== value) : [...selected, value]);
+}
+
 function readEngineeringMemory(): Partial<EngineeringWorkspaceMemory> {
   if (typeof window === "undefined") return {};
   try {
     const parsed = JSON.parse(window.sessionStorage.getItem(ENGINEERING_MEMORY_KEY) ?? "{}") as Record<string, unknown>;
-    const type = parsed.type === "all" || (typeof parsed.type === "string" && parsed.type in TYPE_LABELS) ? parsed.type as EngineeringWorkspaceMemory["type"] : "all";
-    const status = parsed.status === "all" || (typeof parsed.status === "string" && parsed.status in STATUS_LABELS) ? parsed.status as EngineeringWorkspaceMemory["status"] : "all";
-    const receiptClassification = parsed.receiptClassification === "all" || (typeof parsed.receiptClassification === "string" && parsed.receiptClassification in RECEIPT_CLASSIFICATION_LABELS) ? parsed.receiptClassification as EngineeringWorkspaceMemory["receiptClassification"] : "all";
+    const stringArray = (value: unknown) => Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+    const types = stringArray(parsed.types).filter((entry): entry is EngineeringRecordType => entry in TYPE_LABELS);
+    const statuses = stringArray(parsed.statuses).filter((entry): entry is EngineeringRecordEffectiveStatus => entry in STATUS_LABELS);
+    const receiptClassifications = stringArray(parsed.receiptClassifications).filter((entry): entry is EngineeringPullRequestClassification => entry in RECEIPT_CLASSIFICATION_LABELS);
     return {
       journalLayer: parsed.journalLayer === "receipts" ? "receipts" : "records",
       query: typeof parsed.query === "string" ? parsed.query : "",
-      type,
-      status,
-      repository: typeof parsed.repository === "string" ? parsed.repository : "all",
+      types,
+      statuses,
+      repositories: stringArray(parsed.repositories),
       receiptQuery: typeof parsed.receiptQuery === "string" ? parsed.receiptQuery : "",
-      receiptClassification,
-      receiptRepository: typeof parsed.receiptRepository === "string" ? parsed.receiptRepository : "all",
+      receiptClassifications,
+      receiptRepositories: stringArray(parsed.receiptRepositories),
       selectedRef: typeof parsed.selectedRef === "string" ? parsed.selectedRef : "",
       mobileReaderOpen: parsed.mobileReaderOpen !== false,
       evidenceOpen: typeof parsed.evidenceOpen === "boolean" ? parsed.evidenceOpen : undefined,
@@ -441,12 +451,12 @@ function readEngineeringMemory(): Partial<EngineeringWorkspaceMemory> {
 export default function EngineeringWorkspace({ index, view, onNavigateView }: { index: EngineeringJournalIndex; view: EngineeringView; onNavigateView: (view: EngineeringView) => void }) {
   const [journalLayer, setJournalLayer] = useState<EngineeringJournalLayer>("records");
   const [query, setQuery] = useState("");
-  const [type, setType] = useState<EngineeringRecordType | "all">("all");
-  const [status, setStatus] = useState<EngineeringRecordEffectiveStatus | "all">("all");
-  const [repository, setRepository] = useState("all");
+  const [selectedTypes, setSelectedTypes] = useState<EngineeringRecordType[]>([]);
+  const [selectedStatuses, setSelectedStatuses] = useState<EngineeringRecordEffectiveStatus[]>([]);
+  const [selectedRepositories, setSelectedRepositories] = useState<string[]>([]);
   const [receiptQuery, setReceiptQuery] = useState("");
-  const [receiptClassification, setReceiptClassification] = useState<EngineeringPullRequestClassification | "all">("all");
-  const [receiptRepository, setReceiptRepository] = useState("all");
+  const [selectedReceiptClassifications, setSelectedReceiptClassifications] = useState<EngineeringPullRequestClassification[]>([]);
+  const [selectedReceiptRepositories, setSelectedReceiptRepositories] = useState<string[]>([]);
   const [selectedRef, setSelectedRef] = useState(index.records[0]?.ref ?? "");
   const [mobileReaderOpen, setMobileReaderOpen] = useState(true);
   const [evidenceOpen, setEvidenceOpen] = useState(true);
@@ -462,17 +472,17 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   const records = useMemo(() => index.records.filter((record) => {
     const search = searchByRef.get(record.ref);
     return viewRecord(record, view)
-      && (view !== "journal" || type === "all" || record.type === type)
-      && (view !== "journal" || status === "all" || record.effectiveStatus === status)
-      && (view !== "journal" || repository === "all" || record.repository === repository)
+      && (view !== "journal" || selectedTypes.length === 0 || selectedTypes.includes(record.type))
+      && (view !== "journal" || selectedStatuses.length === 0 || selectedStatuses.includes(record.effectiveStatus))
+      && (view !== "journal" || selectedRepositories.length === 0 || selectedRepositories.includes(record.repository))
       && (view !== "journal" || !query.trim() || search?.text.includes(query.trim().toLowerCase()));
-  }), [index.records, query, repository, searchByRef, status, type, view]);
+  }), [index.records, query, searchByRef, selectedRepositories, selectedStatuses, selectedTypes, view]);
   const receipts = useMemo(() => index.pullRequestReceipts.filter((receipt) => {
     const search = receiptSearchByRef.get(receipt.ref);
-    return (receiptClassification === "all" || receipt.classification === receiptClassification)
-      && (receiptRepository === "all" || receipt.repository === receiptRepository)
+    return (selectedReceiptClassifications.length === 0 || selectedReceiptClassifications.includes(receipt.classification))
+      && (selectedReceiptRepositories.length === 0 || selectedReceiptRepositories.includes(receipt.repository))
       && (!receiptQuery.trim() || search?.text.includes(receiptQuery.trim().toLowerCase()));
-  }), [index.pullRequestReceipts, receiptClassification, receiptQuery, receiptRepository, receiptSearchByRef]);
+  }), [index.pullRequestReceipts, receiptQuery, receiptSearchByRef, selectedReceiptClassifications, selectedReceiptRepositories]);
 
   useLayoutEffect(() => {
     const memory = readEngineeringMemory();
@@ -482,12 +492,12 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
       const rememberedLayer = memory.journalLayer ?? "records";
       setJournalLayer(rememberedLayer);
       setQuery(memory.query ?? "");
-      setType(memory.type ?? "all");
-      setStatus(memory.status ?? "all");
-      setRepository(memory.repository ?? "all");
+      setSelectedTypes(memory.types ?? []);
+      setSelectedStatuses(memory.statuses ?? []);
+      setSelectedRepositories(memory.repositories ?? []);
       setReceiptQuery(memory.receiptQuery ?? "");
-      setReceiptClassification(memory.receiptClassification ?? "all");
-      setReceiptRepository(memory.receiptRepository ?? "all");
+      setSelectedReceiptClassifications(memory.receiptClassifications ?? []);
+      setSelectedReceiptRepositories(memory.receiptRepositories ?? []);
       if (index.records.some((record) => record.ref === memory.selectedRef)) setSelectedRef(memory.selectedRef!);
       setMobileReaderOpen(rememberedLayer === "receipts" ? false : memory.mobileReaderOpen ?? false);
       setEvidenceOpen(memory.evidenceOpen ?? !window.matchMedia("(max-width: 1320px)").matches);
@@ -506,12 +516,12 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   const writeMemory = useCallback(() => {
     if (!memoryReady) return;
     try {
-      const next: EngineeringWorkspaceMemory = { journalLayer, query, type, status, repository, receiptQuery, receiptClassification, receiptRepository, selectedRef, mobileReaderOpen, evidenceOpen, contentsSection, indexScrollTop: indexScrollTopRef.current };
+      const next: EngineeringWorkspaceMemory = { journalLayer, query, types: selectedTypes, statuses: selectedStatuses, repositories: selectedRepositories, receiptQuery, receiptClassifications: selectedReceiptClassifications, receiptRepositories: selectedReceiptRepositories, selectedRef, mobileReaderOpen, evidenceOpen, contentsSection, indexScrollTop: indexScrollTopRef.current };
       window.sessionStorage.setItem(ENGINEERING_MEMORY_KEY, JSON.stringify(next));
     } catch {
       // Session storage can be unavailable in hardened browsing contexts; in-memory state remains active.
     }
-  }, [contentsSection, evidenceOpen, journalLayer, memoryReady, mobileReaderOpen, query, receiptClassification, receiptQuery, receiptRepository, repository, selectedRef, status, type]);
+  }, [contentsSection, evidenceOpen, journalLayer, memoryReady, mobileReaderOpen, query, receiptQuery, selectedReceiptClassifications, selectedReceiptRepositories, selectedRef, selectedRepositories, selectedStatuses, selectedTypes]);
 
   useEffect(() => {
     writeMemory();
@@ -537,9 +547,9 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   const openRelation = (ref: string) => {
     setJournalLayer("records");
     setQuery("");
-    setType("all");
-    setStatus("all");
-    setRepository("all");
+    setSelectedTypes([]);
+    setSelectedStatuses([]);
+    setSelectedRepositories([]);
     setSelectedRef(ref);
     setContentsSection("overview");
     setMobileReaderOpen(true);
@@ -559,17 +569,31 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
         <button type="button" aria-pressed={journalLayer === "receipts"} onClick={() => chooseJournalLayer("receipts")}><span>All merged PRs</span><strong>{index.receiptStatistics.totalReceipts}</strong></button>
       </div> : null}
       {view === "journal" && !showReceipts ? <div className="engineering-filters">
-        <label className="engineering-search"><EngineeringIcon name="search" /><span className="sr-only">Search Engineering records</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search evidence, Module, issue…" /></label>
-        <div>
-          <label><span>Type</span><select value={type} onChange={(event) => setType(event.target.value as EngineeringRecordType | "all")}><option value="all">All types</option>{Object.entries(TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-          <label><span>Status</span><select value={status} onChange={(event) => setStatus(event.target.value as EngineeringRecordEffectiveStatus | "all")}><option value="all">All status</option>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <div className="engineering-filter-rail">
+          <label className="engineering-search"><EngineeringIcon name="search" /><span className="sr-only">Search Engineering records</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search records, modules, issues…" /></label>
+          <details className="engineering-filter-menu">
+            <summary aria-label="Filter Engineering records"><EngineeringIcon name="filter" /><span>{selectedTypes.length + selectedStatuses.length + selectedRepositories.length || "Filter"}</span></summary>
+            <div className="engineering-filter-popover">
+              <fieldset><legend>Type</legend>{Object.entries(TYPE_LABELS).map(([value, label]) => <button type="button" key={value} aria-pressed={selectedTypes.includes(value as EngineeringRecordType)} onClick={() => toggleFacet(selectedTypes, value as EngineeringRecordType, setSelectedTypes)}>{label}</button>)}</fieldset>
+              <fieldset><legend>Status</legend>{Object.entries(STATUS_LABELS).map(([value, label]) => <button type="button" key={value} aria-pressed={selectedStatuses.includes(value as EngineeringRecordEffectiveStatus)} onClick={() => toggleFacet(selectedStatuses, value as EngineeringRecordEffectiveStatus, setSelectedStatuses)}>{label}</button>)}</fieldset>
+              <fieldset><legend>Repository</legend>{repositories.map((value) => <button type="button" key={value} aria-pressed={selectedRepositories.includes(value)} onClick={() => toggleFacet(selectedRepositories, value, setSelectedRepositories)}>{value}</button>)}</fieldset>
+              <button type="button" className="engineering-filter-reset" onClick={() => { setSelectedTypes([]); setSelectedStatuses([]); setSelectedRepositories([]); }}>Reset filters</button>
+            </div>
+          </details>
         </div>
-        <label><span>Repository</span><select value={repository} onChange={(event) => setRepository(event.target.value)}><option value="all">All repositories</option>{repositories.map((value) => <option key={value}>{value}</option>)}</select></label>
       </div> : null}
       {showReceipts ? <div className="engineering-filters engineering-receipt-filters">
-        <label className="engineering-search"><EngineeringIcon name="search" /><span className="sr-only">Search pull-request receipts</span><input value={receiptQuery} onChange={(event) => setReceiptQuery(event.target.value)} placeholder="Search PR, title, source…" /></label>
-        <label><span>Classification</span><select value={receiptClassification} onChange={(event) => setReceiptClassification(event.target.value as EngineeringPullRequestClassification | "all")}><option value="all">All classifications</option>{Object.entries(RECEIPT_CLASSIFICATION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        <label><span>Repository</span><select value={receiptRepository} onChange={(event) => setReceiptRepository(event.target.value)}><option value="all">All repositories</option>{receiptRepositories.map((value) => <option key={value}>{value}</option>)}</select></label>
+        <div className="engineering-filter-rail">
+          <label className="engineering-search"><EngineeringIcon name="search" /><span className="sr-only">Search pull-request receipts</span><input value={receiptQuery} onChange={(event) => setReceiptQuery(event.target.value)} placeholder="Search PR, title, source…" /></label>
+          <details className="engineering-filter-menu">
+            <summary aria-label="Filter pull-request receipts"><EngineeringIcon name="filter" /><span>{selectedReceiptClassifications.length + selectedReceiptRepositories.length || "Filter"}</span></summary>
+            <div className="engineering-filter-popover">
+              <fieldset><legend>Classification</legend>{Object.entries(RECEIPT_CLASSIFICATION_LABELS).map(([value, label]) => <button type="button" key={value} aria-pressed={selectedReceiptClassifications.includes(value as EngineeringPullRequestClassification)} onClick={() => toggleFacet(selectedReceiptClassifications, value as EngineeringPullRequestClassification, setSelectedReceiptClassifications)}>{label}</button>)}</fieldset>
+              <fieldset><legend>Repository</legend>{receiptRepositories.map((value) => <button type="button" key={value} aria-pressed={selectedReceiptRepositories.includes(value)} onClick={() => toggleFacet(selectedReceiptRepositories, value, setSelectedReceiptRepositories)}>{value}</button>)}</fieldset>
+              <button type="button" className="engineering-filter-reset" onClick={() => { setSelectedReceiptClassifications([]); setSelectedReceiptRepositories([]); }}>Reset filters</button>
+            </div>
+          </details>
+        </div>
       </div> : null}
       {showReceipts ? <ReceiptTimeline receipts={receipts} onOpenRecord={openRelation} /> : <div ref={recordListRef} className="engineering-record-list" onScroll={(event) => rememberIndexScroll(event.currentTarget.scrollTop)}>
         {records.map((record) => <button type="button" key={record.ref} className={record.ref === selected?.ref ? "active" : ""} aria-current={record.ref === selected?.ref ? "true" : undefined} onClick={() => select(record.ref)}>
