@@ -47,11 +47,10 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .profile > span { width: 36px; height: 36px; border-radius: 50%; background: var(--signal); display: grid; place-items: center; font-size: .75rem; font-weight: 820; }
 
 .main-column { min-width: 0; }
-.topbar { min-height: 82px; padding: 0 clamp(24px, 4vw, 64px); border-bottom: 1px solid var(--line); background: rgba(233, 237, 231, .92); backdrop-filter: blur(14px); position: sticky; top: 0; z-index: 20; display: flex; justify-content: space-between; align-items: center; gap: 24px; }
-.topbar > div:first-child { display: grid; gap: 3px; }
-.topbar > div:first-child span { color: var(--muted); font-size: .75rem; }
-.topbar > div:first-child strong { font-size: .95rem; }
-.topbar > div:last-child { display: flex; gap: 9px; }
+.topbar { min-height: 134px; padding: 0 clamp(24px, 4vw, 64px); border-bottom: 1px solid var(--line); background: rgba(233, 237, 231, .92); backdrop-filter: blur(14px); position: sticky; top: 0; z-index: 20; display: grid; grid-template-columns: minmax(170px, 1fr) 330px minmax(170px, 1fr); grid-template-areas: "context switch ." "actions actions actions"; grid-template-rows: 42px 42px; align-items: center; gap: 8px 22px; }
+.topbar > .topbar-context { grid-area: context; }
+.topbar > .topbar-workspace-switch { grid-area: switch; }
+.topbar > .topbar-actions { grid-area: actions; width: 100%; }
 .primary-action, .secondary-action, .text-action { min-height: 42px; padding: 0 16px; border-radius: 9px; font-size: .82rem; font-weight: 730; cursor: pointer; transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
 .primary-action { border: 1px solid var(--ink); background: var(--ink); color: white; }
 .primary-action:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(24,32,25,.13); }
@@ -917,7 +916,17 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 @keyframes selectionConfirm { from { opacity: .72; transform: scale(.992); } to { opacity: 1; transform: none; } }
 @keyframes letterOpen { from { opacity: 0; transform: translateY(30px) scale(.94) rotate(-1deg); } to { opacity: 1; transform: none; } }
 
+@media (min-width: 1900px) {
+  .topbar { min-height: 82px; grid-template-columns: minmax(220px, 1fr) 330px minmax(220px, 1fr); grid-template-areas: "context switch actions"; grid-template-rows: 42px; row-gap: 0; }
+}
+
+@media (max-width: 1320px) {
+  .topbar { padding-block: 10px; grid-template-columns: minmax(170px, 1fr) 288px minmax(170px, 1fr); }
+  .topbar > .topbar-workspace-switch { width: 288px; }
+}
+
 @media (max-width: 1180px) {
+  .topbar { padding-inline: 22px; grid-template-columns: minmax(170px, 1fr) 288px minmax(170px, 1fr); gap: 8px 14px; }
   .today-masthead { grid-template-columns: 140px 1fr; }
   .date-poster { height: 160px; }
   .date-poster strong { font-size: 5.4rem; }
@@ -962,8 +971,9 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 }
 
 @media (max-width: 680px) {
-  .topbar { min-height: 70px; padding: 9px 15px; }
-  .topbar > div:first-child span { display: none; }
+  .topbar { min-height: 116px; padding: 10px 14px; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "context actions" "switch switch"; grid-template-rows: 42px 44px; }
+  .topbar > .topbar-workspace-switch { width: min(100%, 360px); }
+  .topbar-context time { display: block; }
   .topbar .secondary-action { display: none; }
   .page-content { padding: 20px 15px 50px; }
   .today-masthead { padding: 25px 20px; grid-template-columns: 1fr; }
@@ -2690,30 +2700,4 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .loops-loader, .materials-detail-state.loading > span, .materials-library-state.loading > span, .materials-import-state.loading > span { animation: none; }
   .loop-history-arrow { transition: none; }
   .loop-material-summary-mark svg { transition: none; }
-}
-
-/* Keep the global header invariant after all legacy responsive overrides.
-   Normal screens reserve a separate action row so the player can never
-   collide with the centered workspace selector. */
-.topbar { min-height: 134px; display: grid; grid-template-columns: minmax(170px, 1fr) 330px minmax(170px, 1fr); grid-template-areas: "context switch ." "actions actions actions"; grid-template-rows: 42px 42px; gap: 8px 22px; }
-.topbar > .topbar-context { display: grid; }
-.topbar > .topbar-context { grid-area: context; }
-.topbar > .topbar-workspace-switch { grid-area: switch; }
-.topbar > .topbar-actions { grid-area: actions; width: 100%; display: flex; justify-content: flex-end; }
-@media (min-width: 1900px) {
-  .topbar { min-height: 82px; grid-template-columns: minmax(220px, 1fr) 330px minmax(220px, 1fr); grid-template-areas: "context switch actions"; grid-template-rows: 42px; row-gap: 0; }
-}
-@media (max-width: 1320px) {
-  .topbar { padding-block: 10px; grid-template-columns: minmax(170px, 1fr) 288px minmax(170px, 1fr); }
-  .topbar > .topbar-workspace-switch { grid-area: switch; width: 288px; }
-}
-@media (max-width: 1180px) {
-  .topbar { padding-inline: 22px; grid-template-columns: minmax(170px, 1fr) 288px minmax(170px, 1fr); gap: 8px 14px; }
-}
-@media (max-width: 680px) {
-  .topbar { min-height: 116px; padding: 10px 14px; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "context actions" "switch switch"; grid-template-rows: 42px 44px; }
-  .topbar > .topbar-context { grid-area: context; }
-  .topbar > .topbar-actions { grid-area: actions; }
-  .topbar > .topbar-workspace-switch { grid-area: switch; width: min(100%, 360px); }
-  .topbar-context time { display: block; }
 }

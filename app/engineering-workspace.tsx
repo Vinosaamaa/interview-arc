@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import type { ComponentType, CSSProperties } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -140,25 +140,46 @@ const ENGINEERING_HERO_COPY: Record<EngineeringView, { eyebrow: string; title: s
   statistics: { eyebrow: "Engineering · Statistics", title: "The record, measured without invention.", accent: "#49a6a8", description: "Explore deterministic coverage, chronology, repositories, and verification from the same normalized projection." },
 };
 
+function JournalNatureSketch() { return <svg viewBox="0 0 720 250" role="img" aria-label="An alpine route recording exact engineering revisions"><path d="M30 224 154 102l65 61 91-119 80 109 73-76 134 147" /><path d="M65 219c70-42 132-51 188-26 63 28 112 13 149-45 35-55 92-64 169-27" /><circle cx="184" cy="191" r="9" /><circle cx="401" cy="148" r="9" /><circle cx="567" cy="121" r="9" /></svg>; }
+function CapabilitiesNatureSketch() { return <svg viewBox="0 0 720 250" role="img" aria-label="A cedar canopy representing reusable capabilities"><path d="M356 225c7-41 8-87 2-139M358 114l-70-55M357 135l87-70M354 159l-114-25M359 173l120-18" /><path d="M286 60c-42 2-72 20-91 55 47 4 82-10 105-42M445 64c42 2 73 20 92 54-48 5-83-9-106-41M238 132c-38 10-62 34-72 70 45-4 75-24 91-61M479 153c37 9 63 31 77 66-46-1-78-20-96-56" /></svg>; }
+function DecisionsNatureSketch() { return <svg viewBox="0 0 720 250" role="img" aria-label="Three tributaries converging into a chosen river"><path d="M91 39c82 25 120 62 115 112-3 35 28 58 92 68M271 26c-20 33-20 67 1 102 21 34 59 64 113 91M500 33c-54 18-82 49-84 94-1 38-22 69-64 92M298 219h279" /><circle cx="298" cy="219" r="8" /><circle cx="386" cy="219" r="8" /><circle cx="475" cy="219" r="8" /></svg>; }
+function IncidentsNatureSketch() { return <svg viewBox="0 0 720 250" role="img" aria-label="A storm breaking over a recovery beacon"><path d="M125 126c-8-44 23-75 67-72 17-31 52-45 84-28 31-35 86-25 105 15 45-2 73 29 67 70 37 4 59 27 57 62H113c-25-12-27-32-17-48 7-12 16-19 29-21" /><path d="m285 129-36 57h43l-20 44 73-72h-46l26-29M520 198h95M568 198v-50M548 148h40" /></svg>; }
+function CaseStudiesNatureSketch() { return <svg viewBox="0 0 720 250" role="img" aria-label="Layered canyon strata representing examined systems"><path d="M55 57h190l35 32 62 9 49-41h271v168H55Z" /><path d="M55 101c88 18 162 18 223 0 57-17 118-13 183 13 54 21 121 20 201-4M55 147c72 14 142 11 210-10 69-21 137-17 204 12 57 24 121 24 193 1M55 191c79 15 154 11 224-12 63-20 128-17 195 9 56 21 119 22 188 3" /><circle cx="211" cy="91" r="8" /><circle cx="417" cy="149" r="8" /><circle cx="559" cy="191" r="8" /></svg>; }
+function StatisticsNatureSketch() { return <svg viewBox="0 0 720 250" role="img" aria-label="A measured sun transect across a landscape"><path d="M65 211c89-86 179-114 270-85 77 24 133 12 170-34 36-44 86-46 150-6" /><path d="M80 219h574M132 210v19M229 196v33M326 178v51M423 158v71M520 127v102M617 94v135" /><path d="M475 70a55 55 0 0 1 110 0" /><circle cx="530" cy="70" r="17" /></svg>; }
+
+const ENGINEERING_NATURE_SKETCHES: Record<EngineeringView, ComponentType> = {
+  journal: JournalNatureSketch,
+  capabilities: CapabilitiesNatureSketch,
+  decisions: DecisionsNatureSketch,
+  incidents: IncidentsNatureSketch,
+  "case-studies": CaseStudiesNatureSketch,
+  statistics: StatisticsNatureSketch,
+};
+
 function EngineeringNatureSketch({ view }: { view: EngineeringView }) {
-  if (view === "capabilities") return <svg viewBox="0 0 720 250" role="img" aria-label="A cedar canopy representing reusable capabilities"><path d="M356 225c7-41 8-87 2-139M358 114l-70-55M357 135l87-70M354 159l-114-25M359 173l120-18" /><path d="M286 60c-42 2-72 20-91 55 47 4 82-10 105-42M445 64c42 2 73 20 92 54-48 5-83-9-106-41M238 132c-38 10-62 34-72 70 45-4 75-24 91-61M479 153c37 9 63 31 77 66-46-1-78-20-96-56" /></svg>;
-  if (view === "decisions") return <svg viewBox="0 0 720 250" role="img" aria-label="Three tributaries converging into a chosen river"><path d="M91 39c82 25 120 62 115 112-3 35 28 58 92 68M271 26c-20 33-20 67 1 102 21 34 59 64 113 91M500 33c-54 18-82 49-84 94-1 38-22 69-64 92M298 219h279" /><circle cx="298" cy="219" r="8" /><circle cx="386" cy="219" r="8" /><circle cx="475" cy="219" r="8" /></svg>;
-  if (view === "incidents") return <svg viewBox="0 0 720 250" role="img" aria-label="A storm breaking over a recovery beacon"><path d="M125 126c-8-44 23-75 67-72 17-31 52-45 84-28 31-35 86-25 105 15 45-2 73 29 67 70 37 4 59 27 57 62H113c-25-12-27-32-17-48 7-12 16-19 29-21" /><path d="m285 129-36 57h43l-20 44 73-72h-46l26-29M520 198h95M568 198v-50M548 148h40" /></svg>;
-  if (view === "case-studies") return <svg viewBox="0 0 720 250" role="img" aria-label="Layered canyon strata representing examined systems"><path d="M55 57h190l35 32 62 9 49-41h271v168H55Z" /><path d="M55 101c88 18 162 18 223 0 57-17 118-13 183 13 54 21 121 20 201-4M55 147c72 14 142 11 210-10 69-21 137-17 204 12 57 24 121 24 193 1M55 191c79 15 154 11 224-12 63-20 128-17 195 9 56 21 119 22 188 3" /><circle cx="211" cy="91" r="8" /><circle cx="417" cy="149" r="8" /><circle cx="559" cy="191" r="8" /></svg>;
-  if (view === "statistics") return <svg viewBox="0 0 720 250" role="img" aria-label="A measured sun transect across a landscape"><path d="M65 211c89-86 179-114 270-85 77 24 133 12 170-34 36-44 86-46 150-6" /><path d="M80 219h574M132 210v19M229 196v33M326 178v51M423 158v71M520 127v102M617 94v135" /><path d="M475 70a55 55 0 0 1 110 0" /><circle cx="530" cy="70" r="17" /></svg>;
-  return <svg viewBox="0 0 720 250" role="img" aria-label="An alpine route recording exact engineering revisions"><path d="M30 224 154 102l65 61 91-119 80 109 73-76 134 147" /><path d="M65 219c70-42 132-51 188-26 63 28 112 13 149-45 35-55 92-64 169-27" /><circle cx="184" cy="191" r="9" /><circle cx="401" cy="148" r="9" /><circle cx="567" cy="121" r="9" /></svg>;
+  const Sketch = ENGINEERING_NATURE_SKETCHES[view];
+  return <Sketch />;
 }
 
 function EngineeringDestinationHero({ index, view }: { index: EngineeringJournalIndex; view: EngineeringView }) {
   const copy = ENGINEERING_HERO_COPY[view];
-  const eligible = index.records.filter((record) => viewRecord(record, view));
-  const repositories = new Set(eligible.map((record) => record.repository)).size;
-  const verified = eligible.filter((record) => record.verification.state === "verified").length;
+  const aggregates = useMemo(() => {
+    let eligible = 0;
+    let verified = 0;
+    const repositories = new Set<string>();
+    for (const record of index.records) {
+      if (!viewRecord(record, view)) continue;
+      eligible += 1;
+      if (record.verification.state === "verified") verified += 1;
+      repositories.add(record.repository);
+    }
+    return { eligible, verified, repositories: repositories.size };
+  }, [index.records, view]);
   const stats = view === "journal"
     ? [["Factual records", index.statistics.totalRecords], ["Merged pull requests", index.receiptStatistics.totalReceipts], ["Repositories", Object.keys(index.statistics.byRepository).length]]
     : view === "statistics"
       ? [["Factual records", index.statistics.totalRecords], ["Verified", index.statistics.verification.verified], ["PR receipts", index.receiptStatistics.totalReceipts]]
-      : [["Eligible records", eligible.length], ["Verified", verified], ["Repositories", repositories]];
+      : [["Eligible records", aggregates.eligible], ["Verified", aggregates.verified], ["Repositories", aggregates.repositories]];
   return <header key={view} className={`engineering-hero engineering-hero-${view}`} style={{ "--engineering-accent": copy.accent } as CSSProperties}>
     <div className="engineering-hero-copy"><span>{copy.eyebrow}</span><h1>{copy.title}</h1><p>{copy.description}</p></div>
     <div className="engineering-hero-sketch"><EngineeringNatureSketch view={view} /></div>

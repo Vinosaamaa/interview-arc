@@ -516,6 +516,8 @@
   gap: 20px;
 }
 .engineering-destination .engineering-workspace.evidence-closed { grid-template-columns: minmax(290px, 316px) minmax(0, 1120px); }
+.engineering-destination .engineering-workspace.index-collapsed { grid-template-columns: 52px minmax(0, 1120px) minmax(260px, 288px); }
+.engineering-destination .engineering-workspace.index-collapsed.evidence-closed { grid-template-columns: 52px minmax(0, 1120px); }
 .engineering-destination .engineering-index-panel,
 .engineering-destination .engineering-record-panel,
 .engineering-destination .engineering-evidence-panel {
@@ -543,6 +545,8 @@
 @media (max-width: 1320px) {
   .engineering-destination .engineering-workspace,
   .engineering-destination .engineering-workspace.evidence-closed { grid-template-columns: minmax(280px, 320px) minmax(0, 1fr); }
+  .engineering-destination .engineering-workspace.index-collapsed,
+  .engineering-destination .engineering-workspace.index-collapsed.evidence-closed { grid-template-columns: 52px minmax(0, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {
