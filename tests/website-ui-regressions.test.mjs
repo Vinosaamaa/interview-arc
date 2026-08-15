@@ -569,8 +569,9 @@ test("the fixed header owns the only workspace selector", async () => {
   const fixedHeader = cssRules(rules, ".topbar")
     .filter((rule) => rule.ancestors.length === 0 && rule.declarations["grid-template-areas"])
     .at(-1).declarations;
-  assert.equal(fixedHeader["grid-template-areas"], '"context switch ." "actions actions actions"');
-  assert.equal(fixedHeader["grid-template-rows"], "42px 42px");
+  assert.equal(fixedHeader["grid-template-areas"], '"context switch actions"');
+  assert.equal(fixedHeader["grid-template-rows"], "42px");
+  assert.equal(fixedHeader["min-height"], "64px");
   assert.ok(cssRules(rules, ".brand-mark").some((rule) => rule.declarations.background?.includes('/favicon.svg')));
 });
 
@@ -638,12 +639,13 @@ test("Engineering Journal is a persistent three-panel evidence workbench", async
   assert.match(source, /engineering-record-panel/);
   assert.match(source, /engineering-evidence-panel/);
   assert.match(source, /engineering-contents-nav/);
+  assert.doesNotMatch(source, />Contents<\/span>/);
   assert.match(source, /evidenceOpen/);
   assert.match(source, /indexScrollTop/);
   assert.match(source, /aria-label="Open evidence and lineage"/);
   assert.match(styles, /grid-template-columns:\s*minmax\(290px, 316px\) minmax\(0, 1120px\) minmax\(260px, 288px\)/);
   assert.match(styles, /gap:\s*20px/);
-  assert.match(styles, /height:\s*max\(680px, calc\(100dvh - 142px\)\)/);
+  assert.match(styles, /height:\s*max\(680px, calc\(100dvh - 40px\)\)/);
   assert.match(source, /matchMedia\("\(max-width: 1320px\)"\)/);
   assert.match(source, /typeof parsed\.evidenceOpen === "boolean" \? parsed\.evidenceOpen : undefined/);
   assert.match(styles, /\.engineering-search \.sr-only/);

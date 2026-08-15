@@ -23,7 +23,7 @@
   --engineering-paper: #fffdf7;
   --engineering-survey: #16877c;
   --engineering-altitude: #d87852;
-  height: max(620px, calc(100dvh - 194px));
+  height: max(620px, calc(100dvh - 40px));
   min-height: 0;
   border: 0;
   border-radius: 0;
@@ -296,8 +296,7 @@
   .active-workspace-engineering .engineering-destination .engineering-reader-panel-actions button:first-child,
   .engineering-reader-panel-actions button:last-child { display: inline-flex; }
   .engineering-contents-nav { padding-inline: 12px; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
-  .engineering-contents-nav > span { display: none; }
-  .engineering-contents-nav > div:nth-child(2) { order: 1; }
+  .engineering-contents-nav > div:first-child { order: 1; }
   .engineering-reader-panel-actions { order: 2; }
   .engineering-reader-header h1 { font-size: clamp(2.2rem, 13vw, 3.7rem); }
   .engineering-evidence-panel { top: 16px; right: 12px; bottom: 76px; width: calc(100vw - 24px); }
@@ -397,12 +396,11 @@
   padding: 0 20px;
   border-bottom: 1px solid #cad9d4;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 18px;
   background: #fffdf7;
 }
-.engineering-contents-nav > span { color: #55706a; font: 780 .7rem var(--font-geist-mono); letter-spacing: .09em; text-transform: uppercase; }
 .engineering-contents-nav > div { min-width: 0; display: flex; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none; }
 .engineering-contents-nav > div::-webkit-scrollbar { display: none; }
 .engineering-contents-nav button { min-height: 36px; padding: 0 10px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #5c716c; font-size: .75rem; font-weight: 730; white-space: nowrap; cursor: pointer; }
@@ -534,7 +532,7 @@
 .engineering-destination .engineering-workspace {
   width: 100%;
   max-width: 1764px;
-  height: max(680px, calc(100dvh - 142px));
+  height: max(680px, calc(100dvh - 40px));
   margin-inline: auto;
   grid-template-columns: minmax(290px, 316px) minmax(0, 1120px) minmax(260px, 288px);
   justify-content: center;

@@ -261,7 +261,6 @@ function RecordReader({
   };
   return <article ref={readerRef} className="engineering-reader engineering-record-panel" aria-labelledby="engineering-record-title">
     <nav className="engineering-contents-nav" aria-label="Record contents">
-      <span>Contents</span>
       <div>{contents.map(([id, label]) => <button type="button" key={id} className={contentsSection === id ? "active" : ""} aria-current={contentsSection === id ? "location" : undefined} onClick={() => visit(id)}>{label}</button>)}</div>
       <div className="engineering-reader-panel-actions"><button type="button" onClick={onBack}>Index</button><button type="button" onClick={onOpenEvidence} aria-label="Open evidence and lineage">Evidence</button></div>
     </nav>
