@@ -340,3 +340,71 @@
   .app-shell .primary-nav button,
   .app-shell .materials-nav button { transition: none !important; }
 }
+
+/* #341 — one stable 50px application bar and one canonical product mark. */
+.app-shell .brand-mark,
+.app-shell.active-workspace-learn .brand-mark,
+.app-shell.active-workspace-engineering .brand-mark {
+  background: url("/favicon.svg") center / cover no-repeat;
+  color: transparent;
+}
+.app-shell .brand-mark::before { content: none; }
+.app-shell .topbar {
+  height: 50px;
+  min-height: 50px;
+  max-height: 50px;
+  padding-block: 5px;
+  grid-template-rows: 40px;
+  align-items: center;
+}
+.app-shell .topbar > .topbar-context,
+.app-shell .topbar > .topbar-workspace-switch,
+.app-shell .topbar > .topbar-actions {
+  height: 40px;
+  min-height: 40px;
+  align-self: center;
+}
+.app-shell .topbar-workspace-switch { padding: 3px; }
+.app-shell .topbar-workspace-switch button { min-height: 32px; }
+
+/* Every control communicates clickability before activation. */
+.app-shell :is(button, summary, a[href], label[for], [role="button"]):not(:disabled) { cursor: pointer; }
+.app-shell :is(button, [role="button"]):disabled { cursor: not-allowed; }
+
+/* Panel gutters expose the shared canvas instead of a tinted under-panel. */
+.app-shell.active-view-library :is(.library-page, .past-master-detail, .past-master-pane, .past-entry-pane),
+.app-shell.active-view-banks :is(.banks-page, .bank-master-detail, .bank-master-pane, .bank-solution-pane) {
+  background: transparent !important;
+}
+
+/* The light materials theme needs dark, readable handoff copy. */
+.app-shell.active-view-materials .materials-specialist-handoff {
+  background: linear-gradient(135deg, #fff 0%, color-mix(in srgb, var(--page-accent-soft) 58%, white) 100%);
+  color: #173631;
+}
+.app-shell.active-view-materials .materials-specialist-handoff h2 { color: #173631; }
+.app-shell.active-view-materials .materials-specialist-handoff p,
+.app-shell.active-view-materials .materials-specialist-handoff li { color: #526963; }
+.app-shell.active-view-materials .materials-specialist-handoff li {
+  border-color: color-mix(in srgb, var(--page-accent) 25%, #d5dfda);
+  background: rgba(255,255,255,.62);
+}
+.app-shell.active-workspace-learn .learn-hero-metrics { height: 64px; min-height: 64px; }
+
+@media (max-width: 760px) {
+  .app-shell .topbar {
+    padding: 5px 10px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "switch actions";
+    gap: 8px;
+  }
+  .app-shell .topbar-context { display: none; }
+  .app-shell .topbar-workspace-switch { width: min(100%, 330px); }
+  .app-shell .topbar-actions { width: auto; min-width: 0; overflow: hidden; }
+  .app-shell .topbar-actions > :not(.music-dock) { display: none; }
+  .app-shell .music-dock { width: 40px; min-width: 40px; max-width: 40px; padding: 0; overflow: hidden; }
+  .app-shell .music-dock > button:first-child { width: 40px; min-width: 40px; padding: 0 7px; }
+  .app-shell .music-dock > button:not(:first-child),
+  .app-shell .music-dock label,
+  .app-shell .music-dock i { display: none; }
+}

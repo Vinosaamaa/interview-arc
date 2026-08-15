@@ -274,14 +274,17 @@
 }
 
 @media (max-width: 760px) {
+  /* The compact application bar owns only the workspace switch and player.
+     Keep destination context out of a phantom second row. */
+  .app-shell.active-workspace-engineering .topbar-context { display: none !important; }
   .engineering-workspace,
   .engineering-workspace.evidence-closed,
   .engineering-workspace.index-collapsed,
-  .engineering-workspace.index-collapsed.evidence-closed { height: max(180px, calc(100dvh - 244px)); min-height: 0; display: block; }
+  .engineering-workspace.index-collapsed.evidence-closed { height: calc(100dvh - 174px); min-height: 300px; display: block; }
   .active-workspace-engineering .engineering-destination .engineering-workspace,
   .active-workspace-engineering .engineering-destination .engineering-workspace.evidence-closed,
   .active-workspace-engineering .engineering-destination .engineering-workspace.index-collapsed,
-  .active-workspace-engineering .engineering-destination .engineering-workspace.index-collapsed.evidence-closed { height: max(180px, calc(100dvh - 244px)); }
+  .active-workspace-engineering .engineering-destination .engineering-workspace.index-collapsed.evidence-closed { height: calc(100dvh - 174px); min-height: 300px; }
   .engineering-records { border-right: 0; }
   .engineering-record-list, .engineering-receipt-list { max-height: none; }
   .engineering-reader { display: none; }
@@ -299,7 +302,7 @@
   .engineering-contents-nav > div:first-child { order: 1; }
   .engineering-reader-panel-actions { order: 2; }
   .engineering-reader-header h1 { font-size: clamp(2.2rem, 13vw, 3.7rem); }
-  .engineering-evidence-panel { top: 16px; right: 12px; bottom: 76px; width: calc(100vw - 24px); }
+  .engineering-evidence-panel { top: 119px; right: 12px; bottom: 18px; width: calc(100vw - 24px); }
   .engineering-mobile-back { width: max-content; min-height: 40px; margin-bottom: 20px; padding: 0 10px; border: 1px solid #b8ccc6; border-radius: 8px; display: inline-flex; align-items: center; background: #fff; color: #28564e; font-size: .875rem; font-weight: 760; }
   .engineering-provenance { grid-template-columns: 1fr; }
   .engineering-provenance > a { width: max-content; }
@@ -456,7 +459,7 @@
   .engineering-workspace.evidence-closed { grid-template-columns: minmax(280px, 320px) minmax(0, 1fr); }
   .engineering-workspace.index-collapsed,
   .engineering-workspace.index-collapsed.evidence-closed { grid-template-columns: 52px minmax(0, 1fr); }
-  .engineering-evidence-panel { position: fixed; z-index: 90; top: 86px; right: 20px; bottom: 20px; width: min(360px, calc(100vw - 40px)); height: auto; box-shadow: 0 24px 70px rgba(8, 31, 29, .25); }
+  .engineering-evidence-panel { position: fixed; z-index: 90; top: 62px; right: 20px; bottom: 18px; width: min(360px, calc(100vw - 40px)); height: auto; box-shadow: 0 24px 70px rgba(8, 31, 29, .25); }
   .engineering-evidence-panel { transition: transform .2s ease, opacity .2s ease, visibility 0s linear; }
   .engineering-workspace.evidence-closed .engineering-evidence-panel { display: block; visibility: hidden; opacity: 0; transform: translateX(calc(100% + 32px)); pointer-events: none; transition-delay: 0s, 0s, .2s; }
   .engineering-reader-panel-actions button:last-child { display: inline-flex; }
@@ -585,4 +588,29 @@
   .engineering-hero-sketch svg > *, .engineering-hero-pulse, .engineering-hero-light-band { animation: none !important; }
   .engineering-hero-sketch svg > * { stroke-dashoffset: 0; }
   .engineering-hero-pulse { opacity: .78; transform: scale(.76); }
+}
+
+/* Final #341 geometry overrides the historical workspace generations above. */
+.engineering-destination .engineering-workspace,
+.engineering-destination .engineering-workspace.evidence-closed,
+.engineering-destination .engineering-workspace.index-collapsed,
+.engineering-destination .engineering-workspace.index-collapsed.evidence-closed {
+  height: calc(100dvh - 90px);
+  min-height: 480px;
+  max-height: none;
+  align-items: stretch;
+}
+.engineering-destination .engineering-index-panel,
+.engineering-destination .engineering-record-panel,
+.engineering-destination .engineering-evidence-panel { height: 100%; min-height: 0; }
+.engineering-destination .engineering-record-panel,
+.engineering-destination .engineering-evidence-panel { overflow-y: auto; overscroll-behavior: contain; }
+.engineering-destination .engineering-record-list,
+.engineering-destination .engineering-receipt-list { min-height: 0; max-height: none; overflow-y: auto; }
+.engineering-destination :is(button, summary, a[href]):not(:disabled) { cursor: pointer; }
+.engineering-destination .engineering-evidence-panel > header { justify-content: space-between; }
+.engineering-destination .engineering-evidence-panel > header button {
+  width: auto;
+  min-width: 64px;
+  padding-inline: 10px;
 }
