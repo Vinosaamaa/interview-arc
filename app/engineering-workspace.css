@@ -265,6 +265,10 @@
   .engineering-workspace.evidence-closed,
   .engineering-workspace.index-collapsed,
   .engineering-workspace.index-collapsed.evidence-closed { height: max(180px, calc(100dvh - 244px)); min-height: 0; display: block; }
+  .active-workspace-engineering .engineering-destination .engineering-workspace,
+  .active-workspace-engineering .engineering-destination .engineering-workspace.evidence-closed,
+  .active-workspace-engineering .engineering-destination .engineering-workspace.index-collapsed,
+  .active-workspace-engineering .engineering-destination .engineering-workspace.index-collapsed.evidence-closed { height: max(180px, calc(100dvh - 244px)); }
   .engineering-records { border-right: 0; }
   .engineering-record-list, .engineering-receipt-list { max-height: none; }
   .engineering-reader { display: none; }
@@ -445,6 +449,10 @@
   .engineering-workspace.evidence-closed,
   .engineering-workspace.index-collapsed,
   .engineering-workspace.index-collapsed.evidence-closed { height: max(180px, calc(100dvh - 280px)); }
+  .active-workspace-engineering .engineering-destination .engineering-workspace,
+  .active-workspace-engineering .engineering-destination .engineering-workspace.evidence-closed,
+  .active-workspace-engineering .engineering-destination .engineering-workspace.index-collapsed,
+  .active-workspace-engineering .engineering-destination .engineering-workspace.index-collapsed.evidence-closed { height: max(180px, calc(100dvh - 280px)); }
   .active-workspace-engineering .page-content { padding-inline: 16px; }
 }
 

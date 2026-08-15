@@ -970,9 +970,12 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .calendar-dates button { flex: 1 0 130px; }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 760px) {
   .topbar { min-height: 116px; padding: 10px 14px; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "context actions" "switch switch"; grid-template-rows: 42px 44px; }
   .topbar > .topbar-workspace-switch { width: min(100%, 360px); }
+}
+
+@media (max-width: 680px) {
   .topbar-context time { display: block; }
   .topbar .secondary-action { display: none; }
   .page-content { padding: 20px 15px 50px; }
