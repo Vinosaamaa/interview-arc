@@ -547,6 +547,7 @@ test("Reader contents reveal collapsed sections before navigating", async () => 
 
 test("the fixed header owns the only workspace selector", async () => {
   const { file, rules } = await loadResponsiveShell();
+  const atmosphereRules = parseCss(await load("../app/workspace-atmosphere.css"));
   const literals = stringLiterals(file);
   const workspaceNav = visit(file, (node) => ts.isJsxElement(node)
     && node.openingElement.attributes.properties.some((attribute) => ts.isJsxAttribute(attribute)
@@ -572,7 +573,12 @@ test("the fixed header owns the only workspace selector", async () => {
   assert.equal(fixedHeader["grid-template-areas"], '"context switch actions"');
   assert.equal(fixedHeader["grid-template-rows"], "40px");
   assert.equal(fixedHeader["min-height"], "54px");
-  assert.ok(cssRules(rules, ".brand-mark").some((rule) => rule.declarations.background?.includes('/favicon.svg')));
+  const canonicalBrandRule = cssRules(atmosphereRules, ".app-shell .brand-mark")
+    .find((rule) => rule.declarations.background?.includes('/favicon.svg')
+      && rule.declarations.border === "0"
+      && rule.declarations["border-radius"] === "0"
+      && rule.declarations["box-shadow"] === "none");
+  assert.ok(canonicalBrandRule, "the favicon must not inherit a second bordered tile");
 });
 
 test("Engineering uses its exact local navigation and keeps Statistics out of Interview", async () => {
