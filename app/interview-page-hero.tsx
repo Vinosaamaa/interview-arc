@@ -32,6 +32,8 @@ export default function InterviewPageHero({ tone, eyebrow, title, description, m
     <div className="page-hero-narrative">
       <div className="page-hero-copy"><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p></div>
       <BotanicalArtwork tone={tone} />
+      <span className="page-hero-pulse" aria-hidden="true" />
+      <span className="page-hero-light-band" aria-hidden="true" />
     </div>
     <div className={`page-hero-summary ${footer ? "interactive" : ""}`}>
       {footer ?? metrics?.map((metric, index) => <div className="page-hero-metric" key={`${metric.label}-${index}`}><strong>{metric.value}</strong><span>{metric.label}</span></div>)}

@@ -1045,6 +1045,17 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
 
+/* Invariant global-header controls. The authoritative geometry lives after
+   the legacy responsive rules at the end of this stylesheet. */
+.topbar-context { min-width: 0; display: grid; grid-template-rows: 22px 17px; align-content: center; gap: 2px; }
+.topbar-context strong { min-width: 0; overflow: hidden; color: #173631; font-size: .95rem; line-height: 22px; text-overflow: ellipsis; white-space: nowrap; }
+.topbar-context time { color: #71817a; font: 680 .72rem/17px var(--font-geist-mono); white-space: nowrap; }
+.topbar-workspace-switch { width: 330px; min-height: 42px; padding: 4px; border: 1px solid #c4d1cc; border-radius: 13px; background: rgba(255,255,255,.72); display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; justify-self: center; }
+.topbar-workspace-switch button { min-width: 0; min-height: 32px; padding: 0 10px; border: 0; border-radius: 9px; background: transparent; color: #60726c; font-size: .74rem; font-weight: 760; cursor: pointer; transition: color .18s ease, background .18s ease, box-shadow .18s ease; }
+.topbar-workspace-switch button:hover { background: #edf3f0; color: #173631; }
+.topbar-workspace-switch button.active { background: #123c37; color: #fff; box-shadow: 0 2px 8px rgba(14,51,46,.14); }
+.topbar-actions { min-width: 0; display: flex; justify-content: flex-end; gap: 9px; }
+
 /* Practice console repair: one compact icon language across planning, catalog, and case files. */
 .ui-icon { width: 18px; height: 18px; display: block; }
 .icon-action { width: 38px; height: 38px; padding: 0; border: 1px solid #c6cec4; border-radius: 10px; background: #fff; color: #5e6960; display: inline-grid; place-items: center; cursor: pointer; }
@@ -2679,4 +2690,30 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .loops-loader, .materials-detail-state.loading > span, .materials-library-state.loading > span, .materials-import-state.loading > span { animation: none; }
   .loop-history-arrow { transition: none; }
   .loop-material-summary-mark svg { transition: none; }
+}
+
+/* Keep the global header invariant after all legacy responsive overrides.
+   Normal screens reserve a separate action row so the player can never
+   collide with the centered workspace selector. */
+.topbar { min-height: 134px; display: grid; grid-template-columns: minmax(170px, 1fr) 330px minmax(170px, 1fr); grid-template-areas: "context switch ." "actions actions actions"; grid-template-rows: 42px 42px; gap: 8px 22px; }
+.topbar > .topbar-context { display: grid; }
+.topbar > .topbar-context { grid-area: context; }
+.topbar > .topbar-workspace-switch { grid-area: switch; }
+.topbar > .topbar-actions { grid-area: actions; width: 100%; display: flex; justify-content: flex-end; }
+@media (min-width: 1900px) {
+  .topbar { min-height: 82px; grid-template-columns: minmax(220px, 1fr) 330px minmax(220px, 1fr); grid-template-areas: "context switch actions"; grid-template-rows: 42px; row-gap: 0; }
+}
+@media (max-width: 1320px) {
+  .topbar { padding-block: 10px; grid-template-columns: minmax(170px, 1fr) 288px minmax(170px, 1fr); }
+  .topbar > .topbar-workspace-switch { grid-area: switch; width: 288px; }
+}
+@media (max-width: 1180px) {
+  .topbar { padding-inline: 22px; grid-template-columns: minmax(170px, 1fr) 288px minmax(170px, 1fr); gap: 8px 14px; }
+}
+@media (max-width: 680px) {
+  .topbar { min-height: 116px; padding: 10px 14px; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "context actions" "switch switch"; grid-template-rows: 42px 44px; }
+  .topbar > .topbar-context { grid-area: context; }
+  .topbar > .topbar-actions { grid-area: actions; }
+  .topbar > .topbar-workspace-switch { grid-area: switch; width: min(100%, 360px); }
+  .topbar-context time { display: block; }
 }

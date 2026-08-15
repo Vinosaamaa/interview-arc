@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -128,6 +129,43 @@ function EmptyEngineeringView({ view }: { view: EngineeringView }) {
     "case-studies": "No released Feature Retrospective has been published yet.",
   };
   return <div className="engineering-empty" role="status"><h2>Nothing fabricated</h2><p>{view === "journal" || view === "statistics" ? "No eligible Engineering records match these filters." : copy[view]}</p></div>;
+}
+
+const ENGINEERING_HERO_COPY: Record<EngineeringView, { eyebrow: string; title: string; accent: string; description: string }> = {
+  journal: { eyebrow: "Engineering · Journal", title: "Engineering decisions, mapped in the terrain.", accent: "#d86742", description: "Read the architecture, tradeoffs, incidents, and verification behind every shipped capability." },
+  capabilities: { eyebrow: "Engineering · Capabilities", title: "Reusable strengths, grown from exact work.", accent: "#25856c", description: "Trace durable capabilities back to the records, modules, interfaces, and evidence that established them." },
+  decisions: { eyebrow: "Engineering · Decisions", title: "Alternatives converge into deliberate choices.", accent: "#566cc6", description: "Review the constraints, rejected paths, and consequences behind each accepted engineering direction." },
+  incidents: { eyebrow: "Engineering · Incidents", title: "Failures become operating knowledge.", accent: "#d65d63", description: "Keep timelines, root causes, recovery evidence, and follow-up work together without smoothing the facts." },
+  "case-studies": { eyebrow: "Engineering · Case Studies", title: "Delivered systems, examined layer by layer.", accent: "#c5872b", description: "Move from context through implementation and verification while preserving the exact source lineage." },
+  statistics: { eyebrow: "Engineering · Statistics", title: "The record, measured without invention.", accent: "#49a6a8", description: "Explore deterministic coverage, chronology, repositories, and verification from the same normalized projection." },
+};
+
+function EngineeringNatureSketch({ view }: { view: EngineeringView }) {
+  if (view === "capabilities") return <svg viewBox="0 0 720 250" role="img" aria-label="A cedar canopy representing reusable capabilities"><path d="M356 225c7-41 8-87 2-139M358 114l-70-55M357 135l87-70M354 159l-114-25M359 173l120-18" /><path d="M286 60c-42 2-72 20-91 55 47 4 82-10 105-42M445 64c42 2 73 20 92 54-48 5-83-9-106-41M238 132c-38 10-62 34-72 70 45-4 75-24 91-61M479 153c37 9 63 31 77 66-46-1-78-20-96-56" /></svg>;
+  if (view === "decisions") return <svg viewBox="0 0 720 250" role="img" aria-label="Three tributaries converging into a chosen river"><path d="M91 39c82 25 120 62 115 112-3 35 28 58 92 68M271 26c-20 33-20 67 1 102 21 34 59 64 113 91M500 33c-54 18-82 49-84 94-1 38-22 69-64 92M298 219h279" /><circle cx="298" cy="219" r="8" /><circle cx="386" cy="219" r="8" /><circle cx="475" cy="219" r="8" /></svg>;
+  if (view === "incidents") return <svg viewBox="0 0 720 250" role="img" aria-label="A storm breaking over a recovery beacon"><path d="M125 126c-8-44 23-75 67-72 17-31 52-45 84-28 31-35 86-25 105 15 45-2 73 29 67 70 37 4 59 27 57 62H113c-25-12-27-32-17-48 7-12 16-19 29-21" /><path d="m285 129-36 57h43l-20 44 73-72h-46l26-29M520 198h95M568 198v-50M548 148h40" /></svg>;
+  if (view === "case-studies") return <svg viewBox="0 0 720 250" role="img" aria-label="Layered canyon strata representing examined systems"><path d="M55 57h190l35 32 62 9 49-41h271v168H55Z" /><path d="M55 101c88 18 162 18 223 0 57-17 118-13 183 13 54 21 121 20 201-4M55 147c72 14 142 11 210-10 69-21 137-17 204 12 57 24 121 24 193 1M55 191c79 15 154 11 224-12 63-20 128-17 195 9 56 21 119 22 188 3" /><circle cx="211" cy="91" r="8" /><circle cx="417" cy="149" r="8" /><circle cx="559" cy="191" r="8" /></svg>;
+  if (view === "statistics") return <svg viewBox="0 0 720 250" role="img" aria-label="A measured sun transect across a landscape"><path d="M65 211c89-86 179-114 270-85 77 24 133 12 170-34 36-44 86-46 150-6" /><path d="M80 219h574M132 210v19M229 196v33M326 178v51M423 158v71M520 127v102M617 94v135" /><path d="M475 70a55 55 0 0 1 110 0" /><circle cx="530" cy="70" r="17" /></svg>;
+  return <svg viewBox="0 0 720 250" role="img" aria-label="An alpine route recording exact engineering revisions"><path d="M30 224 154 102l65 61 91-119 80 109 73-76 134 147" /><path d="M65 219c70-42 132-51 188-26 63 28 112 13 149-45 35-55 92-64 169-27" /><circle cx="184" cy="191" r="9" /><circle cx="401" cy="148" r="9" /><circle cx="567" cy="121" r="9" /></svg>;
+}
+
+function EngineeringDestinationHero({ index, view }: { index: EngineeringJournalIndex; view: EngineeringView }) {
+  const copy = ENGINEERING_HERO_COPY[view];
+  const eligible = index.records.filter((record) => viewRecord(record, view));
+  const repositories = new Set(eligible.map((record) => record.repository)).size;
+  const verified = eligible.filter((record) => record.verification.state === "verified").length;
+  const stats = view === "journal"
+    ? [["Factual records", index.statistics.totalRecords], ["Merged pull requests", index.receiptStatistics.totalReceipts], ["Repositories", Object.keys(index.statistics.byRepository).length]]
+    : view === "statistics"
+      ? [["Factual records", index.statistics.totalRecords], ["Verified", index.statistics.verification.verified], ["PR receipts", index.receiptStatistics.totalReceipts]]
+      : [["Eligible records", eligible.length], ["Verified", verified], ["Repositories", repositories]];
+  return <header key={view} className={`engineering-hero engineering-hero-${view}`} style={{ "--engineering-accent": copy.accent } as CSSProperties}>
+    <div className="engineering-hero-copy"><span>{copy.eyebrow}</span><h1>{copy.title}</h1><p>{copy.description}</p></div>
+    <div className="engineering-hero-sketch"><EngineeringNatureSketch view={view} /></div>
+    <span className="engineering-hero-pulse" aria-hidden="true" />
+    <span className="engineering-hero-light-band" aria-hidden="true" />
+    <dl>{stats.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+  </header>;
 }
 
 function ReceiptTimeline({
@@ -345,7 +383,6 @@ type EngineeringWorkspaceMemory = {
   receiptRepository: string;
   selectedRef: string;
   mobileReaderOpen: boolean;
-  indexCollapsed: boolean;
   evidenceOpen: boolean;
   contentsSection: EngineeringContentsSection;
   indexScrollTop: number;
@@ -371,7 +408,6 @@ function readEngineeringMemory(): Partial<EngineeringWorkspaceMemory> {
       receiptRepository: typeof parsed.receiptRepository === "string" ? parsed.receiptRepository : "all",
       selectedRef: typeof parsed.selectedRef === "string" ? parsed.selectedRef : "",
       mobileReaderOpen: parsed.mobileReaderOpen !== false,
-      indexCollapsed: parsed.indexCollapsed === true,
       evidenceOpen: typeof parsed.evidenceOpen === "boolean" ? parsed.evidenceOpen : undefined,
       contentsSection: parsed.contentsSection === "architecture" || parsed.contentsSection === "record" || parsed.contentsSection === "interview" ? parsed.contentsSection : "overview",
       indexScrollTop: typeof parsed.indexScrollTop === "number" && Number.isFinite(parsed.indexScrollTop) ? Math.max(0, parsed.indexScrollTop) : 0,
@@ -392,7 +428,6 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   const [receiptRepository, setReceiptRepository] = useState("all");
   const [selectedRef, setSelectedRef] = useState(index.records[0]?.ref ?? "");
   const [mobileReaderOpen, setMobileReaderOpen] = useState(true);
-  const [indexCollapsed, setIndexCollapsed] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(true);
   const [contentsSection, setContentsSection] = useState<EngineeringContentsSection>("overview");
   const [memoryReady, setMemoryReady] = useState(false);
@@ -434,7 +469,6 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
       setReceiptRepository(memory.receiptRepository ?? "all");
       if (index.records.some((record) => record.ref === memory.selectedRef)) setSelectedRef(memory.selectedRef!);
       setMobileReaderOpen(rememberedLayer === "receipts" ? false : memory.mobileReaderOpen ?? false);
-      setIndexCollapsed(memory.indexCollapsed ?? false);
       setEvidenceOpen(memory.evidenceOpen ?? !window.matchMedia("(max-width: 1320px)").matches);
       setContentsSection(memory.contentsSection ?? "overview");
       indexScrollTopRef.current = memory.indexScrollTop ?? 0;
@@ -451,12 +485,12 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   const writeMemory = useCallback(() => {
     if (!memoryReady) return;
     try {
-      const next: EngineeringWorkspaceMemory = { journalLayer, query, type, status, repository, receiptQuery, receiptClassification, receiptRepository, selectedRef, mobileReaderOpen, indexCollapsed, evidenceOpen, contentsSection, indexScrollTop: indexScrollTopRef.current };
+      const next: EngineeringWorkspaceMemory = { journalLayer, query, type, status, repository, receiptQuery, receiptClassification, receiptRepository, selectedRef, mobileReaderOpen, evidenceOpen, contentsSection, indexScrollTop: indexScrollTopRef.current };
       window.sessionStorage.setItem(ENGINEERING_MEMORY_KEY, JSON.stringify(next));
     } catch {
       // Session storage can be unavailable in hardened browsing contexts; in-memory state remains active.
     }
-  }, [contentsSection, evidenceOpen, indexCollapsed, journalLayer, memoryReady, mobileReaderOpen, query, receiptClassification, receiptQuery, receiptRepository, repository, selectedRef, status, type]);
+  }, [contentsSection, evidenceOpen, journalLayer, memoryReady, mobileReaderOpen, query, receiptClassification, receiptQuery, receiptRepository, repository, selectedRef, status, type]);
 
   useEffect(() => {
     writeMemory();
@@ -475,7 +509,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
     }, 160);
   };
 
-  if (view === "statistics") return <EngineeringStatistics index={index} />;
+  if (view === "statistics") return <div className="engineering-destination engineering-destination-statistics"><EngineeringDestinationHero index={index} view={view} /><EngineeringStatistics index={index} /></div>;
   const activeSelectedRef = records.some((record) => record.ref === selectedRef) ? selectedRef : records[0]?.ref;
   const selected = index.records.find((record) => record.ref === activeSelectedRef) ?? null;
   const select = (ref: string) => { setSelectedRef(ref); setContentsSection("overview"); setMobileReaderOpen(true); };
@@ -496,9 +530,9 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
     if (next === "receipts") setMobileReaderOpen(false);
   };
 
-  return <section className={`engineering-workspace ${mobileReaderOpen ? "mobile-reader-open" : ""} ${indexCollapsed ? "index-collapsed" : ""} ${evidenceOpen ? "evidence-open" : "evidence-closed"}`}>
+  return <div className={`engineering-destination engineering-destination-${view}`}><EngineeringDestinationHero index={index} view={view} /><section className={`engineering-workspace ${mobileReaderOpen ? "mobile-reader-open" : ""} ${evidenceOpen ? "evidence-open" : "evidence-closed"}`}>
     <aside className="engineering-index-panel engineering-records" aria-label={`${ENGINEERING_VIEW_TITLES[view]} ${showReceipts ? "pull-request receipts" : "rich records"}`}>
-      <header><div><h1>{ENGINEERING_VIEW_TITLES[view].replace("Engineering · ", "")}</h1><p>{showReceipts ? `${receipts.length} of ${index.receiptStatistics.totalReceipts} pull-request receipts` : `${records.length} factual ${records.length === 1 ? "record" : "records"}`}</p></div><button type="button" onClick={() => setIndexCollapsed(true)} aria-label="Collapse Journal index" title="Collapse Journal index">←</button></header>
+      <header><div><h1>{ENGINEERING_VIEW_TITLES[view].replace("Engineering · ", "")}</h1><p>{showReceipts ? `${receipts.length} of ${index.receiptStatistics.totalReceipts} pull-request receipts` : `${records.length} factual ${records.length === 1 ? "record" : "records"}`}</p></div></header>
       {view === "journal" ? <div className="engineering-journal-layers" role="group" aria-label="Journal evidence layer">
         <button type="button" aria-pressed={journalLayer === "records"} onClick={() => chooseJournalLayer("records")}><span>Rich records</span><strong>{index.statistics.totalRecords}</strong></button>
         <button type="button" aria-pressed={journalLayer === "receipts"} onClick={() => chooseJournalLayer("receipts")}><span>All merged PRs</span><strong>{index.receiptStatistics.totalReceipts}</strong></button>
@@ -526,8 +560,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
         {records.length === 0 ? <EmptyEngineeringView view={view} /> : null}
       </div>}
     </aside>
-    {indexCollapsed ? <button type="button" className="engineering-index-restore" onClick={() => setIndexCollapsed(false)} aria-label="Open Journal index" title="Open Journal index">→</button> : null}
     {selected ? <RecordReader record={selected} onBack={() => setMobileReaderOpen(false)} onOpenEvidence={() => setEvidenceOpen(true)} contentsSection={contentsSection} onContentsSectionChange={setContentsSection} /> : <div className="engineering-reader engineering-record-panel engineering-reader-empty"><EmptyEngineeringView view={view} /></div>}
     {selected ? <EngineeringEvidencePanel record={selected} index={index} onSelect={openRelation} onClose={() => setEvidenceOpen(false)} /> : null}
-  </section>;
+  </section></div>;
 }
