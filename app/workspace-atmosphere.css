@@ -345,8 +345,11 @@
 .app-shell .brand-mark,
 .app-shell.active-workspace-learn .brand-mark,
 .app-shell.active-workspace-engineering .brand-mark {
+  border: 0;
+  border-radius: 0;
   background: url("/favicon.svg") center / cover no-repeat;
   color: transparent;
+  box-shadow: none;
 }
 .app-shell .brand-mark::before { content: none; }
 .app-shell .topbar {
