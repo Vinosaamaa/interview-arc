@@ -283,67 +283,6 @@ function EngineeringEvidencePanel({ record, index, onSelect, onClose }: { record
   </aside>;
 }
 
-const ENGINEERING_HERO_COPY: Record<EngineeringView, { eyebrow: string; title: string; description: string }> = {
-  journal: {
-    eyebrow: "ENGINEERING · JOURNAL",
-    title: "Engineering decisions, mapped in the terrain.",
-    description: "A commit-pinned record of the choices, tradeoffs, incidents, and capabilities that shaped Interview Arc.",
-  },
-  capabilities: {
-    eyebrow: "ENGINEERING · CAPABILITIES",
-    title: "The systems we can explain, end to end.",
-    description: "Capabilities stay grounded in released work, explicit interfaces, and the evidence that makes each claim durable.",
-  },
-  decisions: {
-    eyebrow: "ENGINEERING · DECISIONS",
-    title: "Tradeoffs with a visible trail.",
-    description: "Architecture reviews and ADRs keep the reasoning close to the code, its constraints, and its later consequences.",
-  },
-  incidents: {
-    eyebrow: "ENGINEERING · INCIDENTS",
-    title: "Failures mapped before they repeat.",
-    description: "Public-safe postmortems preserve the mechanism, the correction, and the verification without turning hindsight into mythology.",
-  },
-  "case-studies": {
-    eyebrow: "ENGINEERING · CASE STUDIES",
-    title: "Systems made legible.",
-    description: "Released retrospectives connect product behavior to the people, interfaces, and constraints that made it possible.",
-  },
-  statistics: {
-    eyebrow: "ENGINEERING · STATISTICS",
-    title: "Measure the work, not the story.",
-    description: "Counts and timelines are projected from the same normalized records as the readers, with no inferred completion.",
-  },
-};
-
-function EngineeringHero({ index, view }: { index: EngineeringJournalIndex; view: EngineeringView }) {
-  const copy = ENGINEERING_HERO_COPY[view];
-  const statistics = index.statistics;
-  const stats = [
-    ["Factual records", statistics.totalRecords],
-    ["Merged pull requests", index.receiptStatistics.totalReceipts],
-    ["Repositories", Object.keys(statistics.byRepository).length],
-  ] as const;
-  return <section className="engineering-hero" aria-labelledby="engineering-hero-title">
-    <div className="engineering-hero-copy">
-      <span className="eyebrow">{copy.eyebrow}</span>
-      <h1 id="engineering-hero-title">{copy.title}</h1>
-      <p>{copy.description}</p>
-    </div>
-    <svg className="engineering-hero-sketch" viewBox="0 0 520 230" role="img" aria-label="Minimal mountain and tree line sketch">
-      <path className="engineering-hero-sun" d="M412 38a44 44 0 1 1-88 0" />
-      <path className="engineering-hero-mountain" d="M22 194 128 74l55 57 84-103 102 122 45-58 84 102" />
-      <path className="engineering-hero-mountain engineering-hero-mountain-secondary" d="m28 194 104-76 56 43 68-69 91 102" />
-      <path className="engineering-hero-tree" d="M366 190V90m0 36-35-34m35 14 30-40m-30 87-46-37m46 9 52-44" />
-      <path className="engineering-hero-ground" d="M18 194h482" />
-      <circle className="engineering-hero-dot" cx="128" cy="74" r="5" />
-      <circle className="engineering-hero-dot" cx="267" cy="28" r="5" />
-      <circle className="engineering-hero-dot" cx="369" cy="90" r="5" />
-    </svg>
-    <dl className="engineering-hero-stats">{stats.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
-  </section>;
-}
-
 function EngineeringStatistics({ index }: { index: EngineeringJournalIndex }) {
   const statistics = index.statistics;
   const receiptStatistics = index.receiptStatistics;
@@ -406,6 +345,7 @@ type EngineeringWorkspaceMemory = {
   receiptRepository: string;
   selectedRef: string;
   mobileReaderOpen: boolean;
+  indexCollapsed: boolean;
   evidenceOpen: boolean;
   contentsSection: EngineeringContentsSection;
   indexScrollTop: number;
@@ -431,6 +371,7 @@ function readEngineeringMemory(): Partial<EngineeringWorkspaceMemory> {
       receiptRepository: typeof parsed.receiptRepository === "string" ? parsed.receiptRepository : "all",
       selectedRef: typeof parsed.selectedRef === "string" ? parsed.selectedRef : "",
       mobileReaderOpen: parsed.mobileReaderOpen !== false,
+      indexCollapsed: parsed.indexCollapsed === true,
       evidenceOpen: typeof parsed.evidenceOpen === "boolean" ? parsed.evidenceOpen : undefined,
       contentsSection: parsed.contentsSection === "architecture" || parsed.contentsSection === "record" || parsed.contentsSection === "interview" ? parsed.contentsSection : "overview",
       indexScrollTop: typeof parsed.indexScrollTop === "number" && Number.isFinite(parsed.indexScrollTop) ? Math.max(0, parsed.indexScrollTop) : 0,
@@ -451,12 +392,13 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   const [receiptRepository, setReceiptRepository] = useState("all");
   const [selectedRef, setSelectedRef] = useState(index.records[0]?.ref ?? "");
   const [mobileReaderOpen, setMobileReaderOpen] = useState(true);
+  const [indexCollapsed, setIndexCollapsed] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(true);
   const [contentsSection, setContentsSection] = useState<EngineeringContentsSection>("overview");
   const [memoryReady, setMemoryReady] = useState(false);
   const recordListRef = useRef<HTMLDivElement>(null);
   const indexScrollTopRef = useRef(0);
-  const scrollPersistTimerRef = useRef<number | null>(null);
+  const scrollPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchByRef = useMemo(() => new Map(index.search.map((entry) => [entry.ref, entry])), [index.search]);
   const repositories = useMemo(() => [...new Set(index.records.map((record) => record.repository))].sort(), [index.records]);
   const receiptSearchByRef = useMemo(() => new Map(index.receiptSearch.map((entry) => [entry.ref, entry])), [index.receiptSearch]);
@@ -492,6 +434,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
       setReceiptRepository(memory.receiptRepository ?? "all");
       if (index.records.some((record) => record.ref === memory.selectedRef)) setSelectedRef(memory.selectedRef!);
       setMobileReaderOpen(rememberedLayer === "receipts" ? false : memory.mobileReaderOpen ?? false);
+      setIndexCollapsed(memory.indexCollapsed ?? false);
       setEvidenceOpen(memory.evidenceOpen ?? !window.matchMedia("(max-width: 1320px)").matches);
       setContentsSection(memory.contentsSection ?? "overview");
       indexScrollTopRef.current = memory.indexScrollTop ?? 0;
@@ -508,12 +451,12 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   const writeMemory = useCallback(() => {
     if (!memoryReady) return;
     try {
-      const next: EngineeringWorkspaceMemory = { journalLayer, query, type, status, repository, receiptQuery, receiptClassification, receiptRepository, selectedRef, mobileReaderOpen, evidenceOpen, contentsSection, indexScrollTop: indexScrollTopRef.current };
+      const next: EngineeringWorkspaceMemory = { journalLayer, query, type, status, repository, receiptQuery, receiptClassification, receiptRepository, selectedRef, mobileReaderOpen, indexCollapsed, evidenceOpen, contentsSection, indexScrollTop: indexScrollTopRef.current };
       window.sessionStorage.setItem(ENGINEERING_MEMORY_KEY, JSON.stringify(next));
     } catch {
       // Session storage can be unavailable in hardened browsing contexts; in-memory state remains active.
     }
-  }, [contentsSection, evidenceOpen, journalLayer, memoryReady, mobileReaderOpen, query, receiptClassification, receiptQuery, receiptRepository, repository, selectedRef, status, type]);
+  }, [contentsSection, evidenceOpen, indexCollapsed, journalLayer, memoryReady, mobileReaderOpen, query, receiptClassification, receiptQuery, receiptRepository, repository, selectedRef, status, type]);
 
   useEffect(() => {
     writeMemory();
@@ -532,7 +475,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
     }, 160);
   };
 
-  if (view === "statistics") return <div className="engineering-page"><EngineeringHero index={index} view={view} /><EngineeringStatistics index={index} /></div>;
+  if (view === "statistics") return <EngineeringStatistics index={index} />;
   const activeSelectedRef = records.some((record) => record.ref === selectedRef) ? selectedRef : records[0]?.ref;
   const selected = index.records.find((record) => record.ref === activeSelectedRef) ?? null;
   const select = (ref: string) => { setSelectedRef(ref); setContentsSection("overview"); setMobileReaderOpen(true); };
@@ -553,9 +496,9 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
     if (next === "receipts") setMobileReaderOpen(false);
   };
 
-  return <div className="engineering-page"><EngineeringHero index={index} view={view} /><section className={`engineering-workspace ${mobileReaderOpen ? "mobile-reader-open" : ""} ${evidenceOpen ? "evidence-open" : "evidence-closed"}`}>
+  return <section className={`engineering-workspace ${mobileReaderOpen ? "mobile-reader-open" : ""} ${indexCollapsed ? "index-collapsed" : ""} ${evidenceOpen ? "evidence-open" : "evidence-closed"}`}>
     <aside className="engineering-index-panel engineering-records" aria-label={`${ENGINEERING_VIEW_TITLES[view]} ${showReceipts ? "pull-request receipts" : "rich records"}`}>
-      <header><div><h1>{ENGINEERING_VIEW_TITLES[view].replace("Engineering · ", "")}</h1><p>{showReceipts ? `${receipts.length} of ${index.receiptStatistics.totalReceipts} pull-request receipts` : `${records.length} factual ${records.length === 1 ? "record" : "records"}`}</p></div></header>
+      <header><div><h1>{ENGINEERING_VIEW_TITLES[view].replace("Engineering · ", "")}</h1><p>{showReceipts ? `${receipts.length} of ${index.receiptStatistics.totalReceipts} pull-request receipts` : `${records.length} factual ${records.length === 1 ? "record" : "records"}`}</p></div><button type="button" onClick={() => setIndexCollapsed(true)} aria-label="Collapse Journal index" title="Collapse Journal index">←</button></header>
       {view === "journal" ? <div className="engineering-journal-layers" role="group" aria-label="Journal evidence layer">
         <button type="button" aria-pressed={journalLayer === "records"} onClick={() => chooseJournalLayer("records")}><span>Rich records</span><strong>{index.statistics.totalRecords}</strong></button>
         <button type="button" aria-pressed={journalLayer === "receipts"} onClick={() => chooseJournalLayer("receipts")}><span>All merged PRs</span><strong>{index.receiptStatistics.totalReceipts}</strong></button>
@@ -583,7 +526,8 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
         {records.length === 0 ? <EmptyEngineeringView view={view} /> : null}
       </div>}
     </aside>
+    {indexCollapsed ? <button type="button" className="engineering-index-restore" onClick={() => setIndexCollapsed(false)} aria-label="Open Journal index" title="Open Journal index">→</button> : null}
     {selected ? <RecordReader record={selected} onBack={() => setMobileReaderOpen(false)} onOpenEvidence={() => setEvidenceOpen(true)} contentsSection={contentsSection} onContentsSectionChange={setContentsSection} /> : <div className="engineering-reader engineering-record-panel engineering-reader-empty"><EmptyEngineeringView view={view} /></div>}
     {selected ? <EngineeringEvidencePanel record={selected} index={index} onSelect={openRelation} onClose={() => setEvidenceOpen(false)} /> : null}
-  </section></div>;
+  </section>;
 }
