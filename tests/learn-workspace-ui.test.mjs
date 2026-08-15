@@ -9,7 +9,10 @@ const stylesUrl = new URL("../app/learn-workspace.css", import.meta.url);
 test("Learn is an enabled workspace with the contracted local navigation", async () => {
   const home = await readFile(homeUrl, "utf8");
 
-  assert.match(home, /<strong>Learn<\/strong><\/button>/);
+  assert.match(
+    home,
+    /<button type="button" className=\{activeWorkspace === "learn" \? "active" : ""\} aria-current=\{activeWorkspace === "learn" \? "page" : undefined\} onClick=\{\(\) => selectWorkspace\("learn"\)\}>Learn<\/button>/,
+  );
   assert.doesNotMatch(home, /disabled title="Learn workspace/);
   assert.match(home, /\["today", "Today"\]/);
   assert.match(home, /\["courses", "Courses"\]/);
