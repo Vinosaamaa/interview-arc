@@ -545,27 +545,33 @@ test("Reader contents reveal collapsed sections before navigating", async () => 
   assert.match(reveal.getText(file), /group\.open = true/);
 });
 
-test("workspace selector contains exactly Interview, Learn, and Engineering", async () => {
+test("the fixed header owns the only workspace selector", async () => {
   const { file, rules } = await loadResponsiveShell();
   const literals = stringLiterals(file);
   const workspaceNav = visit(file, (node) => ts.isJsxElement(node)
     && node.openingElement.attributes.properties.some((attribute) => ts.isJsxAttribute(attribute)
       && attribute.name.getText(file) === "className"
-      && attribute.initializer?.getText(file) === '"workspace-switcher"'))[0];
+      && attribute.initializer?.getText(file) === '"topbar-workspace-switch"'))[0];
   assert.ok(workspaceNav);
   const workspaceLabels = visit(workspaceNav, (node) => ts.isJsxText(node))
     .map((node) => node.text.trim())
     .filter((value) => ["Interview", "Learn", "Engineering", "Journey"].includes(value));
   assert.deepEqual(workspaceLabels, ["Interview", "Learn", "Engineering"]);
-  assert.equal(visit(file, (node) => ts.isJsxElement(node)
-    && node.openingElement.attributes.properties.some((attribute) => ts.isJsxAttribute(attribute)
-      && attribute.name.getText(file) === "className"
-      && attribute.initializer?.getText(file) === '"workspace-nav"')).length, 0);
   assert.equal(literals.has("Statistics"), true);
   const engineeringNav = visit(file, (node) => ts.isIdentifier(node)
     && node.text === "ENGINEERING_NAV_ITEMS");
   assert.ok(engineeringNav.length > 0);
   assert.equal(literals.has("Recall schedule"), false);
+  assert.equal(visit(file, (node) => ts.isJsxElement(node)
+    && node.openingElement.attributes.properties.some((attribute) => ts.isJsxAttribute(attribute)
+      && attribute.name.getText(file) === "className"
+      && attribute.initializer?.getText(file) === '"workspace-nav"')).length, 0);
+  const fixedHeader = cssRules(rules, ".topbar")
+    .filter((rule) => rule.ancestors.length === 0 && rule.declarations["grid-template-areas"])
+    .at(-1).declarations;
+  assert.equal(fixedHeader["grid-template-areas"], '"context switch actions"');
+  assert.equal(fixedHeader["grid-template-rows"], "42px");
+  assert.equal(fixedHeader["min-height"], "64px");
   assert.ok(cssRules(rules, ".brand-mark").some((rule) => rule.declarations.background?.includes('/favicon.svg')));
 });
 
@@ -633,22 +639,19 @@ test("Engineering Journal is a persistent three-panel evidence workbench", async
   assert.match(source, /engineering-record-panel/);
   assert.match(source, /engineering-evidence-panel/);
   assert.match(source, /engineering-contents-nav/);
+  assert.doesNotMatch(source, />Contents<\/span>/);
   assert.match(source, /evidenceOpen/);
   assert.match(source, /indexScrollTop/);
-  assert.doesNotMatch(source, /indexCollapsed/);
-  assert.doesNotMatch(source, /aria-label="Collapse Journal index"/);
   assert.match(source, /aria-label="Open evidence and lineage"/);
-  assert.match(styles, /grid-template-columns:\s*minmax\(270px, 300px\) minmax\(0, 1fr\) minmax\(250px, 280px\)/);
+  assert.match(styles, /grid-template-columns:\s*minmax\(290px, 316px\) minmax\(0, 1120px\) minmax\(260px, 288px\)/);
   assert.match(styles, /gap:\s*20px/);
-  assert.match(styles, /\.active-workspace-engineering \.page-content \{ width: 100%; max-width: none; padding-inline: 24px; \}/);
-  assert.match(styles, /height:\s*max\(180px, calc\(100dvh - 244px\)\)/);
+  assert.match(styles, /height:\s*max\(680px, calc\(100dvh - 40px\)\)/);
   assert.match(source, /matchMedia\("\(max-width: 1320px\)"\)/);
   assert.match(source, /typeof parsed\.evidenceOpen === "boolean" \? parsed\.evidenceOpen : undefined/);
   assert.match(styles, /\.engineering-search \.sr-only/);
   assert.match(styles, /\.engineering-record-panel \.engineering-facts \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
-  assert.doesNotMatch(styles, /\.engineering-workspace\.index-collapsed/);
-  assert.equal(cssRules(rules, ".engineering-hero")[0]?.declarations.height, "350px");
-  assert.match(styles, /\.engineering-hero-stats\s*\{[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.doesNotMatch(source, /indexCollapsed/);
+  assert.doesNotMatch(source, /aria-label="Collapse Journal index"/);
   assert.match(styles, /@media \(max-width: 1320px\)/);
   assert.match(styles, /@media \(max-width: 760px\)/);
   assert.equal((styles.match(/^\.engineering-workspace \{/gm) ?? []).length, 1, "the Engineering workbench must have one authoritative base rule");
@@ -760,17 +763,17 @@ test("workspace header stacks the active tab above the Pacific date at every wid
       && attribute.initializer?.getText(file) === '"topbar-context"'))[0];
   assert.ok(context);
   const elements = context.children.filter(ts.isJsxElement);
-  assert.deepEqual(elements.map((element) => element.openingElement.tagName.getText(file)), ["strong", "span"]);
+  assert.deepEqual(elements.map((element) => element.openingElement.tagName.getText(file)), ["strong", "time"]);
   assert.equal(elements[0].children[0]?.getText(file), '{activeWorkspace === "engineering" ? ENGINEERING_VIEW_TITLES[engineeringView] : activeWorkspace === "learn" ? LEARN_VIEW_TITLES[learnDestination] : INTERVIEW_VIEW_TITLES[view]}');
   assert.match(elements[1].children[0]?.getText(file) ?? "", /readableDate\(journal\.date\)/);
 
-  const contextStyle = cssRules(rules, ".topbar > div:first-child")
+  const contextStyle = cssRules(rules, ".topbar-context")
     .find((rule) => rule.declarations["align-content"] === "center")?.declarations;
   assert.ok(contextStyle);
   assert.equal(contextStyle.display, "grid");
   assert.equal(contextStyle["align-content"], "center");
 
-  const narrowDate = cssRules(rules, ".topbar > div:first-child span", "max-width: 680px").at(-1).declarations;
+  const narrowDate = cssRules(rules, ".topbar-context time", "max-width: 680px").at(-1).declarations;
   assert.notEqual(narrowDate.display, "none");
 });
 
@@ -856,6 +859,33 @@ test("all seven Interview pages use the exact shared hero geometry and semantic 
   assert.match(css, /active-view-banks/);
   assert.match(css, /active-view-journey/);
   assert.match(css, /active-view-materials/);
+});
+
+test("every workspace hero uses one localized draw pulse and sweep with a static reduced-motion frame", async () => {
+  const [interviewSource, interviewCss, learnSource, learnCss, engineeringSource, engineeringCss] = await Promise.all([
+    load("../app/interview-page-hero.tsx"),
+    load("../app/interview-page-hero.css"),
+    load("../app/learn-workspace.tsx"),
+    load("../app/learn-workspace.css"),
+    load("../app/engineering-workspace.tsx"),
+    load("../app/engineering-workspace.css"),
+  ]);
+  assert.match(interviewSource, /page-hero-pulse/);
+  assert.match(interviewSource, /page-hero-light-band/);
+  assert.match(interviewCss, /interview-hero-draw \.56s/);
+  assert.match(interviewCss, /prefers-reduced-motion: reduce/);
+
+  assert.equal((learnSource.match(/aria-label="[^"]+"/g) ?? []).filter((value) => /owl|elephant|honeybee|fox/i.test(value)).length, 4);
+  assert.match(learnSource, /learn-hero-pulse/);
+  assert.match(learnSource, /learn-hero-light-band/);
+  assert.match(learnCss, /learn-hero-draw \.56s/);
+  assert.match(learnCss, /stroke-dashoffset: 0/);
+
+  assert.equal((engineeringSource.match(/aria-label="[^"]+"/g) ?? []).filter((value) => /cedar|tributaries|storm|canyon|sun transect|alpine route/i.test(value)).length, 6);
+  assert.match(engineeringSource, /engineering-hero-pulse/);
+  assert.match(engineeringSource, /engineering-hero-light-band/);
+  assert.match(engineeringCss, /engineering-hero-draw \.56s/);
+  assert.match(engineeringCss, /prefers-reduced-motion: reduce/);
 });
 
 test("Banks hero selector spans the full summary band and keeps one major-panel gap", async () => {

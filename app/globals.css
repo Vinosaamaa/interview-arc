@@ -47,11 +47,10 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .profile > span { width: 36px; height: 36px; border-radius: 50%; background: var(--signal); display: grid; place-items: center; font-size: .75rem; font-weight: 820; }
 
 .main-column { min-width: 0; }
-.topbar { min-height: 82px; padding: 0 clamp(24px, 4vw, 64px); border-bottom: 1px solid var(--line); background: rgba(233, 237, 231, .92); backdrop-filter: blur(14px); position: sticky; top: 0; z-index: 20; display: flex; justify-content: space-between; align-items: center; gap: 24px; }
-.topbar > div:first-child { display: grid; gap: 3px; }
-.topbar > div:first-child span { color: var(--muted); font-size: .75rem; }
-.topbar > div:first-child strong { font-size: .95rem; }
-.topbar > div:last-child { display: flex; gap: 9px; }
+.topbar { min-height: 64px; padding: 0 clamp(24px, 4vw, 64px); border-bottom: 1px solid var(--line); background: rgba(233, 237, 231, .92); backdrop-filter: blur(14px); position: sticky; top: 0; z-index: 20; display: grid; grid-template-columns: minmax(170px, 1fr) 330px minmax(170px, 1fr); grid-template-areas: "context switch actions"; grid-template-rows: 42px; align-items: center; gap: 0 22px; }
+.topbar > .topbar-context { grid-area: context; align-self: center; }
+.topbar > .topbar-workspace-switch { grid-area: switch; align-self: center; }
+.topbar > .topbar-actions { grid-area: actions; width: 100%; align-self: center; }
 .primary-action, .secondary-action, .text-action { min-height: 42px; padding: 0 16px; border-radius: 9px; font-size: .82rem; font-weight: 730; cursor: pointer; transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
 .primary-action { border: 1px solid var(--ink); background: var(--ink); color: white; }
 .primary-action:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(24,32,25,.13); }
@@ -917,7 +916,17 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 @keyframes selectionConfirm { from { opacity: .72; transform: scale(.992); } to { opacity: 1; transform: none; } }
 @keyframes letterOpen { from { opacity: 0; transform: translateY(30px) scale(.94) rotate(-1deg); } to { opacity: 1; transform: none; } }
 
+@media (min-width: 1900px) {
+  .topbar { min-height: 64px; grid-template-columns: minmax(220px, 1fr) 330px minmax(220px, 1fr); grid-template-areas: "context switch actions"; grid-template-rows: 42px; row-gap: 0; }
+}
+
+@media (max-width: 1320px) {
+  .topbar { padding-block: 10px; grid-template-columns: minmax(170px, 1fr) 288px minmax(170px, 1fr); }
+  .topbar > .topbar-workspace-switch { width: 288px; }
+}
+
 @media (max-width: 1180px) {
+  .topbar { padding-inline: 22px; grid-template-columns: minmax(170px, 1fr) 288px minmax(170px, 1fr); gap: 8px 14px; }
   .today-masthead { grid-template-columns: 140px 1fr; }
   .date-poster { height: 160px; }
   .date-poster strong { font-size: 5.4rem; }
@@ -961,9 +970,13 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   .calendar-dates button { flex: 1 0 130px; }
 }
 
+@media (max-width: 760px) {
+  .topbar { min-height: 116px; padding: 10px 14px; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "context actions" "switch switch"; grid-template-rows: 42px 44px; }
+  .topbar > .topbar-workspace-switch { width: min(100%, 360px); }
+}
+
 @media (max-width: 680px) {
-  .topbar { min-height: 70px; padding: 9px 15px; }
-  .topbar > div:first-child span { display: none; }
+  .topbar-context time { display: block; }
   .topbar .secondary-action { display: none; }
   .page-content { padding: 20px 15px 50px; }
   .today-masthead { padding: 25px 20px; grid-template-columns: 1fr; }
@@ -1044,6 +1057,17 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
+
+/* Invariant global-header controls. The authoritative geometry lives after
+   the legacy responsive rules at the end of this stylesheet. */
+.topbar-context { min-width: 0; display: grid; grid-template-rows: 22px 17px; align-content: center; gap: 2px; }
+.topbar-context strong { min-width: 0; overflow: hidden; color: #173631; font-size: .95rem; line-height: 22px; text-overflow: ellipsis; white-space: nowrap; }
+.topbar-context time { color: #71817a; font: 680 .72rem/17px var(--font-geist-mono); white-space: nowrap; }
+.topbar-workspace-switch { width: 330px; min-height: 42px; padding: 4px; border: 1px solid #c4d1cc; border-radius: 13px; background: rgba(255,255,255,.72); display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; justify-self: center; }
+.topbar-workspace-switch button { min-width: 0; min-height: 32px; padding: 0 10px; border: 0; border-radius: 9px; background: transparent; color: #60726c; font-size: .74rem; font-weight: 760; cursor: pointer; transition: color .18s ease, background .18s ease, box-shadow .18s ease; }
+.topbar-workspace-switch button:hover { background: #edf3f0; color: #173631; }
+.topbar-workspace-switch button.active { background: #123c37; color: #fff; box-shadow: 0 2px 8px rgba(14,51,46,.14); }
+.topbar-actions { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 9px; }
 
 /* Practice console repair: one compact icon language across planning, catalog, and case files. */
 .ui-icon { width: 18px; height: 18px; display: block; }

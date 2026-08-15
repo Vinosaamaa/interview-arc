@@ -40,6 +40,16 @@
 .page-hero-art { width: 100%; height: 100%; max-height: 250px; overflow: visible; color: var(--page-accent); position: relative; z-index: 1; }
 .page-hero-art .art-line { fill: color-mix(in srgb, var(--page-accent-soft) 50%, transparent); stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 .page-hero-art .art-dash { fill: none; stroke-dasharray: 9 8; }
+.page-hero-art .art-line > :not(.art-dash) { stroke-dasharray: 1400; stroke-dashoffset: 1400; animation: interview-hero-draw .56s cubic-bezier(.22,.8,.32,1) forwards; }
+.page-hero-art .art-line > :nth-child(2) { animation-delay: .06s; }
+.page-hero-art .art-line > :nth-child(3) { animation-delay: .11s; }
+.page-hero-art .art-dash { animation: interview-hero-dash .56s cubic-bezier(.22,.8,.32,1) forwards; }
+.page-hero-pulse { position: absolute; z-index: 2; top: 30%; right: 22%; width: 10px; height: 10px; border-radius: 50%; background: var(--page-accent); box-shadow: 0 0 0 0 color-mix(in srgb, var(--page-accent) 32%, transparent); pointer-events: none; animation: interview-hero-pulse .52s ease-out .44s both; }
+.page-hero-light-band { position: absolute; z-index: 1; top: -25%; bottom: -25%; left: 45%; width: 11%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.48), transparent); filter: blur(6px); opacity: 0; pointer-events: none; transform: translateX(-230%) skewX(-12deg); animation: interview-hero-sweep .72s ease-out .18s both; }
+@keyframes interview-hero-draw { to { stroke-dashoffset: 0; } }
+@keyframes interview-hero-dash { from { stroke-dashoffset: 120; opacity: .25; } to { stroke-dashoffset: 0; opacity: 1; } }
+@keyframes interview-hero-pulse { 0% { opacity: 0; transform: scale(.45); } 38% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 13px color-mix(in srgb, var(--page-accent) 0%, transparent); } 100% { opacity: .78; transform: scale(.76); box-shadow: none; } }
+@keyframes interview-hero-sweep { 0% { opacity: 0; transform: translateX(-230%) skewX(-12deg); } 25% { opacity: .74; } 100% { opacity: 0; transform: translateX(440%) skewX(-12deg); } }
 .page-hero-summary { height: 50px; padding-inline: clamp(28px, 4vw, 62px); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; }
 .page-hero-metric { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: 9px; }
 .page-hero-metric + .page-hero-metric { padding-left: clamp(22px, 3vw, 48px); border-left: 1px solid color-mix(in srgb, var(--page-accent) 48%, transparent); }
@@ -164,4 +174,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .interview-page-hero *, .interview-page-hero *::before, .interview-page-hero *::after { animation: none !important; transition: none !important; }
+  .page-hero-art .art-line > :not(.art-dash) { stroke-dashoffset: 0; }
+  .page-hero-pulse { opacity: .78; transform: scale(.76); }
 }

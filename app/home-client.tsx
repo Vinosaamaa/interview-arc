@@ -7255,13 +7255,16 @@ export default function HomeClient({ content, today, engineering, initialLocatio
 
       <section className="main-column">
         <header className="topbar">
-          <div className="topbar-context"><strong>{activeWorkspace === "engineering" ? ENGINEERING_VIEW_TITLES[engineeringView] : activeWorkspace === "learn" ? LEARN_VIEW_TITLES[learnDestination] : INTERVIEW_VIEW_TITLES[view]}</strong><span>{activeWorkspace === "engineering" ? `${engineering.statistics.totalRecords} eligible record${engineering.statistics.totalRecords === 1 ? "" : "s"}` : readableDate(journal.date)}</span></div>
-          <nav className="workspace-switcher" aria-label="Workspaces">
-            <button type="button" className={activeWorkspace === "interview" ? "active" : ""} aria-current={activeWorkspace === "interview" ? "page" : undefined} onClick={() => selectWorkspace("interview")}><strong>Interview</strong></button>
-            <button type="button" className={activeWorkspace === "learn" ? "active" : ""} aria-current={activeWorkspace === "learn" ? "page" : undefined} onClick={() => selectWorkspace("learn")}><strong>Learn</strong></button>
-            <button type="button" className={activeWorkspace === "engineering" ? "active" : ""} aria-current={activeWorkspace === "engineering" ? "page" : undefined} onClick={() => selectWorkspace("engineering")}><strong>Engineering</strong></button>
+          <div className="topbar-context">
+            <strong>{activeWorkspace === "engineering" ? ENGINEERING_VIEW_TITLES[engineeringView] : activeWorkspace === "learn" ? LEARN_VIEW_TITLES[learnDestination] : INTERVIEW_VIEW_TITLES[view]}</strong>
+            <time dateTime={journal.date}>{readableDate(journal.date)}</time>
+          </div>
+          <nav className="topbar-workspace-switch" aria-label="Workspaces">
+            <button type="button" className={activeWorkspace === "interview" ? "active" : ""} aria-current={activeWorkspace === "interview" ? "page" : undefined} onClick={() => selectWorkspace("interview")}>Interview</button>
+            <button type="button" className={activeWorkspace === "learn" ? "active" : ""} aria-current={activeWorkspace === "learn" ? "page" : undefined} onClick={() => selectWorkspace("learn")}>Learn</button>
+            <button type="button" className={activeWorkspace === "engineering" ? "active" : ""} aria-current={activeWorkspace === "engineering" ? "page" : undefined} onClick={() => selectWorkspace("engineering")}>Engineering</button>
           </nav>
-          <div>
+          <div className="topbar-actions">
             <div className={`music-dock ${ambientPlaying ? "active" : ""}`}>
               <button onClick={toggleAmbientSound} aria-pressed={ambientPlaying} title={ambientPlaying ? "Pause music" : "Play music"}><span aria-hidden="true">{ambientPlaying ? "Ⅱ" : "▶"}</span><i><small>{ambientPlaying ? "PLAYING" : "PAUSED"}</small><strong>{trackName}</strong></i></button>
               <button className="music-next" onClick={previousAmbientTrack} aria-label="Previous music track" title={`Previous track · ${trackArtist}`}>↞</button>
