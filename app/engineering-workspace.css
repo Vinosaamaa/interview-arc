@@ -85,15 +85,17 @@
 .engineering-receipt-list details[open] summary::after { top: 29px; transform: rotate(225deg); }
 .engineering-receipt-list summary:hover, .engineering-receipt-list details[open] summary { background: #fff; }
 .engineering-receipt-list summary:focus-visible { outline: 3px solid rgba(13, 148, 136, .24); outline-offset: -4px; }
-.engineering-receipt-list summary > span { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.engineering-receipt-list summary time, .engineering-receipt-list summary i { color: #607972; font: 710 .75rem/1.25 var(--font-geist-mono); font-style: normal; }
-.engineering-receipt-list summary i { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.engineering-receipt-kicker { min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+.engineering-receipt-kicker time, .engineering-receipt-kicker i { min-width: 0; color: #607972; font: 710 .72rem/1.25 var(--font-geist-mono); font-style: normal; }
+.engineering-receipt-kicker time { flex: 0 0 auto; }
+.engineering-receipt-kicker i { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .engineering-receipt-pr { flex: 0 0 auto; color: inherit; font: inherit; white-space: nowrap; text-decoration: none; }
 .engineering-receipt-pr:hover { color: #0d9488; text-decoration: underline; text-underline-offset: 3px; }
-.engineering-receipt-list summary .engineering-receipt-pr { position: relative; z-index: 2; color: #153b36; font: 710 .75rem/1.25 var(--font-geist-mono); }
+.engineering-receipt-kicker .engineering-receipt-pr { flex: 0 0 auto; position: relative; z-index: 2; color: #153b36; font: 780 .88rem/1 var(--font-geist-mono); white-space: nowrap; }
 .engineering-receipt-list summary strong { color: #153b36; font-size: .875rem; line-height: 1.38; }
-.engineering-receipt-list summary em { padding: 4px 7px; border-radius: 999px; background: #dfeee9; color: #245c54; font-size: .75rem; font-weight: 780; font-style: normal; }
-.engineering-receipt-list summary small { color: #667a75; font-size: .75rem; text-align: right; }
+.engineering-receipt-flags { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
+.engineering-receipt-flags em { flex: 0 0 auto; padding: 5px 9px; border-radius: 999px; background: #dfeee9; color: #245c54; font-size: .78rem; font-weight: 780; font-style: normal; line-height: 1; white-space: nowrap; }
+.engineering-receipt-flags small { flex: 0 0 auto; color: #667a75; font-size: .62rem; line-height: 1.2; letter-spacing: .02em; text-align: right; white-space: nowrap; }
 .engineering-receipt-detail { padding: 0 18px 20px 45px; background: #fff; color: #49645e; }
 .engineering-receipt-detail > p { margin: 0 0 15px; font-size: .875rem; line-height: 1.55; }
 .engineering-receipt-detail dl { margin: 0; border-block: 1px solid #d7e3df; }
@@ -342,8 +344,8 @@
   .engineering-journal-layers { padding-inline: 10px; }
   .engineering-journal-layers button { padding-inline: 7px; }
   .engineering-receipt-list summary { padding-right: 38px; }
-  .engineering-receipt-list summary > span:last-child { align-items: flex-start; flex-direction: column; }
-  .engineering-receipt-list summary small { text-align: left; }
+  .engineering-receipt-flags { justify-content: flex-start; }
+  .engineering-receipt-flags small { text-align: left; }
   .engineering-record-receipts li { align-items: flex-start; flex-direction: column; }
 }
 

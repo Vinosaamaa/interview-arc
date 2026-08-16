@@ -221,9 +221,9 @@ function ReceiptTimeline({
     {receipts.map((receipt) => <li key={receipt.ref}>
       <details>
         <summary>
-          <span><time dateTime={receipt.timelineAt}>{receipt.timelineAt.slice(0, 10)}</time><i>{receipt.repository}</i><OriginalPullRequestLink href={receipt.originalPullRequestUrl} pr={receipt.pr} /></span>
+          <span className="engineering-receipt-kicker"><time dateTime={receipt.timelineAt}>{receipt.timelineAt.slice(0, 10)}</time><i>{receipt.repository}</i><OriginalPullRequestLink href={receipt.originalPullRequestUrl} pr={receipt.pr} /></span>
           <strong>{receipt.title}</strong>
-          <span><em>{RECEIPT_CLASSIFICATION_LABELS[receipt.classification]}</em><small>{receipt.timelineBasis === "verified-merge" ? "Verified merge" : "Source-commit fallback"}</small></span>
+          <span className="engineering-receipt-flags"><em>{RECEIPT_CLASSIFICATION_LABELS[receipt.classification]}</em><small>{receipt.timelineBasis === "verified-merge" ? "Verified merge" : "Source-commit fallback"}</small></span>
         </summary>
         <div className="engineering-receipt-detail">
           <p>{receipt.summary}</p>
