@@ -12,6 +12,7 @@ import {
   connectMcpClient,
   runMcpCommand,
   startMcpWorker,
+  stopMcpWorker,
   waitForMcpWorker,
 } from "./helpers/mcp-worker-harness.mjs";
 
@@ -107,7 +108,7 @@ test("legacy Target Profiles remain owner-private and readable while every write
     ], project);
     const started = startMcpWorker({ wrangler, config, persistence, project, port });
     worker = started.child;
-    await waitForMcpWorker(baseUrl, worker);
+    await waitForMcpWorker(baseUrl, worker, started.readDiagnosticTail);
     client = await connectMcpClient(baseUrl, token, "behavioral-target-owner");
 
     const tools = await client.listTools();
@@ -150,8 +151,7 @@ test("legacy Target Profiles remain owner-private and readable while every write
   } finally {
     await client?.close().catch(() => {});
     await otherClient?.close().catch(() => {});
-    worker?.kill("SIGTERM");
-    if (worker && worker.exitCode === null) await new Promise((resolve) => worker.once("exit", resolve));
+    await stopMcpWorker(worker);
     if (persistence) await rm(persistence, { recursive: true, force: true });
     await releaseLock?.();
   }

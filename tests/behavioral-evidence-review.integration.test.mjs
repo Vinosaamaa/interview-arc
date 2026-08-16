@@ -12,6 +12,7 @@ import {
   connectMcpClient,
   runMcpCommand,
   startMcpWorker,
+  stopMcpWorker,
   waitForMcpWorker,
 } from "./helpers/mcp-worker-harness.mjs";
 
@@ -117,7 +118,7 @@ test("source revisions and candidate review are owner-isolated, atomic, and exac
     ], project);
     const started = startMcpWorker({ wrangler, config, persistence, project, port });
     worker = started.child;
-    await waitForMcpWorker(baseUrl, worker);
+    await waitForMcpWorker(baseUrl, worker, started.readDiagnosticTail);
     client = await connectMcpClient(baseUrl, ownerToken, "behavioral-review-owner");
     otherClient = await connectMcpClient(baseUrl, otherToken, "behavioral-review-other");
 
@@ -289,7 +290,7 @@ test("source revisions and candidate review are owner-isolated, atomic, and exac
   } finally {
     await client?.close().catch(() => {});
     await otherClient?.close().catch(() => {});
-    if (worker && worker.exitCode === null) worker.kill("SIGTERM");
+    await stopMcpWorker(worker);
     if (persistence) await rm(persistence, { recursive: true, force: true });
     await releaseLock?.();
   }

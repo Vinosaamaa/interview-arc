@@ -12,6 +12,7 @@ import {
   connectMcpClient,
   runMcpCommand,
   startMcpWorker,
+  stopMcpWorker,
   waitForMcpWorker,
 } from "./helpers/mcp-worker-harness.mjs";
 
@@ -91,7 +92,7 @@ test("Story Bank persists exact revisions and serves owner-scoped question prefl
     ], project);
     const started = startMcpWorker({ wrangler, config, persistence, project, port });
     worker = started.child;
-    await waitForMcpWorker(baseUrl, worker);
+    await waitForMcpWorker(baseUrl, worker, started.readDiagnosticTail);
     client = await connectMcpClient(baseUrl, token, "behavioral-story-owner");
 
     const created = await call(client, "upsert_behavioral_story", storyWrite());
@@ -161,8 +162,7 @@ test("Story Bank persists exact revisions and serves owner-scoped question prefl
   } finally {
     await client?.close().catch(() => {});
     await otherClient?.close().catch(() => {});
-    worker?.kill("SIGTERM");
-    if (worker && worker.exitCode === null) await new Promise((resolve) => worker.once("exit", resolve));
+    await stopMcpWorker(worker);
     if (persistence) await rm(persistence, { recursive: true, force: true });
     await releaseLock?.();
   }
