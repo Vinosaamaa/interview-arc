@@ -39,6 +39,10 @@
   color: #203f68 !important;
 }
 
+@media (max-width: 900px) {
+  .mobile-learn-nav { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
 .learn-workspace button,
 .learn-workspace a {
   -webkit-tap-highlight-color: transparent;
@@ -58,7 +62,7 @@
   border-radius: 20px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 280px;
-  grid-template-rows: 1fr 62px;
+  grid-template-rows: 300px 50px;
   height: 350px;
   min-height: 350px;
   overflow: hidden;
@@ -75,9 +79,16 @@
 }
 
 .learn-hero-copy {
-  align-self: center;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  grid-row: 1;
+  max-height: 300px;
   max-width: 720px;
-  padding: 38px 40px 28px;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: 26px 40px 12px;
   position: relative;
   z-index: 1;
 }
@@ -94,11 +105,13 @@
 
 .learn-hero h1 {
   font-family: var(--font-editorial), Georgia, serif;
-  font-size: clamp(2.35rem, 4.25vw, 4.75rem);
+  font-size: clamp(2.15rem, 3.5vw, 3.85rem);
   font-weight: 520;
-  letter-spacing: -0.052em;
-  line-height: 0.93;
-  margin: 17px 0 20px;
+  letter-spacing: -0.015em;
+  line-height: 1.28;
+  margin: 10px 0 14px;
+  overflow: visible;
+  padding: 0.08em 0 0.14em;
   text-wrap: balance;
 }
 
@@ -109,10 +122,15 @@
 
 .learn-hero-copy > p {
   color: var(--learn-muted);
+  display: -webkit-box;
   font-size: 0.95rem;
   line-height: 1.65;
   margin: 0;
   max-width: 620px;
+  min-height: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 .learn-animal-sketch {
@@ -132,29 +150,55 @@
 @keyframes learn-hero-sweep { 0% { opacity: 0; transform: translateX(-230%) skewX(-12deg); } 25% { opacity: .74; } 100% { opacity: 0; transform: translateX(440%) skewX(-12deg); } }
 
 .learn-hero-metrics {
-  align-items: stretch;
+  align-items: center;
   border-top: 0;
   display: grid;
   grid-column: 1 / -1;
+  grid-row: 2;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  height: 62px;
+  height: 50px;
+  isolation: isolate;
   margin: 0;
-  min-height: 0;
+  max-height: 50px;
+  min-height: 50px;
+  padding-inline: clamp(18px, 3vw, 40px);
   position: relative;
-  z-index: 1;
+  z-index: 3;
 }
 
 .learn-hero-metrics > div {
-  align-items: center;
+  align-items: baseline;
   display: grid;
-  gap: 2px;
-  grid-template-columns: 1fr auto;
-  padding: 10px 22px;
+  gap: 9px;
+  grid-template-columns: auto minmax(0, 1fr);
+  height: 50px;
+  min-width: 0;
+  padding: 0;
 }
 
-.learn-hero-metrics > div + div { border-left: 1px solid var(--learn-rule); }
-.learn-hero-metrics dt { color: var(--learn-muted); font-size: 0.72rem; }
-.learn-hero-metrics dd { font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 1.05rem; font-weight: 720; margin: 0; }
+.learn-hero-metrics > div + div {
+  border-left: 1px solid var(--learn-rule);
+  padding-left: clamp(12px, 2vw, 28px);
+}
+.learn-hero-metrics dt {
+  color: var(--learn-muted);
+  font-size: 0.72rem;
+  line-height: 1.15;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.learn-hero-metrics dd {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: clamp(1.05rem, 1.6vw, 1.35rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 720;
+  line-height: 1;
+  margin: 0;
+  order: -1;
+  white-space: nowrap;
+}
 
 .learn-loading,
 .learn-error,
@@ -459,15 +503,12 @@
 
 @media (max-width: 760px) {
   .learn-workspace { gap: 14px; padding: 25px 12px 86px; }
-  .learn-hero { grid-template-columns: 1fr; grid-template-rows: 1fr 58px; min-height: 350px; }
-  .learn-hero-copy { padding: 30px 24px 22px; }
-  .learn-hero h1 { font-size: clamp(2.45rem, 12vw, 3.5rem); }
+  .learn-hero { grid-template-columns: 1fr; grid-template-rows: 300px 50px; min-height: 350px; }
+  .learn-hero-copy { padding: 22px 22px 10px; }
+  .learn-hero h1 { font-size: clamp(2.05rem, 9vw, 3.05rem); line-height: 1.28; letter-spacing: -0.015em; }
   .learn-hero-copy > p { font-size: 0.82rem; max-width: 88%; }
   .learn-animal-sketch { opacity: 0.46; position: absolute; right: -32px; top: 34px; width: 166px; }
-  .learn-hero-metrics { min-height: 58px; }
-  .learn-hero-metrics > div { display: block; padding: 9px 10px; text-align: center; }
-  .learn-hero-metrics dt { font-size: 0.55rem; }
-  .learn-hero-metrics dd { font-size: 0.84rem; margin-top: 3px; }
+  .learn-hero-metrics { height: 50px; max-height: 50px; min-height: 50px; padding-inline: 16px; }
   .learn-course-workspace { padding: 0; }
   .learn-course-nav { overflow-x: auto; }
   .learn-session-instrument { align-items: start; grid-template-columns: 1fr; }
@@ -511,44 +552,20 @@
   .learn-hero-pulse { opacity: .82; transform: scale(.76); }
 }
 
-/* #341 — stable, readable metrics at every Learn breakpoint. */
-.learn-hero { grid-template-rows: minmax(0, 1fr) 64px; }
-.learn-hero-metrics {
-  height: 64px;
-  min-height: 64px;
-  align-items: stretch;
-  border-top: 0;
-}
-.learn-hero-metrics > div {
-  height: 64px;
-  min-width: 0;
-  padding: 8px 16px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-content: center;
-  align-items: center;
-  gap: 10px;
-  text-align: left;
-}
-.learn-hero-metrics dt {
-  min-width: 0;
-  font-size: .68rem;
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-}
-.learn-hero-metrics dd { margin: 0; font-size: 1rem; line-height: 1; }
-
-@media (max-width: 760px) {
-  .learn-hero { grid-template-rows: minmax(0, 1fr) 64px; }
-  .learn-hero-metrics { height: 64px; min-height: 64px; }
+@media (max-width: 680px) {
+  .learn-hero-metrics { padding-inline: 14px; }
   .learn-hero-metrics > div {
-    height: 64px;
-    padding: 7px 8px;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 5px;
-    text-align: left;
+    align-content: center;
+    gap: 1px;
+    grid-template-columns: 1fr;
   }
-  .learn-hero-metrics dt { font-size: .58rem; }
-  .learn-hero-metrics dd { margin: 0; font-size: .86rem; }
+  .learn-hero-metrics > div + div { padding-left: 12px; }
+  .learn-hero-metrics dt {
+    font-size: 0.62rem;
+    line-height: 1.1;
+    overflow: visible;
+    text-overflow: unset;
+    white-space: normal;
+  }
+  .learn-hero-metrics dd { font-size: 1.05rem; }
 }

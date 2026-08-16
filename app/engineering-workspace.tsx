@@ -79,7 +79,9 @@ export type EngineeringIconName =
   | "filter"
   | "source"
   | "copy"
-  | "lineage";
+  | "lineage"
+  | "index"
+  | "evidence";
 
 export function EngineeringIcon({ name }: { name: EngineeringIconName }) {
   const paths = (() => {
@@ -96,6 +98,8 @@ export function EngineeringIcon({ name }: { name: EngineeringIconName }) {
     if (name === "filter") return <><path d="M4 6h16M7 12h10M10 18h4" /></>;
     if (name === "source") return <><path d="M14 4h6v6M20 4l-9 9" /><path d="M18 13v6H5V6h6" /></>;
     if (name === "copy") return <><rect x="8" y="8" width="11" height="11" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></>;
+    if (name === "index") return <><rect x="4.5" y="5" width="6.5" height="14" rx="1.2" /><path d="M14 8.5h5.5M14 12h5.5M14 15.5h3.5" /></>;
+    if (name === "evidence") return <><rect x="13" y="5" width="6.5" height="14" rx="1.2" /><path d="M4.5 8.5h6M4.5 12h6M4.5 15.5h4" /></>;
     return <><circle cx="6" cy="7" r="2" /><circle cx="18" cy="7" r="2" /><circle cx="12" cy="18" r="2" /><path d="M8 7h8M7.3 8.7l3.4 7.6M16.7 8.7l-3.4 7.6" /></>;
   })();
   return <svg className="engineering-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths}</svg>;
@@ -264,7 +268,16 @@ function RecordReader({
   return <article ref={readerRef} className="engineering-reader engineering-record-panel" aria-labelledby="engineering-record-title">
     <nav className="engineering-contents-nav" aria-label="Record contents">
       <div>{contents.map(([id, label]) => <button type="button" key={id} className={contentsSection === id ? "active" : ""} aria-current={contentsSection === id ? "location" : undefined} onClick={() => visit(id)}>{label}</button>)}</div>
-      <div className="engineering-reader-panel-actions"><button type="button" onClick={onBack}>Index</button><button type="button" onClick={onToggleEvidence} aria-pressed={evidenceOpen} aria-label={evidenceOpen ? "Hide evidence and lineage" : "Open evidence and lineage"}>Evidence</button></div>
+      <div className="engineering-reader-panel-actions" role="group" aria-label="Workbench panels">
+        <button type="button" className="engineering-panel-toggle" onClick={onBack} aria-label="Open index">
+          <EngineeringIcon name="index" />
+          <span>Index</span>
+        </button>
+        <button type="button" className="engineering-panel-toggle" onClick={onToggleEvidence} aria-pressed={evidenceOpen} aria-label={evidenceOpen ? "Hide evidence" : "Open evidence"}>
+          <EngineeringIcon name="evidence" />
+          <span>Evidence</span>
+        </button>
+      </div>
     </nav>
     <header className="engineering-reader-header" data-engineering-section="overview">
       <div className="engineering-record-classification">
@@ -312,7 +325,11 @@ function RecordReader({
   </article>;
 }
 
-function EngineeringEvidencePanel({ record, index, onSelect, onReturn }: { record: EngineeringJournalRecord; index: EngineeringJournalIndex; onSelect: (ref: string) => void; onReturn: () => void }) {
+function EngineeringPanelClose({ onClose }: { onClose: () => void }) {
+  return <button type="button" className="engineering-panel-close" onClick={onClose} aria-label="Close evidence">Close</button>;
+}
+
+function EngineeringEvidencePanel({ record, index, onSelect, onClose }: { record: EngineeringJournalRecord; index: EngineeringJournalIndex; onSelect: (ref: string) => void; onClose: () => void }) {
   const corrections = [...record.amendedBy, ...record.supersededBy];
   const outgoing = [...record.amends, ...record.supersedes, ...record.relatedRecords, ...record.decisions, ...record.incidents, ...record.features];
   const backlinks = index.backlinks[record.ref] ?? [];
@@ -322,7 +339,7 @@ function EngineeringEvidencePanel({ record, index, onSelect, onReturn }: { recor
     .map((ref) => receiptByRef.get(ref))
     .filter((receipt): receipt is EngineeringPullRequestReceipt => Boolean(receipt));
   return <aside className="engineering-evidence-panel" aria-label="Evidence and lineage">
-    <header><div><span>Evidence desk</span><h2>Exact evidence</h2></div><button type="button" onClick={onReturn} aria-label="Return to Engineering record">Record</button></header>
+    <header><div><span>Evidence desk</span><h2>Exact evidence</h2></div><EngineeringPanelClose onClose={onClose} /></header>
     <dl className="engineering-evidence-ledger">
       <div><dt>Record ref</dt><dd><code>{record.ref}</code><CopyControl value={record.ref} label="record reference" /></dd></div>
       <div><dt>Commit</dt><dd><code>{record.source.commit}</code><CopyControl value={record.source.commit} label="full commit" /></dd></div>
@@ -345,9 +362,9 @@ function EngineeringEvidencePanel({ record, index, onSelect, onReturn }: { recor
   </aside>;
 }
 
-function EngineeringEmptyEvidencePanel({ view, onReturn }: { view: EngineeringView; onReturn: () => void }) {
+function EngineeringEmptyEvidencePanel({ view, onClose }: { view: EngineeringView; onClose: () => void }) {
   return <aside className="engineering-evidence-panel engineering-evidence-empty" aria-label="Exact evidence">
-    <header><div><span>Evidence desk</span><h2>Exact evidence</h2></div><button type="button" onClick={onReturn} aria-label="Return to Engineering record">Record</button></header>
+    <header><div><span>Evidence desk</span><h2>Exact evidence</h2></div><EngineeringPanelClose onClose={onClose} /></header>
     <div className="engineering-evidence-empty-copy" role="status">
       <strong>No eligible record selected.</strong>
       <p>{view === "case-studies" ? "A released Feature Retrospective will open here with its exact commit, source path, and lineage." : "Choose an eligible record to inspect its exact evidence and lineage."}</p>
@@ -470,6 +487,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   const [selectedReceiptRepositories, setSelectedReceiptRepositories] = useState<string[]>([]);
   const [selectedRef, setSelectedRef] = useState(index.records[0]?.ref ?? "");
   const [mobileReaderOpen, setMobileReaderOpen] = useState(true);
+  const [narrowWorkbench, setNarrowWorkbench] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 1320px)").matches);
   const [evidenceOpen, setEvidenceOpen] = useState(true);
   const [contentsSection, setContentsSection] = useState<EngineeringContentsSection>("overview");
   const [memoryReady, setMemoryReady] = useState(false);
@@ -512,14 +530,25 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
       if (index.records.some((record) => record.ref === memory.selectedRef)) setSelectedRef(memory.selectedRef!);
       const narrowReader = window.matchMedia("(max-width: 760px)").matches;
       setMobileReaderOpen(rememberedLayer === "receipts" ? false : narrowReader ? true : memory.mobileReaderOpen ?? false);
-      const narrowWorkbench = window.matchMedia("(max-width: 1320px)").matches;
-      setEvidenceOpen(narrowWorkbench ? false : memory.evidenceOpen ?? true);
+      const narrow = window.matchMedia("(max-width: 1320px)").matches;
+      setNarrowWorkbench(narrow);
+      setEvidenceOpen(narrow ? false : memory.evidenceOpen ?? true);
       setContentsSection(memory.contentsSection ?? "overview");
       indexScrollTopRef.current = memory.indexScrollTop ?? 0;
       setMemoryReady(true);
     });
     return () => { cancelled = true; };
   }, [index.records]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 1320px)");
+    const syncEvidenceLayout = () => {
+      setNarrowWorkbench(media.matches);
+      if (media.matches) setEvidenceOpen(false);
+    };
+    media.addEventListener("change", syncEvidenceLayout);
+    return () => media.removeEventListener("change", syncEvidenceLayout);
+  }, []);
 
   useLayoutEffect(() => {
     if (!memoryReady || !recordListRef.current) return;
@@ -574,7 +603,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
     if (next === "receipts") setMobileReaderOpen(false);
   };
 
-  const displayEvidence = evidenceOpen;
+  const displayEvidence = narrowWorkbench ? evidenceOpen : true;
 
   return <div className={`engineering-destination engineering-destination-${view}`}><EngineeringDestinationHero index={index} view={view} /><section className={`engineering-workspace ${mobileReaderOpen ? "mobile-reader-open" : ""} ${displayEvidence ? "evidence-open" : "evidence-closed"}`}>
     <aside className="engineering-index-panel engineering-records" aria-label={`${ENGINEERING_VIEW_TITLES[view]} ${showReceipts ? "pull-request receipts" : "rich records"}`}>
@@ -621,6 +650,6 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
       </div>}
     </aside>
     {selected ? <RecordReader record={selected} onBack={() => setMobileReaderOpen(false)} onToggleEvidence={() => setEvidenceOpen((open) => !open)} evidenceOpen={evidenceOpen} contentsSection={contentsSection} onContentsSectionChange={setContentsSection} /> : <div className="engineering-reader engineering-record-panel engineering-reader-empty"><EmptyEngineeringView view={view} /></div>}
-    {selected ? <EngineeringEvidencePanel record={selected} index={index} onSelect={openRelation} onReturn={() => setEvidenceOpen(false)} /> : <EngineeringEmptyEvidencePanel view={view} onReturn={() => setEvidenceOpen(false)} />}
+    {selected ? <EngineeringEvidencePanel record={selected} index={index} onSelect={openRelation} onClose={() => setEvidenceOpen(false)} /> : <EngineeringEmptyEvidencePanel view={view} onClose={() => setEvidenceOpen(false)} />}
   </section></div>;
 }

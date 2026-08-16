@@ -24,8 +24,9 @@ Before editing website code, read `../docs/agents/website.md` and the shared con
   user explicitly enters. Draw fresh artwork, encouragement, and a starting track from
   locally hosted, documented, licensed pools. Sound begins only from a user
   action; expose play/pause, previous/next, playlist selection, licensed source,
-  local save, volume, and persistent motion controls. Keep the petal field dense
-  and legible over bright and dark surfaces, with reduced-motion support.
+  local save, volume, and persistent motion controls. Shell chrome follows
+  `../design-system/pages/workspace-shell.md`. Atmosphere is Petals, Rain, or
+  Off with reduced-motion support.
 - Treat only a finished, previously started activity stopwatch as publication-ready automatically. A selected result is metadata and never completes or queues work by itself.
   Keep `ready` as the agent-queue enum and set `published` only after an artifact
   exists; do not require a second manual queue action.

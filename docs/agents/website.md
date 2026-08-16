@@ -119,7 +119,8 @@ exports are ignored convenience copies, not publication.
 ## UX Direction
 
 - Follow the canonical [UI Design Skill Routing](../../AGENTS.md#ui-design-skill-routing)
-  rules before designing or redesigning website UI.
+  rules before designing or redesigning website UI. Shared chrome and a new
+  workspace follow [`design-system/pages/workspace-shell.md`](../../design-system/pages/workspace-shell.md).
 
 - Treat the arrival screen as the product's signature moment. Show it on every
   full page entry and keep it visible until the user explicitly enters. Draw
@@ -132,16 +133,18 @@ exports are ignored convenience copies, not publication.
   volume controls. Show the daily playlist with the licensed source page and a
   direct save action for every locally hosted track. Never rip music from
   YouTube, hotlink media, or ship media without a documented usage license.
-- Keep cherry-blossom motion abundant and high-contrast on both arrival and the
-  working dashboard so the petals remain visible over bright or dark surfaces.
-  Provide persistent independent controls for sound and petals, remember those
-  preferences locally, and disable motion for `prefers-reduced-motion`.
+- Atmosphere is Petals, Rain, or Off. Interview defaults to petals; Engineering
+  defaults to rain; remember the explicit choice. Petals stay high-contrast;
+  rain is the original CSS falling streaks. Pause for hidden documents, open
+  readers, and `prefers-reduced-motion`.
 - Lead with today's practice and progress, then history and review queues.
 - Favor a focused journal/dashboard over contest theater.
 - Use exactly three top-level workspaces: Interview, Learn, and Engineering.
   Interview owns Today, Loops, Reviews, Past, Banks, and Journey. Keep Learn and
   Engineering visibly unavailable until their separately authorized work
   begins; each owns a separate local Statistics surface when implemented.
+  Every workspace keeps Pop out timer, Export today, and Connect in the same
+  header tools menu.
 - Provide Interview-local Today, Loops, Reviews, Past, Banks, and Journey views
   without placing every raw log on one page.
 - Loops is an owner-private, responsive company-and-role tracker. Render only

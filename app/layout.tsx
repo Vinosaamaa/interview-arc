@@ -23,6 +23,7 @@ const geistMono = Geist_Mono({
 const newsreader = Newsreader({
   variable: "--font-newsreader",
   subsets: ["latin"],
+  axes: ["opsz"],
 });
 
 export async function generateMetadata(): Promise<Metadata> {

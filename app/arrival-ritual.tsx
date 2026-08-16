@@ -71,12 +71,12 @@ const PETALS = Array.from({ length: 72 }, (_, index) => ({
   rotate: (index * 47) % 180,
 }));
 
-const RAIN_DROPS = Array.from({ length: 40 }, (_, index) => ({
+const RAIN_DROPS = Array.from({ length: 64 }, (_, index) => ({
   left: (index * 29 + 7) % 101,
   delay: -((index * .73) % 8),
-  duration: 2.8 + (index % 7) * .22,
-  length: 18 + (index * 11) % 30,
-  opacity: .18 + (index % 5) * .07,
+  duration: 2.55 + (index % 7) * .2,
+  length: 28 + (index * 11) % 38,
+  opacity: .38 + (index % 5) * .09,
 }));
 
 export type AtmosphereMode = "petals" | "rain" | "off";
@@ -123,7 +123,7 @@ export function AtmosphereField({ quiet, mode }: { quiet: boolean; mode: Atmosph
     return () => document.removeEventListener("visibilitychange", synchronize);
   }, []);
   return (
-    <div className={`petal-field atmosphere-field atmosphere-${mode} ${quiet ? "quiet" : "full"} ${mode === "off" || documentHidden ? "paused" : ""}`} aria-hidden="true">
+    <div key={mode} className={`petal-field atmosphere-field atmosphere-${mode} ${quiet ? "quiet" : "full"} ${mode === "off" || documentHidden ? "paused" : ""}`} aria-hidden="true">
       {mode === "petals" ? PETALS.map((petal, index) => (
         <i
           key={index}

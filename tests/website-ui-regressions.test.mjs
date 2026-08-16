@@ -650,20 +650,23 @@ test("Engineering Journal is a persistent three-panel evidence workbench", async
   assert.match(source, /indexScrollTop/);
   assert.match(source, /onToggleEvidence/);
   assert.match(source, /aria-pressed=\{evidenceOpen\}/);
-  assert.doesNotMatch(source, /aria-label="Close evidence and lineage"/);
-  assert.match(source, /aria-label="Return to Engineering record"/);
-  assert.match(source, /const displayEvidence = evidenceOpen/);
+  assert.match(source, /aria-label="Close evidence"/);
+  assert.doesNotMatch(source, /aria-label="Return to Engineering record"/);
+  assert.match(source, /const displayEvidence = narrowWorkbench \? evidenceOpen : true/);
   assert.match(styles, /grid-template-columns:\s*minmax\(290px, 316px\) minmax\(0, 1120px\) minmax\(260px, 288px\)/);
   assert.match(styles, /gap:\s*20px/);
   assert.match(styles, /height:\s*calc\(100dvh - 90px\)/);
   assert.match(styles, /\.engineering-destination \.engineering-record-panel,[\s\S]*?\.engineering-destination \.engineering-evidence-panel \{ overflow-y: auto;/);
   assert.match(source, /matchMedia\("\(max-width: 1320px\)"\)/);
+  assert.match(source, /addEventListener\("change", syncEvidenceLayout\)/);
   assert.match(source, /typeof parsed\.evidenceOpen === "boolean" \? parsed\.evidenceOpen : undefined/);
   assert.match(styles, /\.engineering-search \.sr-only/);
   assert.match(styles, /\.engineering-record-panel \.engineering-facts \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
   assert.doesNotMatch(source, /indexCollapsed/);
   assert.doesNotMatch(source, /aria-label="Collapse Journal index"/);
-  assert.match(styles, /@media \(max-width: 1320px\)/);
+  assert.match(styles, /@media \(max-width: 1320px\)[\s\S]*position:\s*absolute;/);
+  assert.match(styles, /@media \(max-width: 1320px\)[\s\S]*\.engineering-panel-close \{ display: inline-flex/);
+  assert.doesNotMatch(styles, /position:\s*fixed;[\s\S]*engineering-evidence-panel|engineering-evidence-panel \{ position: fixed/);
   assert.match(styles, /@media \(max-width: 760px\)/);
   assert.equal((styles.match(/^\.engineering-workspace \{/gm) ?? []).length, 1, "the Engineering workbench must have one authoritative base rule");
   assert.equal((styles.match(/^@media \(max-width: 760px\) \{/gm) ?? []).length, 1, "mobile workbench behavior must stay in one breakpoint block");
@@ -680,7 +683,7 @@ test("Engineering Case Studies preserves the three-panel workbench before select
   const source = await load("../app/engineering-workspace.tsx");
   const styles = await load("../app/engineering-workspace.css");
   assert.match(source, /EngineeringEmptyEvidencePanel/);
-  assert.match(source, /displayEvidence = evidenceOpen/);
+  assert.match(source, /displayEvidence = narrowWorkbench \? evidenceOpen : true/);
   assert.match(source, /No eligible record selected\./);
   assert.match(styles, /\.engineering-evidence-empty/);
 });
@@ -692,6 +695,11 @@ test("workspace gutters stay transparent and Learn removes its underpanel", asyn
   ]);
   assert.match(atmosphere, /active-view-library[\s\S]*\.past-master-detail/);
   assert.match(atmosphere, /active-view-banks[\s\S]*\.bank-master-detail/);
+  assert.match(atmosphere, /active-view-library \.main-column[\s\S]*background:\s*var\(--workspace-paper\)/);
+  assert.match(atmosphere, /active-view-banks \.main-column[\s\S]*background:\s*var\(--workspace-paper\)/);
+  assert.match(atmosphere, /\.past-master-pane, \.past-entry-pane[\s\S]*?background:\s*var\(--workspace-paper\)/);
+  assert.match(atmosphere, /\.bank-master-pane, \.bank-solution-pane[\s\S]*?background:\s*var\(--workspace-paper\)/);
+  assert.doesNotMatch(atmosphere, /past-entry-pane\) \{\s*background: transparent !important/);
   assert.match(atmosphere, /active-workspace-engineering[\s\S]*\.engineering-workspace[\s\S]*background:\s*transparent/);
   assert.match(learn, /\.learn-course-workspace\s*\{[\s\S]*background:\s*transparent;[\s\S]*border:\s*0;[\s\S]*padding:\s*0;/);
   assert.match(learn, /\.learn-hero-metrics\s*\{[\s\S]*border-top:\s*0;/);
@@ -708,10 +716,12 @@ test("workspace atmosphere is persistent, bounded, and reader-safe", async () =>
   assert.match(home, /!atmosphereReady \? "off"/);
   assert.match(home, /activeWorkspace === "engineering" \? "rain" : "petals"/);
   assert.match(home, /<AtmosphereField[^>]*mode=\{atmosphereMode\}/);
-  assert.match(atmosphere, /Array\.from\(\{ length: 40 \}/);
+  assert.match(atmosphere, /Array\.from\(\{ length: 64 \}/);
+  assert.match(atmosphere, /ambient-rain-drop/);
   assert.match(atmosphere, /visibilitychange/);
   assert.match(globalStyles, /\.ambient-rain-drop/);
   assert.match(globalStyles, /prefers-reduced-motion: reduce/);
+  assert.equal(cssRules(globalRules, ".ambient-rain-drop")[0]?.declarations.width, "2px");
   assert.equal(cssRules(globalRules, ".ambient-rain-drop")[0]?.declarations["will-change"], undefined);
   assert.match(readerStyles, /body:has\(\.reader-workspace\) \.ambient-rain-drop/);
 });
@@ -772,14 +782,13 @@ test("Interview navigation uses one shared local model with Journey last", async
 test("responsive shell keeps the workspace selector above the seven-item Interview dock", async () => {
   const { rules } = await loadResponsiveShell();
   const mobileSidebar = cssRules(rules, ".sidebar", "max-width: 900px").at(-1).declarations;
-  assert.equal(mobileSidebar.position, "sticky");
-  assert.equal(mobileSidebar.inset, "auto");
-  assert.equal(mobileSidebar.top, "0");
-  assert.equal(mobileSidebar.width, "100%");
+  assert.equal(mobileSidebar.display, "none");
   const interviewDock = cssRules(rules, ".mobile-interview-nav", "max-width: 900px").at(-1).declarations;
   assert.equal(interviewDock.position, "fixed");
   assert.equal(interviewDock.display, "grid");
-  assert.equal(interviewDock["grid-template-columns"], "repeat(7, 1fr)");
+  assert.equal(interviewDock["grid-template-columns"], "repeat(7, minmax(0, 1fr))");
+  assert.equal(cssRules(rules, ".mobile-learn-nav", "max-width: 900px").at(-1).declarations["grid-template-columns"], "repeat(4, minmax(0, 1fr))");
+  assert.equal(cssRules(rules, ".mobile-engineering-nav", "max-width: 900px").at(-1).declarations["grid-template-columns"], "repeat(6, minmax(0, 1fr))");
   const compactDock = cssRules(rules, ".mobile-interview-nav", "max-width: 360px").at(-1).declarations;
   assert.equal(compactDock["grid-template-columns"], "repeat(4, minmax(0, 1fr))");
   assert.equal(cssRules(rules, ".mobile-interview-nav button", "max-width: 420px").at(-1).declarations["min-height"], "44px");
@@ -794,12 +803,17 @@ test("workspace header stacks the active tab above the Pacific date at every wid
       && attribute.name.getText(file) === "className"
       && attribute.initializer?.getText(file) === '"topbar-context"'))[0];
   assert.ok(context);
-  const elements = context.children.filter(ts.isJsxElement);
+  const copy = context.children.filter(ts.isJsxElement)
+    .find((element) => element.openingElement.attributes.properties.some((attribute) => ts.isJsxAttribute(attribute)
+      && attribute.name.getText(file) === "className"
+      && attribute.initializer?.getText(file) === '"topbar-context-copy"'));
+  assert.ok(copy);
+  const elements = copy.children.filter(ts.isJsxElement);
   assert.deepEqual(elements.map((element) => element.openingElement.tagName.getText(file)), ["strong", "time"]);
   assert.equal(elements[0].children[0]?.getText(file), '{activeWorkspace === "engineering" ? ENGINEERING_VIEW_TITLES[engineeringView] : activeWorkspace === "learn" ? LEARN_VIEW_TITLES[learnDestination] : INTERVIEW_VIEW_TITLES[view]}');
   assert.match(elements[1].children[0]?.getText(file) ?? "", /readableDate\(journal\.date\)/);
 
-  const contextStyle = cssRules(rules, ".topbar-context")
+  const contextStyle = cssRules(rules, ".topbar-context-copy")
     .find((rule) => rule.declarations["align-content"] === "center")?.declarations;
   assert.ok(contextStyle);
   assert.equal(contextStyle.display, "grid");
@@ -807,6 +821,8 @@ test("workspace header stacks the active tab above the Pacific date at every wid
 
   const narrowDate = cssRules(rules, ".topbar-context time", "max-width: 680px").at(-1).declarations;
   assert.notEqual(narrowDate.display, "none");
+  assert.equal(cssRules(rules, ".topbar", "max-width: 760px").at(-1).declarations["grid-template-areas"], '"context switch actions"');
+  assert.equal(cssRules(rules, ".topbar-brand", "max-width: 900px").at(-1).declarations.display, "grid");
 });
 
 test("Loops source dialog keeps a stable close callback for its focus and scroll-lock lifecycle", async () => {
@@ -920,6 +936,82 @@ test("every workspace hero uses one localized draw pulse and sweep with a static
   assert.match(engineeringCss, /prefers-reduced-motion: reduce/);
 });
 
+test("Learn and Engineering hero type stays inside the 350px panel", async () => {
+  const [learnCss, engineeringCss] = await Promise.all([
+    load("../app/learn-workspace.css"),
+    load("../app/engineering-workspace.css"),
+  ]);
+  const learnRules = parseCss(learnCss);
+  const engineeringRules = parseCss(engineeringCss);
+  const learnCopy = cssRules(learnRules, ".learn-hero-copy").find((rule) => rule.ancestors.length === 0)?.declarations;
+  const learnTitle = cssRules(learnRules, ".learn-hero h1").find((rule) => rule.ancestors.length === 0)?.declarations;
+  const engineeringCopy = cssRules(engineeringRules, ".engineering-hero-copy").find((rule) => rule.ancestors.length === 0)?.declarations;
+  const engineeringTitle = cssRules(engineeringRules, ".engineering-hero-copy h1").find((rule) => rule.ancestors.length === 0)?.declarations;
+  const readerTitle = cssRules(engineeringRules, ".engineering-reader-header h1").find((rule) => rule.ancestors.length === 0)?.declarations;
+
+  assert.equal(learnCopy?.["align-self"], "stretch");
+  assert.equal(learnCopy?.overflow, "hidden");
+  assert.equal(learnCopy?.["max-height"], "300px");
+  const learnBlurb = cssRules(learnRules, ".learn-hero-copy > p").find((rule) => rule.ancestors.length === 0)?.declarations;
+  assert.equal(learnBlurb?.["-webkit-line-clamp"], "3");
+  assert.equal(learnTitle?.["line-height"], "1.28");
+  assert.equal(learnTitle?.["letter-spacing"], "-0.015em");
+  assert.match(learnTitle?.["font-size"] ?? "", /3\.85rem/);
+  assert.equal(engineeringCopy?.bottom, "88px");
+  assert.equal(engineeringTitle?.["line-height"], "1.28");
+  assert.equal(engineeringTitle?.["letter-spacing"], ".012em");
+  assert.match(engineeringTitle?.["font-family"] ?? "", /font-editorial/);
+  assert.match(engineeringTitle?.["font-size"] ?? "", /3\.65rem/);
+  assert.equal(readerTitle?.["line-height"], "1.28");
+  assert.match(readerTitle?.["font-family"] ?? "", /font-editorial/);
+  assert.doesNotMatch(learnCss, /letter-spacing:\s*-0\.052em/);
+  assert.doesNotMatch(engineeringCss, /line-height:\s*\.86/);
+});
+
+test("Learn hero metrics stay in the 50px summary band", async () => {
+  const [learnCss, atmosphereCss] = await Promise.all([
+    load("../app/learn-workspace.css"),
+    load("../app/workspace-atmosphere.css"),
+  ]);
+  const learnRules = parseCss(learnCss);
+  const atmosphereRules = parseCss(atmosphereCss);
+  const hero = cssRules(learnRules, ".learn-hero").find((rule) => rule.ancestors.length === 0)?.declarations;
+  const metrics = cssRules(learnRules, ".learn-hero-metrics").find((rule) => rule.ancestors.length === 0)?.declarations;
+  const cells = cssRules(learnRules, ".learn-hero-metrics > div").find((rule) => rule.ancestors.length === 0)?.declarations;
+  const values = cssRules(learnRules, ".learn-hero-metrics dd").find((rule) => rule.ancestors.length === 0)?.declarations;
+  const stacked = cssRules(learnRules, ".learn-hero-metrics > div", "max-width: 680px").at(-1)?.declarations;
+
+  assert.equal(hero?.["grid-template-rows"], "300px 50px");
+  assert.equal(metrics?.height, "50px");
+  assert.equal(metrics?.["min-height"], "50px");
+  assert.equal(metrics?.["max-height"], "50px");
+  assert.equal(metrics?.["z-index"], "3");
+  assert.equal(cells?.["grid-template-columns"], "auto minmax(0, 1fr)");
+  assert.equal(values?.order, "-1");
+  assert.equal(values?.["white-space"], "nowrap");
+  assert.equal(stacked?.["grid-template-columns"], "1fr");
+  const stackedLabel = cssRules(learnRules, ".learn-hero-metrics dt", "max-width: 680px").at(-1)?.declarations;
+  assert.equal(stackedLabel?.["white-space"], "normal");
+  for (const rule of cssRules(atmosphereRules, ".app-shell.active-workspace-learn .learn-hero-metrics")) {
+    if (rule.declarations.height) assert.equal(rule.declarations.height, "50px");
+  }
+  assert.doesNotMatch(learnCss, /learn-hero-metrics[^{]*\{[^}]*height:\s*64px/);
+});
+
+test("Career Materials stays readable at narrow widths", async () => {
+  const css = await load("../app/globals.css");
+  const rules = parseCss(css);
+  const workspace = cssRules(rules, ".career-materials-workspace")[0]?.declarations;
+  const trust = cssRules(rules, ".materials-trust-strip")[0]?.declarations;
+  const handoff = cssRules(rules, ".materials-specialist-handoff")[0]?.declarations;
+
+  assert.equal(workspace?.gap, "20px");
+  assert.equal(trust?.["flex-wrap"], "wrap");
+  assert.match(handoff?.["grid-template-columns"] ?? "", /minmax\(0, 1\.3fr\)/);
+  assert.equal(cssRules(rules, ".materials-library-empty", "max-width: 900px").at(-1)?.declarations["grid-template-columns"], "minmax(0, 1fr)");
+  assert.equal(cssRules(rules, ".materials-trust-strip", "max-width: 680px").at(-1)?.declarations["flex-direction"], "column");
+});
+
 test("Banks hero selector spans the full summary band and keeps one major-panel gap", async () => {
   const [heroCss, workspaceCss] = await Promise.all([
     load("../app/interview-page-hero.css"),
@@ -1002,4 +1094,49 @@ test("an open reader owns an opaque paint layer and suspends ambient petals", as
   assert.equal(reader?.["border-radius"], "14px");
   assert.equal(reader?.overflow, "hidden");
   assert.equal(cssRules(rules, ".reader-outline .toc-parent")[0]?.declarations["font-weight"], "inherit");
+});
+
+test("every workspace keeps timer, export, and connect in one tools menu", async () => {
+  const source = await load("../app/home-client.tsx");
+  assert.match(source, /<details className=\{`topbar-tools/);
+  assert.match(source, /aria-label="Timer, export, and connect"/);
+  assert.match(source, /className="topbar-tools-menu"/);
+  assert.match(source, /<Icon name="link" \/>/);
+  assert.match(source, /"Close timer" : "Pop out timer"/);
+  assert.match(source, />Connect</);
+  assert.match(source, />Export today</);
+  assert.doesNotMatch(source, /topbar-tool-group/);
+  assert.doesNotMatch(source, /<Icon name="clock"/);
+  assert.doesNotMatch(source, /view === "today" && pipSupported/);
+  assert.doesNotMatch(source, /activeWorkspace === "learn" \?\s*\(/);
+  assert.doesNotMatch(source, /activeWorkspace === "engineering" \? null/);
+});
+
+test("narrow chrome hides the destination sidebar instead of squeezing it", async () => {
+  const v2 = await load("../app/interview-arc-v2.css");
+  const atmosphere = await load("../app/workspace-atmosphere.css");
+  assert.doesNotMatch(v2, /--sidebar-size:\s*82px/);
+  assert.doesNotMatch(v2, /grid-template-columns:\s*82px minmax\(0, 1fr\)/);
+  assert.doesNotMatch(v2, /grid-template-columns:\s*190px minmax\(0, 1fr\)/);
+  assert.match(atmosphere, /@media \(max-width: 900px\)[\s\S]*\.app-shell \.sidebar \{ display: none;/);
+  assert.match(atmosphere, /@media \(max-width: 900px\)[\s\S]*\.app-shell \.topbar-brand \{ display: grid;/);
+});
+
+test("Engineering stepwise shell keeps compact contents, collapsing evidence, and a 50px music dock", async () => {
+  const source = await load("../app/engineering-workspace.tsx");
+  const styles = await load("../app/engineering-workspace.css");
+  const atmosphere = await load("../app/workspace-atmosphere.css");
+  assert.match(styles, /\.engineering-contents-nav button \{[\s\S]*border-radius:\s*999px/);
+  assert.match(styles, /@media \(max-width: 1320px\)[\s\S]*evidence-closed \.engineering-evidence-panel \{ display: none;/);
+  assert.match(styles, /\.engineering-panel-toggle/);
+  assert.doesNotMatch(source, /Show Journal index/);
+  assert.doesNotMatch(source, /journalUserSet/);
+  assert.match(atmosphere, /\.music-dock \{[\s\S]*max-height:\s*40px/);
+  assert.match(atmosphere, /\.topbar \{[\s\S]*height:\s*50px/);
+  assert.match(atmosphere, /\.app-shell \.music-dock label,\s*\.app-shell \.music-dock i \{ display: none;/);
+  assert.match(atmosphere, /flex: 0 0 auto/);
+  assert.match(atmosphere, /@container topbar-actions \(max-width: 520px\)[\s\S]*\.music-playlist-label/);
+  assert.match(atmosphere, /@media \(max-width: 1320px\)[\s\S]*\.music-playlist \{ display: none;/);
+  assert.doesNotMatch(atmosphere, /@container topbar \(max-width: 1100px\)[\s\S]*\.topbar-context \{ visibility: hidden;/);
+  assert.doesNotMatch(atmosphere, /\.app-shell \.topbar-context \{ display: none;/);
 });

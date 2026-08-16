@@ -668,7 +668,7 @@ function inferredQuestionTags(type: ActivityType, question: QuestionBankItem) {
   return inferred.length ? [...new Set(inferred)] : [type === "leetcode" ? "General coding" : type === "system_design" ? "Distributed systems" : "Behavioral signal"];
 }
 
-function Icon({ name }: { name: "close" | "star" | "book" | "sidebar" | "outline" | "plus" | "minus" | "filter" | "sort" | "note" | "edit" | "trash" | "chevron" | "flag" | "play" | "pause" | "clips" | "volume" }) {
+function Icon({ name }: { name: "close" | "star" | "book" | "sidebar" | "outline" | "plus" | "minus" | "filter" | "sort" | "note" | "edit" | "trash" | "chevron" | "flag" | "play" | "pause" | "clips" | "volume" | "link" }) {
   const paths: Record<typeof name, ReactNode> = {
     close: <><path d="M5 5l14 14M19 5 5 19" /></>,
     star: <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" />,
@@ -688,6 +688,7 @@ function Icon({ name }: { name: "close" | "star" | "book" | "sidebar" | "outline
     pause: <><path d="M8 5v14M16 5v14" /></>,
     clips: <><rect x="5" y="7" width="14" height="12" rx="2" /><path d="M8 7V5h8v2M9 11h6M9 15h4" /></>,
     volume: <><path d="M5 10v4h3l4 4V6L8 10H5Z" /><path d="M16 9c1 1 1 5 0 6M19 7c2 3 2 7 0 10" /></>,
+    link: <><path d="M9 8H7a4 4 0 1 0 0 8h2" /><path d="M15 8h2a4 4 0 1 1 0 8h-2" /><path d="M8 12h8" /></>,
   };
   return <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 }
@@ -7256,8 +7257,13 @@ export default function HomeClient({ content, today, engineering, initialLocatio
       <section className="main-column">
         <header className="topbar">
           <div className="topbar-context">
-            <strong>{activeWorkspace === "engineering" ? ENGINEERING_VIEW_TITLES[engineeringView] : activeWorkspace === "learn" ? LEARN_VIEW_TITLES[learnDestination] : INTERVIEW_VIEW_TITLES[view]}</strong>
-            <time dateTime={journal.date}>{readableDate(journal.date)}</time>
+            <button type="button" className="topbar-brand" onClick={() => navigateToPrimaryView("today")} aria-label="Interview Arc home">
+              <span className="brand-mark" aria-hidden="true" />
+            </button>
+            <div className="topbar-context-copy">
+              <strong>{activeWorkspace === "engineering" ? ENGINEERING_VIEW_TITLES[engineeringView] : activeWorkspace === "learn" ? LEARN_VIEW_TITLES[learnDestination] : INTERVIEW_VIEW_TITLES[view]}</strong>
+              <time dateTime={journal.date}>{readableDate(journal.date)}</time>
+            </div>
           </div>
           <nav className="topbar-workspace-switch" aria-label="Workspaces">
             <button type="button" className={activeWorkspace === "interview" ? "active" : ""} aria-current={activeWorkspace === "interview" ? "page" : undefined} onClick={() => selectWorkspace("interview")}>Interview</button>
@@ -7272,10 +7278,15 @@ export default function HomeClient({ content, today, engineering, initialLocatio
               <label><span>Volume</span><input type="range" min="0" max="1" step="0.05" value={musicVolume} onChange={(event) => setMusicVolume(Number(event.target.value))} aria-label="Music volume" /></label>
               <MusicPlaylist playlist={ambientPlaylist} currentIndex={ambientTrackIndex} onSelect={chooseAmbientTrack} />
             </div>
-            <button className={`atmosphere-toggle ${atmosphereMode !== "off" ? "active" : ""}`} onClick={cycleAtmosphere} title={`Atmosphere: ${atmosphereMode}. Switch atmosphere`}><span aria-hidden="true">{atmosphereMode === "rain" ? "⌁" : atmosphereMode === "petals" ? "✦" : "○"}</span>{atmosphereMode === "rain" ? "Rain" : atmosphereMode === "petals" ? "Petals" : "Atmosphere off"}</button>
-            {activeWorkspace === "interview" && view === "today" && pipSupported && <button className={`secondary-action pip-toggle ${pipWindow && !pipWindow.closed ? "active" : ""}`} onClick={openNowWindow} aria-pressed={Boolean(pipWindow && !pipWindow.closed)}>{pipWindow && !pipWindow.closed ? "Close timer" : "Pop out timer"}</button>}
-            {activeWorkspace !== "engineering" ? <button className="secondary-action" onClick={() => setIntegrationOpen(true)}>Connect</button> : null}
-            {activeWorkspace === "interview" ? <button className="secondary-action" onClick={() => void exportDraft()}>Export today</button> : null}
+            <button className={`atmosphere-toggle ${atmosphereMode !== "off" ? "active" : ""}`} onClick={cycleAtmosphere} title={`Atmosphere: ${atmosphereMode}. Switch atmosphere`}><span aria-hidden="true">{atmosphereMode === "rain" ? "⌁" : atmosphereMode === "petals" ? "✦" : "○"}</span><span className="atmosphere-toggle-label">{atmosphereMode === "rain" ? "Rain" : atmosphereMode === "petals" ? "Petals" : "Atmosphere off"}</span></button>
+            <details className={`topbar-tools ${pipWindow && !pipWindow.closed ? "active" : ""}`}>
+              <summary aria-label="Timer, export, and connect" title="Timer, export, and connect"><Icon name="link" /></summary>
+              <div className="topbar-tools-menu" role="menu">
+                <button type="button" role="menuitem" className={pipWindow && !pipWindow.closed ? "active" : ""} disabled={!pipSupported} title={pipSupported ? undefined : "Pop out timer needs Chrome or Edge"} aria-pressed={Boolean(pipWindow && !pipWindow.closed)} onClick={(event) => { void openNowWindow(); event.currentTarget.closest("details")?.removeAttribute("open"); }}>{pipWindow && !pipWindow.closed ? "Close timer" : "Pop out timer"}</button>
+                <button type="button" role="menuitem" onClick={(event) => { setIntegrationOpen(true); event.currentTarget.closest("details")?.removeAttribute("open"); }}>Connect</button>
+                <button type="button" role="menuitem" onClick={(event) => { void exportDraft(); event.currentTarget.closest("details")?.removeAttribute("open"); }}>Export today</button>
+              </div>
+            </details>
           </div>
         </header>
         <div className="page-content" id="practice-content">{activeWorkspace === "engineering" ? <EngineeringWorkspace index={engineering} view={engineeringView} onNavigateView={navigateToEngineering} /> : activeWorkspace === "learn" ? <LearnWorkspace destination={learnDestination} /> : <>{view === "today" && renderToday()}{view === "loops" && renderLoops()}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}{view === "materials" && <CareerMaterialsWorkspace />}</>}</div>

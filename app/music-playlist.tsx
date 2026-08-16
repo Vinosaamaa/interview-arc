@@ -17,7 +17,7 @@ export function MusicPlaylist({
     <details className={`music-playlist ${variant}`}>
       <summary aria-label="Open today’s music playlist">
         <span aria-hidden="true">≡</span>
-        <span>Playlist</span>
+        <span className="music-playlist-label">Playlist</span>
         <small>{playlist.length}</small>
       </summary>
       <div className="music-playlist-card">

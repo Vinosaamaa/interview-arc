@@ -85,6 +85,9 @@ test("local development bypasses Access without weakening the production config"
   ]);
 
   assert.match(viteConfig, /command === "serve" \? "wrangler\.dev\.jsonc" : "wrangler\.jsonc"/);
+  assert.match(viteConfig, /installLocalPreviewGuards/);
+  assert.match(viteConfig, /host: "127\.0\.0\.1"/);
+  assert.match(viteConfig, /command === "serve" \? \{ inspectorPort: false \}/);
   assert.match(worker, /LOCAL_DEV_AUTH_BYPASS === "true" && isLocalRequest/);
   assert.match(worker, /hostname\.endsWith\("\.localhost"\)/);
   assert.match(worker, /hostname === "0\.0\.0\.0"/);
@@ -96,6 +99,7 @@ test("local development bypasses Access without weakening the production config"
 
   const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   assert.match(packageJson.scripts.dev, /pnpm dev:prepare/);
+  assert.match(packageJson.scripts.dev, /vinext dev -H 127\.0\.0\.1 -p 3000/);
   assert.match(packageJson.scripts["dev:prepare"], /db:migrate:local/);
   assert.match(packageJson.scripts["dev:prepare"], /content:import:local/);
 });
@@ -226,8 +230,16 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.doesNotMatch(client, /returnFromCrossReader/);
   assert.doesNotMatch(client, /moveReaderNavigation/);
   assert.match(client, /Choose a result before completing this activity\./);
-  assert.match(client, /pip-toggle \$\{pipWindow && !pipWindow\.closed \? "active" : ""\}/);
+  assert.match(client, /className=\{`topbar-tools \$\{pipWindow && !pipWindow.closed \? "active" : ""\}`\}/);
+  assert.match(client, /aria-label="Timer, export, and connect"/);
+  assert.match(client, /className="topbar-tools-menu"/);
+  assert.match(client, /<Icon name="link" \/>/);
   assert.match(client, /"Close timer" : "Pop out timer"/);
+  assert.match(client, />Connect<\/button>/);
+  assert.match(client, />Export today<\/button>/);
+  assert.doesNotMatch(client, /topbar-tool-group/);
+  assert.doesNotMatch(client, /<Icon name="clock"/);
+  assert.doesNotMatch(client, /view === "today" && pipSupported/);
   assert.match(client, /const sessionOvertime = session \? overtime\(sessionTimer, now, sessionAllocated\) : 0/);
   assert.match(client, /sessionOvertime \? `\+\$\{formatClock\(sessionOvertime\)\}` : formatClock\(sessionLeft\)/);
   assert.match(client, /disabled=\{activityComplete \|\| !activityStarted \|\| \(!focusActivity && !outcome\) \|\| activityLocked\}/);
