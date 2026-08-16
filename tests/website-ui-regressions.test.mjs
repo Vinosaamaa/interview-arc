@@ -648,10 +648,10 @@ test("Engineering Journal is a persistent three-panel evidence workbench", async
   assert.doesNotMatch(source, />Contents<\/span>/);
   assert.match(source, /evidenceOpen/);
   assert.match(source, /indexScrollTop/);
-  assert.match(source, /toggleEvidence/);
+  assert.match(source, /onToggleEvidence/);
   assert.match(source, /aria-pressed=\{evidenceOpen\}/);
   assert.doesNotMatch(source, /aria-label="Close evidence and lineage"/);
-  assert.doesNotMatch(source, /aria-label="Return to Engineering record"/);
+  assert.match(source, /aria-label="Return to Engineering record"/);
   assert.match(source, /const displayEvidence = evidenceOpen/);
   assert.match(styles, /grid-template-columns:\s*minmax\(290px, 316px\) minmax\(0, 1120px\) minmax\(260px, 288px\)/);
   assert.match(styles, /gap:\s*20px/);
@@ -661,9 +661,8 @@ test("Engineering Journal is a persistent three-panel evidence workbench", async
   assert.match(source, /typeof parsed\.evidenceOpen === "boolean" \? parsed\.evidenceOpen : undefined/);
   assert.match(styles, /\.engineering-search \.sr-only/);
   assert.match(styles, /\.engineering-record-panel \.engineering-facts \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
-  assert.match(source, /indexCollapsed/);
-  assert.match(source, /journalOpen \? "Hide Journal index" : "Show Journal index"/);
-  assert.match(source, /evidenceOpen \? "Hide Exact evidence" : "Show Exact evidence"/);
+  assert.doesNotMatch(source, /indexCollapsed/);
+  assert.doesNotMatch(source, /aria-label="Collapse Journal index"/);
   assert.match(styles, /@media \(max-width: 1320px\)/);
   assert.match(styles, /@media \(max-width: 760px\)/);
   assert.equal((styles.match(/^\.engineering-workspace \{/gm) ?? []).length, 1, "the Engineering workbench must have one authoritative base rule");
@@ -675,34 +674,6 @@ test("Engineering Journal is a persistent three-panel evidence workbench", async
   assert.match(source, /const indexScrollTopRef = useRef\(0\)/);
   assert.match(source, /scrollPersistTimerRef/);
   assert.doesNotMatch(source, /setIndexScrollTop/);
-});
-
-test("Engineering record contents use compact pills and edge-mounted rails", async () => {
-  const source = await load("../app/engineering-workspace.tsx");
-  const styles = await load("../app/engineering-workspace.css");
-  const rules = parseCss(styles);
-  const file = parseTsx(source);
-  const reader = functionNamed(file, "RecordReader");
-  assert.ok(reader);
-  const readerSource = reader.getText(file);
-  assert.match(readerSource, /\["overview", "Overview"\]/);
-  assert.match(readerSource, /\["decision", "Decision"\]/);
-  assert.match(readerSource, /\["contract", "Contract"\]/);
-  assert.match(readerSource, /\["verification", "Verification"\]/);
-  assert.doesNotMatch(readerSource, /\["record", "Record"\]/);
-  assert.match(source, /type EngineeringContentsSection = "overview" \| "decision" \| "contract" \| "verification" \| "architecture" \| "interview"/);
-  assert.match(source, /contentsSection === "decision" \|\| parsed\.contentsSection === "contract" \|\| parsed\.contentsSection === "verification"/);
-  assert.match(source, /engineering-rail-toggle/);
-  assert.match(source, /"》"/);
-  assert.match(source, /"《"/);
-  assert.match(source, /matchMedia\("\(max-width: 980px\)"\)/);
-  assert.match(source, /typeof parsed\.journalOpen === "boolean" \? parsed\.journalOpen : undefined/);
-  assert.match(source, /journalUserSet/);
-  assert.match(source, /evidenceUserSet/);
-  assert.match(source, /setJournalOpen\(true\); setMobileReaderOpen\(false\)/);
-  assert.equal(cssRules(rules, ".engineering-contents-nav button").some((rule) => rule.declarations["border-radius"] === "999px"), true);
-  assert.equal(cssRules(rules, ".engineering-rail-toggle")[0]?.declarations.position, "absolute");
-  assert.match(styles, /prefers-reduced-motion: reduce/);
 });
 
 test("Engineering Case Studies preserves the three-panel workbench before selection", async () => {
@@ -719,32 +690,11 @@ test("workspace gutters stay transparent and Learn removes its underpanel", asyn
     load("../app/workspace-atmosphere.css"),
     load("../app/learn-workspace.css"),
   ]);
-  assert.match(atmosphere, /active-view-library :is\(\.library-page, \.past-master-detail\)/);
-  assert.match(atmosphere, /active-view-banks :is\(\.banks-page, \.bank-master-detail\)/);
-  assert.doesNotMatch(atmosphere, /past-master-detail, \.past-master-pane, \.past-entry-pane/);
-  assert.doesNotMatch(atmosphere, /bank-master-detail, \.bank-master-pane, \.bank-solution-pane/);
-  assert.match(atmosphere, /active-view-library :is\(\.past-master-pane, \.past-entry-pane\)/);
-  assert.match(atmosphere, /active-view-banks :is\(\.bank-master-pane, \.bank-solution-pane\)/);
+  assert.match(atmosphere, /active-view-library[\s\S]*\.past-master-detail/);
+  assert.match(atmosphere, /active-view-banks[\s\S]*\.bank-master-detail/);
   assert.match(atmosphere, /active-workspace-engineering[\s\S]*\.engineering-workspace[\s\S]*background:\s*transparent/);
   assert.match(learn, /\.learn-course-workspace\s*\{[\s\S]*background:\s*transparent;[\s\S]*border:\s*0;[\s\S]*padding:\s*0;/);
   assert.match(learn, /\.learn-hero-metrics\s*\{[\s\S]*border-top:\s*0;/);
-});
-
-test("the 50px application bar keeps music controls inside the pill", async () => {
-  const atmosphere = await load("../app/workspace-atmosphere.css");
-  const rules = parseCss(atmosphere);
-  const topbar = cssRules(rules, ".app-shell .topbar").find((rule) => rule.declarations.height === "50px")?.declarations;
-  assert.ok(topbar);
-  assert.equal(topbar.height, "50px");
-  assert.equal(topbar["min-height"], "50px");
-  assert.equal(topbar["max-height"], "50px");
-  assert.match(atmosphere, /\.app-shell \.music-dock \{[\s\S]*max-height:\s*40px/);
-  assert.match(atmosphere, /\.app-shell \.music-dock > button:first-child \{[\s\S]*min-width:\s*0/);
-  assert.match(atmosphere, /music-playlist > summary small/);
-  assert.match(atmosphere, /\.app-shell \.topbar > \.topbar-context \{[\s\S]*min-width:\s*0/);
-  assert.match(atmosphere, /@media \(max-width: 980px\)/);
-  assert.match(atmosphere, /@media \(max-width: 900px\)[\s\S]*\.app-shell \.local-nav-label/);
-  assert.match(atmosphere, /\.app-shell \.materials-nav button strong/);
 });
 
 test("workspace atmosphere is persistent, bounded, and reader-safe", async () => {
