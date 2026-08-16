@@ -697,7 +697,9 @@ test("Engineering record contents use compact pills and edge-mounted rails", asy
   assert.match(source, /"《"/);
   assert.match(source, /matchMedia\("\(max-width: 980px\)"\)/);
   assert.match(source, /typeof parsed\.journalOpen === "boolean" \? parsed\.journalOpen : undefined/);
-  assert.match(source, /pendingRailFocusRef/);
+  assert.match(source, /journalUserSet/);
+  assert.match(source, /evidenceUserSet/);
+  assert.match(source, /setJournalOpen\(true\); setMobileReaderOpen\(false\)/);
   assert.equal(cssRules(rules, ".engineering-contents-nav button").some((rule) => rule.declarations["border-radius"] === "999px"), true);
   assert.equal(cssRules(rules, ".engineering-rail-toggle")[0]?.declarations.position, "absolute");
   assert.match(styles, /prefers-reduced-motion: reduce/);

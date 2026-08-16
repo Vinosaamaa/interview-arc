@@ -295,7 +295,12 @@
   .engineering-workspace.mobile-reader-open .engineering-index-panel { display: none; }
   .engineering-workspace:not(.mobile-reader-open) .engineering-record-panel { display: none; }
   .engineering-workspace.index-collapsed .engineering-index-restore { display: none; }
-  .engineering-rail-toggle-journal { display: none; }
+  .engineering-workspace:not(.mobile-reader-open).index-collapsed .engineering-index-panel {
+    overflow: auto;
+    visibility: visible;
+    pointer-events: auto;
+    border-width: 1px;
+  }
   .engineering-reader { display: block; }
   .active-workspace-engineering .engineering-destination .engineering-reader-panel-actions button,
   .engineering-reader-panel-actions button { display: inline-flex; }

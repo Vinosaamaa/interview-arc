@@ -443,12 +443,13 @@
   }
   .app-shell .primary-nav button {
     min-width: 0;
-    font-size: 0;
-    line-height: 0;
+    overflow: hidden;
   }
-  .app-shell .primary-nav button > span {
-    font-size: .62rem;
-    line-height: 1.1;
+  .app-shell .primary-nav button .nav-copy {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .app-shell .materials-nav button {
     grid-template-columns: 1fr;

@@ -470,7 +470,9 @@ type EngineeringWorkspaceMemory = {
   selectedRef: string;
   mobileReaderOpen: boolean;
   journalOpen: boolean;
+  journalUserSet: boolean;
   evidenceOpen: boolean;
+  evidenceUserSet: boolean;
   contentsSection: EngineeringContentsSection;
   indexScrollTop: number;
 };
@@ -501,7 +503,9 @@ function readEngineeringMemory(): Partial<EngineeringWorkspaceMemory> {
       selectedRef: typeof parsed.selectedRef === "string" ? parsed.selectedRef : "",
       mobileReaderOpen: parsed.mobileReaderOpen !== false,
       journalOpen: typeof parsed.journalOpen === "boolean" ? parsed.journalOpen : undefined,
+      journalUserSet: parsed.journalUserSet === true,
       evidenceOpen: typeof parsed.evidenceOpen === "boolean" ? parsed.evidenceOpen : undefined,
+      evidenceUserSet: parsed.evidenceUserSet === true,
       contentsSection: parsed.contentsSection === "decision" || parsed.contentsSection === "contract" || parsed.contentsSection === "verification" || parsed.contentsSection === "architecture" || parsed.contentsSection === "interview" ? parsed.contentsSection : "overview",
       indexScrollTop: typeof parsed.indexScrollTop === "number" && Number.isFinite(parsed.indexScrollTop) ? Math.max(0, parsed.indexScrollTop) : 0,
     };
@@ -522,7 +526,9 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   const [selectedRef, setSelectedRef] = useState(index.records[0]?.ref ?? "");
   const [mobileReaderOpen, setMobileReaderOpen] = useState(true);
   const [journalOpen, setJournalOpen] = useState(true);
+  const [journalUserSet, setJournalUserSet] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(true);
+  const [evidenceUserSet, setEvidenceUserSet] = useState(false);
   const [contentsSection, setContentsSection] = useState<EngineeringContentsSection>("overview");
   const [memoryReady, setMemoryReady] = useState(false);
   const recordListRef = useRef<HTMLDivElement>(null);
@@ -571,8 +577,15 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
       setMobileReaderOpen(rememberedLayer === "receipts" ? false : narrowReader ? true : memory.mobileReaderOpen ?? false);
       const narrowWorkbench = window.matchMedia("(max-width: 1320px)").matches;
       const compactIndex = window.matchMedia("(max-width: 980px)").matches;
-      setJournalOpen(compactIndex ? false : memory.journalOpen ?? true);
-      setEvidenceOpen(narrowWorkbench ? false : memory.evidenceOpen ?? true);
+      const phoneReader = window.matchMedia("(max-width: 760px)").matches;
+      setJournalUserSet(memory.journalUserSet === true);
+      setEvidenceUserSet(memory.evidenceUserSet === true);
+      setJournalOpen(memory.journalUserSet === true && typeof memory.journalOpen === "boolean"
+        ? memory.journalOpen
+        : phoneReader ? true : !compactIndex);
+      setEvidenceOpen(memory.evidenceUserSet === true && typeof memory.evidenceOpen === "boolean"
+        ? memory.evidenceOpen
+        : !narrowWorkbench);
       setContentsSection(memory.contentsSection ?? "overview");
       indexScrollTopRef.current = memory.indexScrollTop ?? 0;
       setMemoryReady(true);
@@ -588,12 +601,12 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   const writeMemory = useCallback(() => {
     if (!memoryReady) return;
     try {
-      const next: EngineeringWorkspaceMemory = { journalLayer, query, types: selectedTypes, statuses: selectedStatuses, repositories: selectedRepositories, receiptQuery, receiptClassifications: selectedReceiptClassifications, receiptRepositories: selectedReceiptRepositories, selectedRef, mobileReaderOpen, journalOpen, evidenceOpen, contentsSection, indexScrollTop: indexScrollTopRef.current };
+      const next: EngineeringWorkspaceMemory = { journalLayer, query, types: selectedTypes, statuses: selectedStatuses, repositories: selectedRepositories, receiptQuery, receiptClassifications: selectedReceiptClassifications, receiptRepositories: selectedReceiptRepositories, selectedRef, mobileReaderOpen, journalOpen, journalUserSet, evidenceOpen, evidenceUserSet, contentsSection, indexScrollTop: indexScrollTopRef.current };
       window.sessionStorage.setItem(ENGINEERING_MEMORY_KEY, JSON.stringify(next));
     } catch {
       // Session storage can be unavailable in hardened browsing contexts; in-memory state remains active.
     }
-  }, [contentsSection, evidenceOpen, journalLayer, journalOpen, memoryReady, mobileReaderOpen, query, receiptQuery, selectedReceiptClassifications, selectedReceiptRepositories, selectedRef, selectedRepositories, selectedStatuses, selectedTypes]);
+  }, [contentsSection, evidenceOpen, evidenceUserSet, journalLayer, journalOpen, journalUserSet, memoryReady, mobileReaderOpen, query, receiptQuery, selectedReceiptClassifications, selectedReceiptRepositories, selectedRef, selectedRepositories, selectedStatuses, selectedTypes]);
 
   useEffect(() => {
     writeMemory();
@@ -648,14 +661,17 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   const showReceipts = view === "journal" && journalLayer === "receipts";
   const chooseJournalLayer = (next: EngineeringJournalLayer) => {
     setJournalLayer(next);
+    setJournalOpen(true);
     if (next === "receipts") setMobileReaderOpen(false);
   };
   const toggleJournal = () => {
     pendingRailFocusRef.current = journalOpen ? "journal-control" : "journal";
+    setJournalUserSet(true);
     setJournalOpen(!journalOpen);
   };
   const toggleEvidence = () => {
     pendingRailFocusRef.current = evidenceOpen ? "evidence-control" : "evidence";
+    setEvidenceUserSet(true);
     setEvidenceOpen(!evidenceOpen);
   };
 
@@ -708,7 +724,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
     </aside>
     <div className="engineering-record-shell">
       <button type="button" ref={journalDisclosureRef} className="engineering-rail-toggle engineering-rail-toggle-journal" aria-pressed={journalOpen} aria-label={journalOpen ? "Hide Journal index" : "Show Journal index"} onClick={toggleJournal}>{journalOpen ? "》" : "《"}</button>
-      {selected ? <RecordReader record={selected} onBack={() => setMobileReaderOpen(false)} contentsSection={contentsSection} onContentsSectionChange={setContentsSection} /> : <div className="engineering-reader engineering-record-panel engineering-reader-empty"><EmptyEngineeringView view={view} /></div>}
+      {selected ? <RecordReader record={selected} onBack={() => { setJournalOpen(true); setMobileReaderOpen(false); }} contentsSection={contentsSection} onContentsSectionChange={setContentsSection} /> : <div className="engineering-reader engineering-record-panel engineering-reader-empty"><EmptyEngineeringView view={view} /></div>}
       <button type="button" ref={evidenceDisclosureRef} className="engineering-rail-toggle engineering-rail-toggle-evidence" aria-pressed={evidenceOpen} aria-label={evidenceOpen ? "Hide Exact evidence" : "Show Exact evidence"} onClick={toggleEvidence}>{evidenceOpen ? "《" : "》"}</button>
     </div>
     {selected ? <EngineeringEvidencePanel record={selected} index={index} onSelect={openRelation} headingRef={evidenceHeadingRef} inactive={!displayEvidence} /> : <EngineeringEmptyEvidencePanel view={view} headingRef={evidenceHeadingRef} inactive={!displayEvidence} />}
