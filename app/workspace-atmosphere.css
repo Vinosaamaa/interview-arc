@@ -359,60 +359,25 @@
   padding-block: 5px;
   grid-template-rows: 40px;
   align-items: center;
-  overflow: hidden;
 }
 .app-shell .topbar > .topbar-context,
 .app-shell .topbar > .topbar-workspace-switch,
 .app-shell .topbar > .topbar-actions {
   height: 40px;
   min-height: 40px;
-  min-width: 0;
   align-self: center;
-  overflow: hidden;
 }
-.app-shell .topbar > .topbar-context { min-width: 0; overflow: hidden; }
 .app-shell .topbar-workspace-switch { padding: 3px; }
 .app-shell .topbar-workspace-switch button { min-height: 32px; }
-.app-shell .topbar-actions {
-  container-type: inline-size;
-  container-name: topbar-actions;
-}
-.app-shell .music-dock {
-  height: 40px;
-  min-height: 0;
-  max-height: 40px;
-  min-width: 0;
-  max-width: 100%;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-.app-shell .music-dock > button:first-child { min-width: 0; }
-.app-shell .atmosphere-toggle {
-  height: 40px;
-  min-height: 40px;
-  max-height: 40px;
-  overflow: hidden;
-}
-@container topbar-actions (max-width: 360px) {
-  .music-playlist > summary > span:nth-child(2),
-  .music-playlist > summary small { display: none; }
-}
-@container topbar-actions (max-width: 280px) {
-  .music-playlist { display: none; }
-}
 
 /* Every control communicates clickability before activation. */
 .app-shell :is(button, summary, a[href], label[for], [role="button"]):not(:disabled) { cursor: pointer; }
 .app-shell :is(button, [role="button"]):disabled { cursor: not-allowed; }
 
 /* Panel gutters expose the shared canvas instead of a tinted under-panel. */
-.app-shell.active-view-library :is(.library-page, .past-master-detail),
-.app-shell.active-view-banks :is(.banks-page, .bank-master-detail) {
-  background: transparent;
-}
-.app-shell.active-view-library :is(.past-master-pane, .past-entry-pane),
-.app-shell.active-view-banks :is(.bank-master-pane, .bank-solution-pane) {
-  background-color: var(--workspace-paper, #fffdf8);
+.app-shell.active-view-library :is(.library-page, .past-master-detail, .past-master-pane, .past-entry-pane),
+.app-shell.active-view-banks :is(.banks-page, .bank-master-detail, .bank-master-pane, .bank-solution-pane) {
+  background: transparent !important;
 }
 
 /* The light materials theme needs dark, readable handoff copy. */
@@ -428,76 +393,6 @@
   background: rgba(255,255,255,.62);
 }
 .app-shell.active-workspace-learn .learn-hero-metrics { height: 64px; min-height: 64px; }
-
-@media (max-width: 980px) {
-  .app-shell .local-nav-label {
-    min-width: 0;
-    margin-inline: 0;
-  }
-  .app-shell .local-nav-label > span,
-  .app-shell .local-nav-label small {
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .app-shell .primary-nav button {
-    min-width: 0;
-    overflow: hidden;
-  }
-  .app-shell .primary-nav button .nav-copy {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .app-shell .materials-nav button {
-    grid-template-columns: 1fr;
-    justify-items: center;
-    padding-inline: 0;
-  }
-  .app-shell .materials-nav button strong,
-  .app-shell .materials-nav button small { display: none; }
-}
-
-@media (max-width: 900px) {
-  .app-shell .sidebar {
-    position: sticky;
-    top: 0;
-    inset: auto;
-    width: 100%;
-    height: 50px;
-    min-height: 50px;
-    max-height: 50px;
-    padding: 5px 12px;
-    border: 0;
-    border-radius: 0;
-    border-bottom: 1px solid var(--workspace-sidebar-border);
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 10px;
-    overflow: hidden;
-    box-shadow: none;
-  }
-  .app-shell .brand { display: flex; flex: 0 0 auto; padding: 0; }
-  .app-shell .brand > span:last-child { display: none; }
-  .app-shell .local-nav-label {
-    display: flex;
-    min-width: 0;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    flex: 1;
-    align-items: baseline;
-    gap: 8px;
-  }
-  .app-shell .sidebar > .primary-nav,
-  .app-shell .materials-nav,
-  .app-shell .sidebar-status,
-  .app-shell .profile { display: none; }
-  .app-shell .topbar { top: 50px; }
-}
 
 @media (max-width: 760px) {
   .app-shell .topbar {
