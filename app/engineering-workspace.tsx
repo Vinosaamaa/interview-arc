@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ComponentType, CSSProperties } from "react";
+import type { ComponentType, CSSProperties, RefObject } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import type {
   EngineeringJournalIndex,
   EngineeringJournalRecord,
+  EngineeringRecordSection,
   EngineeringPullRequestClassification,
   EngineeringPullRequestReceipt,
   EngineeringRecordEffectiveStatus,
@@ -63,7 +64,24 @@ const RECEIPT_CLASSIFICATION_LABELS: Record<EngineeringPullRequestClassification
 };
 
 type EngineeringJournalLayer = "records" | "receipts";
-type EngineeringContentsSection = "overview" | "architecture" | "record" | "interview";
+type EngineeringContentsSection = "overview" | "decision" | "contract" | "verification" | "architecture" | "interview";
+
+function recordedValues(values: string[]) {
+  return values.length > 0 ? values.join(", ") : "Not recorded";
+}
+
+function classifyRecordSection(section: EngineeringRecordSection): Exclude<EngineeringContentsSection, "architecture" | "interview"> {
+  const key = `${section.id} ${section.title}`.toLowerCase();
+  if (/(verif|evidence|source|privacy|statistic|follow-?up|recovery|timeline|root-cause|root cause)/.test(key)) return "verification";
+  if (/(interface|contract|module|boundary|adapter|seam|api|schema)/.test(key)) return "contract";
+  if (/(decision|consequence|alternative|chosen|trade-?off|status|constraint)/.test(key)) return "decision";
+  return "overview";
+}
+
+function RecordSectionMarkdown({ sections }: { sections: EngineeringRecordSection[] }) {
+  if (sections.length === 0) return null;
+  return <>{sections.map((section) => <div key={section.id} className="engineering-markdown"><Markdown remarkPlugins={[remarkGfm]}>{`## ${section.title}\n\n${section.body}`}</Markdown></div>)}</>;
+}
 
 export type EngineeringIconName =
   | "interview"
@@ -235,26 +253,27 @@ function ReceiptTimeline({
 function RecordReader({
   record,
   onBack,
-  onToggleEvidence,
-  evidenceOpen,
   contentsSection,
   onContentsSectionChange,
 }: {
   record: EngineeringJournalRecord;
   onBack: () => void;
-  onToggleEvidence: () => void;
-  evidenceOpen: boolean;
   contentsSection: EngineeringContentsSection;
   onContentsSectionChange: (section: EngineeringContentsSection) => void;
 }) {
   const readerRef = useRef<HTMLElement>(null);
-  const readerBody = record.body.startsWith(record.summary)
-    ? record.body.slice(record.summary.length).trim()
-    : record.body;
+  const groupedSections = {
+    overview: record.sections.filter((section) => classifyRecordSection(section) === "overview"),
+    decision: record.sections.filter((section) => classifyRecordSection(section) === "decision"),
+    contract: record.sections.filter((section) => classifyRecordSection(section) === "contract"),
+    verification: record.sections.filter((section) => classifyRecordSection(section) === "verification"),
+  };
   const contents: Array<[EngineeringContentsSection, string]> = [
     ["overview", "Overview"],
+    ["decision", "Decision"],
+    ["contract", "Contract"],
+    ["verification", "Verification"],
     ...(record.diagrams.length > 0 ? [["architecture", "Architecture"] as [EngineeringContentsSection, string]] : []),
-    ["record", "Record"],
     ...(record.interviewView ? [["interview", "Interview view"] as [EngineeringContentsSection, string]] : []),
   ];
   const visit = (section: EngineeringContentsSection) => {
@@ -264,7 +283,7 @@ function RecordReader({
   return <article ref={readerRef} className="engineering-reader engineering-record-panel" aria-labelledby="engineering-record-title">
     <nav className="engineering-contents-nav" aria-label="Record contents">
       <div>{contents.map(([id, label]) => <button type="button" key={id} className={contentsSection === id ? "active" : ""} aria-current={contentsSection === id ? "location" : undefined} onClick={() => visit(id)}>{label}</button>)}</div>
-      <div className="engineering-reader-panel-actions"><button type="button" onClick={onBack}>Index</button><button type="button" onClick={onToggleEvidence} aria-pressed={evidenceOpen} aria-label={evidenceOpen ? "Hide evidence and lineage" : "Open evidence and lineage"}>Evidence</button></div>
+      <div className="engineering-reader-panel-actions"><button type="button" onClick={onBack}>Index</button></div>
     </nav>
     <header className="engineering-reader-header" data-engineering-section="overview">
       <div className="engineering-record-classification">
@@ -278,11 +297,45 @@ function RecordReader({
 
     <div className="engineering-reader-body">
       <dl className="engineering-facts">
-        <div><dt>Modules</dt><dd>{record.modules.join(", ") || "Not recorded"}</dd></div>
-        <div><dt>Interfaces</dt><dd>{record.interfaces.join(", ") || "Not recorded"}</dd></div>
-        <div><dt>Capabilities</dt><dd>{record.capabilityIds.join(", ") || "Not recorded"}</dd></div>
-        <div><dt>Verification</dt><dd>{record.verification.state === "verified" ? "Explicit evidence recorded" : "Not recorded"}</dd></div>
+        <div><dt>Repository</dt><dd>{record.repository}</dd></div>
+        <div><dt>Created</dt><dd><time dateTime={record.createdAt}>{record.createdAt}</time></dd></div>
+        <div><dt>Capabilities</dt><dd>{recordedValues(record.capabilityIds)}</dd></div>
+        <div><dt>Issue / PR</dt><dd>{[record.issue ? `Issue #${record.issue}` : null, record.pr ? `PR #${record.pr}` : null].filter(Boolean).join(" · ") || "Not recorded"}</dd></div>
       </dl>
+      <RecordSectionMarkdown sections={groupedSections.overview} />
+
+      <section className="engineering-reader-section" data-engineering-section="decision" aria-labelledby="engineering-decision-title">
+        <h2 id="engineering-decision-title">Decision</h2>
+        <dl className="engineering-facts">
+          <div><dt>Status</dt><dd>{STATUS_LABELS[record.effectiveStatus]}</dd></div>
+          <div><dt>Amends</dt><dd>{recordedValues(record.amends)}</dd></div>
+          <div><dt>Supersedes</dt><dd>{recordedValues(record.supersedes)}</dd></div>
+          <div><dt>Related decisions</dt><dd>{recordedValues(record.decisions)}</dd></div>
+        </dl>
+        <RecordSectionMarkdown sections={groupedSections.decision} />
+      </section>
+
+      <section className="engineering-reader-section" data-engineering-section="contract" aria-labelledby="engineering-contract-title">
+        <h2 id="engineering-contract-title">Contract</h2>
+        <dl className="engineering-facts">
+          <div><dt>Modules</dt><dd>{recordedValues(record.modules)}</dd></div>
+          <div><dt>Interfaces</dt><dd>{recordedValues(record.interfaces)}</dd></div>
+          <div><dt>Seams</dt><dd>{recordedValues(record.seams)}</dd></div>
+          <div><dt>Adapters</dt><dd>{recordedValues(record.adapters)}</dd></div>
+        </dl>
+        <RecordSectionMarkdown sections={groupedSections.contract} />
+      </section>
+
+      <section className="engineering-reader-section" data-engineering-section="verification" aria-labelledby="engineering-verification-title">
+        <h2 id="engineering-verification-title">Verification</h2>
+        <dl className="engineering-facts">
+          <div><dt>Verification</dt><dd>{record.verification.state === "verified" ? "Explicit evidence recorded" : "Not recorded"}</dd></div>
+          <div><dt>Confidence</dt><dd>{record.confidence}</dd></div>
+          <div><dt>Unknowns</dt><dd>{recordedValues(record.unknowns)}</dd></div>
+          <div><dt>Sources</dt><dd>{record.sources.length > 0 ? `${record.sources.length} recorded` : "Not recorded"}</dd></div>
+        </dl>
+        <RecordSectionMarkdown sections={groupedSections.verification} />
+      </section>
 
       {record.diagrams.length > 0 ? <section className="engineering-diagrams" data-engineering-section="architecture" aria-labelledby="engineering-diagrams-title">
         <header><h2 id="engineering-diagrams-title">Architecture diagrams</h2><p>Evidence-backed assets bundled from this record&apos;s exact Git revision.</p></header>
@@ -294,10 +347,6 @@ function RecordReader({
           <figcaption><strong>{diagram.title}</strong><span>{diagram.summary}</span><div><a href={diagram.renderedPermalink} target="_blank" rel="noreferrer"><EngineeringIcon name="source" />Exact rendered asset</a><a href={diagram.sourcePermalink} target="_blank" rel="noreferrer"><EngineeringIcon name="source" />Editable draw.io source</a></div></figcaption>
         </figure>)}
       </section> : null}
-
-      <div className="engineering-markdown" data-engineering-section="record">
-        <Markdown remarkPlugins={[remarkGfm]}>{readerBody}</Markdown>
-      </div>
 
       {record.interviewView ? <details className="engineering-interview-view" data-engineering-section="interview">
         <summary>Interview view</summary>
@@ -312,7 +361,7 @@ function RecordReader({
   </article>;
 }
 
-function EngineeringEvidencePanel({ record, index, onSelect, onReturn }: { record: EngineeringJournalRecord; index: EngineeringJournalIndex; onSelect: (ref: string) => void; onReturn: () => void }) {
+function EngineeringEvidencePanel({ record, index, onSelect, headingRef, inactive }: { record: EngineeringJournalRecord; index: EngineeringJournalIndex; onSelect: (ref: string) => void; headingRef: RefObject<HTMLHeadingElement | null>; inactive?: boolean }) {
   const corrections = [...record.amendedBy, ...record.supersededBy];
   const outgoing = [...record.amends, ...record.supersedes, ...record.relatedRecords, ...record.decisions, ...record.incidents, ...record.features];
   const backlinks = index.backlinks[record.ref] ?? [];
@@ -321,8 +370,8 @@ function EngineeringEvidencePanel({ record, index, onSelect, onReturn }: { recor
   const relatedReceipts = (index.receiptBacklinks[record.ref] ?? [])
     .map((ref) => receiptByRef.get(ref))
     .filter((receipt): receipt is EngineeringPullRequestReceipt => Boolean(receipt));
-  return <aside className="engineering-evidence-panel" aria-label="Evidence and lineage">
-    <header><div><span>Evidence desk</span><h2>Exact evidence</h2></div><button type="button" onClick={onReturn} aria-label="Return to Engineering record">Record</button></header>
+  return <aside className="engineering-evidence-panel" aria-label="Evidence and lineage" inert={inactive || undefined} aria-hidden={inactive || undefined}>
+    <header><div><span>Evidence desk</span><h2 id="engineering-evidence-heading" ref={headingRef} tabIndex={-1}>Exact evidence</h2></div></header>
     <dl className="engineering-evidence-ledger">
       <div><dt>Record ref</dt><dd><code>{record.ref}</code><CopyControl value={record.ref} label="record reference" /></dd></div>
       <div><dt>Commit</dt><dd><code>{record.source.commit}</code><CopyControl value={record.source.commit} label="full commit" /></dd></div>
@@ -345,9 +394,9 @@ function EngineeringEvidencePanel({ record, index, onSelect, onReturn }: { recor
   </aside>;
 }
 
-function EngineeringEmptyEvidencePanel({ view, onReturn }: { view: EngineeringView; onReturn: () => void }) {
-  return <aside className="engineering-evidence-panel engineering-evidence-empty" aria-label="Exact evidence">
-    <header><div><span>Evidence desk</span><h2>Exact evidence</h2></div><button type="button" onClick={onReturn} aria-label="Return to Engineering record">Record</button></header>
+function EngineeringEmptyEvidencePanel({ view, headingRef, inactive }: { view: EngineeringView; headingRef: RefObject<HTMLHeadingElement | null>; inactive?: boolean }) {
+  return <aside className="engineering-evidence-panel engineering-evidence-empty" aria-label="Exact evidence" inert={inactive || undefined} aria-hidden={inactive || undefined}>
+    <header><div><span>Evidence desk</span><h2 id="engineering-evidence-heading" ref={headingRef} tabIndex={-1}>Exact evidence</h2></div></header>
     <div className="engineering-evidence-empty-copy" role="status">
       <strong>No eligible record selected.</strong>
       <p>{view === "case-studies" ? "A released Feature Retrospective will open here with its exact commit, source path, and lineage." : "Choose an eligible record to inspect its exact evidence and lineage."}</p>
@@ -420,7 +469,10 @@ type EngineeringWorkspaceMemory = {
   receiptRepositories: string[];
   selectedRef: string;
   mobileReaderOpen: boolean;
+  journalOpen: boolean;
+  journalUserSet: boolean;
   evidenceOpen: boolean;
+  evidenceUserSet: boolean;
   contentsSection: EngineeringContentsSection;
   indexScrollTop: number;
 };
@@ -450,8 +502,11 @@ function readEngineeringMemory(): Partial<EngineeringWorkspaceMemory> {
       receiptRepositories: stringArray(parsed.receiptRepositories),
       selectedRef: typeof parsed.selectedRef === "string" ? parsed.selectedRef : "",
       mobileReaderOpen: parsed.mobileReaderOpen !== false,
+      journalOpen: typeof parsed.journalOpen === "boolean" ? parsed.journalOpen : undefined,
+      journalUserSet: parsed.journalUserSet === true,
       evidenceOpen: typeof parsed.evidenceOpen === "boolean" ? parsed.evidenceOpen : undefined,
-      contentsSection: parsed.contentsSection === "architecture" || parsed.contentsSection === "record" || parsed.contentsSection === "interview" ? parsed.contentsSection : "overview",
+      evidenceUserSet: parsed.evidenceUserSet === true,
+      contentsSection: parsed.contentsSection === "decision" || parsed.contentsSection === "contract" || parsed.contentsSection === "verification" || parsed.contentsSection === "architecture" || parsed.contentsSection === "interview" ? parsed.contentsSection : "overview",
       indexScrollTop: typeof parsed.indexScrollTop === "number" && Number.isFinite(parsed.indexScrollTop) ? Math.max(0, parsed.indexScrollTop) : 0,
     };
   } catch {
@@ -470,10 +525,18 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   const [selectedReceiptRepositories, setSelectedReceiptRepositories] = useState<string[]>([]);
   const [selectedRef, setSelectedRef] = useState(index.records[0]?.ref ?? "");
   const [mobileReaderOpen, setMobileReaderOpen] = useState(true);
+  const [journalOpen, setJournalOpen] = useState(true);
+  const [journalUserSet, setJournalUserSet] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(true);
+  const [evidenceUserSet, setEvidenceUserSet] = useState(false);
   const [contentsSection, setContentsSection] = useState<EngineeringContentsSection>("overview");
   const [memoryReady, setMemoryReady] = useState(false);
   const recordListRef = useRef<HTMLDivElement>(null);
+  const indexPanelRef = useRef<HTMLElement>(null);
+  const journalDisclosureRef = useRef<HTMLButtonElement>(null);
+  const evidenceDisclosureRef = useRef<HTMLButtonElement>(null);
+  const evidenceHeadingRef = useRef<HTMLHeadingElement>(null);
+  const pendingRailFocusRef = useRef<"journal" | "evidence" | "journal-control" | "evidence-control" | null>(null);
   const indexScrollTopRef = useRef(0);
   const scrollPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchByRef = useMemo(() => new Map(index.search.map((entry) => [entry.ref, entry])), [index.search]);
@@ -513,7 +576,16 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
       const narrowReader = window.matchMedia("(max-width: 760px)").matches;
       setMobileReaderOpen(rememberedLayer === "receipts" ? false : narrowReader ? true : memory.mobileReaderOpen ?? false);
       const narrowWorkbench = window.matchMedia("(max-width: 1320px)").matches;
-      setEvidenceOpen(narrowWorkbench ? false : memory.evidenceOpen ?? true);
+      const compactIndex = window.matchMedia("(max-width: 980px)").matches;
+      const phoneReader = window.matchMedia("(max-width: 760px)").matches;
+      setJournalUserSet(memory.journalUserSet === true);
+      setEvidenceUserSet(memory.evidenceUserSet === true);
+      setJournalOpen(memory.journalUserSet === true && typeof memory.journalOpen === "boolean"
+        ? memory.journalOpen
+        : phoneReader ? true : !compactIndex);
+      setEvidenceOpen(memory.evidenceUserSet === true && typeof memory.evidenceOpen === "boolean"
+        ? memory.evidenceOpen
+        : !narrowWorkbench);
       setContentsSection(memory.contentsSection ?? "overview");
       indexScrollTopRef.current = memory.indexScrollTop ?? 0;
       setMemoryReady(true);
@@ -529,12 +601,12 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   const writeMemory = useCallback(() => {
     if (!memoryReady) return;
     try {
-      const next: EngineeringWorkspaceMemory = { journalLayer, query, types: selectedTypes, statuses: selectedStatuses, repositories: selectedRepositories, receiptQuery, receiptClassifications: selectedReceiptClassifications, receiptRepositories: selectedReceiptRepositories, selectedRef, mobileReaderOpen, evidenceOpen, contentsSection, indexScrollTop: indexScrollTopRef.current };
+      const next: EngineeringWorkspaceMemory = { journalLayer, query, types: selectedTypes, statuses: selectedStatuses, repositories: selectedRepositories, receiptQuery, receiptClassifications: selectedReceiptClassifications, receiptRepositories: selectedReceiptRepositories, selectedRef, mobileReaderOpen, journalOpen, journalUserSet, evidenceOpen, evidenceUserSet, contentsSection, indexScrollTop: indexScrollTopRef.current };
       window.sessionStorage.setItem(ENGINEERING_MEMORY_KEY, JSON.stringify(next));
     } catch {
       // Session storage can be unavailable in hardened browsing contexts; in-memory state remains active.
     }
-  }, [contentsSection, evidenceOpen, journalLayer, memoryReady, mobileReaderOpen, query, receiptQuery, selectedReceiptClassifications, selectedReceiptRepositories, selectedRef, selectedRepositories, selectedStatuses, selectedTypes]);
+  }, [contentsSection, evidenceOpen, evidenceUserSet, journalLayer, journalOpen, journalUserSet, memoryReady, mobileReaderOpen, query, receiptQuery, selectedReceiptClassifications, selectedReceiptRepositories, selectedRef, selectedRepositories, selectedStatuses, selectedTypes]);
 
   useEffect(() => {
     writeMemory();
@@ -552,6 +624,24 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
       writeMemory();
     }, 160);
   };
+
+  useLayoutEffect(() => {
+    const pending = pendingRailFocusRef.current;
+    if (!pending) return;
+    const apply = () => {
+      pendingRailFocusRef.current = null;
+      if (pending === "journal") indexPanelRef.current?.querySelector<HTMLElement>("input, h1")?.focus();
+      else if (pending === "evidence") evidenceHeadingRef.current?.focus();
+      else if (pending === "journal-control") journalDisclosureRef.current?.focus();
+      else evidenceDisclosureRef.current?.focus();
+    };
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      apply();
+      return;
+    }
+    const timer = window.setTimeout(apply, 230);
+    return () => window.clearTimeout(timer);
+  }, [evidenceOpen, journalOpen]);
 
   if (view === "statistics") return <div className="engineering-destination engineering-destination-statistics"><EngineeringDestinationHero index={index} view={view} /><EngineeringStatistics index={index} /></div>;
   const activeSelectedRef = records.some((record) => record.ref === selectedRef) ? selectedRef : records[0]?.ref;
@@ -571,13 +661,25 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   const showReceipts = view === "journal" && journalLayer === "receipts";
   const chooseJournalLayer = (next: EngineeringJournalLayer) => {
     setJournalLayer(next);
+    setJournalOpen(true);
     if (next === "receipts") setMobileReaderOpen(false);
+  };
+  const toggleJournal = () => {
+    pendingRailFocusRef.current = journalOpen ? "journal-control" : "journal";
+    setJournalUserSet(true);
+    setJournalOpen(!journalOpen);
+  };
+  const toggleEvidence = () => {
+    pendingRailFocusRef.current = evidenceOpen ? "evidence-control" : "evidence";
+    setEvidenceUserSet(true);
+    setEvidenceOpen(!evidenceOpen);
   };
 
   const displayEvidence = evidenceOpen;
+  const indexCollapsed = !journalOpen;
 
-  return <div className={`engineering-destination engineering-destination-${view}`}><EngineeringDestinationHero index={index} view={view} /><section className={`engineering-workspace ${mobileReaderOpen ? "mobile-reader-open" : ""} ${displayEvidence ? "evidence-open" : "evidence-closed"}`}>
-    <aside className="engineering-index-panel engineering-records" aria-label={`${ENGINEERING_VIEW_TITLES[view]} ${showReceipts ? "pull-request receipts" : "rich records"}`}>
+  return <div className={`engineering-destination engineering-destination-${view}`}><EngineeringDestinationHero index={index} view={view} /><section className={`engineering-workspace${mobileReaderOpen ? " mobile-reader-open" : ""}${indexCollapsed ? " index-collapsed" : ""}${displayEvidence ? " evidence-open" : " evidence-closed"}`}>
+    <aside ref={indexPanelRef} className="engineering-index-panel engineering-records" aria-label={`${ENGINEERING_VIEW_TITLES[view]} ${showReceipts ? "pull-request receipts" : "rich records"}`} inert={!journalOpen || undefined} aria-hidden={journalOpen ? undefined : true}>
       <header><div><h1>{ENGINEERING_VIEW_TITLES[view].replace("Engineering · ", "")}</h1><p>{showReceipts ? `${receipts.length} of ${index.receiptStatistics.totalReceipts} pull-request receipts` : `${records.length} factual ${records.length === 1 ? "record" : "records"}`}</p></div></header>
       {view === "journal" ? <div className="engineering-journal-layers" role="group" aria-label="Journal evidence layer">
         <button type="button" aria-pressed={journalLayer === "records"} onClick={() => chooseJournalLayer("records")}><span>Rich records</span><strong>{index.statistics.totalRecords}</strong></button>
@@ -620,7 +722,11 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
         {records.length === 0 ? <EmptyEngineeringView view={view} /> : null}
       </div>}
     </aside>
-    {selected ? <RecordReader record={selected} onBack={() => setMobileReaderOpen(false)} onToggleEvidence={() => setEvidenceOpen((open) => !open)} evidenceOpen={evidenceOpen} contentsSection={contentsSection} onContentsSectionChange={setContentsSection} /> : <div className="engineering-reader engineering-record-panel engineering-reader-empty"><EmptyEngineeringView view={view} /></div>}
-    {selected ? <EngineeringEvidencePanel record={selected} index={index} onSelect={openRelation} onReturn={() => setEvidenceOpen(false)} /> : <EngineeringEmptyEvidencePanel view={view} onReturn={() => setEvidenceOpen(false)} />}
+    <div className="engineering-record-shell">
+      <button type="button" ref={journalDisclosureRef} className="engineering-rail-toggle engineering-rail-toggle-journal" aria-pressed={journalOpen} aria-label={journalOpen ? "Hide Journal index" : "Show Journal index"} onClick={toggleJournal}>{journalOpen ? "》" : "《"}</button>
+      {selected ? <RecordReader record={selected} onBack={() => { setJournalOpen(true); setMobileReaderOpen(false); }} contentsSection={contentsSection} onContentsSectionChange={setContentsSection} /> : <div className="engineering-reader engineering-record-panel engineering-reader-empty"><EmptyEngineeringView view={view} /></div>}
+      <button type="button" ref={evidenceDisclosureRef} className="engineering-rail-toggle engineering-rail-toggle-evidence" aria-pressed={evidenceOpen} aria-label={evidenceOpen ? "Hide Exact evidence" : "Show Exact evidence"} onClick={toggleEvidence}>{evidenceOpen ? "《" : "》"}</button>
+    </div>
+    {selected ? <EngineeringEvidencePanel record={selected} index={index} onSelect={openRelation} headingRef={evidenceHeadingRef} inactive={!displayEvidence} /> : <EngineeringEmptyEvidencePanel view={view} headingRef={evidenceHeadingRef} inactive={!displayEvidence} />}
   </section></div>;
 }
