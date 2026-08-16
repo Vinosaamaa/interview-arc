@@ -81,6 +81,8 @@ The generator derives the receipt source commit, immutable source permalink, and
 
 `headCommit`, `mergeCommit`, and `mergedAt` are optional historical facts. Leave them `null` unless authoritative external evidence verifies the exact value. The projection exposes each missing fact and uses the source commit and timestamp only as an explicitly labelled timeline fallback. It never presents that fallback as a verified merge fact. Supplied head or merge facts require verified evidence references.
 
+Published readers display that timeline instant as an `America/Los_Angeles` calendar date on kickers and Statistics chronology, and as a full Pacific timestamp in the receipt detail. The HTML `datetime` attribute remains the ISO instant. Readers must not use the UTC `YYYY-MM-DD` prefix of `timelineAt`, which can disagree with the Pacific practice day.
+
 ## Materiality and record selection
 
 A Pull Request Receipt is always required, but rich prose is not. Use a rich record when a change materially affects a Module or Interface, schema or migration, cross-repository protocol, durable state or ownership rule, dependency boundary, security, privacy, reliability, accessibility, performance, incident repair, or a difficult-to-reverse tradeoff.

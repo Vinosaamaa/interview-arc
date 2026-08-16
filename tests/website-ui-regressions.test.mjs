@@ -740,6 +740,10 @@ test("Engineering keeps the complete PR timeline separate from rich records", as
   assert.match(source, /receipt\.source\.path/);
   assert.match(source, /receipt\.source\.commit/);
   assert.match(source, /receipt\.timelineBasis/);
+  assert.match(source, /receipt\.timelineDate/);
+  assert.match(source, /receipt\.timelineDisplay/);
+  assert.match(source, /entry\.timelineDate/);
+  assert.doesNotMatch(source, /timelineAt\.slice\(0,\s*10\)/);
   assert.match(source, /receipt\.missingFacts/);
   assert.match(source, /receipt\.sources\.map/);
   assert.match(source, /Compact receipt only; no rich record was required/);

@@ -95,6 +95,8 @@ export type EngineeringPullRequestReceipt = {
   mergeCommit: string | null;
   mergedAt: string | null;
   timelineAt: string;
+  timelineDate: string;
+  timelineDisplay: string;
   timelineBasis: "verified-merge" | "source-commit";
   timelineCommit: string;
   timelineCommitBasis: "verified-merge" | "source-commit";
@@ -175,6 +177,8 @@ export type EngineeringPullRequestReceiptStatistics = {
   totalReceipts: number;
   earliestTimelineAt: string | null;
   latestTimelineAt: string | null;
+  earliestTimelineDate: string | null;
+  latestTimelineDate: string | null;
   byRepository: Record<string, number>;
   byClassification: Record<EngineeringPullRequestClassification, number>;
   reconstructed: number;
@@ -184,6 +188,7 @@ export type EngineeringPullRequestReceiptStatistics = {
     pr: number;
     originalPullRequestUrl: string;
     timelineAt: string;
+    timelineDate: string;
     timelineBasis: EngineeringPullRequestReceipt["timelineBasis"];
     repository: string;
     classification: EngineeringPullRequestClassification;
@@ -237,6 +242,29 @@ export class EngineeringJournalError extends Error {
     this.code = code;
     this.source = source;
   }
+}
+
+export const JOURNAL_TIME_ZONE = "America/Los_Angeles";
+
+export function journalCalendarDate(iso: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: JOURNAL_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
+}
+
+export function journalTimestamp(iso: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: JOURNAL_TIME_ZONE,
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(new Date(iso));
 }
 
 const RECORD_TYPES = new Set<EngineeringRecordType>([
@@ -830,6 +858,7 @@ function normalizeReceipt(
   if (!headCommit) missingFacts.push("head-commit");
   if (!mergeCommit) missingFacts.push("merge-commit");
   if (!mergedAt) missingFacts.push("merged-at");
+  const timelineAt = mergedAt ?? document.committedAt;
 
   return {
     schemaVersion: 1,
@@ -847,7 +876,9 @@ function normalizeReceipt(
     headCommit,
     mergeCommit,
     mergedAt,
-    timelineAt: mergedAt ?? document.committedAt,
+    timelineAt,
+    timelineDate: journalCalendarDate(timelineAt),
+    timelineDisplay: journalTimestamp(timelineAt),
     timelineBasis: mergedAt ? "verified-merge" : "source-commit",
     timelineCommit: mergeCommit ?? document.commit,
     timelineCommitBasis: mergeCommit ? "verified-merge" : "source-commit",
@@ -958,6 +989,7 @@ function buildReceiptStatistics(receipts: EngineeringPullRequestReceipt[]): Engi
       pr: receipt.pr,
       originalPullRequestUrl: receipt.originalPullRequestUrl,
       timelineAt: receipt.timelineAt,
+      timelineDate: receipt.timelineDate,
       timelineBasis: receipt.timelineBasis,
       repository: receipt.repository,
       classification: receipt.classification,
@@ -966,6 +998,8 @@ function buildReceiptStatistics(receipts: EngineeringPullRequestReceipt[]): Engi
     totalReceipts: receipts.length,
     earliestTimelineAt: chronology[0]?.timelineAt ?? null,
     latestTimelineAt: chronology.at(-1)?.timelineAt ?? null,
+    earliestTimelineDate: chronology[0]?.timelineDate ?? null,
+    latestTimelineDate: chronology.at(-1)?.timelineDate ?? null,
     byRepository: Object.fromEntries(Object.entries(byRepository).sort(([left], [right]) => left.localeCompare(right))),
     byClassification,
     reconstructed,
@@ -979,7 +1013,7 @@ function renderStandalone(index: EngineeringJournalIndex, normalizedJson: string
 <p><a href="${escapeHtml(receipt.originalPullRequestUrl)}">PR #${receipt.pr}</a> · ${escapeHtml(receipt.repository)} · ${escapeHtml(receipt.classification)}</p>
 <h2>${escapeHtml(receipt.title)}</h2>
 <p>${escapeHtml(receipt.summary)}</p>
-<p>${escapeHtml(receipt.timelineAt)} · ${escapeHtml(receipt.timelineBasis)}</p>
+<p><time datetime="${escapeHtml(receipt.timelineAt)}">${escapeHtml(receipt.timelineDisplay)}</time> · ${escapeHtml(receipt.timelineBasis)}</p>
 <p><a href="${escapeHtml(receipt.source.permalink)}">Exact receipt source</a></p>
 </article>`).join("\n");
   const records = index.records.map((record) => `<article id="${escapeHtml(record.ref)}">

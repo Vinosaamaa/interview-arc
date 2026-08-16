@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { buildEngineeringJournal } from "../engineering-journal/index.ts";
+import { buildEngineeringJournal, journalCalendarDate, journalTimestamp } from "../engineering-journal/index.ts";
 
 const SOURCE_COMMIT = "a".repeat(40);
 const TRUSTED_REPOSITORIES = [{
@@ -278,6 +278,8 @@ test("receipt provenance labels Git-derived fallbacks and externally verified ba
   const verified = buildEngineeringJournal(inputWithReceipt(reconstructed)).index.pullRequestReceipts[0];
   assert.equal(verified.reconstructed, true);
   assert.equal(verified.timelineAt, "2026-08-13T01:02:03Z");
+  assert.equal(verified.timelineDate, "2026-08-12");
+  assert.match(verified.timelineDisplay, /Aug 12, 2026/);
   assert.equal(verified.timelineBasis, "verified-merge");
   assert.equal(verified.timelineCommit, "d".repeat(40));
   assert.equal(verified.timelineCommitBasis, "verified-merge");
@@ -292,6 +294,25 @@ test("receipt provenance labels Git-derived fallbacks and externally verified ba
   const impossibleDate = inputWithReceipt();
   impossibleDate.receiptDocuments[0].committedAt = "2026-02-30T18:42:11Z";
   assert.throws(() => buildEngineeringJournal(impossibleDate), (error) => error.code === "source_committedAt_invalid");
+});
+
+test("receipt timeline dates use America/Los_Angeles instead of the UTC ISO prefix", () => {
+  assert.equal(journalCalendarDate("2026-08-16T03:58:00Z"), "2026-08-15");
+  assert.match(journalTimestamp("2026-08-16T03:58:00Z"), /Aug 15, 2026/);
+  assert.doesNotMatch(journalTimestamp("2026-08-16T03:58:00Z"), /Aug 16, 2026/);
+
+  const pacificEvening = RECEIPT.replace("mergedAt: null", "mergedAt: 2026-08-16T03:58:00Z");
+  const receipt = buildEngineeringJournal(inputWithReceipt(pacificEvening)).index.pullRequestReceipts[0];
+  assert.equal(receipt.timelineAt, "2026-08-16T03:58:00Z");
+  assert.equal(receipt.timelineDate, "2026-08-15");
+  assert.equal(receipt.timelineBasis, "verified-merge");
+  assert.equal(receipt.timelineAt.slice(0, 10), "2026-08-16");
+  assert.notEqual(receipt.timelineDate, receipt.timelineAt.slice(0, 10));
+  assert.match(buildEngineeringJournal(inputWithReceipt(pacificEvening)).standaloneHtml, /Aug 15, 2026/);
+  assert.equal(
+    buildEngineeringJournal(inputWithReceipt(pacificEvening)).index.receiptStatistics.chronology[0].timelineDate,
+    "2026-08-15",
+  );
 });
 
 test("receipt ingestion is deterministic, path-allowlisted, and public-safe without echoing rejected values", () => {
@@ -383,6 +404,7 @@ test("receipt timeline JSON, search, Statistics, and standalone HTML remain one 
   });
   assert.equal(result.index.receiptStatistics.withMissingFacts, 1);
   assert.equal(result.index.receiptStatistics.earliestTimelineAt, "2026-08-12T18:42:11Z");
+  assert.equal(result.index.receiptStatistics.earliestTimelineDate, "2026-08-12");
   assert.equal(result.index.statistics.totalRecords, 1);
 });
 
