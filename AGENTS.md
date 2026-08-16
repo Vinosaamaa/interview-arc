@@ -55,6 +55,9 @@ Interview Arc, and perform its design-plan and self-critique passes.
 - Explicit user skill selection wins. Keep controlled comparison tasks isolated.
 - Preserve approved visual references under `docs/design/<feature>/` and link
   them from the owning issue.
+- Shell chrome and new workspaces follow
+  `design-system/pages/workspace-shell.md`; product tokens and page primitives
+  follow `design-system/interview-arc/MASTER.md`.
 
 ## Shared Product Rules
 

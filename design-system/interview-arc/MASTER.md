@@ -3,6 +3,8 @@
 > **LOGIC:** When building a specific page, first check `design-system/pages/[page-name].md`.
 > If that file exists, its rules **override** this Master file.
 > If not, strictly follow the rules below.
+> Shared Interview / Learn / Engineering chrome is `design-system/pages/workspace-shell.md`.
+> The Product-specific refinement below overrides the generated Soft UI Evolution defaults.
 
 ---
 
@@ -26,8 +28,9 @@ The generated Soft UI Evolution recommendation is refined into a distinctive
   timelines, and answer audio.
 - **Problem banks are a discovery index.** Dense, scan-friendly rows beat a
   generic card grid.
-- A persistent dark-teal **practice ribbon** unifies the four modes and becomes
-  a four-item bottom ribbon on mobile.
+- One **50px application bar** and one centered Interview / Learn / Engineering
+  switch unify the product. Below 900px, local destinations become an
+  even-spread bottom dock. Follow `design-system/pages/workspace-shell.md`.
 
 ### Refined tokens
 
@@ -175,6 +178,8 @@ Interview, Learn, and Engineering share one shell geometry, navigation order,
 typography hierarchy, breakpoint system, focus behavior, and accessibility
 contract. They do not share one visual atmosphere. Theme changes are expressed
 through tokens, never by duplicating shell markup or changing its dimensions.
+Chrome anatomy (50px bar, always-visible title, centered switch, icon tools,
+even bottom dock) is owned by `design-system/pages/workspace-shell.md`.
 
 - **Interview** is deep evergreen with botanical color and restrained paper
   surfaces. Its seven destination accents remain defined by the table above.
@@ -445,6 +450,9 @@ gsap.from('.grid-item', { opacity: 0, scale: 0.92, y: 16, duration: 0.4, stagger
 - ❌ **Low contrast text** — Maintain 4.5:1 minimum contrast ratio
 - ❌ **Instant state changes** — Always use transitions (150-300ms)
 - ❌ **Invisible focus states** — Focus states must be visible for a11y
+- ❌ **Second application bar** — Do not add a 64–74px icon strip above the 50px bar
+- ❌ **Header text actions** — Connect, Export, and Pop out timer stay in one icon menu on every workspace, not as bar labels
+- ❌ **Hiding the workspace title** to make room for the switcher
 
 ---
 

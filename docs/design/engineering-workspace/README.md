@@ -33,7 +33,9 @@ direction on 2026-08-12:
 When Engineering is the selected top-level workspace, its left navigation rail
 uses a near-black surface with the lime active signal. This black rail is an
 Engineering workspace identity treatment; it does not require recoloring the
-Interview or Learn workspaces. The light content canvas, exact-evidence drawer,
+Interview or Learn workspaces. Shared chrome (50px bar, centered workspace
+switch, icon tools, even bottom dock) follows
+`design-system/pages/workspace-shell.md`. The light content canvas, exact-evidence drawer,
 page-specific information architecture, and immutable evidence trace remain
 shared motifs across Engineering views.
 

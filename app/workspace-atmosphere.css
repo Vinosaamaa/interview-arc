@@ -293,9 +293,7 @@
 
 /* Gaps reveal the common canvas, never a second tinted wrapper panel. */
 .app-shell.active-workspace-engineering :is(.engineering-destination, .engineering-workspace),
-.app-shell.active-workspace-learn .learn-course-workspace,
-.app-shell.active-view-library :is(.library-page, .past-master-detail),
-.app-shell.active-view-banks :is(.banks-page, .bank-master-detail) {
+.app-shell.active-workspace-learn .learn-course-workspace {
   background: transparent;
 }
 .app-shell.active-workspace-learn .learn-course-workspace {
@@ -305,20 +303,21 @@
   border-radius: 0;
 }
 .app-shell.active-workspace-learn .learn-hero-metrics {
-  height: 62px;
-  min-height: 0;
+  height: 50px;
+  min-height: 50px;
+  max-height: 50px;
   border-top: 0;
   align-items: center;
 }
 
 @media (min-width: 761px) {
-  .app-shell .topbar-context {
+  .app-shell .topbar-context-copy {
     grid-template-rows: 18px 14px;
     align-content: center;
     gap: 1px;
   }
-  .app-shell .topbar-context strong { font-size: .9rem; line-height: 18px; }
-  .app-shell .topbar-context time { font-size: .67rem; line-height: 14px; }
+  .app-shell .topbar-context-copy strong { font-size: .9rem; line-height: 18px; }
+  .app-shell .topbar-context-copy time { font-size: .67rem; line-height: 14px; }
   .app-shell .topbar-workspace-switch { min-height: 38px; }
   .app-shell .topbar-workspace-switch button { min-height: 28px; }
 }
@@ -359,6 +358,8 @@
   padding-block: 5px;
   grid-template-rows: 40px;
   align-items: center;
+  container-type: inline-size;
+  container-name: topbar;
 }
 .app-shell .topbar > .topbar-context,
 .app-shell .topbar > .topbar-workspace-switch,
@@ -367,17 +368,115 @@
   min-height: 40px;
   align-self: center;
 }
-.app-shell .topbar-workspace-switch { padding: 3px; }
+.app-shell .topbar-context {
+  min-width: 0;
+  overflow: hidden;
+  visibility: visible;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.app-shell .topbar-context-copy {
+  min-width: 0;
+  flex: 1 1 0;
+  overflow: hidden;
+}
+.app-shell .topbar-context-copy time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-shell .topbar-workspace-switch { padding: 3px; justify-self: center; }
 .app-shell .topbar-workspace-switch button { min-height: 32px; }
+.app-shell .topbar-workspace-switch {
+  z-index: 3;
+  flex-shrink: 0;
+}
+.app-shell .topbar-actions {
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 8px;
+  container-type: inline-size;
+  container-name: topbar-actions;
+}
+.app-shell .topbar-tools {
+  flex: 0 0 auto;
+}
+/* The 50px bar cannot fit PLAYING + title as a second column. Never shrink
+   controls into each other; drop copy, then whole widgets. */
+.app-shell .music-dock,
+.app-shell .atmosphere-toggle,
+.app-shell .topbar-actions .secondary-action,
+.app-shell .music-playlist,
+.app-shell .topbar-tools {
+  flex: 0 0 auto;
+}
+.app-shell .music-dock {
+  height: 40px;
+  min-height: 40px;
+  max-height: 40px;
+  min-width: 40px;
+  max-width: none;
+}
+.app-shell .music-dock > button:first-child {
+  width: 40px;
+  min-width: 40px;
+  max-width: 40px;
+  padding: 0;
+  justify-content: center;
+  overflow: hidden;
+}
+.app-shell .music-dock label,
+.app-shell .music-dock i { display: none; }
+.app-shell .music-playlist-label,
+.app-shell .atmosphere-toggle-label { white-space: nowrap; }
+
+@container topbar-actions (max-width: 520px) {
+  .music-playlist-label,
+  .atmosphere-toggle-label,
+  .music-playlist > summary small { display: none; }
+  .atmosphere-toggle {
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+  .music-playlist > summary { padding-inline: 7px; }
+}
+@container topbar-actions (max-width: 220px) {
+  .music-playlist { display: none; }
+  .music-dock > button:not(:first-child) { display: none; }
+}
+@media (max-width: 1480px) {
+  .app-shell .music-playlist-label,
+  .app-shell .atmosphere-toggle-label,
+  .app-shell .music-playlist > summary small { display: none; }
+  .app-shell .atmosphere-toggle { width: 40px; min-width: 40px; padding: 0; justify-content: center; }
+}
+@media (max-width: 1320px) {
+  .app-shell .music-playlist { display: none; }
+}
+@media (max-width: 1100px) {
+  .app-shell .music-dock > button:not(:first-child) { display: none; }
+}
 
 /* Every control communicates clickability before activation. */
 .app-shell :is(button, summary, a[href], label[for], [role="button"]):not(:disabled) { cursor: pointer; }
 .app-shell :is(button, [role="button"]):disabled { cursor: not-allowed; }
 
-/* Panel gutters expose the shared canvas instead of a tinted under-panel. */
-.app-shell.active-view-library :is(.library-page, .past-master-detail, .past-master-pane, .past-entry-pane),
-.app-shell.active-view-banks :is(.banks-page, .bank-master-detail, .bank-master-pane, .bank-solution-pane) {
-  background: transparent !important;
+/* Past and Banks fill as opaque paper. Do not leave a grey canvas gutter
+   around the list, search, or calendar. */
+.app-shell.active-view-library :is(.library-page, .past-master-detail, .past-master-pane, .past-entry-pane, .past-control-deck, .dated-log, .log-layout, .log-day, .log-calendar, .quiet-empty),
+.app-shell.active-view-banks :is(.banks-page, .bank-master-detail, .bank-master-pane, .bank-solution-pane, .bank-control-deck, .topic-ribbon, .problem-bank-list, .quiet-empty) {
+  background: var(--workspace-paper);
+}
+.app-shell.active-view-library .main-column,
+.app-shell.active-view-banks .main-column,
+.app-shell.active-view-library .page-content,
+.app-shell.active-view-banks .page-content {
+  background: var(--workspace-paper);
 }
 
 /* The light materials theme needs dark, readable handoff copy. */
@@ -392,22 +491,54 @@
   border-color: color-mix(in srgb, var(--page-accent) 25%, #d5dfda);
   background: rgba(255,255,255,.62);
 }
-.app-shell.active-workspace-learn .learn-hero-metrics { height: 64px; min-height: 64px; }
+.app-shell.active-workspace-learn .learn-hero-metrics { height: 50px; min-height: 50px; max-height: 50px; }
+.app-shell .local-nav-label {
+  display: grid;
+  justify-content: stretch;
+  gap: 2px;
+}
+.app-shell .materials-nav button {
+  grid-template-columns: 28px minmax(0, 1fr);
+}
+.app-shell .materials-nav button small { grid-column: 2; }
+
+@media (max-width: 900px) {
+  .app-shell {
+    --sidebar-size: 0px;
+    --sidebar-half: 0px;
+    display: block;
+  }
+  .app-shell .sidebar { display: none; }
+  .app-shell .topbar { top: 0; }
+  .app-shell .topbar-brand { display: grid; }
+}
 
 @media (max-width: 760px) {
   .app-shell .topbar {
     padding: 5px 10px;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "switch actions";
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-areas: "context switch actions";
     gap: 8px;
   }
-  .app-shell .topbar-context { display: none; }
-  .app-shell .topbar-workspace-switch { width: min(100%, 330px); }
-  .app-shell .topbar-actions { width: auto; min-width: 0; overflow: hidden; }
-  .app-shell .topbar-actions > :not(.music-dock) { display: none; }
+  .app-shell .topbar-brand { display: grid; }
+  .app-shell .topbar-context { display: flex; visibility: visible; overflow: hidden; }
+  .app-shell .topbar-workspace-switch { width: min(288px, 42vw); justify-self: center; }
+  .app-shell .topbar-actions { width: auto; min-width: 0; overflow: visible; }
   .app-shell .music-dock { width: 40px; min-width: 40px; max-width: 40px; padding: 0; overflow: hidden; }
   .app-shell .music-dock > button:first-child { width: 40px; min-width: 40px; padding: 0 7px; }
   .app-shell .music-dock > button:not(:first-child),
   .app-shell .music-dock label,
   .app-shell .music-dock i { display: none; }
+}
+@media (max-width: 480px) {
+  .app-shell .music-dock { display: none; }
+  .app-shell .topbar-workspace-switch { width: min(240px, 48vw); }
+  .app-shell .atmosphere-toggle,
+  .app-shell .topbar-tools,
+  .app-shell .topbar-tools > summary,
+  .app-shell button.topbar-tools {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+  }
 }
