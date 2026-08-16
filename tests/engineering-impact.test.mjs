@@ -22,6 +22,9 @@ test("the shared receipt contract has one immutable v1 identity and bounded coll
   ), "utf8"));
   assert.equal(schema.$id, "urn:interview-arc:contracts:engineering-pull-request-receipt:1");
   assert.equal(schema.properties.sources.maxItems, 32);
+  assert.equal(schema.properties.sources.contains.properties.kind.const, "pull-request");
+  assert.match(schema.properties.sources.contains.properties.url.pattern, /github\\.com/);
+  assert.match(schema.properties.sources.contains.properties.url.pattern, /\/pull\//);
   assert.equal(schema.properties.sources.items.properties.label.maxLength, 160);
   assert.equal(schema.properties.sources.items.properties.url.maxLength, 2048);
   assert.equal(schema.$defs.stringList.maxItems, 32);
@@ -165,6 +168,7 @@ title: Fixture receipt
 classification: none
 richRecordRefs: []
 reconstructed: false
+sources: [{"label":"Pull request #312","url":"https://github.com/example/interview-arc/pull/312","kind":"pull-request"}]
 ---
 # Fixture receipt
 
@@ -187,7 +191,7 @@ Records one small fixture change.
   assert.match(result.stdout, /Engineering impact: none/);
 });
 
-test("a bounded historical batch keeps the current PR receipt separate from reconstructed history", (t) => {
+test("the required validation CLI rejects a receipt without the original GitHub pull-request URL", (t) => {
   const cwd = createRepository(t);
   const base = git(cwd, ["rev-parse", "HEAD"]);
   write(cwd, "docs/engineering/changes/pr-312.md", `---
@@ -201,6 +205,40 @@ reconstructed: false
 ---
 # Fixture receipt
 
+Records one small fixture change.
+`);
+  git(cwd, ["add", "docs/engineering/changes/pr-312.md"]);
+  git(cwd, ["commit", "--quiet", "-m", "add receipt without original PR URL"]);
+  const head = git(cwd, ["rev-parse", "HEAD"]);
+
+  const result = runValidator(cwd, {
+    pull_request: {
+      number: 312,
+      body: checks.none,
+      base: { sha: base },
+      head: { sha: head },
+    },
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /original GitHub pull-request URL/);
+});
+
+test("a bounded historical batch keeps the current PR receipt separate from reconstructed history", (t) => {
+  const cwd = createRepository(t);
+  const base = git(cwd, ["rev-parse", "HEAD"]);
+  write(cwd, "docs/engineering/changes/pr-312.md", `---
+schemaVersion: 1
+repository: interview-arc
+pr: 312
+title: Fixture receipt
+classification: none
+richRecordRefs: []
+reconstructed: false
+sources: [{"label":"Pull request #312","url":"https://github.com/example/interview-arc/pull/312","kind":"pull-request"}]
+---
+# Fixture receipt
+
 Publishes one bounded historical evidence batch without changing current product behavior.
 `);
   write(cwd, "docs/engineering/changes/pr-1.md", `---
@@ -211,6 +249,7 @@ title: Historical small change
 classification: none
 richRecordRefs: []
 reconstructed: true
+sources: [{"label":"Pull request #1","url":"https://github.com/example/interview-arc/pull/1","kind":"pull-request"}]
 ---
 # Historical small change
 
@@ -224,6 +263,7 @@ title: Historical architecture review
 classification: architecture-review
 richRecordRefs: ["review@1"]
 reconstructed: true
+sources: [{"label":"Pull request #2","url":"https://github.com/example/interview-arc/pull/2","kind":"pull-request"}]
 ---
 # Historical architecture review
 
@@ -272,6 +312,7 @@ title: Accepted historical receipt
 classification: none
 richRecordRefs: []
 reconstructed: true
+sources: [{"label":"Pull request #1","url":"https://github.com/example/interview-arc/pull/1","kind":"pull-request"}]
 ---
 # Accepted historical receipt
 
@@ -289,6 +330,7 @@ title: Fixture receipt
 classification: none
 richRecordRefs: []
 reconstructed: false
+sources: [{"label":"Pull request #312","url":"https://github.com/example/interview-arc/pull/312","kind":"pull-request"}]
 ---
 # Fixture receipt
 
@@ -332,6 +374,7 @@ title: Fixture receipt
 classification: none
 richRecordRefs: []
 reconstructed: false
+sources: [{"label":"Pull request #312","url":"https://github.com/example/interview-arc/pull/312","kind":"pull-request"}]
 ---
 # Fixture receipt
 
@@ -345,6 +388,7 @@ title: Oversized historical receipt
 classification: none
 richRecordRefs: []
 reconstructed: true
+sources: [{"label":"Pull request #1","url":"https://github.com/example/interview-arc/pull/1","kind":"pull-request"}]
 ---
 # Oversized historical receipt
 
@@ -512,6 +556,7 @@ title: Fixture receipt
 classification: none
 richRecordRefs: []
 reconstructed: false
+sources: [{"label":"Pull request #312","url":"https://github.com/example/interview-arc/pull/312","kind":"pull-request"}]
 ---
 # Fixture receipt
 
@@ -573,6 +618,7 @@ title: Fixture receipt
 classification: architecture-review
 richRecordRefs: ["review@2"]
 reconstructed: false
+sources: [{"label":"Pull request #312","url":"https://github.com/example/interview-arc/pull/312","kind":"pull-request"}]
 ---
 # Fixture receipt
 
@@ -618,6 +664,7 @@ title: Reuse shared architecture review
 classification: architecture-review
 richRecordRefs: ["${ref}"]
 reconstructed: false
+sources: [{"label":"Pull request #312","url":"https://github.com/example/interview-arc/pull/312","kind":"pull-request"}]
 ---
 # Reuse shared architecture review
 
@@ -678,6 +725,7 @@ title: Invalid deletion receipt
 classification: architecture-review
 richRecordRefs: ["review@1"]
 reconstructed: false
+sources: [{"label":"Pull request #312","url":"https://github.com/example/interview-arc/pull/312","kind":"pull-request"}]
 ---
 # Invalid deletion receipt
 
@@ -723,6 +771,7 @@ title: Shallow fixture receipt
 classification: none
 richRecordRefs: []
 reconstructed: false
+sources: [{"label":"Pull request #312","url":"https://github.com/example/interview-arc/pull/312","kind":"pull-request"}]
 ---
 # Shallow fixture receipt
 
@@ -780,6 +829,7 @@ title: Invalid metadata receipt
 classification: architecture-review
 richRecordRefs: ["review@1"]
 reconstructed: false
+sources: [{"label":"Pull request #312","url":"https://github.com/example/interview-arc/pull/312","kind":"pull-request"}]
 ---
 # Invalid metadata receipt
 

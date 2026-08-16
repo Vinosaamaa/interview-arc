@@ -340,6 +340,14 @@ test("receipt v1 bounds collections and public source strings", () => {
   assert.throws(() => buildEngineeringJournal(overlongEvidence), (error) => error.code === "field_verification_invalid");
 });
 
+test("a receipt must include the original GitHub pull-request URL", () => {
+  const missing = inputWithReceipt(RECEIPT.replace(
+    'sources: [{"label":"Pull request #312","url":"https://github.com/Vinosaamaa/interview-arc/pull/312","kind":"pull-request"}]',
+    'sources: [{"label":"Issue","url":"https://github.com/Vinosaamaa/interview-arc/issues/278","kind":"issue"}]',
+  ));
+  assert.throws(() => buildEngineeringJournal(missing), (error) => error.code === "receipt_pull_request_source_missing");
+});
+
 test("receipt timeline JSON, search, Statistics, and standalone HTML remain one separate projection", () => {
   const result = buildEngineeringJournal(inputWithReceipt());
   const embedded = result.standaloneHtml.match(/<script id="engineering-journal-index" type="application\/json">([\s\S]+)<\/script>/);
@@ -348,6 +356,18 @@ test("receipt timeline JSON, search, Statistics, and standalone HTML remain one 
   assert.deepEqual(JSON.parse(embedded[1]), result.index);
   assert.match(result.standaloneHtml, /Pull request timeline/);
   assert.match(result.standaloneHtml, /Exact receipt source/);
+  assert.match(
+    result.standaloneHtml,
+    /<a href="https:\/\/github\.com\/Vinosaamaa\/interview-arc\/pull\/312">PR #312<\/a>/,
+  );
+  assert.equal(
+    result.index.pullRequestReceipts[0].originalPullRequestUrl,
+    "https://github.com/Vinosaamaa/interview-arc/pull/312",
+  );
+  assert.equal(
+    result.index.receiptStatistics.chronology[0].originalPullRequestUrl,
+    "https://github.com/Vinosaamaa/interview-arc/pull/312",
+  );
   assert.match(result.standaloneHtml, /Commit-pinned publication flow/);
   assert.match(result.standaloneHtml, /journal-module-architecture\.drawio/);
   assert.match(result.standaloneHtml, new RegExp(`/engineering-journal/assets/interview-arc/${SOURCE_COMMIT}/docs/design/engineering-workspace/journal-module-architecture\\.png`));

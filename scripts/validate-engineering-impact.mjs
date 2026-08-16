@@ -377,7 +377,7 @@ function leadingFrontmatter(markdown, documentKind) {
   return fields;
 }
 
-function parseReceipt(markdown, path) {
+function parseReceipt(markdown, path, repositoryFullName) {
   const fields = leadingFrontmatter(markdown, "Pull Request Receipt");
   if (fields.get("schemaVersion") !== "1") {
     throw new Error("The canonical Pull Request Receipt has an unsupported schema version.");
@@ -408,6 +408,18 @@ function parseReceipt(markdown, path) {
   const reconstructedValue = fields.get("reconstructed");
   if (reconstructedValue !== "true" && reconstructedValue !== "false") {
     throw new Error("The canonical Pull Request Receipt has an invalid `reconstructed` field.");
+  }
+  let sources;
+  try {
+    sources = JSON.parse(fields.get("sources") ?? "[]");
+  } catch {
+    throw new Error("The canonical Pull Request Receipt has invalid sources.");
+  }
+  const owner = typeof repositoryFullName === "string" ? repositoryFullName.slice(0, repositoryFullName.indexOf("/")) : "";
+  const expectedPullRequestUrl = `https://github.com/${owner}/${repository}/pull/${prValue}`;
+  if (!Array.isArray(sources) || sources.length < 1 || sources.length > 32 ||
+      !sources.some((entry) => entry?.kind === "pull-request" && entry.url === expectedPullRequestUrl)) {
+    throw new Error("The canonical Pull Request Receipt must include the original GitHub pull-request URL.");
   }
   return {
     path,
@@ -555,7 +567,7 @@ function main() {
     }
   }
   const [receiptMarkdown] = blobsAt(pullRequest.head.sha, [expectedReceiptPath]);
-  const receipt = receiptMarkdown === null ? null : parseReceipt(receiptMarkdown, expectedReceiptPath);
+  const receipt = receiptMarkdown === null ? null : parseReceipt(receiptMarkdown, expectedReceiptPath, repositoryFullName);
   let manifest = null;
   let historicalReceipts = [];
   if (historicalMode) {
@@ -569,7 +581,7 @@ function main() {
     const historicalReceiptMarkdown = blobsAt(pullRequest.head.sha, manifest.receiptPaths);
     historicalReceipts = historicalReceiptMarkdown.map((markdown, index) => {
       if (markdown === null) throw new Error("Every declared historical receipt must exist at the pull request head.");
-      return parseReceipt(markdown, manifest.receiptPaths[index]);
+      return parseReceipt(markdown, manifest.receiptPaths[index], repositoryFullName);
     });
   }
   const allReceiptRefs = [...(receipt?.richRecordRefs ?? []), ...historicalReceipts.flatMap((entry) => entry.richRecordRefs)];

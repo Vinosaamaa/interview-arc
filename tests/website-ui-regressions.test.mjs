@@ -750,6 +750,12 @@ test("Engineering keeps the complete PR timeline separate from rich records", as
   assert.match(source, /diagram\.renderedUrl/);
   assert.match(source, /Editable draw\.io source/);
   assert.doesNotMatch(source, /raw\.githubusercontent\.com/);
+  assert.match(source, /function OriginalPullRequestLink/);
+  assert.match(source, /href=\{receipt\.originalPullRequestUrl\}/);
+  assert.match(source, /href=\{entry\.originalPullRequestUrl\}/);
+  assert.match(source, /className="engineering-receipt-permalink"/);
+  assert.doesNotMatch(source, /\{receipt\.repository\} · PR #\{receipt\.pr\}/);
+  assert.match(styles, /\.engineering-receipt-pr \{[\s\S]*white-space:\s*nowrap/);
   assert.match(styles, /\.engineering-receipt-list::before/);
   assert.match(styles, /@media \(pointer: coarse\)/);
 });
