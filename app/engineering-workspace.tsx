@@ -221,7 +221,7 @@ function ReceiptTimeline({
     {receipts.map((receipt) => <li key={receipt.ref}>
       <details>
         <summary>
-          <span><time dateTime={receipt.timelineAt}>{receipt.timelineAt.slice(0, 10)}</time><i>{receipt.repository}</i><OriginalPullRequestLink href={receipt.originalPullRequestUrl} pr={receipt.pr} /></span>
+          <span><time dateTime={receipt.timelineAt}>{receipt.timelineDate}</time><i>{receipt.repository}</i><OriginalPullRequestLink href={receipt.originalPullRequestUrl} pr={receipt.pr} /></span>
           <strong>{receipt.title}</strong>
           <span><em>{RECEIPT_CLASSIFICATION_LABELS[receipt.classification]}</em><small>{receipt.timelineBasis === "verified-merge" ? "Verified merge" : "Source-commit fallback"}</small></span>
         </summary>
@@ -229,7 +229,7 @@ function ReceiptTimeline({
           <p>{receipt.summary}</p>
           <dl>
             <div><dt>Receipt</dt><dd><code>{receipt.ref}</code></dd></div>
-            <div><dt>Timeline</dt><dd><time dateTime={receipt.timelineAt}>{receipt.timelineAt}</time> · {receipt.timelineBasis === "verified-merge" ? "verified merge facts" : "source commit fallback"}</dd></div>
+            <div><dt>Timeline</dt><dd><time dateTime={receipt.timelineAt}>{receipt.timelineDisplay}</time> · {receipt.timelineBasis === "verified-merge" ? "verified merge facts" : "source commit fallback"}</dd></div>
             <div><dt>Timeline commit</dt><dd><code>{receipt.timelineCommit}</code></dd></div>
             {receipt.headCommit ? <div><dt>Head commit</dt><dd><code>{receipt.headCommit}</code></dd></div> : null}
             {receipt.mergeCommit ? <div><dt>Merge commit</dt><dd><code>{receipt.mergeCommit}</code></dd></div> : null}
@@ -391,10 +391,10 @@ function EngineeringStatistics({ index }: { index: EngineeringJournalIndex }) {
       ? statistics.earliestCreatedAt
       : `${statistics.earliestCreatedAt} — ${statistics.latestCreatedAt}`
     : "No eligible records";
-  const receiptDateRange = receiptStatistics.earliestTimelineAt && receiptStatistics.latestTimelineAt
-    ? receiptStatistics.earliestTimelineAt === receiptStatistics.latestTimelineAt
-      ? receiptStatistics.earliestTimelineAt
-      : `${receiptStatistics.earliestTimelineAt} — ${receiptStatistics.latestTimelineAt}`
+  const receiptDateRange = receiptStatistics.earliestTimelineDate && receiptStatistics.latestTimelineDate
+    ? receiptStatistics.earliestTimelineDate === receiptStatistics.latestTimelineDate
+      ? receiptStatistics.earliestTimelineDate
+      : `${receiptStatistics.earliestTimelineDate} — ${receiptStatistics.latestTimelineDate}`
     : "No projected receipts";
   return <section className="engineering-statistics" aria-labelledby="engineering-statistics-title">
     <h1 id="engineering-statistics-title" className="sr-only">Engineering statistics</h1>
@@ -432,7 +432,7 @@ function EngineeringStatistics({ index }: { index: EngineeringJournalIndex }) {
       <section className="engineering-stat-table engineering-date-range"><h3>Timeline range</h3><p>{receiptDateRange}</p></section>
       <section className="engineering-stat-table"><h3>Classification</h3><table><tbody>{Object.entries(receiptStatistics.byClassification).map(([classification, count]) => <tr key={classification}><th>{RECEIPT_CLASSIFICATION_LABELS[classification as EngineeringPullRequestClassification]}</th><td>{count}</td></tr>)}</tbody></table></section>
       <section className="engineering-stat-table"><h3>Repositories</h3>{Object.keys(receiptStatistics.byRepository).length > 0 ? <table><tbody>{Object.entries(receiptStatistics.byRepository).map(([repository, count]) => <tr key={repository}><th>{repository}</th><td>{count}</td></tr>)}</tbody></table> : <p>No projected repositories.</p>}</section>
-      <section className="engineering-chronology engineering-receipt-chronology"><h3>Complete receipt chronology</h3>{receiptStatistics.chronology.length > 0 ? <ol>{receiptStatistics.chronology.map((entry) => <li key={entry.ref}><time dateTime={entry.timelineAt}>{entry.timelineAt.slice(0, 10)}</time><strong>{entry.repository} · <OriginalPullRequestLink href={entry.originalPullRequestUrl} pr={entry.pr} /></strong><small>{RECEIPT_CLASSIFICATION_LABELS[entry.classification]}</small></li>)}</ol> : <p>No projected receipts.</p>}</section>
+      <section className="engineering-chronology engineering-receipt-chronology"><h3>Complete receipt chronology</h3>{receiptStatistics.chronology.length > 0 ? <ol>{receiptStatistics.chronology.map((entry) => <li key={entry.ref}><time dateTime={entry.timelineAt}>{entry.timelineDate}</time><strong>{entry.repository} · <OriginalPullRequestLink href={entry.originalPullRequestUrl} pr={entry.pr} /></strong><small>{RECEIPT_CLASSIFICATION_LABELS[entry.classification]}</small></li>)}</ol> : <p>No projected receipts.</p>}</section>
     </aside>
   </section>;
 }

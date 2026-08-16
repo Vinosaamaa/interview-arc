@@ -145,6 +145,11 @@ exports are ignored convenience copies, not publication.
   begins; each owns a separate local Statistics surface when implemented.
   Engineering Journal readers must link each visible `PR #n` to the original
   GitHub pull request and keep Exact receipt source as the markdown permalink.
+  Timeline kickers and Statistics chronology show the `America/Los_Angeles`
+  calendar date of `timelineAt`; the `datetime` attribute stays the ISO instant.
+  Receipt detail shows the full Pacific timestamp. Keep the Verified merge vs
+  Source-commit fallback label. Do not use the UTC `YYYY-MM-DD` prefix of the
+  ISO string as if it were the practice day.
   Every workspace keeps Pop out timer, Export today, and Connect in the same
   header tools menu.
 - Provide Interview-local Today, Loops, Reviews, Past, Banks, and Journey views
