@@ -105,6 +105,17 @@ export function EngineeringIcon({ name }: { name: EngineeringIconName }) {
   return <svg className="engineering-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths}</svg>;
 }
 
+function OriginalPullRequestLink({ href, pr }: { href: string; pr: number }) {
+  return <a
+    className="engineering-receipt-pr"
+    href={href}
+    target="_blank"
+    rel="noreferrer"
+    onPointerDown={(event) => event.stopPropagation()}
+    onClick={(event) => event.stopPropagation()}
+  >PR #{pr}</a>;
+}
+
 function CopyControl({ value, label }: { value: string; label: string }) {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   const copy = async () => {
@@ -210,7 +221,7 @@ function ReceiptTimeline({
     {receipts.map((receipt) => <li key={receipt.ref}>
       <details>
         <summary>
-          <span><time dateTime={receipt.timelineAt}>{receipt.timelineAt.slice(0, 10)}</time><i>{receipt.repository} · PR #{receipt.pr}</i></span>
+          <span><time dateTime={receipt.timelineAt}>{receipt.timelineAt.slice(0, 10)}</time><i>{receipt.repository}</i><OriginalPullRequestLink href={receipt.originalPullRequestUrl} pr={receipt.pr} /></span>
           <strong>{receipt.title}</strong>
           <span><em>{RECEIPT_CLASSIFICATION_LABELS[receipt.classification]}</em><small>{receipt.timelineBasis === "verified-merge" ? "Verified merge" : "Source-commit fallback"}</small></span>
         </summary>
@@ -358,7 +369,7 @@ function EngineeringEvidencePanel({ record, index, onSelect, onClose }: { record
       {lineageRefs.length > 0 ? <div className="engineering-lineage-links">{lineageRefs.map((ref) => <button type="button" key={ref} onClick={() => onSelect(ref)}>{ref}</button>)}</div> : <small>No linked revisions or backlinks.</small>}
     </section>
     <section className="engineering-evidence" aria-labelledby="engineering-evidence-title"><h2 id="engineering-evidence-title">Sources</h2><ul>{record.sources.map((source) => <li key={`${source.kind}:${source.url}`}><a href={source.url} target="_blank" rel="noreferrer">{source.label}<EngineeringIcon name="source" /></a><span>{source.kind}</span></li>)}</ul></section>
-    {relatedReceipts.length > 0 ? <section className="engineering-record-receipts" aria-labelledby="engineering-record-receipts-title"><h2 id="engineering-record-receipts-title">Pull requests</h2><ul>{relatedReceipts.map((receipt) => <li key={receipt.ref}><div><span>{receipt.repository} · PR #{receipt.pr}</span><strong>{receipt.title}</strong></div><a href={receipt.source.permalink} target="_blank" rel="noreferrer">Receipt<EngineeringIcon name="source" /></a></li>)}</ul></section> : null}
+    {relatedReceipts.length > 0 ? <section className="engineering-record-receipts" aria-labelledby="engineering-record-receipts-title"><h2 id="engineering-record-receipts-title">Pull requests</h2><ul>{relatedReceipts.map((receipt) => <li key={receipt.ref}><div><span>{receipt.repository} · <OriginalPullRequestLink href={receipt.originalPullRequestUrl} pr={receipt.pr} /></span><strong>{receipt.title}</strong></div><a className="engineering-receipt-permalink" href={receipt.source.permalink} target="_blank" rel="noreferrer">Receipt<EngineeringIcon name="source" /></a></li>)}</ul></section> : null}
   </aside>;
 }
 
@@ -421,7 +432,7 @@ function EngineeringStatistics({ index }: { index: EngineeringJournalIndex }) {
       <section className="engineering-stat-table engineering-date-range"><h3>Timeline range</h3><p>{receiptDateRange}</p></section>
       <section className="engineering-stat-table"><h3>Classification</h3><table><tbody>{Object.entries(receiptStatistics.byClassification).map(([classification, count]) => <tr key={classification}><th>{RECEIPT_CLASSIFICATION_LABELS[classification as EngineeringPullRequestClassification]}</th><td>{count}</td></tr>)}</tbody></table></section>
       <section className="engineering-stat-table"><h3>Repositories</h3>{Object.keys(receiptStatistics.byRepository).length > 0 ? <table><tbody>{Object.entries(receiptStatistics.byRepository).map(([repository, count]) => <tr key={repository}><th>{repository}</th><td>{count}</td></tr>)}</tbody></table> : <p>No projected repositories.</p>}</section>
-      <section className="engineering-chronology engineering-receipt-chronology"><h3>Complete receipt chronology</h3>{receiptStatistics.chronology.length > 0 ? <ol>{receiptStatistics.chronology.map((entry) => <li key={entry.ref}><time dateTime={entry.timelineAt}>{entry.timelineAt.slice(0, 10)}</time><strong>{entry.repository} · PR #{entry.pr}</strong><small>{RECEIPT_CLASSIFICATION_LABELS[entry.classification]}</small></li>)}</ol> : <p>No projected receipts.</p>}</section>
+      <section className="engineering-chronology engineering-receipt-chronology"><h3>Complete receipt chronology</h3>{receiptStatistics.chronology.length > 0 ? <ol>{receiptStatistics.chronology.map((entry) => <li key={entry.ref}><time dateTime={entry.timelineAt}>{entry.timelineAt.slice(0, 10)}</time><strong>{entry.repository} · <OriginalPullRequestLink href={entry.originalPullRequestUrl} pr={entry.pr} /></strong><small>{RECEIPT_CLASSIFICATION_LABELS[entry.classification]}</small></li>)}</ol> : <p>No projected receipts.</p>}</section>
     </aside>
   </section>;
 }

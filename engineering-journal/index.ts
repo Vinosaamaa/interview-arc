@@ -83,6 +83,7 @@ export type EngineeringPullRequestReceipt = {
   ref: string;
   repository: string;
   pr: number;
+  originalPullRequestUrl: string;
   title: string;
   summary: string;
   classification: EngineeringPullRequestClassification;
@@ -181,6 +182,7 @@ export type EngineeringPullRequestReceiptStatistics = {
   chronology: Array<{
     ref: string;
     pr: number;
+    originalPullRequestUrl: string;
     timelineAt: string;
     timelineBasis: EngineeringPullRequestReceipt["timelineBasis"];
     repository: string;
@@ -834,6 +836,7 @@ function normalizeReceipt(
     ref: `pr:${repository}:${pr}`,
     repository,
     pr,
+    originalPullRequestUrl: pullRequestUrl,
     title,
     summary,
     classification,
@@ -953,6 +956,7 @@ function buildReceiptStatistics(receipts: EngineeringPullRequestReceipt[]): Engi
     .map((receipt) => ({
       ref: receipt.ref,
       pr: receipt.pr,
+      originalPullRequestUrl: receipt.originalPullRequestUrl,
       timelineAt: receipt.timelineAt,
       timelineBasis: receipt.timelineBasis,
       repository: receipt.repository,
@@ -972,7 +976,7 @@ function buildReceiptStatistics(receipts: EngineeringPullRequestReceipt[]): Engi
 
 function renderStandalone(index: EngineeringJournalIndex, normalizedJson: string) {
   const receipts = index.pullRequestReceipts.map((receipt) => `<article id="${escapeHtml(receipt.ref)}">
-<p>PR #${receipt.pr} · ${escapeHtml(receipt.repository)} · ${escapeHtml(receipt.classification)}</p>
+<p><a href="${escapeHtml(receipt.originalPullRequestUrl)}">PR #${receipt.pr}</a> · ${escapeHtml(receipt.repository)} · ${escapeHtml(receipt.classification)}</p>
 <h2>${escapeHtml(receipt.title)}</h2>
 <p>${escapeHtml(receipt.summary)}</p>
 <p>${escapeHtml(receipt.timelineAt)} · ${escapeHtml(receipt.timelineBasis)}</p>

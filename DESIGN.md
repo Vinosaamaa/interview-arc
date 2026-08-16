@@ -298,7 +298,7 @@ Components should read as precise instruments: quiet at rest, explicit on hover 
 
 ### Pull Request Receipt Timeline
 
-- **Structure:** Every receipt is one compact expandable row (`126px` minimum height) on a continuous `1px` teal timeline with a circular teal node. The collapsed state shows timeline date, repository and PR number, title, classification, and whether chronology uses verified merge facts or a source-commit fallback.
+- **Structure:** Every receipt is one compact expandable row (`126px` minimum height) on a continuous `1px` teal timeline with a circular teal node. The collapsed state shows timeline date, repository, and a `PR #<number>` link to the original GitHub pull request, plus title, classification, and whether chronology uses verified merge facts or a source-commit fallback. Clicking the PR link navigates; it does not merely toggle the row.
 - **Expanded Evidence:** Summary, receipt reference, timeline basis and commits, canonical source, confidence, missing facts, unknowns, evidence links, rich-record references, and the exact receipt source remain inside the row instead of becoming detached cards.
 - **Materiality:** Small changes stay visible as compact receipts with an explicit “no rich record required” note. Material receipts may link to one or more rich records; the compact chronology never disappears merely because deeper narrative exists.
 
@@ -320,7 +320,7 @@ Architecture diagrams sit inside the record reading flow after its fact register
 
 ### Rich-Record Pull Request History
 
-When compact receipts cite a rich record, render a **Pull request history** backlink section after Evidence. Each hairline-separated row pairs repository and PR number with the factual title and an **Exact receipt** action. The copy must explicitly state that receipt coverage remains independent from record status and verification.
+When compact receipts cite a rich record, render a **Pull request history** backlink section after Evidence. Each hairline-separated row pairs repository with a `PR #<number>` link to the original GitHub pull request, the factual title, and an **Exact receipt** action for the receipt markdown permalink. The copy must explicitly state that receipt coverage remains independent from record status and verification.
 
 **The Evidence Asset Rule.** A diagram or pull-request backlink belongs in a rich record only when its exact source remains visible and its relationship to the record is evidence-backed.
 
@@ -335,6 +335,7 @@ When compact receipts cite a rich record, render a **Pull request history** back
 - **Do** preserve the literal Rich records / All merged PRs labels, their independent counts, and their separate filters.
 - **Do** keep every ingested merged PR visible in the compact timeline while reserving rich records for material narratives.
 - **Do** expose related pull-request receipts and exact diagram source/render links inside the rich-record reading flow.
+- **Do** link every visible `PR #<number>` to the original GitHub pull request and keep Exact receipt source as the markdown permalink.
 - **Do** switch the Journal to an explicit list-or-reader flow below `760px`.
 - **Do** keep visible focus states, text reinforcement for color, and reduced-motion behavior.
 

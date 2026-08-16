@@ -26,9 +26,10 @@ This protocol owns the content boundary: the receipt contains a public-safe
 title and one factual summary paragraph of at most 280 characters; `none`
 leaves `richRecordRefs` empty; material classifications link exact
 `id@revision` records; and a reviewed multi-PR case study may be shared by
-several receipts. CI validates those authored layers, while the deterministic
-build projects their indexes, backlinks, Statistics, immutable diagram links,
-and standalone HTML.
+several receipts. CI validates those authored layers, including the original
+GitHub pull-request URL in `sources`. The deterministic build projects their
+indexes, backlinks, Statistics, `originalPullRequestUrl`, immutable diagram
+links, and standalone HTML.
 
 After the pull request number is known, scaffold its forward receipt without a separate user operation:
 
@@ -76,7 +77,7 @@ publicationEligibility: eligible
 Renamed one local navigation label without changing a Module or Interface.
 ```
 
-The generator derives the receipt source commit, immutable source permalink, and source commit timestamp from Git. These values do not appear in the document frontmatter, so a pull request never has to predict the commit that will contain its own receipt.
+The generator derives the receipt source commit, immutable source permalink, and source commit timestamp from Git. These values do not appear in the document frontmatter, so a pull request never has to predict the commit that will contain its own receipt. Published readers must expose the original GitHub pull-request URL as a navigable `PR #<number>` link, distinct from that receipt markdown permalink. The projection copies it onto `originalPullRequestUrl`; it is not a second canonical frontmatter field.
 
 `headCommit`, `mergeCommit`, and `mergedAt` are optional historical facts. Leave them `null` unless authoritative external evidence verifies the exact value. The projection exposes each missing fact and uses the source commit and timestamp only as an explicitly labelled timeline fallback. It never presents that fallback as a verified merge fact. Supplied head or merge facts require verified evidence references.
 

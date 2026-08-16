@@ -143,6 +143,8 @@ exports are ignored convenience copies, not publication.
   Interview owns Today, Loops, Reviews, Past, Banks, and Journey. Keep Learn and
   Engineering visibly unavailable until their separately authorized work
   begins; each owns a separate local Statistics surface when implemented.
+  Engineering Journal readers must link each visible `PR #n` to the original
+  GitHub pull request and keep Exact receipt source as the markdown permalink.
   Every workspace keeps Pop out timer, Export today, and Connect in the same
   header tools menu.
 - Provide Interview-local Today, Loops, Reviews, Past, Banks, and Journey views

@@ -87,7 +87,10 @@
 .engineering-receipt-list summary:focus-visible { outline: 3px solid rgba(13, 148, 136, .24); outline-offset: -4px; }
 .engineering-receipt-list summary > span { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .engineering-receipt-list summary time, .engineering-receipt-list summary i { color: #607972; font: 710 .75rem/1.25 var(--font-geist-mono); font-style: normal; }
-.engineering-receipt-list summary i { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.engineering-receipt-list summary i { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.engineering-receipt-pr { flex: 0 0 auto; color: inherit; font: inherit; white-space: nowrap; text-decoration: none; }
+.engineering-receipt-pr:hover { color: #0d9488; text-decoration: underline; text-underline-offset: 3px; }
+.engineering-receipt-list summary .engineering-receipt-pr { position: relative; z-index: 2; color: #153b36; font: 710 .75rem/1.25 var(--font-geist-mono); }
 .engineering-receipt-list summary strong { color: #153b36; font-size: .875rem; line-height: 1.38; }
 .engineering-receipt-list summary em { padding: 4px 7px; border-radius: 999px; background: #dfeee9; color: #245c54; font-size: .75rem; font-weight: 780; font-style: normal; }
 .engineering-receipt-list summary small { color: #667a75; font-size: .75rem; text-align: right; }
@@ -210,8 +213,8 @@
 .engineering-record-receipts li div { min-width: 0; display: grid; gap: 3px; }
 .engineering-record-receipts li span { color: #697c77; font: .75rem var(--font-geist-mono); }
 .engineering-record-receipts li strong { color: #245149; font-size: .875rem; line-height: 1.35; }
-.engineering-record-receipts li a { min-height: 36px; padding: 0 8px; display: inline-flex; align-items: center; gap: 5px; color: #195b51; font-size: .75rem; font-weight: 760; text-decoration: none; white-space: nowrap; }
-.engineering-record-receipts li a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.engineering-record-receipts li a.engineering-receipt-permalink { min-height: 36px; padding: 0 8px; display: inline-flex; align-items: center; gap: 5px; color: #195b51; font-size: .75rem; font-weight: 760; text-decoration: none; white-space: nowrap; }
+.engineering-record-receipts li a.engineering-receipt-permalink:hover { text-decoration: underline; text-underline-offset: 3px; }
 .engineering-record-receipts li .engineering-icon { width: 14px; height: 14px; }
 .engineering-actions { max-width: 72ch; margin-top: 42px; padding-top: 18px; border-top: 1px solid #d2dfdb; display: flex; align-items: center; gap: 12px; }
 .engineering-actions button { min-height: 40px; padding: 0 13px; border: 1px solid #c4d0cc; border-radius: 8px; background: #edf1ef; color: #6d7b77; font-weight: 760; cursor: not-allowed; }
@@ -345,7 +348,7 @@
 }
 
 @media (pointer: coarse) {
-  .engineering-journal-layers button, .engineering-receipt-records button, .engineering-receipt-detail > a, .engineering-record-receipts li a { min-height: 44px; }
+  .engineering-journal-layers button, .engineering-receipt-records button, .engineering-receipt-detail > a, .engineering-record-receipts li a.engineering-receipt-permalink { min-height: 44px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
