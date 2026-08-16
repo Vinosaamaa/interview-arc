@@ -758,6 +758,20 @@ test("Engineering keeps the complete PR timeline separate from rich records", as
   assert.match(styles, /\.engineering-receipt-pr \{[\s\S]*white-space:\s*nowrap/);
   assert.match(styles, /\.engineering-receipt-list::before/);
   assert.match(styles, /@media \(pointer: coarse\)/);
+  assert.match(source, /className="engineering-receipt-kicker"/);
+  assert.match(source, /<i>\{receipt\.repository\}<\/i><OriginalPullRequestLink href=\{receipt\.originalPullRequestUrl\} pr=\{receipt\.pr\} \/>/);
+  assert.doesNotMatch(source, /<b>PR #\{receipt\.pr\}<\/b>/);
+  const rules = parseCss(styles);
+  const number = cssRules(rules, ".engineering-receipt-kicker .engineering-receipt-pr")[0]?.declarations;
+  const pill = cssRules(rules, ".engineering-receipt-flags em")[0]?.declarations;
+  const basis = cssRules(rules, ".engineering-receipt-flags small")[0]?.declarations;
+  assert.equal(number?.["white-space"], "nowrap");
+  assert.equal(number?.flex, "0 0 auto");
+  assert.equal(pill?.["white-space"], "nowrap");
+  assert.equal(basis?.["white-space"], "nowrap");
+  assert.match(number?.font ?? "", /\.88rem/);
+  assert.equal(pill?.["font-size"], ".78rem");
+  assert.equal(basis?.["font-size"], ".62rem");
 });
 
 test("Interview navigation uses one shared local model with Journey last", async () => {
