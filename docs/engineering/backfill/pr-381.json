@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "repository": "interview-arc",
+  "pullRequest": 381,
+  "privacyAuthorizationUrl": "https://github.com/Vinosaamaa/interview-arc/issues/313#issuecomment-5310349179",
+  "receiptPaths": [
+    "docs/engineering/changes/pr-183.md",
+    "docs/engineering/changes/pr-184.md",
+    "docs/engineering/changes/pr-188.md",
+    "docs/engineering/changes/pr-189.md",
+    "docs/engineering/changes/pr-195.md",
+    "docs/engineering/changes/pr-197.md",
+    "docs/engineering/changes/pr-198.md",
+    "docs/engineering/changes/pr-200.md",
+    "docs/engineering/changes/pr-206.md",
+    "docs/engineering/changes/pr-212.md",
+    "docs/engineering/changes/pr-213.md",
+    "docs/engineering/changes/pr-214.md",
+    "docs/engineering/changes/pr-217.md",
+    "docs/engineering/changes/pr-218.md",
+    "docs/engineering/changes/pr-221.md",
+    "docs/engineering/changes/pr-225.md"
+  ],
+  "recordRefs": [
+    "architecture-review-background-specialist-persistence@1",
+    "architecture-review-owner-private-behavioral-evidence@1",
+    "architecture-review-practice-state-command-module@1",
+    "feature-retrospective-behavioral-attempt-truth@1",
+    "feature-retrospective-leetcode-cli-controller@1",
+    "feature-retrospective-resume-and-cover-letter-foundation@1",
+    "feature-retrospective-review-queue-and-journey@1",
+    "feature-retrospective-structured-code-attempt-review@1"
+  ],
+  "addedRecordRefs": []
+}
