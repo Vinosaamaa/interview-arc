@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "repository": "interview-arc",
+  "pullRequest": 384,
+  "privacyAuthorizationUrl": "https://github.com/Vinosaamaa/interview-arc/issues/313#issuecomment-5310349179",
+  "receiptPaths": [
+    "docs/engineering/changes/pr-285.md",
+    "docs/engineering/changes/pr-287.md",
+    "docs/engineering/changes/pr-288.md",
+    "docs/engineering/changes/pr-289.md",
+    "docs/engineering/changes/pr-290.md",
+    "docs/engineering/changes/pr-292.md",
+    "docs/engineering/changes/pr-293.md",
+    "docs/engineering/changes/pr-294.md",
+    "docs/engineering/changes/pr-296.md",
+    "docs/engineering/changes/pr-297.md",
+    "docs/engineering/changes/pr-298.md",
+    "docs/engineering/changes/pr-300.md",
+    "docs/engineering/changes/pr-302.md",
+    "docs/engineering/changes/pr-304.md",
+    "docs/engineering/changes/pr-305.md",
+    "docs/engineering/changes/pr-307.md"
+  ],
+  "recordRefs": [],
+  "addedRecordRefs": []
+}
