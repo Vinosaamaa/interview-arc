@@ -29,7 +29,7 @@ The generated Soft UI Evolution recommendation is refined into a distinctive
 - **Problem banks are a discovery index.** Dense, scan-friendly rows beat a
   generic card grid.
 - One **50px application bar** and one centered Interview / Learn / Engineering
-  switch unify the product. Below 980px, local destinations become an
+  switch unify the product. At ≤980px, local destinations become an
   even-spread bottom dock. Follow `design-system/pages/workspace-shell.md`.
 
 ### Refined tokens

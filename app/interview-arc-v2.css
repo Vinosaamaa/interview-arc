@@ -1451,12 +1451,14 @@ body:has(.reader-workspace) .ambient-rain-drop span { animation-play-state: paus
   html { scroll-padding-top: 78px; }
   body { padding-bottom: 76px; }
   .app-shell { --sidebar-size: 0px; --sidebar-half: 0px; display: block; }
+  .sidebar { display: none; }
   .topbar { top: 0; min-height: 50px; padding: 5px 16px; gap: 10px; }
+  .topbar-brand { display: grid; }
   .topbar-context-copy time { font-size: .66rem; }
   .topbar > div:last-child { margin-left: auto; gap: 5px; }
   .topbar .music-dock { max-width: 116px; }
   .topbar .music-dock label, .topbar .music-dock i { display: none; }
-  .topbar .secondary-action { min-height: 40px; padding: 0 9px; display: inline-flex; align-items: center; font-size: .67rem; }
+  .topbar .secondary-action { display: none; }
   .page-content { padding-bottom: 90px; }
   .today-masthead { grid-template-columns: 112px minmax(0, 1fr); }
   .today-tally { grid-column: 1 / -1; padding: 18px 0 0; border-left: 0; border-top: 1px solid #c8d8d3; grid-template-columns: repeat(4, 1fr); }
@@ -2677,15 +2679,6 @@ body:has(.review-queue-workspace) { padding-bottom: 0; overflow: hidden; }
   .practice-mode-card dl { grid-template-columns: 1fr 1fr; }
   .practice-mode-card dl > div:nth-child(2) { border-right: 0; }
   .practice-mode-card dl > div:nth-child(-n + 2) { border-bottom: 1px solid #cfdbd7; }
-}
-
-/* The compact bar owns the mark, title, centered workspace pill, and tools. */
-@media (max-width: 980px) {
-  body { padding-bottom: 76px; }
-  .sidebar { display: none; }
-  .topbar { top: 0; }
-  .topbar-brand { display: grid; }
-  .topbar .secondary-action { display: none; }
 }
 
 @media (max-width: 680px) {
