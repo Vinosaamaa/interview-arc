@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="title desc">
+  <title id="title">Interview Arc workspace identity specimen rail</title>
+  <desc id="desc">Same chamfered 28-pixel plate for Interview, Learn, and Engineering. Distinct motifs. Selected fill lives on the plate. Later is a quiet unavailable status.</desc>
+  <rect width="1280" height="720" fill="#EDF3F1"/>
+  <rect x="48" y="40" width="1184" height="640" rx="20" fill="#FBFCFA" stroke="#C8D8D3"/>
+  <text x="80" y="92" fill="#102A2A" font-family="Georgia, 'Iowan Old Style', serif" font-size="34">Workspace identity</text>
+  <text x="80" y="124" fill="#617470" font-family="ui-sans-serif, system-ui, sans-serif" font-size="16">Mineral specimen plates · same geometry · selected is the badge</text>
+  <g font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" letter-spacing="0.12em" fill="#617470">
+    <text x="80" y="176">IDLE</text>
+    <text x="480" y="176">SELECTED</text>
+    <text x="880" y="176">LATER</text>
+  </g>
+
+  <!-- Idle -->
+  <g transform="translate(80,204)">
+    <g transform="translate(0,0)">
+      <path d="M0,0 H47 Q56,0 56,9 V47 Q56,56 47,56 H9 Q0,56 0,47 Z" fill="#0D9488" fill-opacity=".16" stroke="#0D9488" stroke-opacity=".5"/>
+      <g transform="translate(12,12)" fill="none" stroke="#0D9488" stroke-width="2.2" stroke-linecap="round">
+        <path d="M4.2 23.4a12.3 12.3 0 1 1 19.2 0"/>
+        <path d="M16 6.6v6.2"/>
+        <circle cx="16" cy="15.6" r="2" fill="#0D9488" stroke="none"/>
+      </g>
+      <text x="28" y="78" text-anchor="middle" fill="#102A2A" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="650">Interview</text>
+    </g>
+    <g transform="translate(110,0)">
+      <path d="M0,0 H47 Q56,0 56,9 V47 Q56,56 47,56 H9 Q0,56 0,47 Z" fill="#315CA8" fill-opacity=".16" stroke="#315CA8" stroke-opacity=".5"/>
+      <g transform="translate(12,11)" fill="none" stroke="#315CA8" stroke-width="2.2" stroke-linejoin="round">
+        <path d="M8 4.2h12.2A3.2 3.2 0 0 1 23.4 7.4v15.5H11.1A3.2 3.2 0 0 1 7.9 19.7V4.2Z"/>
+        <path d="M7.9 7.7H5.9A2.5 2.5 0 0 0 3.4 10.2v12.6A3 3 0 0 0 6.4 25.8h14.1" stroke-linecap="round"/>
+        <path d="M14.2 9.2v9.9" stroke-linecap="round"/>
+      </g>
+      <text x="28" y="78" text-anchor="middle" fill="#102A2A" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="650">Learn</text>
+    </g>
+    <g transform="translate(220,0)">
+      <path d="M0,0 H47 Q56,0 56,9 V47 Q56,56 47,56 H9 Q0,56 0,47 Z" fill="#D86742" fill-opacity=".16" stroke="#D86742" stroke-opacity=".5"/>
+      <g transform="translate(12,12)" fill="none" stroke="#D86742" stroke-width="2.2" stroke-linejoin="round">
+        <path d="M16 2.4 27.1 16 16 29.6 4.9 16Z"/>
+        <path d="M16 2.4V29.6M4.9 16h22.2" stroke-width="1.7"/>
+      </g>
+      <text x="28" y="78" text-anchor="middle" fill="#102A2A" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="650">Engineering</text>
+    </g>
+  </g>
+
+  <!-- Selected -->
+  <g transform="translate(480,204)">
+    <g transform="translate(0,0)">
+      <path d="M0,0 H47 Q56,0 56,9 V47 Q56,56 47,56 H9 Q0,56 0,47 Z" fill="#0D9488"/>
+      <g transform="translate(12,12)" fill="none" stroke="#FBFCFA" stroke-width="2.2" stroke-linecap="round">
+        <path d="M4.2 23.4a12.3 12.3 0 1 1 19.2 0"/>
+        <path d="M16 6.6v6.2"/>
+        <circle cx="16" cy="15.6" r="2" fill="#FBFCFA" stroke="none"/>
+      </g>
+      <text x="28" y="78" text-anchor="middle" fill="#0F5F5A" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="700">Interview</text>
+    </g>
+    <g transform="translate(110,0)">
+      <path d="M0,0 H47 Q56,0 56,9 V47 Q56,56 47,56 H9 Q0,56 0,47 Z" fill="#315CA8"/>
+      <g transform="translate(12,11)" fill="none" stroke="#FBFCFA" stroke-width="2.2" stroke-linejoin="round">
+        <path d="M8 4.2h12.2A3.2 3.2 0 0 1 23.4 7.4v15.5H11.1A3.2 3.2 0 0 1 7.9 19.7V4.2Z"/>
+        <path d="M7.9 7.7H5.9A2.5 2.5 0 0 0 3.4 10.2v12.6A3 3 0 0 0 6.4 25.8h14.1" stroke-linecap="round"/>
+        <path d="M14.2 9.2v9.9" stroke-linecap="round"/>
+      </g>
+      <text x="28" y="78" text-anchor="middle" fill="#23477F" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="700">Learn</text>
+    </g>
+    <g transform="translate(220,0)">
+      <path d="M0,0 H47 Q56,0 56,9 V47 Q56,56 47,56 H9 Q0,56 0,47 Z" fill="#D86742"/>
+      <g transform="translate(12,12)" fill="none" stroke="#FBFCFA" stroke-width="2.2" stroke-linejoin="round">
+        <path d="M16 2.4 27.1 16 16 29.6 4.9 16Z"/>
+        <path d="M16 2.4V29.6M4.9 16h22.2" stroke-width="1.7"/>
+      </g>
+      <text x="28" y="78" text-anchor="middle" fill="#8A3D24" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="700">Engineering</text>
+    </g>
+  </g>
+
+  <!-- Later -->
+  <g transform="translate(880,204)" opacity=".78">
+    <g transform="translate(110,0)">
+      <path d="M0,0 H47 Q56,0 56,9 V47 Q56,56 47,56 H9 Q0,56 0,47 Z" fill="none" stroke="#C8D8D3"/>
+      <g transform="translate(12,11)" fill="none" stroke="#617470" stroke-width="2.2" stroke-linejoin="round">
+        <path d="M8 4.2h12.2A3.2 3.2 0 0 1 23.4 7.4v15.5H11.1A3.2 3.2 0 0 1 7.9 19.7V4.2Z"/>
+        <path d="M7.9 7.7H5.9A2.5 2.5 0 0 0 3.4 10.2v12.6A3 3 0 0 0 6.4 25.8h14.1" stroke-linecap="round"/>
+        <path d="M14.2 9.2v9.9" stroke-linecap="round"/>
+      </g>
+      <text x="28" y="78" text-anchor="middle" fill="#617470" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="650">Learn</text>
+      <text x="28" y="96" text-anchor="middle" fill="#617470" font-family="ui-monospace, monospace" font-size="10" letter-spacing="0.14em">LATER</text>
+    </g>
+    <g transform="translate(220,0)">
+      <path d="M0,0 H47 Q56,0 56,9 V47 Q56,56 47,56 H9 Q0,56 0,47 Z" fill="none" stroke="#C8D8D3"/>
+      <g transform="translate(12,12)" fill="none" stroke="#617470" stroke-width="2.2" stroke-linejoin="round">
+        <path d="M16 2.4 27.1 16 16 29.6 4.9 16Z"/>
+        <path d="M16 2.4V29.6M4.9 16h22.2" stroke-width="1.7"/>
+      </g>
+      <text x="28" y="78" text-anchor="middle" fill="#617470" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="650">Engineering</text>
+      <text x="28" y="96" text-anchor="middle" fill="#617470" font-family="ui-monospace, monospace" font-size="10" letter-spacing="0.14em">LATER</text>
+    </g>
+  </g>
+
+  <g font-family="ui-sans-serif, system-ui, sans-serif" fill="#617470" font-size="15">
+    <text x="80" y="360">Not this</text>
+    <text x="80" y="386" fill="#102A2A">Stacked INTERVIEW / Workspace wordmark · I L E letter tiles · contents or peach pills · extra Architecture tabs</text>
+    <text x="80" y="430">Keep</text>
+    <text x="80" y="456" fill="#102A2A">50px application bar text switch · 980px even destination dock · Career Materials CM glyph unchanged</text>
+  </g>
+
+  <g transform="translate(80,500)">
+    <rect width="1120" height="140" rx="14" fill="#102D2D"/>
+    <text x="28" y="36" fill="#8EA7A2" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" letter-spacing="0.16em">LEFT RAIL ON MINERAL TEAL</text>
+    <g transform="translate(28,56)">
+      <path d="M0,0 H23 Q28,0 28,5 V23 Q28,28 23,28 H5 Q0,28 0,23 Z" fill="#0D9488"/>
+      <g transform="translate(6,6)" fill="none" stroke="#FBFCFA" stroke-width="1.4" stroke-linecap="round">
+        <path d="M2.1 11.7a6.15 6.15 0 1 1 9.6 0"/>
+        <path d="M8 3.3v3.1"/>
+        <circle cx="8" cy="7.8" r="1" fill="#FBFCFA" stroke="none"/>
+      </g>
+      <text x="14" y="44" text-anchor="middle" fill="#FBFCFA" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9">Interview</text>
+    </g>
+    <g transform="translate(88,56)">
+      <path d="M0,0 H23 Q28,0 28,5 V23 Q28,28 23,28 H5 Q0,28 0,23 Z" fill="#315CA8" fill-opacity=".2" stroke="#315CA8" stroke-opacity=".55"/>
+      <g transform="translate(6,5.5)" fill="none" stroke="#9DBCED" stroke-width="1.4" stroke-linejoin="round">
+        <path d="M4 2.1h6.1A1.6 1.6 0 0 1 11.7 3.7v7.75H5.55A1.6 1.6 0 0 1 4 9.85V2.1Z"/>
+        <path d="M4 3.85H3A1.25 1.25 0 0 0 1.7 5.1v6.3A1.5 1.5 0 0 0 3.2 12.9h7.05" stroke-linecap="round"/>
+        <path d="M7.1 4.6v4.95" stroke-linecap="round"/>
+      </g>
+      <text x="14" y="44" text-anchor="middle" fill="#B7C9C5" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9">Learn</text>
+    </g>
+    <g transform="translate(148,56)">
+      <path d="M0,0 H23 Q28,0 28,5 V23 Q28,28 23,28 H5 Q0,28 0,23 Z" fill="#D86742" fill-opacity=".2" stroke="#D86742" stroke-opacity=".55"/>
+      <g transform="translate(6,6)" fill="none" stroke="#E7A48A" stroke-width="1.4" stroke-linejoin="round">
+        <path d="M8 1.2 13.55 8 8 14.8 2.45 8Z"/>
+        <path d="M8 1.2V14.8M2.45 8h11.1" stroke-width="1.1"/>
+      </g>
+      <text x="14" y="44" text-anchor="middle" fill="#B7C9C5" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9">Engineering</text>
+    </g>
+    <line x1="220" y1="58" x2="220" y2="118" stroke="#C8D8D3" stroke-opacity=".28"/>
+    <text x="244" y="86" fill="#EDF7F4" font-family="ui-sans-serif, system-ui, sans-serif" font-size="18">01 Today</text>
+    <text x="244" y="112" fill="#8EA7A2" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13">Destination nav stays numbered. Identity is the plate, not a second Workspace caption.</text>
+  </g>
+</svg>

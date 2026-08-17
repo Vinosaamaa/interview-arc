@@ -626,10 +626,14 @@ test("the fixed header owns the only workspace selector", async () => {
     && node.text === "ENGINEERING_NAV_ITEMS");
   assert.ok(engineeringNav.length > 0);
   assert.equal(literals.has("Recall schedule"), false);
-  assert.equal(visit(file, (node) => ts.isJsxElement(node)
+  const identityNav = visit(file, (node) => ts.isJsxElement(node)
     && node.openingElement.attributes.properties.some((attribute) => ts.isJsxAttribute(attribute)
       && attribute.name.getText(file) === "className"
-      && attribute.initializer?.getText(file) === '"workspace-nav"')).length, 0);
+      && attribute.initializer?.getText(file) === '"workspace-nav"'))[0];
+  assert.ok(identityNav);
+  assert.match(identityNav.getText(file), /WorkspaceIdentityBadge/);
+  assert.doesNotMatch(file.getText(), /<small>Workspace<\/small>/);
+  assert.doesNotMatch(file.getText(), /<span>\{activeWorkspace === "engineering" \? "Engineering"/);
   const fixedHeader = cssRules(rules, ".topbar")
     .filter((rule) => rule.ancestors.length === 0 && rule.declarations["grid-template-areas"])
     .at(-1).declarations;
@@ -642,6 +646,66 @@ test("the fixed header owns the only workspace selector", async () => {
       && rule.declarations["border-radius"] === "0"
       && rule.declarations["box-shadow"] === "none");
   assert.ok(canonicalBrandRule, "the favicon must not inherit a second bordered tile");
+});
+
+test("workspace identity badges share one specimen plate and drop stacked wordmarks", async () => {
+  const [home, identity, identityCss, globals, v2] = await Promise.all([
+    load("../app/home-client.tsx"),
+    load("../app/workspace-identity.tsx"),
+    load("../app/workspace-identity.css"),
+    load("../app/globals.css"),
+    load("../app/interview-arc-v2.css"),
+  ]);
+  const identityFile = parseTsx(identity);
+  const homeFile = parseTsx(home);
+  const identityRules = parseCss(identityCss);
+  const globalRules = parseCss(globals);
+  const v2Rules = parseCss(v2);
+
+  assert.match(home, /<nav className="workspace-nav" aria-label="Workspace identity">/);
+  assert.doesNotMatch(home, /<small>Workspace<\/small>/);
+  assert.doesNotMatch(home, /local-nav-label"><span>/);
+  const localNav = visit(homeFile, (node) => ts.isJsxSelfClosingElement(node)
+    && node.attributes.properties.some((attribute) => ts.isJsxAttribute(attribute)
+      && attribute.name.getText(homeFile) === "className"
+      && attribute.initializer?.getText(homeFile) === '"local-nav-label"'))[0];
+  assert.ok(localNav);
+  assert.match(localNav.getText(homeFile), /aria-hidden="true"/);
+
+  const badges = visit(identityFile, (node) => ts.isFunctionDeclaration(node)
+    && node.name?.text === "WorkspaceIdentityBadge")[0]
+    ?? visit(identityFile, (node) => ts.isVariableDeclaration(node)
+      && ts.isIdentifier(node.name)
+      && node.name.text === "WorkspaceIdentityBadge")[0];
+  assert.ok(badges);
+  const badgeSource = badges.getText(identityFile);
+  assert.match(badgeSource, /aria-label=\{ariaLabel\}/);
+  assert.match(badgeSource, /aria-current=\{selected \? "page" : undefined\}/);
+  assert.match(badgeSource, /unavailable \? `\$\{label\}, later` : label/);
+  assert.match(badgeSource, /workspace-identity-later">Later/);
+  assert.match(identity, /function InterviewMotif/);
+  assert.match(identity, /function LearnMotif/);
+  assert.match(identity, /function EngineeringMotif/);
+  assert.doesNotMatch(identity, />I<\/span>/);
+  assert.doesNotMatch(identity, />L<\/span>/);
+  assert.doesNotMatch(identity, />E<\/span>/);
+  assert.doesNotMatch(identity, /Overview|Architecture|peach|contents pill/i);
+
+  const mark = cssRules(identityRules, ".app-shell .workspace-nav .workspace-identity-mark")[0]?.declarations;
+  assert.equal(mark?.width, "28px");
+  assert.equal(mark?.height, "28px");
+  assert.equal(mark?.["border-radius"], "9px 9px 9px 3px");
+  assert.equal(cssRules(identityRules, ".app-shell .workspace-nav")[0]?.declarations["grid-template-columns"], "repeat(3, minmax(0, 1fr))");
+  assert.equal(cssRules(globalRules, ".workspace-nav")[0]?.declarations["grid-template-columns"], "repeat(3, minmax(0, 1fr))");
+  assert.equal(cssRules(v2Rules, ".workspace-nav")[0]?.declarations["grid-template-columns"], "repeat(3, minmax(0, 1fr))");
+  assert.equal(cssRules(globalRules, ".workspace-nav .workspace-identity-mark")[0]?.declarations.width, "28px");
+  assert.equal(cssRules(globalRules, ".workspace-nav .workspace-identity-mark")[0]?.declarations.height, "28px");
+  assert.equal(cssRules(identityRules, ".app-shell .local-nav-label")[0]?.declarations["border-top"].includes("1px solid"), true);
+  assert.equal(cssRules(globalRules, ".local-nav-label")[0]?.declarations["font-size"], "0");
+  assert.equal(cssRules(identityRules, ".app-shell .primary-nav")[0]?.declarations["margin-top"], "0");
+  assert.equal(cssRules(v2Rules, ".primary-nav")[0]?.declarations["margin-top"], "0");
+  assert.doesNotMatch(identityCss, /#f4c7a8|#f6c7b0|peach/i);
+  assert.doesNotMatch(globals, /\.workspace-nav button > span \{ width: 26px/);
 });
 
 test("Engineering uses its exact local navigation and keeps Statistics out of Interview", async () => {
