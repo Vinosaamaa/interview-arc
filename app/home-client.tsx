@@ -7290,7 +7290,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
               <label><span>Volume</span><input type="range" min="0" max="1" step="0.05" value={musicVolume} onChange={(event) => setMusicVolume(Number(event.target.value))} aria-label="Music volume" /></label>
               <MusicPlaylist playlist={ambientPlaylist} currentIndex={ambientTrackIndex} onSelect={chooseAmbientTrack} />
             </div>
-            <button className={`atmosphere-toggle ${atmosphereMode !== "off" ? "active" : ""}`} onClick={cycleAtmosphere} title={`Atmosphere: ${atmosphereMode}. Switch atmosphere`}><span aria-hidden="true">{atmosphereMode === "rain" ? "⌁" : atmosphereMode === "petals" ? "✦" : "○"}</span><span className="atmosphere-toggle-label">{atmosphereMode === "rain" ? "Rain" : atmosphereMode === "petals" ? "Petals" : "Atmosphere off"}</span></button>
+            <button className={`atmosphere-toggle ${atmosphereMode !== "off" ? "active" : ""}`} onClick={cycleAtmosphere} aria-label={`Atmosphere: ${atmosphereMode}. Switch atmosphere`} title={`Atmosphere: ${atmosphereMode}. Switch atmosphere`}><span aria-hidden="true">{atmosphereMode === "rain" ? "⌁" : atmosphereMode === "petals" ? "✦" : "○"}</span></button>
             <details className={`topbar-tools ${pipWindow && !pipWindow.closed ? "active" : ""}`}>
               <summary aria-label="Timer, export, and connect" title="Timer, export, and connect"><Icon name="link" /></summary>
               <div className="topbar-tools-menu" role="menu">
