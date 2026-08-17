@@ -18,7 +18,9 @@ LeetCode, infer outcomes, or replace the website and Voice interfaces.
 - An exact selection, or every activity in a filtered session, may name one
   `loopContext` with a stable Loop ID and optional Round ID. The server rejects
   cross-owner or missing identities and snapshots the current immutable,
-  display-safe Role Brief revision into each created activity binding.
+  display-safe Role Brief revision into each created activity binding. The
+  website composer uses the same contract: extra-upsert with `loopContext`
+  writes the activity and Loop binding together before the timer starts.
 - `remove_today_practice_activities` removes one or more exact untouched plan
   rows after an explicit user instruction. It requires the current workbench
   revision, preserves every durable row, and returns deleted and rejected IDs

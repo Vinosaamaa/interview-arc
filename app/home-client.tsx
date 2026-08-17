@@ -10,6 +10,18 @@ import {
   type ActivityBatchDestination,
   type SelectedActivity,
 } from "./activity-batch";
+import {
+  activityKeysBoundToLoop,
+  composerLoopContextRequest,
+  composerLoopPrefillFromLoop,
+  EMPTY_COMPOSER_LOOP_BINDING,
+  toggleComposerLoopUnboundKey,
+  type ComposerLoopPracticePrefill,
+} from "./activity-composer-loop-binding";
+import {
+  ActivityComposerLoopBinding,
+  ActivityComposerLoopBindStamp,
+} from "./activity-composer-loop-panel";
 import { findExactPastSnapshot, orderPastReaderSections, retainLoadedPastSnapshot } from "./behavioral-final-answer-view";
 import type {
   ContentArtifact,
@@ -320,6 +332,10 @@ type ComposerState = {
   customMinutes: string;
   reviewOpen: boolean;
   batchDestination: ActivityBatchDestination;
+  hiringLoopEnabled: boolean;
+  hiringLoopId: string;
+  hiringLoopStageId: string;
+  hiringLoopUnboundKeys: string[];
   editingId: string;
   editingSessionId: string;
   sessionCoding: number;
@@ -393,6 +409,7 @@ const EMPTY_COMPOSER: ComposerState = {
   customMinutes: "30",
   reviewOpen: false,
   batchDestination: "standalone",
+  ...EMPTY_COMPOSER_LOOP_BINDING,
   editingId: "",
   editingSessionId: "",
   sessionCoding: 6,
@@ -3236,7 +3253,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
     return "draft";
   }
 
-  function openNewActivity() {
+  function openNewActivity(prefill?: ComposerLoopPracticePrefill) {
     composerSpecialtyViewsRef.current = createComposerSpecialtyViews();
     pendingComposerScrollRestoreRef.current = 0;
     setComposerClosing(false);
@@ -3246,7 +3263,12 @@ export default function HomeClient({ content, today, engineering, initialLocatio
     setComposerSortKey("frequency");
     setComposerSortDir("asc");
     setComposerVisibleCount(20);
-    setComposer({ ...EMPTY_COMPOSER, open: true, mode: "activity" });
+    setComposer({
+      ...EMPTY_COMPOSER,
+      open: true,
+      mode: "activity",
+      ...(prefill ? composerLoopPrefillFromLoop(prefill) : {}),
+    });
   }
 
   function openNewSession() {
@@ -3939,6 +3961,20 @@ export default function HomeClient({ content, today, engineering, initialLocatio
         showUiToast(`${duplicate.title} is already on Today or selected more than once.`);
         return;
       }
+      const loopContext = composerLoopContextRequest({
+        enabled: composer.hiringLoopEnabled,
+        loopId: composer.hiringLoopId,
+        stageId: composer.hiringLoopStageId,
+      });
+      if (composer.hiringLoopEnabled && !loopContext) {
+        showUiToast("Choose a hiring Loop, or turn Hiring Loop off for universal practice.");
+        return;
+      }
+      const boundKeys = new Set(activityKeysBoundToLoop(
+        composer.selectedActivities.map((item) => item.key),
+        composer.hiringLoopUnboundKeys,
+        Boolean(loopContext),
+      ));
       const batchStamp = Date.now().toString(36);
       const { activities, session: builtSession } = buildSelectedActivityBatch({
         date: journal.date,
@@ -3946,6 +3982,8 @@ export default function HomeClient({ content, today, engineering, initialLocatio
         sessionNumber: allSessions.length + 1,
         destination: composer.batchDestination,
         items: composer.selectedActivities,
+        loopContext,
+        boundKeys,
       });
       const focusBlock: FocusBlock | null = composer.focusSelected ? {
         id: `${journal.date}-focus-job-applications-${batchStamp}`,
@@ -5622,7 +5660,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
           </div>
         </section>}
 
-        <div className="today-actions"><div><h2>Current workbench</h2><p>It stays open across Pacific midnight until you publish it or explicitly start fresh.</p></div><div><button className="secondary-action" onClick={() => allTodayActivities.length || allSessions.length || currentFocusBlocks.length ? setFreshDayConfirmOpen(true) : startFreshPracticeDay()}>Start fresh day</button><button className="secondary-action" onClick={openNewActivity}>Add activities</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
+        <div className="today-actions"><div><h2>Current workbench</h2><p>It stays open across Pacific midnight until you publish it or explicitly start fresh.</p></div><div><button className="secondary-action" onClick={() => allTodayActivities.length || allSessions.length || currentFocusBlocks.length ? setFreshDayConfirmOpen(true) : startFreshPracticeDay()}>Start fresh day</button><button className="secondary-action" onClick={() => openNewActivity()}>Add activities</button><button className="primary-action" onClick={openNewSession}>＋ Add another session</button></div></div>
         <BehavioralTargetBindings activities={allTodayActivities} sessions={allSessions} />
         <section className="session-stack">{allSessions.length ? allSessions.map(renderSession) : <div className="quiet-empty session-empty"><strong>No session planned yet.</strong><span>Add another session to choose up to six coding questions and one question from each available interview bank.</span></div>}</section>
 
@@ -5822,7 +5860,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
     const readerVisible = arrivalState === "entered" && readerOpen;
     return <section className={`loops-reader-workspace ${readerVisible ? "has-open-reader" : ""}`}>
       <div className="loops-reader-base" inert={readerVisible ? true : undefined}>
-        <LoopsWorkspace onOpenActivity={openLoopActivity} />
+        <LoopsWorkspace onOpenActivity={openLoopActivity} onAddPractice={openNewActivity} />
       </div>
       {readerNotFound && <div className="journey-reader-not-found" role="alert"><strong>That Loop practice record is unavailable.</strong><span>The saved reader link points to <code>{readerNotFound}</code>, which is not present in the current authoritative record.</span></div>}
       {readerVisible && <div className={`loop-reader-detail reader-workspace focused-attempt-workspace ${readerClosing ? "reader-closing" : ""}`}><ModalReaderPane focusKey={loopNestedProblem ? `loop-solution-${loopNestedProblem.type}-${loopNestedProblem.question.id}` : `loop-attempt-${loopNestedEntry?.id ?? "unknown"}`} restoreFocusRef={loopReaderOpenerRef} className="loop-reader-pane focused-attempt-pane" label="Selected Loop practice reader">{loopNestedProblem ? renderSolutionReader() : renderCaseReader()}</ModalReaderPane></div>}
@@ -7389,7 +7427,31 @@ export default function HomeClient({ content, today, engineering, initialLocatio
               {composer.type === "leetcode" && !composer.customUrl.trim() && !composer.customPrompt.trim() && <p>A title-only coding activity is allowed, but the specialist may need you to provide the full prompt later.</p>}
               <div className="custom-activity-actions"><button type="button" onClick={() => setComposer((current) => ({ ...current, customOpen: false, customEditingKey: "" }))}>Cancel</button><button type="button" className="primary-action" disabled={!composer.customTitle.trim() || customUrlInvalid} onClick={stageCustomActivity}>{composer.customEditingKey ? "Save selection" : "Add to selections"}</button></div>
             </section>}
-            {composer.reviewOpen && <section className="selection-review" aria-label="Review selected activities"><header><div><strong>Review selections</strong><small>Remove anything without searching for it again.</small></div><button type="button" onClick={() => setComposer((current) => ({ ...current, selectedActivities: [], focusSelected: false }))} disabled={!selectedActivityCount}>Clear all</button></header>{composer.focusSelected && <div className="selection-review-group"><h3>Career focus</h3><article><div><strong>Job applications</strong><small>{Math.max(1, Number(composer.focusMinutes) || 60)} min · Time only</small></div><button type="button" onClick={() => setComposer((current) => ({ ...current, focusSelected: false }))} aria-label="Remove Job applications">×</button></article></div>}{stagedByType.length ? stagedByType.map((group) => <div className="selection-review-group" key={group.type}><h3>{typeLabel(group.type)}</h3>{group.items.map((item) => <article key={item.key}><div><strong>{item.title}</strong><small>{item.minutes} min{item.source === "custom" ? " · Custom" : ""}</small></div>{item.source === "custom" && <button type="button" onClick={() => editStagedActivity(item)} aria-label={`Edit ${item.title}`}>Edit</button>}<button type="button" onClick={() => removeStagedActivity(item.key)} aria-label={`Remove ${item.title}`}>×</button></article>)}</div>) : !composer.focusSelected && <p className="no-results">No activities selected yet.</p>}</section>}
+            {composer.reviewOpen && <section className="selection-review" aria-label="Review selected activities">
+              <header>
+                <div><strong>Review selections</strong><small>Remove anything without searching for it again.</small></div>
+                <button type="button" onClick={() => setComposer((current) => ({ ...current, selectedActivities: [], focusSelected: false, hiringLoopUnboundKeys: [] }))} disabled={!selectedActivityCount}>Clear all</button>
+              </header>
+              <ActivityComposerLoopBinding
+                enabled={composer.hiringLoopEnabled}
+                loopId={composer.hiringLoopId}
+                stageId={composer.hiringLoopStageId}
+                onEnabledChange={(enabled) => setComposer((current) => ({ ...current, hiringLoopEnabled: enabled, hiringLoopUnboundKeys: enabled ? [] : current.hiringLoopUnboundKeys }))}
+                onLoopChange={(nextLoopId, nextStageId) => setComposer((current) => ({ ...current, hiringLoopId: nextLoopId, hiringLoopStageId: nextStageId }))}
+              />
+              {composer.focusSelected && <div className="selection-review-group"><h3>Career focus</h3><article className="career-focus-selection"><div><strong>Job applications</strong><small>{Math.max(1, Number(composer.focusMinutes) || 60)} min · Time only{composer.hiringLoopEnabled ? " · Never binds" : ""}</small></div><button type="button" onClick={() => setComposer((current) => ({ ...current, focusSelected: false }))} aria-label="Remove Job applications">×</button></article></div>}
+              {stagedByType.length ? stagedByType.map((group) => <div className="selection-review-group" key={group.type}><h3>{typeLabel(group.type)}</h3>{group.items.map((item) => {
+                const bound = composer.hiringLoopEnabled && !composer.hiringLoopUnboundKeys.includes(item.key);
+                return <article className={composer.hiringLoopEnabled ? "has-loop-stamp" : ""} key={item.key}>
+                  <ActivityComposerLoopBindStamp title={item.title} bound={bound} disabled={!composer.hiringLoopEnabled} onToggle={() => setComposer((current) => ({ ...current, hiringLoopUnboundKeys: toggleComposerLoopUnboundKey(current.hiringLoopUnboundKeys, item.key) }))} />
+                  <div><strong>{item.title}</strong><small>{item.minutes} min{item.source === "custom" ? " · Custom" : ""}{bound ? " · This Loop" : composer.hiringLoopEnabled ? " · Universal" : ""}</small></div>
+                  <div className="selection-review-actions">
+                    {item.source === "custom" && <button type="button" onClick={() => editStagedActivity(item)} aria-label={`Edit ${item.title}`}>Edit</button>}
+                    <button type="button" onClick={() => removeStagedActivity(item.key)} aria-label={`Remove ${item.title}`}>×</button>
+                  </div>
+                </article>;
+              })}</div>) : !composer.focusSelected && <p className="no-results">No activities selected yet.</p>}
+            </section>}
             <footer className="activity-selection-footer">
               <div className="selection-summary"><strong className="selection-count" key={selectedActivityCount}>{selectedActivityCount} selected</strong><small>{composer.batchDestination === "session" ? `${selectedActivityMinutes} min session countdown` : `${selectedActivityMinutes} total minutes`}</small></div>
               {!composer.editingId && <div className="activity-destination" role="radiogroup" aria-label="Add selected activities as">

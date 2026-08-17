@@ -18,6 +18,7 @@ import {
   type LoopPreparationSource,
   type LoopSpecialty,
 } from "./loops-view-model";
+import type { ComposerLoopPracticePrefill } from "./activity-composer-loop-binding";
 import InterviewPageHero from "./interview-page-hero";
 import { isAbortError, parseLoopPayloadResponse } from "./loop-payload";
 
@@ -223,15 +224,23 @@ function useLoopPayload(includeArchived = false) {
   };
 }
 
-function PreparationLedger({ loop, onOpenActivity }: {
+function PreparationLedger({ loop, onOpenActivity, onAddPractice }: {
   loop: LoopProjection;
   onOpenActivity: (activityId: string, loopId: string, stageId: string) => void;
+  onAddPractice?: (prefill: ComposerLoopPracticePrefill) => void;
 }) {
   const groups = useMemo(() => groupLoopPreparation(loop), [loop]);
   return <section className="loop-preparation" aria-labelledby="loop-preparation-title">
     <header>
       <div><h2 id="loop-preparation-title">Linked preparation</h2><p>Completed work first. Each finished attempt opens its exact Past record.</p></div>
-      <small>{loop.activityBindings.length} linked</small>
+      <div className="loop-add-practice-row">
+        <small>{loop.activityBindings.length} linked</small>
+        {onAddPractice ? <button type="button" className="loop-add-practice" onClick={() => onAddPractice({
+          loopId: loop.loop.loopId,
+          stages: loop.loop.stages,
+          preferredStageId: readLoopWorkspaceState(window.location.href)?.stageId,
+        })}>Add practice</button> : null}
+      </div>
     </header>
     <div className="loop-preparation-columns">{groups.map((group) => <section className={`loop-preparation-column ${group.specialty}`} key={group.specialty}>
       <header><span className={`loop-specialty-mark ${group.specialty}`} aria-hidden="true" /><strong>{specialtyLabel(group.specialty)}</strong><small>{group.questions.filter((question) => question.completed).length}/{group.questions.length}</small></header>
@@ -408,7 +417,13 @@ function StageChronology({ loop }: { loop: LoopProjection }) {
   return <ol className={`loop-stage-chronology outcome-${terminal}`} aria-label="Interview stage chronology">{stages.map((stage, index) => <StageRecord stage={stage} materials={stageMaterials(materialIndex, stage.stageId, index === 0)} key={stage.stageId} />)}<li className={`loop-stage-terminal ${terminal}`}><span aria-hidden="true">{terminal === "rejected" || terminal === "withdrawn" || terminal === "closed" ? "×" : ""}</span><strong>{terminal === "open" ? "To be continued" : sentenceId(terminal)}</strong></li></ol>;
 }
 
-export function LoopsWorkspace({ onOpenActivity }: { onOpenActivity: (activityId: string, loopId: string, stageId: string) => void }) {
+export function LoopsWorkspace({
+  onOpenActivity,
+  onAddPractice,
+}: {
+  onOpenActivity: (activityId: string, loopId: string, stageId: string) => void;
+  onAddPractice?: (prefill: ComposerLoopPracticePrefill) => void;
+}) {
   const [includeArchived, setIncludeArchived] = useState(false);
   const { payload, error, loading, reload } = useLoopPayload(includeArchived);
   const [selectedLoopId, setSelectedLoopId] = useState(() => (typeof window === "undefined" ? "" : readLoopWorkspaceState(window.location.href)?.loopId ?? ""));
@@ -454,7 +469,7 @@ export function LoopsWorkspace({ onOpenActivity }: { onOpenActivity: (activityId
       <button type="button" className="loop-current-identity" aria-expanded={loopSwitcherOpen} aria-controls="loop-switcher-list" onClick={() => setLoopSwitcherOpen((current) => !current)}><span><i className={`loop-status ${selectedLoop.loop.status}`}>{sentenceId(selectedLoop.loop.status)}</i><strong>{selectedLoop.loop.company} · {selectedLoop.loop.roleTitle}</strong><small>{[selectedLoop.loop.jobReference, selectedLoop.loop.location, selectedLoop.roleBrief.targetLevel].filter(Boolean).join(" · ") || "Company-and-role hiring process"}</small></span><b>Switch Loop</b><svg className="loop-disclosure" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" /></svg></button>
       <div className="loop-switcher-list" id="loop-switcher-list" inert={!loopSwitcherOpen} aria-hidden={!loopSwitcherOpen}><div>{loops.filter((loop) => loop.loop.loopId !== selectedLoop.loop.loopId).map((loop) => <button type="button" onClick={() => { setSelectedLoopId(loop.loop.loopId); setLoopSwitcherOpen(false); }} key={loop.loop.loopId}><strong>{loop.loop.company}</strong><span>{loop.loop.roleTitle}</span><small>{sentenceId(loop.loop.status)}</small></button>)}</div>{loops.length <= 1 ? <p>No other Loop is recorded.</p> : null}<label><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} /> Include archived Loops</label></div>
     </section>
-    <div className="loop-support-band"><RoleBriefPanel loop={selectedLoop} onOpenSource={(opener) => setSourceDialog({ loop: selectedLoop, opener })} /><PreparationLedger loop={selectedLoop} onOpenActivity={onOpenActivity} /></div>
+    <div className="loop-support-band"><RoleBriefPanel loop={selectedLoop} onOpenSource={(opener) => setSourceDialog({ loop: selectedLoop, opener })} /><PreparationLedger loop={selectedLoop} onOpenActivity={onOpenActivity} onAddPractice={onAddPractice} /></div>
     <StageChronology loop={selectedLoop} />
   </section>{sourceDialog ? <JobDescriptionDialog loop={sourceDialog.loop} opener={sourceDialog.opener} onClose={closeSourceDialog} /> : null}</>;
 }

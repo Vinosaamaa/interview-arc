@@ -136,7 +136,7 @@ function displaySafeRoleBrief(row: {
   };
 }
 
-function boundRoleBriefDisplaySnapshot(value: unknown): LoopRoleBriefDisplaySnapshot {
+export function boundRoleBriefDisplaySnapshot(value: unknown): LoopRoleBriefDisplaySnapshot {
   const revision = displaySafeLoopRoleBriefRevisionSchema.safeParse(value);
   if (!revision.success) return loopRoleBriefDisplaySnapshotSchema.parse(value);
   const snapshot = Object.fromEntries(Object.entries(revision.data).filter(
@@ -573,6 +573,22 @@ export async function readLoopRoleBriefSource(ownerId: string, inputValue: unkno
     },
     createdAt: row.createdAt,
   };
+}
+
+export function extraActivityLoopContextRequest(loopContext: unknown): LoopActivityContextRequest | null {
+  if (!loopContext || typeof loopContext !== "object") return null;
+  const context = loopContext as Record<string, unknown>;
+  const parsed = loopActivityContextRequestSchema.safeParse({
+    loopId: context.loopId,
+    ...(typeof context.stageId === "string" && context.stageId ? { stageId: context.stageId } : {}),
+  });
+  if (!parsed.success) {
+    throw new LoopError(
+      "loop_context_invalid",
+      "Loop context must name one owner-private Loop and an optional Round.",
+    );
+  }
+  return parsed.data;
 }
 
 export async function resolveLoopActivityContext(
