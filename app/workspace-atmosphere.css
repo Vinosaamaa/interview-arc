@@ -419,41 +419,49 @@
   max-height: 40px;
   min-width: 40px;
   max-width: none;
+  padding: 0 4px;
 }
 .app-shell .music-dock > button:first-child {
   width: 40px;
   min-width: 40px;
   max-width: 40px;
+  height: 40px;
   padding: 0;
   justify-content: center;
   overflow: hidden;
 }
 .app-shell .music-dock label,
 .app-shell .music-dock i { display: none; }
-.app-shell .music-playlist-label,
-.app-shell .atmosphere-toggle-label { white-space: nowrap; }
-
-@container topbar-actions (max-width: 520px) {
-  .music-playlist-label,
-  .atmosphere-toggle-label,
-  .music-playlist > summary small { display: none; }
-  .atmosphere-toggle {
-    width: 40px;
-    min-width: 40px;
-    padding: 0;
-    justify-content: center;
-  }
-  .music-playlist > summary { padding-inline: 7px; }
+.app-shell .atmosphere-toggle {
+  flex: 0 0 40px;
+  width: 40px;
+  min-width: 40px;
+  max-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  max-height: 40px;
+  padding: 0;
+  justify-content: center;
+  overflow: hidden;
 }
+.app-shell .music-playlist > summary {
+  width: 40px;
+  min-width: 40px;
+  max-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+  overflow: hidden;
+}
+.app-shell .music-playlist-label,
+.app-shell .atmosphere-toggle-label,
+.app-shell .music-playlist > summary small { display: none; }
+
 @container topbar-actions (max-width: 220px) {
   .music-playlist { display: none; }
   .music-dock > button:not(:first-child) { display: none; }
-}
-@media (max-width: 1480px) {
-  .app-shell .music-playlist-label,
-  .app-shell .atmosphere-toggle-label,
-  .app-shell .music-playlist > summary small { display: none; }
-  .app-shell .atmosphere-toggle { width: 40px; min-width: 40px; padding: 0; justify-content: center; }
 }
 @media (max-width: 1320px) {
   .app-shell .music-playlist { display: none; }

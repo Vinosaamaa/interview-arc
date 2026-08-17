@@ -15,10 +15,14 @@ export function MusicPlaylist({
 }) {
   return (
     <details className={`music-playlist ${variant}`}>
-      <summary aria-label="Open today’s music playlist">
+      <summary aria-label="Open today’s music playlist" title="Open today’s music playlist">
         <span aria-hidden="true">≡</span>
-        <span className="music-playlist-label">Playlist</span>
-        <small>{playlist.length}</small>
+        {variant === "arrival" ? (
+          <>
+            <span className="music-playlist-label">Playlist</span>
+            <small>{playlist.length}</small>
+          </>
+        ) : null}
       </summary>
       <div className="music-playlist-card">
         <header>

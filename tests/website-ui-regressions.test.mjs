@@ -87,6 +87,58 @@ function cssRules(rules, selector, media = "") {
     && (!media || rule.ancestors.some((ancestor) => ancestor.includes(media))));
 }
 
+function selectorHasClass(selector, className) {
+  return new RegExp(`(^|[\\s>+~])\\.${className}(?:$|[^a-zA-Z0-9_-])`).test(` ${selector.trim()}`);
+}
+
+function parsePx(value) {
+  const match = /^(-?\d+(?:\.\d+)?)px$/.exec(String(value ?? "").trim());
+  return match ? Number(match[1]) : null;
+}
+
+function spacingFromShorthand(value, side) {
+  if (!value) return null;
+  const lengths = String(value).trim().split(/\s+/).map(parsePx);
+  if (lengths.some((entry) => entry == null)) return null;
+  if (lengths.length === 1) return lengths[0];
+  if (lengths.length === 2) return side === "top" || side === "bottom" ? lengths[0] : lengths[1];
+  if (lengths.length === 3) return side === "top" ? lengths[0] : side === "bottom" ? lengths[2] : lengths[1];
+  return { top: lengths[0], right: lengths[1], bottom: lengths[2], left: lengths[3] }[side];
+}
+
+function horizontalPadding(declarations) {
+  return (parsePx(declarations["padding-left"]) ?? spacingFromShorthand(declarations.padding, "left") ?? 0)
+    + (parsePx(declarations["padding-right"]) ?? spacingFromShorthand(declarations.padding, "right") ?? 0);
+}
+
+function usedBorderBoxWidth(declarations, intrinsicContentPx) {
+  const width = parsePx(declarations.width);
+  if (width != null) return width;
+  const minWidth = parsePx(declarations["min-width"]) ?? 0;
+  return Math.max(minWidth, intrinsicContentPx + horizontalPadding(declarations));
+}
+
+function cascadeAtmosphere(rules, mode, mediaQuery = null) {
+  const declarations = {};
+  for (const rule of rules) {
+    const queryAncestors = rule.ancestors.filter((ancestor) => ancestor.startsWith("@media") || ancestor.startsWith("@container"));
+    if (mediaQuery) {
+      if (queryAncestors.length && !queryAncestors.some((ancestor) => ancestor.includes(mediaQuery))) continue;
+    } else if (queryAncestors.length) {
+      continue;
+    }
+    for (const selector of rule.selectors) {
+      if (!selectorHasClass(selector, "atmosphere-toggle") || selectorHasClass(selector, "atmosphere-toggle-label")) continue;
+      const isActive = /\.atmosphere-toggle\.active(?:$|[^a-zA-Z0-9_-])/.test(selector);
+      const isInactive = selector.includes(":not(.active)");
+      if (isActive && mode === "off") continue;
+      if (isInactive && mode !== "off") continue;
+      Object.assign(declarations, rule.declarations);
+    }
+  }
+  return declarations;
+}
+
 async function loadResponsiveShell() {
   const [source, globals, css, atmosphere] = await Promise.all([
     load("../app/home-client.tsx"),
@@ -1182,8 +1234,51 @@ test("Engineering stepwise shell keeps compact contents, collapsing evidence, an
   assert.match(atmosphere, /\.topbar \{[\s\S]*height:\s*50px/);
   assert.match(atmosphere, /\.app-shell \.music-dock label,\s*\.app-shell \.music-dock i \{ display: none;/);
   assert.match(atmosphere, /flex: 0 0 auto/);
-  assert.match(atmosphere, /@container topbar-actions \(max-width: 520px\)[\s\S]*\.music-playlist-label/);
+  assert.match(atmosphere, /\.app-shell \.atmosphere-toggle \{[\s\S]*width:\s*40px/);
+  assert.match(atmosphere, /\.app-shell \.music-playlist > summary \{[\s\S]*width:\s*40px/);
   assert.match(atmosphere, /@media \(max-width: 1320px\)[\s\S]*\.music-playlist \{ display: none;/);
   assert.doesNotMatch(atmosphere, /@container topbar \(max-width: 1100px\)[\s\S]*\.topbar-context \{ visibility: hidden;/);
   assert.doesNotMatch(atmosphere, /\.app-shell \.topbar-context \{ display: none;/);
+});
+
+test("atmosphere toggle keeps one computed width in petals, rain, and off", async () => {
+  const { source, rules } = await loadResponsiveShell();
+  const atmosphereButton = source.match(/<button className=\{`atmosphere-toggle[\s\S]*?<\/button>/)?.[0];
+  assert.ok(atmosphereButton);
+  assert.match(atmosphereButton, /aria-label=\{`Atmosphere: \$\{atmosphereMode\}\. Switch atmosphere`\}/);
+  assert.match(atmosphereButton, /title=\{`Atmosphere: \$\{atmosphereMode\}\. Switch atmosphere`\}/);
+  assert.doesNotMatch(atmosphereButton, /atmosphere-toggle-label/);
+  assert.doesNotMatch(atmosphereButton, />Petals</);
+  assert.doesNotMatch(atmosphereButton, />Rain</);
+  assert.doesNotMatch(atmosphereButton, /Atmosphere off/);
+
+  const intrinsicByMode = { petals: 64, rain: 42, off: 118 };
+  const desktop = Object.fromEntries(Object.entries(intrinsicByMode).map(([mode, intrinsic]) => [
+    mode,
+    usedBorderBoxWidth(cascadeAtmosphere(rules, mode), intrinsic),
+  ]));
+  assert.equal(desktop.petals, desktop.rain);
+  assert.equal(desktop.rain, desktop.off);
+  assert.equal(desktop.petals, 40);
+
+  const compact = Object.fromEntries(Object.entries(intrinsicByMode).map(([mode, intrinsic]) => [
+    mode,
+    usedBorderBoxWidth(cascadeAtmosphere(rules, mode, "max-width: 480px"), intrinsic),
+  ]));
+  assert.equal(compact.petals, compact.rain);
+  assert.equal(compact.rain, compact.off);
+  assert.equal(compact.petals, 36);
+});
+
+test("playlist collapsed control is icon-only without Playlist text", async () => {
+  const source = await load("../app/music-playlist.tsx");
+  const summary = source.match(/<summary[\s\S]*?<\/summary>/)?.[0];
+  assert.ok(summary);
+  const dashboardSummary = summary.replace(/\{variant === "arrival" \? \([\s\S]*?\) : null\}/, "");
+  assert.match(summary, /aria-label="Open today’s music playlist"/);
+  assert.match(summary, /title="Open today’s music playlist"/);
+  assert.doesNotMatch(dashboardSummary, />Playlist</);
+  assert.doesNotMatch(dashboardSummary, /music-playlist-label/);
+  assert.doesNotMatch(dashboardSummary, /<small>\{playlist\.length\}<\/small>/);
+  assert.match(source, /\{playlist\.length\} tracks/);
 });

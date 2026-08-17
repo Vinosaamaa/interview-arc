@@ -1473,22 +1473,26 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 
 /* Daily arrival ritual ---------------------------------------------------- */
 .atmosphere-toggle {
-  min-height: 38px;
-  padding: 0 11px;
+  width: 40px;
+  min-width: 40px;
+  max-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: rgba(255, 255, 255, .66);
   color: #687269;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  font-size: .75rem;
+  justify-content: center;
+  overflow: hidden;
+  font-size: .82rem;
   font-weight: 730;
   cursor: pointer;
   transition: background .2s ease, border-color .2s ease, color .2s ease;
 }
-.atmosphere-toggle > span:first-child { width: 15px; color: #8a938b; text-align: center; }
-.atmosphere-toggle .atmosphere-toggle-label { width: auto; color: inherit; }
+.atmosphere-toggle > span:first-child { width: auto; color: #8a938b; text-align: center; }
 .atmosphere-toggle.active { border-color: #b5c48a; background: #f3f8df; color: #405020; }
 .atmosphere-toggle.active span:first-child { color: #6f8627; }
 
@@ -1593,6 +1597,17 @@ button.topbar-tools:hover,
 .music-playlist[open] > summary { background: #e8ece5; color: #38413a; }
 .music-playlist > summary > span:first-child { font-size: .9rem; letter-spacing: -.08em; }
 .music-playlist > summary small { min-width: 17px; height: 17px; border-radius: 50%; background: #dce4d7; display: grid; place-items: center; font-size: .53rem; }
+.music-playlist.dashboard > summary {
+  width: 40px;
+  min-width: 40px;
+  max-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+  overflow: hidden;
+}
 .music-playlist-card {
   position: absolute;
   z-index: 80;
@@ -2036,12 +2051,7 @@ button.topbar-tools:hover,
   .music-dock label, .music-dock i { display: none; }
   .music-dock > button:first-child { min-width: 34px; padding: 0; }
   .music-playlist > summary > span:nth-child(2),
-  .music-playlist-label,
-  .atmosphere-toggle-label { display: none; }
-  .atmosphere-toggle { width: 38px; padding: 0; justify-content: center; }
-  .atmosphere-toggle > span { width: auto; }
-  .atmosphere-toggle { font-size: 0; }
-  .atmosphere-toggle > span:first-child { font-size: .82rem; }
+  .music-playlist-label { display: none; }
   .career-focus-card { grid-template-columns: 40px 1fr auto; }
   .career-focus-card .activity-timer { grid-column: 1 / -1; width: 100%; }
   .career-local-ledger, .career-pipeline-ledger { grid-template-columns: repeat(2, 1fr); }
