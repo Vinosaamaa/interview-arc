@@ -1,15 +1,15 @@
 ---
 schemaVersion: 1
-id: "feature-retrospective-interview-loops"
+id: feature-retrospective-interview-loops
 revision: 1
-type: "feature-retrospective"
-status: "released"
-title: "Implement the Interview Loops MVP"
-repository: "interview-arc"
+type: feature-retrospective
+status: released
+title: Implement the Interview Loops MVP
+repository: interview-arc
 capabilityIds: ["arc-interview-loops"]
-createdAt: "2026-08-11"
+createdAt: 2026-08-11
 reconstructed: true
-confidence: "high"
+confidence: high
 unknowns: ["Attachment bodies and workflow logs were not quoted.","Sensitive source values and nonessential risky evidence links were omitted."]
 modules: ["HTTP:loops","web:content-types","web:globals","web:home-client","web:interview-arc-v2","web:journey-insights"]
 interfaces: ["app/api/loops/route.ts","db/loop-policy.ts","db/today-planning-policy.ts","docs/contracts/interview-loops.md","docs/contracts/specialist-today-controls.md","drizzle/0034_wild_the_initiative.sql"]
@@ -25,8 +25,8 @@ supersedes: []
 learningRefs: []
 sources: [{"label":"Pull request #253","url":"https://github.com/Vinosaamaa/interview-arc/pull/253","kind":"pull-request"}]
 verification: {"state":"verified","evidenceRefs":["pull-request:253","head-commit:dfacff2a792be9557bd8b304f48da56040f5ba9d","merge-commit:7489f6bb4c79f0df7fe26cd3a48bd24b1e0be50b"]}
-visibility: "public-safe"
-publicationEligibility: "eligible"
+visibility: public-safe
+publicationEligibility: eligible
 issue: 252
 pr: 253
 release: null

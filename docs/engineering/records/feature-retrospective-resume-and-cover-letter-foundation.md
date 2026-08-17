@@ -1,15 +1,15 @@
 ---
 schemaVersion: 1
-id: "feature-retrospective-resume-and-cover-letter-foundation"
+id: feature-retrospective-resume-and-cover-letter-foundation
 revision: 1
-type: "feature-retrospective"
-status: "released"
-title: "Complete Resume & Cover Letter specialist foundation"
-repository: "interview-arc"
+type: feature-retrospective
+status: released
+title: Complete Resume & Cover Letter specialist foundation
+repository: interview-arc
 capabilityIds: ["arc-career-materials"]
-createdAt: "2026-08-12"
+createdAt: 2026-08-12
 reconstructed: true
-confidence: "high"
+confidence: high
 unknowns: ["Attachment bodies and workflow logs were not quoted.","Sensitive source values and nonessential risky evidence links were omitted."]
 modules: ["HTTP:resume-imports","HTTP:resume-revisions/[resumeId]/[revisionId]/files","HTTP:resume-revisions/[resumeId]/[revisionId]","HTTP:resume-revisions/[resumeId]/compare","web:behavioral-foundation","web:career-materials-workspace"]
 interfaces: ["app/api/resume-imports/route.ts","app/api/resume-revisions/[resumeId]/[revisionId]/files/route.ts","app/api/resume-revisions/[resumeId]/[revisionId]/route.ts","app/api/resume-revisions/[resumeId]/compare/route.ts","docs/contracts/durable-practice-publishing.md","docs/contracts/resume-revision-ingest.md"]
@@ -25,8 +25,8 @@ supersedes: []
 learningRefs: []
 sources: [{"label":"Pull request #265","url":"https://github.com/Vinosaamaa/interview-arc/pull/265","kind":"pull-request"}]
 verification: {"state":"verified","evidenceRefs":["pull-request:265","head-commit:6580c2fefe660717ef09b6740b0b9fcc4a750b40","merge-commit:cdbe3c7eafebfd6d1a0bb05fb5ce2c75938489c0"]}
-visibility: "public-safe"
-publicationEligibility: "eligible"
+visibility: public-safe
+publicationEligibility: eligible
 issue: 211
 pr: 265
 release: null
