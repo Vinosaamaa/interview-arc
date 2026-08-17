@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "repository": "interview-arc",
+  "pullRequest": 371,
+  "privacyAuthorizationUrl": "https://github.com/Vinosaamaa/interview-arc/issues/313#issuecomment-5310349179",
+  "receiptPaths": [
+    "docs/engineering/changes/pr-95.md",
+    "docs/engineering/changes/pr-96.md",
+    "docs/engineering/changes/pr-111.md",
+    "docs/engineering/changes/pr-132.md",
+    "docs/engineering/changes/pr-136.md",
+    "docs/engineering/changes/pr-154.md",
+    "docs/engineering/changes/pr-156.md",
+    "docs/engineering/changes/pr-159.md"
+  ],
+  "recordRefs": [
+    "architecture-review-background-specialist-persistence@1",
+    "feature-retrospective-authoritative-today-controls@1",
+    "feature-retrospective-leetcode-cli-controller@1",
+    "feature-retrospective-structured-code-attempt-review@1",
+    "postmortem-career-work-boundary@1",
+    "postmortem-exactly-once-practice-exchanges@1",
+    "postmortem-leetcode-controller-result-receipt-loss@1",
+    "postmortem-voice-group-delivery-retry-conflict@1"
+  ],
+  "addedRecordRefs": [
+    "architecture-review-background-specialist-persistence@1",
+    "feature-retrospective-authoritative-today-controls@1",
+    "feature-retrospective-leetcode-cli-controller@1",
+    "feature-retrospective-structured-code-attempt-review@1",
+    "postmortem-career-work-boundary@1",
+    "postmortem-exactly-once-practice-exchanges@1",
+    "postmortem-leetcode-controller-result-receipt-loss@1",
+    "postmortem-voice-group-delivery-retry-conflict@1"
+  ]
+}
