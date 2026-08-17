@@ -1,15 +1,15 @@
 ---
 schemaVersion: 1
-id: "adr-interview-arc-repository-and-practice-boundary"
+id: adr-interview-arc-repository-and-practice-boundary
 revision: 1
-type: "adr"
-status: "accepted"
-title: "Organize Interview Arc specialist workflows"
-repository: "interview-arc"
+type: adr
+status: accepted
+title: Organize Interview Arc specialist workflows
+repository: interview-arc
 capabilityIds: ["arc-repository-practice-boundary"]
-createdAt: "2026-07-19"
+createdAt: 2026-07-19
 reconstructed: true
-confidence: "medium"
+confidence: medium
 unknowns: ["An explicit linked issue was not exposed.","An exact hosted workflow SHA was not exposed.","A deployment receipt was not exposed.","Attachment bodies and workflow logs were not quoted."]
 modules: ["web:agents","web:content-index","web:globals","web:layout","web:page","practice:behavioral"]
 interfaces: ["docs/contracts/activity.schema.json","docs/contracts/daily-journal.schema.json","docs/contracts/leetcode-log.md","docs/contracts/leetcode-log.schema.json","docs/contracts/practice-question-bank.schema.json","docs/contracts/question-bank.schema.json"]
@@ -25,8 +25,8 @@ supersedes: []
 learningRefs: []
 sources: [{"label":"Pull request #1","url":"https://github.com/Vinosaamaa/interview-arc/pull/1","kind":"pull-request"}]
 verification: {"state":"verified","evidenceRefs":["pull-request:1","head-commit:8546c18e67d9c1db024b4eced0b3858149db7021","merge-commit:fecb5e4813b17f038410fad238b1a7fcb6f6dfe9"]}
-visibility: "public-safe"
-publicationEligibility: "eligible"
+visibility: public-safe
+publicationEligibility: eligible
 issue: null
 pr: 1
 release: null

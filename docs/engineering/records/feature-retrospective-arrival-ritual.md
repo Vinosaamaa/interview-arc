@@ -1,15 +1,15 @@
 ---
 schemaVersion: 1
-id: "feature-retrospective-arrival-ritual"
+id: feature-retrospective-arrival-ritual
 revision: 1
-type: "feature-retrospective"
-status: "released"
-title: "Add a calming daily arrival ritual"
-repository: "interview-arc"
+type: feature-retrospective
+status: released
+title: Add a calming daily arrival ritual
+repository: interview-arc
 capabilityIds: ["arc-arrival-ritual"]
-createdAt: "2026-07-20"
+createdAt: 2026-07-20
 reconstructed: true
-confidence: "high"
+confidence: high
 unknowns: ["An explicit linked issue was not exposed.","Attachment bodies and workflow logs were not quoted."]
 modules: ["web:agents","web:ambient-sound","web:arrival-ritual","web:globals","web:home-client"]
 interfaces: ["no explicit public interface file changed"]
@@ -25,8 +25,8 @@ supersedes: []
 learningRefs: []
 sources: [{"label":"Pull request #3","url":"https://github.com/Vinosaamaa/interview-arc/pull/3","kind":"pull-request"}]
 verification: {"state":"verified","evidenceRefs":["pull-request:3","head-commit:ae75ef0dc1ae825cd34603355237cd383d8c6428","merge-commit:47b6c2cfe420a0f3ffe0425b85157b3530b5221b"]}
-visibility: "public-safe"
-publicationEligibility: "eligible"
+visibility: public-safe
+publicationEligibility: eligible
 issue: null
 pr: 3
 release: null

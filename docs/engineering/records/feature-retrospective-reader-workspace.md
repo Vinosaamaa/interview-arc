@@ -1,15 +1,15 @@
 ---
 schemaVersion: 1
-id: "feature-retrospective-reader-workspace"
+id: feature-retrospective-reader-workspace
 revision: 1
-type: "feature-retrospective"
-status: "released"
-title: "Improve persistent reader workspace"
-repository: "interview-arc"
+type: feature-retrospective
+status: released
+title: Improve persistent reader workspace
+repository: interview-arc
 capabilityIds: ["arc-reader-workspace"]
-createdAt: "2026-07-23"
+createdAt: 2026-07-23
 reconstructed: true
-confidence: "high"
+confidence: high
 unknowns: ["An explicit linked issue was not exposed.","Attachment bodies and workflow logs were not quoted."]
 modules: ["HTTP:highlight-notes","HTTP:highlights","web:home-client","web:interview-arc-v2","D1:content-highlights","D1:schema"]
 interfaces: ["app/api/highlight-notes/route.ts","app/api/highlights/route.ts","drizzle/0010_highlight_notes.sql","drizzle/meta/_journal.json"]
@@ -25,8 +25,8 @@ supersedes: []
 learningRefs: []
 sources: [{"label":"Pull request #37","url":"https://github.com/Vinosaamaa/interview-arc/pull/37","kind":"pull-request"}]
 verification: {"state":"verified","evidenceRefs":["pull-request:37","head-commit:e028fb132945eb7650cde6367fe757da59555004","merge-commit:3c06a650a1c412a9cbbb653ea4431ca948f5ceeb"]}
-visibility: "public-safe"
-publicationEligibility: "eligible"
+visibility: public-safe
+publicationEligibility: eligible
 issue: null
 pr: 37
 release: null

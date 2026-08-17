@@ -1,15 +1,15 @@
 ---
 schemaVersion: 1
-id: "postmortem-live-sync-polling-and-voice-retry-storm"
+id: postmortem-live-sync-polling-and-voice-retry-storm
 revision: 1
-type: "postmortem"
-status: "closed"
-title: "Replace one-second polling with owner-scoped live updates"
-repository: "interview-arc"
+type: postmortem
+status: closed
+title: Replace one-second polling with owner-scoped live updates
+repository: interview-arc
 capabilityIds: ["arc-postmortem-live-sync-polling-and-voice-retry-storm"]
-createdAt: "2026-07-27"
+createdAt: 2026-07-27
 reconstructed: true
-confidence: "high"
+confidence: high
 unknowns: ["Attachment bodies and workflow logs were not quoted."]
 modules: ["HTTP:mutations","web:home-client","web:live-event-policy","web:live-sync","D1:durable-practice","D1:schema"]
 interfaces: ["app/api/mutations/route.ts","app/live-event-policy.ts","docs/contracts/live-update-reliability.md","drizzle/0014_outgoing_shinko_yamashiro.sql","drizzle/meta/0014_snapshot.json","drizzle/meta/_journal.json"]
@@ -25,8 +25,8 @@ supersedes: []
 learningRefs: []
 sources: [{"label":"Pull request #92","url":"https://github.com/Vinosaamaa/interview-arc/pull/92","kind":"pull-request"}]
 verification: {"state":"verified","evidenceRefs":["pull-request:92","head-commit:41aba38e69501fde56f0b1aa3796a6ae5dcddd28","merge-commit:e301eef040fe7c91649d4b6f65574e57d5366773"]}
-visibility: "public-safe"
-publicationEligibility: "eligible"
+visibility: public-safe
+publicationEligibility: eligible
 issue: 89
 pr: 92
 release: null
