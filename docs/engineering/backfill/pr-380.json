@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "repository": "interview-arc",
+  "pullRequest": 380,
+  "privacyAuthorizationUrl": "https://github.com/Vinosaamaa/interview-arc/issues/313#issuecomment-5310349179",
+  "receiptPaths": [
+    "docs/engineering/changes/pr-152.md",
+    "docs/engineering/changes/pr-153.md",
+    "docs/engineering/changes/pr-161.md",
+    "docs/engineering/changes/pr-163.md",
+    "docs/engineering/changes/pr-164.md",
+    "docs/engineering/changes/pr-166.md",
+    "docs/engineering/changes/pr-168.md",
+    "docs/engineering/changes/pr-169.md",
+    "docs/engineering/changes/pr-171.md",
+    "docs/engineering/changes/pr-173.md",
+    "docs/engineering/changes/pr-174.md",
+    "docs/engineering/changes/pr-176.md",
+    "docs/engineering/changes/pr-179.md",
+    "docs/engineering/changes/pr-180.md",
+    "docs/engineering/changes/pr-181.md",
+    "docs/engineering/changes/pr-182.md"
+  ],
+  "recordRefs": [
+    "architecture-review-background-specialist-persistence@1",
+    "feature-retrospective-leetcode-cli-controller@1",
+    "postmortem-exactly-once-practice-exchanges@1",
+    "postmortem-voice-group-delivery-retry-conflict@1"
+  ],
+  "addedRecordRefs": []
+}
