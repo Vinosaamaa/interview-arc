@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "repository": "interview-arc",
+  "pullRequest": 387,
+  "privacyAuthorizationUrl": "https://github.com/Vinosaamaa/interview-arc/issues/313#issuecomment-5310349179",
+  "receiptPaths": [
+    "docs/engineering/changes/pr-282.md",
+    "docs/engineering/changes/pr-283.md"
+  ],
+  "recordRefs": [],
+  "addedRecordRefs": []
+}
