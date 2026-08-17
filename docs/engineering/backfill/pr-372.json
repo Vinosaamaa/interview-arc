@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "repository": "interview-arc",
+  "pullRequest": 372,
+  "privacyAuthorizationUrl": "https://github.com/Vinosaamaa/interview-arc/issues/313#issuecomment-5310349179",
+  "receiptPaths": [
+    "docs/engineering/changes/pr-162.md",
+    "docs/engineering/changes/pr-208.md",
+    "docs/engineering/changes/pr-215.md",
+    "docs/engineering/changes/pr-216.md",
+    "docs/engineering/changes/pr-220.md",
+    "docs/engineering/changes/pr-227.md",
+    "docs/engineering/changes/pr-228.md",
+    "docs/engineering/changes/pr-232.md"
+  ],
+  "recordRefs": [
+    "architecture-review-owner-private-behavioral-evidence@1",
+    "architecture-review-practice-state-command-module@1",
+    "feature-retrospective-behavioral-attempt-truth@1",
+    "feature-retrospective-behavioral-targeting@1",
+    "feature-retrospective-owner-scoped-live-v1-api@1",
+    "feature-retrospective-review-queue-and-journey@1",
+    "postmortem-specialist-mcp-write-503@1",
+    "postmortem-unverified-prior-task-reconstruction@1"
+  ],
+  "addedRecordRefs": [
+    "architecture-review-owner-private-behavioral-evidence@1",
+    "architecture-review-practice-state-command-module@1",
+    "feature-retrospective-behavioral-attempt-truth@1",
+    "feature-retrospective-behavioral-targeting@1",
+    "feature-retrospective-owner-scoped-live-v1-api@1",
+    "feature-retrospective-review-queue-and-journey@1",
+    "postmortem-specialist-mcp-write-503@1",
+    "postmortem-unverified-prior-task-reconstruction@1"
+  ]
+}
