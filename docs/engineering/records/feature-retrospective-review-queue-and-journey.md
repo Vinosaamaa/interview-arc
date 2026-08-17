@@ -1,15 +1,15 @@
 ---
 schemaVersion: 1
-id: "feature-retrospective-review-queue-and-journey"
+id: feature-retrospective-review-queue-and-journey
 revision: 1
-type: "feature-retrospective"
-status: "released"
-title: "Add an evidence-backed Review Queue"
-repository: "interview-arc"
+type: feature-retrospective
+status: released
+title: Add an evidence-backed Review Queue
+repository: interview-arc
 capabilityIds: ["arc-review-queue-journey"]
-createdAt: "2026-08-10"
+createdAt: 2026-08-10
 reconstructed: true
-confidence: "high"
+confidence: high
 unknowns: ["Attachment bodies and workflow logs were not quoted."]
 modules: ["web:agents","HTTP:mutations","web:home-client","web:interview-arc-v2","web:journey-insights","web:layout"]
 interfaces: ["app/api/mutations/route.ts","db/review-queue-policy.ts","db/today-planning-policy.ts","docs/contracts/website-draft.md"]
@@ -25,8 +25,8 @@ supersedes: []
 learningRefs: []
 sources: [{"label":"Pull request #215","url":"https://github.com/Vinosaamaa/interview-arc/pull/215","kind":"pull-request"}]
 verification: {"state":"verified","evidenceRefs":["pull-request:215","head-commit:c15666229aad69a404a0caac2554aece98b9c7fe","merge-commit:c28a10e1901f33a4c19424ebd68addeff54250d8"]}
-visibility: "public-safe"
-publicationEligibility: "eligible"
+visibility: public-safe
+publicationEligibility: eligible
 issue: 115
 pr: 215
 release: null

@@ -1,15 +1,15 @@
 ---
 schemaVersion: 1
-id: "architecture-review-practice-state-command-module"
+id: architecture-review-practice-state-command-module
 revision: 1
-type: "architecture-review"
-status: "accepted"
-title: "Deepen the practice-state command module"
-repository: "interview-arc"
+type: architecture-review
+status: accepted
+title: Deepen the practice-state command module
+repository: interview-arc
 capabilityIds: ["arc-practice-command-module"]
-createdAt: "2026-08-10"
+createdAt: 2026-08-10
 reconstructed: true
-confidence: "high"
+confidence: high
 unknowns: ["Attachment bodies and workflow logs were not quoted."]
 modules: ["HTTP:mutations","web:content-types","web:home-client","web:live-sync","web:live-types","D1:live-state"]
 interfaces: ["app/api/mutations/route.ts","app/live-types.ts"]
@@ -25,8 +25,8 @@ supersedes: []
 learningRefs: []
 sources: [{"label":"Pull request #220","url":"https://github.com/Vinosaamaa/interview-arc/pull/220","kind":"pull-request"}]
 verification: {"state":"verified","evidenceRefs":["pull-request:220","head-commit:f6fb8a72dfc9fe58e411f3be8f1ef1bb92f319d5","merge-commit:b76734b76504015269e9e9b57100640eb6d3b289"]}
-visibility: "public-safe"
-publicationEligibility: "eligible"
+visibility: public-safe
+publicationEligibility: eligible
 issue: 202
 pr: 220
 release: null
