@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "repository": "interview-arc",
+  "pullRequest": 379,
+  "privacyAuthorizationUrl": "https://github.com/Vinosaamaa/interview-arc/issues/313#issuecomment-5310349179",
+  "receiptPaths": [
+    "docs/engineering/changes/pr-124.md",
+    "docs/engineering/changes/pr-126.md",
+    "docs/engineering/changes/pr-127.md",
+    "docs/engineering/changes/pr-128.md",
+    "docs/engineering/changes/pr-129.md",
+    "docs/engineering/changes/pr-133.md",
+    "docs/engineering/changes/pr-134.md",
+    "docs/engineering/changes/pr-137.md",
+    "docs/engineering/changes/pr-138.md",
+    "docs/engineering/changes/pr-139.md",
+    "docs/engineering/changes/pr-140.md",
+    "docs/engineering/changes/pr-141.md",
+    "docs/engineering/changes/pr-143.md",
+    "docs/engineering/changes/pr-144.md",
+    "docs/engineering/changes/pr-145.md",
+    "docs/engineering/changes/pr-147.md",
+    "docs/engineering/changes/pr-148.md",
+    "docs/engineering/changes/pr-151.md"
+  ],
+  "recordRefs": [
+    "feature-retrospective-authoritative-today-controls@1",
+    "feature-retrospective-leetcode-cli-controller@1",
+    "feature-retrospective-structured-code-attempt-review@1",
+    "postmortem-exactly-once-practice-exchanges@1"
+  ],
+  "addedRecordRefs": []
+}
