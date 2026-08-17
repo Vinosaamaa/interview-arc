@@ -105,6 +105,7 @@ import BehavioralTargetBindings from "./behavioral-target-bindings";
 import BehavioralTargetDesk from "./behavioral-target-desk";
 import BankDomainOverview from "./bank-domain-overview";
 import CareerMaterialsWorkspace from "./career-materials-workspace";
+import { CareerMaterialsMark } from "./career-materials-mark";
 import InterviewPageHero from "./interview-page-hero";
 import LearnWorkspace from "./learn-workspace";
 import type { LearnDestination } from "./learn-workspace-model";
@@ -7260,7 +7261,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
           : activeWorkspace === "interview"
             ? <nav className="primary-nav" aria-label="Interview navigation">{INTERVIEW_NAV_ITEMS.map(([id, label], index) => <button key={id} className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
              : <nav className="primary-nav engineering-primary-nav" aria-label="Engineering navigation">{ENGINEERING_NAV_ITEMS.map(([id, label], index) => <button key={id} className={engineeringView === id ? "active" : ""} aria-current={engineeringView === id ? "page" : undefined} onClick={() => navigateToEngineering(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>}
-        {activeWorkspace === "interview" ? <nav className="materials-nav" aria-label="Career Materials navigation"><button type="button" className={view === "materials" ? "active" : ""} aria-current={view === "materials" ? "page" : undefined} onClick={() => navigateToPrimaryView("materials")}><span aria-hidden="true">CM</span><strong>Career Materials</strong><small>Private</small></button></nav> : null}
+        {activeWorkspace === "interview" ? <nav className="materials-nav" aria-label="Career Materials navigation"><button type="button" className={view === "materials" ? "active" : ""} aria-current={view === "materials" ? "page" : undefined} onClick={() => navigateToPrimaryView("materials")}><CareerMaterialsMark /><strong>Career Materials</strong><small>Private</small></button></nav> : null}
         <div className="sidebar-status"><span className={activeWorkspace === "interview" && [...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "live" : ""} /><div><strong>{activeWorkspace === "learn" ? "Private Learning record" : activeWorkspace === "engineering" ? "Static Git projection" : [...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "Timer running" : hydrated ? "Draft saved locally" : "Loading draft"}</strong><small>{activeWorkspace === "learn" ? "Transcript-only sessions · no cloud audio" : activeWorkspace === "engineering" ? "No mutable Journal state" : "Session countdown + one activity stopwatch"}</small></div></div>
         <div className="profile"><span>IA</span><div><strong>Interview Arc owner</strong><small>Private preparation record</small></div></div>
       </aside>
