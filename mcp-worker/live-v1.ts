@@ -370,7 +370,7 @@ async function leaseMutationResponse(
   if (!activity) {
     throw new LiveV1Error(
       "activity_not_found",
-      "The System Design activity is unavailable in the current workbench.",
+      "The activity is unavailable in the current workbench.",
       404,
       false,
     );
@@ -411,7 +411,7 @@ export async function routeLiveV1(
       const projection = await readLiveActivityProjection(ownerId, activityId);
       if (!projection) {
         return respond({
-          error: "The System Design activity is unavailable in the current workbench.",
+          error: "The activity is unavailable in the current workbench.",
           code: "activity_not_found",
           retryable: false,
         }, { status: 404 });
@@ -519,7 +519,7 @@ export async function routeLiveV1(
       if (!activity) {
         throw new LiveV1Error(
           "activity_not_found",
-          "The System Design activity is unavailable in the current workbench.",
+          "The activity is unavailable in the current workbench.",
           404,
           false,
         );
