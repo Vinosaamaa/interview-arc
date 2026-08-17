@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Engineering Statistics mockup — Interview Arc</title>
+  <meta name="description" content="Standalone design mockup. Sample projection only. Production Statistics is unchanged.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&family=Geist:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <p class="mock-banner">Design mockup · <strong>sample projection</strong> · not live Journal data · production Statistics is unchanged</p>
+
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Workspace">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">IA</span> Interview Arc</div>
+      <div>
+        <p class="nav-label">Workspaces</p>
+        <ul class="workspace-nav">
+          <li><a href="#sample-interview">Interview</a></li>
+          <li><a href="#sample-learn">Learn</a></li>
+          <li><a href="#engineering" aria-current="page">Engineering</a></li>
+        </ul>
+      </div>
+      <div>
+        <p class="nav-label">Engineering</p>
+        <ul class="primary-nav">
+          <li><a href="#sample-journal"><span>01</span>Journal</a></li>
+          <li><a href="#sample-capabilities"><span>02</span>Capabilities</a></li>
+          <li><a href="#sample-decisions"><span>03</span>Decisions</a></li>
+          <li><a href="#sample-incidents"><span>04</span>Incidents</a></li>
+          <li><a href="#sample-cases"><span>05</span>Case Studies</a></li>
+          <li><a href="#statistics" aria-current="page"><span>06</span>Statistics</a></li>
+        </ul>
+      </div>
+      <p class="sidebar-note"><i aria-hidden="true"></i>Static Git projection. No mutable Journal state.</p>
+    </aside>
+
+    <div class="main-column">
+      <header class="topbar">
+        <div class="topbar-context">
+          <strong>Engineering · Statistics</strong>
+          <time datetime="2026-08-17">Mon, Aug 17</time>
+        </div>
+        <nav class="workspace-switch" aria-label="Workspace">
+          <a href="#sample-interview">Interview</a>
+          <a href="#sample-learn">Learn</a>
+          <a href="#engineering" aria-current="page">Engineering</a>
+        </nav>
+        <div class="topbar-actions" aria-hidden="true">
+          <span class="icon-tool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg></span>
+          <span class="icon-tool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M12 4v2M12 18v2M4 12h2M18 12h2"/></svg></span>
+        </div>
+      </header>
+
+      <main class="page-content" id="statistics">
+        <header class="hero">
+          <div class="hero-copy">
+            <span>Engineering · Statistics</span>
+            <h1>The record, measured without invention.</h1>
+            <p>Explore deterministic coverage, chronology, repositories, and verification from the same normalized projection.</p>
+          </div>
+          <div class="hero-sketch">
+            <svg viewBox="0 0 720 250" role="img" aria-label="A measured sun transect across a landscape">
+              <path d="M65 211c89-86 179-114 270-85 77 24 133 12 170-34 36-44 86-46 150-6"/>
+              <path d="M80 219h574M132 210v19M229 196v33M326 178v51M423 158v71M520 127v102M617 94v135"/>
+              <path d="M475 70a55 55 0 0 1 110 0"/>
+              <circle cx="530" cy="70" r="17"/>
+            </svg>
+          </div>
+          <span class="hero-pulse" aria-hidden="true"></span>
+          <dl>
+            <div><dt>Factual records</dt><dd>12</dd></div>
+            <div><dt>Verified</dt><dd>9</dd></div>
+            <div><dt>PR receipts</dt><dd>41</dd></div>
+          </dl>
+        </header>
+
+        <section class="workbench" data-layer="records" aria-label="Statistics workbench">
+          <aside class="panel index" aria-label="Statistics rich records">
+            <header>
+              <h1>Statistics</h1>
+              <p class="index-count">12 factual records</p>
+            </header>
+            <div class="layers" role="group" aria-label="Journal evidence layer">
+              <button type="button" data-layer="records" aria-pressed="true"><span>Rich records</span><strong>12</strong></button>
+              <button type="button" data-layer="receipts" aria-pressed="false"><span>All merged PRs</span><strong>41</strong></button>
+            </div>
+            <div class="facet-list" role="listbox" aria-label="Measured questions">
+              <button type="button" role="option" data-layer="records" data-target="records-overview" aria-current="true">
+                <span><i>Coverage summary</i><time datetime="2026-08-14">2026-06-04 — 2026-08-14</time></span>
+                <strong>Truth at a glance</strong>
+                <small>sample-web · sample projection</small>
+                <em>12 eligible</em>
+              </button>
+              <button type="button" role="option" data-layer="records" data-target="records-status">
+                <span><i>Effective status</i><time>6 accepted</time></span>
+                <strong>What still stands</strong>
+                <small>proposed through superseded</small>
+                <em>6 statuses</em>
+              </button>
+              <button type="button" role="option" data-layer="records" data-target="records-types">
+                <span><i>Record types</i><time>5 change notes</time></span>
+                <strong>What the Journal can prove</strong>
+                <small>curated narrative records</small>
+                <em>6 types</em>
+              </button>
+              <button type="button" role="option" data-layer="records" data-target="records-repos">
+                <span><i>Repositories</i><time>2 homes</time></span>
+                <strong>Where records live</strong>
+                <small>sample-web · sample-voice</small>
+                <em>8 / 4</em>
+              </button>
+              <button type="button" role="option" data-layer="records" data-target="records-capabilities">
+                <span><i>Capabilities</i><time>3 tags</time></span>
+                <strong>Tagged strengths</strong>
+                <small>only explicit capability ids</small>
+                <em>3 tagged</em>
+              </button>
+              <button type="button" role="option" data-layer="records" data-target="records-chronology">
+                <span><i>Record chronology</i><time>12 stations</time></span>
+                <strong>Created-at transect</strong>
+                <small>oldest first · sample refs</small>
+                <em>survey staff</em>
+              </button>
+              <button type="button" role="option" data-layer="receipts" data-target="receipts-overview" hidden>
+                <span><i>Receipt completeness</i><time datetime="2026-08-16">2026-05-22 — 2026-08-16</time></span>
+                <strong>Pull-request receipts</strong>
+                <small>every ingested merged PR</small>
+                <em>41 projected</em>
+              </button>
+              <button type="button" role="option" data-layer="receipts" data-target="receipts-classification" hidden>
+                <span><i>Classification</i><time>28 compact</time></span>
+                <strong>What each receipt is</strong>
+                <small>compact change through dossier</small>
+                <em>7 classes</em>
+              </button>
+              <button type="button" role="option" data-layer="receipts" data-target="receipts-repos" hidden>
+                <span><i>Repositories</i><time>2 homes</time></span>
+                <strong>Where receipts live</strong>
+                <small>sample-web · sample-voice</small>
+                <em>29 / 12</em>
+              </button>
+              <button type="button" role="option" data-layer="receipts" data-target="receipts-chronology" hidden>
+                <span><i>Complete receipt chronology</i><time>41 stations</time></span>
+                <strong>Timeline transect</strong>
+                <small>verified merge or fallback</small>
+                <em data-tone="rust">8 missing facts</em>
+              </button>
+            </div>
+          </aside>
+
+          <article class="panel reader" aria-labelledby="records-title">
+            <nav class="contents-nav" aria-label="Record contents">
+              <div class="contents-links" data-for="records">
+                <a class="active" href="#records-overview">Overview</a>
+                <a href="#records-status">Status</a>
+                <a href="#records-types">Types</a>
+                <a href="#records-repos">Repositories</a>
+                <a href="#records-capabilities">Capabilities</a>
+                <a href="#records-chronology">Chronology</a>
+              </div>
+              <div class="contents-links" data-for="receipts" hidden>
+                <a class="active" href="#receipts-overview">Overview</a>
+                <a href="#receipts-classification">Classification</a>
+                <a href="#receipts-repos">Repositories</a>
+                <a href="#receipts-chronology">Chronology</a>
+              </div>
+              <div class="panel-actions" role="group" aria-label="Workbench panels">
+                <button type="button" class="panel-toggle index-toggle" aria-label="Open index">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4.5" y="5" width="6.5" height="14" rx="1.2"/><path d="M14 8.5h5.5M14 12h5.5M14 15.5h3.5"/></svg>
+                  <span>Index</span>
+                </button>
+                <button type="button" class="panel-toggle evidence-toggle" aria-pressed="true" aria-label="Hide evidence">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="13" y="5" width="6.5" height="14" rx="1.2"/><path d="M4.5 8.5h6M4.5 12h6M4.5 15.5h4"/></svg>
+                  <span>Evidence</span>
+                </button>
+              </div>
+            </nav>
+
+            <div class="article" data-article="records">
+              <header class="reader-header" id="records-overview">
+                <div class="classification">
+                  <span>Coverage summary</span>
+                  <i>Sample projection</i>
+                </div>
+                <h1 id="records-title">Truth at a glance</h1>
+                <p>Only explicit facts in the normalized Journal projection are counted. This mockup uses invented sample numbers so the layout can be reviewed without owner data.</p>
+              </header>
+              <div class="reader-body">
+                <dl class="facts">
+                  <div><dt>Eligible records</dt><dd>12</dd></div>
+                  <div><dt>Explicitly verified</dt><dd>9</dd></div>
+                  <div><dt>With release refs</dt><dd>4</dd></div>
+                  <div><dt>With run refs</dt><dd>2</dd></div>
+                </dl>
+                <dl class="range"><dt>Record range</dt><dd>2026-06-04 — 2026-08-14</dd></dl>
+                <p class="note">Release and run references are lineage, not verification receipts.</p>
+
+                <section class="section" id="records-status" aria-labelledby="records-status-title">
+                  <h2 id="records-status-title">Effective status</h2>
+                  <p>Status is the record’s effective standing after amendments and supersession. Counts are exact; the measured fill is the same integer, not a rate.</p>
+                  <ol class="tally" style="--tally-max: 6">
+                    <li><span>Proposed</span><span class="track" aria-hidden="true"><i style="--n:1"></i></span><strong>1</strong></li>
+                    <li><span>Accepted</span><span class="track" aria-hidden="true"><i style="--n:6"></i></span><strong>6</strong></li>
+                    <li><span>Released</span><span class="track" aria-hidden="true"><i style="--n:3"></i></span><strong>3</strong></li>
+                    <li><span>Closed</span><span class="track" aria-hidden="true"><i data-tone="zero" style="--n:0"></i></span><strong>0</strong></li>
+                    <li><span>Amended</span><span class="track" aria-hidden="true"><i data-tone="rust" style="--n:1"></i></span><strong>1</strong></li>
+                    <li><span>Superseded</span><span class="track" aria-hidden="true"><i data-tone="rust" style="--n:1"></i></span><strong>1</strong></li>
+                  </ol>
+                </section>
+
+                <section class="section" id="records-types" aria-labelledby="records-types-title">
+                  <h2 id="records-types-title">Record types</h2>
+                  <p>Curated architecture, decision, incident, capability, and retrospective records—kept distinct from compact pull-request receipts.</p>
+                  <ol class="tally" style="--tally-max: 5">
+                    <li><span>Change Note</span><span class="track" aria-hidden="true"><i style="--n:5"></i></span><strong>5</strong></li>
+                    <li><span>ADR</span><span class="track" aria-hidden="true"><i style="--n:2"></i></span><strong>2</strong></li>
+                    <li><span>Architecture Review</span><span class="track" aria-hidden="true"><i style="--n:2"></i></span><strong>2</strong></li>
+                    <li><span>Feature Retrospective</span><span class="track" aria-hidden="true"><i style="--n:1"></i></span><strong>1</strong></li>
+                    <li><span>Postmortem</span><span class="track" aria-hidden="true"><i data-tone="zero" style="--n:0"></i></span><strong>0</strong></li>
+                    <li><span>Capability Dossier</span><span class="track" aria-hidden="true"><i style="--n:2"></i></span><strong>2</strong></li>
+                  </ol>
+                </section>
+
+                <section class="section" id="records-repos" aria-labelledby="records-repos-title">
+                  <h2 id="records-repos-title">Repositories</h2>
+                  <p>Homes named for the mockup. They are not production repository counts.</p>
+                  <ol class="tally" style="--tally-max: 8">
+                    <li><span>sample-web</span><span class="track" aria-hidden="true"><i style="--n:8"></i></span><strong>8</strong></li>
+                    <li><span>sample-voice</span><span class="track" aria-hidden="true"><i style="--n:4"></i></span><strong>4</strong></li>
+                  </ol>
+                </section>
+
+                <section class="section" id="records-capabilities" aria-labelledby="records-capabilities-title">
+                  <h2 id="records-capabilities-title">Capabilities</h2>
+                  <p>Capability tags recorded on eligible records. Untagged work is not inferred.</p>
+                  <ol class="tally" style="--tally-max: 5">
+                    <li><span>survey-ledger</span><span class="track" aria-hidden="true"><i style="--n:5"></i></span><strong>5</strong></li>
+                    <li><span>receipt-projection</span><span class="track" aria-hidden="true"><i style="--n:4"></i></span><strong>4</strong></li>
+                    <li><span>mineral-canvas</span><span class="track" aria-hidden="true"><i style="--n:3"></i></span><strong>3</strong></li>
+                  </ol>
+                </section>
+
+                <section class="section" id="records-chronology" aria-labelledby="records-chronology-title">
+                  <h2 id="records-chronology-title">Record chronology</h2>
+                  <p>A survey staff of created-at stations. Teal marks are ordinary standing; rust rings are amended or superseded.</p>
+                  <ol class="survey">
+                    <li><time datetime="2026-06-04">2026-06-04</time><strong>adr-mineral-canvas@1</strong><small>ADR · Accepted · sample-web</small></li>
+                    <li><time datetime="2026-06-11">2026-06-11</time><strong>change-note-survey-staff@1</strong><small>Change Note · Released · sample-web</small></li>
+                    <li><time datetime="2026-06-19">2026-06-19</time><strong>architecture-review-ledger-boundary@1</strong><small>Architecture Review · Accepted · sample-web</small></li>
+                    <li data-mark="reconstructed"><time datetime="2026-06-28">2026-06-28</time><strong>change-note-receipt-gap@1</strong><small>Change Note · Amended · sample-voice</small></li>
+                    <li><time datetime="2026-07-03">2026-07-03</time><strong>capability-dossier-survey-ledger@1</strong><small>Capability Dossier · Accepted · sample-web</small></li>
+                    <li><time datetime="2026-07-09">2026-07-09</time><strong>change-note-hero-transect@1</strong><small>Change Note · Released · sample-web</small></li>
+                    <li><time datetime="2026-07-18">2026-07-18</time><strong>adr-receipt-projection@1</strong><small>ADR · Accepted · sample-voice</small></li>
+                    <li><time datetime="2026-07-22">2026-07-22</time><strong>change-note-index-rhythm@1</strong><small>Change Note · Proposed · sample-web</small></li>
+                    <li><time datetime="2026-07-30">2026-07-30</time><strong>feature-retrospective-workbench@1</strong><small>Feature Retrospective · Released · sample-web</small></li>
+                    <li><time datetime="2026-08-04">2026-08-04</time><strong>capability-dossier-mineral-canvas@1</strong><small>Capability Dossier · Accepted · sample-voice</small></li>
+                    <li data-mark="reconstructed"><time datetime="2026-08-09">2026-08-09</time><strong>architecture-review-evidence-desk@1</strong><small>Architecture Review · Superseded · sample-web</small></li>
+                    <li><time datetime="2026-08-14">2026-08-14</time><strong>change-note-sample-close@1</strong><small>Change Note · Accepted · sample-voice</small></li>
+                  </ol>
+                </section>
+              </div>
+            </div>
+
+            <div class="article" data-article="receipts" hidden>
+              <header class="reader-header" id="receipts-overview">
+                <div class="classification">
+                  <span>Release coverage</span>
+                  <i>Sample projection</i>
+                </div>
+                <h1>Pull-request receipts</h1>
+                <p>Every ingested merged PR stays visible, even when it does not warrant a rich narrative. Compact coverage does not inflate every change into a case study.</p>
+              </header>
+              <div class="reader-body">
+                <dl class="facts">
+                  <div><dt>Projected</dt><dd>41</dd></div>
+                  <div><dt>Complete facts</dt><dd>33</dd></div>
+                  <div><dt>Reconstructed</dt><dd data-tone="rust">5</dd></div>
+                  <div><dt>Missing facts</dt><dd data-tone="rust">8</dd></div>
+                </dl>
+                <dl class="range"><dt>Timeline range</dt><dd>2026-05-22 — 2026-08-16</dd></dl>
+                <p class="note">Complete facts are projected receipts minus those with missing facts. Reconstructed receipts can overlap either set; they are not a third total.</p>
+
+                <section class="section" id="receipts-classification" aria-labelledby="receipts-class-title">
+                  <h2 id="receipts-class-title">Classification</h2>
+                  <p>How each receipt is classified in the projection. Compact change is the default when no rich record was required.</p>
+                  <ol class="tally" style="--tally-max: 28">
+                    <li><span>Compact change</span><span class="track" aria-hidden="true"><i style="--n:28"></i></span><strong>28</strong></li>
+                    <li><span>Change Note</span><span class="track" aria-hidden="true"><i style="--n:6"></i></span><strong>6</strong></li>
+                    <li><span>ADR</span><span class="track" aria-hidden="true"><i style="--n:2"></i></span><strong>2</strong></li>
+                    <li><span>Architecture Review</span><span class="track" aria-hidden="true"><i style="--n:2"></i></span><strong>2</strong></li>
+                    <li><span>Feature Retrospective</span><span class="track" aria-hidden="true"><i style="--n:1"></i></span><strong>1</strong></li>
+                    <li><span>Postmortem</span><span class="track" aria-hidden="true"><i data-tone="zero" style="--n:0"></i></span><strong>0</strong></li>
+                    <li><span>Capability Dossier</span><span class="track" aria-hidden="true"><i style="--n:2"></i></span><strong>2</strong></li>
+                  </ol>
+                </section>
+
+                <section class="section" id="receipts-repos" aria-labelledby="receipts-repos-title">
+                  <h2 id="receipts-repos-title">Repositories</h2>
+                  <p>Receipt homes for this sample projection.</p>
+                  <ol class="tally" style="--tally-max: 29">
+                    <li><span>sample-web</span><span class="track" aria-hidden="true"><i style="--n:29"></i></span><strong>29</strong></li>
+                    <li><span>sample-voice</span><span class="track" aria-hidden="true"><i style="--n:12"></i></span><strong>12</strong></li>
+                  </ol>
+                </section>
+
+                <section class="section" id="receipts-chronology" aria-labelledby="receipts-chronology-title">
+                  <h2 id="receipts-chronology-title">Complete receipt chronology</h2>
+                  <p>A survey staff of timeline stations. Teal marks have complete merge facts. Rust rings are reconstructed or missing facts. The list is a sample slice, not the live GitHub timeline.</p>
+                  <ol class="survey">
+                    <li><time datetime="2026-05-22">2026-05-22</time><strong>sample-web · <a class="pr" href="#sample-pr-1042">PR #1042</a></strong><small>Compact change</small></li>
+                    <li><time datetime="2026-05-30">2026-05-30</time><strong>sample-voice · <a class="pr" href="#sample-pr-881">PR #881</a></strong><small>Compact change</small></li>
+                    <li><time datetime="2026-06-04">2026-06-04</time><strong>sample-web · <a class="pr" href="#sample-pr-760">PR #760</a></strong><small>ADR</small></li>
+                    <li data-mark="missing"><time datetime="2026-06-12">2026-06-12</time><strong>sample-web · <a class="pr" href="#sample-pr-612">PR #612</a></strong><small>Compact change · missing facts</small></li>
+                    <li><time datetime="2026-06-19">2026-06-19</time><strong>sample-web · <a class="pr" href="#sample-pr-548">PR #548</a></strong><small>Architecture Review</small></li>
+                    <li data-mark="reconstructed"><time datetime="2026-06-28">2026-06-28</time><strong>sample-voice · <a class="pr" href="#sample-pr-431">PR #431</a></strong><small>Change Note · reconstructed</small></li>
+                    <li><time datetime="2026-07-03">2026-07-03</time><strong>sample-web · <a class="pr" href="#sample-pr-390">PR #390</a></strong><small>Capability Dossier</small></li>
+                    <li><time datetime="2026-07-18">2026-07-18</time><strong>sample-voice · <a class="pr" href="#sample-pr-277">PR #277</a></strong><small>ADR</small></li>
+                    <li data-mark="missing"><time datetime="2026-08-02">2026-08-02</time><strong>sample-web · <a class="pr" href="#sample-pr-188">PR #188</a></strong><small>Compact change · missing facts</small></li>
+                    <li><time datetime="2026-08-16">2026-08-16</time><strong>sample-voice · <a class="pr" href="#sample-pr-104">PR #104</a></strong><small>Feature Retrospective</small></li>
+                  </ol>
+                </section>
+              </div>
+            </div>
+          </article>
+
+          <aside class="panel evidence" aria-label="Evidence and lineage">
+            <header>
+              <div>
+                <span>Evidence desk</span>
+                <h2>Exact evidence</h2>
+              </div>
+              <button type="button" class="panel-close" aria-label="Close evidence">Close</button>
+            </header>
+            <dl class="ledger">
+              <div>
+                <dt>Sample projection</dt>
+                <dd>
+                  <code>sample/engineering-statistics-projection.json</code>
+                  <button type="button" class="copy" data-copy="sample/engineering-statistics-projection.json" aria-label="Copy sample projection path">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+                    <span>Copy</span>
+                  </button>
+                </dd>
+              </div>
+              <div>
+                <dt>Sample commit</dt>
+                <dd>
+                  <code>0f1e2d3c4b5a69788796a5b4c3d2e1f0a9b8c7d6</code>
+                  <button type="button" class="copy" data-copy="0f1e2d3c4b5a69788796a5b4c3d2e1f0a9b8c7d6" aria-label="Copy sample commit">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+                    <span>Copy</span>
+                  </button>
+                </dd>
+              </div>
+              <div>
+                <dt>Verification</dt>
+                <dd><code>Explicit evidence recorded · sample only</code></dd>
+              </div>
+            </dl>
+            <a class="exact-source" href="#sample-source">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 13v6H5V6h6"/></svg>
+              Open sample source
+            </a>
+            <section class="evidence-facts" aria-label="Measurement contract">
+              <div>
+                <span>What is counted</span>
+                <p>Eligible records, effective status, classification, repositories, chronology, and receipt completeness from the same normalized projection.</p>
+              </div>
+              <div>
+                <span>What is not counted</span>
+                <p>No mastery, productivity, or pace scores. Release and run references remain lineage.</p>
+              </div>
+              <div>
+                <span>Record range</span>
+                <p>2026-06-04 — 2026-08-14</p>
+              </div>
+              <div>
+                <span>Receipt timeline</span>
+                <p>2026-05-22 — 2026-08-16</p>
+              </div>
+            </section>
+            <p class="contract-note">Counts are projections, not performance claims. Nothing on this page is live owner data.</p>
+          </aside>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <nav class="dock" aria-label="Engineering destinations">
+    <a href="#sample-journal">Journal</a>
+    <a href="#sample-capabilities">Capabilities</a>
+    <a href="#sample-decisions">Decisions</a>
+    <a href="#sample-incidents">Incidents</a>
+    <a href="#sample-cases">Case Studies</a>
+    <a href="#statistics" aria-current="page">Statistics</a>
+  </nav>
+
+  <script>
+    const workbench = document.querySelector(".workbench");
+    const indexCount = document.querySelector(".index-count");
+    const indexLabel = document.querySelector(".index");
+    const articles = document.querySelectorAll("[data-article]");
+    const layerButtons = document.querySelectorAll(".layers button");
+    const facetButtons = document.querySelectorAll(".facet-list button");
+    const contentGroups = document.querySelectorAll(".contents-links");
+
+    const setLayer = (layer) => {
+      workbench.dataset.layer = layer;
+      layerButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.layer === layer)));
+      articles.forEach((article) => { article.hidden = article.dataset.article !== layer; });
+      contentGroups.forEach((group) => { group.hidden = group.dataset.for !== layer; });
+      facetButtons.forEach((button) => { button.hidden = button.dataset.layer !== layer; });
+      indexCount.textContent = layer === "records" ? "12 factual records" : "41 of 41 pull-request receipts";
+      indexLabel.setAttribute("aria-label", layer === "records" ? "Statistics rich records" : "Statistics pull-request receipts");
+      const first = document.querySelector(`.facet-list button[data-layer="${layer}"]`);
+      if (first) selectFacet(first, false);
+    };
+
+    const selectFacet = (button, scroll) => {
+      facetButtons.forEach((entry) => entry.setAttribute("aria-current", String(entry === button)));
+      const target = document.getElementById(button.dataset.target);
+      const group = document.querySelector(`.contents-links[data-for="${button.dataset.layer}"]`);
+      group?.querySelectorAll("a").forEach((link) => {
+        link.classList.toggle("active", link.getAttribute("href") === `#${button.dataset.target}`);
+      });
+      if (scroll && target) target.scrollIntoView({ block: "start" });
+      workbench.classList.add("mobile-reader-open");
+    };
+
+    layerButtons.forEach((button) => button.addEventListener("click", () => setLayer(button.dataset.layer)));
+    facetButtons.forEach((button) => button.addEventListener("click", () => selectFacet(button, true)));
+    document.querySelectorAll(".contents-links a").forEach((link) => {
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        const id = link.getAttribute("href").slice(1);
+        const facet = document.querySelector(`.facet-list button[data-target="${id}"]`);
+        if (facet) selectFacet(facet, true);
+      });
+    });
+
+    const evidenceToggle = document.querySelector(".evidence-toggle");
+    const closeEvidence = () => {
+      workbench.classList.add("evidence-closed");
+      evidenceToggle?.setAttribute("aria-pressed", "false");
+      evidenceToggle?.setAttribute("aria-label", "Open evidence");
+    };
+    const openEvidence = () => {
+      workbench.classList.remove("evidence-closed");
+      evidenceToggle?.setAttribute("aria-pressed", "true");
+      evidenceToggle?.setAttribute("aria-label", "Hide evidence");
+    };
+    evidenceToggle?.addEventListener("click", () => {
+      workbench.classList.contains("evidence-closed") ? openEvidence() : closeEvidence();
+    });
+    document.querySelector(".panel-close")?.addEventListener("click", closeEvidence);
+    document.querySelector(".index-toggle")?.addEventListener("click", () => workbench.classList.remove("mobile-reader-open"));
+
+    const narrow = window.matchMedia("(max-width: 1320px)");
+    const syncEvidence = () => { if (narrow.matches) closeEvidence(); else openEvidence(); };
+    syncEvidence();
+    narrow.addEventListener("change", syncEvidence);
+
+    document.querySelectorAll(".copy").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const label = button.querySelector("span");
+        try {
+          await navigator.clipboard.writeText(button.dataset.copy);
+          label.textContent = "Copied";
+        } catch {
+          label.textContent = "Retry";
+        }
+      });
+    });
+  </script>
+</body>
+</html>

@@ -30,6 +30,8 @@ direction on 2026-08-12:
 - `06-case-studies.png` — truthful empty case-study library;
 - `07-statistics.png` — separate rich-record and PR-receipt coverage ledgers.
 
+Issue #395 mockup: [`../engineering-statistics/`](../engineering-statistics/) redesigns Statistics in Journal workbench language; production Statistics is unchanged until review.
+
 When Engineering is the selected top-level workspace, its left navigation rail
 uses a near-black surface with the lime active signal. This black rail is an
 Engineering workspace identity treatment; it does not require recoloring the
