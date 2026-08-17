@@ -19,6 +19,7 @@ import {
   type LoopSpecialty,
 } from "./loops-view-model";
 import InterviewPageHero from "./interview-page-hero";
+import { isAbortError, parseLoopPayloadResponse } from "./loop-payload";
 
 type Specialty = LoopSpecialty;
 type MemoryConfidence = "exact" | "reconstructed";
@@ -136,11 +137,17 @@ type LoopPayload = {
   migrationInbox: unknown[];
 };
 
+const LOOP_PAYLOAD_TIMEOUT_MS = 12_000;
+
 async function fetchLoopPayload(includeArchived: boolean, signal?: AbortSignal) {
   const response = await fetch(`/api/loops?includeArchived=${includeArchived}`, { cache: "no-store", signal });
-  const body = await response.json() as LoopPayload & { error?: string };
-  if (!response.ok) throw new Error(body.error || "Loop state is unavailable.");
-  return body;
+  const bodyText = await response.text();
+  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+  return parseLoopPayloadResponse<LoopPayload & { error?: string }>(
+    response.status,
+    response.headers.get("content-type") ?? "",
+    bodyText,
+  );
 }
 
 function formatDate(value?: number) {
@@ -176,20 +183,43 @@ function useLoopPayload(includeArchived = false) {
   }>({ requestKey: "", includeArchived, payload: null, error: "" });
   useEffect(() => {
     const controller = new AbortController();
+    let cancelled = false;
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, LOOP_PAYLOAD_TIMEOUT_MS);
     void fetchLoopPayload(includeArchived, controller.signal).then(
-      (payload) => setResult({ requestKey, includeArchived, payload, error: "" }),
+      (payload) => {
+        if (cancelled) return;
+        setResult({ requestKey, includeArchived, payload, error: "" });
+      },
       (cause: unknown) => {
-        if (controller.signal.aborted) return;
-        setResult({ requestKey, includeArchived, payload: null, error: cause instanceof Error ? cause.message : "Loop state is unavailable." });
+        if (cancelled) return;
+        if (isAbortError(cause) && !timedOut) return;
+        setResult((current) => ({
+          requestKey,
+          includeArchived,
+          payload: current.includeArchived === includeArchived ? current.payload : null,
+          error: timedOut
+            ? "Loops took too long to load."
+            : cause instanceof Error ? cause.message : "Loop state is unavailable.",
+        }));
       },
     );
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
   }, [includeArchived, requestKey]);
+  const reload = useCallback(() => setReloadKey((current) => current + 1), []);
+  const payload = result.includeArchived === includeArchived ? result.payload : null;
   return {
-    payload: result.includeArchived === includeArchived ? result.payload : null,
+    payload,
     error: result.requestKey === requestKey ? result.error : "",
-    loading: result.requestKey !== requestKey,
-    reload: useCallback(() => setReloadKey((current) => current + 1), []),
+    loading: result.requestKey !== requestKey && !payload,
+    reload,
   };
 }
 
@@ -408,7 +438,7 @@ export function LoopsWorkspace({ onOpenActivity }: { onOpenActivity: (activityId
   }, [selectedLoop]);
 
   if (loading && !payload) return <section className="loops-state" aria-live="polite"><span className="loops-loader" /><strong>Reading owner-private Loops…</strong></section>;
-  if (error) return <section className="loops-state error" role="alert"><strong>Loops could not be loaded.</strong><span>{error}</span><button type="button" onClick={() => void reload()}>Try again</button></section>;
+  if (error && !payload) return <section className="loops-state error" role="alert"><strong>Loops could not be loaded.</strong><span>{error}</span><button type="button" onClick={() => void reload()}>Try again</button></section>;
   if (requestedLoopMissing) return <section className="loops-state error" role="alert"><strong>That Loop is unavailable.</strong><span>The saved link does not match a Loop in the current owner-scoped result.</span>{loops[0] ? <button type="button" onClick={() => setSelectedLoopId(loops[0].loop.loopId)}>Open the current Loop</button> : null}</section>;
   if (!selectedLoop) return <section className="loops-empty"><div><h1>Your first Loop starts with a real role.</h1><p>Ask <strong>Interview Arc — Loop Recorder</strong> to record the company, role, job description, and hiring stages you actually know.</p></div><aside><strong>{payload?.migrationInbox.length ?? 0} standalone Target Profiles await a decision</strong><p>Nothing is guessed or deleted.</p></aside></section>;
 
