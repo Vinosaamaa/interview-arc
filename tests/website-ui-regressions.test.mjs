@@ -702,6 +702,8 @@ test("workspace identity badges share one specimen plate and drop stacked wordma
   assert.equal(cssRules(globalRules, ".workspace-nav .workspace-identity-mark")[0]?.declarations.height, "28px");
   assert.equal(cssRules(identityRules, ".app-shell .local-nav-label")[0]?.declarations["border-top"].includes("1px solid"), true);
   assert.equal(cssRules(globalRules, ".local-nav-label")[0]?.declarations["font-size"], "0");
+  assert.equal(cssRules(identityRules, ".app-shell .primary-nav")[0]?.declarations["margin-top"], "0");
+  assert.equal(cssRules(v2Rules, ".primary-nav")[0]?.declarations["margin-top"], "0");
   assert.doesNotMatch(identityCss, /#f4c7a8|#f6c7b0|peach/i);
   assert.doesNotMatch(globals, /\.workspace-nav button > span \{ width: 26px/);
 });
