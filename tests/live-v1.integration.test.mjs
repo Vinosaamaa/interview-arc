@@ -105,8 +105,6 @@ function currentPacificDate(now = Date.now()) {
 before(async () => {
   releaseIntegrationLock = await acquireMcpIntegrationLock();
   persistence = await mkdtemp(join(tmpdir(), "interview-arc-live-v1-"));
-  const port = await availablePort();
-  baseUrl = `http://127.0.0.1:${port}`;
   await run(wrangler, ["d1", "migrations", "apply", "DB", "--local", "--persist-to", persistence, "--config", config]);
   await run(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", `
     INSERT INTO integration_tokens
@@ -172,6 +170,8 @@ before(async () => {
     VALUES
       ('owner-live','terminal-pending-capture','activity-terminal','terminal-pending-turn','terminal-pending-clip','system_design','pending','${"1".repeat(64)}',4500,NULL,NULL,NULL,NULL,4500,4500);
   `]);
+  const port = await availablePort();
+  baseUrl = `http://127.0.0.1:${port}`;
   worker = spawn(wrangler, ["dev", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
     cwd: project,
     stdio: ["ignore", "pipe", "pipe"],
