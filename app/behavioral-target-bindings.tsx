@@ -92,7 +92,8 @@ export default function BehavioralTargetBindings({
       latestBindingRequest.current += 1;
     };
   }, [readBindings]);
-  if (scopes.length === 0) return null;
+  const hasHistoricalTarget = scopes.some((scope) => Boolean(bindings[`${scope.type}:${scope.id}`]?.resolution.target));
+  if (scopes.length === 0 || (!bindingError && !hasHistoricalTarget)) return null;
   return <section className="behavioral-target-bindings" aria-labelledby="behavioral-target-bindings-title">
     <header><div><span className="eyebrow">TODAY · LOOP CONTEXT</span><h2 id="behavioral-target-bindings-title">Role context belongs to the hiring Loop.</h2><p>Historical Target Profile bindings remain visible below. New planned activities use one optional Loop and Round with an exact immutable Role Brief revision.</p></div><small>Migration-only legacy</small></header>
     {bindingError && <div className="target-notice error" role="alert"><span>{bindingError}</span><button type="button" onClick={() => void readBindings()}>Retry</button></div>}

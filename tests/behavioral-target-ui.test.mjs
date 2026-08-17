@@ -30,6 +30,11 @@ test("Behavioral Bank and Today keep Target Profiles migration-only", async () =
   assert.match(bindings, /Historical activity binding/);
   assert.match(bindings, /Historical session inheritance/);
   assert.match(bindings, /Loop context or universal practice/);
+  assert.match(bindings, /hasHistoricalTarget/);
+  assert.match(bindings, /bindings\[`\$\{scope\.type\}:\$\{scope\.id\}`\]\?\.resolution\.target/);
+  assert.match(bindings, /if \(scopes\.length === 0 \|\| \(!bindingError && !hasHistoricalTarget\)\) return null/);
+  assert.match(bindings, /bindingError && <div className="target-notice error"/);
+  assert.match(bindings, /onClick=\{\(\) => void readBindings\(\)\}>Retry/);
   assert.doesNotMatch(bindings, /<select|Set exact revision|Clear override|Clear target/);
   assert.match(bindings, /BINDING_READ_LIMIT = 50/);
   assert.match(bindings, /scopes\.slice\(index \* BINDING_READ_LIMIT/);
