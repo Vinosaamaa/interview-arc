@@ -1,15 +1,15 @@
 ---
 schemaVersion: 1
-id: "feature-retrospective-structured-code-attempt-review"
+id: feature-retrospective-structured-code-attempt-review
 revision: 1
-type: "feature-retrospective"
-status: "released"
-title: "Require structured reviews for every Code Attempt"
-repository: "interview-arc"
+type: feature-retrospective
+status: released
+title: Require structured reviews for every Code Attempt
+repository: interview-arc
 capabilityIds: ["arc-structured-code-attempt-review"]
-createdAt: "2026-08-03"
+createdAt: 2026-08-03
 reconstructed: true
-confidence: "high"
+confidence: high
 unknowns: ["Attachment bodies and workflow logs were not quoted."]
 modules: ["HTTP:practice-record","web:home-client","web:interview-arc-v2","web:live-types","D1:code-attempt-review","D1:durable-practice"]
 interfaces: ["app/api/practice-record/route.ts","app/live-types.ts","docs/contracts/code-attempt-reviews.md","drizzle/0020_code_attempt_reviews.sql","drizzle/meta/_journal.json"]
@@ -25,8 +25,8 @@ supersedes: []
 learningRefs: []
 sources: [{"label":"Pull request #132","url":"https://github.com/Vinosaamaa/interview-arc/pull/132","kind":"pull-request"}]
 verification: {"state":"verified","evidenceRefs":["pull-request:132","head-commit:6ed43a2cfcea24559f748c5b917340082f8e0b45","merge-commit:4d704faf488963b36b20227ecaeaee6d819fe3e9"]}
-visibility: "public-safe"
-publicationEligibility: "eligible"
+visibility: public-safe
+publicationEligibility: eligible
 issue: 131
 pr: 132
 release: null

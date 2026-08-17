@@ -1,15 +1,15 @@
 ---
 schemaVersion: 1
-id: "postmortem-career-work-boundary"
+id: postmortem-career-work-boundary
 revision: 1
-type: "postmortem"
-status: "closed"
-title: "Add career focus blocks and Career Work"
-repository: "interview-arc"
+type: postmortem
+status: closed
+title: Add career focus blocks and Career Work
+repository: interview-arc
 capabilityIds: ["arc-postmortem-career-work-boundary"]
-createdAt: "2026-07-27"
+createdAt: 2026-07-27
 reconstructed: true
-confidence: "high"
+confidence: high
 unknowns: ["Attachment bodies and workflow logs were not quoted."]
 modules: ["HTTP:career-work","HTTP:mutations","web:career-work","web:globals","web:home-client","web:live-sync"]
 interfaces: ["app/api/career-work/route.ts","app/api/mutations/route.ts","app/live-types.ts","docs/contracts/career-work.md","docs/contracts/durable-practice-publishing.md","drizzle/0016_mighty_justin_hammer.sql"]
@@ -25,8 +25,8 @@ supersedes: []
 learningRefs: []
 sources: [{"label":"Pull request #96","url":"https://github.com/Vinosaamaa/interview-arc/pull/96","kind":"pull-request"}]
 verification: {"state":"verified","evidenceRefs":["pull-request:96","head-commit:41ff0ca4a61a7919df2f13573f55432234a5794a","merge-commit:5412831fb8ab6fb39596274ddf0cb1b5366bbe8a"]}
-visibility: "public-safe"
-publicationEligibility: "eligible"
+visibility: public-safe
+publicationEligibility: eligible
 issue: 94
 pr: 96
 release: null

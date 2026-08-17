@@ -1,15 +1,15 @@
 ---
 schemaVersion: 1
-id: "postmortem-leetcode-controller-result-receipt-loss"
+id: postmortem-leetcode-controller-result-receipt-loss
 revision: 1
-type: "postmortem"
-status: "closed"
-title: "Make LeetCode submit receipts durable and recoverable"
-repository: "interview-arc"
+type: postmortem
+status: closed
+title: Make LeetCode submit receipts durable and recoverable
+repository: interview-arc
 capabilityIds: ["arc-postmortem-leetcode-controller-result-receipt-loss"]
-createdAt: "2026-08-04"
+createdAt: 2026-08-04
 reconstructed: true
-confidence: "high"
+confidence: high
 unknowns: ["Attachment bodies and workflow logs were not quoted.","Sensitive source values and nonessential risky evidence links were omitted."]
 modules: ["practice:leetcode","tooling:leetcode-playwright-controller"]
 interfaces: ["docs/contracts/leetcode-playwright-controller.md","scripts/leetcode-playwright-controller.mjs","tests/leetcode-playwright-controller.test.mjs"]
@@ -25,8 +25,8 @@ supersedes: []
 learningRefs: []
 sources: [{"label":"Pull request #154","url":"https://github.com/Vinosaamaa/interview-arc/pull/154","kind":"pull-request"}]
 verification: {"state":"verified","evidenceRefs":["pull-request:154","head-commit:835bea14675849669b296c5f421fa0896bd29f42","merge-commit:e199ca369f0aa90ab1553b1026071635c139a532"]}
-visibility: "public-safe"
-publicationEligibility: "eligible"
+visibility: public-safe
+publicationEligibility: eligible
 issue: 135
 pr: 154
 release: null

@@ -1,15 +1,15 @@
 ---
 schemaVersion: 1
-id: "architecture-review-background-specialist-persistence"
+id: architecture-review-background-specialist-persistence
 revision: 1
-type: "architecture-review"
-status: "accepted"
-title: "Delegate specialist persistence to background sub-agents"
-repository: "interview-arc"
+type: architecture-review
+status: accepted
+title: Delegate specialist persistence to background sub-agents
+repository: interview-arc
 capabilityIds: ["arc-background-specialist-persistence"]
-createdAt: "2026-08-04"
+createdAt: 2026-08-04
 reconstructed: true
-confidence: "high"
+confidence: high
 unknowns: ["Attachment bodies and workflow logs were not quoted."]
 modules: ["practice:behavioral","practice:leetcode","practice:system-design"]
 interfaces: ["docs/contracts/background-specialist-persistence.md","docs/contracts/durable-practice-publishing.md"]
@@ -25,8 +25,8 @@ supersedes: []
 learningRefs: []
 sources: [{"label":"Pull request #156","url":"https://github.com/Vinosaamaa/interview-arc/pull/156","kind":"pull-request"}]
 verification: {"state":"verified","evidenceRefs":["pull-request:156","head-commit:6090e6c8f4ff884f1d8978bd38730105281975a1","merge-commit:af378e825e8e5bf2d5d3e3ecb03d774c2b3a9f04"]}
-visibility: "public-safe"
-publicationEligibility: "eligible"
+visibility: public-safe
+publicationEligibility: eligible
 issue: 155
 pr: 156
 release: null
