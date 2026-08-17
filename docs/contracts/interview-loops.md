@@ -115,7 +115,13 @@ canonical question merely to add Loop context.
 A planned Interview activity has zero or one Loop binding and an optional Round
 binding. The server validates the owner-scoped Loop/Round identity and snapshots
 the exact display-safe Role Brief revision. The binding supplements question
-identity; it does not duplicate a Bank question.
+identity; it does not duplicate a Bank question. The Today composer Review
+selections panel may stamp selected practice activities with one Loop and
+optional Round through the same `loopContext` binding; Career Focus never
+binds, and universal (unbound) practice remains the default. Website extra
+creation attaches that context on create using the same D1 binding tables as
+`plan_today_practice`. Loop context is immutable after the activity timer
+starts.
 
 Finishing a bound activity automatically appends its authoritative completion
 receipt to Loop history. The projection is idempotent and records facts such as

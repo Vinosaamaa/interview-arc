@@ -1,3 +1,4 @@
+import type { LoopActivityContextRequest } from "../db/loop-policy";
 import type { ActivityType, ExtraActivity, LocalSession } from "./live-types";
 
 export type ActivityBatchDestination = "standalone" | "session";
@@ -20,6 +21,8 @@ type BuildSelectedActivityBatchInput = {
   sessionNumber: number;
   destination: ActivityBatchDestination;
   items: SelectedActivity[];
+  loopContext?: LoopActivityContextRequest | null;
+  boundKeys?: ReadonlySet<string> | readonly string[];
 };
 
 function slugify(value: string) {
@@ -42,6 +45,8 @@ export function buildSelectedActivityBatch({
   sessionNumber,
   destination,
   items,
+  loopContext,
+  boundKeys,
 }: BuildSelectedActivityBatchInput): {
   activities: ExtraActivity[];
   session: LocalSession | null;
@@ -49,9 +54,12 @@ export function buildSelectedActivityBatch({
   const sessionId = destination === "session"
     ? `${date}-session-selected-${sessionNumber}-${stamp}`
     : null;
+  const bound = boundKeys instanceof Set ? boundKeys : new Set(boundKeys ?? []);
+  const bindAll = !boundKeys && Boolean(loopContext);
   const activities = items.map((item, index): ExtraActivity => {
     const id = `${date}-extra-${slugify(item.title)}-${stamp}-${index}`;
     const questionId = item.questionId ?? `personal-${item.type}-${slugify(item.title)}`;
+    const bindThis = Boolean(loopContext) && (bindAll || bound.has(item.key));
     return {
       schemaVersion: 2,
       id,
@@ -69,6 +77,7 @@ export function buildSelectedActivityBatch({
       timingSource: "website",
       status: "planned",
       ...(item.topics.length ? { notes: item.topics.join(", ") } : {}),
+      ...(bindThis && loopContext ? { loopContext } : {}),
     };
   });
 

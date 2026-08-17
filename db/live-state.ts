@@ -32,6 +32,12 @@ import type {
   PracticeStateSession,
 } from "../app/content-types";
 import {
+  boundRoleBriefDisplaySnapshot,
+  extraActivityLoopContextRequest,
+  LoopError,
+  resolveLoopActivityContext,
+} from "./loops";
+import {
   prepareVoiceCapturesForFinish,
   readDurablePracticeSummary,
   voiceFinishGuardMessage,
@@ -1312,7 +1318,62 @@ export async function upsertExtraActivity(
 ) {
   const db = getDb();
   const workbench = await ensureOpenWorkbench(ownerId, activity.date, nowMs);
-  const payload = { ...activity, workbenchId: workbench.id };
+  const requestedLoop = extraActivityLoopContextRequest(activity.loopContext);
+  const [existingRows, timerRow, bindingRows] = await Promise.all([
+    db.select().from(extraActivities).where(and(
+      eq(extraActivities.ownerId, ownerId),
+      eq(extraActivities.id, activity.id),
+    )).limit(1),
+    loadTimer(db, ownerId, activity.id, "activity"),
+    db.select().from(loopActivityBindings).where(and(
+      eq(loopActivityBindings.ownerId, ownerId),
+      eq(loopActivityBindings.activityId, activity.id),
+    )).limit(1),
+  ]);
+  const existingPayload = existingRows[0]?.payload as ActivityPayload | undefined;
+  const existingBinding = bindingRows[0];
+  const started = Boolean(timerRow?.startedAt);
+  let payloadLoopContext: PracticeStateExtraActivity["loopContext"] | undefined;
+  if (existingPayload?.loopContext && typeof existingPayload.loopContext === "object") {
+    payloadLoopContext = existingPayload.loopContext as PracticeStateExtraActivity["loopContext"];
+  }
+  let writeBinding = false;
+  let resolvedBinding: Awaited<ReturnType<typeof resolveLoopActivityContext>> | null = null;
+
+  if (requestedLoop) {
+    if (
+      (
+        activity.type !== "leetcode"
+        && activity.type !== "system_design"
+        && activity.type !== "behavioral"
+      )
+      || typeof activity.questionId !== "string"
+      || !activity.questionId
+    ) {
+      throw new LoopError("loop_activity_not_practice", "Only a stable Interview practice activity can bind to a Loop.");
+    }
+    resolvedBinding = await resolveLoopActivityContext(ownerId, requestedLoop);
+    const sameBinding = Boolean(
+      existingBinding
+      && existingBinding.loopId === resolvedBinding.loopContext.loopId
+      && (existingBinding.stageId ?? null) === (resolvedBinding.loopContext.stageId ?? null),
+    );
+    if (started && !sameBinding) {
+      throw new LoopError("loop_activity_already_started", "Loop context is immutable after an activity starts.");
+    }
+    if (sameBinding) {
+      payloadLoopContext = payloadLoopContext ?? resolvedBinding.loopContext;
+    } else {
+      payloadLoopContext = resolvedBinding.loopContext;
+      writeBinding = true;
+    }
+  }
+
+  const payload = {
+    ...activity,
+    workbenchId: workbench.id,
+    ...(payloadLoopContext ? { loopContext: payloadLoopContext } : {}),
+  };
   const upsert = db.insert(extraActivities)
     .values({
       ownerId,
@@ -1327,11 +1388,42 @@ export async function upsertExtraActivity(
       target: [extraActivities.ownerId, extraActivities.id],
       set: { date: activity.date, workbenchId: workbench.id, payload, updatedAt: nowMs },
     });
+  const statements = [
+    openWorkbenchInvariant(db, ownerId, workbench),
+    upsert,
+    ...(writeBinding && resolvedBinding ? [db.insert(loopActivityBindings).values({
+      ownerId,
+      activityId: activity.id,
+      loopId: resolvedBinding.loopContext.loopId,
+      stageId: resolvedBinding.loopContext.stageId ?? null,
+      loopRevision: resolvedBinding.loopContext.loopRevision,
+      roleBriefRevision: resolvedBinding.loopContext.roleBriefRevision,
+      specialty: activity.type,
+      questionId: activity.questionId as string,
+      roleBriefDisplaySnapshot: boundRoleBriefDisplaySnapshot(resolvedBinding.roleBriefDisplaySnapshot),
+      bindingRevision: (existingBinding?.bindingRevision ?? 0) + 1,
+      createdAt: existingBinding?.createdAt ?? nowMs,
+      updatedAt: nowMs,
+    }).onConflictDoUpdate({
+      target: [loopActivityBindings.ownerId, loopActivityBindings.activityId],
+      set: {
+        loopId: resolvedBinding.loopContext.loopId,
+        stageId: resolvedBinding.loopContext.stageId ?? null,
+        loopRevision: resolvedBinding.loopContext.loopRevision,
+        roleBriefRevision: resolvedBinding.loopContext.roleBriefRevision,
+        specialty: activity.type,
+        questionId: activity.questionId as string,
+        roleBriefDisplaySnapshot: boundRoleBriefDisplaySnapshot(resolvedBinding.roleBriefDisplaySnapshot),
+        bindingRevision: (existingBinding?.bindingRevision ?? 0) + 1,
+        updatedAt: nowMs,
+      },
+    })] : []),
+    advanceWorkbenchRevision(db, ownerId, workbench.id, nowMs),
+  ];
   try {
-    await db.batch([
-      openWorkbenchInvariant(db, ownerId, workbench),
-      upsert,
-      advanceWorkbenchRevision(db, ownerId, workbench.id, nowMs),
+    await db.batch(statements as [
+      (typeof statements)[number],
+      ...(typeof statements)[number][],
     ]);
   } catch (error) {
     throwWorkbenchMutationConflict(error);

@@ -57,4 +57,30 @@ test("standalone selection remains the default and creates no session", () => {
   assert.equal(result.session, null);
   assert.ok(result.activities.every((activity) => activity.sessionId === undefined));
   assert.ok(result.activities.every((activity) => activity.timerGroupId === activity.id));
+  assert.ok(result.activities.every((activity) => activity.loopContext === undefined));
+});
+
+test("selected practice can bind one Loop while an unchecked row stays universal", () => {
+  const loopContext = { loopId: "loop-northstar-backend-2026", stageId: "onsite-coding" };
+  const boundAll = buildSelectedActivityBatch({
+    date: "2026-07-25",
+    stamp: "batch1",
+    sessionNumber: 3,
+    destination: "standalone",
+    items: selected,
+    loopContext,
+  });
+  assert.deepEqual(boundAll.activities.map((activity) => activity.loopContext), [loopContext, loopContext]);
+
+  const unchecked = buildSelectedActivityBatch({
+    date: "2026-07-25",
+    stamp: "batch1",
+    sessionNumber: 3,
+    destination: "standalone",
+    items: selected,
+    loopContext,
+    boundKeys: [selected[0].key],
+  });
+  assert.deepEqual(unchecked.activities[0].loopContext, loopContext);
+  assert.equal(unchecked.activities[1].loopContext, undefined);
 });

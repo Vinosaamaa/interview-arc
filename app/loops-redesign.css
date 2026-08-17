@@ -37,9 +37,24 @@
 .loop-support-band .loop-preparation > header::before { content: "ROLE DOSSIER"; color: var(--page-accent); font-size: .57rem; font-weight: 840; letter-spacing: .12em; grid-column: 1 / -1; }
 .loop-support-band .loop-preparation > header::before { content: "PREPARATION RECORD"; }
 .loop-support-band .loop-role-brief > header > div,
-.loop-support-band .loop-preparation > header > div { grid-column: 1; }
+.loop-support-band .loop-preparation > header > div:not(.loop-add-practice-row) { grid-column: 1; }
 .loop-support-band .loop-role-brief > header > small,
-.loop-support-band .loop-preparation > header > small { grid-column: 2; grid-row: 2; }
+.loop-support-band .loop-add-practice-row { grid-column: 2; grid-row: 2; }
+.loop-add-practice-row { display: flex; align-items: center; justify-content: end; gap: 10px; }
+.loop-add-practice {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--page-accent) 42%, #c5cec7);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--page-accent);
+  font-size: .72rem;
+  font-weight: 760;
+  cursor: pointer;
+}
+.loop-add-practice:hover, .loop-add-practice:focus-visible {
+  background: var(--page-accent-soft);
+}
 .loop-role-summary { padding: 9px 18px 7px; }
 .loop-support-band .loop-role-brief > ul { padding: 7px 18px 10px; display: flex; flex-wrap: wrap; gap: 7px; }
 .loop-support-band .loop-role-brief > ul li { width: fit-content; min-height: 32px; padding: 6px 9px; border: 1px solid color-mix(in srgb, var(--page-accent) 28%, #d6ddd7); border-radius: 999px; background: var(--page-accent-soft); color: #61404a; grid-template-columns: 15px auto; align-items: center; font-size: .69rem; }

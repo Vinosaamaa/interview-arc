@@ -26,6 +26,7 @@ import {
 import { buildPracticeSnapshot } from "./practice-snapshot";
 import { addReviewQueueItemsToToday, deferReviewToNextWeek } from "./review-queue";
 import { removePlannedActivities } from "./today-planning";
+import { LoopError } from "./loops";
 import { readPracticeActivityIdentity } from "./practice-activity-identity";
 import {
   interactionModeMutationFingerprint,
@@ -376,7 +377,19 @@ export async function executePracticeStateCommand(
       if (!command.activity?.id || !command.activity.date) {
         throw new PracticeStateCommandInputError("Invalid extra activity.");
       }
-      await upsertExtraActivity(ownerId, command.activity, now);
+      try {
+        await upsertExtraActivity(ownerId, command.activity, now);
+      } catch (error) {
+        if (error instanceof LoopError) {
+          throw new PracticeStateCommandInputError(
+            error.message,
+            error.retryable ? 503 : 409,
+            error.retryable,
+            error.code,
+          );
+        }
+        throw error;
+      }
       break;
     }
     case "extra-remove": {

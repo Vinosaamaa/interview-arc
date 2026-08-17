@@ -20,6 +20,10 @@ Own the Interview Arc website: the daily dashboard, timers, activity creation, h
   practice activities. It shares the one-active-stopwatch rule but has no
   outcome, specialist, review, solution, Past card, Problem Bank row, or
   publication lifecycle. Follow `../contracts/career-work.md`.
+- On Review selections, an optional Hiring Loop control can stamp selected
+  practice activities with one Loop and optional Round. It stays off by
+  default. Unchecked practice stays universal. Career Focus never binds. Loops
+  **Add practice** opens the same composer already scoped to that Loop/Round.
 - On Today, use the masthead tally for yesterday's completed activities,
   recorded time, and sessions from owner-scoped D1; frozen versioned journals
   are migration-only fallback.
