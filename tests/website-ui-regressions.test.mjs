@@ -88,15 +88,16 @@ function cssRules(rules, selector, media = "") {
 }
 
 async function loadResponsiveShell() {
-  const [source, globals, css] = await Promise.all([
+  const [source, globals, css, atmosphere] = await Promise.all([
     load("../app/home-client.tsx"),
     load("../app/globals.css"),
     load("../app/interview-arc-v2.css"),
+    load("../app/workspace-atmosphere.css"),
   ]);
   return {
     source,
     file: parseTsx(source),
-    rules: parseCss(`${globals}\n${css}`),
+    rules: parseCss(`${globals}\n${css}\n${atmosphere}`),
   };
 }
 
@@ -811,19 +812,26 @@ test("Interview navigation uses one shared local model with Journey last", async
 
 test("responsive shell keeps the workspace selector above the seven-item Interview dock", async () => {
   const { rules } = await loadResponsiveShell();
-  const mobileSidebar = cssRules(rules, ".sidebar", "max-width: 900px").at(-1).declarations;
+  const mobileSidebar = cssRules(rules, ".sidebar", "max-width: 980px").at(-1).declarations;
   assert.equal(mobileSidebar.display, "none");
-  const interviewDock = cssRules(rules, ".mobile-interview-nav", "max-width: 900px").at(-1).declarations;
+  assert.equal(cssRules(rules, ".app-shell .sidebar", "max-width: 980px").at(-1).declarations.display, "none");
+  const interviewDock = cssRules(rules, ".mobile-interview-nav", "max-width: 980px").at(-1).declarations;
   assert.equal(interviewDock.position, "fixed");
   assert.equal(interviewDock.display, "grid");
   assert.equal(interviewDock["grid-template-columns"], "repeat(7, minmax(0, 1fr))");
-  assert.equal(cssRules(rules, ".mobile-learn-nav", "max-width: 900px").at(-1).declarations["grid-template-columns"], "repeat(4, minmax(0, 1fr))");
-  assert.equal(cssRules(rules, ".mobile-engineering-nav", "max-width: 900px").at(-1).declarations["grid-template-columns"], "repeat(6, minmax(0, 1fr))");
+  assert.equal(cssRules(rules, ".mobile-learn-nav", "max-width: 980px").at(-1).declarations["grid-template-columns"], "repeat(4, minmax(0, 1fr))");
+  assert.equal(cssRules(rules, ".mobile-engineering-nav", "max-width: 980px").at(-1).declarations["grid-template-columns"], "repeat(6, minmax(0, 1fr))");
   const compactDock = cssRules(rules, ".mobile-interview-nav", "max-width: 360px").at(-1).declarations;
   assert.equal(compactDock["grid-template-columns"], "repeat(4, minmax(0, 1fr))");
   assert.equal(cssRules(rules, ".mobile-interview-nav button", "max-width: 420px").at(-1).declarations["min-height"], "44px");
   assert.ok(cssRules(rules, ".topbar > div:last-child").some((rule) => rule.declarations["flex-wrap"] === "nowrap"));
-  assert.equal(cssRules(rules, ".topbar .secondary-action", "max-width: 900px").at(-1).declarations.display, "none");
+  assert.equal(cssRules(rules, ".topbar .secondary-action", "max-width: 980px").at(-1).declarations.display, "none");
+  assert.equal(cssRules(rules, ".app-shell", "max-width: 980px").at(-1).declarations["--sidebar-size"], "0px");
+  assert.equal(
+    cssRules(rules, ".topbar > div:first-child span", "max-width: 760px")
+      .some((rule) => rule.declarations.display === "none"),
+    false,
+  );
 });
 
 test("workspace header stacks the active tab above the Pacific date at every width", async () => {
@@ -852,7 +860,7 @@ test("workspace header stacks the active tab above the Pacific date at every wid
   const narrowDate = cssRules(rules, ".topbar-context time", "max-width: 680px").at(-1).declarations;
   assert.notEqual(narrowDate.display, "none");
   assert.equal(cssRules(rules, ".topbar", "max-width: 760px").at(-1).declarations["grid-template-areas"], '"context switch actions"');
-  assert.equal(cssRules(rules, ".topbar-brand", "max-width: 900px").at(-1).declarations.display, "grid");
+  assert.equal(cssRules(rules, ".topbar-brand", "max-width: 980px").at(-1).declarations.display, "grid");
 });
 
 test("Loops source dialog keeps a stable close callback for its focus and scroll-lock lifecycle", async () => {
@@ -995,6 +1003,9 @@ test("Learn and Engineering hero type stays inside the 350px panel", async () =>
   assert.equal(readerTitle?.["line-height"], "1.28");
   assert.match(readerTitle?.["font-family"] ?? "", /font-editorial/);
   assert.doesNotMatch(learnCss, /letter-spacing:\s*-0\.052em/);
+  assert.doesNotMatch(engineeringCss, /max-width:\s*18ch/);
+  assert.match(engineeringCss, /\.engineering-search input \{[^}]*min-width:\s*0/s);
+  assert.match(engineeringCss, /\.engineering-search input::placeholder \{[^}]*opacity:\s*1/s);
   assert.doesNotMatch(engineeringCss, /line-height:\s*\.86/);
 });
 
@@ -1145,11 +1156,17 @@ test("every workspace keeps timer, export, and connect in one tools menu", async
 test("narrow chrome hides the destination sidebar instead of squeezing it", async () => {
   const v2 = await load("../app/interview-arc-v2.css");
   const atmosphere = await load("../app/workspace-atmosphere.css");
+  const source = await load("../app/home-client.tsx");
   assert.doesNotMatch(v2, /--sidebar-size:\s*82px/);
   assert.doesNotMatch(v2, /grid-template-columns:\s*82px minmax\(0, 1fr\)/);
   assert.doesNotMatch(v2, /grid-template-columns:\s*190px minmax\(0, 1fr\)/);
-  assert.match(atmosphere, /@media \(max-width: 900px\)[\s\S]*\.app-shell \.sidebar \{ display: none;/);
-  assert.match(atmosphere, /@media \(max-width: 900px\)[\s\S]*\.app-shell \.topbar-brand \{ display: grid;/);
+  assert.doesNotMatch(v2, /\.topbar > div:first-child span \{ display: none; \}/);
+  assert.match(atmosphere, /@media \(max-width: 980px\)[\s\S]*\.app-shell \.sidebar \{ display: none;/);
+  assert.match(atmosphere, /@media \(max-width: 980px\)[\s\S]*\.app-shell \.topbar-brand \{ display: grid;/);
+  assert.doesNotMatch(source, /Show Journal index/);
+  assert.doesNotMatch(source, /[》《]/);
+  assert.doesNotMatch(source, /journalUserSet/);
+  assert.match(source, /<details className=\{`topbar-tools/);
 });
 
 test("Engineering stepwise shell keeps compact contents, collapsing evidence, and a 50px music dock", async () => {
