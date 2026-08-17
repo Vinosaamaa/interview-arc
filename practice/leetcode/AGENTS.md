@@ -165,6 +165,11 @@ never run a misleading sandboxed preflight first. Never replace it with browser
 plugins, raw CDP, manual Playwright, coordinate control, alternate
 profiles/ports/tabs, or direct private/account endpoints.
 
+Interview Arc Live's native coding room may invoke this same checked-in
+controller CLI and the checked-in Java harness from the Live macOS process
+without a specialist turn. That is the same only-supported path, not a second
+controller. Specialists still must not build a temporary controller.
+
 After a merge changes `package.json` or `pnpm-lock.yaml`, the coordinator first
 synchronizes the canonical checkout with:
 
