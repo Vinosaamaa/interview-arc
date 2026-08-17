@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "repository": "interview-arc",
+  "pullRequest": 375,
+  "privacyAuthorizationUrl": "https://github.com/Vinosaamaa/interview-arc/issues/313#issuecomment-5310349179",
+  "receiptPaths": [
+    "docs/engineering/changes/pr-21.md",
+    "docs/engineering/changes/pr-22.md",
+    "docs/engineering/changes/pr-23.md",
+    "docs/engineering/changes/pr-24.md",
+    "docs/engineering/changes/pr-25.md",
+    "docs/engineering/changes/pr-26.md",
+    "docs/engineering/changes/pr-27.md",
+    "docs/engineering/changes/pr-28.md",
+    "docs/engineering/changes/pr-29.md",
+    "docs/engineering/changes/pr-30.md",
+    "docs/engineering/changes/pr-31.md",
+    "docs/engineering/changes/pr-32.md",
+    "docs/engineering/changes/pr-33.md",
+    "docs/engineering/changes/pr-34.md",
+    "docs/engineering/changes/pr-35.md",
+    "docs/engineering/changes/pr-36.md",
+    "docs/engineering/changes/pr-38.md",
+    "docs/engineering/changes/pr-39.md",
+    "docs/engineering/changes/pr-40.md"
+  ],
+  "recordRefs": [
+    "feature-retrospective-connected-practice-bridge@1",
+    "feature-retrospective-durable-practice-workbench@1",
+    "feature-retrospective-reader-workspace@1"
+  ],
+  "addedRecordRefs": []
+}
