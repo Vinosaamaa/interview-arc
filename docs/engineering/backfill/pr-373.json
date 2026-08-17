@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "repository": "interview-arc",
+  "pullRequest": 373,
+  "privacyAuthorizationUrl": "https://github.com/Vinosaamaa/interview-arc/issues/313#issuecomment-5310349179",
+  "receiptPaths": [
+    "docs/engineering/changes/pr-251.md",
+    "docs/engineering/changes/pr-253.md",
+    "docs/engineering/changes/pr-265.md"
+  ],
+  "recordRefs": [
+    "adr-learn-workspace-architecture@1",
+    "feature-retrospective-interview-loops@1",
+    "feature-retrospective-resume-and-cover-letter-foundation@1"
+  ],
+  "addedRecordRefs": [
+    "adr-learn-workspace-architecture@1",
+    "feature-retrospective-interview-loops@1",
+    "feature-retrospective-resume-and-cover-letter-foundation@1"
+  ]
+}
