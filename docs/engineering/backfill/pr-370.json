@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "repository": "interview-arc",
+  "pullRequest": 370,
+  "privacyAuthorizationUrl": "https://github.com/Vinosaamaa/interview-arc/issues/313#issuecomment-5310349179",
+  "receiptPaths": [
+    "docs/engineering/changes/pr-1.md",
+    "docs/engineering/changes/pr-2.md",
+    "docs/engineering/changes/pr-3.md",
+    "docs/engineering/changes/pr-4.md",
+    "docs/engineering/changes/pr-15.md",
+    "docs/engineering/changes/pr-37.md",
+    "docs/engineering/changes/pr-85.md",
+    "docs/engineering/changes/pr-92.md"
+  ],
+  "recordRefs": [
+    "adr-hybrid-git-d1-owner-scoped-state@1",
+    "adr-interview-arc-repository-and-practice-boundary@1",
+    "feature-retrospective-arrival-ritual@1",
+    "feature-retrospective-connected-practice-bridge@1",
+    "feature-retrospective-durable-practice-workbench@1",
+    "feature-retrospective-reader-workspace@1",
+    "postmortem-companion-network-recovery@1",
+    "postmortem-live-sync-polling-and-voice-retry-storm@1"
+  ],
+  "addedRecordRefs": [
+    "adr-hybrid-git-d1-owner-scoped-state@1",
+    "adr-interview-arc-repository-and-practice-boundary@1",
+    "feature-retrospective-arrival-ritual@1",
+    "feature-retrospective-connected-practice-bridge@1",
+    "feature-retrospective-durable-practice-workbench@1",
+    "feature-retrospective-reader-workspace@1",
+    "postmortem-companion-network-recovery@1",
+    "postmortem-live-sync-polling-and-voice-retry-storm@1"
+  ]
+}
