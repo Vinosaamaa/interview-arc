@@ -12,7 +12,7 @@ The application bar is exactly **50px** (`40px` controls). Grid: `minmax(0,1fr) 
 | Switch | Interview · Learn · Engineering | Centered in the bar, not in leftover space. Equal-width segments. Active fill uses that workspace accent. |
 | Actions | Music, atmosphere, tools | `40px` round controls. Drop *labels*, then widgets. Never collide with the switch. |
 
-At **≤900px**: hide the sidebar. Put the canonical favicon (`/favicon.svg`) on the **same** context row as the title. Local destinations move to the bottom dock. Do not squeeze the destination rail to 190px or 82px, and do not leave a leftover 64–74px icon strip above the bar.
+At **≤980px**: hide the sidebar. Put the canonical favicon (`/favicon.svg`) on the **same** context row as the title. Local destinations move to the bottom dock. Do not squeeze the destination rail to 190px or 82px, and do not leave a leftover 64–74px icon strip above the bar.
 
 At **≤480px**: hide the music dock; keep atmosphere + tools at `36px`.
 
@@ -20,7 +20,7 @@ At **≤480px**: hide the music dock; keep atmosphere + tools at `36px`.
 
 One `40px` link-icon control on every workspace. Menu: **Pop out timer**, **Connect**, **Export today**. No header text. Timer stays available off Today; disable it only when Document Picture-in-Picture is missing.
 
-## Bottom dock (≤900px)
+## Bottom dock (≤980px)
 
 `.mobile-interview-nav` is the only local nav. Tabs **evenly fill** the dock (`repeat(N, minmax(0,1fr))`, `width:100%`). Do not share Interview’s 7-column grid with fewer tabs.
 
