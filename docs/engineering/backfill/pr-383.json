@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "repository": "interview-arc",
+  "pullRequest": 383,
+  "privacyAuthorizationUrl": "https://github.com/Vinosaamaa/interview-arc/issues/313#issuecomment-5310349179",
+  "receiptPaths": [
+    "docs/engineering/changes/pr-267.md",
+    "docs/engineering/changes/pr-268.md",
+    "docs/engineering/changes/pr-270.md",
+    "docs/engineering/changes/pr-271.md",
+    "docs/engineering/changes/pr-273.md",
+    "docs/engineering/changes/pr-279.md",
+    "docs/engineering/changes/pr-280.md",
+    "docs/engineering/changes/pr-281.md"
+  ],
+  "recordRefs": [
+    "architecture-review-owner-private-behavioral-evidence@1",
+    "architecture-review-practice-state-command-module@1",
+    "feature-retrospective-interview-loops@1",
+    "feature-retrospective-review-queue-and-journey@1"
+  ],
+  "addedRecordRefs": []
+}
