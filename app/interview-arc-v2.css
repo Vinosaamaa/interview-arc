@@ -1965,6 +1965,10 @@ body:has(.reader-workspace) .ambient-rain-drop span { animation-play-state: paus
   background: var(--canvas);
 }
 
+.interview-loops-surface[hidden] {
+  display: none !important;
+}
+
 .loops-reader-workspace.has-open-reader::before {
   content: "";
   position: fixed;

@@ -1875,6 +1875,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
   // the one-time restoration, so the remembered workspace is ready before the
   // user enters without forcing React to discard a mismatched server tree.
   const [view, setView] = useState<View>(() => initialInterviewView(initialLocation));
+  const [loopsSurfaceReady, setLoopsSurfaceReady] = useState(() => initialInterviewView(initialLocation) === "loops");
   const [learnDestination, setLearnDestination] = useState<LearnDestination>(() => initialLearnDestination(initialLocation));
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace>(() => initialWorkspace(initialLocation));
   const [engineeringView, setEngineeringView] = useState<EngineeringView>(() => parseEngineeringDestination(initialLocation.engineering));
@@ -2201,6 +2202,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
       }
       const routeView = readWorkspaceRouteView(window.location.href);
       if (readLoopReaderState(window.location.href)) {
+        setLoopsSurfaceReady(true);
         setView("loops");
         setViewMemoryReady(true);
         return;
@@ -2232,12 +2234,15 @@ export default function HomeClient({ content, today, engineering, initialLocatio
       if (routeView) {
         setActiveWorkspace(routeView === "learn" ? "learn" : "interview");
         if (routeView === "learn") setLearnDestination(readLearnDestination(window.location.href));
-        setView(routeView === "past" ? "library" : routeView === "career-materials" ? "materials" : routeView);
+        const nextView = routeView === "past" ? "library" : routeView === "career-materials" ? "materials" : routeView;
+        if (nextView === "loops") setLoopsSurfaceReady(true);
+        setView(nextView);
         setViewMemoryReady(true);
         return;
       }
       const stored = window.sessionStorage.getItem("interview-arc-active-view");
       if (stored === "loops" || stored === "journey" || stored === "reviews" || stored === "library" || stored === "banks" || stored === "materials" || stored === "learn") {
+        if (stored === "loops") setLoopsSurfaceReady(true);
         setView(stored);
         if (stored === "learn") {
           setActiveWorkspace("learn");
@@ -4871,6 +4876,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
     const workspaceChanged = activeWorkspace !== "interview";
     if (workspaceChanged) setActiveWorkspace("interview");
     if (nextView === view && !workspaceChanged) return;
+    if (nextView === "loops") setLoopsSurfaceReady(true);
     startNavigationDiagnostic(nextView, view);
     if (readerCloseTimerRef.current !== null) {
       window.clearTimeout(readerCloseTimerRef.current);
@@ -5219,6 +5225,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
           setLoopNestedEntry(null);
           setLoopNestedProblem(null);
           setReaderNotFound(loopState.attemptId);
+          setLoopsSurfaceReady(true);
           setView("loops");
           return;
         }
@@ -5226,6 +5233,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
         setReaderClosing(false);
         setLoopNestedEntry((current) => retainLoadedPastSnapshot(current, entry));
         setLoopNestedProblem(nestedProblem && loopState.specialty ? { type: loopState.specialty, question: nestedProblem } : null);
+        setLoopsSurfaceReady(true);
         setView("loops");
         return;
       }
@@ -5393,7 +5401,9 @@ export default function HomeClient({ content, today, engineering, initialLocatio
         setReaderNotFound("");
       }
       if (routeView === "learn") setLearnDestination(readLearnDestination(window.location.href));
-      setView(routeView === "past" ? "library" : routeView === "career-materials" ? "materials" : routeView);
+      const nextView = routeView === "past" ? "library" : routeView === "career-materials" ? "materials" : routeView;
+      if (nextView === "loops") setLoopsSurfaceReady(true);
+      setView(nextView);
       if (routeView === "journey") {
         restorePageScroll(window.history.state?.interviewArcJourneyScrollY);
       } else if (routeView === "loops") {
@@ -5808,12 +5818,13 @@ export default function HomeClient({ content, today, engineering, initialLocatio
 
   function renderLoops() {
     const readerOpen = Boolean(loopNestedEntry || loopNestedProblem);
-    return <section className={`loops-reader-workspace ${readerOpen ? "has-open-reader" : ""}`}>
-      <div className="loops-reader-base" inert={readerOpen ? true : undefined}>
+    const readerVisible = arrivalState === "entered" && readerOpen;
+    return <section className={`loops-reader-workspace ${readerVisible ? "has-open-reader" : ""}`}>
+      <div className="loops-reader-base" inert={readerVisible ? true : undefined}>
         <LoopsWorkspace onOpenActivity={openLoopActivity} />
       </div>
       {readerNotFound && <div className="journey-reader-not-found" role="alert"><strong>That Loop practice record is unavailable.</strong><span>The saved reader link points to <code>{readerNotFound}</code>, which is not present in the current authoritative record.</span></div>}
-      {arrivalState === "entered" && readerOpen && <div className={`loop-reader-detail reader-workspace focused-attempt-workspace ${readerClosing ? "reader-closing" : ""}`}><ModalReaderPane focusKey={loopNestedProblem ? `loop-solution-${loopNestedProblem.type}-${loopNestedProblem.question.id}` : `loop-attempt-${loopNestedEntry?.id ?? "unknown"}`} restoreFocusRef={loopReaderOpenerRef} className="loop-reader-pane focused-attempt-pane" label="Selected Loop practice reader">{loopNestedProblem ? renderSolutionReader() : renderCaseReader()}</ModalReaderPane></div>}
+      {readerVisible && <div className={`loop-reader-detail reader-workspace focused-attempt-workspace ${readerClosing ? "reader-closing" : ""}`}><ModalReaderPane focusKey={loopNestedProblem ? `loop-solution-${loopNestedProblem.type}-${loopNestedProblem.question.id}` : `loop-attempt-${loopNestedEntry?.id ?? "unknown"}`} restoreFocusRef={loopReaderOpenerRef} className="loop-reader-pane focused-attempt-pane" label="Selected Loop practice reader">{loopNestedProblem ? renderSolutionReader() : renderCaseReader()}</ModalReaderPane></div>}
     </section>;
   }
 
@@ -7289,7 +7300,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
             </details>
           </div>
         </header>
-        <div className="page-content" id="practice-content">{activeWorkspace === "engineering" ? <EngineeringWorkspace index={engineering} view={engineeringView} onNavigateView={navigateToEngineering} /> : activeWorkspace === "learn" ? <LearnWorkspace destination={learnDestination} /> : <>{view === "today" && renderToday()}{view === "loops" && renderLoops()}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}{view === "materials" && <CareerMaterialsWorkspace />}</>}</div>
+        <div className="page-content" id="practice-content">{activeWorkspace === "engineering" ? <EngineeringWorkspace index={engineering} view={engineeringView} onNavigateView={navigateToEngineering} /> : activeWorkspace === "learn" ? <LearnWorkspace destination={learnDestination} /> : <>{view === "today" && renderToday()}{loopsSurfaceReady ? <div hidden={view !== "loops"} className="interview-loops-surface">{renderLoops()}</div> : null}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}{view === "materials" && <CareerMaterialsWorkspace />}</>}</div>
       </section>
 
       {activeWorkspace === "learn"
