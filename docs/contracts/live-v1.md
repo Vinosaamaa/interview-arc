@@ -135,7 +135,8 @@ the session/activity arrays are empty.
 ### `GET /live/v1/activities/{activityId}`
 
 Returns `404 activity_not_found` unless the ID is an owner-visible System
-Design activity in the current open workbench.
+Design, LeetCode, or Behavioral activity in the current open workbench.
+Unknown types remain out of scope.
 
 ```ts
 type ActivityProjection = {
@@ -524,7 +525,7 @@ projection before retrying optimistic conflicts.
 | --- | --- | --- | --- |
 | 400 | `invalid_request` | false | Malformed JSON, ID, field, header, command, range metadata, or unsupported limit. |
 | 401 | `unauthorized` | false | Token missing, malformed, unknown, or revoked. |
-| 404 | `activity_not_found` | false | No owner-visible System Design activity in the open workbench. |
+| 404 | `activity_not_found` | false | No owner-visible System Design, LeetCode, or Behavioral activity in the open workbench. |
 | 404 | `receipt_not_found` | false | No receipt for this owner/activity/operation. |
 | 404 | `pair_not_found` | false | Confirmation pair is absent in this owner/activity. |
 | 404 | `clip_not_found` | false | Clip metadata/object is absent or not available. |

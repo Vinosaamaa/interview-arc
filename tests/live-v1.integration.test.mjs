@@ -133,6 +133,7 @@ before(async () => {
       ('owner-live','activity-finish-b','2026-08-09','workbench-live','{"schemaVersion":2,"id":"activity-finish-b","questionId":"design-finish-b","date":"2026-08-09","source":"extra","type":"system_design","title":"Finish B","allocatedSeconds":3600,"sessionId":"session-finish-race","timerGroupId":"activity-finish-b","timingSource":"website","status":"planned"}',1,100),
       ('owner-live','activity-published','2026-08-09','workbench-live','{"schemaVersion":2,"id":"activity-published","questionId":"design-published","date":"2026-08-09","source":"extra","type":"system_design","title":"Published result","allocatedSeconds":3600,"timerGroupId":"activity-published","timingSource":"website","status":"completed"}',1,100),
       ('owner-live','activity-review-attempt','2026-08-09','workbench-live','{"schemaVersion":2,"id":"activity-review-attempt","questionId":"design-review","date":"2026-08-09","source":"extra","type":"system_design","title":"Review attempt","allocatedSeconds":3600,"timerGroupId":"activity-review-attempt","timingSource":"website","status":"planned","reviewOfActivityId":"activity-review-origin","reviewReason":"failed"}',1,100),
+      ('owner-live','activity-behavioral','2026-08-09','workbench-live','{"schemaVersion":2,"id":"activity-behavioral","questionId":"tell-me-about-yourself","date":"2026-08-09","source":"extra","type":"behavioral","title":"Tell me about yourself","allocatedSeconds":3600,"timerGroupId":"activity-behavioral","timingSource":"website","status":"planned"}',1,100),
       ('other-live','activity-design','2026-08-09','workbench-other','{"schemaVersion":2,"id":"activity-design","questionId":"other-design","date":"2026-08-09","source":"daily","type":"system_design","title":"Other owner secret","prompt":"Do not disclose.","allocatedSeconds":3600,"timerGroupId":"activity-design","timingSource":"website","status":"planned"}',1,100);
     INSERT INTO live_sessions
       (owner_id,id,date,workbench_id,payload,revision,updated_at)
@@ -189,7 +190,7 @@ after(async () => {
   await releaseIntegrationLock?.();
 });
 
-test("Live bearer reads resume only the resolved owner's System Design work", async () => {
+test("Live bearer reads resume only the resolved owner's System Design, LeetCode, and Behavioral work", async () => {
   for (const token of [null, "malformed", revokedToken]) {
     const unauthorized = await request("/live/v1/today", { token });
     assert.equal(unauthorized.status, 401);
@@ -217,6 +218,7 @@ test("Live bearer reads resume only the resolved owner's System Design work", as
     "activity-design-next",
     "activity-code",
     "activity-terminal",
+    "activity-behavioral",
     "activity-race-a",
     "activity-race-b",
     "activity-review-attempt",
@@ -241,9 +243,19 @@ test("Live bearer reads resume only the resolved owner's System Design work", as
   assert.equal(hiddenFromOtherOwner.body.activity.title, "Other owner secret");
   assert.doesNotMatch(JSON.stringify(hiddenFromOtherOwner.body), /Owner transcript body/);
 
-  const nonSystemDesign = await request("/live/v1/activities/activity-code");
-  assert.equal(nonSystemDesign.status, 404);
-  assert.equal(nonSystemDesign.body.code, "activity_not_found");
+  const leetcode = await request("/live/v1/activities/activity-code");
+  assert.equal(leetcode.status, 200);
+  assert.equal(leetcode.body.activity.id, "activity-code");
+  assert.equal(leetcode.body.activity.type, "leetcode");
+
+  const behavioral = await request("/live/v1/activities/activity-behavioral");
+  assert.equal(behavioral.status, 200);
+  assert.equal(behavioral.body.activity.id, "activity-behavioral");
+  assert.equal(behavioral.body.activity.type, "behavioral");
+
+  const missing = await request("/live/v1/activities/activity-missing");
+  assert.equal(missing.status, 404);
+  assert.equal(missing.body.code, "activity_not_found");
 
   const oversized = await request("/live/v1/activities/activity-missing/lease/acquire", {
     method: "POST",
@@ -1518,6 +1530,192 @@ test("a missed Live invalidation is recovered by an authoritative reconnect rere
   assert.equal(reconnected.body.ownerRevision > before.body.ownerRevision, true);
   assert.equal(reconnected.body.activities.some((activity) => activity.id === "activity-design-next"), false);
   assert.equal(reconnected.body.sessions.find((session) => session.id === "session-live").timer.completed, false);
+});
+
+test("Live rooms bind open LeetCode activities with payload specialty and review keys", async () => {
+  const holderId = "aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaa1";
+  const holderSessionId = "room-leetcode";
+  const acquired = await request("/live/v1/activities/activity-code/lease/acquire", {
+    method: "POST",
+    body: { operationId: "leetcode-lease", holderId, holderSessionId },
+  });
+  assert.equal(acquired.status, 200, JSON.stringify({ body: acquired.body, workerLog }));
+  assert.equal(acquired.body.activity.activity.type, "leetcode");
+  const identity = { holderId, holderSessionId, fencingToken: acquired.body.lease.fencingToken };
+  const pair = await request("/live/v1/activities/activity-code/turn-pairs", {
+    method: "POST",
+    body: {
+      operationId: "leetcode-pair",
+      ...identity,
+      pairId: "leetcode-pair",
+      candidate: {
+        turnId: "leetcode-candidate",
+        text: "I would use a hash map from value to index.",
+        evidenceStatus: "verified",
+        occurredAt: 8_000,
+      },
+      interviewer: {
+        turnId: "leetcode-interviewer",
+        displayMarkdown: "What is the time complexity?",
+        spokenText: "What is the time complexity?",
+        occurredAt: 8_100,
+      },
+    },
+  });
+  assert.equal(pair.status, 200, JSON.stringify({ body: pair.body, workerLog }));
+  const specialties = await queryLocalD1(`
+    SELECT specialty FROM practice_transcript_turns
+    WHERE owner_id = 'owner-live' AND activity_id = 'activity-code'
+    ORDER BY sequence;
+  `);
+  assert.deepEqual(specialties, [{ specialty: "leetcode" }, { specialty: "leetcode" }]);
+
+  const command = (body) => request("/live/v1/activities/activity-code/commands", {
+    method: "POST",
+    body: { ...identity, expectedWorkbenchRevision: 100, ...body },
+  });
+  const started = await command({
+    operationId: "leetcode-start",
+    command: "start",
+    expectedTimerRevision: 0,
+  });
+  assert.equal(started.status, 200, JSON.stringify({ body: started.body, workerLog }));
+  assert.equal(started.body.activity.activity.type, "leetcode");
+  assert.equal(started.body.activity.activity.timer.runningSince != null, true);
+
+  const result = await command({
+    operationId: "leetcode-result",
+    command: "set_result",
+    expectedResultRevision: 0,
+    result: "solved_after_reviewing_approach",
+  });
+  assert.equal(result.status, 200);
+
+  const finished = await command({
+    operationId: "leetcode-finish",
+    command: "finish",
+    expectedTimerRevision: started.body.activity.activity.timer.revision,
+    expectedResultRevision: 1,
+  });
+  assert.equal(finished.status, 200, JSON.stringify({ body: finished.body, workerLog }));
+
+  const reviews = await queryLocalD1(`
+    SELECT review_key, specialty
+    FROM review_schedules
+    WHERE owner_id = 'owner-live' AND activity_id = 'activity-code';
+  `);
+  assert.deepEqual(reviews, [{
+    review_key: "leetcode:two-sum",
+    specialty: "leetcode",
+  }]);
+  const systemDesignCollision = await queryLocalD1(`
+    SELECT review_key FROM review_schedules
+    WHERE owner_id = 'owner-live' AND review_key = 'system_design:two-sum';
+  `);
+  assert.deepEqual(systemDesignCollision, []);
+});
+
+test("Live rooms bind open Behavioral activities with payload specialty, clips, and review keys", async () => {
+  const holderId = "bbbbbbb1-bbbb-4bbb-8bbb-bbbbbbbbbbb1";
+  const holderSessionId = "room-behavioral";
+  const acquired = await request("/live/v1/activities/activity-behavioral/lease/acquire", {
+    method: "POST",
+    body: { operationId: "behavioral-lease", holderId, holderSessionId },
+  });
+  assert.equal(acquired.status, 200, JSON.stringify({ body: acquired.body, workerLog }));
+  assert.equal(acquired.body.activity.activity.type, "behavioral");
+  const identity = { holderId, holderSessionId, fencingToken: acquired.body.lease.fencingToken };
+
+  const clipBytes = new TextEncoder().encode("private-behavioral-live-clip");
+  const staged = await request("/live/v1/activities/activity-behavioral/clips/stage", {
+    method: "POST",
+    body: {
+      operationId: "behavioral-clip-stage",
+      ...identity,
+      clipId: "behavioral-clip",
+      candidateTurnId: "behavioral-candidate",
+      mimeType: "audio/mp4",
+      byteSize: clipBytes.byteLength,
+      sha256: sha256Bytes(clipBytes),
+    },
+  });
+  assert.equal(staged.status, 200, JSON.stringify({ body: staged.body, workerLog }));
+  assert.equal(staged.body.clip.status, "staged");
+  assert.equal(staged.body.clip.pairId, null);
+  assert.doesNotMatch(JSON.stringify(staged.body), /objectKey|https?:\/\//i);
+
+  const pair = await request("/live/v1/activities/activity-behavioral/turn-pairs", {
+    method: "POST",
+    body: {
+      operationId: "behavioral-pair",
+      ...identity,
+      pairId: "behavioral-pair",
+      candidate: {
+        turnId: "behavioral-candidate",
+        text: "I led the migration by owning the cutover checklist.",
+        evidenceStatus: "verified",
+        occurredAt: 9_000,
+      },
+      interviewer: {
+        turnId: "behavioral-interviewer",
+        displayMarkdown: "What did you personally decide?",
+        spokenText: "What did you personally decide?",
+        occurredAt: 9_100,
+      },
+    },
+  });
+  assert.equal(pair.status, 200, JSON.stringify({ body: pair.body, workerLog }));
+  assert.equal(pair.body.pair.clipId, "behavioral-clip");
+  const specialties = await queryLocalD1(`
+    SELECT specialty FROM practice_transcript_turns
+    WHERE owner_id = 'owner-live' AND activity_id = 'activity-behavioral'
+    ORDER BY sequence;
+  `);
+  assert.deepEqual(specialties, [{ specialty: "behavioral" }, { specialty: "behavioral" }]);
+
+  const command = (body) => request("/live/v1/activities/activity-behavioral/commands", {
+    method: "POST",
+    body: { ...identity, expectedWorkbenchRevision: 100, ...body },
+  });
+  const started = await command({
+    operationId: "behavioral-start",
+    command: "start",
+    expectedTimerRevision: 0,
+  });
+  assert.equal(started.status, 200, JSON.stringify({ body: started.body, workerLog }));
+  assert.equal(started.body.activity.activity.type, "behavioral");
+  assert.equal(started.body.activity.activity.timer.runningSince != null, true);
+
+  const result = await command({
+    operationId: "behavioral-result",
+    command: "set_result",
+    expectedResultRevision: 0,
+    result: "solved_after_reviewing_approach",
+  });
+  assert.equal(result.status, 200);
+
+  const finished = await command({
+    operationId: "behavioral-finish",
+    command: "finish",
+    expectedTimerRevision: started.body.activity.activity.timer.revision,
+    expectedResultRevision: 1,
+  });
+  assert.equal(finished.status, 200, JSON.stringify({ body: finished.body, workerLog }));
+
+  const reviews = await queryLocalD1(`
+    SELECT review_key, specialty
+    FROM review_schedules
+    WHERE owner_id = 'owner-live' AND activity_id = 'activity-behavioral';
+  `);
+  assert.deepEqual(reviews, [{
+    review_key: "behavioral:tell-me-about-yourself",
+    specialty: "behavioral",
+  }]);
+  const systemDesignCollision = await queryLocalD1(`
+    SELECT review_key FROM review_schedules
+    WHERE owner_id = 'owner-live' AND review_key = 'system_design:tell-me-about-yourself';
+  `);
+  assert.deepEqual(systemDesignCollision, []);
 });
 
 test("Today owner revision remains monotonic after the open workbench closes", async () => {

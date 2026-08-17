@@ -120,6 +120,12 @@ function timerProjection(row: typeof timers.$inferSelect | undefined) {
   };
 }
 
+type LiveRoomActivityType = "system_design" | "leetcode" | "behavioral";
+
+function isLiveRoomActivityType(type: unknown): type is LiveRoomActivityType {
+  return type === "system_design" || type === "leetcode" || type === "behavioral";
+}
+
 function validActivity(payload: unknown): payload is ActivityPayload {
   if (!payload || typeof payload !== "object") return false;
   const candidate = payload as Partial<ActivityPayload>;
@@ -360,7 +366,7 @@ function detailedActivityProjection(
   now: number,
 ) {
   const item = loaded.activities.find(({ row }) => row.id === activityId);
-  if (!item || item.payload.type !== "system_design") return null;
+  if (!item || !isLiveRoomActivityType(item.payload.type)) return null;
   const { pairRows, clipRows, leaseRows, transcriptRows } = loaded;
   const sessionId = loaded.canonicalSessionByActivity.get(activityId)
     ?? item.payload.sessionId
@@ -473,7 +479,7 @@ function liveActivityInvariant(ownerId: string, activityId: string) {
     WHERE ${extraActivities.ownerId} = ${ownerId}
       AND ${extraActivities.id} = ${activityId}
       AND ${practiceWorkbenches.status} = 'open'
-      AND json_extract(${extraActivities.payload}, '$.type') = 'system_design'
+      AND json_extract(${extraActivities.payload}, '$.type') IN ('system_design', 'leetcode', 'behavioral')
   )`);
 }
 
@@ -673,14 +679,16 @@ function leaseConflict(): never {
 }
 
 async function requireLiveActivity(ownerId: string, activityId: string) {
-  if (!await readLiveActivityProjection(ownerId, activityId)) {
+  const projection = await readLiveActivityProjection(ownerId, activityId);
+  if (!projection || !isLiveRoomActivityType(projection.activity.type)) {
     throw new LiveV1Error(
       "activity_not_found",
-      "The System Design activity is unavailable in the current workbench.",
+      "The activity is unavailable in the current workbench.",
       404,
       false,
     );
   }
+  return projection;
 }
 
 type LiveMutationCommit = {
@@ -1017,7 +1025,7 @@ export async function commitLiveTurnPair(
     input.requestDigest,
   );
   if (replay) return { duplicate: true, receipt: replay, ownerRevision: await ownerRevision(input.ownerId) };
-  await requireLiveActivity(input.ownerId, input.activityId);
+  const projection = await requireLiveActivity(input.ownerId, input.activityId);
   const lease = await leaseRow(input.ownerId, input.activityId);
   if (!hasCurrentLease(lease, input.identity, input.now)) leaseConflict();
   if (input.candidate.turnId === input.interviewer.turnId || await pairIdentityExists(input)) {
@@ -1107,7 +1115,7 @@ export async function commitLiveTurnPair(
         ownerId: input.ownerId,
         activityId: input.activityId,
         turnId: input.candidate.turnId,
-        specialty: "system_design",
+        specialty: projection.activity.type,
         speaker: "user",
         body: input.candidate.text,
         source: "audio_transcript",
@@ -1119,7 +1127,7 @@ export async function commitLiveTurnPair(
         ownerId: input.ownerId,
         activityId: input.activityId,
         turnId: input.interviewer.turnId,
-        specialty: "system_design",
+        specialty: projection.activity.type,
         speaker: "specialist",
         body: input.interviewer.displayMarkdown,
         source: "codex",
@@ -2135,6 +2143,7 @@ function scheduleReviewStatements(input: {
   activityId: string;
   questionId?: string;
   reviewOfActivityId?: string;
+  specialty: LiveRoomActivityType;
   result: LiveResult;
   completedDate: string;
   prior: typeof reviewSchedules.$inferSelect | undefined;
@@ -2148,7 +2157,7 @@ function scheduleReviewStatements(input: {
       eq(reviewSchedules.activityId, input.activityId),
     ))];
   }
-  const reviewKey = `system_design:${input.questionId ?? input.activityId}`;
+  const reviewKey = `${input.specialty}:${input.questionId ?? input.activityId}`;
   const intervalDays = reviewIntervalDays(reason, input.prior?.intervalDays);
   const successfulRecall = reason === "successful_recall";
   return [db.insert(reviewSchedules).values({
@@ -2156,7 +2165,7 @@ function scheduleReviewStatements(input: {
     reviewKey,
     activityId: input.activityId,
     questionId: input.questionId ?? null,
-    specialty: "system_design",
+    specialty: input.specialty,
     status: "scheduled",
     reason,
     dueDate: addDays(input.completedDate, intervalDays),
@@ -2172,7 +2181,7 @@ function scheduleReviewStatements(input: {
     set: {
       activityId: input.activityId,
       questionId: input.questionId ?? null,
-      specialty: "system_design",
+      specialty: input.specialty,
       status: "scheduled",
       reason,
       dueDate: addDays(input.completedDate, intervalDays),
@@ -2265,7 +2274,7 @@ export async function applyLiveActivityCommand(
     throw new LiveV1Error("activity_not_found", "The activity is unavailable.", 404, false);
   }
   const item = loaded.activities.find(({ row }) => row.id === input.activityId);
-  if (!item || item.payload.type !== "system_design") {
+  if (!item || !isLiveRoomActivityType(item.payload.type)) {
     throw new LiveV1Error("activity_not_found", "The activity is unavailable.", 404, false);
   }
   if (loaded.workbench.updatedAt !== input.expectedWorkbenchRevision) revisionConflict();
@@ -2344,7 +2353,7 @@ export async function applyLiveActivityCommand(
         setWhere: eq(outcomes.revision, input.expectedResultRevision),
       }));
       if (timer?.completed) {
-        const reviewKey = `system_design:${item.payload.questionId ?? input.activityId}`;
+        const reviewKey = `${item.payload.type}:${item.payload.questionId ?? input.activityId}`;
         const priorRows = await db.select().from(reviewSchedules).where(and(
           eq(reviewSchedules.ownerId, input.ownerId),
           eq(reviewSchedules.reviewKey, reviewKey),
@@ -2354,6 +2363,7 @@ export async function applyLiveActivityCommand(
           activityId: input.activityId,
           questionId: item.payload.questionId,
           reviewOfActivityId: item.payload.reviewOfActivityId,
+          specialty: item.payload.type,
           result: input.result!,
           completedDate: dateInPracticeTimeZone(new Date(timer.completedAt ?? input.now)),
           prior: priorRows[0],
@@ -2642,7 +2652,7 @@ export async function applyLiveActivityCommand(
         }));
       }
 
-      const reviewKey = `system_design:${item.payload.questionId ?? input.activityId}`;
+      const reviewKey = `${item.payload.type}:${item.payload.questionId ?? input.activityId}`;
       const completionDate = dateInPracticeTimeZone(new Date(input.now));
       const [priorReviews, publicationRows] = await Promise.all([
         db.select().from(reviewSchedules).where(and(
@@ -2671,6 +2681,7 @@ export async function applyLiveActivityCommand(
           activityId: input.activityId,
           questionId: item.payload.questionId,
           reviewOfActivityId: item.payload.reviewOfActivityId,
+          specialty: item.payload.type,
           result: result.outcome,
           completedDate: completionDate,
           prior: priorReviews[0],
