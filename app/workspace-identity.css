@@ -1,0 +1,125 @@
+/* Shared Interview / Learn / Engineering identity seals.
+   Same 28px chamfered specimen plate; motif and pigment carry the name. */
+
+.workspace-identity-badge.workspace-identity-interview {
+  --workspace-identity-pigment: #0d9488;
+}
+.workspace-identity-badge.workspace-identity-learn {
+  --workspace-identity-pigment: #315ca8;
+}
+.workspace-identity-badge.workspace-identity-engineering {
+  --workspace-identity-pigment: #d86742;
+}
+
+.app-shell .workspace-nav {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 0 2px;
+}
+
+.app-shell .workspace-nav .workspace-identity-badge {
+  min-width: 0;
+  min-height: 52px;
+  padding: 6px 2px 5px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--workspace-sidebar-muted, #86a69e);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  align-content: start;
+  gap: 5px;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: none;
+  transition: color .2s ease;
+}
+
+.app-shell .workspace-nav .workspace-identity-badge:hover:not(:disabled),
+.app-shell .workspace-nav .workspace-identity-badge.active {
+  border-color: transparent;
+  background: transparent;
+  color: var(--workspace-selection-ink, #f5fbf6);
+  box-shadow: none;
+}
+
+.app-shell .workspace-nav .workspace-identity-mark {
+  width: 28px;
+  height: 28px;
+  border: 1px solid color-mix(in srgb, var(--workspace-identity-pigment) 46%, transparent);
+  border-radius: 9px 9px 9px 3px;
+  background: color-mix(in srgb, var(--workspace-identity-pigment) 16%, transparent);
+  color: color-mix(in srgb, var(--workspace-identity-pigment) 82%, #edf3f1);
+  display: grid;
+  place-items: center;
+  transition: background .2s ease, color .2s ease, border-color .2s ease, opacity .2s ease;
+}
+
+.app-shell .workspace-nav .workspace-identity-motif {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.app-shell .workspace-nav .workspace-identity-badge.active .workspace-identity-mark,
+.app-shell .workspace-nav .workspace-identity-badge.active > span {
+  border-color: color-mix(in srgb, var(--workspace-identity-pigment) 78%, #102a2a);
+  background: var(--workspace-identity-pigment);
+  color: #fbfcfa;
+}
+
+.app-shell .workspace-nav .workspace-identity-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: inherit;
+  font-size: .62rem;
+  font-weight: 650;
+  letter-spacing: .02em;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.app-shell .workspace-nav .workspace-identity-later {
+  margin-top: -3px;
+  color: var(--workspace-sidebar-muted, #6e9087);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: .52rem;
+  font-weight: 650;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.app-shell .workspace-nav .workspace-identity-badge:disabled,
+.app-shell .workspace-nav .workspace-identity-badge.later {
+  opacity: 1;
+  cursor: not-allowed;
+  color: var(--workspace-sidebar-muted, #6e9087);
+}
+
+.app-shell .workspace-nav .workspace-identity-badge.later .workspace-identity-mark {
+  border-color: color-mix(in srgb, var(--workspace-sidebar-border, #c8d8d3) 55%, transparent);
+  background: transparent;
+  color: var(--workspace-sidebar-muted, #86a69e);
+  opacity: .7;
+}
+
+.app-shell .local-nav-label {
+  margin: 14px 9px 6px;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--workspace-sidebar-border, rgba(222, 240, 234, .14));
+  min-height: 0;
+  font-size: 0;
+  line-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell .workspace-nav .workspace-identity-badge,
+  .app-shell .workspace-nav .workspace-identity-mark {
+    transition: none;
+  }
+}

@@ -2121,18 +2121,17 @@ button.topbar-tools:hover,
 .brand { color: #fff; }
 .brand-mark { background: var(--signal); box-shadow: inset 0 0 0 1px rgba(255,255,255,.35); }
 .brand-mark::before { content: "IA"; color: #14362f; font-family: var(--font-geist-mono); font-size: .68rem; font-weight: 850; }
-.workspace-nav { margin-top: 34px; display: grid; gap: 4px; }
-.workspace-nav button { min-height: 43px; padding: 0 9px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: #aac3bd; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 8px; text-align: left; cursor: pointer; }
-.workspace-nav button > span { width: 26px; height: 26px; border: 1px solid rgba(209,235,227,.22); border-radius: 8px; display: grid; place-items: center; font-family: var(--font-geist-mono); font-size: .67rem; }
-.workspace-nav button strong { font-size: .84rem; font-weight: 690; }
-.workspace-nav button small { color: #708e87; font-size: .66rem; text-transform: uppercase; letter-spacing: .08em; }
-.workspace-nav button:hover:not(:disabled) { border-color: rgba(207,234,224,.22); background: rgba(255,255,255,.055); color: white; }
-.workspace-nav button.active { background: #174942; color: #fff; }
-.workspace-nav button.active > span { border-color: var(--signal); color: var(--signal); }
-.workspace-nav button:disabled { opacity: .52; cursor: not-allowed; }
-.local-nav-label { margin: 27px 9px 8px; padding-top: 18px; border-top: 1px solid rgba(222,240,234,.14); display: flex; justify-content: space-between; align-items: baseline; }
-.local-nav-label span { color: #fff; font-size: .72rem; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
-.local-nav-label small { color: #6e9087; font-size: .65rem; }
+.workspace-nav { margin-top: 18px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.workspace-nav .workspace-identity-badge { min-height: 52px; padding: 6px 2px 5px; border: 0; border-radius: 10px; background: transparent; color: #aac3bd; display: grid; justify-items: center; gap: 5px; text-align: center; cursor: pointer; }
+.workspace-nav .workspace-identity-mark { width: 28px; height: 28px; border: 1px solid rgba(209,235,227,.22); border-radius: 9px 9px 9px 3px; display: grid; place-items: center; }
+.workspace-nav .workspace-identity-name { font-size: .62rem; font-weight: 650; }
+.workspace-nav .workspace-identity-later { color: #708e87; font-size: .52rem; text-transform: uppercase; letter-spacing: .1em; }
+.workspace-nav .workspace-identity-badge:hover:not(:disabled) { color: white; }
+.workspace-nav .workspace-identity-badge.active { background: transparent; color: #fff; }
+.workspace-nav .workspace-identity-badge.active .workspace-identity-mark { border-color: var(--signal); color: #fbfcfa; }
+.workspace-nav .workspace-identity-badge:disabled { cursor: not-allowed; }
+.local-nav-label { margin: 14px 9px 6px; padding: 0; border-top: 1px solid rgba(222,240,234,.14); min-height: 0; font-size: 0; line-height: 0; }
+.local-nav-label span, .local-nav-label small { display: none; }
 .primary-nav { margin-top: 0; gap: 3px; }
 .primary-nav button { min-height: 42px; color: #aac3bd; }
 .primary-nav button span { color: #668b82; }

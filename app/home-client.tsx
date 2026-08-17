@@ -120,6 +120,7 @@ import CareerMaterialsWorkspace from "./career-materials-workspace";
 import { CareerMaterialsMark } from "./career-materials-mark";
 import InterviewPageHero from "./interview-page-hero";
 import LearnWorkspace from "./learn-workspace";
+import { WorkspaceIdentityBadge } from "./workspace-identity";
 import type { LearnDestination } from "./learn-workspace-model";
 import EngineeringWorkspace, {
   ENGINEERING_NAV_ITEMS,
@@ -7293,7 +7294,8 @@ export default function HomeClient({ content, today, engineering, initialLocatio
       <a className="skip-link" href="#practice-content">Skip to practice</a>
       <aside className="sidebar">
         <button className="brand" onClick={() => navigateToPrimaryView("today")}><span className="brand-mark" aria-hidden="true" /><span>Interview Arc</span></button>
-        <div className="local-nav-label"><span>{activeWorkspace === "engineering" ? "Engineering" : activeWorkspace === "learn" ? "Learn" : "Interview"}</span><small>Workspace</small></div>
+        <nav className="workspace-nav" aria-label="Workspace identity">{(["interview", "learn", "engineering"] as const).map((workspace) => <WorkspaceIdentityBadge key={workspace} workspace={workspace} selected={activeWorkspace === workspace} onSelect={selectWorkspace} />)}</nav>
+        <div className="local-nav-label" aria-hidden="true" />
         {activeWorkspace === "learn"
           ? <nav className="primary-nav learn-local-nav" aria-label="Learn navigation">{LEARN_NAV_ITEMS.map(([id, label], index) => <button key={id} className={learnDestination === id ? "active" : ""} aria-current={learnDestination === id ? "page" : undefined} onClick={() => navigateToLearn(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
           : activeWorkspace === "interview"
