@@ -118,13 +118,12 @@ import BehavioralTargetDesk from "./behavioral-target-desk";
 import BankDomainOverview from "./bank-domain-overview";
 import CareerMaterialsWorkspace from "./career-materials-workspace";
 import { CareerMaterialsMark } from "./career-materials-mark";
+import { WorkspaceNameplate } from "./workspace-identity";
 import InterviewPageHero from "./interview-page-hero";
 import LearnWorkspace from "./learn-workspace";
-import { WorkspaceIdentityBadge } from "./workspace-identity";
 import type { LearnDestination } from "./learn-workspace-model";
 import EngineeringWorkspace, {
   ENGINEERING_NAV_ITEMS,
-  ENGINEERING_VIEW_TITLES,
   type EngineeringView,
 } from "./engineering-workspace";
 import type { EngineeringJournalIndex } from "../engineering-journal/index";
@@ -168,28 +167,12 @@ const INTERVIEW_NAV_ITEMS: ReadonlyArray<readonly [InterviewView, string]> = [
   ["banks", "Banks"],
   ["journey", "Journey"],
 ];
-const INTERVIEW_VIEW_TITLES: Record<InterviewView, string> = {
-  today: "Interview · Today",
-  loops: "Interview · Loops",
-  reviews: "Interview · Reviews",
-  library: "Interview · Past",
-  banks: "Interview · Banks",
-  journey: "Interview · Journey",
-  materials: "Interview · Career Materials",
-};
 const LEARN_NAV_ITEMS: ReadonlyArray<readonly [LearnDestination, string]> = [
   ["today", "Today"],
   ["courses", "Courses"],
   ["history", "History"],
   ["analytics", "Statistics"],
 ];
-const LEARN_VIEW_TITLES: Record<LearnDestination, string> = {
-  today: "Learn · Today",
-  courses: "Learn · Courses",
-  history: "Learn · History",
-  analytics: "Learn · Statistics",
-};
-
 function readLearnDestination(currentHref: string): LearnDestination {
   const destination = new URL(currentHref).searchParams.get("learn");
   return destination === "courses" || destination === "history" || destination === "analytics" ? destination : "today";
@@ -5610,7 +5593,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
     const railSessionTimer = railSession ? draft.sessionTimers[railSession.id] : undefined;
     return (
       <>
-        <InterviewPageHero tone="today" eyebrow={`TODAY · ${journal.focus.toUpperCase()}`} title={<>{totalToday ? `${totalToday} activities.` : "A clean page."}<br /><em>One honest record.</em></>} description={journal.note} metrics={[
+        <InterviewPageHero tone="today" eyebrow={`TODAY · ${journal.focus.toUpperCase()}`} title={totalToday ? `${totalToday} activities.` : "A clean page."} quote="One honest record." description={journal.note} metrics={[
           { value: `${yesterdayCompleted.length}/${yesterdayEntries.length}`, label: "finished yesterday" },
           { value: formatDuration(yesterdaySeconds), label: "recorded yesterday" },
           { value: yesterdaySessions, label: `session${yesterdaySessions === 1 ? "" : "s"} planned` },
@@ -5696,7 +5679,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
     const maxEffortMinutes = Math.max(1, ...effortEntries.map((entry) => entry.elapsedSeconds / 60));
     return (
       <section className={`view-page journey-page ${journeyNestedEntry || journeyNestedProblem ? "has-open-reader" : ""}`}>
-        <InterviewPageHero tone="journey" eyebrow="JOURNEY · PUBLISHED + TODAY'S LIVE RECORD" title={<>Your practice,<br /><em>mapped over time.</em></>} description="This page counts only recorded work. Explore consistency, outcomes, topic coverage, effort, and the exact days behind every trend." metrics={[
+        <InterviewPageHero tone="journey" eyebrow="JOURNEY · PUBLISHED + TODAY'S LIVE RECORD" title="Your practice." quote="Mapped over time." description="This page counts only recorded work. Explore consistency, outcomes, topic coverage, effort, and the exact days behind every trend." metrics={[
           { value: activeDates.length, label: "active days" },
           { value: streaks.longest, label: "longest streak" },
           { value: activeDayAverage.toFixed(1), label: "per active day" },
@@ -5952,7 +5935,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
     const visibleRecordCount = groupedLog.reduce((sum, [, entries]) => sum + entries.length, 0);
     return (
       <section className={`view-page library-page ${selectedEntry ? "has-open-entry" : ""} ${listRestoring === "library" ? "list-restoring" : ""}`}>
-        <InterviewPageHero tone="past" eyebrow="PAST · COMPLETED WORK" title={<>Read the journey<br /><em>like a field journal.</em></>} description="Past contains finished activity timers and published case files—never planned work or result flags by themselves." metrics={[
+        <InterviewPageHero tone="past" eyebrow="PAST · COMPLETED WORK" title="Read the journey" quote="Like a field journal." description="Past contains finished activity timers and published case files—never planned work or result flags by themselves." metrics={[
           { value: visibleRecordCount, label: "records" },
           { value: activeDates.length, label: "active days" },
           { value: "Pacific", label: "record" },
@@ -6120,7 +6103,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
     const activeSort = sortOptions.find((option) => option.key === bankSortKey) ?? sortOptions[0];
     return (
       <section className={`view-page banks-page ${selectedProblem ? "has-open-solution" : ""} ${!selectedProblem && !expandedBankDesk ? "bounded-list" : ""} ${listRestoring === "banks" ? "list-restoring" : ""}`}>
-        <InterviewPageHero tone="banks" eyebrow="PROBLEM BANKS · ALL PRACTICE SOURCES" title={<>Choose the next thing<br /><em>worth practicing.</em></>} description="Browse every coding, system-design, and behavioral prompt in one place. Practice today adds the question to standalone practice and takes you directly to Today." footer={<div className="bank-totals hero-bank-totals" aria-label="Question bank totals">
+        <InterviewPageHero tone="banks" eyebrow="PROBLEM BANKS · ALL PRACTICE SOURCES" title="Choose the next thing" quote="Worth practicing." description="Browse every coding, system-design, and behavioral prompt in one place. Practice today adds the question to standalone practice and takes you directly to Today." footer={<div className="bank-totals hero-bank-totals" aria-label="Question bank totals">
           {([[
             "leetcode", bankFor("leetcode").length, "Coding problems"],
             ["system_design", bankFor("system_design").length, "System designs"],
@@ -7293,15 +7276,17 @@ export default function HomeClient({ content, today, engineering, initialLocatio
     <main className={`app-shell active-view-${activeWorkspace === "engineering" ? "engineering" : view} active-workspace-${activeWorkspace} active-destination-${activeWorkspace === "engineering" ? engineeringView : activeWorkspace === "learn" ? learnDestination : view}`} aria-hidden={arrivalState !== "entered"}>
       <a className="skip-link" href="#practice-content">Skip to practice</a>
       <aside className="sidebar">
-        <button className="brand" onClick={() => navigateToPrimaryView("today")}><span className="brand-mark" aria-hidden="true" /><span>Interview Arc</span></button>
-        <nav className="workspace-nav" aria-label="Workspace identity">{(["interview", "learn", "engineering"] as const).map((workspace) => <WorkspaceIdentityBadge key={workspace} workspace={workspace} selected={activeWorkspace === workspace} onSelect={selectWorkspace} />)}</nav>
+        <div className="sidebar-masthead">
+          <button className="brand" onClick={() => navigateToPrimaryView("today")}><span className="brand-mark" aria-hidden="true" /><span>Interview Arc</span></button>
+          <WorkspaceNameplate workspace={activeWorkspace} />
+        </div>
         <div className="local-nav-label" aria-hidden="true" />
         {activeWorkspace === "learn"
           ? <nav className="primary-nav learn-local-nav" aria-label="Learn navigation">{LEARN_NAV_ITEMS.map(([id, label], index) => <button key={id} className={learnDestination === id ? "active" : ""} aria-current={learnDestination === id ? "page" : undefined} onClick={() => navigateToLearn(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
           : activeWorkspace === "interview"
             ? <nav className="primary-nav" aria-label="Interview navigation">{INTERVIEW_NAV_ITEMS.map(([id, label], index) => <button key={id} className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => navigateToPrimaryView(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>
              : <nav className="primary-nav engineering-primary-nav" aria-label="Engineering navigation">{ENGINEERING_NAV_ITEMS.map(([id, label], index) => <button key={id} className={engineeringView === id ? "active" : ""} aria-current={engineeringView === id ? "page" : undefined} onClick={() => navigateToEngineering(id)}><span>{String(index + 1).padStart(2, "0")}</span>{label}</button>)}</nav>}
-        {activeWorkspace === "interview" ? <nav className="materials-nav" aria-label="Career Materials navigation"><button type="button" className={view === "materials" ? "active" : ""} aria-current={view === "materials" ? "page" : undefined} onClick={() => navigateToPrimaryView("materials")}><CareerMaterialsMark /><strong>Career Materials</strong><small>Private</small></button></nav> : null}
+        {activeWorkspace === "interview" ? <nav className="materials-nav" aria-label="Career Materials navigation"><button type="button" className={view === "materials" ? "active" : ""} aria-current={view === "materials" ? "page" : undefined} onClick={() => navigateToPrimaryView("materials")}><CareerMaterialsMark /><span className="materials-copy"><strong>Career Materials</strong><small>Private</small></span></button></nav> : null}
         <div className="sidebar-status"><span className={activeWorkspace === "interview" && [...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "live" : ""} /><div><strong>{activeWorkspace === "learn" ? "Private Learning record" : activeWorkspace === "engineering" ? "Static Git projection" : [...Object.values(draft.timers), ...Object.values(draft.sessionTimers)].some((timer) => timer.runningSince) ? "Timer running" : hydrated ? "Draft saved locally" : "Loading draft"}</strong><small>{activeWorkspace === "learn" ? "Transcript-only sessions · no cloud audio" : activeWorkspace === "engineering" ? "No mutable Journal state" : "Session countdown + one activity stopwatch"}</small></div></div>
         <div className="profile"><span>IA</span><div><strong>Interview Arc owner</strong><small>Private preparation record</small></div></div>
       </aside>
@@ -7312,10 +7297,6 @@ export default function HomeClient({ content, today, engineering, initialLocatio
             <button type="button" className="topbar-brand" onClick={() => navigateToPrimaryView("today")} aria-label="Interview Arc home">
               <span className="brand-mark" aria-hidden="true" />
             </button>
-            <div className="topbar-context-copy">
-              <strong>{activeWorkspace === "engineering" ? ENGINEERING_VIEW_TITLES[engineeringView] : activeWorkspace === "learn" ? LEARN_VIEW_TITLES[learnDestination] : INTERVIEW_VIEW_TITLES[view]}</strong>
-              <time dateTime={journal.date}>{readableDate(journal.date)}</time>
-            </div>
           </div>
           <nav className="topbar-workspace-switch" aria-label="Workspaces">
             <button type="button" className={activeWorkspace === "interview" ? "active" : ""} aria-current={activeWorkspace === "interview" ? "page" : undefined} onClick={() => selectWorkspace("interview")}>Interview</button>

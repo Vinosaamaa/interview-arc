@@ -1061,9 +1061,6 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .topbar-context { min-width: 0; display: flex; align-items: center; gap: 10px; }
 .topbar-brand { display: none; width: 40px; height: 40px; padding: 0; border: 0; background: transparent; flex: 0 0 40px; place-items: center; cursor: pointer; }
 .topbar-brand .brand-mark { width: 32px; height: 32px; }
-.topbar-context-copy { min-width: 0; display: grid; grid-template-rows: 22px 17px; align-content: center; gap: 2px; }
-.topbar-context strong, .topbar-context-copy strong { min-width: 0; overflow: hidden; color: #173631; font-size: .95rem; line-height: 22px; text-overflow: ellipsis; white-space: nowrap; }
-.topbar-context time, .topbar-context-copy time { color: #71817a; font: 680 .72rem/17px var(--font-geist-mono); white-space: nowrap; }
 .topbar-workspace-switch { width: 330px; min-height: 42px; padding: 4px; border: 1px solid #c4d1cc; border-radius: 13px; background: rgba(255,255,255,.72); display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; justify-self: center; }
 .topbar-workspace-switch button { min-width: 0; min-height: 32px; padding: 0 10px; border: 0; border-radius: 9px; background: transparent; color: #60726c; font-size: .74rem; font-weight: 760; cursor: pointer; transition: color .18s ease, background .18s ease, box-shadow .18s ease; }
 .topbar-workspace-switch button:hover { background: #edf3f0; color: #173631; }
@@ -2121,14 +2118,14 @@ button.topbar-tools:hover,
 .brand { color: #fff; }
 .brand-mark { background: var(--signal); box-shadow: inset 0 0 0 1px rgba(255,255,255,.35); }
 .brand-mark::before { content: "IA"; color: #14362f; font-family: var(--font-geist-mono); font-size: .68rem; font-weight: 850; }
-.workspace-nav { margin-top: 18px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.workspace-nav .workspace-identity-badge { min-height: 52px; padding: 6px 2px 5px; border: 0; border-radius: 10px; background: transparent; color: #aac3bd; display: grid; justify-items: center; gap: 5px; text-align: center; cursor: pointer; }
-.workspace-nav .workspace-identity-mark { width: 28px; height: 28px; border: 1px solid rgba(209,235,227,.22); border-radius: 9px 9px 9px 3px; display: grid; place-items: center; }
-.workspace-nav .workspace-identity-name { font-size: .62rem; font-weight: 650; }
-.workspace-nav .workspace-identity-later { color: #708e87; font-size: .52rem; text-transform: uppercase; letter-spacing: .1em; }
+.workspace-nav { margin-top: 18px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; }
+.workspace-nav .workspace-identity-badge { min-height: 42px; padding: 0 8px 0 7px; border: 0; border-radius: 10px; background: transparent; color: #aac3bd; display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: 8px; text-align: left; cursor: pointer; }
+.workspace-nav .workspace-identity-mark { width: 28px; height: 28px; border: 1px solid rgba(209,235,227,.22); border-radius: 5px 5px 5px 1px; display: grid; place-items: center; }
+.workspace-nav .workspace-identity-name { font-size: .8rem; font-weight: 650; letter-spacing: .04em; }
+.workspace-nav .workspace-identity-later { color: #708e87; font-size: .52rem; text-transform: uppercase; letter-spacing: .12em; }
 .workspace-nav .workspace-identity-badge:hover:not(:disabled) { color: white; }
 .workspace-nav .workspace-identity-badge.active { background: transparent; color: #fff; }
-.workspace-nav .workspace-identity-badge.active .workspace-identity-mark { border-color: var(--signal); color: #fbfcfa; }
+.workspace-nav .workspace-identity-badge.active .workspace-identity-mark { color: #fbfcfa; }
 .workspace-nav .workspace-identity-badge:disabled { cursor: not-allowed; }
 .local-nav-label { margin: 14px 9px 6px; padding: 0; border-top: 1px solid rgba(222,240,234,.14); min-height: 0; font-size: 0; line-height: 0; }
 .local-nav-label span, .local-nav-label small { display: none; }
@@ -2139,13 +2136,15 @@ button.topbar-tools:hover,
 .primary-nav button.active { background: var(--signal); color: #15362f; }
 .primary-nav button.active span { color: #3c5a2d; }
 .materials-nav { margin-top: 17px; padding-top: 17px; border-top: 1px solid rgba(222,240,234,.14); }
-.materials-nav button { width: 100%; min-height: 48px; padding: 0 9px; border: 1px solid rgba(209,235,227,.12); border-radius: 9px; background: rgba(255,255,255,.035); color: #b6ccc6; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 8px; text-align: left; cursor: pointer; }
-.materials-nav button > span { width: 26px; height: 26px; border: 1px solid rgba(209,235,227,.22); border-radius: 8px; display: grid; place-items: center; color: #8bb0a6; overflow: hidden; }
-.materials-nav button strong { font-size: .8rem; }
-.materials-nav button small { color: #6e9087; font-size: .61rem; text-transform: uppercase; letter-spacing: .08em; }
+.materials-nav button { width: 100%; min-height: 0; padding: 8px 10px; border: 1px solid rgba(209,235,227,.12); border-radius: 10px; background: rgba(255,255,255,.035); color: #b6ccc6; display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: 10px; text-align: left; cursor: pointer; }
+.materials-nav .career-materials-mark { width: 28px; height: 28px; border: 1px solid rgba(209,235,227,.22); border-radius: 8px 8px 8px 3px; background: rgba(139,176,166,.14); color: #8bb0a6; display: grid; place-items: center; overflow: hidden; align-self: center; }
+.materials-nav .materials-copy { min-width: 0; display: grid; align-content: center; gap: 2px; }
+.materials-nav button strong { min-width: 0; overflow: hidden; font-size: .8rem; letter-spacing: 0; text-overflow: ellipsis; white-space: nowrap; }
+.materials-nav button small { color: #8aa49c; font-size: .52rem; font-weight: 780; letter-spacing: .14em; text-transform: uppercase; white-space: nowrap; }
 .materials-nav button:hover { border-color: rgba(207,234,224,.28); background: rgba(255,255,255,.07); color: #fff; }
 .materials-nav button.active { border-color: var(--signal); background: #174942; color: #fff; }
-.materials-nav button.active > span { border-color: var(--signal); color: var(--signal); }
+.materials-nav button.active .career-materials-mark { border-color: var(--signal); color: var(--signal); }
+.materials-nav .materials-copy, .materials-nav button.active .materials-copy { border: 0; background: transparent; }
 .sidebar-status { border-color: rgba(219,239,232,.18); background: rgba(255,255,255,.06); }
 .sidebar-status strong, .profile strong { color: #f5fbf6; }
 .sidebar-status small, .profile small { color: #86a69e; }

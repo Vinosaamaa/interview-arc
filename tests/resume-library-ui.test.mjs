@@ -18,7 +18,7 @@ test("Career Materials owns the authenticated Resume Library outside Behavioral 
   ]);
   assert.doesNotMatch(foundation, /ResumeLibrary|resume-library/);
   assert.match(home, /CareerMaterialsWorkspace/);
-  assert.match(home, /Interview · Career Materials/);
+  assert.match(home, /<strong>Career Materials<\/strong>/);
   assert.match(home, /view === "materials"/);
   assert.match(materials, /\/api\/resume-library/);
   assert.match(materials, /\/api\/resume-revisions/);

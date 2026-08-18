@@ -173,7 +173,7 @@ export default function ReviewQueueView({
 
   return (
     <div className="review-queue-container"><section className="review-queue-page">
-      <InterviewPageHero tone="reviews" eyebrow="INTERVIEW · REVIEWS" title={<>Return while the<br />memory is still <em>warm.</em></>} description="A short second pass now turns yesterday's friction into something you can recall under pressure." metrics={[
+      <InterviewPageHero tone="reviews" eyebrow="INTERVIEW · REVIEWS" title="Return while the memory is still warm." quote="A short second pass now." description="Yesterday's friction becomes something you can recall under pressure." metrics={[
         { value: dueNowCount, label: "due now" },
         { value: totalMinutes < 60 ? `${totalMinutes}m` : `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`, label: "estimated review" },
         { value: `${reviewStreak} day${reviewStreak === 1 ? "" : "s"}`, label: "review streak" },

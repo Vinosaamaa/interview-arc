@@ -391,7 +391,7 @@ export default function CareerMaterialsWorkspace() {
   }, [library, selection]);
 
   return <section className="career-materials-workspace">
-    <InterviewPageHero tone="materials" eyebrow="CAREER MATERIALS · OWNER PRIVATE" title={<>Your résumé,<br /><em>with its history intact.</em></>} description="Every import is one owner-private DOCX/PDF pair with exact lineage—without turning résumé wording into truth." metrics={[
+    <InterviewPageHero tone="materials" eyebrow="CAREER MATERIALS · OWNER PRIVATE" title="Your résumé." quote="With its history intact." description="Every import is one owner-private DOCX/PDF pair with exact lineage—without turning résumé wording into truth." metrics={[
       { value: revisionCount, label: `immutable revision${revisionCount === 1 ? "" : "s"}` },
       { value: "DOCX = PDF", label: "paired source" },
       { value: "Private", label: "owner read" },

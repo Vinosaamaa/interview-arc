@@ -4,17 +4,21 @@ Overrides `design-system/interview-arc/MASTER.md` for chrome shared by Interview
 
 ## One bar
 
-The application bar is exactly **50px** (`40px` controls). Grid: `minmax(0,1fr) auto minmax(0,1fr)` → `context | switch | actions`. Vertical center everything. Do not grow it, stack a second chrome row, or hide the title.
+The application bar is exactly **50px** (`40px` controls). Grid: `minmax(0,1fr) auto minmax(0,1fr)` → `context | switch | actions`. Vertical center everything. Do not grow it, stack a second chrome row, or hide the centered switch.
 
 | Slot | Always | Rules |
 |------|--------|--------|
-| Context | Destination title + Pacific date | `Workspace · Destination`. Ellipsis if needed; never `display:none` / `visibility:hidden`. |
+| Context | Home mark at ≤980px; empty on desktop | No destination title. No Pacific date. Keep `.topbar-context` for the brand slot; do not `display: none` the whole slot. |
 | Switch | Interview · Learn · Engineering | Centered in the bar, not in leftover space. Equal-width segments. Active fill uses that workspace accent. |
 | Actions | Music, atmosphere, tools | `40px` round controls. Drop *labels*, then widgets. Never collide with the switch. |
 
-At **≤980px**: hide the sidebar. Put the canonical favicon (`/favicon.svg`) on the **same** context row as the title. Local destinations move to the bottom dock. Do not squeeze the destination rail to 190px or 82px, and do not leave a leftover 64–74px icon strip above the bar.
+At **≤980px**: hide the sidebar. Put the canonical favicon (`/favicon.svg`) on the context row. Local destinations move to the bottom dock. Do not squeeze the destination rail to 190px or 82px, and do not leave a leftover 64–74px icon strip above the bar.
 
 At **≤480px**: hide the music dock; keep atmosphere + tools at `36px`.
+
+## Sidebar (desktop)
+
+One pigment **masthead** from the top of the sidebar through the product brand and the active workspace name (`Interview`, `Learn`, or `Engineering`). Brand and name share that one color; the rule above the destination list is the bottom edge. It is a display plate, not a badge and not a switch. Then the numbered destination list for that workspace (`01` …). Interview keeps Career Materials as the private folio card under the list. Never list another workspace’s pages, and never put a second Interview / Learn / Engineering switch in the sidebar.
 
 ## Tools
 
@@ -39,8 +43,8 @@ Rain is CSS falling streaks (`.ambient-rain-drop`): teal 2px trails with a splas
 ## New workspace
 
 1. Add one switcher segment and one `.active-workspace-*` token set (`docs/engineering/records/adr-workspace-atmosphere-token-boundary.md`).
-2. Numbered local nav (`01` …). Destination accents on hero, selected nav, focus, and quiet panel tints only.
-3. Reuse this 50px bar, centered switch, icon tools, and even dock. Destination pages use the `350px` top-panel primitive in MASTER (or the same height/gap).
+2. One full-width current-workspace nameplate, then numbered local nav (`01` …) for that workspace only. Destination accents on hero, selected nav, focus, and quiet panel tints only.
+3. Reuse this 50px bar, centered switch, icon tools, and even dock. Destination pages use the `350px` top-panel primitive in MASTER (eyebrow, display statement, quote, supporting copy, summary band).
 4. Gutters show the workspace canvas; major panes are opaque `--workspace-paper`.
 
 ## Do not
@@ -48,5 +52,6 @@ Rain is CSS falling streaks (`.ambient-rain-drop`): teal 2px trails with a splas
 - Restore #345: Overview/Decision/Contract/Verification pills, extra Architecture/Interview tabs, edge `》`/`《` Journal/Evidence disclosures, collapsing `0px` rails, peach contents pills, `Show Journal index`.
 - Squeeze the destination sidebar until labels overlap; go to the dock instead.
 - Put Pop out timer / Connect / Export today back in the bar as text labels.
-- Hide `Learn · Today` (or any workspace title) to make room for the switch.
+- Put destination title or Pacific date back in the header.
+- Put a second Interview / Learn / Engineering switch in the sidebar, or show another workspace’s pages in the current sidebar.
 - Recolor success, failure, evidence, or specialty semantics to match a destination.
