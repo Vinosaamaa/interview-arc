@@ -31,21 +31,31 @@ Load only what the current action needs:
 
 Never commit private sources or copy employer source code into D1/artifacts.
 
-For an explicit evidence-foundation refresh, use the local controller in this
-order: `status`, `refresh`, regenerate the private projection when useful, then
-`pin-provenance`, then `prepare-sync`. For an evidence identity already present
-in D1, `pin-provenance` must consume an ignored owner-private snapshot containing
-only its authoritative evidence ID and source revision; never derive that old
-revision from the latest source registry. Read the ignored plan without printing
-it wholesale. Register
-sources only after reading their exact current D1 revisions; execute only its
-typed evidence writes, poll every durable receipt, and then present the pending
-candidate queue for explicit owner review. A prepared plan is not a saved
-receipt. Never upload the bundle, plan, source bytes, local locators, or review
-site to R2. Treat `uncoveredPendingEvidence > 0` as a sync-readiness blocker:
-repair the ignored bundle so every pending observation has exactly one typed
-D1 candidate or explicit local-only exclusion, and never report a source-only
-registry write as a completed evidence sync.
+For an explicit evidence-foundation refresh, follow this sequence:
+
+1. **Prepare local state.** Input: the owner-authorized ignored bundle. Run
+   `status`, `refresh`, regenerate the private projection when useful, then
+   `pin-provenance`, then `prepare-sync`. Output: one validated ignored plan.
+2. **Pin existing identities.** Input: an ignored owner-private snapshot that
+   contains only each authoritative D1 evidence ID and source revision. Output:
+   immutable historical provenance; never derive that old revision from the
+   latest source registry or make exact replay depend on current availability.
+3. **Project current source state.** Input: connector refresh state. Output: a
+   display-safe snapshot; project `not_checked` without stale revision metadata,
+   and do not invalidate an existing immutable evidence pin.
+4. **Register sources.** Input: the plan's source snapshots plus each exact
+   current D1 revision. Output: verified durable source receipts. Read the
+   ignored plan without printing it wholesale.
+5. **Execute evidence writes.** Input: only the plan's typed evidence writes.
+   Output: verified durable receipts after polling every operation.
+6. **Request review.** Input: the durably saved pending candidate queue. Output:
+   explicit owner review decisions; a prepared plan is not a saved receipt.
+
+Never upload the bundle, plan, source bytes, local locators, or review site to
+R2. Treat `uncoveredPendingEvidence > 0` as a sync-readiness blocker: repair the
+ignored bundle so every pending observation has exactly one typed D1 candidate
+or explicit local-only exclusion, and never report a source-only registry write
+as a completed evidence sync.
 
 ## Session Behavior
 

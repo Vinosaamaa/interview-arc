@@ -30,6 +30,7 @@ const MAX_DIRECTORY_ENTRIES = 5_000;
 const MAX_REMOTE_TEXT = 240;
 const FILESYSTEM_SOURCE_POLICY = "source-policy.json";
 const SOURCE_KINDS = new Set(["resume", "repository", "document", "chat_export", "architecture", "git_history", "user_statement", "other"]);
+const CONNECTOR_REFRESH_MODES = new Set(["remote", "conversation"]);
 const REMOTE_E1_MAX_ORIGINS = new Set(["user_statement", "resume", "generated_secondary", "derived_inference"]);
 const PROVENANCE_BY_ORIGIN = {
   user_statement: "conversation",
@@ -428,6 +429,11 @@ function projectSourceSnapshot(project, source) {
   }
   const refreshStatus = sourceRefreshStatus(source);
   const inspectionIsCurrent = source.availability === "available" && ["current", "changed"].includes(refreshStatus);
+  const projectedAvailability = CONNECTOR_REFRESH_MODES.has(source.refreshMode)
+    && source.availability === "available"
+    && refreshStatus === "not_checked"
+    ? "not_checked"
+    : source.availability;
   const snapshot = {
     schemaVersion: 1,
     sourceId: sourceRemoteId(project.record.project.id, source.id),
@@ -438,7 +444,7 @@ function projectSourceSnapshot(project, source) {
     safeHint: `Sanitized ${source.kind.replaceAll("_", " ")} source metadata.`,
     authorization: source.authorization,
     sensitivity: source.sensitivity,
-    availability: source.availability,
+    availability: projectedAvailability,
     refreshStatus,
     ...(inspectionIsCurrent && source.revision ? { contentRevision: boundedSafeText(source.revision, "source.revision", 200) } : {}),
     ...(inspectionIsCurrent && /^[a-f0-9]{64}$/.test(source.fingerprint ?? "") ? { contentFingerprint: source.fingerprint } : {}),
@@ -458,10 +464,16 @@ function projectSourceSnapshot(project, source) {
   return snapshot;
 }
 
-function availableEvidenceSources(evidence, sourceById) {
+function evidenceSources(evidence, sourceById) {
   return evidence.sourceIds.map((sourceId) => {
     const source = sourceById.get(sourceId);
     if (!source) throw new Error("Evidence references an unavailable source.");
+    return source;
+  });
+}
+
+function availableEvidenceSources(evidence, sourceById) {
+  return evidenceSources(evidence, sourceById).map((source) => {
     if (source.availability !== "available" || !["current", "changed"].includes(sourceRefreshStatus(source))) {
       throw new Error("Non-conversation evidence requires an available source with a current or changed refresh status before sync preparation.");
     }
@@ -490,7 +502,7 @@ function pinnedEvidenceSourceRevision(project, evidence, sourceById) {
     }
     return undefined;
   }
-  availableEvidenceSources(evidence, sourceById);
+  evidenceSources(evidence, sourceById);
   if (!EVIDENCE_SOURCE_REVISION_PATTERN.test(evidence.sourceRevision ?? "")) {
     throw new Error("Evidence provenance is not pinned. Run pin-provenance before prepare-sync.");
   }
