@@ -1,8 +1,9 @@
 # LeetCode Playwright Controller
 
 This contract owns deterministic browser navigation and submission for the
-LeetCode specialist. `scripts/leetcode-playwright-controller.mjs` is the **only
-supported browser-automation and submission path**. Specialists must not build
+LeetCode specialist and for Interview Arc Live's native coding room.
+`scripts/leetcode-playwright-controller.mjs` is the **only supported
+browser-automation and submission path**. Specialists must not build
 temporary controllers, use raw CDP submission scripts, type multiline source,
 or fall back to another browser, profile, port, tab, or automation framework.
 
@@ -145,6 +146,31 @@ missing, or corrupt receipt state remains ambiguous and never authorizes a new
 ID, a resent `submit`, or an automatic `retry`. Run `retry` only after revised
 source and a separate explicit user request; a non-Accepted verdict alone does
 not authorize it. Never resend `submit` or run `retry` automatically.
+
+## Interview Arc Live caller
+
+Interview Arc Live's native coding room may invoke the same `ensure`,
+`navigate`, `submit`, `retry`, and `receipt` commands from the Live macOS
+process. That is not a specialist turn and does not go through the LeetCode
+specialist helper. Live uses this same only-supported path; it must not invent
+a second controller, copy `browser-profiles/leetcode-submitter`, run `pnpm
+install` on the click path, reuse an invocation ID, or retry automatically.
+
+Warm path: run `ensure` then `navigate` while the candidate reads or codes.
+Click path: flush the Java file, then run `submit` or `retry`.
+
+If command output is lost or ambiguous, Live runs `receipt` exactly once with
+the same invocation ID. Pending, missing, or corrupt receipt state remains
+ambiguous and never authorizes a resent `submit`, a reused ID, or an automatic
+`retry`.
+
+Specialist sandbox, `require_escalated`, and “no side diagnostics” rules remain
+specialist-process rules. They do not require Live to use Codex `exec_command`.
+Live still must not copy the dedicated profile or launch a second Chrome
+identity.
+
+Pairing: [interview-arc-live#69](https://github.com/Vinosaamaa/interview-arc-live/issues/69).
+Hosted HTTP bind is interview-arc#388 / PR 390 and is separate.
 
 ## Exact submission transaction
 
