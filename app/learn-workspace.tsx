@@ -17,34 +17,36 @@ import {
   type LearningSessionProjection,
 } from "./learn-workspace-model";
 
+import HeroQuote from "./hero-quote";
+
 import "./learn-workspace.css";
 
 type CourseSection = "overview" | "lessons" | "homework" | "analytics";
 type MobileCoursePane = "path" | "lesson";
 
-const LEARN_DESTINATION_COPY: Record<LearnDestination, { eyebrow: string; title: string; emphasis: string; description: string }> = {
+const LEARN_DESTINATION_COPY: Record<LearnDestination, { eyebrow: string; title: string; quote: string; description: string }> = {
   today: {
     eyebrow: "LEARN · TODAY",
-    title: "Pick up the thread,",
-    emphasis: "not the whole textbook.",
+    title: "Pick up the thread.",
+    quote: "Not the whole textbook.",
     description: "Open the exact Current lesson, keep the Module path in view, and continue one evidence-backed Learning Session.",
   },
   courses: {
     eyebrow: "LEARN · COURSES",
     title: "A syllabus that grows",
-    emphasis: "one lesson at a time.",
+    quote: "One lesson at a time.",
     description: "Blueprints preserve the path. Current lesson revisions preserve the material you actually learned from.",
   },
   history: {
     eyebrow: "LEARN · HISTORY",
-    title: "The conversation stays",
-    emphasis: "exact and private.",
+    title: "The conversation stays.",
+    quote: "Exact and private.",
     description: "Completed Sessions keep their timer, transcript, artifacts, and factual recap without turning raw conversation into a textbook.",
   },
   analytics: {
     eyebrow: "LEARN · STATISTICS",
-    title: "Count the work,",
-    emphasis: "never invent mastery.",
+    title: "Count the work.",
+    quote: "Never invent mastery.",
     description: "Duration, Sessions, Lessons, homework, and checkpoint coverage come directly from recorded Learning events.",
   },
 };
@@ -121,8 +123,9 @@ function LearnHero({ destination, payload }: { destination: LearnDestination; pa
   return <header key={destination} className={`learn-hero learn-hero-${destination}`}>
     <div className="learn-hero-copy">
       <span className="learn-eyebrow">{copy.eyebrow}</span>
-      <h1>{copy.title}<br /><em>{copy.emphasis}</em></h1>
-      <p>{copy.description}</p>
+      <h1>{copy.title}</h1>
+      <HeroQuote className="learn-hero-quote">{copy.quote}</HeroQuote>
+      <p className="learn-hero-lede">{copy.description}</p>
     </div>
     <div className="learn-animal-sketch"><LearnAnimalSketch destination={destination} /></div>
     <span className="learn-hero-pulse" aria-hidden="true" />

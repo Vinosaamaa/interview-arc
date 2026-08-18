@@ -63,11 +63,12 @@ function jsxChildTag(file, node) {
 }
 
 test("Career Materials rail uses a folio mark instead of CM letters", async () => {
-  const [homeSource, markSource, markCss, globals] = await Promise.all([
+  const [homeSource, markSource, markCss, globals, atmosphere] = await Promise.all([
     load("../app/home-client.tsx"),
     load("../app/career-materials-mark.tsx"),
     load("../app/career-materials-mark.css"),
     load("../app/globals.css"),
+    load("../app/workspace-atmosphere.css"),
   ]);
   const home = parseTsx(homeSource);
   const mark = parseTsx(markSource);
@@ -84,11 +85,21 @@ test("Career Materials rail uses a folio mark instead of CM letters", async () =
   const children = button.children.filter((child) => ts.isJsxElement(child) || ts.isJsxSelfClosingElement(child));
   assert.deepEqual(children.map((child) => jsxChildTag(home, child)), [
     "CareerMaterialsMark",
+    "span",
+  ]);
+  const copy = children[1];
+  assert.ok(ts.isJsxElement(copy));
+  assert.ok(copy.openingElement.attributes.properties.some((attribute) => ts.isJsxAttribute(attribute)
+    && attribute.name.getText(home) === "className"
+    && attribute.initializer?.getText(home) === '"materials-copy"'));
+  const copyChildren = copy.children.filter((child) => ts.isJsxElement(child) || ts.isJsxSelfClosingElement(child));
+  assert.deepEqual(copyChildren.map((child) => jsxChildTag(home, child)), [
     "strong",
     "small",
   ]);
-  assert.equal(children[1].children[0]?.getText(home), "Career Materials");
-  assert.equal(children[2].children[0]?.getText(home), "Private");
+  assert.equal(copyChildren[0].children[0]?.getText(home), "Career Materials");
+  assert.equal(copyChildren[1].children[0]?.getText(home), "Private");
+  assert.doesNotMatch(homeSource, /materials-head/);
 
   const markRoot = visit(mark, (node) => ts.isJsxElement(node)
     && node.openingElement.attributes.properties.some((attribute) => ts.isJsxAttribute(attribute)
@@ -103,13 +114,24 @@ test("Career Materials rail uses a folio mark instead of CM letters", async () =
   assert.deepEqual(markText, []);
   assert.equal(markText.includes("CM"), false);
 
+  const rules = parseCss(globals);
+  const materialsButton = cssRules(rules, ".materials-nav button")[0]?.declarations;
+  assert.equal(materialsButton?.["grid-template-columns"], "28px minmax(0, 1fr)");
+  assert.equal(materialsButton?.["align-items"], "center");
+  const materialsMark = cssRules(rules, ".materials-nav .career-materials-mark")[0]?.declarations;
+  assert.equal(materialsMark?.width, "28px");
+  assert.equal(materialsMark?.height, "28px");
+  assert.equal(materialsMark?.["align-self"], "center");
+  assert.doesNotMatch(globals, /\.materials-nav button small \{[^}]*width: 100%/s);
+
   assert.doesNotMatch(homeSource, /aria-hidden="true">CM</);
   assert.doesNotMatch(markSource, />CM</);
   assert.doesNotMatch(markSource, /["']CM["']/);
   assert.doesNotMatch(markCss, /content:\s*["']CM["']/);
   assert.doesNotMatch(globals, /\.materials-nav button > span \{[^}]*content:\s*["']CM["']/s);
   assert.match(markCss, /\.materials-nav \.career-materials-mark-stitch/);
-  assert.match(globals, /\.materials-nav button > span \{[^}]*place-items: center/s);
+  assert.match(globals, /\.materials-nav \.career-materials-mark \{[^}]*place-items: center/s);
+  assert.match(atmosphere, /\.app-shell \.materials-nav button \{\s*grid-template-columns: 28px minmax\(0, 1fr\);/);
   assert.doesNotMatch(globals, /\.materials-nav button > span \{[^}]*font-family: var\(--font-geist-mono\)/s);
 });
 

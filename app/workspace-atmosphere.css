@@ -311,13 +311,6 @@
 }
 
 @media (min-width: 761px) {
-  .app-shell .topbar-context-copy {
-    grid-template-rows: 18px 14px;
-    align-content: center;
-    gap: 1px;
-  }
-  .app-shell .topbar-context-copy strong { font-size: .9rem; line-height: 18px; }
-  .app-shell .topbar-context-copy time { font-size: .67rem; line-height: 14px; }
   .app-shell .topbar-workspace-switch { min-height: 38px; }
   .app-shell .topbar-workspace-switch button { min-height: 28px; }
 }
@@ -375,15 +368,6 @@
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
-}
-.app-shell .topbar-context-copy {
-  min-width: 0;
-  flex: 1 1 0;
-  overflow: hidden;
-}
-.app-shell .topbar-context-copy time {
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .app-shell .topbar-workspace-switch { padding: 3px; justify-self: center; }
 .app-shell .topbar-workspace-switch button { min-height: 32px; }
@@ -507,8 +491,10 @@
 }
 .app-shell .materials-nav button {
   grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
 }
-.app-shell .materials-nav button small { grid-column: 2; }
+.app-shell .materials-nav .career-materials-mark { align-self: center; }
+.app-shell .materials-nav button small { grid-column: auto; }
 
 @media (max-width: 980px) {
   .app-shell {

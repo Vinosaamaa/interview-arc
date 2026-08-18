@@ -66,23 +66,28 @@ does not exempt it from this geometry.
 |------|------:|------|
 | `--interview-top-panel-top-gap` | `25px` | Exact visual space from the bottom edge of the persistent top bar to the top-panel border |
 | `--interview-top-panel-height` | `350px` | Exact fixed outer height on every Interview page |
-| `--interview-top-panel-narrative-height` | `300px` | Exact upper zone for the page statement, supporting copy, and optional illustration |
+| `--interview-top-panel-narrative-height` | `300px` | Upper zone for the page statement, supporting copy, and optional illustration. Copy is inset above the summary band so descenders stay visible; this is a layout zone, not a clip box. |
 | `--interview-top-panel-summary-height` | `50px` | Exact lower summary band for truthful metrics or compact page state |
 | `--interview-panel-gap` | `20px` | Exact gap between sibling page-level panel border boxes in the main page flow |
 
-- The panel owns the page eyebrow, primary heading or statement, concise
+- The panel owns the page eyebrow, display statement, distinct quote, concise
   supporting copy, and only the highest-value summary metrics or controls.
   Secondary controls and growing collections belong in the page body.
+  The quote is its own italic line with quotation marks; never fuse it into
+  the display heading as a second sentence.
 - Today, Loops, and Reviews must converge on this same shell geometry while
   retaining their distinct internal compositions. Past, Banks, and Journey
   must move their current loose title, introduction, and summary content into
   the top panel; Career Materials must move its current loose résumé heading,
   introduction, and highest-value revision summary into the same primitive.
   Do not leave a free-floating page heading on the canvas.
-- Every top panel uses one shared vertical anatomy: an exact `300px` narrative
-  field above and an exact `50px` bottom summary zone below, producing one
-  `350px` outer panel. These are layout zones inside one continuous surface,
-  not two visibly stacked components. Except for Banks, do not draw a
+- Every top panel uses one shared vertical anatomy: a narrative field above and
+  an exact `50px` bottom summary zone below, producing one `350px` outer panel.
+  Copy sits in an inset box (`top: 24px`, `bottom: 88px` or equivalent padding)
+  with `overflow: visible`, matching Engineering. Never clip type mid-glyph
+  with `overflow: hidden` or `-webkit-line-clamp` on the quote, heading, or
+  lede. These are layout zones inside one continuous surface, not two visibly
+  stacked components. Except for Banks, do not draw a
   full-width horizontal divider at their boundary; use only short vertical
   separators between summary groups. The summary zone has one fixed height,
   divider treatment, metric-number size, metric-label size, and baseline
@@ -168,7 +173,7 @@ while green remains reserved for explicit completion and success.
 | Career Materials | `#7A4D30` | `#F5E9DD` | `#D8A97F` |
 
 The selected left-navigation row uses the current page's accent-on-dark color
-for its index, icon, and label, plus a quiet tinted rail/background. Unselected
+for its index and label, plus a quiet tinted rail/background. Unselected
 rows stay neutral. Page accents must pass contrast requirements in their exact
 rendering context and remain a redundant signal rather than the only state cue.
 
@@ -178,8 +183,8 @@ Interview, Learn, and Engineering share one shell geometry, navigation order,
 typography hierarchy, breakpoint system, focus behavior, and accessibility
 contract. They do not share one visual atmosphere. Theme changes are expressed
 through tokens, never by duplicating shell markup or changing its dimensions.
-Chrome anatomy (50px bar, always-visible title, centered switch, icon tools,
-even bottom dock) is owned by `design-system/pages/workspace-shell.md`.
+Chrome anatomy (50px bar, empty-or-brand context slot, centered switch, icon tools,
+even bottom dock, current-workspace nameplate and numbered destination list) is owned by `design-system/pages/workspace-shell.md`.
 
 - **Interview** is deep evergreen with botanical color and restrained paper
   surfaces. Its seven destination accents remain defined by the table above.

@@ -14,6 +14,8 @@ import type {
   EngineeringRecordType,
 } from "../engineering-journal/index";
 
+import HeroQuote from "./hero-quote";
+
 export type EngineeringView = "journal" | "capabilities" | "decisions" | "incidents" | "case-studies" | "statistics";
 
 export const ENGINEERING_NAV_ITEMS: ReadonlyArray<readonly [EngineeringView, string]> = [
@@ -26,12 +28,12 @@ export const ENGINEERING_NAV_ITEMS: ReadonlyArray<readonly [EngineeringView, str
 ];
 
 export const ENGINEERING_VIEW_TITLES: Record<EngineeringView, string> = {
-  journal: "Engineering · Journal",
-  capabilities: "Engineering · Capabilities",
-  decisions: "Engineering · Decisions",
-  incidents: "Engineering · Incidents",
-  "case-studies": "Engineering · Case Studies",
-  statistics: "Engineering · Statistics",
+  journal: "Journal",
+  capabilities: "Capabilities",
+  decisions: "Decisions",
+  incidents: "Incidents",
+  "case-studies": "Case Studies",
+  statistics: "Statistics",
 };
 
 const TYPE_LABELS: Record<EngineeringRecordType, string> = {
@@ -148,13 +150,13 @@ function EmptyEngineeringView({ view }: { view: EngineeringView }) {
   return <div className="engineering-empty" role="status"><h2>Nothing fabricated</h2><p>{view === "journal" || view === "statistics" ? "No eligible Engineering records match these filters." : copy[view]}</p></div>;
 }
 
-const ENGINEERING_HERO_COPY: Record<EngineeringView, { eyebrow: string; title: string; accent: string; description: string }> = {
-  journal: { eyebrow: "Engineering · Journal", title: "Engineering decisions, mapped in the terrain.", accent: "#d86742", description: "Read the architecture, tradeoffs, incidents, and verification behind every shipped capability." },
-  capabilities: { eyebrow: "Engineering · Capabilities", title: "Reusable strengths, grown from exact work.", accent: "#25856c", description: "Trace durable capabilities back to the records, modules, interfaces, and evidence that established them." },
-  decisions: { eyebrow: "Engineering · Decisions", title: "Alternatives converge into deliberate choices.", accent: "#566cc6", description: "Review the constraints, rejected paths, and consequences behind each accepted engineering direction." },
-  incidents: { eyebrow: "Engineering · Incidents", title: "Failures become operating knowledge.", accent: "#d65d63", description: "Keep timelines, root causes, recovery evidence, and follow-up work together without smoothing the facts." },
-  "case-studies": { eyebrow: "Engineering · Case Studies", title: "Delivered systems, examined layer by layer.", accent: "#c5872b", description: "Move from context through implementation and verification while preserving the exact source lineage." },
-  statistics: { eyebrow: "Engineering · Statistics", title: "The record, measured without invention.", accent: "#49a6a8", description: "Explore deterministic coverage, chronology, repositories, and verification from the same normalized projection." },
+const ENGINEERING_HERO_COPY: Record<EngineeringView, { eyebrow: string; title: string; quote: string; accent: string; description: string }> = {
+  journal: { eyebrow: "Engineering · Journal", title: "Engineering decisions.", quote: "Mapped in the terrain.", accent: "#d86742", description: "Read the architecture, tradeoffs, incidents, and verification behind every shipped capability." },
+  capabilities: { eyebrow: "Engineering · Capabilities", title: "Reusable strengths.", quote: "Grown from exact work.", accent: "#25856c", description: "Trace durable capabilities back to the records, modules, interfaces, and evidence that established them." },
+  decisions: { eyebrow: "Engineering · Decisions", title: "Alternatives converge.", quote: "Into deliberate choices.", accent: "#566cc6", description: "Review the constraints, rejected paths, and consequences behind each accepted engineering direction." },
+  incidents: { eyebrow: "Engineering · Incidents", title: "Failures become operating knowledge.", quote: "Without smoothing the facts.", accent: "#d65d63", description: "Keep timelines, root causes, recovery evidence, and follow-up work together." },
+  "case-studies": { eyebrow: "Engineering · Case Studies", title: "Delivered systems.", quote: "Examined layer by layer.", accent: "#c5872b", description: "Move from context through implementation and verification while preserving the exact source lineage." },
+  statistics: { eyebrow: "Engineering · Statistics", title: "The record, measured.", quote: "Without invention.", accent: "#49a6a8", description: "Explore deterministic coverage, chronology, repositories, and verification from the same normalized projection." },
 };
 
 function JournalNatureSketch() { return <svg viewBox="0 0 720 250" role="img" aria-label="An alpine route recording exact engineering revisions"><path d="M30 224 154 102l65 61 91-119 80 109 73-76 134 147" /><path d="M65 219c70-42 132-51 188-26 63 28 112 13 149-45 35-55 92-64 169-27" /><circle cx="184" cy="191" r="9" /><circle cx="401" cy="148" r="9" /><circle cx="567" cy="121" r="9" /></svg>; }
@@ -198,7 +200,7 @@ function EngineeringDestinationHero({ index, view }: { index: EngineeringJournal
       ? [["Factual records", index.statistics.totalRecords], ["Verified", index.statistics.verification.verified], ["PR receipts", index.receiptStatistics.totalReceipts]]
       : [["Eligible records", aggregates.eligible], ["Verified", aggregates.verified], ["Repositories", aggregates.repositories]];
   return <header key={view} className={`engineering-hero engineering-hero-${view}`} style={{ "--engineering-accent": copy.accent } as CSSProperties}>
-    <div className="engineering-hero-copy"><span>{copy.eyebrow}</span><h1>{copy.title}</h1><p>{copy.description}</p></div>
+    <div className="engineering-hero-copy"><span>{copy.eyebrow}</span><h1>{copy.title}</h1><HeroQuote className="engineering-hero-quote">{copy.quote}</HeroQuote><p className="engineering-hero-lede">{copy.description}</p></div>
     <div className="engineering-hero-sketch"><EngineeringNatureSketch view={view} /></div>
     <span className="engineering-hero-pulse" aria-hidden="true" />
     <span className="engineering-hero-light-band" aria-hidden="true" />
@@ -618,7 +620,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
 
   return <div className={`engineering-destination engineering-destination-${view}`}><EngineeringDestinationHero index={index} view={view} /><section className={`engineering-workspace ${mobileReaderOpen ? "mobile-reader-open" : ""} ${displayEvidence ? "evidence-open" : "evidence-closed"}`}>
     <aside className="engineering-index-panel engineering-records" aria-label={`${ENGINEERING_VIEW_TITLES[view]} ${showReceipts ? "pull-request receipts" : "rich records"}`}>
-      <header><div><h1>{ENGINEERING_VIEW_TITLES[view].replace("Engineering · ", "")}</h1><p>{showReceipts ? `${receipts.length} of ${index.receiptStatistics.totalReceipts} pull-request receipts` : `${records.length} factual ${records.length === 1 ? "record" : "records"}`}</p></div></header>
+      <header><div><h1>{ENGINEERING_VIEW_TITLES[view]}</h1><p>{showReceipts ? `${receipts.length} of ${index.receiptStatistics.totalReceipts} pull-request receipts` : `${records.length} factual ${records.length === 1 ? "record" : "records"}`}</p></div></header>
       {view === "journal" ? <div className="engineering-journal-layers" role="group" aria-label="Journal evidence layer">
         <button type="button" aria-pressed={journalLayer === "records"} onClick={() => chooseJournalLayer("records")}><span>Rich records</span><strong>{index.statistics.totalRecords}</strong></button>
         <button type="button" aria-pressed={journalLayer === "receipts"} onClick={() => chooseJournalLayer("receipts")}><span>All merged PRs</span><strong>{index.receiptStatistics.totalReceipts}</strong></button>

@@ -460,7 +460,7 @@ export function LoopsWorkspace({
   const completedStages = selectedLoop.loop.stages.filter((stage) => stage.status === "completed").length;
   const linkedPractices = selectedLoop.activityHistory.length;
   return <><section className="loops-workspace" data-loop-workspace-root>
-    <InterviewPageHero tone="loops" eyebrow="INTERVIEW · LOOPS" title={<>Every conversation<br />becomes a <em>clearer record.</em></>} description="Role context, linked preparation, and every interview stage stay together without rewriting history." metrics={[
+    <InterviewPageHero tone="loops" eyebrow="INTERVIEW · LOOPS" title="Every conversation" quote="A clearer record." description="Role context, linked preparation, and every interview stage stay together without rewriting history." metrics={[
       { value: loops.filter((loop) => loop.loop.status === "active").length, label: "active loop" },
       { value: completedStages, label: "completed stage" },
       { value: linkedPractices, label: "linked practices" },

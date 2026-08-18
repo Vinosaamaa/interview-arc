@@ -630,8 +630,8 @@ test("the fixed header owns the only workspace selector", async () => {
     && node.openingElement.attributes.properties.some((attribute) => ts.isJsxAttribute(attribute)
       && attribute.name.getText(file) === "className"
       && attribute.initializer?.getText(file) === '"workspace-nav"'))[0];
-  assert.ok(identityNav);
-  assert.match(identityNav.getText(file), /WorkspaceIdentityBadge/);
+  assert.equal(identityNav, undefined);
+  assert.doesNotMatch(file.getText(), /WorkspaceIdentityBadge/);
   assert.doesNotMatch(file.getText(), /<small>Workspace<\/small>/);
   assert.doesNotMatch(file.getText(), /<span>\{activeWorkspace === "engineering" \? "Engineering"/);
   const fixedHeader = cssRules(rules, ".topbar")
@@ -648,21 +648,29 @@ test("the fixed header owns the only workspace selector", async () => {
   assert.ok(canonicalBrandRule, "the favicon must not inherit a second bordered tile");
 });
 
-test("workspace identity badges share one specimen plate and drop stacked wordmarks", async () => {
-  const [home, identity, identityCss, globals, v2] = await Promise.all([
-    load("../app/home-client.tsx"),
-    load("../app/workspace-identity.tsx"),
-    load("../app/workspace-identity.css"),
-    load("../app/globals.css"),
-    load("../app/interview-arc-v2.css"),
-  ]);
-  const identityFile = parseTsx(identity);
+test("sidebar destination rail has no second workspace switch", async () => {
+  const home = await load("../app/home-client.tsx");
+  const identity = await load("../app/workspace-identity.tsx");
+  const identityCss = await load("../app/workspace-identity.css");
   const homeFile = parseTsx(home);
-  const identityRules = parseCss(identityCss);
-  const globalRules = parseCss(globals);
-  const v2Rules = parseCss(v2);
-
-  assert.match(home, /<nav className="workspace-nav" aria-label="Workspace identity">/);
+  assert.doesNotMatch(home, /<nav className="workspace-nav"/);
+  assert.doesNotMatch(home, /WorkspaceIdentityBadge/);
+  assert.match(home, /className="sidebar-masthead"/);
+  assert.match(home, /<WorkspaceNameplate workspace=\{activeWorkspace\} \/>/);
+  assert.match(identity, /export function WorkspaceNameplate/);
+  assert.doesNotMatch(identity, /export function WorkspaceIdentityBadge/);
+  assert.doesNotMatch(identity, /onSelect/);
+  assert.match(identityCss, /\.app-shell \.sidebar-masthead \{/);
+  assert.match(identityCss, /margin: -22px -14px 0/);
+  assert.match(identityCss, /background: var\(--workspace-nameplate-pigment\)/);
+  assert.match(identityCss, /\.app-shell \.workspace-nameplate \{[^}]*background: transparent/s);
+  assert.doesNotMatch(identityCss, /linear-gradient/);
+  assert.doesNotMatch(identityCss, /inset 0 1px 0/);
+  assert.doesNotMatch(home, /Interview · Today/);
+  assert.doesNotMatch(home, /topbar-context-copy/);
+  assert.doesNotMatch(home, /workspace-tabs/);
+  assert.match(home, /<nav className="topbar-workspace-switch" aria-label="Workspaces">/);
+  assert.match(home, /<nav className="primary-nav" aria-label="Interview navigation">/);
   assert.doesNotMatch(home, /<small>Workspace<\/small>/);
   assert.doesNotMatch(home, /local-nav-label"><span>/);
   const localNav = visit(homeFile, (node) => ts.isJsxSelfClosingElement(node)
@@ -671,41 +679,15 @@ test("workspace identity badges share one specimen plate and drop stacked wordma
       && attribute.initializer?.getText(homeFile) === '"local-nav-label"'))[0];
   assert.ok(localNav);
   assert.match(localNav.getText(homeFile), /aria-hidden="true"/);
-
-  const badges = visit(identityFile, (node) => ts.isFunctionDeclaration(node)
-    && node.name?.text === "WorkspaceIdentityBadge")[0]
-    ?? visit(identityFile, (node) => ts.isVariableDeclaration(node)
-      && ts.isIdentifier(node.name)
-      && node.name.text === "WorkspaceIdentityBadge")[0];
-  assert.ok(badges);
-  const badgeSource = badges.getText(identityFile);
-  assert.match(badgeSource, /aria-label=\{ariaLabel\}/);
-  assert.match(badgeSource, /aria-current=\{selected \? "page" : undefined\}/);
-  assert.match(badgeSource, /unavailable \? `\$\{label\}, later` : label/);
-  assert.match(badgeSource, /workspace-identity-later">Later/);
-  assert.match(identity, /function InterviewMotif/);
-  assert.match(identity, /function LearnMotif/);
-  assert.match(identity, /function EngineeringMotif/);
-  assert.doesNotMatch(identity, />I<\/span>/);
-  assert.doesNotMatch(identity, />L<\/span>/);
-  assert.doesNotMatch(identity, />E<\/span>/);
-  assert.doesNotMatch(identity, /Overview|Architecture|peach|contents pill/i);
-
-  const mark = cssRules(identityRules, ".app-shell .workspace-nav .workspace-identity-mark")[0]?.declarations;
-  assert.equal(mark?.width, "28px");
-  assert.equal(mark?.height, "28px");
-  assert.equal(mark?.["border-radius"], "9px 9px 9px 3px");
-  assert.equal(cssRules(identityRules, ".app-shell .workspace-nav")[0]?.declarations["grid-template-columns"], "repeat(3, minmax(0, 1fr))");
-  assert.equal(cssRules(globalRules, ".workspace-nav")[0]?.declarations["grid-template-columns"], "repeat(3, minmax(0, 1fr))");
-  assert.equal(cssRules(v2Rules, ".workspace-nav")[0]?.declarations["grid-template-columns"], "repeat(3, minmax(0, 1fr))");
-  assert.equal(cssRules(globalRules, ".workspace-nav .workspace-identity-mark")[0]?.declarations.width, "28px");
-  assert.equal(cssRules(globalRules, ".workspace-nav .workspace-identity-mark")[0]?.declarations.height, "28px");
-  assert.equal(cssRules(identityRules, ".app-shell .local-nav-label")[0]?.declarations["border-top"].includes("1px solid"), true);
-  assert.equal(cssRules(globalRules, ".local-nav-label")[0]?.declarations["font-size"], "0");
-  assert.equal(cssRules(identityRules, ".app-shell .primary-nav")[0]?.declarations["margin-top"], "0");
-  assert.equal(cssRules(v2Rules, ".primary-nav")[0]?.declarations["margin-top"], "0");
-  assert.doesNotMatch(identityCss, /#f4c7a8|#f6c7b0|peach/i);
-  assert.doesNotMatch(globals, /\.workspace-nav button > span \{ width: 26px/);
+  const interviewNav = visit(homeFile, (node) => ts.isJsxElement(node)
+    && node.openingElement.attributes.properties.some((attribute) => ts.isJsxAttribute(attribute)
+      && attribute.name.getText(homeFile) === "aria-label"
+      && attribute.initializer?.getText(homeFile) === '"Interview navigation"'))[0];
+  assert.ok(interviewNav);
+  const interviewNavText = interviewNav.getText(homeFile);
+  assert.doesNotMatch(interviewNavText, />Learn</);
+  assert.doesNotMatch(interviewNavText, />Engineering</);
+  assert.match(interviewNavText, /padStart\(2,/);
 });
 
 test("Engineering uses its exact local navigation and keeps Statistics out of Interview", async () => {
@@ -922,7 +904,6 @@ test("Interview navigation uses one shared local model with Journey last", async
     ["banks", "Banks"],
     ["journey", "Journey"],
   ]);
-  assert.match(source, /journey: "Interview · Journey"/);
   assert.doesNotMatch(source, /view !== "journey" && <nav className="mobile-interview-nav"/);
 });
 
@@ -950,31 +931,21 @@ test("responsive shell keeps the workspace selector above the seven-item Intervi
   );
 });
 
-test("workspace header stacks the active tab above the Pacific date at every width", async () => {
-  const { file, rules } = await loadResponsiveShell();
+test("workspace header keeps the home mark and never shows destination title or date", async () => {
+  const { file, source, rules } = await loadResponsiveShell();
   const context = visit(file, (node) => ts.isJsxElement(node)
     && node.openingElement.attributes.properties.some((attribute) => ts.isJsxAttribute(attribute)
       && attribute.name.getText(file) === "className"
       && attribute.initializer?.getText(file) === '"topbar-context"'))[0];
   assert.ok(context);
+  assert.doesNotMatch(source, /topbar-context-copy/);
+  assert.doesNotMatch(context.getText(file), /readableDate/);
+  assert.doesNotMatch(context.getText(file), /INTERVIEW_VIEW_TITLES|LEARN_VIEW_TITLES|ENGINEERING_VIEW_TITLES/);
   const copy = context.children.filter(ts.isJsxElement)
     .find((element) => element.openingElement.attributes.properties.some((attribute) => ts.isJsxAttribute(attribute)
       && attribute.name.getText(file) === "className"
       && attribute.initializer?.getText(file) === '"topbar-context-copy"'));
-  assert.ok(copy);
-  const elements = copy.children.filter(ts.isJsxElement);
-  assert.deepEqual(elements.map((element) => element.openingElement.tagName.getText(file)), ["strong", "time"]);
-  assert.equal(elements[0].children[0]?.getText(file), '{activeWorkspace === "engineering" ? ENGINEERING_VIEW_TITLES[engineeringView] : activeWorkspace === "learn" ? LEARN_VIEW_TITLES[learnDestination] : INTERVIEW_VIEW_TITLES[view]}');
-  assert.match(elements[1].children[0]?.getText(file) ?? "", /readableDate\(journal\.date\)/);
-
-  const contextStyle = cssRules(rules, ".topbar-context-copy")
-    .find((rule) => rule.declarations["align-content"] === "center")?.declarations;
-  assert.ok(contextStyle);
-  assert.equal(contextStyle.display, "grid");
-  assert.equal(contextStyle["align-content"], "center");
-
-  const narrowDate = cssRules(rules, ".topbar-context time", "max-width: 680px").at(-1).declarations;
-  assert.notEqual(narrowDate.display, "none");
+  assert.equal(copy, undefined);
   assert.equal(cssRules(rules, ".topbar", "max-width: 760px").at(-1).declarations["grid-template-areas"], '"context switch actions"');
   assert.equal(cssRules(rules, ".topbar-brand", "max-width: 980px").at(-1).declarations.display, "grid");
 });
@@ -1046,8 +1017,36 @@ test("all seven Interview pages use the exact shared hero geometry and semantic 
   assert.equal(hero?.["min-height"], "350px");
   assert.equal(hero?.["max-height"], "350px");
   assert.equal(hero?.["container-type"], "inline-size");
-  assert.equal(cssRules(rules, ".page-hero-narrative")[0]?.declarations.height, "300px");
-  assert.equal(cssRules(rules, ".page-hero-summary")[0]?.declarations.height, "50px");
+  const narrative = cssRules(rules, ".page-hero-narrative")[0]?.declarations;
+  const summary = cssRules(rules, ".page-hero-summary")[0]?.declarations;
+  const art = cssRules(rules, ".page-hero-art").find((rule) => rule.ancestors.length === 0)?.declarations;
+  assert.equal(narrative?.display, "block");
+  assert.equal(narrative?.padding, "0");
+  assert.equal(summary?.height, "50px");
+  assert.equal(summary?.position, "absolute");
+  assert.equal(summary?.bottom, "0");
+  assert.equal(summary?.["z-index"], "3");
+  assert.match(summary?.background ?? "", /255,\s*255,\s*255/);
+  assert.equal(art?.position, "absolute");
+  assert.equal(art?.height, "225px");
+  assert.equal(art?.top, "27px");
+  const heroCopy = cssRules(rules, ".page-hero-copy").find((rule) => rule.ancestors.length === 0)?.declarations;
+  const heroTitle = cssRules(rules, ".page-hero-copy h1").find((rule) => rule.ancestors.length === 0)?.declarations;
+  const heroLede = cssRules(rules, ".page-hero-lede").find((rule) => rule.ancestors.length === 0)?.declarations;
+  assert.equal(heroCopy?.position, "absolute");
+  assert.equal(heroCopy?.top, "24px");
+  assert.equal(heroCopy?.bottom, "88px");
+  assert.equal(heroCopy?.overflow, "visible");
+  assert.equal(heroTitle?.overflow, "visible");
+  assert.equal(heroLede?.overflow, "visible");
+  assert.equal(heroLede?.["line-height"], "1.55");
+  assert.equal(heroLede?.["-webkit-line-clamp"], undefined);
+  assert.doesNotMatch(css, /\.page-hero-lede[^{]*\{[^}]*-webkit-line-clamp/);
+  assert.equal(heroTitle?.["line-height"], "1.28");
+  assert.equal(heroTitle?.["letter-spacing"], "-.015em");
+  assert.match(heroTitle?.["font-size"] ?? "", /3\.65rem/);
+  assert.doesNotMatch(css, /line-height:\s*\.88/);
+  assert.doesNotMatch(css, /letter-spacing:\s*-\.055em/);
   assert.equal(cssRules(rules, ".page-content")[0]?.declarations["padding-top"], "25px");
   const allPageSources = `${homeSource}\n${materialsSource}\n${loopsSource}\n${await load("../app/review-queue-view.tsx")}`;
   for (const tone of ["today", "loops", "reviews", "past", "banks", "journey", "materials"]) {
@@ -1103,11 +1102,17 @@ test("Learn and Engineering hero type stays inside the 350px panel", async () =>
   const engineeringTitle = cssRules(engineeringRules, ".engineering-hero-copy h1").find((rule) => rule.ancestors.length === 0)?.declarations;
   const readerTitle = cssRules(engineeringRules, ".engineering-reader-header h1").find((rule) => rule.ancestors.length === 0)?.declarations;
 
-  assert.equal(learnCopy?.["align-self"], "stretch");
-  assert.equal(learnCopy?.overflow, "hidden");
-  assert.equal(learnCopy?.["max-height"], "300px");
-  const learnBlurb = cssRules(learnRules, ".learn-hero-copy > p").find((rule) => rule.ancestors.length === 0)?.declarations;
-  assert.equal(learnBlurb?.["-webkit-line-clamp"], "3");
+  assert.equal(learnCopy?.position, "absolute");
+  assert.equal(learnCopy?.top, "24px");
+  assert.equal(learnCopy?.bottom, "88px");
+  assert.equal(learnCopy?.overflow, "visible");
+  assert.equal(learnCopy?.["max-height"], "none");
+  const learnBlurb = cssRules(learnRules, ".learn-hero-lede").find((rule) => rule.ancestors.length === 0)?.declarations;
+  assert.equal(learnBlurb?.overflow, "visible");
+  assert.equal(learnBlurb?.["line-height"], "1.55");
+  assert.equal(learnBlurb?.["-webkit-line-clamp"], undefined);
+  assert.doesNotMatch(learnCss, /-webkit-line-clamp/);
+  assert.equal(learnTitle?.overflow, "visible");
   assert.equal(learnTitle?.["line-height"], "1.28");
   assert.equal(learnTitle?.["letter-spacing"], "-0.015em");
   assert.match(learnTitle?.["font-size"] ?? "", /3\.85rem/);
@@ -1125,6 +1130,56 @@ test("Learn and Engineering hero type stays inside the 350px panel", async () =>
   assert.doesNotMatch(engineeringCss, /line-height:\s*\.86/);
 });
 
+test("every workspace top panel has a quote and a display statement", async () => {
+  const [learn, engineering, hero, home, materials, loops, reviews, learnCss, interviewCss, engineeringCss] = await Promise.all([
+    load("../app/learn-workspace.tsx"),
+    load("../app/engineering-workspace.tsx"),
+    load("../app/interview-page-hero.tsx"),
+    load("../app/home-client.tsx"),
+    load("../app/career-materials-workspace.tsx"),
+    load("../app/loops-workspace.tsx"),
+    load("../app/review-queue-view.tsx"),
+    load("../app/learn-workspace.css"),
+    load("../app/interview-page-hero.css"),
+    load("../app/engineering-workspace.css"),
+  ]);
+
+  assert.match(learn, /title: "The conversation stays\."/);
+  assert.match(learn, /quote: "Exact and private\."/);
+  assert.match(learn, /className="learn-hero-quote"/);
+  assert.match(learn, /<HeroQuote className="learn-hero-quote">\{copy\.quote\}<\/HeroQuote>/);
+  assert.match(learn, /className="learn-hero-lede">\{copy\.description\}/);
+  assert.doesNotMatch(learn, /<h1>\{copy\.title\}<br/);
+  assert.equal((learn.match(/quote:\s*"[^"]+"/g) ?? []).length, 4);
+
+  assert.match(engineering, /<HeroQuote className="engineering-hero-quote">\{copy\.quote\}<\/HeroQuote>/);
+  assert.equal((engineering.match(/quote:\s*"[^"]+"/g) ?? []).length, 6);
+
+  const quoteHelper = await load("../app/hero-quote.tsx");
+  assert.match(quoteHelper, /\\u201C/);
+  assert.match(quoteHelper, /\\u201D/);
+  assert.match(hero, /page-hero-quote/);
+  assert.match(hero, /<HeroQuote className="page-hero-quote">\{quote\}<\/HeroQuote>/);
+  const pages = `${home}\n${materials}\n${loops}\n${reviews}`;
+  for (const tone of ["today", "loops", "reviews", "past", "banks", "journey", "materials"]) {
+    const start = pages.indexOf(`<InterviewPageHero tone="${tone}"`);
+    assert.ok(start >= 0, `missing Interview hero for ${tone}`);
+    const slice = pages.slice(start, start + 900);
+    assert.match(slice, /\btitle=/);
+    assert.match(slice, /\bquote=/);
+  }
+
+  assert.match(learnCss, /\.learn-hero-quote \{[^}]*font-style:\s*italic/s);
+  assert.match(learnCss, /\.learn-hero-quote \{[^}]*flex:\s*0 0 auto/s);
+  assert.match(interviewCss, /\.page-hero-quote \{[^}]*font-style:\s*italic/s);
+  assert.doesNotMatch(interviewCss, /open-quote/);
+  assert.doesNotMatch(learnCss, /open-quote/);
+  assert.doesNotMatch(engineeringCss, /open-quote/);
+  assert.match(engineeringCss, /\.engineering-hero-quote \{[^}]*font-style:\s*italic/s);
+  assert.doesNotMatch(learnCss, /\.learn-hero h1 em/);
+  assert.doesNotMatch(interviewCss, /\.page-hero-copy h1 em/);
+});
+
 test("Learn hero metrics stay in the 50px summary band", async () => {
   const [learnCss, atmosphereCss] = await Promise.all([
     load("../app/learn-workspace.css"),
@@ -1138,11 +1193,14 @@ test("Learn hero metrics stay in the 50px summary band", async () => {
   const values = cssRules(learnRules, ".learn-hero-metrics dd").find((rule) => rule.ancestors.length === 0)?.declarations;
   const stacked = cssRules(learnRules, ".learn-hero-metrics > div", "max-width: 680px").at(-1)?.declarations;
 
-  assert.equal(hero?.["grid-template-rows"], "300px 50px");
+  assert.equal(hero?.display, "block");
+  assert.equal(metrics?.position, "absolute");
+  assert.equal(metrics?.bottom, "0");
   assert.equal(metrics?.height, "50px");
   assert.equal(metrics?.["min-height"], "50px");
   assert.equal(metrics?.["max-height"], "50px");
   assert.equal(metrics?.["z-index"], "3");
+  assert.match(metrics?.background ?? "", /255,\s*255,\s*255/);
   assert.equal(cells?.["grid-template-columns"], "auto minmax(0, 1fr)");
   assert.equal(values?.order, "-1");
   assert.equal(values?.["white-space"], "nowrap");

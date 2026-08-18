@@ -312,7 +312,7 @@
   .engineering-lineage-compact { align-items: flex-start; flex-direction: column; }
   .engineering-destination .engineering-hero-copy { left: 22px; top: 20px; bottom: 80px; width: calc(100% - 44px); }
   .engineering-destination .engineering-hero-copy h1 { max-width: 100%; font-size: clamp(1.85rem, 6.6vw, 2.7rem); line-height: 1.28; letter-spacing: .01em; overflow-wrap: anywhere; }
-  .engineering-destination .engineering-hero-copy p { max-width: 100%; font-size: .8rem; }
+  .engineering-destination .engineering-hero-lede { max-width: 100%; font-size: .8rem; }
   .engineering-destination .engineering-hero-sketch { right: -70px; top: 42px; width: 60%; opacity: .2; }
   .engineering-destination .engineering-hero dl > div { padding-inline: 14px; grid-template-columns: 1fr; gap: 2px; }
   .engineering-destination .engineering-hero dt { font-size: .62rem; }
@@ -577,8 +577,9 @@
 .engineering-hero::before { content: ""; position: absolute; inset: 0; opacity: .42; background-image: linear-gradient(rgba(47,84,76,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(47,84,76,.045) 1px, transparent 1px); background-size: 34px 34px; pointer-events: none; }
 .engineering-hero-copy { position: absolute; z-index: 2; left: clamp(34px, 5vw, 76px); top: 24px; bottom: 88px; width: min(58%, 780px); min-width: 0; display: flex; flex-direction: column; justify-content: flex-start; }
 .engineering-hero-copy > span { color: var(--engineering-accent); font: 820 .72rem/1.3 var(--font-geist-mono); letter-spacing: .13em; text-transform: uppercase; }
-.engineering-hero-copy h1 { max-width: 22ch; margin: 10px 0 12px; font-family: var(--font-editorial), Georgia, serif; font-size: clamp(2.2rem, 3.4vw, 3.65rem); font-weight: 520; line-height: 1.28; letter-spacing: .012em; overflow: visible; padding: .1em 0 .18em; text-wrap: balance; }
-.engineering-hero-copy p { max-width: 62ch; margin: 0; color: #5d706a; font-size: .9rem; line-height: 1.55; }
+.engineering-hero-copy h1 { max-width: 22ch; margin: 10px 0 8px; font-family: var(--font-editorial), Georgia, serif; font-size: clamp(2.2rem, 3.4vw, 3.65rem); font-weight: 520; line-height: 1.28; letter-spacing: .012em; overflow: visible; padding: .1em 0 .12em; text-wrap: balance; }
+.engineering-hero-quote { flex: 0 0 auto; margin: 0 0 12px; max-width: 42ch; color: var(--engineering-accent); font-family: var(--font-editorial), Georgia, serif; font-size: clamp(1.22rem, 1.7vw, 1.5rem); font-style: italic; font-weight: 500; line-height: 1.35; }
+.engineering-hero-lede { max-width: 62ch; margin: 0; color: #5d706a; font-size: .9rem; line-height: 1.55; }
 .engineering-hero-sketch { position: absolute; z-index: 1; top: 27px; right: clamp(24px, 4vw, 62px); width: min(39%, 600px); height: 225px; display: grid; place-items: center; color: var(--engineering-accent); }
 .engineering-hero-sketch svg { width: 100%; height: 100%; overflow: visible; fill: color-mix(in srgb, var(--engineering-accent) 11%, transparent); stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 .engineering-hero-sketch svg > * { stroke-dasharray: 1700; stroke-dashoffset: 1700; animation: engineering-hero-draw .56s cubic-bezier(.22,.8,.32,1) forwards; }
