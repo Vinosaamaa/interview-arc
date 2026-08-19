@@ -182,11 +182,26 @@ export type LearnPayload = {
   };
 };
 
+export type CourseSection = "overview" | "lessons" | "homework" | "analytics";
+export type CoursePathLessonState = "completed" | "current" | "available" | "planned";
+
 export type CoursePathLesson = LearningBlueprintLesson & {
-  state: "completed" | "current" | "available" | "outlined";
+  state: CoursePathLessonState;
   lessonRevision: number | null;
   demonstratedCheckpoints: number;
   requiredCheckpoints: number;
+};
+
+export type LessonContentItem = {
+  id: string;
+  label: string;
+  kind: "section" | "example" | "exercises" | "checkpoints" | "homework" | "sources";
+};
+
+export type LocatedCourseLesson = {
+  module: CoursePathModule;
+  lesson: CoursePathLesson;
+  snapshot: LearningLessonSnapshot | null;
 };
 
 export type CoursePathModule = Omit<LearningBlueprintModule, "lessons"> & {
@@ -215,8 +230,8 @@ export function courseModulePath(payload: LearnPayload, course: LearningCoursePr
   const checkpointById = new Map(payload.evidence.checkpointStates.map((checkpoint) => (
     [`${checkpoint.lessonId}:${checkpoint.checkpointId}`, checkpoint]
   )));
-  return [...(course.blueprint?.modules ?? [])].sort((left, right) => left.order - right.order).map((module) => {
-    const lessons = [...module.lessons].sort((left, right) => left.order - right.order).map((outline) => {
+  return [...(course.blueprint?.modules ?? [])].sort((left, right) => left.order - right.order).map((pathModule) => {
+    const lessons = [...pathModule.lessons].sort((left, right) => left.order - right.order).map((outline) => {
       const lesson = lessonById.get(outline.lessonId);
       const checkpoints = lesson?.current?.checkpoints.filter((checkpoint) => checkpoint.required) ?? [];
       const demonstratedCheckpoints = checkpoints.filter((checkpoint) => (
@@ -226,9 +241,9 @@ export function courseModulePath(payload: LearnPayload, course: LearningCoursePr
         ? "completed" as const
         : course.enrollment?.currentLessonId === outline.lessonId
           ? "current" as const
-          : lesson
+            : lesson
             ? "available" as const
-            : "outlined" as const;
+            : "planned" as const;
       return {
         ...outline,
         state,
@@ -238,7 +253,7 @@ export function courseModulePath(payload: LearnPayload, course: LearningCoursePr
       };
     });
     return {
-      ...module,
+      ...pathModule,
       lessons,
       completedLessons: lessons.filter((lesson) => lesson.state === "completed").length,
     };
@@ -263,4 +278,69 @@ export function selectActiveLearningSession(payload: LearnPayload, lessonId?: st
 export function learningHistory(payload: LearnPayload) {
   return payload.sessions.filter((projection) => projection.session.state === "completed")
     .sort((left, right) => (right.session.completedAt ?? 0) - (left.session.completedAt ?? 0));
+}
+
+export function flattenCourseLessons(path: CoursePathModule[]) {
+  return path.flatMap((pathModule) => pathModule.lessons);
+}
+
+export function locateCourseLesson(payload: LearnPayload, course: LearningCourseProjection, lessonId?: string | null): LocatedCourseLesson | null {
+  if (!lessonId) return null;
+  const snapshot = course.lessons.find((lesson) => lesson.lessonId === lessonId)?.current ?? null;
+  for (const pathModule of courseModulePath(payload, course)) {
+    const lesson = pathModule.lessons.find((item) => item.lessonId === lessonId);
+    if (lesson) return { module: pathModule, lesson, snapshot };
+  }
+  return null;
+}
+
+export function adjacentCourseLessons(path: CoursePathModule[], lessonId?: string | null) {
+  const lessons = flattenCourseLessons(path);
+  const index = lessons.findIndex((lesson) => lesson.lessonId === lessonId);
+  return {
+    previous: index > 0 ? lessons[index - 1] : null,
+    next: index >= 0 && index < lessons.length - 1 ? lessons[index + 1] : null,
+  };
+}
+
+export function defaultCourseLessonId(payload: LearnPayload, course: LearningCourseProjection) {
+  return course.enrollment?.currentLessonId
+    ?? flattenCourseLessons(courseModulePath(payload, course))[0]?.lessonId
+    ?? null;
+}
+
+export function parseCourseSection(value: string | null | undefined): CourseSection | null {
+  return value === "overview" || value === "lessons" || value === "homework" || value === "analytics" ? value : null;
+}
+
+export function lessonContentItems(lesson: LearningLessonSnapshot): LessonContentItem[] {
+  return [
+    ...lesson.sections.map((section) => ({ id: `section-${section.sectionId}`, label: section.heading, kind: "section" as const })),
+    ...lesson.examples.map((example) => ({ id: `example-${example.exampleId}`, label: example.title, kind: "example" as const })),
+    ...(lesson.exercises.length ? [{ id: "exercises", label: "Exercises", kind: "exercises" as const }] : []),
+    ...(lesson.checkpoints.length ? [{ id: "checkpoints", label: "Checkpoints", kind: "checkpoints" as const }] : []),
+    ...(lesson.homework.length ? [{ id: "homework", label: "Homework", kind: "homework" as const }] : []),
+    ...(lesson.sourcePins.length ? [{ id: "sources", label: "Exact sources", kind: "sources" as const }] : []),
+  ];
+}
+
+export function courseProgress(payload: LearnPayload, course: LearningCourseProjection) {
+  const path = flattenCourseLessons(courseModulePath(payload, course));
+  const required = path.reduce((sum, lesson) => sum + lesson.requiredCheckpoints, 0);
+  const demonstrated = path.reduce((sum, lesson) => sum + lesson.demonstratedCheckpoints, 0);
+  return {
+    writtenLessons: course.lessons.length,
+    totalLessons: path.length,
+    completedLessons: path.filter((lesson) => lesson.state === "completed").length,
+    requiredCheckpoints: required,
+    demonstratedCheckpoints: demonstrated,
+  };
+}
+
+export function nextCourseAction(payload: LearnPayload, course: LearningCourseProjection) {
+  const current = locateCourseLesson(payload, course, course.enrollment?.currentLessonId);
+  if (!course.enrollment) return "Review the Blueprint, then enroll from the Learning Specialist.";
+  if (!current) return "Open Lessons and pick up the Module path.";
+  if (!current.snapshot) return `Ask the Learning Specialist to write ${current.lesson.title}.`;
+  return `Continue ${current.lesson.title}.`;
 }

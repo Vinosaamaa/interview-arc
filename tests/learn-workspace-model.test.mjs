@@ -2,8 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  adjacentCourseLessons,
   courseModulePath,
+  courseProgress,
+  defaultCourseLessonId,
+  flattenCourseLessons,
   learningHistory,
+  lessonContentItems,
+  locateCourseLesson,
+  nextCourseAction,
+  parseCourseSection,
   selectActiveLearningSession,
   selectCurrentLesson,
   selectLearningCourse,
@@ -83,7 +91,7 @@ test("the Learn workspace model preserves pinned curriculum order and factual pr
   assert.equal(course.course.currentBlueprintRevision, 2);
   assert.equal(selectCurrentLesson(course).lessonId, "retry-boundary");
   const path = courseModulePath(payload, course);
-  assert.deepEqual(path[0].lessons.map((lesson) => lesson.state), ["completed", "current", "outlined"]);
+  assert.deepEqual(path[0].lessons.map((lesson) => lesson.state), ["completed", "current", "planned"]);
   assert.equal(path[0].completedLessons, 1);
   assert.equal(path[0].lessons[0].demonstratedCheckpoints, 1);
   assert.equal(path[0].lessons[1].demonstratedCheckpoints, 0);
@@ -118,4 +126,40 @@ test("Quick Study remains a revisitable Current lesson without fabricating a Cou
   assert.equal(selectQuickStudy(quickPayload).lesson.lessonId, "quick-study-retries");
   assert.equal(selectQuickStudy(quickPayload, "missing"), null);
   assert.equal(selectQuickStudy(quickPayload).lesson.courseId, null);
+});
+
+test("Lesson selection helpers preserve Enrollment current while browsing Planned and written Lessons", () => {
+  const course = selectLearningCourse(payload);
+  const path = courseModulePath(payload, course);
+  const currentId = defaultCourseLessonId(payload, course);
+  assert.equal(currentId, "retry-boundary");
+  assert.equal(selectCurrentLesson(course).lessonId, "retry-boundary");
+  assert.deepEqual(flattenCourseLessons(path).map((lesson) => lesson.lessonId), ["request-path", "retry-boundary", "release-readback"]);
+  const planned = locateCourseLesson(payload, course, "release-readback");
+  assert.equal(planned.lesson.state, "planned");
+  assert.equal(planned.snapshot, null);
+  assert.equal(selectCurrentLesson(course).lessonId, "retry-boundary");
+  const neighbors = adjacentCourseLessons(path, "retry-boundary");
+  assert.equal(neighbors.previous.lessonId, "request-path");
+  assert.equal(neighbors.next.state, "planned");
+  const progress = courseProgress(payload, course);
+  assert.equal(progress.writtenLessons, 2);
+  assert.equal(progress.totalLessons, 3);
+  assert.match(nextCourseAction(payload, course), /Continue Retry boundary/);
+});
+
+test("two Courses keep independent current Lessons and contents come from real structure", () => {
+  const second = {
+    ...payload.workspace.courses[0],
+    course: { ...payload.workspace.courses[0].course, courseId: "course-spring", title: "Spring" },
+    enrollment: { ...payload.workspace.courses[0].enrollment, enrollmentId: "enrollment-spring", currentLessonId: "request-path" },
+  };
+  const multi = { ...payload, workspace: { ...payload.workspace, courses: [...payload.workspace.courses, second] } };
+  assert.equal(selectLearningCourse(multi, "course-architecture").enrollment.currentLessonId, "retry-boundary");
+  assert.equal(selectLearningCourse(multi, "course-spring").enrollment.currentLessonId, "request-path");
+  assert.equal(parseCourseSection("lessons"), "lessons");
+  assert.equal(parseCourseSection("overview"), "overview");
+  assert.equal(parseCourseSection("bogus"), null);
+  const snapshot = selectCurrentLesson(selectLearningCourse(payload)).current;
+  assert.deepEqual(lessonContentItems(snapshot).map((item) => item.kind), ["section", "checkpoints"]);
 });

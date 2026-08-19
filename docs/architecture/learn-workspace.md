@@ -180,32 +180,37 @@ publication is outside the MVP.
 
 Learn workspace navigation:
 
-- Today
-- Courses
+- Today — Session workbench only. No Course Overview/Lessons/Homework/Statistics
+  controls. A planned, running, or paused Session is the primary instrument;
+  otherwise Today points the owner to Courses.
+- Courses — syllabus and course reader.
 - History
 - Analytics
 
 Course navigation:
 
-- Overview
-- Lessons
+- Overview — enrollment, approved Blueprint revision, current position, facts
+- Lessons — interactive Module path plus a selectable Lesson reader
 - Homework
 - Analytics
 
-Desktop Course layout preserves the curriculum and the selected lesson:
+Desktop Lessons layout preserves the curriculum and the selected lesson:
 
     ┌──────────────────────────┬──────────────────────────┐
-    │ Module path              │ Current lesson           │
+    │ Module path              │ Selected lesson          │
     │                          │                          │
-    │ modules and lessons      │ objective and explanation│
-    │ completion state         │ diagrams and examples    │
-    │ dependency order         │ sources and exercises    │
-    │ locked/next lessons      │ homework/checkpoints     │
+    │ modules and lessons      │ written revision or      │
+    │ Current / Completed /    │ Planned Blueprint card   │
+    │ Available / Planned      │ contents navigator       │
     └──────────────────────────┴──────────────────────────┘
 
-An active Session adds a compact timer, pause/resume control, and Finish session
-action without replacing the Course layout. The website has no tutor input or
-live chat panel; teaching remains in the local Codex specialist thread.
+Selecting a Module-path row changes only the reader. It never changes
+Enrollment.currentLessonId, creates a Lesson, or starts a Session. Planned
+rows show the Blueprint outline until the Learning Specialist writes that
+exact Lesson. An active Session adds a compact timer, pause/resume control,
+and Finish session action without replacing the Course layout. The website
+has no tutor input or live chat panel; teaching remains in the local Codex
+specialist thread.
 
 Mobile uses an accessible Module path/Current lesson switcher and preserves the
 timer, Session identity, and reading position when switching surfaces.

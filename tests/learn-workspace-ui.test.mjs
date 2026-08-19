@@ -19,7 +19,7 @@ test("Learn is an enabled workspace with the contracted local navigation", async
   assert.match(home, /\["history", "History"\]/);
   assert.match(home, /\["analytics", "Statistics"\]/);
   assert.match(home, /aria-label="Learn navigation"/);
-  assert.match(home, /<LearnWorkspace destination=\{learnDestination\}/);
+  assert.match(home, /<LearnWorkspace destination=\{learnDestination\} openedFocus=\{learnCourseFocus\} onOpenCourses=\{\(focus\) => navigateToLearn\("courses", focus\)\}/);
 });
 
 test("the website remains a durable reading surface rather than a second tutor", async () => {
@@ -39,6 +39,25 @@ test("the website remains a durable reading surface rather than a second tutor",
   assert.match(workspace, /response\.status >= 400 && response\.status < 500/);
   assert.match(workspace, /sessionAction: action/);
   assert.doesNotMatch(workspace, /<textarea|contentEditable|Send message|Ask the tutor/);
+});
+
+test("Today is a Session workbench and Courses keeps four distinct rooms", async () => {
+  const workspace = await readFile(workspaceUrl, "utf8");
+
+  assert.match(workspace, /TODAY · SESSION WORKBENCH/);
+  assert.match(workspace, /Open full lesson/);
+  assert.match(workspace, /COURSE OVERVIEW/);
+  assert.match(workspace, /id="learn-overview-title"/);
+  assert.match(workspace, /id="learn-homework-title"/);
+  assert.match(workspace, /id="learn-course-statistics-title"/);
+  assert.match(workspace, /Return to current lesson/);
+  assert.match(workspace, /BLUEPRINT CARD · NOT WRITTEN YET/);
+  assert.match(workspace, /Enrolled · Blueprint r/);
+  assert.match(workspace, /ON THIS LESSON/);
+  assert.match(workspace, /selectLessonWithoutMutatingEnrollment/);
+  assert.match(workspace, /onOpenCourses/);
+  assert.doesNotMatch(workspace, /section="overview"/);
+  assert.doesNotMatch(workspace, /pre-generate|generate every Lesson|generate all/i);
 });
 
 test("Learn preserves an explicit mobile reading switcher and accessibility safeguards", async () => {

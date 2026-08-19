@@ -121,6 +121,7 @@ import { CareerMaterialsMark } from "./career-materials-mark";
 import { WorkspaceNameplate } from "./workspace-identity";
 import InterviewPageHero from "./interview-page-hero";
 import LearnWorkspace from "./learn-workspace";
+import type { LearnCourseFocus } from "./learn-workspace";
 import type { LearnDestination } from "./learn-workspace-model";
 import EngineeringWorkspace, {
   ENGINEERING_NAV_ITEMS,
@@ -1879,6 +1880,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
   const [view, setView] = useState<View>(() => initialInterviewView(initialLocation));
   const [loopsSurfaceReady, setLoopsSurfaceReady] = useState(() => initialInterviewView(initialLocation) === "loops");
   const [learnDestination, setLearnDestination] = useState<LearnDestination>(() => initialLearnDestination(initialLocation));
+  const [learnCourseFocus, setLearnCourseFocus] = useState<LearnCourseFocus | undefined>();
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace>(() => initialWorkspace(initialLocation));
   const [engineeringView, setEngineeringView] = useState<EngineeringView>(() => parseEngineeringDestination(initialLocation.engineering));
   const [engineeringViewMemoryReady, setEngineeringViewMemoryReady] = useState(false);
@@ -4949,12 +4951,25 @@ export default function HomeClient({ content, today, engineering, initialLocatio
     transitionToView(nextView);
   }
 
-  function navigateToLearn(nextDestination: LearnDestination) {
-    if (activeWorkspace === "learn" && view === "learn" && learnDestination === nextDestination) return;
+  function navigateToLearn(nextDestination: LearnDestination, focus?: LearnCourseFocus) {
+    if (activeWorkspace === "learn" && view === "learn" && learnDestination === nextDestination && !focus) return;
     const route = new URL(workspaceViewHref(window.location.href, "learn"), window.location.origin);
     route.searchParams.delete("workspace");
     route.searchParams.delete("engineering");
     route.searchParams.set("learn", nextDestination);
+    if (nextDestination === "courses" && focus) {
+      if (focus.courseId) route.searchParams.set("course", focus.courseId);
+      else route.searchParams.delete("course");
+      if (focus.lessonId) route.searchParams.set("lesson", focus.lessonId);
+      else route.searchParams.delete("lesson");
+      if (focus.section) route.searchParams.set("section", focus.section);
+      else route.searchParams.delete("section");
+    } else if (nextDestination !== "courses") {
+      route.searchParams.delete("course");
+      route.searchParams.delete("lesson");
+      route.searchParams.delete("section");
+    }
+    if (focus) setLearnCourseFocus(focus);
     window.history.pushState(
       { interviewArcWorkspaceView: "learn", interviewArcLearnDestination: nextDestination },
       "",
@@ -7322,7 +7337,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
             </details>
           </div>
         </header>
-        <div className="page-content" id="practice-content">{activeWorkspace === "engineering" ? <EngineeringWorkspace index={engineering} view={engineeringView} onNavigateView={navigateToEngineering} /> : activeWorkspace === "learn" ? <LearnWorkspace destination={learnDestination} /> : <>{view === "today" && renderToday()}{loopsSurfaceReady ? <div hidden={view !== "loops"} className="interview-loops-surface">{renderLoops()}</div> : null}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}{view === "materials" && <CareerMaterialsWorkspace />}</>}</div>
+        <div className="page-content" id="practice-content">{activeWorkspace === "engineering" ? <EngineeringWorkspace index={engineering} view={engineeringView} onNavigateView={navigateToEngineering} /> : activeWorkspace === "learn" ? <LearnWorkspace destination={learnDestination} openedFocus={learnCourseFocus} onOpenCourses={(focus) => navigateToLearn("courses", focus)} /> : <>{view === "today" && renderToday()}{loopsSurfaceReady ? <div hidden={view !== "loops"} className="interview-loops-surface">{renderLoops()}</div> : null}{view === "journey" && renderJourney()}{view === "reviews" && renderReviewQueue()}{view === "library" && renderLibrary()}{view === "banks" && renderBanks()}{view === "materials" && <CareerMaterialsWorkspace />}</>}</div>
       </section>
 
       {activeWorkspace === "learn"
