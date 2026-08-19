@@ -382,15 +382,15 @@ function LessonNavigator({
   const path = courseModulePath(payload, course);
   const currentId = course.enrollment?.currentLessonId;
   const { previous, next } = adjacentCourseLessons(path, selectedLessonId);
-  return <div className="learn-lesson-nav">
+  return <nav className="learn-lesson-nav" aria-label="Adjacent lessons">
     {currentId && currentId !== selectedLessonId && <button type="button" onClick={() => onSelect(currentId)}>Return to current lesson</button>}
     <button type="button" disabled={!previous} onClick={() => previous && onSelect(previous.lessonId)}>
-      Previous{previous ? ` · ${previous.state === "planned" ? "Blueprint preview" : previous.title}` : ""}
+      Previous{previous ? ` · ${previous.title}` : ""}
     </button>
     <button type="button" disabled={!next} onClick={() => next && onSelect(next.lessonId)}>
-      Next{next ? ` · ${next.state === "planned" ? "Blueprint preview" : next.title}` : ""}
+      Next{next ? ` · ${next.title}` : ""}
     </button>
-  </div>;
+  </nav>;
 }
 
 function LessonReader({
@@ -413,10 +413,10 @@ function LessonReader({
     </section>;
   }
   return <div className="learn-lesson-stage">
-    <LessonNavigator payload={payload} course={course} selectedLessonId={selectedLessonId} onSelect={onSelect} />
     {located.snapshot
       ? <WrittenLesson payload={payload} lesson={located.snapshot} />
       : <PlannedLessonCard course={course} lesson={located.lesson} moduleTitle={located.module.title} />}
+    <LessonNavigator payload={payload} course={course} selectedLessonId={selectedLessonId} onSelect={onSelect} />
   </div>;
 }
 
