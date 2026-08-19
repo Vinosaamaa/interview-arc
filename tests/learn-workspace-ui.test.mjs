@@ -72,3 +72,20 @@ test("Learn preserves an explicit mobile reading switcher and accessibility safe
   assert.match(styles, /:focus-visible/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });
+
+test("the Courses lesson pager stays a compact bar instead of stretching with the Module path", async () => {
+  const workspace = await readFile(workspaceUrl, "utf8");
+  const styles = await readFile(stylesUrl, "utf8");
+  const stageIndex = workspace.indexOf("className=\"learn-lesson-stage\"");
+  const cardIndex = workspace.indexOf("<PlannedLessonCard");
+  const navIndex = workspace.indexOf("<LessonNavigator");
+
+  assert.match(styles, /\.learn-course-spread \{[^}]*align-items:\s*start/s);
+  assert.match(styles, /\.learn-lesson-stage \{[^}]*align-content:\s*start/s);
+  assert.match(styles, /\.learn-lesson-stage \{[^}]*grid-auto-rows:\s*max-content/s);
+  assert.match(styles, /\.learn-lesson-nav \{[^}]*align-items:\s*center/s);
+  assert.match(styles, /\.learn-lesson-nav button \{[^}]*flex:\s*0 0 auto/s);
+  assert.match(styles, /\.learn-lesson-nav button \{[^}]*height:\s*auto/s);
+  assert.doesNotMatch(styles, /\.learn-lesson-nav button \{[^}]*flex:\s*1/s);
+  assert.ok(stageIndex >= 0 && cardIndex > stageIndex && navIndex > cardIndex);
+});
