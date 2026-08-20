@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
   adjacentCourseLessons,
@@ -33,8 +33,9 @@ import HeroQuote from "./hero-quote";
 import "./learn-workspace.css";
 
 type MobileCoursePane = "path" | "lesson";
+type MobileTodayPane = "thread" | "session";
 type CourseFocus = { courseId: string; lessonId: string; section: CourseSection };
-export type LearnCourseFocus = { courseId?: string; lessonId?: string; section?: CourseSection };
+export type LearnCourseFocus = { courseId?: string; lessonId?: string; quickStudyId?: string; section?: CourseSection };
 
 const FOCUS_STORAGE_KEY = "interview-arc-learn-course-focus-v1";
 
@@ -295,14 +296,29 @@ function CheckpointList({ payload, lesson }: { payload: LearnPayload; lesson: Le
 function LessonContents({ lesson, activeId, onJump }: { lesson: LearningLessonSnapshot; activeId: string; onJump: (id: string) => void }) {
   const items = lessonContentItems(lesson);
   if (!items.length) return null;
-  return <nav className="learn-lesson-toc" aria-label="On this lesson">
-    <span className="learn-eyebrow">ON THIS LESSON</span>
-    {items.map((item) => (
-      <button type="button" key={item.id} className={activeId === item.id ? "active" : ""} aria-current={activeId === item.id ? "true" : undefined} onClick={() => onJump(item.id)}>
-        {item.label}
-      </button>
-    ))}
-  </nav>;
+  return <details className="learn-lesson-contents">
+    <summary aria-label="Open Lesson contents">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h9" /></svg>
+      <span>Contents</span>
+    </summary>
+    <nav aria-label="On this Lesson">
+      {items.map((item) => (
+        <a
+          href={`#learn-${item.id}`}
+          key={item.id}
+          className={activeId === item.id ? "active" : ""}
+          aria-current={activeId === item.id ? "location" : undefined}
+          onClick={(event) => {
+            event.preventDefault();
+            onJump(item.id);
+            event.currentTarget.closest("details")?.removeAttribute("open");
+          }}
+        >
+          {item.label}
+        </a>
+      ))}
+    </nav>
+  </details>;
 }
 
 function PlannedLessonCard({ course, lesson, moduleTitle }: { course: LearningCourseProjection; lesson: CoursePathLesson; moduleTitle: string }) {
@@ -347,7 +363,8 @@ function WrittenLesson({ payload, lesson }: { payload: LearnPayload; lesson: Lea
   }
 
   return <div className="learn-lesson-reader">
-    <article className="learn-current-lesson" aria-labelledby="learn-current-lesson-title">
+    <article className="learn-current-lesson learn-written-lesson" aria-labelledby="learn-current-lesson-title">
+      <LessonContents lesson={lesson} activeId={activeId} onJump={jump} />
       <header>
         <div>
           <span className="learn-eyebrow">CURRENT LESSON · REVISION {lesson.revision}</span>
@@ -364,7 +381,6 @@ function WrittenLesson({ payload, lesson }: { payload: LearnPayload; lesson: Lea
       {lesson.homework.length > 0 && <section className="learn-lesson-block" id="learn-homework"><span className="learn-eyebrow">HOMEWORK</span><ol className="learn-exercises">{lesson.homework.map((item) => <li key={item.homeworkId}>{item.prompt}</li>)}</ol></section>}
       {lesson.sourcePins.length > 0 && <section className="learn-sources" id="learn-sources"><span className="learn-eyebrow">EXACT SOURCES</span>{lesson.sourcePins.map((source, index) => <div key={`${source.title}-${index}`}><strong>{source.title}</strong><small>{source.repository && source.commit ? `${source.repository} · ${source.commit.slice(0, 12)}` : source.kind.replaceAll("_", " ")}{source.path ? ` · ${source.path}` : ""}</small>{source.url && <a href={source.url} target="_blank" rel="noreferrer">Open source ↗</a>}</div>)}</section>}
     </article>
-    <LessonContents lesson={lesson} activeId={activeId} onJump={jump} />
   </div>;
 }
 
@@ -423,26 +439,70 @@ function LessonReader({
 function QuickStudyWorkspace({
   payload,
   study,
-  now,
   busy,
-  onControl,
   onHomework,
 }: {
   payload: LearnPayload;
   study: LearningQuickStudyProjection;
-  now: number;
   busy: boolean;
-  onControl: (session: LearningSessionProjection, action: "start" | "pause" | "resume") => void;
   onHomework: (homework: LearnPayload["evidence"]["homework"][number]) => void;
 }) {
   const activeSession = selectActiveLearningSession(payload, study.lesson.lessonId);
   const homework = payload.evidence.homework.filter((item) => item.lessonId === study.lesson.lessonId);
   return <div className="learn-course-workspace learn-quick-study-workspace">
     <header className="learn-quick-study-header"><div><span className="learn-eyebrow">QUICK STUDY</span><h2>{study.lesson.title}</h2><p>A standalone Current lesson with no Course or Enrollment overhead.</p></div><span className={`learn-state ${study.lesson.state}`}>{study.lesson.state}</span></header>
-    {activeSession && <SessionInstrument session={activeSession} now={now} busy={busy} lessonTitle={study.lesson.title} onControl={(action) => onControl(activeSession, action)} />}
+    {activeSession && <aside className="learn-session-chip"><p>A {activeSession.session.state} Session is attached to this Quick Study. Open Today to control its timer.</p></aside>}
     {study.current ? <WrittenLesson payload={payload} lesson={study.current} /> : <section className="learn-current-lesson learn-current-lesson-empty"><span className="learn-eyebrow">CURRENT LESSON</span><h2>This Lesson has not been generated yet.</h2><p>The Learning Specialist creates the exact reusable Lesson revision immediately before the Session starts.</p></section>}
     {homework.length > 0 && <section className="learn-homework-panel"><header><span className="learn-eyebrow">HOMEWORK</span><h2>Follow-up, recorded plainly.</h2><p>Completion is a fact. It does not automatically demonstrate a checkpoint.</p></header>{homework.map((item) => <article key={item.homeworkId}><div><strong>{item.prompt}</strong><small>Revision {item.revision} · {item.state}</small></div><button type="button" onClick={() => onHomework(item)} disabled={busy}>{item.state === "completed" ? "Mark open" : "Mark completed"}</button></article>)}</section>}
   </div>;
+}
+
+function CourseIndex({
+  payload,
+  courses,
+  quickStudies,
+  selectedCourse,
+  selectedQuickStudy,
+  onSelectCourse,
+  onSelectQuickStudy,
+}: {
+  payload: LearnPayload;
+  courses: LearningCourseProjection[];
+  quickStudies: LearningQuickStudyProjection[];
+  selectedCourse: LearningCourseProjection | null;
+  selectedQuickStudy: LearningQuickStudyProjection | null;
+  onSelectCourse: (courseId: string) => void;
+  onSelectQuickStudy: (lessonId: string) => void;
+}) {
+  return <nav className="learn-course-index" aria-label="Courses and Quick Studies">
+    <header><span className="learn-eyebrow">COURSES</span><h2>{courses.length} Blueprint{courses.length === 1 ? "" : "s"}</h2><p>Select a Course to change the reader.</p></header>
+    {courses.map((course) => <button type="button" key={course.course.courseId} className={selectedCourse?.course.courseId === course.course.courseId ? "active" : ""} aria-current={selectedCourse?.course.courseId === course.course.courseId ? "true" : undefined} onClick={() => onSelectCourse(course.course.courseId)}><span>{enrollmentCopy(course)}</span><strong>{course.course.title}</strong><small>{course.lessons.filter((lesson) => lesson.state === "completed").length} / {flattenCourseLessons(courseModulePath(payload, course)).length} lessons · Course {course.course.state}</small></button>)}
+    {quickStudies.length > 0 && <div className="learn-course-index-divider"><span className="learn-eyebrow">QUICK STUDIES</span><small>{quickStudies.length} standalone</small></div>}
+    {quickStudies.map((study) => <button type="button" key={study.lesson.lessonId} className={selectedQuickStudy?.lesson.lessonId === study.lesson.lessonId ? "active" : ""} aria-current={selectedQuickStudy?.lesson.lessonId === study.lesson.lessonId ? "true" : undefined} onClick={() => onSelectQuickStudy(study.lesson.lessonId)}><span>{study.lesson.state}</span><strong>{study.lesson.title}</strong><small>Current lesson r{study.current?.revision ?? study.lesson.currentRevision}</small></button>)}
+  </nav>;
+}
+
+function homeworkDomId(homeworkId: string) {
+  return `learn-homework-${homeworkId.toLowerCase().replace(/[^a-z0-9_-]+/g, "-")}`;
+}
+
+function HomeworkIndex({ homework }: { homework: LearnPayload["evidence"]["homework"] }) {
+  return <nav className="learn-context-rail learn-homework-index" aria-label="Course assignments">
+    <header><span className="learn-eyebrow">ASSIGNMENTS</span><h2>{homework.length} current</h2><p>Open and completed states from exact Lesson revisions.</p></header>
+    {homework.length ? homework.map((item) => <a href={`#${homeworkDomId(item.homeworkId)}`} key={item.homeworkId}><strong>{item.prompt}</strong><small>Revision {item.revision} · {item.state}</small></a>) : <p className="learn-context-empty">No homework is attached to this Course yet.</p>}
+  </nav>;
+}
+
+function CourseScope({ course, analytics }: { course: LearningCourseProjection; analytics?: LearnPayload["analytics"]["courses"][number] }) {
+  return <aside className="learn-context-rail learn-course-scope" aria-labelledby="learn-course-scope-title">
+    <header><span className="learn-eyebrow">STATISTICS SCOPE</span><h2 id="learn-course-scope-title">This Course</h2><p>{course.course.title}</p></header>
+    <dl>
+      <div><dt>Enrollment</dt><dd>{enrollmentCopy(course)}</dd></div>
+      <div><dt>Recorded</dt><dd>{formatDuration(factualCount(analytics?.recordedSeconds))}</dd></div>
+      <div><dt>Sessions</dt><dd>{factualCount(analytics?.completedSessionCount)}</dd></div>
+      <div><dt>Evidence policy</dt><dd>Factual records only</dd></div>
+    </dl>
+  </aside>;
 }
 
 function CourseOverview({ payload, course, onOpenLessons }: { payload: LearnPayload; course: LearningCourseProjection; onOpenLessons: () => void }) {
@@ -469,57 +529,68 @@ function CourseOverview({ payload, course, onOpenLessons }: { payload: LearnPayl
   </section>;
 }
 
+function HomeworkPanel({
+  homework,
+  busy,
+  onHomework,
+}: {
+  homework: LearnPayload["evidence"]["homework"];
+  busy: boolean;
+  onHomework: (homework: LearnPayload["evidence"]["homework"][number]) => void;
+}) {
+  return <section className="learn-homework-panel" aria-labelledby="learn-homework-title">
+    <header><span className="learn-eyebrow">HOMEWORK</span><h2 id="learn-homework-title">Assigned work, recorded plainly.</h2><p>Completion is a fact. It does not automatically demonstrate a checkpoint.</p></header>
+    {homework.length ? homework.map((item) => <article id={homeworkDomId(item.homeworkId)} key={item.homeworkId}><div><strong>{item.prompt}</strong><small>Revision {item.revision} · {item.state}</small></div><button type="button" onClick={() => onHomework(item)} disabled={busy}>{item.state === "completed" ? "Mark open" : "Mark completed"}</button></article>) : <p className="learn-inline-empty">No homework is attached to this Course yet.</p>}
+  </section>;
+}
+
 function CourseWorkspace({
   payload,
   course,
+  courseIndex,
   section,
   onSection,
   selectedLessonId,
   onSelectLesson,
   mobilePane,
   onMobilePane,
-  now,
   busy,
-  onControl,
   onHomework,
 }: {
   payload: LearnPayload;
   course: LearningCourseProjection;
+  courseIndex: ReactNode;
   section: CourseSection;
   onSection: (section: CourseSection) => void;
   selectedLessonId: string;
   onSelectLesson: (lessonId: string) => void;
   mobilePane: MobileCoursePane;
   onMobilePane: (pane: MobileCoursePane) => void;
-  now: number;
   busy: boolean;
-  onControl: (session: LearningSessionProjection, action: "start" | "pause" | "resume") => void;
   onHomework: (homework: LearnPayload["evidence"]["homework"][number]) => void;
 }) {
   const current = selectCurrentLesson(course);
-  const selected = locateCourseLesson(payload, course, selectedLessonId);
   const sessionForSelected = selectActiveLearningSession(payload, selectedLessonId);
   const activeSession = selectActiveLearningSession(payload, current?.lessonId) ?? selectActiveLearningSession(payload);
   const inspectingOther = Boolean(activeSession && activeSession.session.lessonId !== selectedLessonId);
   const homework = payload.evidence.homework.filter((item) => course.lessons.some((lesson) => lesson.lessonId === item.lessonId));
   const analytics = payload.analytics.courses.find((item) => item.courseId === course.course.courseId);
-  return <div className="learn-course-workspace">
+  return <div className="learn-course-workspace learn-courses-surface">
     <nav className="learn-course-nav" aria-label={`${course.course.title} navigation`}>{(["overview", "lessons", "homework", "analytics"] as CourseSection[]).map((item) => <button type="button" key={item} className={section === item ? "active" : ""} aria-current={section === item ? "page" : undefined} onClick={() => onSection(item)}>{item === "analytics" ? "statistics" : item}</button>)}</nav>
-    {section === "overview" && <CourseOverview payload={payload} course={course} onOpenLessons={() => onSection("lessons")} />}
+    {section === "overview" && <div className="learn-courses-layout learn-course-section-overview">{courseIndex}<CourseOverview payload={payload} course={course} onOpenLessons={() => onSection("lessons")} /></div>}
     {section === "lessons" && <>
-      {inspectingOther && activeSession && <aside className="learn-session-chip">
-        <p>A Session is {activeSession.session.state} on another Lesson.</p>
-        <button type="button" onClick={() => onSelectLesson(activeSession.session.lessonId)}>Return to the Session lesson</button>
-      </aside>}
-      {sessionForSelected && !inspectingOther && <SessionInstrument session={sessionForSelected} now={now} busy={busy} courseTitle={course.course.title} moduleTitle={selected?.module.title} lessonTitle={selected?.lesson.title} onControl={(action) => onControl(sessionForSelected, action)} />}
       <div className="learn-mobile-pane-switcher" aria-label="Course reading surface"><button type="button" className={mobilePane === "path" ? "active" : ""} aria-pressed={mobilePane === "path"} onClick={() => onMobilePane("path")}>Module path</button><button type="button" className={mobilePane === "lesson" ? "active" : ""} aria-pressed={mobilePane === "lesson"} onClick={() => onMobilePane("lesson")}>Current lesson</button></div>
-      <div className={`learn-course-spread mobile-${mobilePane}`}>
+      <div className={`learn-courses-layout learn-course-section-lessons mobile-${mobilePane}`}>
         <ModulePath payload={payload} course={course} selectedLessonId={selectedLessonId} onSelect={onSelectLesson} />
-        <LessonReader payload={payload} course={course} selectedLessonId={selectedLessonId} onSelect={onSelectLesson} />
+        <div className="learn-course-reader-pane">
+          {inspectingOther && activeSession && <aside className="learn-session-chip"><p>A Session is {activeSession.session.state} on another Lesson.</p><button type="button" onClick={() => onSelectLesson(activeSession.session.lessonId)}>Return to the Session lesson</button></aside>}
+          {sessionForSelected && !inspectingOther && <aside className="learn-session-chip"><p>A Session is {sessionForSelected.session.state} on this Lesson. Open Today to control its timer.</p></aside>}
+          <LessonReader payload={payload} course={course} selectedLessonId={selectedLessonId} onSelect={onSelectLesson} />
+        </div>
       </div>
     </>}
-    {section === "homework" && <section className="learn-homework-panel" aria-labelledby="learn-homework-title"><header><span className="learn-eyebrow">HOMEWORK</span><h2 id="learn-homework-title">Assigned work, recorded plainly.</h2><p>Completion is a fact. It does not automatically demonstrate a checkpoint.</p></header>{homework.length ? homework.map((item) => <article key={item.homeworkId}><div><strong>{item.prompt}</strong><small>Revision {item.revision} · {item.state}</small></div><button type="button" onClick={() => onHomework(item)} disabled={busy}>{item.state === "completed" ? "Mark open" : "Mark completed"}</button></article>) : <p className="learn-inline-empty">No homework is attached to this Course yet.</p>}</section>}
-    {section === "analytics" && <CourseAnalytics course={course} analytics={analytics} />}
+    {section === "homework" && <div className="learn-courses-layout learn-course-section-homework"><HomeworkIndex homework={homework} /><HomeworkPanel homework={homework} busy={busy} onHomework={onHomework} /></div>}
+    {section === "analytics" && <div className="learn-courses-layout learn-course-section-analytics"><CourseScope course={course} analytics={analytics} /><CourseAnalytics course={course} analytics={analytics} /></div>}
   </div>;
 }
 
@@ -535,6 +606,36 @@ function CourseAnalytics({ course, analytics }: { course: LearningCourseProjecti
   return <section className="learn-course-analytics" aria-labelledby="learn-course-statistics-title"><header><span className="learn-eyebrow">COURSE STATISTICS</span><h2 id="learn-course-statistics-title">{course.course.title}</h2><p>Only observed Learning records are counted.</p></header><dl>{cells.map(([label, value]) => <div key={String(label)}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></section>;
 }
 
+function CurrentLearningThread({
+  payload,
+  course,
+  located,
+  quickStudy,
+  session,
+}: {
+  payload: LearnPayload;
+  course: LearningCourseProjection | null;
+  located: ReturnType<typeof locateCourseLesson>;
+  quickStudy: LearningQuickStudyProjection | null;
+  session: LearningSessionProjection;
+}) {
+  const next = course && located ? adjacentCourseLessons(courseModulePath(payload, course), located.lesson.lessonId).next : null;
+  return <aside className="learn-today-context" aria-labelledby="learn-today-thread-title">
+    <header><h2 id="learn-today-thread-title">Current thread</h2><p>Exact Course, Module, Lesson, and checkpoint scope.</p></header>
+    <div className="learn-today-context-body">
+      <dl>
+        <div><dt>{quickStudy ? "Scope" : "Course"}</dt><dd>{quickStudy ? "Quick Study" : course?.course.title ?? "Course unavailable"}</dd></div>
+        <div><dt>{quickStudy ? "Lesson revision" : "Enrollment"}</dt><dd>{quickStudy ? `r${quickStudy.current?.revision ?? quickStudy.lesson.currentRevision}` : course ? enrollmentCopy(course) : "Not available"}</dd></div>
+      </dl>
+      <ol className="learn-thread-path">
+        {located?.module && <li><span aria-hidden="true" /><div><strong>{located.module.title}</strong><small>MODULE · {located.module.lessons.length} LESSONS</small></div></li>}
+        <li className="current"><span aria-hidden="true" /><div><strong>{located?.lesson.title ?? quickStudy?.lesson.title ?? session.session.lessonId}</strong><small>CURRENT · LESSON R{session.session.lessonRevision}</small></div></li>
+        {next && <li><span aria-hidden="true" /><div><strong>{next.title}</strong><small>{pathStateLabel(next.state).toUpperCase()} · NEXT LESSON</small></div></li>}
+      </ol>
+    </div>
+  </aside>;
+}
+
 function TodayWorkbench({
   payload,
   session,
@@ -543,7 +644,6 @@ function TodayWorkbench({
   busy,
   onControl,
   onOpenCourses,
-  onHomework,
 }: {
   payload: LearnPayload;
   session: LearningSessionProjection | null;
@@ -552,23 +652,19 @@ function TodayWorkbench({
   busy: boolean;
   onControl: (session: LearningSessionProjection, action: "start" | "pause" | "resume") => void;
   onOpenCourses: (focus?: LearnCourseFocus) => void;
-  onHomework: (homework: LearnPayload["evidence"]["homework"][number]) => void;
 }) {
+  const [mobilePane, setMobilePane] = useState<MobileTodayPane>("session");
   const course = session?.session.courseId ? selectLearningCourse(payload, session.session.courseId) : null;
   const located = course ? locateCourseLesson(payload, course, session?.session.lessonId) : null;
   const todayQuickStudy = session?.session.scopeType === "quick_study" ? quickStudy : null;
   if (!session) {
-    return <section className="learn-empty learn-today-empty" aria-labelledby="learn-today-empty-title">
-      <span className="learn-eyebrow">TODAY · SESSION WORKBENCH</span>
-      <h2 id="learn-today-empty-title">No Learning Session is planned.</h2>
-      <p>Today holds the Session you are in. Open Courses to inspect the syllabus, written lessons, homework, and counts without starting time.</p>
-      <button type="button" className="learn-open-lesson" onClick={() => onOpenCourses({ section: "lessons" })}>Open Courses</button>
-    </section>;
+    return <div className="learn-today-body learn-today-empty-body">
+      <aside className="learn-today-context"><header><h2>Current thread</h2><p>No Session is planned.</p></header><div className="learn-today-context-body"><p>Courses remain available for reading without starting time.</p></div></aside>
+      <section className="learn-empty learn-today-empty" aria-labelledby="learn-today-empty-title"><span className="learn-eyebrow">TODAY · SESSION WORKBENCH</span><h2 id="learn-today-empty-title">No Learning Session is planned.</h2><p>Today holds the Session you are in. Open Courses to inspect the syllabus, written lessons, homework, and counts without starting time.</p><button type="button" className="learn-open-lesson" onClick={() => onOpenCourses({ section: "lessons" })}>Open Courses</button></section>
+    </div>;
   }
-  if (todayQuickStudy) {
-    return <QuickStudyWorkspace payload={payload} study={todayQuickStudy} now={now} busy={busy} onControl={onControl} onHomework={onHomework} />;
-  }
-  const snapshot = located?.snapshot;
+  const snapshot = todayQuickStudy?.current ?? located?.snapshot;
+  const lessonTitle = located?.lesson.title ?? todayQuickStudy?.lesson.title ?? session.session.lessonId;
   const checkpoints = snapshot?.checkpoints.filter((item) => item.required) ?? [];
   const demonstrated = checkpoints.filter((checkpoint) => payload.evidence.checkpointStates.some((state) => state.lessonId === snapshot?.lessonId && state.checkpointId === checkpoint.checkpointId && state.status === "demonstrated")).length;
   return <div className="learn-today-workbench">
@@ -578,23 +674,21 @@ function TodayWorkbench({
       busy={busy}
       courseTitle={course?.course.title}
       moduleTitle={located?.module.title}
-      lessonTitle={located?.lesson.title ?? session.session.lessonId}
+      lessonTitle={lessonTitle}
       onControl={(action) => onControl(session, action)}
     />
-    <section className="learn-today-summary" aria-labelledby="learn-today-lesson-title">
-      <span className="learn-eyebrow">IN PLAY</span>
-      <h2 id="learn-today-lesson-title">{located?.lesson.title ?? session.session.lessonId}</h2>
-      <p>{snapshot?.objective ?? located?.lesson.objective ?? "The specialist has not written this Lesson yet."}</p>
-      <p className="learn-enrollment">{course ? enrollmentCopy(course) : "Quick Study"}</p>
-      {checkpoints.length > 0 && <p>Required checkpoints {demonstrated} / {checkpoints.length}.</p>}
-      <button
-        type="button"
-        className="learn-open-lesson"
-        onClick={() => onOpenCourses({ courseId: course?.course.courseId, lessonId: session.session.lessonId, section: "lessons" })}
-      >
-        Open full lesson
-      </button>
-    </section>
+    <nav className="learn-mobile-today-switcher" aria-label="Today reading surface"><button type="button" className={mobilePane === "thread" ? "active" : ""} aria-pressed={mobilePane === "thread"} onClick={() => setMobilePane("thread")}>Thread</button><button type="button" className={mobilePane === "session" ? "active" : ""} aria-pressed={mobilePane === "session"} onClick={() => setMobilePane("session")}>Session</button></nav>
+    <div className={`learn-today-body mobile-${mobilePane}`}>
+      <CurrentLearningThread payload={payload} course={course} located={located} quickStudy={todayQuickStudy} session={session} />
+      <section className="learn-today-summary" aria-labelledby="learn-today-lesson-title">
+        <span className="learn-eyebrow">IN PLAY</span>
+        <h2 id="learn-today-lesson-title">{lessonTitle}</h2>
+        <p>{snapshot?.objective ?? located?.lesson.objective ?? "The specialist has not written this Lesson yet."}</p>
+        <p className="learn-enrollment">{course ? enrollmentCopy(course) : `Quick Study · Lesson r${snapshot?.revision ?? session.session.lessonRevision}`}</p>
+        {checkpoints.length > 0 && <p>Required checkpoints {demonstrated} / {checkpoints.length}.</p>}
+        <button type="button" className="learn-open-lesson" onClick={() => onOpenCourses({ courseId: course?.course.courseId, lessonId: session.session.lessonId, quickStudyId: todayQuickStudy?.lesson.lessonId, section: "lessons" })}>Open full lesson</button>
+      </section>
+    </div>
   </div>;
 }
 
@@ -690,13 +784,14 @@ export default function LearnWorkspace({
   const selectedLessonId = selectedCourse
     ? lessonByCourse[selectedCourse.course.courseId] || defaultCourseLessonId(payload!, selectedCourse) || ""
     : "";
-  const openedSignature = `${openedFocus?.courseId ?? ""}|${openedFocus?.lessonId ?? ""}|${openedFocus?.section ?? ""}`;
+  const openedSignature = `${openedFocus?.courseId ?? ""}|${openedFocus?.lessonId ?? ""}|${openedFocus?.quickStudyId ?? ""}|${openedFocus?.section ?? ""}`;
   if (openedSignature && openedSignature !== appliedFocusSignature) {
     setAppliedFocusSignature(openedSignature);
     if (openedFocus?.courseId) {
       setSelectedCourseId(openedFocus.courseId);
       setSelectedQuickStudyId("");
     }
+    if (openedFocus?.quickStudyId) setSelectedQuickStudyId(openedFocus.quickStudyId);
     if (openedFocus?.section) setCourseSection(openedFocus.section);
     if (openedFocus?.courseId && openedFocus?.lessonId) {
       setLessonByCourse((current) => ({ ...current, [openedFocus.courseId!]: openedFocus.lessonId! }));
@@ -773,6 +868,22 @@ export default function LearnWorkspace({
   const todayQuickStudy = activeSession?.session.scopeType === "quick_study"
     ? selectQuickStudy(payload, activeSession.session.lessonId)
     : selectedQuickStudy;
+  const courseIndex = <CourseIndex
+    payload={payload}
+    courses={courses}
+    quickStudies={quickStudies}
+    selectedCourse={selectedCourse}
+    selectedQuickStudy={selectedQuickStudy}
+    onSelectCourse={(courseId) => {
+      setSelectedQuickStudyId("");
+      setSelectedCourseId(courseId);
+      setCourseSection("overview");
+    }}
+    onSelectQuickStudy={(lessonId) => {
+      setSelectedQuickStudyId(lessonId);
+      setCourseSection("overview");
+    }}
+  />;
 
   return <div className="learn-workspace">
     <LearnHero destination={destination} payload={payload} />
@@ -786,10 +897,12 @@ export default function LearnWorkspace({
         busy={busy}
         onControl={(session, action) => void controlSessionExact(session, action)}
         onOpenCourses={(focus) => onOpenCourses?.(focus)}
-        onHomework={(item) => void setHomework(item)}
       />
     )}
-    {destination === "courses" && (courses.length || quickStudies.length ? <div className="learn-courses-layout"><nav className="learn-course-index" aria-label="Courses and Quick Studies"><header><span className="learn-eyebrow">COURSES</span><h2>{courses.length} Blueprint{courses.length === 1 ? "" : "s"}</h2></header>{courses.map((course) => <button type="button" key={course.course.courseId} className={selectedCourse?.course.courseId === course.course.courseId ? "active" : ""} onClick={() => { setSelectedQuickStudyId(""); setSelectedCourseId(course.course.courseId); setCourseSection("overview"); }}><span>{enrollmentCopy(course)}</span><strong>{course.course.title}</strong><small>{course.lessons.filter((lesson) => lesson.state === "completed").length} / {flattenCourseLessons(courseModulePath(payload, course)).length} lessons · Course {course.course.state}</small></button>)}{quickStudies.length > 0 && <div className="learn-course-index-divider"><span className="learn-eyebrow">QUICK STUDIES</span><small>{quickStudies.length} standalone</small></div>}{quickStudies.map((study) => <button type="button" key={study.lesson.lessonId} className={selectedQuickStudy?.lesson.lessonId === study.lesson.lessonId ? "active" : ""} onClick={() => setSelectedQuickStudyId(study.lesson.lessonId)}><span>{study.lesson.state}</span><strong>{study.lesson.title}</strong><small>Current lesson r{study.current?.revision ?? study.lesson.currentRevision}</small></button>)}</nav>{selectedQuickStudy ? <QuickStudyWorkspace payload={payload} study={selectedQuickStudy} now={now} busy={busy} onControl={(session, action) => void controlSessionExact(session, action)} onHomework={(item) => void setHomework(item)} /> : selectedCourse && <CourseWorkspace payload={payload} course={selectedCourse} section={courseSection} onSection={setCourseSection} selectedLessonId={selectedLessonId} onSelectLesson={(lessonId) => selectLessonWithoutMutatingEnrollment(selectedCourse.course.courseId, lessonId)} mobilePane={mobilePane} onMobilePane={setMobilePane} now={now} busy={busy} onControl={(session, action) => void controlSessionExact(session, action)} onHomework={(item) => void setHomework(item)} />}</div> : <EmptyLearn destination="courses" />)}
+    {destination === "courses" && (courses.length || quickStudies.length ? selectedQuickStudy
+      ? <div className="learn-courses-layout learn-quick-study-layout">{courseIndex}<QuickStudyWorkspace payload={payload} study={selectedQuickStudy} busy={busy} onHomework={(item) => void setHomework(item)} /></div>
+      : selectedCourse && <CourseWorkspace payload={payload} course={selectedCourse} courseIndex={courseIndex} section={courseSection} onSection={setCourseSection} selectedLessonId={selectedLessonId} onSelectLesson={(lessonId) => selectLessonWithoutMutatingEnrollment(selectedCourse.course.courseId, lessonId)} mobilePane={mobilePane} onMobilePane={setMobilePane} busy={busy} onHomework={(item) => void setHomework(item)} />
+      : <EmptyLearn destination="courses" />)}
     {destination === "history" && <HistoryView payload={payload} />}
     {destination === "analytics" && <AnalyticsView payload={payload} />}
   </div>;
