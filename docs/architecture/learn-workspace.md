@@ -178,6 +178,9 @@ publication is outside the MVP.
 
 ## Interface Structure
 
+The approved responsive geometry and contextual-rail behavior are preserved in
+[`../design/learn-workspace/approved-layout.md`](../design/learn-workspace/approved-layout.md).
+
 Learn workspace navigation:
 
 - Today — Session workbench only. No Course Overview/Lessons/Homework/Statistics
@@ -192,28 +195,30 @@ Course navigation:
 - Overview — enrollment, approved Blueprint revision, current position, facts
 - Lessons — interactive Module path plus a selectable Lesson reader
 - Homework
-- Analytics
+- Statistics
 
-Desktop Lessons layout preserves the curriculum and the selected lesson:
+Desktop Lessons uses the shared 1,536-pixel Learn frame: a 316-pixel contextual
+rail, a 20-pixel gutter, and a main reader up to 1,200 pixels wide. It preserves
+the curriculum and selected lesson:
 
     ┌──────────────────────────┬──────────────────────────┐
     │ Module path              │ Selected lesson          │
     │                          │                          │
     │ modules and lessons      │ written revision or      │
     │ Current / Completed /    │ Planned Blueprint card   │
-    │ Available / Planned      │ contents navigator       │
+    │ Available / Planned      │ Contents disclosure      │
     └──────────────────────────┴──────────────────────────┘
 
 Selecting a Module-path row changes only the reader. It never changes
 Enrollment.currentLessonId, creates a Lesson, or starts a Session. Planned
 rows show the Blueprint outline until the Learning Specialist writes that
-exact Lesson. An active Session adds a compact timer, pause/resume control,
-and Finish session action without replacing the Course layout. The website
+exact Lesson. The timer and Session controls render only in Today; Courses may
+identify an attached Session and direct the owner back to Today. The website
 has no tutor input or live chat panel; teaching remains in the local Codex
 specialist thread.
 
-Mobile uses an accessible Module path/Current lesson switcher and preserves the
-timer, Session identity, and reading position when switching surfaces.
+Mobile uses accessible Module path/Current lesson and Thread/Session switchers.
+It preserves Session identity and reading position when switching surfaces.
 
 ## Shared Timed-Conversation Module
 

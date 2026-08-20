@@ -53,9 +53,11 @@ test("Today is a Session workbench and Courses keeps four distinct rooms", async
   assert.match(workspace, /Return to current lesson/);
   assert.match(workspace, /BLUEPRINT CARD · NOT WRITTEN YET/);
   assert.match(workspace, /Enrolled · Blueprint r/);
-  assert.match(workspace, /ON THIS LESSON/);
+  assert.match(workspace, /Open Lesson contents/);
+  assert.match(workspace, /aria-label="On this Lesson"/);
   assert.match(workspace, /selectLessonWithoutMutatingEnrollment/);
   assert.match(workspace, /onOpenCourses/);
+  assert.doesNotMatch(workspace, /learn-lesson-toc/);
   assert.doesNotMatch(workspace, /section="overview"/);
   assert.doesNotMatch(workspace, /pre-generate|generate every Lesson|generate all/i);
 });
@@ -67,20 +69,28 @@ test("Learn preserves an explicit mobile reading switcher and accessibility safe
   assert.match(workspace, /aria-label="Course reading surface"/);
   assert.match(workspace, /aria-pressed=\{mobilePane === "path"\}/);
   assert.match(workspace, /aria-pressed=\{mobilePane === "lesson"\}/);
+  assert.match(workspace, /aria-label="Today reading surface"/);
   assert.match(styles, /@media \(max-width: 760px\)/);
-  assert.match(styles, /\.learn-mobile-pane-switcher \{[^}]*display: grid/s);
+  assert.match(styles, /\.learn-mobile-pane-switcher,\s*\.learn-mobile-today-switcher \{[^}]*display: grid/s);
+  assert.match(styles, /\.learn-course-section-lessons\.mobile-path \.learn-course-reader-pane/);
+  assert.match(styles, /\.learn-today-body\.mobile-thread \.learn-today-summary/);
   assert.match(styles, /:focus-visible/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });
 
-test("the Courses lesson pager stays a compact bar instead of stretching with the Module path", async () => {
+test("Learn uses the approved 316 plus 1200 two-panel frame", async () => {
   const workspace = await readFile(workspaceUrl, "utf8");
   const styles = await readFile(stylesUrl, "utf8");
   const stageIndex = workspace.indexOf("className=\"learn-lesson-stage\"");
   const cardIndex = workspace.indexOf("<PlannedLessonCard");
   const navIndex = workspace.indexOf("<LessonNavigator");
 
-  assert.match(styles, /\.learn-course-spread \{[^}]*align-items:\s*start/s);
+  assert.match(styles, /\.active-workspace-learn \.page-content \{[^}]*max-width:\s*none[^}]*padding:\s*0 24px 80px/s);
+  assert.match(styles, /\.learn-courses-layout \{[^}]*grid-template-columns:\s*minmax\(290px, 316px\) minmax\(0, 1200px\)/s);
+  assert.match(styles, /\.learn-today-body \{[^}]*grid-template-columns:\s*minmax\(290px, 316px\) minmax\(0, 1200px\)/s);
+  assert.match(styles, /\.learn-course-nav \{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)[^}]*width:\s*100%/s);
+  assert.match(styles, /\.learn-today-summary \{[^}]*min-height:\s*540px/s);
+  assert.doesNotMatch(styles, /\.learn-today-summary \{[^}]*100vh/s);
   assert.match(styles, /\.learn-lesson-stage \{[^}]*align-content:\s*start/s);
   assert.match(styles, /\.learn-lesson-stage \{[^}]*grid-auto-rows:\s*max-content/s);
   assert.match(styles, /\.learn-lesson-nav \{[^}]*align-items:\s*center/s);
@@ -88,4 +98,29 @@ test("the Courses lesson pager stays a compact bar instead of stretching with th
   assert.match(styles, /\.learn-lesson-nav button \{[^}]*height:\s*auto/s);
   assert.doesNotMatch(styles, /\.learn-lesson-nav button \{[^}]*flex:\s*1/s);
   assert.ok(stageIndex >= 0 && cardIndex > stageIndex && navIndex > cardIndex);
+});
+
+test("only Today renders the live Session timer", async () => {
+  const workspace = await readFile(workspaceUrl, "utf8");
+  const quickStudy = workspace.slice(workspace.indexOf("function QuickStudyWorkspace"), workspace.indexOf("function CourseIndex"));
+  const courses = workspace.slice(workspace.indexOf("function CourseWorkspace"), workspace.indexOf("function CourseAnalytics"));
+  const today = workspace.slice(workspace.indexOf("function TodayWorkbench"), workspace.indexOf("function HistoryView"));
+
+  assert.doesNotMatch(quickStudy, /<SessionInstrument/);
+  assert.doesNotMatch(courses, /<SessionInstrument/);
+  assert.match(today, /<SessionInstrument/);
+  assert.match(courses, /Open Today to control its timer/);
+});
+
+test("each Course room supplies one contextual rail and Lessons uses a disclosure", async () => {
+  const workspace = await readFile(workspaceUrl, "utf8");
+  const styles = await readFile(stylesUrl, "utf8");
+
+  assert.match(workspace, /learn-course-section-overview[^\n]*\{courseIndex\}<CourseOverview/);
+  assert.match(workspace, /learn-course-section-lessons[\s\S]*?<ModulePath/);
+  assert.match(workspace, /learn-course-section-homework[^\n]*<HomeworkIndex/);
+  assert.match(workspace, /learn-course-section-analytics[^\n]*<CourseScope/);
+  assert.match(workspace, /<details className="learn-lesson-contents">/);
+  assert.match(styles, /\.learn-lesson-reader \{\s*display:\s*block/s);
+  assert.doesNotMatch(styles, /learn-lesson-toc/);
 });
