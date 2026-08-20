@@ -751,6 +751,7 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
     const failedPersonalClaims = await waitForJobs(
       ownerClient,
       personalClaims.map((input) => input.operationId),
+      baseUrl,
     );
     for (const failedPersonalClaim of failedPersonalClaims) {
       assert.equal(failedPersonalClaim.status, "failed");
