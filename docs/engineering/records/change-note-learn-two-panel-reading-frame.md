@@ -24,12 +24,12 @@ amends: []
 supersedes: []
 learningRefs: []
 diagrams: []
-sources: [{"label":"Arc issue #407","url":"https://github.com/Vinosaamaa/interview-arc/issues/407","kind":"issue"}]
+sources: [{"label":"Arc issue #407","url":"https://github.com/Vinosaamaa/interview-arc/issues/407","kind":"issue"},{"label":"Pull request #412","url":"https://github.com/Vinosaamaa/interview-arc/pull/412","kind":"pull-request"}]
 verification: {"state":"verified","evidenceRefs":["issue:407","tests/learn-workspace-ui.test.mjs","tests/learn-workspace-model.test.mjs","tests/learn-core.integration.test.mjs","tests/learn-session.integration.test.mjs"]}
 visibility: public-safe
 publicationEligibility: eligible
 issue: 407
-pr: null
+pr: 412
 release: null
 run: null
 ---
