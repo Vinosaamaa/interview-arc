@@ -3,7 +3,7 @@ schemaVersion: 1
 id: change-note-workspace-frame-consistency
 revision: 1
 type: change-note
-status: proposed
+status: released
 title: Correct Learn frame hierarchy and unify workspace hero metrics
 repository: interview-arc
 capabilityIds: ["arc-learn-workspace","website-navigation"]
