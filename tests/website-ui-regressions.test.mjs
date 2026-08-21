@@ -798,9 +798,10 @@ test("Engineering Case Studies preserves the three-panel workbench before select
 });
 
 test("workspace gutters stay transparent and Learn removes its underpanel", async () => {
-  const [atmosphere, learn] = await Promise.all([
+  const [atmosphere, learn, heroMetrics] = await Promise.all([
     load("../app/workspace-atmosphere.css"),
     load("../app/learn-workspace.css"),
+    load("../app/workspace-hero-metrics.css"),
   ]);
   assert.match(atmosphere, /active-view-library[\s\S]*\.past-master-detail/);
   assert.match(atmosphere, /active-view-banks[\s\S]*\.bank-master-detail/);
@@ -811,7 +812,7 @@ test("workspace gutters stay transparent and Learn removes its underpanel", asyn
   assert.doesNotMatch(atmosphere, /past-entry-pane\) \{\s*background: transparent !important/);
   assert.match(atmosphere, /active-workspace-engineering[\s\S]*\.engineering-workspace[\s\S]*background:\s*transparent/);
   assert.match(learn, /\.learn-course-workspace\s*\{[\s\S]*background:\s*transparent;[\s\S]*border:\s*0;[\s\S]*padding:\s*0;/);
-  assert.match(learn, /\.learn-hero-metrics\s*\{[\s\S]*border-top:\s*0;/);
+  assert.match(heroMetrics, /\.workspace-hero-metrics\s*\{[\s\S]*height:\s*50px;/);
 });
 
 test("workspace atmosphere is persistent, bounded, and reader-safe", async () => {
@@ -1004,21 +1005,23 @@ test("Loops presents one chronological record without the detached dashboard", a
 });
 
 test("all seven Interview pages use the exact shared hero geometry and semantic accents", async () => {
-  const [heroSource, homeSource, materialsSource, loopsSource, css] = await Promise.all([
+  const [heroSource, homeSource, materialsSource, loopsSource, css, metricCss] = await Promise.all([
     load("../app/interview-page-hero.tsx"),
     load("../app/home-client.tsx"),
     load("../app/career-materials-workspace.tsx"),
     load("../app/loops-workspace.tsx"),
     load("../app/interview-page-hero.css"),
+    load("../app/workspace-hero-metrics.css"),
   ]);
   const rules = parseCss(css);
+  const metricRules = parseCss(metricCss);
   const hero = cssRules(rules, ".interview-page-hero")[0]?.declarations;
   assert.equal(hero?.height, "350px");
   assert.equal(hero?.["min-height"], "350px");
   assert.equal(hero?.["max-height"], "350px");
   assert.equal(hero?.["container-type"], "inline-size");
   const narrative = cssRules(rules, ".page-hero-narrative")[0]?.declarations;
-  const summary = cssRules(rules, ".page-hero-summary")[0]?.declarations;
+  const summary = cssRules(metricRules, ".workspace-hero-metrics")[0]?.declarations;
   const art = cssRules(rules, ".page-hero-art").find((rule) => rule.ancestors.length === 0)?.declarations;
   assert.equal(narrative?.display, "block");
   assert.equal(narrative?.padding, "0");
@@ -1027,6 +1030,7 @@ test("all seven Interview pages use the exact shared hero geometry and semantic 
   assert.equal(summary?.bottom, "0");
   assert.equal(summary?.["z-index"], "3");
   assert.match(summary?.background ?? "", /255,\s*255,\s*255/);
+  assert.match(heroSource, /<WorkspaceHeroMetrics className="page-hero-summary" metrics=\{metrics \?\? \[\]\} \/>/);
   assert.equal(art?.position, "absolute");
   assert.equal(art?.height, "225px");
   assert.equal(art?.top, "27px");
@@ -1180,37 +1184,55 @@ test("every workspace top panel has a quote and a display statement", async () =
   assert.doesNotMatch(interviewCss, /\.page-hero-copy h1 em/);
 });
 
-test("Learn hero metrics stay in the 50px summary band", async () => {
-  const [learnCss, atmosphereCss] = await Promise.all([
+test("Interview, Learn, and Engineering share the Interview hero metric band", async () => {
+  const [component, sharedCss, layout, interview, learn, engineering, interviewCss, learnCss, engineeringCss] = await Promise.all([
+    load("../app/workspace-hero-metrics.tsx"),
+    load("../app/workspace-hero-metrics.css"),
+    load("../app/layout.tsx"),
+    load("../app/interview-page-hero.tsx"),
+    load("../app/learn-workspace.tsx"),
+    load("../app/engineering-workspace.tsx"),
+    load("../app/interview-page-hero.css"),
     load("../app/learn-workspace.css"),
-    load("../app/workspace-atmosphere.css"),
+    load("../app/engineering-workspace.css"),
   ]);
-  const learnRules = parseCss(learnCss);
-  const atmosphereRules = parseCss(atmosphereCss);
-  const hero = cssRules(learnRules, ".learn-hero").find((rule) => rule.ancestors.length === 0)?.declarations;
-  const metrics = cssRules(learnRules, ".learn-hero-metrics").find((rule) => rule.ancestors.length === 0)?.declarations;
-  const cells = cssRules(learnRules, ".learn-hero-metrics > div").find((rule) => rule.ancestors.length === 0)?.declarations;
-  const values = cssRules(learnRules, ".learn-hero-metrics dd").find((rule) => rule.ancestors.length === 0)?.declarations;
-  const stacked = cssRules(learnRules, ".learn-hero-metrics > div", "max-width: 680px").at(-1)?.declarations;
+  const sharedRules = parseCss(sharedCss);
+  const metrics = cssRules(sharedRules, ".workspace-hero-metrics").find((rule) => rule.ancestors.length === 0)?.declarations;
+  const cells = cssRules(sharedRules, ".workspace-hero-metrics > div").find((rule) => rule.ancestors.length === 0)?.declarations;
+  const values = cssRules(sharedRules, ".workspace-hero-metrics dd").find((rule) => rule.ancestors.length === 0)?.declarations;
+  const labels = cssRules(sharedRules, ".workspace-hero-metrics dt").find((rule) => rule.ancestors.length === 0)?.declarations;
+  const stacked = cssRules(sharedRules, ".workspace-hero-metrics > div", "max-width: 680px").at(-1)?.declarations;
+  const stackedValue = cssRules(sharedRules, ".workspace-hero-metrics dd", "max-width: 680px").at(-1)?.declarations;
 
-  assert.equal(hero?.display, "block");
+  assert.match(layout, /import "\.\/workspace-hero-metrics\.css"/);
+  assert.match(component, /<dl className=\{`workspace-hero-metrics/);
+  assert.ok(component.indexOf("<dt>{metric.label}</dt>") < component.indexOf("<dd>{metric.value}</dd>"));
+  assert.match(interview, /<WorkspaceHeroMetrics className="page-hero-summary"/);
+  assert.match(learn, /<WorkspaceHeroMetrics className="learn-hero-metrics"/);
+  assert.match(engineering, /<WorkspaceHeroMetrics className="engineering-hero-metrics"/);
+
   assert.equal(metrics?.position, "absolute");
   assert.equal(metrics?.bottom, "0");
   assert.equal(metrics?.height, "50px");
   assert.equal(metrics?.["min-height"], "50px");
   assert.equal(metrics?.["max-height"], "50px");
-  assert.equal(metrics?.["z-index"], "3");
-  assert.match(metrics?.background ?? "", /255,\s*255,\s*255/);
+  assert.equal(metrics?.["grid-template-columns"], "repeat(3, minmax(0, 1fr))");
   assert.equal(cells?.["grid-template-columns"], "auto minmax(0, 1fr)");
+  assert.match(values?.["font-family"] ?? "", /font-newsreader/);
+  assert.match(values?.["font-size"] ?? "", /2\.2rem/);
+  assert.equal(values?.["font-variant-numeric"], "tabular-nums");
   assert.equal(values?.order, "-1");
   assert.equal(values?.["white-space"], "nowrap");
+  assert.equal(labels?.["font-size"], "0.72rem");
   assert.equal(stacked?.["grid-template-columns"], "1fr");
-  const stackedLabel = cssRules(learnRules, ".learn-hero-metrics dt", "max-width: 680px").at(-1)?.declarations;
-  assert.equal(stackedLabel?.["white-space"], "normal");
-  for (const rule of cssRules(atmosphereRules, ".app-shell.active-workspace-learn .learn-hero-metrics")) {
-    if (rule.declarations.height) assert.equal(rule.declarations.height, "50px");
-  }
-  assert.doesNotMatch(learnCss, /learn-hero-metrics[^{]*\{[^}]*height:\s*64px/);
+  assert.equal(stackedValue?.["font-size"], "1.2rem");
+
+  assert.match(interviewCss, /--workspace-hero-metric-accent:\s*var\(--page-accent\)/);
+  assert.match(learnCss, /--workspace-hero-metric-accent:\s*var\(--learn-blue-deep\)/);
+  assert.match(engineeringCss, /--workspace-hero-metric-accent:\s*var\(--engineering-accent\)/);
+  assert.doesNotMatch(learnCss, /\.learn-hero-metrics\s*\{/);
+  assert.doesNotMatch(engineeringCss, /\.engineering-hero dl/);
+  assert.doesNotMatch(engineeringCss, /height:\s*64px/);
 });
 
 test("Career Materials stays readable at narrow widths", async () => {

@@ -50,7 +50,7 @@ test("Today is a Session workbench and Courses keeps four distinct rooms", async
   assert.match(workspace, /id="learn-overview-title"/);
   assert.match(workspace, /id="learn-homework-title"/);
   assert.match(workspace, /id="learn-course-statistics-title"/);
-  assert.match(workspace, /Return to current lesson/);
+  assert.doesNotMatch(workspace, /Return to current lesson/);
   assert.match(workspace, /BLUEPRINT CARD · NOT WRITTEN YET/);
   assert.match(workspace, /Enrolled · Blueprint r/);
   assert.match(workspace, /Open Lesson contents/);
@@ -83,21 +83,25 @@ test("Learn uses the approved 316 plus 1200 two-panel frame", async () => {
   const styles = await readFile(stylesUrl, "utf8");
   const stageIndex = workspace.indexOf("className=\"learn-lesson-stage\"");
   const cardIndex = workspace.indexOf("<PlannedLessonCard");
-  const navIndex = workspace.indexOf("<LessonNavigator");
 
   assert.match(styles, /\.active-workspace-learn \.page-content \{[^}]*max-width:\s*none[^}]*padding:\s*0 24px 80px/s);
+  assert.match(styles, /\.learn-frame \{[^}]*max-width:\s*1536px[^}]*width:\s*100%/s);
+  assert.match(workspace, /className=\{`learn-frame learn-hero learn-hero-\$\{destination\}`\}/);
   assert.match(styles, /\.learn-courses-layout \{[^}]*grid-template-columns:\s*minmax\(290px, 316px\) minmax\(0, 1200px\)/s);
   assert.match(styles, /\.learn-today-body \{[^}]*grid-template-columns:\s*minmax\(290px, 316px\) minmax\(0, 1200px\)/s);
+  assert.match(styles, /\.learn-empty-layout,[\s\S]*?\.learn-history \{[^}]*grid-template-columns:\s*minmax\(290px, 316px\) minmax\(0, 1200px\)/s);
+  assert.match(styles, /\.learn-analytics \{[^}]*grid-template-columns:\s*minmax\(290px, 316px\) minmax\(0, 1200px\)/s);
   assert.match(styles, /\.learn-course-nav \{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)[^}]*width:\s*100%/s);
+  assert.match(workspace, /learn-courses-surface learn-frame/);
+  assert.match(workspace, /learn-history learn-frame/);
+  assert.match(workspace, /learn-analytics learn-frame/);
   assert.match(styles, /\.learn-today-summary \{[^}]*min-height:\s*540px/s);
   assert.doesNotMatch(styles, /\.learn-today-summary \{[^}]*100vh/s);
   assert.match(styles, /\.learn-lesson-stage \{[^}]*align-content:\s*start/s);
   assert.match(styles, /\.learn-lesson-stage \{[^}]*grid-auto-rows:\s*max-content/s);
-  assert.match(styles, /\.learn-lesson-nav \{[^}]*align-items:\s*center/s);
-  assert.match(styles, /\.learn-lesson-nav button \{[^}]*flex:\s*0 0 auto/s);
-  assert.match(styles, /\.learn-lesson-nav button \{[^}]*height:\s*auto/s);
-  assert.doesNotMatch(styles, /\.learn-lesson-nav button \{[^}]*flex:\s*1/s);
-  assert.ok(stageIndex >= 0 && cardIndex > stageIndex && navIndex > cardIndex);
+  assert.doesNotMatch(workspace, /LessonNavigator|aria-label="Adjacent lessons"/);
+  assert.doesNotMatch(styles, /\.learn-lesson-nav/);
+  assert.ok(stageIndex >= 0 && cardIndex > stageIndex);
 });
 
 test("only Today renders the live Session timer", async () => {
@@ -109,7 +113,23 @@ test("only Today renders the live Session timer", async () => {
   assert.doesNotMatch(quickStudy, /<SessionInstrument/);
   assert.doesNotMatch(courses, /<SessionInstrument/);
   assert.match(today, /<SessionInstrument/);
-  assert.match(courses, /Open Today to control its timer/);
+  assert.match(courses, /selectStartedLearningSession/);
+  assert.doesNotMatch(courses, /selectActiveLearningSession/);
+  assert.match(today, /learn-today-workbench learn-frame/);
+  assert.match(workspace, /Elapsed time/);
+  assert.match(workspace, /MODULE PLAN/);
+  assert.match(workspace, /CURRENT LESSON · REVISION/);
+});
+
+test("Current thread keeps the Module outside the Lesson timeline", async () => {
+  const workspace = await readFile(workspaceUrl, "utf8");
+  const thread = workspace.slice(workspace.indexOf("function CurrentLearningThread"), workspace.indexOf("function TodayWorkbench"));
+  const moduleIndex = thread.indexOf('className="learn-thread-module"');
+  const pathIndex = thread.indexOf("<ol className={`learn-thread-path");
+
+  assert.ok(moduleIndex >= 0 && pathIndex > moduleIndex);
+  assert.doesNotMatch(thread.slice(pathIndex), /located\?\.module && <li/);
+  assert.match(thread, /aria-label="Current and next Lessons"/);
 });
 
 test("each Course room supplies one contextual rail and Lessons uses a disclosure", async () => {

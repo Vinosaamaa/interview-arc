@@ -17,6 +17,7 @@ import {
   selectCurrentLesson,
   selectLearningCourse,
   selectQuickStudy,
+  selectStartedLearningSession,
   type CoursePathLesson,
   type CoursePathLessonState,
   type CourseSection,
@@ -29,6 +30,7 @@ import {
 } from "./learn-workspace-model";
 
 import HeroQuote from "./hero-quote";
+import WorkspaceHeroMetrics from "./workspace-hero-metrics";
 
 import "./learn-workspace.css";
 
@@ -172,16 +174,16 @@ function LearnHero({ destination, payload }: { destination: LearnDestination; pa
   const facts = payload?.workspace.facts ?? {};
   const metrics = destination === "analytics"
     ? [
-      ["Recorded", formatDuration(factualCount(payload?.analytics.overall.recordedSeconds))],
-      ["Learning days", factualCount(payload?.analytics.overall.activeLearningDays)],
-      ["Sessions", factualCount(payload?.analytics.overall.completedSessionCount)],
+      { label: "Recorded", value: formatDuration(factualCount(payload?.analytics.overall.recordedSeconds)) },
+      { label: "Learning days", value: factualCount(payload?.analytics.overall.activeLearningDays) },
+      { label: "Sessions", value: factualCount(payload?.analytics.overall.completedSessionCount) },
     ]
     : [
-      ["Active courses", factualCount(facts.activeCourseCount)],
-      ["Lessons complete", factualCount(facts.completedLessonCount)],
-      ["Checkpoint evidence", factualCount(facts.demonstratedCheckpointCount)],
+      { label: "Active courses", value: factualCount(facts.activeCourseCount) },
+      { label: "Lessons complete", value: factualCount(facts.completedLessonCount) },
+      { label: "Checkpoint evidence", value: factualCount(facts.demonstratedCheckpointCount) },
     ];
-  return <header key={destination} className={`learn-hero learn-hero-${destination}`}>
+  return <header key={destination} className={`learn-frame learn-hero learn-hero-${destination}`}>
     <div className="learn-hero-copy">
       <span className="learn-eyebrow">{copy.eyebrow}</span>
       <h1>{copy.title}</h1>
@@ -191,17 +193,27 @@ function LearnHero({ destination, payload }: { destination: LearnDestination; pa
     <div className="learn-animal-sketch"><LearnAnimalSketch destination={destination} /></div>
     <span className="learn-hero-pulse" aria-hidden="true" />
     <span className="learn-hero-light-band" aria-hidden="true" />
-    <dl className="learn-hero-metrics">{metrics.map(([label, value]) => <div key={String(label)}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+    <WorkspaceHeroMetrics className="learn-hero-metrics" metrics={metrics} />
   </header>;
 }
 
 function EmptyLearn({ destination }: { destination: LearnDestination }) {
-  return <section className="learn-empty" aria-labelledby="learn-empty-title">
-    <span className="learn-eyebrow">LEARNING SPECIALIST REQUIRED</span>
-    <h2 id="learn-empty-title">{destination === "history" ? "No completed Learning Sessions yet." : "Your first Course starts in the specialist."}</h2>
-    <p>The website is the durable Course and reading surface. Ask the Learning Specialist to propose a Blueprint or create a Quick Study; it will appear here after the exact owner-private revision is saved.</p>
-    <code>Initialize Interview Arc — Learning Specialist</code>
-  </section>;
+  const history = destination === "history";
+  return <div className="learn-empty-layout learn-frame">
+    <aside className="learn-context-rail learn-empty-index" aria-label={history ? "Completed Learning Sessions" : "Courses and Quick Studies"}>
+      <header>
+        <span className="learn-eyebrow">{history ? "COMPLETED SESSIONS" : "COURSES"}</span>
+        <h2>{history ? "0 records" : "0 Blueprints"}</h2>
+        <p>{history ? "Finished Learning Sessions will appear here in chronological order." : "Saved Courses and Quick Studies will appear here."}</p>
+      </header>
+    </aside>
+    <section className="learn-empty" aria-labelledby="learn-empty-title">
+      <span className="learn-eyebrow">LEARNING SPECIALIST REQUIRED</span>
+      <h2 id="learn-empty-title">{history ? "No completed Learning Sessions yet." : "Your first Course starts in the specialist."}</h2>
+      <p>The website is the durable Course and reading surface. Ask the Learning Specialist to propose a Blueprint or create a Quick Study; it will appear here after the exact owner-private revision is saved.</p>
+      <code>Initialize Interview Arc — Learning Specialist</code>
+    </section>
+  </div>;
 }
 
 function SessionInstrument({
@@ -223,10 +235,13 @@ function SessionInstrument({
 }) {
   const state = session.session.state;
   const action = state === "planned" ? "start" : state === "running" ? "pause" : "resume";
-  const place = [courseTitle, moduleTitle, lessonTitle].filter(Boolean).join(" · ");
   return <section className="learn-session-instrument" aria-label="Current Learning Session">
-    <div><span className={`learn-live-dot ${state}`} aria-hidden="true" /><small>{state === "running" ? "SESSION LIVE" : `SESSION ${state.toUpperCase()}`}</small><strong>{formatTimer(sessionSeconds(session, now))}</strong></div>
-    <p>{place ? `${place} · ` : ""}Transcript-only Voice · Lesson revision {session.session.lessonRevision} · {session.session.transcriptRevision} transcript revision{session.session.transcriptRevision === 1 ? "" : "s"}</p>
+    <div className="learn-session-clock"><span className={`learn-live-dot ${state}`} aria-hidden="true" /><small>{state === "running" ? "SESSION LIVE" : `SESSION ${state.toUpperCase()}`}</small><strong>{formatTimer(sessionSeconds(session, now))}</strong><span>Elapsed time</span></div>
+    <div className="learn-session-context">
+      <strong>{lessonTitle ?? session.session.lessonId}</strong>
+      {(courseTitle || moduleTitle) && <p>{courseTitle && <span><small>COURSE</small>{courseTitle}</span>}{moduleTitle && <span><small>MODULE PLAN</small>{moduleTitle}</span>}</p>}
+      <small>Transcript-only Voice · Lesson revision {session.session.lessonRevision} · {session.session.transcriptRevision} transcript revision{session.session.transcriptRevision === 1 ? "" : "s"}</small>
+    </div>
     <div className="learn-session-actions">
       <button type="button" onClick={() => onControl(action)} disabled={busy}>{busy ? "Saving…" : action === "start" ? "Start session" : action === "pause" ? "Pause" : "Resume"}</button>
       <button type="button" className="quiet" onClick={() => window.dispatchEvent(new CustomEvent("interview-arc-learn-finish-help"))}>Finish with specialist</button>
@@ -384,41 +399,14 @@ function WrittenLesson({ payload, lesson }: { payload: LearnPayload; lesson: Lea
   </div>;
 }
 
-function LessonNavigator({
-  payload,
-  course,
-  selectedLessonId,
-  onSelect,
-}: {
-  payload: LearnPayload;
-  course: LearningCourseProjection;
-  selectedLessonId: string;
-  onSelect: (lessonId: string) => void;
-}) {
-  const path = courseModulePath(payload, course);
-  const currentId = course.enrollment?.currentLessonId;
-  const { previous, next } = adjacentCourseLessons(path, selectedLessonId);
-  return <nav className="learn-lesson-nav" aria-label="Adjacent lessons">
-    {currentId && currentId !== selectedLessonId && <button type="button" onClick={() => onSelect(currentId)}>Return to current lesson</button>}
-    <button type="button" disabled={!previous} onClick={() => previous && onSelect(previous.lessonId)}>
-      Previous{previous ? ` · ${previous.title}` : ""}
-    </button>
-    <button type="button" disabled={!next} onClick={() => next && onSelect(next.lessonId)}>
-      Next{next ? ` · ${next.title}` : ""}
-    </button>
-  </nav>;
-}
-
 function LessonReader({
   payload,
   course,
   selectedLessonId,
-  onSelect,
 }: {
   payload: LearnPayload;
   course: LearningCourseProjection;
   selectedLessonId: string;
-  onSelect: (lessonId: string) => void;
 }) {
   const located = locateCourseLesson(payload, course, selectedLessonId);
   if (!located) {
@@ -432,7 +420,6 @@ function LessonReader({
     {located.snapshot
       ? <WrittenLesson payload={payload} lesson={located.snapshot} />
       : <PlannedLessonCard course={course} lesson={located.lesson} moduleTitle={located.module.title} />}
-    <LessonNavigator payload={payload} course={course} selectedLessonId={selectedLessonId} onSelect={onSelect} />
   </div>;
 }
 
@@ -447,7 +434,7 @@ function QuickStudyWorkspace({
   busy: boolean;
   onHomework: (homework: LearnPayload["evidence"]["homework"][number]) => void;
 }) {
-  const activeSession = selectActiveLearningSession(payload, study.lesson.lessonId);
+  const activeSession = selectStartedLearningSession(payload, study.lesson.lessonId);
   const homework = payload.evidence.homework.filter((item) => item.lessonId === study.lesson.lessonId);
   return <div className="learn-course-workspace learn-quick-study-workspace">
     <header className="learn-quick-study-header"><div><span className="learn-eyebrow">QUICK STUDY</span><h2>{study.lesson.title}</h2><p>A standalone Current lesson with no Course or Enrollment overhead.</p></div><span className={`learn-state ${study.lesson.state}`}>{study.lesson.state}</span></header>
@@ -570,12 +557,12 @@ function CourseWorkspace({
   onHomework: (homework: LearnPayload["evidence"]["homework"][number]) => void;
 }) {
   const current = selectCurrentLesson(course);
-  const sessionForSelected = selectActiveLearningSession(payload, selectedLessonId);
-  const activeSession = selectActiveLearningSession(payload, current?.lessonId) ?? selectActiveLearningSession(payload);
+  const sessionForSelected = selectStartedLearningSession(payload, selectedLessonId);
+  const activeSession = selectStartedLearningSession(payload, current?.lessonId) ?? selectStartedLearningSession(payload);
   const inspectingOther = Boolean(activeSession && activeSession.session.lessonId !== selectedLessonId);
   const homework = payload.evidence.homework.filter((item) => course.lessons.some((lesson) => lesson.lessonId === item.lessonId));
   const analytics = payload.analytics.courses.find((item) => item.courseId === course.course.courseId);
-  return <div className="learn-course-workspace learn-courses-surface">
+  return <div className="learn-course-workspace learn-courses-surface learn-frame">
     <nav className="learn-course-nav" aria-label={`${course.course.title} navigation`}>{(["overview", "lessons", "homework", "analytics"] as CourseSection[]).map((item) => <button type="button" key={item} className={section === item ? "active" : ""} aria-current={section === item ? "page" : undefined} onClick={() => onSection(item)}>{item === "analytics" ? "statistics" : item}</button>)}</nav>
     {section === "overview" && <div className="learn-courses-layout learn-course-section-overview">{courseIndex}<CourseOverview payload={payload} course={course} onOpenLessons={() => onSection("lessons")} /></div>}
     {section === "lessons" && <>
@@ -585,7 +572,7 @@ function CourseWorkspace({
         <div className="learn-course-reader-pane">
           {inspectingOther && activeSession && <aside className="learn-session-chip"><p>A Session is {activeSession.session.state} on another Lesson.</p><button type="button" onClick={() => onSelectLesson(activeSession.session.lessonId)}>Return to the Session lesson</button></aside>}
           {sessionForSelected && !inspectingOther && <aside className="learn-session-chip"><p>A Session is {sessionForSelected.session.state} on this Lesson. Open Today to control its timer.</p></aside>}
-          <LessonReader payload={payload} course={course} selectedLessonId={selectedLessonId} onSelect={onSelectLesson} />
+          <LessonReader payload={payload} course={course} selectedLessonId={selectedLessonId} />
         </div>
       </div>
     </>}
@@ -627,10 +614,14 @@ function CurrentLearningThread({
         <div><dt>{quickStudy ? "Scope" : "Course"}</dt><dd>{quickStudy ? "Quick Study" : course?.course.title ?? "Course unavailable"}</dd></div>
         <div><dt>{quickStudy ? "Lesson revision" : "Enrollment"}</dt><dd>{quickStudy ? `r${quickStudy.current?.revision ?? quickStudy.lesson.currentRevision}` : course ? enrollmentCopy(course) : "Not available"}</dd></div>
       </dl>
-      <ol className="learn-thread-path">
-        {located?.module && <li><span aria-hidden="true" /><div><strong>{located.module.title}</strong><small>MODULE · {located.module.lessons.length} LESSONS</small></div></li>}
-        <li className="current"><span aria-hidden="true" /><div><strong>{located?.lesson.title ?? quickStudy?.lesson.title ?? session.session.lessonId}</strong><small>CURRENT · LESSON R{session.session.lessonRevision}</small></div></li>
-        {next && <li><span aria-hidden="true" /><div><strong>{next.title}</strong><small>{pathStateLabel(next.state).toUpperCase()} · NEXT LESSON</small></div></li>}
+      {located?.module && <section className="learn-thread-module" aria-label="Current Module">
+        <small>MODULE PLAN</small>
+        <strong>{located.module.title}</strong>
+        <span>{located.module.completedLessons} of {located.module.lessons.length} lessons completed</span>
+      </section>}
+      <ol className={`learn-thread-path${next ? " has-next" : ""}`} aria-label="Current and next Lessons">
+        <li className="current"><span aria-hidden="true" /><div><strong>{located?.lesson.title ?? quickStudy?.lesson.title ?? session.session.lessonId}</strong><small>CURRENT LESSON · REVISION {session.session.lessonRevision}</small></div></li>
+        {next && <li><span aria-hidden="true" /><div><strong>{next.title}</strong><small>NEXT LESSON · {pathStateLabel(next.state).toUpperCase()}</small></div></li>}
       </ol>
     </div>
   </aside>;
@@ -658,16 +649,19 @@ function TodayWorkbench({
   const located = course ? locateCourseLesson(payload, course, session?.session.lessonId) : null;
   const todayQuickStudy = session?.session.scopeType === "quick_study" ? quickStudy : null;
   if (!session) {
-    return <div className="learn-today-body learn-today-empty-body">
-      <aside className="learn-today-context"><header><h2>Current thread</h2><p>No Session is planned.</p></header><div className="learn-today-context-body"><p>Courses remain available for reading without starting time.</p></div></aside>
-      <section className="learn-empty learn-today-empty" aria-labelledby="learn-today-empty-title"><span className="learn-eyebrow">TODAY · SESSION WORKBENCH</span><h2 id="learn-today-empty-title">No Learning Session is planned.</h2><p>Today holds the Session you are in. Open Courses to inspect the syllabus, written lessons, homework, and counts without starting time.</p><button type="button" className="learn-open-lesson" onClick={() => onOpenCourses({ section: "lessons" })}>Open Courses</button></section>
+    return <div className="learn-today-workbench learn-frame">
+      <div className="learn-today-body learn-today-empty-body">
+        <aside className="learn-today-context"><header><h2>Current thread</h2><p>No Session is planned.</p></header><div className="learn-today-context-body"><p>Courses remain available for reading without starting time.</p></div></aside>
+        <section className="learn-empty learn-today-empty" aria-labelledby="learn-today-empty-title"><span className="learn-eyebrow">TODAY · SESSION WORKBENCH</span><h2 id="learn-today-empty-title">No Learning Session is planned.</h2><p>Today holds the Session you are in. Open Courses to inspect the syllabus, written lessons, homework, and counts without starting time.</p><button type="button" className="learn-open-lesson" onClick={() => onOpenCourses({ section: "lessons" })}>Open Courses</button></section>
+      </div>
     </div>;
   }
   const snapshot = todayQuickStudy?.current ?? located?.snapshot;
   const lessonTitle = located?.lesson.title ?? todayQuickStudy?.lesson.title ?? session.session.lessonId;
   const checkpoints = snapshot?.checkpoints.filter((item) => item.required) ?? [];
   const demonstrated = checkpoints.filter((checkpoint) => payload.evidence.checkpointStates.some((state) => state.lessonId === snapshot?.lessonId && state.checkpointId === checkpoint.checkpointId && state.status === "demonstrated")).length;
-  return <div className="learn-today-workbench">
+  const sessionLabel = session.session.state === "planned" ? "UP NEXT" : session.session.state === "paused" ? "PAUSED" : "IN PLAY";
+  return <div className="learn-today-workbench learn-frame">
     <SessionInstrument
       session={session}
       now={now}
@@ -681,7 +675,7 @@ function TodayWorkbench({
     <div className={`learn-today-body mobile-${mobilePane}`}>
       <CurrentLearningThread payload={payload} course={course} located={located} quickStudy={todayQuickStudy} session={session} />
       <section className="learn-today-summary" aria-labelledby="learn-today-lesson-title">
-        <span className="learn-eyebrow">IN PLAY</span>
+        <span className="learn-eyebrow">{sessionLabel}</span>
         <h2 id="learn-today-lesson-title">{lessonTitle}</h2>
         <p>{snapshot?.objective ?? located?.lesson.objective ?? "The specialist has not written this Lesson yet."}</p>
         <p className="learn-enrollment">{course ? enrollmentCopy(course) : `Quick Study · Lesson r${snapshot?.revision ?? session.session.lessonRevision}`}</p>
@@ -697,7 +691,7 @@ function HistoryView({ payload }: { payload: LearnPayload }) {
   const [selectedId, setSelectedId] = useState(history[0]?.session.sessionId ?? "");
   const selected = history.find((item) => item.session.sessionId === selectedId) ?? history[0] ?? null;
   if (!history.length) return <EmptyLearn destination="history" />;
-  return <section className="learn-history"><div className="learn-history-index"><header><span className="learn-eyebrow">COMPLETED SESSIONS</span><h2>{history.length} exact record{history.length === 1 ? "" : "s"}</h2></header>{history.map((item) => <button type="button" key={item.session.sessionId} className={selected?.session.sessionId === item.session.sessionId ? "active" : ""} onClick={() => setSelectedId(item.session.sessionId)}><span>{formatDate(item.session.completedAt)}</span><strong>{item.session.lessonId}</strong><small>{formatDuration(item.session.accumulatedSeconds)} · {item.turns.length} turns</small></button>)}</div>{selected && <article className="learn-history-record"><header><span className="learn-eyebrow">TRANSCRIPT-ONLY SESSION</span><h2>{selected.session.lessonId}</h2><p>{formatDate(selected.session.completedAt)} · {formatDuration(selected.session.accumulatedSeconds)} · Lesson revision {selected.session.lessonRevision}</p></header>{selected.turns.length ? <ol className="learn-transcript">{selected.turns.map((turn) => <li className={turn.speaker} key={turn.turnId}><small>{turn.speaker} · {turn.source.replaceAll("_", " ")}</small><p>{turn.body}</p></li>)}</ol> : <p className="learn-inline-empty">No transcript turns were recorded for this Session.</p>}</article>}</section>;
+  return <section className="learn-history learn-frame"><div className="learn-history-index"><header><span className="learn-eyebrow">COMPLETED SESSIONS</span><h2>{history.length} exact record{history.length === 1 ? "" : "s"}</h2></header>{history.map((item) => <button type="button" key={item.session.sessionId} className={selected?.session.sessionId === item.session.sessionId ? "active" : ""} onClick={() => setSelectedId(item.session.sessionId)}><span>{formatDate(item.session.completedAt)}</span><strong>{item.session.lessonId}</strong><small>{formatDuration(item.session.accumulatedSeconds)} · {item.turns.length} turns</small></button>)}</div>{selected && <article className="learn-history-record"><header><span className="learn-eyebrow">TRANSCRIPT-ONLY SESSION</span><h2>{selected.session.lessonId}</h2><p>{formatDate(selected.session.completedAt)} · {formatDuration(selected.session.accumulatedSeconds)} · Lesson revision {selected.session.lessonRevision}</p></header>{selected.turns.length ? <ol className="learn-transcript">{selected.turns.map((turn) => <li className={turn.speaker} key={turn.turnId}><small>{turn.speaker} · {turn.source.replaceAll("_", " ")}</small><p>{turn.body}</p></li>)}</ol> : <p className="learn-inline-empty">No transcript turns were recorded for this Session.</p>}</article>}</section>;
 }
 
 function AnalyticsView({ payload }: { payload: LearnPayload }) {
@@ -713,7 +707,17 @@ function AnalyticsView({ payload }: { payload: LearnPayload }) {
     ["Quick Studies", factualCount(overall.quickStudySessionCount)],
     ["Checkpoint coverage", typeof coverage === "number" ? `${Math.round(coverage * 100)}%` : "No required checkpoints"],
   ];
-  return <div className="learn-analytics"><dl className="learn-fact-grid">{facts.map(([label, value]) => <div key={String(label)}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><section className="learn-time-chart"><header><span className="learn-eyebrow">TIME BY COURSE</span><h2>Recorded Session time</h2></header>{byCourse.length ? byCourse.map((item) => <div key={item.key}><span>{item.title}</span><i><b style={{ width: `${Math.max(3, (item.recordedSeconds / maxSeconds) * 100)}%` }} /></i><strong>{formatDuration(item.recordedSeconds)}</strong></div>) : <p className="learn-inline-empty">Finish a Learning Session to begin this factual timeline.</p>}</section><section className="learn-recent-topics"><header><span className="learn-eyebrow">RECENT TOPICS</span><h2>What the record actually contains</h2></header>{payload.analytics.recentTopics.length ? payload.analytics.recentTopics.map((topic) => <article key={topic.lessonId}><strong>{topic.title}</strong><small>{formatDate(topic.lastActivityAt)}</small></article>) : <p className="learn-inline-empty">No completed topics yet.</p>}</section></div>;
+  return <section className="learn-analytics learn-frame" aria-labelledby="learn-statistics-title">
+    <aside className="learn-context-rail learn-analytics-scope">
+      <header><span className="learn-eyebrow">FACTUAL SCOPE</span><h2>Learning record</h2><p>Completed Sessions and demonstrated checkpoints only.</p></header>
+      <dl>{facts.map(([label, value]) => <div key={String(label)}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+    </aside>
+    <div className="learn-analytics-reader">
+      <header><span className="learn-eyebrow">STATISTICS</span><h2 id="learn-statistics-title">Recorded learning</h2><p>Planned time is excluded. Every value below comes from completed owner records.</p></header>
+      <section className="learn-time-chart"><header><span className="learn-eyebrow">TIME BY COURSE</span><h3>Recorded Session time</h3></header>{byCourse.length ? byCourse.map((item) => <div key={item.key}><span>{item.title}</span><i><b style={{ width: `${Math.max(3, (item.recordedSeconds / maxSeconds) * 100)}%` }} /></i><strong>{formatDuration(item.recordedSeconds)}</strong></div>) : <p className="learn-inline-empty">Finish a Learning Session to begin this factual timeline.</p>}</section>
+      <section className="learn-recent-topics"><header><span className="learn-eyebrow">RECENT TOPICS</span><h3>What the record actually contains</h3></header>{payload.analytics.recentTopics.length ? payload.analytics.recentTopics.map((topic) => <article key={topic.lessonId}><strong>{topic.title}</strong><small>{formatDate(topic.lastActivityAt)}</small></article>) : <p className="learn-inline-empty">No completed topics yet.</p>}</section>
+    </div>
+  </section>;
 }
 
 export default function LearnWorkspace({
@@ -859,8 +863,8 @@ export default function LearnWorkspace({
     setLessonByCourse((current) => ({ ...current, [courseId]: lessonId }));
   }
 
-  if (loading) return <div className="learn-workspace"><LearnHero destination={destination} payload={null} /><section className="learn-loading" aria-live="polite"><span /><p>Opening the private Learn workspace…</p></section></div>;
-  if (error || !payload) return <div className="learn-workspace"><LearnHero destination={destination} payload={null} /><section className="learn-error" role="alert"><span className="learn-eyebrow">LEARN UNAVAILABLE</span><h2>The private Learning record could not be read.</h2><p>{error}</p><button type="button" onClick={() => { setLoading(true); void refresh(); }}>Try again</button></section></div>;
+  if (loading) return <div className="learn-workspace"><LearnHero destination={destination} payload={null} /><section className="learn-loading learn-frame" aria-live="polite"><span /><p>Opening the private Learn workspace…</p></section></div>;
+  if (error || !payload) return <div className="learn-workspace"><LearnHero destination={destination} payload={null} /><section className="learn-error learn-frame" role="alert"><span className="learn-eyebrow">LEARN UNAVAILABLE</span><h2>The private Learning record could not be read.</h2><p>{error}</p><button type="button" onClick={() => { setLoading(true); void refresh(); }}>Try again</button></section></div>;
 
   const courses = payload.workspace.courses;
   const quickStudies = payload.workspace.quickStudies;
@@ -887,7 +891,7 @@ export default function LearnWorkspace({
 
   return <div className="learn-workspace">
     <LearnHero destination={destination} payload={payload} />
-    {notice && <div className="learn-notice" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice("")} aria-label="Dismiss Learn message">×</button></div>}
+    {notice && <div className="learn-notice learn-frame" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice("")} aria-label="Dismiss Learn message">×</button></div>}
     {destination === "today" && (
       <TodayWorkbench
         payload={payload}
@@ -900,7 +904,7 @@ export default function LearnWorkspace({
       />
     )}
     {destination === "courses" && (courses.length || quickStudies.length ? selectedQuickStudy
-      ? <div className="learn-courses-layout learn-quick-study-layout">{courseIndex}<QuickStudyWorkspace payload={payload} study={selectedQuickStudy} busy={busy} onHomework={(item) => void setHomework(item)} /></div>
+      ? <div className="learn-courses-layout learn-quick-study-layout learn-frame">{courseIndex}<QuickStudyWorkspace payload={payload} study={selectedQuickStudy} busy={busy} onHomework={(item) => void setHomework(item)} /></div>
       : selectedCourse && <CourseWorkspace payload={payload} course={selectedCourse} courseIndex={courseIndex} section={courseSection} onSection={setCourseSection} selectedLessonId={selectedLessonId} onSelectLesson={(lessonId) => selectLessonWithoutMutatingEnrollment(selectedCourse.course.courseId, lessonId)} mobilePane={mobilePane} onMobilePane={setMobilePane} busy={busy} onHomework={(item) => void setHomework(item)} />
       : <EmptyLearn destination="courses" />)}
     {destination === "history" && <HistoryView payload={payload} />}

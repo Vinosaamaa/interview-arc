@@ -302,13 +302,6 @@
   border: 0;
   border-radius: 0;
 }
-.app-shell.active-workspace-learn .learn-hero-metrics {
-  height: 50px;
-  min-height: 50px;
-  max-height: 50px;
-  border-top: 0;
-  align-items: center;
-}
 
 @media (min-width: 761px) {
   .app-shell .topbar-workspace-switch { min-height: 38px; }
@@ -483,7 +476,6 @@
   border-color: color-mix(in srgb, var(--page-accent) 25%, #d5dfda);
   background: rgba(255,255,255,.62);
 }
-.app-shell.active-workspace-learn .learn-hero-metrics { height: 50px; min-height: 50px; max-height: 50px; }
 .app-shell .local-nav-label {
   display: grid;
   justify-content: stretch;
