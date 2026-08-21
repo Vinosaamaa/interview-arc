@@ -1,0 +1,1214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="A corrected architecture plan separating private interview evidence upload, deterministic Loop creation, and a site-wide Interview Arc AI assistant.">
+  <title>Interview Arc — Three Separate Capabilities</title>
+  <style>
+    :root {
+      --ink: #162019;
+      --ink-soft: #425048;
+      --paper: #f4f0e6;
+      --panel: #fbf9f3;
+      --line: #cbc5b7;
+      --line-strong: #918b7e;
+      --evidence: #bb6810;
+      --evidence-soft: #f7e1bc;
+      --loop: #06796f;
+      --loop-soft: #c9ebe5;
+      --ai: #6941c6;
+      --ai-soft: #e3d9fb;
+      --safe: #2e7149;
+      --danger: #a44135;
+      --shadow: 0 18px 52px rgb(39 31 17 / 10%);
+      --radius: 22px;
+      --serif: Georgia, "Times New Roman", serif;
+      --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      background: var(--paper);
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 16% 3%, rgb(187 104 16 / 9%), transparent 27rem),
+        radial-gradient(circle at 85% 19%, rgb(105 65 198 / 8%), transparent 31rem),
+        var(--paper);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.65;
+    }
+
+    a { color: inherit; text-underline-offset: 0.2em; }
+    a:hover { text-decoration-thickness: 2px; }
+
+    .skip-link {
+      position: fixed;
+      z-index: 100;
+      top: 0.75rem;
+      left: 0.75rem;
+      transform: translateY(-180%);
+      padding: 0.65rem 0.9rem;
+      border-radius: 10px;
+      background: var(--ink);
+      color: white;
+    }
+
+    .skip-link:focus { transform: translateY(0); }
+
+    .shell {
+      width: min(1180px, calc(100% - 2rem));
+      margin-inline: auto;
+    }
+
+    .eyebrow,
+    .section-label,
+    .issue-label,
+    .status,
+    .kicker {
+      font-family: var(--mono);
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.105em;
+      line-height: 1.3;
+      text-transform: uppercase;
+    }
+
+    header {
+      padding: 1.25rem 0 0;
+    }
+
+    .masthead {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--line-strong);
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 0.65rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-mark {
+      display: inline-grid;
+      width: 1.85rem;
+      height: 1.85rem;
+      place-items: center;
+      border: 1px solid currentColor;
+      border-radius: 50%;
+      font-family: var(--serif);
+      font-style: italic;
+    }
+
+    .status {
+      color: var(--ink-soft);
+      text-align: right;
+    }
+
+    .hero {
+      padding: clamp(4rem, 9vw, 8rem) 0 clamp(3.3rem, 7vw, 6rem);
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+      gap: clamp(2rem, 7vw, 6.5rem);
+      align-items: end;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+
+    h1 {
+      max-width: 12ch;
+      margin-bottom: 1.5rem;
+      font-family: var(--serif);
+      font-size: clamp(3.5rem, 8.5vw, 7.8rem);
+      font-weight: 400;
+      letter-spacing: -0.065em;
+      line-height: 0.88;
+    }
+
+    h1 span {
+      display: block;
+      margin-top: 0.18em;
+      color: transparent;
+      -webkit-text-stroke: 1.5px var(--ink);
+    }
+
+    .lede {
+      max-width: 48rem;
+      margin-bottom: 0;
+      color: var(--ink-soft);
+      font-family: var(--serif);
+      font-size: clamp(1.25rem, 2.1vw, 1.75rem);
+      line-height: 1.35;
+    }
+
+    .correction {
+      position: relative;
+      padding: 1.4rem 1.35rem 1.35rem;
+      border: 1px solid var(--ink);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: 9px 9px 0 var(--ink);
+    }
+
+    .correction::before {
+      content: "CORRECTION";
+      position: absolute;
+      top: -0.7rem;
+      left: 1.15rem;
+      padding: 0.18rem 0.48rem;
+      background: var(--paper);
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+    }
+
+    .correction p:last-child { margin-bottom: 0; }
+
+    .doors {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1rem;
+      padding-bottom: clamp(4rem, 8vw, 7rem);
+    }
+
+    .door {
+      min-height: 430px;
+      display: flex;
+      flex-direction: column;
+      padding: 1.35rem;
+      overflow: hidden;
+      border: 1px solid var(--ink);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .door.evidence { --accent: var(--evidence); --soft: var(--evidence-soft); }
+    .door.loop { --accent: var(--loop); --soft: var(--loop-soft); }
+    .door.ai { --accent: var(--ai); --soft: var(--ai-soft); }
+
+    .door-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      margin: -1.35rem -1.35rem 1.35rem;
+      padding: 0.85rem 1.15rem;
+      border-bottom: 1px solid var(--ink);
+      background: var(--soft);
+    }
+
+    .door-letter {
+      font-family: var(--serif);
+      font-size: 2.5rem;
+      font-style: italic;
+      line-height: 1;
+    }
+
+    .door h2 {
+      margin-bottom: 1rem;
+      font-family: var(--serif);
+      font-size: clamp(2rem, 4vw, 3.5rem);
+      font-weight: 400;
+      letter-spacing: -0.045em;
+      line-height: 0.98;
+    }
+
+    .door p { color: var(--ink-soft); }
+
+    .door .answer {
+      margin: auto 0 0;
+      padding-top: 1.2rem;
+      border-top: 1px solid var(--line);
+    }
+
+    .answer strong {
+      display: block;
+      margin-bottom: 0.35rem;
+      color: var(--accent);
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .answer p { margin-bottom: 0; }
+
+    .independence {
+      margin-bottom: clamp(5rem, 9vw, 8rem);
+      padding: clamp(1.5rem, 4vw, 3rem);
+      border-radius: calc(var(--radius) + 4px);
+      color: #fbfaf6;
+      background: var(--ink);
+    }
+
+    .independence-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.8fr;
+      gap: clamp(1.5rem, 5vw, 4rem);
+      align-items: center;
+    }
+
+    .independence h2 {
+      margin-bottom: 0.7rem;
+      font-family: var(--serif);
+      font-size: clamp(2rem, 4.5vw, 4rem);
+      font-weight: 400;
+      letter-spacing: -0.045em;
+      line-height: 1;
+    }
+
+    .equation {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr;
+      align-items: center;
+      gap: 0.7rem;
+      text-align: center;
+    }
+
+    .equation > span:not(.not-equal) {
+      display: grid;
+      min-height: 8rem;
+      place-items: center;
+      padding: 1rem;
+      border: 1px solid rgb(255 255 255 / 38%);
+      border-radius: 18px;
+      background: rgb(255 255 255 / 7%);
+      font-family: var(--mono);
+      font-size: 0.8rem;
+    }
+
+    .not-equal {
+      color: #ffd166;
+      font-family: var(--serif);
+      font-size: 2.25rem;
+    }
+
+    main section { scroll-margin-top: 1rem; }
+
+    .section {
+      padding: clamp(4rem, 8vw, 7rem) 0;
+      border-top: 1px solid var(--line-strong);
+    }
+
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(200px, 0.55fr) minmax(0, 1.45fr);
+      gap: clamp(1.5rem, 6vw, 5rem);
+      margin-bottom: clamp(2.5rem, 6vw, 5rem);
+    }
+
+    .section-number {
+      color: var(--accent, var(--ink));
+      font-family: var(--serif);
+      font-size: clamp(5rem, 12vw, 11rem);
+      font-style: italic;
+      letter-spacing: -0.08em;
+      line-height: 0.7;
+    }
+
+    .section h2 {
+      margin-bottom: 1rem;
+      font-family: var(--serif);
+      font-size: clamp(2.7rem, 6vw, 5.6rem);
+      font-weight: 400;
+      letter-spacing: -0.055em;
+      line-height: 0.95;
+    }
+
+    .section-intro {
+      max-width: 51rem;
+      color: var(--ink-soft);
+      font-size: 1.12rem;
+    }
+
+    .evidence-section { --accent: var(--evidence); }
+    .loop-section { --accent: var(--loop); }
+    .ai-section { --accent: var(--ai); }
+
+    .now-target {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .state-card,
+    .panel,
+    .step,
+    .decision,
+    .issue-card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgb(251 249 243 / 82%);
+    }
+
+    .state-card { padding: 1.35rem; }
+
+    .state-card h3 {
+      margin-bottom: 0.45rem;
+      font-family: var(--serif);
+      font-size: 1.55rem;
+    }
+
+    .state-card p:last-child { margin-bottom: 0; }
+    .state-card.current { border-style: dashed; }
+    .state-card.target { border-color: var(--accent); box-shadow: inset 5px 0 0 var(--accent); }
+
+    .workflow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.8rem;
+      margin: 2rem 0;
+      counter-reset: flow;
+    }
+
+    .step {
+      position: relative;
+      min-height: 185px;
+      padding: 1rem;
+      counter-increment: flow;
+    }
+
+    .step::before {
+      content: counter(flow, decimal-leading-zero);
+      display: block;
+      margin-bottom: 1.6rem;
+      color: var(--accent);
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      font-weight: 800;
+    }
+
+    .step:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      z-index: 2;
+      top: 50%;
+      right: -0.68rem;
+      display: grid;
+      width: 1.35rem;
+      height: 1.35rem;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: var(--paper);
+      color: var(--accent);
+      font-size: 0.85rem;
+    }
+
+    .step strong { display: block; margin-bottom: 0.35rem; }
+    .step p { margin: 0; color: var(--ink-soft); font-size: 0.92rem; }
+
+    .diagram {
+      margin: 2.5rem 0;
+      padding: 1rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: white;
+      box-shadow: var(--shadow);
+    }
+
+    .diagram img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 12px;
+    }
+
+    .diagram figcaption {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.85rem 0.4rem 0.1rem;
+      color: var(--ink-soft);
+      font-size: 0.86rem;
+    }
+
+    .grid-2,
+    .grid-3 {
+      display: grid;
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .panel { padding: 1.3rem; }
+    .panel h3 { margin-bottom: 0.65rem; font-family: var(--serif); font-size: 1.45rem; }
+    .panel p:last-child, .panel ul:last-child { margin-bottom: 0; }
+
+    ul.checks,
+    ul.plain {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    ul.checks li,
+    ul.plain li {
+      position: relative;
+      padding: 0.55rem 0 0.55rem 1.35rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    ul.checks li:last-child,
+    ul.plain li:last-child { border-bottom: 0; }
+
+    ul.checks li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: var(--safe);
+      font-weight: 900;
+    }
+
+    ul.plain li::before {
+      content: "—";
+      position: absolute;
+      left: 0;
+      color: var(--accent, var(--ink));
+    }
+
+    .code {
+      overflow-x: auto;
+      margin: 1.5rem 0;
+      padding: 1.1rem 1.25rem;
+      border-radius: 14px;
+      color: #f8f5ec;
+      background: #17221b;
+      font-family: var(--mono);
+      font-size: 0.84rem;
+      line-height: 1.65;
+      white-space: pre;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1.5rem 0;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 680px;
+      font-size: 0.94rem;
+    }
+
+    th, td {
+      padding: 0.9rem 1rem;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: rgb(22 32 25 / 5%);
+      font-family: var(--mono);
+      font-size: 0.73rem;
+      letter-spacing: 0.065em;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.25rem 0.52rem;
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      color: var(--accent, var(--ink));
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      line-height: 1.2;
+      text-transform: uppercase;
+    }
+
+    .callout {
+      margin: 2rem 0;
+      padding: 1.35rem 1.5rem;
+      border-left: 7px solid var(--accent, var(--ink));
+      border-radius: 0 16px 16px 0;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .callout strong { color: var(--accent, var(--ink)); }
+    .callout p:last-child { margin-bottom: 0; }
+
+    .assistant-band {
+      margin: 3rem 0;
+      padding: clamp(1.5rem, 4vw, 3rem);
+      border-radius: var(--radius);
+      color: #fff;
+      background:
+        linear-gradient(120deg, rgb(255 255 255 / 10%), transparent 45%),
+        var(--ai);
+      box-shadow: 0 22px 60px rgb(105 65 198 / 24%);
+    }
+
+    .assistant-band h3 {
+      max-width: 21ch;
+      margin-bottom: 1rem;
+      font-family: var(--serif);
+      font-size: clamp(2.2rem, 5vw, 4.4rem);
+      font-weight: 400;
+      letter-spacing: -0.05em;
+      line-height: 0.98;
+    }
+
+    .assistant-band p { max-width: 58rem; color: rgb(255 255 255 / 83%); }
+
+    .workspace-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.55rem;
+      margin-top: 1.4rem;
+    }
+
+    .workspace-row span {
+      padding: 0.5rem 0.7rem;
+      border: 1px solid rgb(255 255 255 / 48%);
+      border-radius: 999px;
+      background: rgb(255 255 255 / 8%);
+      font-family: var(--mono);
+      font-size: 0.75rem;
+    }
+
+    .sequence {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 0;
+      margin: 2rem 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+    }
+
+    .sequence > div {
+      position: relative;
+      min-height: 160px;
+      padding: 1rem;
+      border-right: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    .sequence > div:last-child { border-right: 0; }
+    .sequence .kicker { display: block; margin-bottom: 1rem; color: var(--ai); }
+    .sequence strong { display: block; margin-bottom: 0.4rem; }
+    .sequence p { margin: 0; color: var(--ink-soft); font-size: 0.85rem; }
+
+    .issues {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1rem;
+    }
+
+    .issue-card {
+      padding: 1.3rem;
+      border-top: 7px solid var(--accent);
+    }
+
+    .issue-card h3 { margin: 0.55rem 0 0.7rem; font-family: var(--serif); font-size: 1.55rem; }
+    .issue-card p { color: var(--ink-soft); }
+    .issue-card p:last-child { margin-bottom: 0; }
+
+    .issue-card.evidence { --accent: var(--evidence); }
+    .issue-card.loop { --accent: var(--loop); }
+    .issue-card.ai { --accent: var(--ai); }
+
+    .roadmap {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+
+    .decision { padding: 1.25rem; }
+    .decision .kicker { color: var(--accent, var(--ink)); }
+    .decision h3 { margin: 0.7rem 0 0.55rem; font-family: var(--serif); font-size: 1.4rem; }
+    .decision p:last-child { margin-bottom: 0; color: var(--ink-soft); }
+
+    footer {
+      margin-top: 4rem;
+      padding: 2.5rem 0 3.5rem;
+      border-top: 1px solid var(--line-strong);
+    }
+
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+    }
+
+    footer p { margin-bottom: 0; color: var(--ink-soft); }
+
+    @media (max-width: 900px) {
+      .hero-grid,
+      .section-head,
+      .independence-grid { grid-template-columns: 1fr; }
+      .doors,
+      .issues,
+      .roadmap { grid-template-columns: 1fr; }
+      .door { min-height: 0; }
+      .workflow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .step:nth-child(2)::after { display: none; }
+      .sequence { grid-template-columns: 1fr; }
+      .sequence > div { min-height: 0; border-right: 0; border-bottom: 1px solid var(--line); }
+      .sequence > div:last-child { border-bottom: 0; }
+      .section-number { font-size: 6rem; }
+    }
+
+    @media (max-width: 620px) {
+      body { font-size: 15px; }
+      .shell { width: min(100% - 1.15rem, 1180px); }
+      .masthead { align-items: flex-start; }
+      .brand-copy { display: none; }
+      .hero { padding-top: 3.5rem; }
+      h1 { font-size: clamp(3.25rem, 18vw, 5.2rem); }
+      .correction { margin-right: 8px; box-shadow: 6px 6px 0 var(--ink); }
+      .workflow,
+      .grid-2,
+      .grid-3,
+      .now-target,
+      .footer-grid { grid-template-columns: 1fr; }
+      .step::after { display: none !important; }
+      .equation { grid-template-columns: 1fr; }
+      .equation .not-equal { transform: rotate(90deg); }
+      .equation > span:not(.not-equal) { min-height: 5rem; }
+      .diagram { margin-inline: -0.25rem; padding: 0.45rem; }
+      .diagram figcaption { display: block; padding-inline: 0.6rem; }
+      .diagram figcaption a { display: inline-block; margin-top: 0.35rem; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+    }
+
+    @media print {
+      :root { --paper: white; --panel: white; --shadow: none; }
+      body { background: white; font-size: 10pt; }
+      .shell { width: 100%; }
+      .hero { padding: 2rem 0; }
+      h1 { font-size: 50pt; }
+      .door, .panel, .state-card, .step, .decision, .issue-card, .diagram { break-inside: avoid; box-shadow: none; }
+      .section { padding: 2rem 0; }
+      .assistant-band, .independence { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      a { text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to plan</a>
+
+  <header class="shell">
+    <div class="masthead">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">A</span>
+        <span class="brand-copy">Interview Arc / Architecture Review</span>
+      </div>
+      <div class="status">Proposed · 20 Aug 2026<br>PR #416 · Issues #415 / #417 / #418</div>
+    </div>
+
+    <div class="hero">
+      <div class="hero-grid">
+        <div>
+          <p class="eyebrow">Corrected product boundary</p>
+          <h1>Three questions.<span>Three systems.</span></h1>
+          <p class="lede">Private interview evidence, ordinary Loop operations, and a website-wide AI assistant are independent capabilities. They can share foundations without owning one another.</p>
+        </div>
+        <aside class="correction" aria-label="What changed">
+          <p><strong>The previous approach was false.</strong></p>
+          <p>It visually and conceptually centered AI around Loops, making recording upload and Loop creation look like AI features. This revision removes that coupling.</p>
+        </aside>
+      </div>
+    </div>
+
+    <div class="doors" aria-label="Three independent capabilities">
+      <article class="door evidence">
+        <div class="door-top"><span class="issue-label">Issue #415</span><span class="door-letter">A</span></div>
+        <h2>Upload interview evidence</h2>
+        <p>Select private recordings and supplied transcripts in the browser, validate and upload them, then assign them to an exact Loop/Round—or keep them unassigned.</p>
+        <div class="answer">
+          <strong>Answer today</strong>
+          <p>The website cannot do this yet. #415 adds it. No AI is required.</p>
+        </div>
+      </article>
+
+      <article class="door loop">
+        <div class="door-top"><span class="issue-label">Issue #417</span><span class="door-letter">B</span></div>
+        <h2>Create and manage a Loop</h2>
+        <p>Use a normal website form to create the Loop, Role Brief revision 1, initial stages, provenance, and a stable command receipt atomically.</p>
+        <div class="answer">
+          <strong>Answer today</strong>
+          <p>Use the long-lived Loop Recorder task. #417 brings the same operation into the website.</p>
+        </div>
+      </article>
+
+      <article class="door ai">
+        <div class="door-top"><span class="issue-label">Issue #418</span><span class="door-letter">C</span></div>
+        <h2>Ask Interview Arc anywhere</h2>
+        <p>A shared-shell assistant reads owner-selected context across the website and can propose reviewed actions through narrow domain adapters.</p>
+        <div class="answer">
+          <strong>Product boundary</strong>
+          <p>It is site-wide, optional, and not owned by Loops or evidence upload.</p>
+        </div>
+      </article>
+    </div>
+
+    <div class="independence">
+      <div class="independence-grid">
+        <div>
+          <p class="eyebrow">Non-negotiable invariant</p>
+          <h2>Shared does not mean coupled.</h2>
+          <p>Authentication, D1, R2, receipts, traces, and UI primitives can be reused. Product ownership and release dependencies remain separate.</p>
+        </div>
+        <div class="equation" aria-label="Evidence upload is separate from Loop operations and AI">
+          <span>private evidence<br>#415</span>
+          <span class="not-equal" aria-hidden="true">≠</span>
+          <span>Loop operations<br>#417</span>
+          <span class="not-equal" aria-hidden="true">≠</span>
+          <span>site-wide AI<br>#418</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="section evidence-section">
+      <div class="shell">
+        <div class="section-head">
+          <div class="section-number" aria-hidden="true">A</div>
+          <div>
+            <p class="section-label">Issue #415 · Private evidence</p>
+            <h2>How do I upload my recording and transcript?</h2>
+            <p class="section-intro">The owner explicitly chooses files through the website. Interview Arc creates an interview-evidence package, verifies every asset, stores private source bytes in R2 and authoritative metadata in D1, and lets the owner attach the package to a Loop/Round.</p>
+          </div>
+        </div>
+
+        <div class="now-target">
+          <article class="state-card current">
+            <span class="badge">Current</span>
+            <h3>No website upload path</h3>
+            <p>Interview Arc does not currently ingest an arbitrary local folder, recording, or transcript. A local folder remains private and untouched.</p>
+          </article>
+          <article class="state-card target">
+            <span class="badge">Target</span>
+            <h3>Explicit browser upload</h3>
+            <p>Open a Loop/Round or the unassigned evidence inbox, choose files, review their relationships, upload, validate, and finalize.</p>
+          </article>
+        </div>
+
+        <div class="workflow" aria-label="Evidence upload workflow">
+          <article class="step"><strong>Select</strong><p>Choose audio and TXT, VTT, or SRT transcript files through the browser picker.</p></article>
+          <article class="step"><strong>Review</strong><p>Confirm safe names, types, bytes, checksums, interview time, timezone, and relationships.</p></article>
+          <article class="step"><strong>Upload</strong><p>Stream or resume each asset with server-recorded progress and visible per-file state.</p></article>
+          <article class="step"><strong>Finalize</strong><p>Reconcile checksum, signature, D1 metadata, R2 source bytes, and authorized readback.</p></article>
+          <article class="step"><strong>Assign</strong><p>Attach to an exact Loop/Round now, reassign later, or keep it in the unassigned inbox.</p></article>
+          <article class="step"><strong>Use</strong><p>Read the supplied transcript and play or download authorized audio.</p></article>
+          <article class="step"><strong>Correct</strong><p>Create traceable transcript or metadata revisions without replacing the source.</p></article>
+          <article class="step"><strong>Delete</strong><p>Run separately confirmed, governed deletion with visible reconciliation state.</p></article>
+        </div>
+
+        <div class="callout">
+          <p><strong>No hidden folder scan.</strong> The browser never sends an absolute filesystem path, and the server never scans a local directory. The owner makes an explicit selection. Display filenames never become R2 object keys.</p>
+        </div>
+
+        <div class="grid-3">
+          <article class="panel">
+            <h3>Package authority</h3>
+            <ul class="plain">
+              <li>D1 owns package and asset state</li>
+              <li>One event may contain multiple assets</li>
+              <li>Assignment can be absent or revised</li>
+              <li>Every mutation is idempotent</li>
+            </ul>
+          </article>
+          <article class="panel">
+            <h3>Private object storage</h3>
+            <ul class="plain">
+              <li>R2 begins in quarantine</li>
+              <li>Opaque owner and asset keys only</li>
+              <li>Checksum and signature verification</li>
+              <li>D1-authorized range reads</li>
+            </ul>
+          </article>
+          <article class="panel">
+            <h3>Transcript fidelity</h3>
+            <ul class="plain">
+              <li>Original bytes and digest preserved</li>
+              <li>Deterministic TXT/VTT/SRT parsing</li>
+              <li>No invented speakers or timestamps</li>
+              <li>No AI/provider submission in #415</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="code" role="img" aria-label="Evidence package state machine">PACKAGE  draft → uploading → staged → validating → ready
+                              │          ├──────→ partial
+                              │          └──────→ failed
+                              └─────────────────→ expired
+
+ASSET    declared → uploading → quarantined → verified → ready
+                    │              │             └─────→ rejected
+                    └──→ expired   └───────────────────→ corrupt
+
+DELETE   ready / partial / failed → deleting → deleted</div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Boundary</th><th>Authoritative behavior</th><th>Failure is visible as</th></tr></thead>
+            <tbody>
+              <tr><td>Browser → Worker</td><td>Manifest creation plus resumable upload; owner comes from Access</td><td>Typed validation, expiry, cancellation, or byte-position recovery</td></tr>
+              <tr><td>Worker → R2</td><td>Quarantine, validation, promotion, range read, governed delete</td><td>Missing object, checksum mismatch, rejected signature, partial delete</td></tr>
+              <tr><td>Worker → D1</td><td>Package, asset, transcript revision, assignment, session, and receipt state</td><td>Conflict, stale revision, inconsistent reconciliation state</td></tr>
+              <tr><td>Owner → assignment</td><td>Explicit Loop/Round selection or unassigned inbox</td><td>Missing/stale target without losing uploaded evidence</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="grid-2">
+          <article class="panel">
+            <h3>Privacy and consent</h3>
+            <ul class="checks">
+              <li>Owner affirms permission to store/process the recording</li>
+              <li>Content, names, paths, IDs, and object keys stay out of public logs</li>
+              <li>Cross-owner reads, ranges, assignment, and deletion are denied</li>
+              <li>Retention and export behavior are owner-visible before release</li>
+            </ul>
+          </article>
+          <article class="panel">
+            <h3>Release gates</h3>
+            <ul class="checks">
+              <li>Interrupted upload and exact retry</li>
+              <li>Malformed, mislabeled, oversized, and truncated files</li>
+              <li>D1-only, R2-only, corrupt, and partial-delete reconciliation</li>
+              <li>Keyboard, screen reader, mobile, zoom, and large-manifest E2E</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section loop-section">
+      <div class="shell">
+        <div class="section-head">
+          <div class="section-number" aria-hidden="true">B</div>
+          <div>
+            <p class="section-label">Issue #417 · Loop operations</p>
+            <h2>How do I actually add a Loop?</h2>
+            <p class="section-intro">Today, the long-lived Loop Recorder task is the supported mutation path. The target is an ordinary Add Loop screen backed by one deterministic domain command. AI is neither required nor embedded.</p>
+          </div>
+        </div>
+
+        <div class="now-target">
+          <article class="state-card current">
+            <span class="badge">Current path</span>
+            <h3>Use the Loop Recorder</h3>
+            <p>Provide company, role, job-description text or source, location and opened date when known, stages and dates, statuses, and explicit unknowns.</p>
+          </article>
+          <article class="state-card target">
+            <span class="badge">Website path</span>
+            <h3>Choose “Add Loop”</h3>
+            <p>Enter facts, preserve unknowns, review the exact initial record, create atomically, receive a receipt, and open the new Loop.</p>
+          </article>
+        </div>
+
+        <div class="sequence" aria-label="Website Loop creation sequence">
+          <div><span class="kicker">01 · Enter</span><strong>Known facts</strong><p>Company, role, source, location, opened date, and known stages.</p></div>
+          <div><span class="kicker">02 · Mark</span><strong>Unknowns</strong><p>Absence stays explicit. The product does not infer missing facts.</p></div>
+          <div><span class="kicker">03 · Review</span><strong>Exact creation</strong><p>Loop, Role Brief revision 1, stages, provenance, and warnings.</p></div>
+          <div><span class="kicker">04 · Apply</span><strong>One transaction</strong><p>Validation and domain invariants run before an atomic commit.</p></div>
+          <div><span class="kicker">05 · Receive</span><strong>Stable receipt</strong><p>Exact retries return the same result; conflicts preserve the form.</p></div>
+        </div>
+
+        <div class="code" role="img" aria-label="Three adapters calling one Loop command">Manual website form ─┐
+Loop Recorder ───────┼──▶ create_loop command ──▶ Loop + Role Brief revision 1
+Future AI proposal ──┘             │
+                                   └─────────────▶ receipt / typed conflict
+
+Business invariants live in create_loop, not in any adapter.</div>
+
+        <div class="grid-3">
+          <article class="panel">
+            <h3>Atomic domain change</h3>
+            <p>Loop, Role Brief revision 1, initial stages, source provenance, and receipt commit together or not at all.</p>
+          </article>
+          <article class="panel">
+            <h3>Idempotent retry</h3>
+            <p>The owner, command version, idempotency key, and canonical request digest bind one stable result. Changed input produces a typed conflict.</p>
+          </article>
+          <article class="panel">
+            <h3>Separate adapters</h3>
+            <p>The website and Loop Recorder authenticate differently but reuse one command. Neither can impersonate the other.</p>
+          </article>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Website state</th><th>What the owner sees</th><th>Invariant</th></tr></thead>
+            <tbody>
+              <tr><td>Empty</td><td>What a Loop represents plus Add Loop</td><td>No synthetic starter data</td></tr>
+              <tr><td>Draft</td><td>Entered values and explicit unknowns</td><td>No partial domain state</td></tr>
+              <tr><td>Validation error</td><td>Field-level explanation and preserved input</td><td>No transaction opened</td></tr>
+              <tr><td>Conflict</td><td>Which current fact changed and review/reload action</td><td>No silent overwrite</td></tr>
+              <tr><td>Applying</td><td>Stable progress; duplicate submission disabled</td><td>One idempotency scope</td></tr>
+              <tr><td>Success</td><td>Receipt, Loop, Role Brief revision, and next actions</td><td>Atomic authoritative result</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout">
+          <p><strong>Relationship to AI:</strong> the site-wide assistant may later propose a filled <code>create_loop</code> payload. The owner must review it, and approval calls the same deterministic command. Turning AI off does not remove Add Loop.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section ai-section">
+      <div class="shell">
+        <div class="section-head">
+          <div class="section-number" aria-hidden="true">C</div>
+          <div>
+            <p class="section-label">Issue #418 · Horizontal platform capability</p>
+            <h2>How does AI belong on the website?</h2>
+            <p class="section-intro">As “Ask Interview Arc” in the shared application shell—not inside Loops. It understands the current workspace, uses only explicitly selected context, and joins domains through reviewed read and command adapters.</p>
+          </div>
+        </div>
+
+        <div class="assistant-band">
+          <p class="eyebrow">Available from every authenticated workspace</p>
+          <h3>One assistant shell. Many domain-owned capabilities.</h3>
+          <p>The shared platform owns conversation, context minimization, provider routing, proposal integrity, approval, retention, cost controls, and safe observability. Each product domain retains its own authorization, schemas, citations, commands, and invariants.</p>
+          <div class="workspace-row" aria-label="Assistant workspaces">
+            <span>Today</span><span>Banks</span><span>Practice</span><span>Learn</span><span>Review</span><span>Loops</span><span>Evidence</span>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <article class="panel">
+            <span class="badge">Mode 1</span>
+            <h3>Read and explain</h3>
+            <p>Retrieve selected owner-authorized records through read adapters, answer with citations, and distinguish verified facts, model inference, conflicts, and unknowns. No mutation tools exist in this mode.</p>
+          </article>
+          <article class="panel">
+            <span class="badge">Mode 2</span>
+            <h3>Propose an action</h3>
+            <p>Emit one versioned, allowlisted proposal. Deterministic code validates and freezes it. The owner edits, approves, or rejects the exact revision and digest before an owning domain command runs.</p>
+          </article>
+        </div>
+
+        <figure class="diagram">
+          <img src="sitewide-ai-assistant.png" alt="Architecture with Ask Interview Arc in the shared shell above an owner-authenticated assistant platform, domain adapters across all workspaces, private state, and an external model provider without domain mutation authority.">
+          <figcaption>
+            <span>Site-wide assistant architecture. The model provider has no direct D1, R2, SQL, deployment, or domain-command authority.</span>
+            <a href="sitewide-ai-assistant.drawio">Editable draw.io source</a>
+          </figcaption>
+        </figure>
+
+        <div class="sequence" aria-label="AI proposal and approval sequence">
+          <div><span class="kicker">01 · Select</span><strong>Visible context</strong><p>The owner chooses exact records and sees what may leave Interview Arc.</p></div>
+          <div><span class="kicker">02 · Resolve</span><strong>Authorized data</strong><p>The server resolves typed references, revisions, sensitivity, and size budgets.</p></div>
+          <div><span class="kicker">03 · Generate</span><strong>Answer or proposal</strong><p>The provider receives minimum context and no mutation credentials.</p></div>
+          <div><span class="kicker">04 · Review</span><strong>Exact revision</strong><p>The owner sees source attribution, unknowns, warnings, payload, and digest.</p></div>
+          <div><span class="kicker">05 · Apply</span><strong>Domain command</strong><p>Approval invokes one allowlisted command with replay and concurrency checks.</p></div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Workspace</th><th>Initial AI capability</th><th>Command eligibility</th></tr></thead>
+            <tbody>
+              <tr><td>Learn / published content</td><td>Read, explain, compare, and cite</td><td>None initially</td></tr>
+              <tr><td>Today / Banks</td><td>Ground selected owner-private records</td><td>Only existing deterministic commands</td></tr>
+              <tr><td>Practice / Review</td><td>Summarize selected attempts and feedback</td><td>Scoped proposals after privacy review</td></tr>
+              <tr><td>Loops</td><td>Explain selected Loop facts and source conflicts</td><td>After #417 exposes <code>create_loop</code> and revisions</td></tr>
+              <tr><td>Interview evidence</td><td>None until private-provider policy is approved</td><td>After #415 plus separate explicit authorization</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="grid-3">
+          <article class="panel">
+            <h3>Context safety</h3>
+            <ul class="checks">
+              <li>Typed references, not opaque page dumps</li>
+              <li>Owner authorization on every resolution</li>
+              <li>Explicit selection and sensitivity labels</li>
+              <li>Citation and revision receipts</li>
+            </ul>
+          </article>
+          <article class="panel">
+            <h3>Action safety</h3>
+            <ul class="checks">
+              <li>Server-owned command allowlist</li>
+              <li>Immutable versioned proposal digest</li>
+              <li>Single-use approval and stale-state conflict</li>
+              <li>No generic AI write or SQL path</li>
+            </ul>
+          </article>
+          <article class="panel">
+            <h3>Operational safety</h3>
+            <ul class="checks">
+              <li>Manual website remains available</li>
+              <li>Visible retention and deletion controls</li>
+              <li>Timeout, cancellation, budgets, circuit breaker</li>
+              <li>Public-safe traces without prompts or IDs</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="callout">
+          <p><strong>Prompt injection boundary:</strong> job descriptions, URLs, published pages, transcripts, code, and model output are untrusted data. They cannot add context, name a new adapter, expand a schema, change retention, or grant authority.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="shell">
+        <div class="section-head">
+          <div class="section-number" aria-hidden="true">↯</div>
+          <div>
+            <p class="section-label">Separation and shared foundations</p>
+            <h2>Where the boundaries actually sit</h2>
+            <p class="section-intro">The capabilities can reuse infrastructure and still release independently. The only integrations are narrow, explicit domain interfaces—never feature ownership or an AI prerequisite.</p>
+          </div>
+        </div>
+
+        <figure class="diagram">
+          <img src="capability-boundaries.png" alt="Three independent lanes for private evidence, Loop operations, and the site-wide assistant above shared foundations. A banner says evidence and Loop features work with AI disabled.">
+          <figcaption>
+            <span>Capability boundary overview. There are no feature-dependency arrows between #415, #417, and #418.</span>
+            <a href="capability-boundaries.drawio">Editable draw.io source</a>
+          </figcaption>
+        </figure>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Foundation</th><th>#415 Evidence</th><th>#417 Loops</th><th>#418 Assistant</th></tr></thead>
+            <tbody>
+              <tr><td>Cloudflare Access</td><td>Derives owner scope</td><td>Derives owner scope</td><td>Derives owner scope and context</td></tr>
+              <tr><td>D1</td><td>Packages, assets, transcript revisions, links, receipts</td><td>Loop, Role Brief, stages, receipts</td><td>Conversations, context receipts, proposals, approvals</td></tr>
+              <tr><td>R2</td><td>Owns private source bytes</td><td>No source-media ownership</td><td>No direct authority; adapter-mediated selected content only</td></tr>
+              <tr><td>Commands</td><td>Assign, correct metadata, authorize download, delete</td><td>Create and revise Loop</td><td>Calls one allowlisted command after exact approval</td></tr>
+              <tr><td>Failure mode</td><td>Manual upload/recovery remains deterministic</td><td>Manual Add Loop remains deterministic</td><td>Manual website remains available during outage</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="issues">
+          <article class="issue-card evidence">
+            <span class="issue-label">#415 · Independent release</span>
+            <h3>Upload private interview evidence</h3>
+            <p>Can ship against existing Loops plus an unassigned inbox. Does not wait for Loop creation or AI.</p>
+            <p><a href="https://github.com/Vinosaamaa/interview-arc/issues/415">Open GitHub issue</a> · <a href="interview-evidence-upload.md">Read detailed design</a></p>
+          </article>
+          <article class="issue-card loop">
+            <span class="issue-label">#417 · Independent release</span>
+            <h3>Add website-native Loop operations</h3>
+            <p>Can ship as soon as the shared deterministic Loop command and owner-confirmed website adapter are ready.</p>
+            <p><a href="https://github.com/Vinosaamaa/interview-arc/issues/417">Open GitHub issue</a> · <a href="website-loop-creation.md">Read detailed design</a></p>
+          </article>
+          <article class="issue-card ai">
+            <span class="issue-label">#418 · Independent release</span>
+            <h3>Add the site-wide AI assistant</h3>
+            <p>Begins with read-only grounding in published content and a second distinct workspace—not a Loop-only proof of concept.</p>
+            <p><a href="https://github.com/Vinosaamaa/interview-arc/issues/418">Open GitHub issue</a> · <a href="sitewide-ai-assistant.md">Read detailed design</a></p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="shell">
+        <div class="section-head">
+          <div class="section-number" aria-hidden="true">→</div>
+          <div>
+            <p class="section-label">Delivery plan</p>
+            <h2>Ship three vertical slices, then connect adapters.</h2>
+            <p class="section-intro">A vertical slice is an independently useful end-to-end path. Each issue owns its own implementation worktree, PR, tests, Engineering receipt, production verification, and cleanup.</p>
+          </div>
+        </div>
+
+        <div class="roadmap">
+          <article class="decision" style="--accent: var(--loop)">
+            <span class="kicker">Track B · #417</span>
+            <h3>Deterministic Add Loop</h3>
+            <p>Extract the shared command, retain Loop Recorder compatibility, add the website adapter and form, then verify atomicity, authorization, accessibility, and E2E recovery.</p>
+          </article>
+          <article class="decision" style="--accent: var(--evidence)">
+            <span class="kicker">Track A · #415</span>
+            <h3>Evidence package path</h3>
+            <p>Implement manifest, quarantine upload, validation, D1/R2 reconciliation, assignment/unassigned inbox, reading, revision, and governed deletion. Decide limits and retention before release.</p>
+          </article>
+          <article class="decision" style="--accent: var(--ai)">
+            <span class="kicker">Track C · #418</span>
+            <h3>Site-wide assistant</h3>
+            <p>Start with shared shell and read-only published grounding, prove a second workspace, then add proposal/approval around existing commands. Private evidence comes only after separate policy approval.</p>
+          </article>
+        </div>
+
+        <div class="grid-2" style="margin-top: 2rem">
+          <article class="panel">
+            <h3>Decisions for #415</h3>
+            <ul class="plain">
+              <li>Audio and transcript format/size allowlists</li>
+              <li>Retention, download, export, and tombstones</li>
+              <li>Scanning requirement and transcript-body storage threshold</li>
+            </ul>
+          </article>
+          <article class="panel">
+            <h3>Decisions for #418</h3>
+            <ul class="plain">
+              <li>Provider, model routing, retention, regions, and budgets</li>
+              <li>First two read adapters and first two command domains</li>
+              <li>Conversation history/export/deletion policy</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="callout">
+          <p><strong>What this design PR does:</strong> corrects capability ownership, publishes the plan and source diagrams, and links the three issues. It does not implement, migrate, ingest real files, merge, or deploy.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="shell footer-grid">
+      <div>
+        <p class="eyebrow">Interview Arc / proposed architecture</p>
+        <p>Private by default. Deterministic by foundation. AI only through explicit, reviewable adapters.</p>
+      </div>
+      <div>
+        <p class="eyebrow">Source set</p>
+        <p><a href="README.md">Overview</a> · <a href="interview-evidence-upload.md">Evidence</a> · <a href="website-loop-creation.md">Loops</a> · <a href="sitewide-ai-assistant.md">AI assistant</a></p>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
