@@ -15,7 +15,7 @@ modules: ["loop-command-module","ai-change-proposal-module","loop-interview-evid
 interfaces: ["loop-authoring-command","ai-change-proposal","owner-approval-gate","loop-interview-package"]
 seams: ["owner-request-to-ai-proposal","owner-approval-to-domain-command","interview-package-to-owner-private-d1-and-r2"]
 adapters: ["manual-loop-web","ai-provider-gateway","speech-provider-adapter","private-r2-asset-adapter"]
-relatedRecords: ["adr-hybrid-git-d1-owner-scoped-state@1","adr-owner-private-practice-record-authority@1","feature-retrospective-interview-loops@1"]
+relatedRecords: ["adr-hybrid-git-d1-owner-scoped-state@1","adr-owner-private-practice-record-authority@1"]
 decisions: []
 incidents: []
 features: ["feature-retrospective-interview-loops@1"]
