@@ -25,6 +25,7 @@ import {
 import {
   bindPlannedActivitySchema,
   captureLoopPacketSchema,
+  createLoopCommandSchema,
   createLoopSchema,
   displaySafeLoopRoleBriefRevisionSchema,
   importLoopCapturePacketSchema,
@@ -45,6 +46,7 @@ import {
   type CaptureLoopPacketInput,
   type BindPlannedActivityInput,
   type CreateLoopInput,
+  type CreateLoopCommandInput,
   type DisplaySafeLoopRoleBriefRevision,
   type ImportLoopCapturePacketInput,
   type LinkCompletedActivityInput,
@@ -62,6 +64,7 @@ export {
   bindPlannedActivitySchema,
   loopActivityContextRequestSchema,
   createLoopSchema,
+  createLoopCommandSchema,
   captureLoopPacketSchema,
   importLoopCapturePacketSchema,
   linkCompletedActivitySchema,
@@ -95,6 +98,10 @@ async function sha256(value: string) {
 
 const fingerprint = (input: unknown) => sha256(JSON.stringify(input));
 
+export function loopIdentityKey(company: string, roleTitle: string) {
+  return `${company.normalize("NFKC").trim().toLocaleLowerCase("en-US")}\u001f${roleTitle.normalize("NFKC").trim().toLocaleLowerCase("en-US")}`;
+}
+
 function assertRoleBriefIdentity(loop: LoopSnapshot, roleBrief: LoopRoleBriefInput) {
   if (loop.company !== roleBrief.company || loop.roleTitle !== roleBrief.roleTitle) {
     throw new LoopError(
@@ -114,6 +121,12 @@ function roleBriefDisplaySnapshot(roleBrief: LoopRoleBriefInput): LoopRoleBriefD
       capturedAt: roleBrief.source.capturedAt,
     },
   });
+}
+
+async function roleBriefSourceFingerprint(roleBrief: LoopRoleBriefInput) {
+  return "jdText" in roleBrief.source
+    ? sha256(roleBrief.source.jdText.trim())
+    : sha256(`public_posting_reference:${roleBrief.source.displayLocator}`);
 }
 
 function displaySafeRoleBrief(row: {
@@ -177,8 +190,8 @@ async function replayOperation(ownerId: string, operationId: string, requestFing
   return { ...(operation.receipt as object), duplicate: true };
 }
 
-export async function createLoop(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
-  const input = createLoopSchema.parse(inputValue) as CreateLoopInput;
+export async function createLoopCommand(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
+  const input = createLoopCommandSchema.parse(inputValue) as CreateLoopCommandInput;
   const db = getDb();
   const requestFingerprint = await fingerprint(input);
   const replay = await replayOperation(ownerId, input.operationId, requestFingerprint);
@@ -191,11 +204,16 @@ export async function createLoop(ownerId: string, inputValue: unknown, nowMs = D
     loopRevision: 1,
     roleBriefRevision: 1,
   };
-  const sourceFingerprint = await sha256(input.roleBrief.source.jdText.trim());
+  const sourceFingerprint = await roleBriefSourceFingerprint(input.roleBrief);
+  const identityKey = loopIdentityKey(input.loop.company, input.loop.roleTitle);
   const absent = sql`NOT EXISTS (
     SELECT 1 FROM ${interviewLoops}
     WHERE ${interviewLoops.ownerId} = ${ownerId}
       AND ${interviewLoops.loopId} = ${input.loop.loopId}
+  ) AND NOT EXISTS (
+    SELECT 1 FROM ${interviewLoops}
+    WHERE ${interviewLoops.ownerId} = ${ownerId}
+      AND ${interviewLoops.identityKey} = ${identityKey}
   ) AND NOT EXISTS (
     SELECT 1 FROM ${interviewLoopOperations}
     WHERE ${interviewLoopOperations.ownerId} = ${ownerId}
@@ -232,6 +250,7 @@ export async function createLoop(ownerId: string, inputValue: unknown, nowMs = D
         state: input.loop.state,
         company: input.loop.company,
         roleTitle: input.loop.roleTitle,
+        identityKey,
         status: input.loop.status,
         createdAt: nowMs,
         updatedAt: nowMs,
@@ -258,14 +277,22 @@ export async function createLoop(ownerId: string, inputValue: unknown, nowMs = D
   } catch (error) {
     const racedReplay = await replayOperation(ownerId, input.operationId, requestFingerprint);
     if (racedReplay) return racedReplay;
-    const existing = await db.select({ loopId: interviewLoops.loopId }).from(interviewLoops).where(and(
+    const existing = await db.select({ loopId: interviewLoops.loopId, identityKey: interviewLoops.identityKey }).from(interviewLoops).where(and(
       eq(interviewLoops.ownerId, ownerId),
-      eq(interviewLoops.loopId, input.loop.loopId),
+      sql`(${interviewLoops.loopId} = ${input.loop.loopId} OR ${interviewLoops.identityKey} = ${identityKey})`,
     )).limit(1);
+    if (existing[0]?.identityKey === identityKey) {
+      throw new LoopError("loop_identity_conflict", "A Loop for this company and role already exists. Open it instead of creating a duplicate.");
+    }
     if (existing[0]) throw new LoopError("loop_revision_conflict", "The Loop already exists; reread it before retrying.");
     throw error;
   }
   return { ...receipt, duplicate: false };
+}
+
+export async function createLoop(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
+  const input = createLoopSchema.parse(inputValue) as CreateLoopInput;
+  return createLoopCommand(ownerId, input, nowMs);
 }
 
 export async function reviseLoop(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
@@ -1169,6 +1196,7 @@ export async function migrateTargetProfile(ownerId: string, inputValue: unknown,
 
   if (input.action === "create_loop") {
     assertRoleBriefIdentity(input.loop, roleBrief);
+    const identityKey = loopIdentityKey(input.loop.company, input.loop.roleTitle);
     const receipt = {
       status: "migrated" as const,
       action: input.action,
@@ -1182,6 +1210,10 @@ export async function migrateTargetProfile(ownerId: string, inputValue: unknown,
       SELECT 1 FROM ${interviewLoops}
       WHERE ${interviewLoops.ownerId} = ${ownerId}
         AND ${interviewLoops.loopId} = ${input.loop.loopId}
+    ) AND NOT EXISTS (
+      SELECT 1 FROM ${interviewLoops}
+      WHERE ${interviewLoops.ownerId} = ${ownerId}
+        AND ${interviewLoops.identityKey} = ${identityKey}
     ) AND NOT EXISTS (
       SELECT 1 FROM ${loopTargetProfileMigrations}
       WHERE ${loopTargetProfileMigrations.ownerId} = ${ownerId}
@@ -1218,6 +1250,7 @@ export async function migrateTargetProfile(ownerId: string, inputValue: unknown,
           state: input.loop.state,
           company: input.loop.company,
           roleTitle: input.loop.roleTitle,
+          identityKey,
           status: input.loop.status,
           createdAt: nowMs,
           updatedAt: nowMs,

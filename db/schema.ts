@@ -1357,12 +1357,14 @@ export const interviewLoops = sqliteTable(
     state: text("state", { enum: ["active", "archived"] }).notNull(),
     company: text("company").notNull(),
     roleTitle: text("role_title").notNull(),
+    identityKey: text("identity_key").notNull(),
     status: text("status", { enum: ["active", "paused", "completed", "withdrawn"] }).notNull(),
     createdAt: integer("created_at").notNull(),
     updatedAt,
   },
   (table) => [
     primaryKey({ columns: [table.ownerId, table.loopId] }),
+    uniqueIndex("interview_loops_owner_identity_unique").on(table.ownerId, table.identityKey),
     index("interview_loops_owner_state_idx").on(table.ownerId, table.state, table.updatedAt),
   ],
 );

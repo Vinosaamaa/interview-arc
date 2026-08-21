@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 import {
-  behavioralTargetDisplaySourceSchema,
   behavioralTargetPastedSourceSchema,
   behavioralTargetProfileInputSchema,
+  behavioralTargetPublicSourceSchema,
 } from "./behavioral-target-profile-policy.ts";
 
 export const loopStableIdSchema = z.string()
@@ -131,7 +131,7 @@ export const loopSnapshotSchema = z.object({
   jobReference: optionalText(240),
   location: optionalText(240),
   status: z.enum(["active", "paused", "completed", "withdrawn"]),
-  openedAt: z.number().int().positive(),
+  openedAt: z.number().int().positive().optional(),
   closedAt: z.number().int().positive().optional(),
   outcome: z.enum(["offer", "rejected", "withdrawn", "closed"]).nullable(),
   stages: z.array(loopStageSchema).max(100),
@@ -158,16 +158,33 @@ export const loopSnapshotSchema = z.object({
   });
 });
 
-export const loopRoleBriefInputSchema = behavioralTargetProfileInputSchema.omit({ targetId: true });
-export const loopRoleBriefMcpInputSchema = loopRoleBriefInputSchema.extend({
+export const loopRoleBriefReferenceSourceSchema = z.object({
+  kind: z.literal("public_posting_reference"),
+  displayLocator: z.string().trim().url().max(240),
+  capturedAt: z.number().int().positive(),
+}).strict();
+
+const loopRoleBriefCoreSchema = behavioralTargetProfileInputSchema.omit({ targetId: true, source: true });
+export const loopRoleBriefSourceSchema = z.discriminatedUnion("kind", [
+  behavioralTargetPastedSourceSchema,
+  behavioralTargetPublicSourceSchema,
+  loopRoleBriefReferenceSourceSchema,
+]);
+export const loopRoleBriefInputSchema = loopRoleBriefCoreSchema.extend({ source: loopRoleBriefSourceSchema });
+export const loopRoleBriefMcpInputSchema = loopRoleBriefCoreSchema.extend({
   source: behavioralTargetPastedSourceSchema,
 });
-export const loopRoleBriefDisplaySnapshotSchema = loopRoleBriefInputSchema
-  .omit({ source: true, ownerNotes: true })
-  .extend({ source: behavioralTargetDisplaySourceSchema });
+export const loopRoleBriefDisplaySourceSchema = z.discriminatedUnion("kind", [
+  behavioralTargetPastedSourceSchema.omit({ jdText: true }),
+  behavioralTargetPublicSourceSchema.omit({ jdText: true }),
+  loopRoleBriefReferenceSourceSchema,
+]);
+export const loopRoleBriefDisplaySnapshotSchema = loopRoleBriefCoreSchema
+  .omit({ ownerNotes: true })
+  .extend({ source: loopRoleBriefDisplaySourceSchema });
 export const displaySafeLoopRoleBriefRevisionSchema = loopRoleBriefDisplaySnapshotSchema.extend({
   revision: z.number().int().positive(),
-  source: behavioralTargetDisplaySourceSchema.and(z.object({
+  source: loopRoleBriefDisplaySourceSchema.and(z.object({
     fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
   })),
   createdAt: z.number().int().positive(),
@@ -275,12 +292,111 @@ export const queryLoopInterviewMaterialsSchema = z.object({
   }
 });
 
-export const createLoopSchema = z.object({
+const createLoopPayloadSchema = z.object({
   operationId: loopStableIdSchema,
-  authorization: z.literal("loop_recorder"),
   loop: loopSnapshotSchema,
   roleBrief: loopRoleBriefMcpInputSchema,
+});
+
+export const createLoopSchema = createLoopPayloadSchema.extend({
+  authorization: z.literal("loop_recorder"),
 }).strict();
+
+export const createLoopCommandSchema = createLoopPayloadSchema.extend({
+  authorization: z.enum(["loop_recorder", "website_owner"]),
+  roleBrief: loopRoleBriefInputSchema,
+}).strict();
+
+const websiteOptionalText = (max: number) => z.string().trim().max(max).optional();
+const websiteDateSchema = z.string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a calendar date.")
+  .refine((value) => {
+    const timestamp = Date.parse(`${value}T12:00:00.000Z`);
+    return !Number.isNaN(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === value;
+  }, "Use a real calendar date.");
+export const websiteCreateLoopSchema = z.object({
+  schemaVersion: z.literal(1),
+  operationId: loopStableIdSchema,
+  company: boundedText(240),
+  roleTitle: boundedText(240),
+  location: websiteOptionalText(240),
+  openedOn: websiteDateSchema.optional(),
+  jobDescription: z.object({
+    text: websiteOptionalText(100_000),
+    sourceUrl: z.string().trim().url().max(240).optional(),
+  }).strict(),
+  stages: z.array(z.object({
+    label: boundedText(240),
+    status: z.enum(["planned", "scheduled"]),
+    scheduledOn: websiteDateSchema.optional(),
+    format: websiteOptionalText(240),
+  }).strict()).max(25),
+  unknowns: z.array(z.enum(["location", "openedOn", "stages", "jobDescriptionText"])).max(4),
+}).strict().superRefine((input, context) => {
+  const unknowns = new Set(input.unknowns);
+  if (unknowns.size !== input.unknowns.length) {
+    context.addIssue({ code: "custom", path: ["unknowns"], message: "Each unknown fact may be recorded only once." });
+  }
+  const pairs: Array<["location" | "openedOn" | "stages", boolean]> = [
+    ["location", Boolean(input.location)],
+    ["openedOn", Boolean(input.openedOn)],
+    ["stages", input.stages.length > 0],
+  ];
+  for (const [field, present] of pairs) {
+    if (present === unknowns.has(field)) {
+      context.addIssue({
+        code: "custom",
+        path: field === "stages" ? ["unknowns"] : [field],
+        message: present
+          ? `${field} cannot be both supplied and marked unknown.`
+          : `${field} must be supplied or explicitly marked unknown.`,
+      });
+    }
+  }
+  const hasText = Boolean(input.jobDescription.text);
+  if (!hasText && !input.jobDescription.sourceUrl) {
+    context.addIssue({
+      code: "custom",
+      path: ["jobDescription"],
+      message: "Provide job-description text or one HTTPS source URL.",
+    });
+  }
+  if (hasText === unknowns.has("jobDescriptionText")) {
+    context.addIssue({
+      code: "custom",
+      path: ["jobDescription", "text"],
+      message: hasText
+        ? "Job-description text cannot be both supplied and marked unknown."
+        : "Missing job-description text must be explicitly marked unknown.",
+    });
+  }
+  if (input.jobDescription.sourceUrl) {
+    try {
+      const source = new URL(input.jobDescription.sourceUrl);
+      if (source.protocol !== "https:" || source.username || source.password) throw new Error("unsafe");
+    } catch {
+      context.addIssue({
+        code: "custom",
+        path: ["jobDescription", "sourceUrl"],
+        message: "Use a credential-free HTTPS job source URL.",
+      });
+    }
+  }
+  const stageLabels = new Set<string>();
+  input.stages.forEach((stage, index) => {
+    const canonicalLabel = stage.label.normalize("NFKC").toLocaleLowerCase("en-US");
+    if (stageLabels.has(canonicalLabel)) {
+      context.addIssue({ code: "custom", path: ["stages", index, "label"], message: "Stage labels must be unique in one Loop." });
+    }
+    stageLabels.add(canonicalLabel);
+    if (stage.status === "scheduled" && !stage.scheduledOn) {
+      context.addIssue({ code: "custom", path: ["stages", index, "scheduledOn"], message: "A scheduled stage needs its known date." });
+    }
+    if (stage.status === "planned" && stage.scheduledOn) {
+      context.addIssue({ code: "custom", path: ["stages", index, "scheduledOn"], message: "Choose Scheduled before adding a stage date." });
+    }
+  });
+});
 
 export const reviseLoopSchema = z.object({
   operationId: loopStableIdSchema,
@@ -388,6 +504,8 @@ export type LoopInterviewMaterialSnapshot = z.infer<typeof loopInterviewMaterial
 export type CreateLoopInterviewMaterialInput = z.infer<typeof createLoopInterviewMaterialSchema>;
 export type ReviseLoopInterviewMaterialInput = z.infer<typeof reviseLoopInterviewMaterialSchema>;
 export type CreateLoopInput = z.infer<typeof createLoopSchema>;
+export type CreateLoopCommandInput = z.infer<typeof createLoopCommandSchema>;
+export type WebsiteCreateLoopInput = z.infer<typeof websiteCreateLoopSchema>;
 export type ReviseLoopInput = z.infer<typeof reviseLoopSchema>;
 export type ReviseLoopRoleBriefInput = z.infer<typeof reviseLoopRoleBriefSchema>;
 export type DisplaySafeLoopRoleBriefRevision = z.infer<typeof displaySafeLoopRoleBriefRevisionSchema>;

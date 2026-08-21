@@ -40,22 +40,20 @@ Future AI proposal ────────────┘        │
 
 The website, a registered recorder task, and any later assistant adapter share the same domain command. They may have different authorization adapters and input preparation, but business invariants cannot drift.
 
-## Proposed interface
+## HTTP interface
 
 ```http
 POST /api/loops
 Idempotency-Key: <opaque client-generated key>
-If-Match: <optional collection/version token>
 Content-Type: application/json
 ```
 
 ```json
 {
   "schemaVersion": 1,
+  "operationId": "opaque-client-operation-id",
   "company": "Example Company",
-  "role": "Software Engineer",
-  "location": null,
-  "openedOn": null,
+  "roleTitle": "Software Engineer",
   "jobDescription": {
     "text": "…",
     "sourceUrl": "https://example.com/job"
@@ -64,6 +62,13 @@ Content-Type: application/json
   "unknowns": ["location", "openedOn", "stages"]
 }
 ```
+
+The body also carries the same operation ID so a proxy or client cannot attach
+one idempotency header to different content. Initial structured Role Brief
+lists remain empty unless the owner supplies them through a later Recorder
+revision; the server never derives responsibilities or signals from pasted
+text. URL-only input records a `public_posting_reference` with no fabricated
+job-description body and no crawl.
 
 The server derives owner identity from Cloudflare Access. The response contains public-safe domain references, the created Role Brief revision, and an idempotent receipt; it does not expose owner IDs or internal D1 identifiers unnecessarily.
 

@@ -7,11 +7,13 @@ not a coding, system-design, behavioral, or Learning coach.
 
 ## Exclusive Authority
 
-Only the Loop Recorder may create or revise a Loop-owned Role Brief. Use
-`create_loop`, `revise_loop`, and `revise_loop_role_brief` only for facts the
-owner explicitly supplied or sources actually inspected. The Role Brief is an
-immutable revision family owned by its Loop; never create a competing Target
-Profile or silently retarget practice.
+Only the Loop Recorder specialist may call `create_loop`, `revise_loop`, and
+`revise_loop_role_brief`. Use them only for facts the owner explicitly supplied
+or sources actually inspected. Separately, the owner-authenticated website may
+create Loop and Role Brief revision 1 through its server-owned adapter over the
+same deterministic command; it cannot revise either aggregate. The Role Brief
+is an immutable revision family owned by its Loop; never create a competing
+Target Profile or silently retarget practice.
 
 The Loop Recorder also exclusively owns
 `migrate_target_profile_to_loop`, `capture_loop_packet`, and

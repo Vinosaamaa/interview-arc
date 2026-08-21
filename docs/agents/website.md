@@ -153,14 +153,17 @@ exports are ignored convenience copies, not publication.
   header tools menu.
 - Provide Interview-local Today, Loops, Reviews, Past, Banks, and Journey views
   without placing every raw log on one page.
-- Loops is an owner-private, responsive company-and-role tracker. Render only
+- Loops is an owner-private, responsive company-and-role tracker. Its Add Loop
+  flow creates one Loop and Role Brief revision 1 atomically through the shared
+  deterministic command, preserves explicit unknowns, and accepts no browser-
+  supplied owner or authorization value. Render only
   current explicit stage dates, statuses, outcomes, concise debriefs,
   exact/reconstructed memory labels, display-safe Role Brief revisions,
   Loop/Round interview-material revisions, planned bindings, and automatically
   projected completed activity history. Keep interview material visibly
   separate from Career Materials, the Role Brief, and the raw JD. The website
-  reads these records; only the durable Loop Recorder creates or revises a
-  Loop-owned Role Brief or interview material.
+  reads these records; after website creation, only the durable Loop Recorder
+  revises a Loop-owned Role Brief or creates/revises interview material.
 - Activity detail should lead with summary, outcome, approach, lessons, and feedback; keep full transcript or code expandable.
 - Treat activity detail as a case file: pinned notes first, then facts, review
   date, summary/solution, review, transcript/code, and references. A linked
