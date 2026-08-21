@@ -50,6 +50,17 @@ It cannot revise an existing Loop or Role Brief. Missing location, opened date,
 stages, and job-description text remain explicit unknowns. A URL-only job source
 is a reference, not permission to crawl or fabricate the posting text.
 
+The authenticated website also owns the separate Interview Package workflow
+defined in [`interview-packages.md`](interview-packages.md). Package upload,
+assignment, notes, links, retention, export, and deletion do not use Loop
+Recorder authority and never mutate a Loop or Role Brief. A package may link an
+exact Interview Material revision. It may also prepare an owner-authored,
+selected-source proposal; only a second exact confirmation may call the narrow
+`website_owner` material adapter. That adapter preserves all current
+Loop/Round, Role Brief, append-only revision, stale-base, and uniqueness guards.
+It does not grant the website the broader `loop_recorder` authorization and
+does not authorize AI synthesis.
+
 ## Identity And Revisions
 
 - One Loop is one immutable company-and-role identity with a stable owner-scoped

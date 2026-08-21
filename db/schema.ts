@@ -1468,6 +1468,222 @@ export const loopInterviewMaterialOperations = sqliteTable(
   (table) => [primaryKey({ columns: [table.ownerId, table.operationId] })],
 );
 
+// Interview Packages are owner-private event-source aggregates. File bytes
+// remain in private R2; D1 owns every assignment, revision, digest, upload
+// lease, material decision, and command receipt needed to reconcile them.
+export const interviewPackages = sqliteTable(
+  "interview_packages",
+  {
+    ownerId,
+    packageId: text("package_id").notNull(),
+    revision: integer("revision").notNull(),
+    status: text("status", {
+      enum: ["draft", "uploading", "ready", "partial", "failed", "deleting", "deleted"],
+    }).notNull(),
+    interviewAt: integer("interview_at"),
+    timeZone: text("time_zone"),
+    loopId: text("loop_id"),
+    stageId: text("stage_id"),
+    manifestDigest: text("manifest_digest"),
+    consentAffirmedAt: integer("consent_affirmed_at"),
+    retention: text("retention", { enum: ["retained", "deletion_pending", "deleted"] }).notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.packageId] }),
+    index("interview_packages_assignment_idx").on(table.ownerId, table.loopId, table.stageId, table.status),
+    index("interview_packages_status_idx").on(table.ownerId, table.status, table.updatedAt),
+  ],
+);
+
+export const interviewPackageSources = sqliteTable(
+  "interview_package_sources",
+  {
+    ownerId,
+    packageId: text("package_id").notNull(),
+    sourceId: text("source_id").notNull(),
+    kind: text("kind", { enum: ["audio", "transcript", "document", "image"] }).notNull(),
+    state: text("state", {
+      enum: ["declared", "uploading", "quarantined", "ready", "rejected", "expired", "deleted"],
+    }).notNull(),
+    revision: integer("revision").notNull(),
+    label: text("label").notNull(),
+    mediaType: text("media_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    contentHash: text("content_hash"),
+    privateLocator: text("private_locator"),
+    objectEtag: text("object_etag"),
+    transcriptRepresentation: text("transcript_representation", { mode: "json" }),
+    rejectionCode: text("rejection_code"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.sourceId] }),
+    uniqueIndex("interview_package_sources_package_source_unique").on(table.ownerId, table.packageId, table.sourceId),
+    index("interview_package_sources_manifest_idx").on(table.ownerId, table.packageId, table.state, table.createdAt),
+    index("interview_package_sources_digest_idx").on(table.ownerId, table.contentHash),
+  ],
+);
+
+export const interviewPackageEntries = sqliteTable(
+  "interview_package_entries",
+  {
+    ownerId,
+    packageId: text("package_id").notNull(),
+    entryId: text("entry_id").notNull(),
+    kind: text("kind", { enum: ["link", "note"] }).notNull(),
+    currentRevision: integer("current_revision").notNull(),
+    state: text("state", { enum: ["active", "deleted"] }).notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.entryId] }),
+    index("interview_package_entries_manifest_idx").on(table.ownerId, table.packageId, table.state, table.createdAt),
+  ],
+);
+
+export const interviewPackageEntryRevisions = sqliteTable(
+  "interview_package_entry_revisions",
+  {
+    ownerId,
+    entryId: text("entry_id").notNull(),
+    revision: integer("revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    snapshot: text("snapshot", { mode: "json" }).notNull(),
+    contentHash: text("content_hash").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.entryId, table.revision] }),
+    uniqueIndex("interview_package_entry_revisions_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
+export const interviewPackageAssignments = sqliteTable(
+  "interview_package_assignments",
+  {
+    ownerId,
+    packageId: text("package_id").notNull(),
+    assignmentRevision: integer("assignment_revision").notNull(),
+    operationId: text("operation_id").notNull(),
+    loopId: text("loop_id"),
+    stageId: text("stage_id"),
+    loopRevision: integer("loop_revision"),
+    roleBriefRevision: integer("role_brief_revision"),
+    assignedAt: integer("assigned_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.packageId, table.assignmentRevision] }),
+    uniqueIndex("interview_package_assignments_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
+export const interviewPackageUploadSessions = sqliteTable(
+  "interview_package_upload_sessions",
+  {
+    ownerId,
+    sessionId: text("session_id").notNull(),
+    packageId: text("package_id").notNull(),
+    sourceId: text("source_id").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    privateLocator: text("private_locator").notNull(),
+    r2UploadId: text("r2_upload_id").notNull(),
+    expectedBytes: integer("expected_bytes").notNull(),
+    status: text("status", {
+      enum: ["open", "completing", "completed", "rejected", "cancelled", "expired"],
+    }).notNull(),
+    expiresAt: integer("expires_at").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.sessionId] }),
+    uniqueIndex("interview_package_upload_sessions_operation_idx").on(table.ownerId, table.operationId),
+    uniqueIndex("interview_package_upload_sessions_source_idx").on(table.ownerId, table.sourceId),
+    index("interview_package_upload_sessions_expiry_idx").on(table.status, table.expiresAt),
+  ],
+);
+
+export const interviewPackageUploadParts = sqliteTable(
+  "interview_package_upload_parts",
+  {
+    ownerId,
+    sessionId: text("session_id").notNull(),
+    partNumber: integer("part_number").notNull(),
+    byteCount: integer("byte_count").notNull(),
+    contentHash: text("content_hash").notNull(),
+    etag: text("etag").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.sessionId, table.partNumber] })],
+);
+
+export const interviewPackageMaterialLinks = sqliteTable(
+  "interview_package_material_links",
+  {
+    ownerId,
+    packageId: text("package_id").notNull(),
+    linkRevision: integer("link_revision").notNull(),
+    state: text("state", { enum: ["unlinked", "linked"] }).notNull(),
+    materialId: text("material_id"),
+    materialRevision: integer("material_revision"),
+    proposalId: text("proposal_id"),
+    sourceDigests: text("source_digests", { mode: "json" }).notNull(),
+    operationId: text("operation_id").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.packageId] }),
+    uniqueIndex("interview_package_material_links_operation_idx").on(table.ownerId, table.operationId),
+  ],
+);
+
+export const interviewPackageMaterialProposals = sqliteTable(
+  "interview_package_material_proposals",
+  {
+    ownerId,
+    proposalId: text("proposal_id").notNull(),
+    packageId: text("package_id").notNull(),
+    operationId: text("operation_id").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    status: text("status", { enum: ["proposed", "confirmed", "cancelled", "stale"] }).notNull(),
+    materialId: text("material_id").notNull(),
+    baseMaterialRevision: integer("base_material_revision"),
+    baseLoopRevision: integer("base_loop_revision").notNull(),
+    baseRoleBriefRevision: integer("base_role_brief_revision").notNull(),
+    sourceDigests: text("source_digests", { mode: "json" }).notNull(),
+    proposedSnapshot: text("proposed_snapshot", { mode: "json" }).notNull(),
+    confirmedMaterialRevision: integer("confirmed_material_revision"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.ownerId, table.proposalId] }),
+    uniqueIndex("interview_package_material_proposals_operation_idx").on(table.ownerId, table.operationId),
+    index("interview_package_material_proposals_package_idx").on(table.ownerId, table.packageId, table.status),
+  ],
+);
+
+export const interviewPackageOperations = sqliteTable(
+  "interview_package_operations",
+  {
+    ownerId,
+    operationId: text("operation_id").notNull(),
+    packageId: text("package_id").notNull(),
+    action: text("action").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    receipt: text("receipt", { mode: "json" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.operationId] })],
+);
+
 // Planned practice can carry at most one Loop and optional Round. The server
 // snapshots the exact display-safe Role Brief revision; clients never supply
 // or persist raw job-description text in activity context.

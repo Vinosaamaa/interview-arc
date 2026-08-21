@@ -18,15 +18,21 @@ import {
   loopSnapshotSchema,
   queryLoopInterviewMaterialsSchema,
   reviseLoopInterviewMaterialSchema,
+  websiteCreateLoopInterviewMaterialSchema,
+  websiteReviseLoopInterviewMaterialSchema,
   type CreateLoopInterviewMaterialInput,
   type LoopInterviewMaterialSnapshot,
   type ReviseLoopInterviewMaterialInput,
+  type WebsiteCreateLoopInterviewMaterialInput,
+  type WebsiteReviseLoopInterviewMaterialInput,
 } from "./loop-policy";
 
 export {
   createLoopInterviewMaterialSchema,
   queryLoopInterviewMaterialsSchema,
   reviseLoopInterviewMaterialSchema,
+  websiteCreateLoopInterviewMaterialSchema,
+  websiteReviseLoopInterviewMaterialSchema,
 } from "./loop-policy";
 
 export class LoopMaterialError extends Error {
@@ -138,7 +144,7 @@ async function validateMaterialContext(
   }
   const loop = loopSnapshotSchema.parse(loopRevisionRows[0].snapshot);
   const roleBrief = loopRoleBriefInputSchema.parse(roleBriefRows[0].privateSnapshot);
-  assertMaterialIsSynthesis(input.material, roleBrief.source.jdText);
+  assertMaterialIsSynthesis(input.material, "jdText" in roleBrief.source ? roleBrief.source.jdText : "");
   if (input.material.stageId) {
     const stage = loop.stages.find((candidate) => candidate.stageId === input.material.stageId);
     if (!stage) {
@@ -172,12 +178,11 @@ async function validateMaterialContext(
   });
 }
 
-export async function createLoopInterviewMaterial(
+async function createLoopInterviewMaterialCommand(
   ownerId: string,
-  inputValue: unknown,
+  input: CreateLoopInterviewMaterialInput | WebsiteCreateLoopInterviewMaterialInput,
   nowMs = Date.now(),
 ) {
-  const input = createLoopInterviewMaterialSchema.parse(inputValue) as CreateLoopInterviewMaterialInput;
   const fingerprint = await requestFingerprint(input);
   const replay = await replayMaterialOperation(ownerId, input.operationId, fingerprint);
   if (replay) return replay;
@@ -269,12 +274,27 @@ export async function createLoopInterviewMaterial(
   return { ...receipt, duplicate: false };
 }
 
-export async function reviseLoopInterviewMaterial(
+export function createLoopInterviewMaterial(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
+  return createLoopInterviewMaterialCommand(
+    ownerId,
+    createLoopInterviewMaterialSchema.parse(inputValue) as CreateLoopInterviewMaterialInput,
+    nowMs,
+  );
+}
+
+export function createLoopInterviewMaterialFromWebsite(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
+  return createLoopInterviewMaterialCommand(
+    ownerId,
+    websiteCreateLoopInterviewMaterialSchema.parse(inputValue) as WebsiteCreateLoopInterviewMaterialInput,
+    nowMs,
+  );
+}
+
+async function reviseLoopInterviewMaterialCommand(
   ownerId: string,
-  inputValue: unknown,
+  input: ReviseLoopInterviewMaterialInput | WebsiteReviseLoopInterviewMaterialInput,
   nowMs = Date.now(),
 ) {
-  const input = reviseLoopInterviewMaterialSchema.parse(inputValue) as ReviseLoopInterviewMaterialInput;
   const fingerprint = await requestFingerprint(input);
   const replay = await replayMaterialOperation(ownerId, input.operationId, fingerprint);
   if (replay) return replay;
@@ -368,6 +388,22 @@ export async function reviseLoopInterviewMaterial(
     );
   }
   return { ...receipt, duplicate: false };
+}
+
+export function reviseLoopInterviewMaterial(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
+  return reviseLoopInterviewMaterialCommand(
+    ownerId,
+    reviseLoopInterviewMaterialSchema.parse(inputValue) as ReviseLoopInterviewMaterialInput,
+    nowMs,
+  );
+}
+
+export function reviseLoopInterviewMaterialFromWebsite(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
+  return reviseLoopInterviewMaterialCommand(
+    ownerId,
+    websiteReviseLoopInterviewMaterialSchema.parse(inputValue) as WebsiteReviseLoopInterviewMaterialInput,
+    nowMs,
+  );
 }
 
 const materialSelection = {
