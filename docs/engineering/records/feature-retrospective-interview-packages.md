@@ -24,7 +24,7 @@ amends: []
 supersedes: []
 learningRefs: []
 diagrams: []
-sources: [{"label":"Interview Package issue #415","url":"https://github.com/Vinosaamaa/interview-arc/issues/415","kind":"issue"},{"label":"Pull request #421","url":"https://github.com/Vinosaamaa/interview-arc/pull/421","kind":"pull-request"},{"label":"Interview Package runtime contract","url":"docs/contracts/interview-packages.md","kind":"documentation"}]
+sources: [{"label":"Interview Package issue #415","url":"https://github.com/Vinosaamaa/interview-arc/issues/415","kind":"issue"},{"label":"Pull request #421","url":"https://github.com/Vinosaamaa/interview-arc/pull/421","kind":"pull-request"},{"label":"Interview Package runtime contract","url":"https://github.com/Vinosaamaa/interview-arc/blob/main/docs/contracts/interview-packages.md","kind":"documentation"}]
 verification: {"state":"verified","evidenceRefs":["issue:415","pull-request:421","tests/interview-package.test.mjs","docs/design/interview-package/interview-package-desktop.png","docs/design/interview-package/interview-package-mobile.png"]}
 visibility: public-safe
 publicationEligibility: eligible
