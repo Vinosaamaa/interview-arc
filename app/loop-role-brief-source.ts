@@ -5,10 +5,10 @@ export type RoleBriefSourcePayload = {
   company: string;
   roleTitle: string;
   source: {
-    kind: "pasted_jd" | "public_posting";
+    kind: "pasted_jd" | "public_posting" | "public_posting_reference";
     displayLocator: string;
     capturedAt: number;
-    jdText: string;
+    jdText?: string;
     fingerprint: string;
   };
   createdAt: number;

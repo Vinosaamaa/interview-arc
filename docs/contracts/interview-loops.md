@@ -42,6 +42,14 @@ Practice specialists must not create a competing Target Profile or infer any
 Loop, stage, date, outcome, interviewer feedback, Role Brief revision, or
 interview-material content.
 
+The owner-authenticated Loops website may create a new Loop and Role Brief
+revision 1 through the same deterministic command Module. Its adapter derives
+owner scope from verified Cloudflare Access, accepts no authorization or owner
+field from the browser, and records `website_owner` as the command authority.
+It cannot revise an existing Loop or Role Brief. Missing location, opened date,
+stages, and job-description text remain explicit unknowns. A URL-only job source
+is a reference, not permission to crawl or fabricate the posting text.
+
 ## Identity And Revisions
 
 - One Loop is one immutable company-and-role identity with a stable owner-scoped
@@ -50,6 +58,9 @@ interview-material content.
 - Loop creation atomically creates Loop revision 1 and its Loop-owned Role
   Brief revision 1. A Role Brief cannot exist independently in the forward
   model.
+- Company and role form one normalized owner-scoped identity. A changed company
+  or role requires a separate Loop, and an exact duplicate fails without a
+  partial revision.
 - Loop and Role Brief revisions are append-only. A client supplies the exact
   expected revision; stale writes conflict and require a fresh read.
 - One stable operation ID represents one immutable payload. An exact replay

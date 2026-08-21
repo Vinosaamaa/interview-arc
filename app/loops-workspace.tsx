@@ -21,6 +21,7 @@ import {
 import type { ComposerLoopPracticePrefill } from "./activity-composer-loop-binding";
 import InterviewPageHero from "./interview-page-hero";
 import { isAbortError, parseLoopPayloadResponse } from "./loop-payload";
+import LoopCreateDialog from "./loop-create-dialog";
 
 type Specialty = LoopSpecialty;
 type MemoryConfidence = "exact" | "reconstructed";
@@ -92,7 +93,7 @@ type LoopProjection = LoopPreparationSource & {
     state: "active" | "archived";
     status: "active" | "paused" | "completed" | "withdrawn";
     outcome: "offer" | "rejected" | "withdrawn" | "closed" | null;
-    openedAt: number;
+    openedAt?: number;
     revision: number;
     stages: LoopStage[];
   };
@@ -112,7 +113,7 @@ type LoopProjection = LoopPreparationSource & {
     verifiedCompanySignals: Array<{ signal: string; sourceLabel: string; verifiedAt: number }>;
     unresolvedAmbiguities: string[];
     source: {
-      kind: "pasted_jd" | "public_posting";
+      kind: "pasted_jd" | "public_posting" | "public_posting_reference";
       displayLocator: string;
       capturedAt: number;
       fingerprint: string;
@@ -261,7 +262,11 @@ function PreparationLedger({ loop, onOpenActivity, onAddPractice }: {
 }
 
 function JobDescriptionDocument({ source }: { source: RoleBriefSourcePayload }) {
-  const blocks = useMemo(() => parseJobDescription(source.source.jdText), [source.source.jdText]);
+  const blocks = useMemo(() => parseJobDescription(source.source.jdText ?? ""), [source.source.jdText]);
+  if (!blocks.length) return <article className="loop-jd-document loop-jd-reference-only" aria-label={`Job source for ${source.roleTitle}`}>
+    <h3>Source link recorded</h3>
+    <p>Job-description text has not been supplied. Interview Arc preserved the source link without crawling or inventing its contents.</p>
+  </article>;
   return <article className="loop-jd-document" aria-label={`Full job description for ${source.roleTitle}`}>
     {blocks.map((block, index) => {
       if (block.type === "list") return <ul key={`list-${index}`}>{block.items.map((item, itemIndex) => <li key={`${index}-${itemIndex}`}>{item}</li>)}</ul>;
@@ -429,11 +434,14 @@ export function LoopsWorkspace({
   const [selectedLoopId, setSelectedLoopId] = useState(() => (typeof window === "undefined" ? "" : readLoopWorkspaceState(window.location.href)?.loopId ?? ""));
   const [loopSwitcherOpen, setLoopSwitcherOpen] = useState(false);
   const [sourceDialog, setSourceDialog] = useState<{ loop: LoopProjection; opener: HTMLButtonElement } | null>(null);
+  const [createDialogOpener, setCreateDialogOpener] = useState<HTMLButtonElement | null>(null);
+  const [pendingCreatedLoopId, setPendingCreatedLoopId] = useState("");
   const closeSourceDialog = useCallback(() => setSourceDialog(null), []);
-  const loops = payload?.loops ?? [];
-  const requestedLoop = selectedLoopId ? loops.find((loop) => loop.loop.loopId === selectedLoopId) : undefined;
-  const requestedLoopMissing = Boolean(selectedLoopId && !requestedLoop);
-  const selectedLoop = requestedLoop ?? (selectedLoopId ? undefined : loops[0]);
+  const loops = useMemo(() => payload?.loops ?? [], [payload?.loops]);
+  const effectiveLoopId = pendingCreatedLoopId || selectedLoopId;
+  const requestedLoop = effectiveLoopId ? loops.find((loop) => loop.loop.loopId === effectiveLoopId) : undefined;
+  const requestedLoopMissing = Boolean(selectedLoopId && !pendingCreatedLoopId && !requestedLoop);
+  const selectedLoop = requestedLoop ?? (pendingCreatedLoopId || !selectedLoopId ? loops[0] : undefined);
 
   useEffect(() => {
     if (!selectedLoop) return;
@@ -455,7 +463,7 @@ export function LoopsWorkspace({
   if (loading && !payload) return <section className="loops-state" aria-live="polite"><span className="loops-loader" /><strong>Reading owner-private Loops…</strong></section>;
   if (error && !payload) return <section className="loops-state error" role="alert"><strong>Loops could not be loaded.</strong><span>{error}</span><button type="button" onClick={() => void reload()}>Try again</button></section>;
   if (requestedLoopMissing) return <section className="loops-state error" role="alert"><strong>That Loop is unavailable.</strong><span>The saved link does not match a Loop in the current owner-scoped result.</span>{loops[0] ? <button type="button" onClick={() => setSelectedLoopId(loops[0].loop.loopId)}>Open the current Loop</button> : null}</section>;
-  if (!selectedLoop) return <section className="loops-empty"><div><h1>Your first Loop starts with a real role.</h1><p>Ask <strong>Interview Arc — Loop Recorder</strong> to record the company, role, job description, and hiring stages you actually know.</p></div><aside><strong>{payload?.migrationInbox.length ?? 0} standalone Target Profiles await a decision</strong><p>Nothing is guessed or deleted.</p></aside></section>;
+  if (!selectedLoop) return <><section className="loops-empty" data-loop-workspace-root><div><h1>Your first Loop starts with a real role.</h1><p>Create the company-and-role record here. Add only the job source, dates, and stages you actually know.</p><button type="button" className="loop-create-primary" onClick={(event) => setCreateDialogOpener(event.currentTarget)}>Add Loop</button></div><aside><strong>{payload?.migrationInbox.length ?? 0} standalone Target Profiles await a decision</strong><p>Nothing is guessed or deleted.</p></aside></section>{createDialogOpener ? <LoopCreateDialog opener={createDialogOpener} onClose={() => setCreateDialogOpener(null)} onCreated={(receipt) => { setPendingCreatedLoopId(receipt.loopId); setCreateDialogOpener(null); reload(); }} /> : null}</>;
 
   const completedStages = selectedLoop.loop.stages.filter((stage) => stage.status === "completed").length;
   const linkedPractices = selectedLoop.activityHistory.length;
@@ -465,13 +473,14 @@ export function LoopsWorkspace({
       { value: completedStages, label: "completed stage" },
       { value: linkedPractices, label: "linked practices" },
     ]} />
+    <div className="loop-workspace-actions"><p>One company and role per Loop. New facts become later revisions.</p><button type="button" className="loop-create-primary" onClick={(event) => setCreateDialogOpener(event.currentTarget)}>Add Loop</button></div>
     <section className={`loop-identity-switcher ${loopSwitcherOpen ? "open" : ""}`}>
       <button type="button" className="loop-current-identity" aria-expanded={loopSwitcherOpen} aria-controls="loop-switcher-list" onClick={() => setLoopSwitcherOpen((current) => !current)}><span><i className={`loop-status ${selectedLoop.loop.status}`}>{sentenceId(selectedLoop.loop.status)}</i><strong>{selectedLoop.loop.company} · {selectedLoop.loop.roleTitle}</strong><small>{[selectedLoop.loop.jobReference, selectedLoop.loop.location, selectedLoop.roleBrief.targetLevel].filter(Boolean).join(" · ") || "Company-and-role hiring process"}</small></span><b>Switch Loop</b><svg className="loop-disclosure" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" /></svg></button>
-      <div className="loop-switcher-list" id="loop-switcher-list" inert={!loopSwitcherOpen} aria-hidden={!loopSwitcherOpen}><div>{loops.filter((loop) => loop.loop.loopId !== selectedLoop.loop.loopId).map((loop) => <button type="button" onClick={() => { setSelectedLoopId(loop.loop.loopId); setLoopSwitcherOpen(false); }} key={loop.loop.loopId}><strong>{loop.loop.company}</strong><span>{loop.loop.roleTitle}</span><small>{sentenceId(loop.loop.status)}</small></button>)}</div>{loops.length <= 1 ? <p>No other Loop is recorded.</p> : null}<label><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} /> Include archived Loops</label></div>
+      <div className="loop-switcher-list" id="loop-switcher-list" inert={!loopSwitcherOpen} aria-hidden={!loopSwitcherOpen}><div>{loops.filter((loop) => loop.loop.loopId !== selectedLoop.loop.loopId).map((loop) => <button type="button" onClick={() => { setPendingCreatedLoopId(""); setSelectedLoopId(loop.loop.loopId); setLoopSwitcherOpen(false); }} key={loop.loop.loopId}><strong>{loop.loop.company}</strong><span>{loop.loop.roleTitle}</span><small>{sentenceId(loop.loop.status)}</small></button>)}</div>{loops.length <= 1 ? <p>No other Loop is recorded.</p> : null}<label><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} /> Include archived Loops</label></div>
     </section>
     <div className="loop-support-band"><RoleBriefPanel loop={selectedLoop} onOpenSource={(opener) => setSourceDialog({ loop: selectedLoop, opener })} /><PreparationLedger loop={selectedLoop} onOpenActivity={onOpenActivity} onAddPractice={onAddPractice} /></div>
     <StageChronology loop={selectedLoop} />
-  </section>{sourceDialog ? <JobDescriptionDialog loop={sourceDialog.loop} opener={sourceDialog.opener} onClose={closeSourceDialog} /> : null}</>;
+  </section>{sourceDialog ? <JobDescriptionDialog loop={sourceDialog.loop} opener={sourceDialog.opener} onClose={closeSourceDialog} /> : null}{createDialogOpener ? <LoopCreateDialog opener={createDialogOpener} onClose={() => setCreateDialogOpener(null)} onCreated={(receipt) => { setPendingCreatedLoopId(receipt.loopId); setCreateDialogOpener(null); reload(); }} /> : null}</>;
 }
 
 export function LoopJourneyFactsPanel() {
