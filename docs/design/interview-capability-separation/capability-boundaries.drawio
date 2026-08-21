@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="drawio" version="30.2.4">
+  <diagram name="Capability boundaries">
+    <mxGraphModel dx="1600" dy="1080" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1080" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="title" value="Interview Arc — three separate capabilities" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=28;fontStyle=1;fontColor=#183A37;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="950" height="42" as="geometry"/>
+        </mxCell>
+        <mxCell id="subtitle" value="Private Interview Packages and Loop creation work without AI. The site-wide assistant is an optional cross-workspace adapter, not their owner." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontFamily=Helvetica;fontSize=14;fontColor=#5B6D69;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="40" y="66" width="1420" height="38" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="evidenceLane" value="#415  PRIVATE INTERVIEW PACKAGES" style="swimlane;startSize=38;horizontal=1;rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E8;strokeColor=#D49A24;fontColor=#67470B;fontStyle=1;fontFamily=Helvetica;fontSize=13;container=1;pointerEvents=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="130" width="460" height="600" as="geometry"/>
+        </mxCell>
+        <mxCell id="evidenceAction" value="Add Interview Package&#xa;&lt;font style=&quot;font-size:11px;font-weight:normal&quot;&gt;files • external links • owner notes&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D49A24;fontColor=#533908;fontFamily=Helvetica;fontSize=15;fontStyle=1;spacing=10;" vertex="1" parent="evidenceLane">
+          <mxGeometry x="45" y="70" width="370" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="evidenceModule" value="Package ingest module&#xa;&lt;font style=&quot;font-size:11px;font-weight:normal&quot;&gt;resume • validate • revise entries • reconcile&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F7DFAE;strokeColor=#B77A0A;fontColor=#533908;fontFamily=Helvetica;fontSize=15;fontStyle=1;spacing=10;" vertex="1" parent="evidenceLane">
+          <mxGeometry x="45" y="230" width="370" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="evidenceReader" value="Package reader + material relationship&#xa;&lt;font style=&quot;font-size:11px;font-weight:normal&quot;&gt;read • assign • link • propose revision • delete&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D49A24;fontColor=#533908;fontFamily=Helvetica;fontSize=15;fontStyle=1;spacing=10;" vertex="1" parent="evidenceLane">
+          <mxGeometry x="45" y="400" width="370" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="evidenceRule" value="NO AI REQUIRED&#xa;&lt;font style=&quot;font-size:11px;font-weight:normal&quot;&gt;upload never edits Interview Material&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF1CC;strokeColor=#D49A24;fontColor=#67470B;fontFamily=Helvetica;fontSize=12;fontStyle=1;spacing=8;" vertex="1" parent="evidenceLane">
+          <mxGeometry x="90" y="520" width="280" height="56" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="loopLane" value="#417  WEBSITE LOOP OPERATIONS" style="swimlane;startSize=38;horizontal=1;rounded=1;whiteSpace=wrap;html=1;fillColor=#EAF4F1;strokeColor=#3B7C73;fontColor=#183A37;fontStyle=1;fontFamily=Helvetica;fontSize=13;container=1;pointerEvents=0;" vertex="1" parent="1">
+          <mxGeometry x="550" y="130" width="460" height="600" as="geometry"/>
+        </mxCell>
+        <mxCell id="loopAction" value="Add / manage Loop&#xa;&lt;font style=&quot;font-size:11px;font-weight:normal&quot;&gt;deterministic website forms&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B7C73;fontColor=#183A37;fontFamily=Helvetica;fontSize=15;fontStyle=1;spacing=10;" vertex="1" parent="loopLane">
+          <mxGeometry x="45" y="70" width="370" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="loopCommand" value="Loop command module&#xa;&lt;font style=&quot;font-size:11px;font-weight:normal&quot;&gt;validate • authorize • transact • receipt&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1C514C;strokeColor=#1C514C;fontColor=#FFFFFF;fontFamily=Helvetica;fontSize=15;fontStyle=1;spacing=10;" vertex="1" parent="loopLane">
+          <mxGeometry x="45" y="230" width="370" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="loopRecord" value="Loop + Role Brief + Rounds&#xa;&lt;font style=&quot;font-size:11px;font-weight:normal&quot;&gt;owner-scoped revisions and provenance&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B7C73;fontColor=#183A37;fontFamily=Helvetica;fontSize=15;fontStyle=1;spacing=10;" vertex="1" parent="loopLane">
+          <mxGeometry x="45" y="400" width="370" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="loopRule" value="NO AI REQUIRED&#xa;&lt;font style=&quot;font-size:11px;font-weight:normal&quot;&gt;works when every provider is disabled&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCECE8;strokeColor=#3B7C73;fontColor=#183A37;fontFamily=Helvetica;fontSize=12;fontStyle=1;spacing=8;" vertex="1" parent="loopLane">
+          <mxGeometry x="90" y="520" width="280" height="56" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="aiLane" value="#418  SITE-WIDE AI ASSISTANT" style="swimlane;startSize=38;horizontal=1;rounded=1;whiteSpace=wrap;html=1;fillColor=#F2EEFA;strokeColor=#7655A6;fontColor=#3F2764;fontStyle=1;fontFamily=Helvetica;fontSize=13;container=1;pointerEvents=0;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="130" width="460" height="600" as="geometry"/>
+        </mxCell>
+        <mxCell id="aiAction" value="Ask Interview Arc&#xa;&lt;font style=&quot;font-size:11px;font-weight:normal&quot;&gt;shared shell • explicit context&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7655A6;fontColor=#3F2764;fontFamily=Helvetica;fontSize=15;fontStyle=1;spacing=10;" vertex="1" parent="aiLane">
+          <mxGeometry x="45" y="70" width="370" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="aiPlatform" value="Assistant platform&#xa;&lt;font style=&quot;font-size:11px;font-weight:normal&quot;&gt;context • grounding • proposal • approval&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#5A3D83;strokeColor=#5A3D83;fontColor=#FFFFFF;fontFamily=Helvetica;fontSize=15;fontStyle=1;spacing=10;" vertex="1" parent="aiLane">
+          <mxGeometry x="45" y="230" width="370" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="aiAdapters" value="Registered domain adapters&#xa;&lt;font style=&quot;font-size:11px;font-weight:normal&quot;&gt;Today • Banks • Learn • Practice • Review • Loops • Packages&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7655A6;fontColor=#3F2764;fontFamily=Helvetica;fontSize=14;fontStyle=1;spacing=10;" vertex="1" parent="aiLane">
+          <mxGeometry x="45" y="400" width="370" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="aiRule" value="OPTIONAL ADAPTER&#xa;&lt;font style=&quot;font-size:11px;font-weight:normal&quot;&gt;does not own package or Loop state&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E9E0F7;strokeColor=#7655A6;fontColor=#3F2764;fontFamily=Helvetica;fontSize=12;fontStyle=1;spacing=8;" vertex="1" parent="aiLane">
+          <mxGeometry x="90" y="520" width="280" height="56" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="foundation" value="SHARED FOUNDATIONS — REUSE WITHOUT COLLAPSING DOMAIN OWNERSHIP" style="swimlane;startSize=38;horizontal=1;rounded=1;whiteSpace=wrap;html=1;fillColor=#F2F5F4;strokeColor=#98ABA6;fontColor=#183A37;fontStyle=1;fontFamily=Helvetica;fontSize=13;container=1;pointerEvents=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="770" width="1480" height="230" as="geometry"/>
+        </mxCell>
+        <mxCell id="access" value="Cloudflare Access&#xa;&lt;font style=&quot;font-size:11px;font-weight:normal&quot;&gt;verified owner scope&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#183A37;strokeColor=#183A37;fontColor=#FFFFFF;fontFamily=Helvetica;fontSize=13;fontStyle=1;spacing=8;" vertex="1" parent="foundation">
+          <mxGeometry x="45" y="80" width="260" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="commands" value="Deterministic domain interfaces&#xa;&lt;font style=&quot;font-size:11px;font-weight:normal&quot;&gt;validation • authorization • idempotency • receipts&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B7C73;fontColor=#183A37;fontFamily=Helvetica;fontSize=13;fontStyle=1;spacing=8;" vertex="1" parent="foundation">
+          <mxGeometry x="365" y="80" width="350" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="d1" value="Owner-scoped D1&#xa;&lt;font style=&quot;font-size:11px;font-weight:normal&quot;&gt;separate domain tables and revisions&lt;/font&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#E4EEEB;strokeColor=#3B7C73;fontColor=#183A37;fontFamily=Helvetica;fontSize=13;fontStyle=1;spacing=8;" vertex="1" parent="foundation">
+          <mxGeometry x="775" y="70" width="290" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="r2" value="Private R2&#xa;&lt;font style=&quot;font-size:11px;font-weight:normal&quot;&gt;package file-source bytes only&lt;/font&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#FFF3D6;strokeColor=#D49A24;fontColor=#67470B;fontFamily=Helvetica;fontSize=13;fontStyle=1;spacing=8;" vertex="1" parent="foundation">
+          <mxGeometry x="1125" y="70" width="290" height="110" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e1" value="explicit add + manifest" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#D49A24;fontColor=#67470B;fontFamily=Helvetica;fontSize=10;endArrow=block;endFill=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="evidenceAction" target="evidenceModule"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" value="ready package" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#D49A24;fontColor=#67470B;fontFamily=Helvetica;fontSize=10;endArrow=block;endFill=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="evidenceModule" target="evidenceReader"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" value="typed command" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#3B7C73;fontColor=#183A37;fontFamily=Helvetica;fontSize=10;endArrow=block;endFill=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="loopAction" target="loopCommand"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" value="atomic mutation" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#3B7C73;fontColor=#183A37;fontFamily=Helvetica;fontSize=10;endArrow=block;endFill=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="loopCommand" target="loopRecord"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e5" value="request" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#7655A6;fontColor=#3F2764;fontFamily=Helvetica;fontSize=10;endArrow=block;endFill=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="aiAction" target="aiPlatform"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e6" value="registered interfaces only" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#7655A6;fontColor=#3F2764;fontFamily=Helvetica;fontSize=10;endArrow=block;endFill=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="aiPlatform" target="aiAdapters"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="separation" value="NO FEATURE DEPENDENCY: #415 and #417 ship, operate, and recover with #418 disabled." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#183A37;strokeColor=#183A37;fontColor=#FFFFFF;fontFamily=Helvetica;fontSize=14;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="260" y="1020" width="1040" height="46" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,235 @@
+# Private interview package upload and related-material linkage
+
+Owning issue: [#415](https://github.com/Vinosaamaa/interview-arc/issues/415).
+
+Responsive UI mockup: [`interview-package-ui-mockup.html`](interview-package-ui-mockup.html).
+
+This feature answers one concrete question: how does the owner bring the private sources from one real interview event into Interview Arc? A package may contain recordings and transcripts, but it may also contain interviewer-shared documents, images, external links, and owner-authored notes. The feature does not require AI and does not create a Loop.
+
+## Product boundary
+
+Two owner-private aggregates remain separate:
+
+| Aggregate | Meaning | Mutation rule |
+| --- | --- | --- |
+| **Interview Package** | Sources and notes from one interview event | Add, validate, assign, correct, read, export, retain, or delete through issue #415 |
+| **Interview Material** | Reusable preparation for one exact Loop or optional Round | Link an exact current revision, or explicitly prepare and review a new append-only revision under the existing material contract |
+
+Uploading a package never silently edits Interview Material. A package may link to an exact material revision for navigation and provenance. The owner may separately select package sources and start a proposed material revision; that proposal shows a comparison, pinned Role Brief revision, selected source digests, and a distinct confirmation receipt before it becomes current.
+
+Role Briefs, raw job descriptions, Career Materials, practice activities, and completed-attempt records keep their existing authorities. A file appearing in an Interview Package does not reclassify it as one of those records.
+
+## Target workflow
+
+1. Open an existing Loop/Round and choose **Add interview package**, or open the unassigned package inbox.
+2. Add one or more sources through explicit browser controls:
+   - audio recording;
+   - supplied TXT, VTT, SRT, or later allowlisted transcript;
+   - allowlisted document or image;
+   - external link plus an owner-visible label and optional note;
+   - owner-authored note or debrief.
+3. Review a manifest containing safe display names or labels, detected source types, byte counts, checksums, interview time, and intended relationships.
+4. Correct Loop, Round, time, timezone, and source relationships before finalization.
+5. Upload or resume file assets with visible per-file progress and state. Links and notes save through versioned deterministic commands.
+6. Finalize the package after checksum, signature/MIME, D1 metadata, R2 object, and R2 readback agree for each included file.
+7. Read/play/download authorized sources, revise owner notes or link metadata, reassign the package, or run governed deletion.
+8. Independently choose one related-material action: link an exact material revision, prepare a new revision from explicitly selected sources, or keep no material relationship.
+
+No website process scans an arbitrary filesystem directory or stores its absolute path. The owner chooses every file explicitly through the browser.
+
+## Package contract
+
+One Interview Package groups sources from one interview event. A package may remain unassigned when the Loop or Round is not yet known.
+
+```json
+{
+  "schemaVersion": 1,
+  "loopId": "optional_loop_reference",
+  "roundId": "optional_round_reference",
+  "interviewedAt": "2026-08-20T20:00:00Z",
+  "timezone": "America/Los_Angeles",
+  "sources": [
+    {"clientRef": "recording-1", "kind": "audio", "displayName": "interview.m4a"},
+    {"clientRef": "transcript-1", "kind": "supplied-transcript", "displayName": "interview.vtt", "derivedFrom": "recording-1"},
+    {"clientRef": "prompt-1", "kind": "document", "displayName": "shared-prompt.pdf"},
+    {"clientRef": "reference-1", "kind": "external-link", "label": "Architecture reference"},
+    {"clientRef": "debrief-1", "kind": "owner-note", "label": "Post-interview debrief"}
+  ],
+  "relatedMaterial": {
+    "action": "link-only",
+    "materialId": "optional_material_reference",
+    "materialRevision": 3
+  }
+}
+```
+
+The browser's `clientRef` exists only within the draft manifest. Server-generated package, source, revision, and R2 identities are opaque. A display filename never becomes an object key. External URLs are untrusted data and never grant fetch, tool, or processing authority.
+
+## Source categories and fidelity
+
+| Category | Authoritative representation | Rules |
+| --- | --- | --- |
+| File asset | Immutable source bytes in private R2; metadata and digest in D1 | Allowlisted type, streaming size/signature/checksum validation, safe content disposition |
+| Supplied transcript | Immutable source file plus deterministic parsed representation | Never invent speakers/timestamps; correction creates a revision or explicit metadata correction |
+| External link | Versioned URL, owner label/note, and optional safe fetch status in D1 | No automatic crawl; fetched content, if later enabled, is a separate derived source with provenance |
+| Owner note | Append-only text revisions in D1 | Owner-authored fact, never represented as transcript speech or interviewer feedback without an explicit label |
+| Package relationship | Versioned link between sources, event, Loop/Round, and material revision | Destination and relationship are owner-confirmed; the system does not guess |
+
+Arbitrary executable archives are not part of the initial allowlist. Code is represented by an explicit link, a safe text/document format, or a later reviewed source type rather than by silently accepting every file extension.
+
+## Proposed D1 authority
+
+| Entity | Responsibility |
+| --- | --- |
+| `loop_interview_packages` | Package state, assignment, interview time, timezone, manifest digest |
+| `loop_interview_sources` | Source kind, safe filename/label, MIME, bytes, SHA-256, private object locator, validation state |
+| `loop_transcript_revisions` | Supplied source and parsed representation with immutable provenance |
+| `loop_package_entry_revisions` | Append-only owner-note and external-link label/metadata revisions |
+| `loop_package_assignment_links` | Exact Loop/Round assignment and reassignment history |
+| `loop_package_material_links` | Exact material revision link, selected source digests, proposed-revision state, and receipt |
+| `upload_sessions` | Resumable parts, expiry, expected checksum/size, completion state |
+| `interview_package_command_receipts` | Idempotent finalize, assign, revise-entry, link-material, prepare-material-revision, download-authorize, and delete results |
+
+Long transcript bodies and large document representations remain in D1 only if measured payload limits prove safe. Otherwise private R2 may hold the exact body while D1 retains authoritative metadata, digest, origin, and revision. This storage choice is measured during implementation; it is not delegated to AI.
+
+## Proposed private R2 lifecycle
+
+```text
+quarantine/{opaque-upload-object}
+        │ signature + size + checksum + owner-session validation
+        ▼
+source/{opaque-owner-partition}/{opaque-source-object}
+        │ exact readback agrees with D1
+        ▼
+READY
+```
+
+Object locators never appear in the browser, logs, GitHub, or Engineering content. Authorization resolves the owner and source in D1 before the Worker performs any R2 read or write.
+
+## State machines
+
+Package:
+
+```text
+draft → uploading → staged → validating → ready
+                    │          ├→ partial
+                    │          └→ failed
+                    └→ expired
+
+ready/partial/failed → deleting → deleted
+```
+
+File source:
+
+```text
+declared → uploading → quarantined → verified → ready
+                │           │           └→ rejected
+                └→ expired  └→ corrupt
+```
+
+Related-material decision:
+
+```text
+unlinked → linked(revision N)
+              │
+              └→ proposed(revision N+1) → reviewed → current(revision N+1)
+                                      └→ cancelled / stale
+```
+
+`partial` is not hidden failure. The reader shows usable sources, failed sources, and exact retry/finalize-subset/delete options. A failed source does not erase a saved note or a ready source.
+
+## Interview Material revision rules
+
+- Package finalization and material revision are separate commands and receipts.
+- Linking records an exact `materialId` and revision; it does not change the material body.
+- Preparing a revision requires an owner-selected source set. Unchecked package sources are excluded.
+- The proposal pins the current material revision and Role Brief revision, shows the changed sections and provenance, and becomes stale if either current revision advances.
+- Confirming creates a new append-only Interview Material revision. It never edits revision N in place.
+- The original package sources remain independently readable under their own retention and deletion rules.
+- Deleting a package must show linked material provenance affected by deletion. It does not silently delete or rewrite an already-created material revision.
+- AI-generated synthesis remains outside issue #415. A later #418 adapter may propose material changes only after a separate privacy/provider decision and the same exact review contract.
+
+## HTTP interface sketch
+
+| Interface | Responsibility |
+| --- | --- |
+| `POST /api/interview-packages` | Create draft manifest/upload session |
+| `PUT /api/interview-packages/{packageId}/sources/{sourceId}` | Stream or resume one file source |
+| `POST /api/interview-packages/{packageId}/entries` | Add a versioned owner note or external link |
+| `POST /api/interview-packages/{packageId}/finalize` | Validate and reconcile package |
+| `POST /api/interview-packages/{packageId}/assign` | Assign/reassign exact Loop/Round |
+| `POST /api/interview-packages/{packageId}/material-link` | Link or unlink one exact material revision |
+| `POST /api/interview-packages/{packageId}/material-revision-proposals` | Prepare a separate proposal from explicitly selected source digests |
+| `GET /api/interview-packages/{packageId}` | Owner-authorized package reader |
+| `GET /api/interview-packages/sources/{sourceId}/content` | Range-capable authorized media/text/document read |
+| `DELETE /api/interview-packages/{packageId}` | Separately confirmed governed deletion |
+
+Every mutation accepts an idempotency key and an optimistic-concurrency token. Owner scope comes from Cloudflare Access, never request JSON.
+
+## Recovery and reconciliation
+
+- Resume from server-recorded byte/part state; do not trust client-only progress.
+- Calculate SHA-256 while streaming and compare the declared checksum when present.
+- An exact retry returns the existing source or receipt.
+- Owner-scoped duplicate detection avoids storing identical source bytes twice without creating a cross-owner oracle.
+- A reconciliation job detects D1-ready/R2-missing and R2-orphaned objects using safe counts and opaque internal correlation.
+- Stalled quarantine objects expire under a documented retention policy.
+- Delete succeeds only when governed D1/R2 outcomes are reconciled; partial deletion remains visible and retryable.
+- Material proposals use exact source digests and base revisions so retries cannot incorporate a different source set.
+
+## Privacy, consent, and observability
+
+The owner must affirm that they are permitted to store and process a recording under applicable rules. The product explains that it cannot determine recording consent.
+
+Adding any package source does not authorize automatic transcription, AI analysis, publication, crawling, or provider submission. Each later operation needs its own visible authorization and retention policy.
+
+Safe traces include:
+
+```text
+interview_package phase=upload result=ok source_count=1 byte_count=...
+interview_package phase=finalize result=partial source_count=5 ready_count=4
+interview_package phase=material_link result=ok selected_source_count=3
+interview_package phase=delete result=reconciliation_required object_count=1
+```
+
+Traces exclude filenames, labels, URLs, content, paths, owner IDs, Loop/Round/package/source/material IDs, R2 keys, cookies, tokens, and credentials.
+
+## UI contract
+
+The package workspace uses one source register and one visibly separate related-material panel:
+
+- Event identity and assignment remain above both panels.
+- The source register exposes **Audio**, **Transcript**, **Document**, **Image**, **Link**, and **Note** entry points.
+- Each source shows authoritative state, recovery, and a checkbox used only for a proposed material revision.
+- The material panel labels its independent authority, exact current revision, pinned Role Brief revision, and one of: link only, prepare a revision, or no relationship.
+- Mobile preserves the order: Event → Sources → Related Material → Privacy → Review.
+- Unsupported files, partial upload, stale material proposal, unassigned package, reassignment, unlink, retention, and delete are first-class visible states.
+
+The standalone responsive mockup is [`interview-package-ui-mockup.html`](interview-package-ui-mockup.html). All displayed company, role, dates, names, files, and state are synthetic.
+
+## Verification matrix
+
+| Layer | Required cases |
+| --- | --- |
+| File validation | Empty, truncated, mislabeled, unsupported, oversized, signature mismatch, encoding mismatch, unsafe active content |
+| Upload | Interrupt/resume, exact retry, out-of-order part, stale session, duplicate bytes, cancellation |
+| Package | Mixed source types, missing relationship, unassigned, reassign, partial finalize, finalize subset |
+| Transcript | TXT/VTT/SRT, BOM/encoding, timestamps, no timestamps, speaker uncertainty, immutable source |
+| Link/note | Invalid or disallowed URL scheme, URL revision, no automatic fetch, note conflict, stale revision |
+| Material | Link exact revision, prepare selected subset, unchecked exclusion, stale base, compare/cancel/confirm, unlink, package delete impact |
+| Authorization | Cross-owner package/source/read/range/assign/material-link/delete negatives |
+| Reconciliation | D1-only, R2-only, checksum mismatch, readback failure, partial delete, missing linked revision |
+| UX | Keyboard, screen reader, mobile, 200%/400% zoom, progress, recovery, large manifests, reduced motion |
+| Privacy | Captured-log and public-artifact scan with representative private fixtures generated only in temporary test state |
+
+## Decisions before release
+
+- Default retention and owner-visible expiry by source type.
+- Maximum files, entries, total bytes, per-file bytes, and recording duration.
+- Initial audio, transcript, document, and image format allowlists; whether PDF active content is sanitized or rejected.
+- Whether an antivirus/content-scanning provider is required before readiness.
+- D1-versus-private-R2 thresholds for transcript and document representations.
+- External-link scheme allowlist, fetch policy, and safe preview behavior.
+- Download/export behavior and audit scope.
+- Tombstone retention after governed deletion.
+- Whether deterministic material revision authoring is available directly in the website at first release or only through the existing owner-authorized specialist command; package linking still ships independently.
