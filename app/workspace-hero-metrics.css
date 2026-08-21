@@ -1,0 +1,57 @@
+.workspace-hero-metrics {
+  align-items: center;
+  backdrop-filter: blur(8px);
+  background: rgba(255,255,255,.72);
+  bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  height: 50px;
+  left: 0;
+  margin: 0;
+  max-height: 50px;
+  min-height: 50px;
+  padding-inline: clamp(28px, 4vw, 62px);
+  position: absolute;
+  right: 0;
+  z-index: 3;
+}
+
+.workspace-hero-metrics > div {
+  align-items: baseline;
+  display: grid;
+  gap: 9px;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-width: 0;
+}
+
+.workspace-hero-metrics > div + div {
+  border-left: 1px solid var(--workspace-hero-metric-divider, color-mix(in srgb, var(--workspace-hero-metric-accent) 48%, transparent));
+  padding-left: clamp(22px, 3vw, 48px);
+}
+
+.workspace-hero-metrics dd {
+  color: var(--workspace-hero-metric-accent);
+  font-family: var(--font-newsreader), var(--font-editorial), Georgia, serif;
+  font-size: clamp(1.45rem, 2vw, 2.2rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  line-height: 1;
+  margin: 0;
+  order: -1;
+  white-space: nowrap;
+}
+
+.workspace-hero-metrics dt {
+  color: var(--workspace-hero-metric-label, #3f5751);
+  font-size: 0.72rem;
+  line-height: 1.15;
+  min-width: 0;
+}
+
+@media (max-width: 680px) {
+  .workspace-hero-metrics { padding-inline: 18px; }
+  .workspace-hero-metrics > div { align-items: start; gap: 1px; grid-template-columns: 1fr; }
+  .workspace-hero-metrics > div + div { padding-left: 14px; }
+  .workspace-hero-metrics dd { font-size: 1.2rem; }
+  .workspace-hero-metrics dt { font-size: 0.62rem; line-height: 1.05; }
+}

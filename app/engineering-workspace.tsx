@@ -15,6 +15,7 @@ import type {
 } from "../engineering-journal/index";
 
 import HeroQuote from "./hero-quote";
+import WorkspaceHeroMetrics from "./workspace-hero-metrics";
 
 export type EngineeringView = "journal" | "capabilities" | "decisions" | "incidents" | "case-studies" | "statistics";
 
@@ -195,16 +196,16 @@ function EngineeringDestinationHero({ index, view }: { index: EngineeringJournal
     return { eligible, verified, repositories: repositories.size };
   }, [index.records, view]);
   const stats = view === "journal"
-    ? [["Factual records", index.statistics.totalRecords], ["Merged pull requests", index.receiptStatistics.totalReceipts], ["Repositories", Object.keys(index.statistics.byRepository).length]]
+    ? [{ label: "Factual records", value: index.statistics.totalRecords }, { label: "Merged pull requests", value: index.receiptStatistics.totalReceipts }, { label: "Repositories", value: Object.keys(index.statistics.byRepository).length }]
     : view === "statistics"
-      ? [["Factual records", index.statistics.totalRecords], ["Verified", index.statistics.verification.verified], ["PR receipts", index.receiptStatistics.totalReceipts]]
-      : [["Eligible records", aggregates.eligible], ["Verified", aggregates.verified], ["Repositories", aggregates.repositories]];
+      ? [{ label: "Factual records", value: index.statistics.totalRecords }, { label: "Verified", value: index.statistics.verification.verified }, { label: "PR receipts", value: index.receiptStatistics.totalReceipts }]
+      : [{ label: "Eligible records", value: aggregates.eligible }, { label: "Verified", value: aggregates.verified }, { label: "Repositories", value: aggregates.repositories }];
   return <header key={view} className={`engineering-hero engineering-hero-${view}`} style={{ "--engineering-accent": copy.accent } as CSSProperties}>
     <div className="engineering-hero-copy"><span>{copy.eyebrow}</span><h1>{copy.title}</h1><HeroQuote className="engineering-hero-quote">{copy.quote}</HeroQuote><p className="engineering-hero-lede">{copy.description}</p></div>
     <div className="engineering-hero-sketch"><EngineeringNatureSketch view={view} /></div>
     <span className="engineering-hero-pulse" aria-hidden="true" />
     <span className="engineering-hero-light-band" aria-hidden="true" />
-    <dl>{stats.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+    <WorkspaceHeroMetrics className="engineering-hero-metrics" metrics={stats} />
   </header>;
 }
 

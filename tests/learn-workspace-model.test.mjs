@@ -16,6 +16,7 @@ import {
   selectCurrentLesson,
   selectLearningCourse,
   selectQuickStudy,
+  selectStartedLearningSession,
 } from "../app/learn-workspace-model.ts";
 
 const lessonSnapshot = (lessonId, title, revision = 1) => ({
@@ -99,7 +100,23 @@ test("the Learn workspace model preserves pinned curriculum order and factual pr
 
 test("the Learn workspace model selects active and completed Session history without inference", () => {
   assert.equal(selectActiveLearningSession(payload, "retry-boundary").session.sessionId, "session-current");
+  assert.equal(selectStartedLearningSession(payload, "retry-boundary").session.sessionId, "session-current");
   assert.deepEqual(learningHistory(payload).map((entry) => entry.session.sessionId), ["session-complete"]);
+});
+
+test("a merely planned Session belongs to Today but does not create a Courses notice", () => {
+  const planned = {
+    ...payload,
+    sessions: [{
+      session: { ...payload.sessions[1].session, sessionId: "session-planned", state: "planned", accumulatedSeconds: 0 },
+      intervals: [],
+      turns: [],
+      evidencePolicy: "transcript_only",
+    }],
+  };
+
+  assert.equal(selectActiveLearningSession(planned, "retry-boundary").session.sessionId, "session-planned");
+  assert.equal(selectStartedLearningSession(planned, "retry-boundary"), null);
 });
 
 test("Quick Study remains a revisitable Current lesson without fabricating a Course", () => {

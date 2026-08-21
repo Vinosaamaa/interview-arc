@@ -44,7 +44,7 @@ Rain is CSS falling streaks (`.ambient-rain-drop`): teal 2px trails with a splas
 
 1. Add one switcher segment and one `.active-workspace-*` token set (`docs/engineering/records/adr-workspace-atmosphere-token-boundary.md`).
 2. One full-width current-workspace nameplate, then numbered local nav (`01` …) for that workspace only. Destination accents on hero, selected nav, focus, and quiet panel tints only.
-3. Reuse this 50px bar, centered switch, icon tools, and even dock. Destination pages use the `350px` top-panel primitive in MASTER (eyebrow, display statement, quote, supporting copy, summary band).
+3. Reuse this 50px bar, centered switch, icon tools, and even dock. Destination pages use the `350px` top-panel primitive in MASTER (eyebrow, display statement, quote, supporting copy, summary band). The lower summary band is one shared component across Interview, Learn, and Engineering: exact `50px`, three equal segments, editorial value first, compact label second, and short vertical separators. Workspace and destination accents change through tokens, never through different geometry or type hierarchy. Problem Banks keeps its documented interactive-selector exception while preserving the same height and value/label hierarchy.
 4. Gutters show the workspace canvas; major panes are opaque `--workspace-paper`.
 
 ## Do not
