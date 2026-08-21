@@ -3,7 +3,7 @@ schemaVersion: 1
 id: feature-retrospective-website-loop-creation
 revision: 1
 type: feature-retrospective
-status: accepted
+status: released
 title: Create Interview Loops deterministically from the website
 repository: interview-arc
 capabilityIds: ["arc-interview-loops"]
