@@ -6,7 +6,7 @@ This feature answers one concrete question: how does the owner add a Loop withou
 
 ## How to add a Loop today
 
-Use the long-lived `Interview Arc — Loop Recorder` task. Supply explicit facts:
+No Loop Recorder task or thread should be assumed to exist. First create a dedicated coordinator task from the canonical Loop Recorder prompt and register it in the task registry. Then supply explicit facts:
 
 - company and role;
 - job-description text or source URL;
@@ -33,12 +33,12 @@ The form preserves values on validation or concurrency failure. Error messages i
 
 ```text
 Manual website form ─┐
-Loop Recorder ───────┼─▶ create_loop command ─▶ Loop + Role Brief revision 1
-Future AI proposal ──┘        │
-                              └▶ receipt / typed conflict
+Registered recorder task ─────┼─▶ create_loop command ─▶ Loop + Role Brief revision 1
+Future AI proposal ────────────┘        │
+                                        └▶ receipt / typed conflict
 ```
 
-The website, Loop Recorder, and any later assistant adapter share the same domain command. They may have different authorization adapters and input preparation, but business invariants cannot drift.
+The website, a registered recorder task, and any later assistant adapter share the same domain command. They may have different authorization adapters and input preparation, but business invariants cannot drift.
 
 ## Proposed interface
 
@@ -79,9 +79,9 @@ The server derives owner identity from Cloudflare Access. The response contains 
 
 ## Authorization migration
 
-The current Loop Recorder-exclusive mutation contract must be revised deliberately:
+The current recorder-specialist mutation contract must be revised deliberately:
 
-- retain the recorder's dedicated adapter authorization;
+- retain the registered recorder task's dedicated adapter authorization;
 - add an owner-confirmed website adapter authorized by verified Access identity;
 - move reusable validation and transaction logic into a shared Loop command module;
 - prevent either adapter from impersonating the other;

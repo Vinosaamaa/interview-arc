@@ -2,7 +2,7 @@
 
 Owning issue: [#418](https://github.com/Vinosaamaa/interview-arc/issues/418).
 
-This is a horizontal website capability. It is not “AI for Loops.” It lives in the shared application shell and can work across Today, Banks, practice, Learn, Review, Loops, and explicitly selected private evidence as each domain exposes a reviewed adapter.
+This is a horizontal website capability. It is not “AI for Loops.” It lives in the shared application shell and can work across Today, Banks, practice, Learn, Review, Loops, and later explicitly selected private Interview Package sources as each domain exposes a reviewed adapter.
 
 ## User experience
 
@@ -113,7 +113,7 @@ Candidate order:
 2. Today and Banks: read plus proposals over existing deterministic commands.
 3. Practice and Review: selected owner-private attempts with scoped summaries/proposals.
 4. Loops: only after #417 exposes the deterministic command.
-5. Interview evidence: only after #415 and explicit private-provider authorization.
+5. Interview Package sources: only after #415 and explicit private-provider authorization.
 
 The first action release must integrate at least two distinct domains so the shared platform is proven rather than designed around one Loop use case.
 
@@ -172,5 +172,5 @@ The first action release must integrate at least two distinct domains so the sha
 - Making AI necessary for any deterministic website feature.
 - A general autonomous agent with arbitrary tools.
 - Direct model writes, SQL, MCP mutation, GitHub work, deployment, or publication.
-- Automatically including all owner data or private evidence in context.
-- Automatically uploading, transcribing, analyzing, or deleting interview evidence.
+- Automatically including all owner data or private Interview Package sources in context.
+- Automatically uploading, transcribing, analyzing, or deleting Interview Package sources.

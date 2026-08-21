@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <meta name="description" content="A corrected architecture plan separating private interview evidence upload, deterministic Loop creation, and a site-wide Interview Arc AI assistant.">
+  <meta name="description" content="A corrected architecture plan separating private Interview Packages, deterministic Loop creation, and a site-wide Interview Arc AI assistant.">
   <title>Interview Arc — Three Separate Capabilities</title>
   <style>
     :root {
@@ -741,11 +741,11 @@
         <div>
           <p class="eyebrow">Corrected product boundary</p>
           <h1>Three questions.<span>Three systems.</span></h1>
-          <p class="lede">Private interview evidence, ordinary Loop operations, and a website-wide AI assistant are independent capabilities. They can share foundations without owning one another.</p>
+          <p class="lede">Private Interview Packages, ordinary Loop operations, and a website-wide AI assistant are independent capabilities. They can share foundations without owning one another.</p>
         </div>
         <aside class="correction" aria-label="What changed">
           <p><strong>The previous approach was false.</strong></p>
-          <p>It visually and conceptually centered AI around Loops, making recording upload and Loop creation look like AI features. This revision removes that coupling.</p>
+          <p>It visually and conceptually centered AI around Loops, making package upload and Loop creation look like AI features. This revision removes that coupling.</p>
         </aside>
       </div>
     </div>
@@ -753,8 +753,8 @@
     <div class="doors" aria-label="Three independent capabilities">
       <article class="door evidence">
         <div class="door-top"><span class="issue-label">Issue #415</span><span class="door-letter">A</span></div>
-        <h2>Upload interview evidence</h2>
-        <p>Select private recordings and supplied transcripts in the browser, validate and upload them, then assign them to an exact Loop/Round—or keep them unassigned.</p>
+        <h2>Add an Interview Package</h2>
+        <p>Add private recordings, transcripts, documents, images, links, and owner notes, then assign the event package to an exact Loop/Round—or keep it unassigned.</p>
         <div class="answer">
           <strong>Answer today</strong>
           <p>The website cannot do this yet. #415 adds it. No AI is required.</p>
@@ -767,7 +767,7 @@
         <p>Use a normal website form to create the Loop, Role Brief revision 1, initial stages, provenance, and a stable command receipt atomically.</p>
         <div class="answer">
           <strong>Answer today</strong>
-          <p>Use the long-lived Loop Recorder task. #417 brings the same operation into the website.</p>
+          <p>No recorder task/thread is assumed to exist. Create and register a dedicated coordinator task from the canonical prompt; #417 brings the operation into the website.</p>
         </div>
       </article>
 
@@ -777,7 +777,7 @@
         <p>A shared-shell assistant reads owner-selected context across the website and can propose reviewed actions through narrow domain adapters.</p>
         <div class="answer">
           <strong>Product boundary</strong>
-          <p>It is site-wide, optional, and not owned by Loops or evidence upload.</p>
+          <p>It is site-wide, optional, and not owned by Loops or Interview Packages.</p>
         </div>
       </article>
     </div>
@@ -789,8 +789,8 @@
           <h2>Shared does not mean coupled.</h2>
           <p>Authentication, D1, R2, receipts, traces, and UI primitives can be reused. Product ownership and release dependencies remain separate.</p>
         </div>
-        <div class="equation" aria-label="Evidence upload is separate from Loop operations and AI">
-          <span>private evidence<br>#415</span>
+        <div class="equation" aria-label="Interview Packages are separate from Loop operations and AI">
+          <span>Interview Packages<br>#415</span>
           <span class="not-equal" aria-hidden="true">≠</span>
           <span>Loop operations<br>#417</span>
           <span class="not-equal" aria-hidden="true">≠</span>
@@ -806,33 +806,33 @@
         <div class="section-head">
           <div class="section-number" aria-hidden="true">A</div>
           <div>
-            <p class="section-label">Issue #415 · Private evidence</p>
-            <h2>How do I upload my recording and transcript?</h2>
-            <p class="section-intro">The owner explicitly chooses files through the website. Interview Arc creates an interview-evidence package, verifies every asset, stores private source bytes in R2 and authoritative metadata in D1, and lets the owner attach the package to a Loop/Round.</p>
+            <p class="section-label">Issue #415 · Private Interview Packages</p>
+            <h2>How do I add the sources and material from one interview?</h2>
+            <p class="section-intro">The owner explicitly adds recordings, transcripts, documents, images, links, and notes. Interview Arc preserves one event package, while any link or revision to reusable Interview Material remains a separate, reviewable decision.</p>
           </div>
         </div>
 
         <div class="now-target">
           <article class="state-card current">
             <span class="badge">Current</span>
-            <h3>No website upload path</h3>
-            <p>Interview Arc does not currently ingest an arbitrary local folder, recording, or transcript. A local folder remains private and untouched.</p>
+            <h3>No website package path</h3>
+            <p>Interview Arc does not currently ingest an arbitrary local folder or create an event package from its recordings, transcripts, documents, images, links, and notes. A local folder remains private and untouched.</p>
           </article>
           <article class="state-card target">
             <span class="badge">Target</span>
-            <h3>Explicit browser upload</h3>
-            <p>Open a Loop/Round or the unassigned evidence inbox, choose files, review their relationships, upload, validate, and finalize.</p>
+            <h3>Explicit package assembly</h3>
+            <p>Open a Loop/Round or the unassigned package inbox, add each source explicitly, review relationships, validate file assets, and finalize.</p>
           </article>
         </div>
 
-        <div class="workflow" aria-label="Evidence upload workflow">
-          <article class="step"><strong>Select</strong><p>Choose audio and TXT, VTT, or SRT transcript files through the browser picker.</p></article>
-          <article class="step"><strong>Review</strong><p>Confirm safe names, types, bytes, checksums, interview time, timezone, and relationships.</p></article>
+        <div class="workflow" aria-label="Interview Package workflow">
+          <article class="step"><strong>Add</strong><p>Choose audio, transcript, document, or image files; add explicit links and owner notes.</p></article>
+          <article class="step"><strong>Review</strong><p>Confirm safe names or labels, types, bytes, checksums, interview time, timezone, and relationships.</p></article>
           <article class="step"><strong>Upload</strong><p>Stream or resume each asset with server-recorded progress and visible per-file state.</p></article>
           <article class="step"><strong>Finalize</strong><p>Reconcile checksum, signature, D1 metadata, R2 source bytes, and authorized readback.</p></article>
           <article class="step"><strong>Assign</strong><p>Attach to an exact Loop/Round now, reassign later, or keep it in the unassigned inbox.</p></article>
-          <article class="step"><strong>Use</strong><p>Read the supplied transcript and play or download authorized audio.</p></article>
-          <article class="step"><strong>Correct</strong><p>Create traceable transcript or metadata revisions without replacing the source.</p></article>
+          <article class="step"><strong>Use</strong><p>Read, play, or download authorized sources and navigate their exact event context.</p></article>
+          <article class="step"><strong>Relate</strong><p>Link exact Interview Material or prepare a separately reviewed revision from selected sources.</p></article>
           <article class="step"><strong>Delete</strong><p>Run separately confirmed, governed deletion with visible reconciliation state.</p></article>
         </div>
 
@@ -845,7 +845,7 @@
             <h3>Package authority</h3>
             <ul class="plain">
               <li>D1 owns package and asset state</li>
-              <li>One event may contain multiple assets</li>
+              <li>One event may contain multiple source types</li>
               <li>Assignment can be absent or revised</li>
               <li>Every mutation is idempotent</li>
             </ul>
@@ -860,17 +860,36 @@
             </ul>
           </article>
           <article class="panel">
-            <h3>Transcript fidelity</h3>
+            <h3>Source fidelity</h3>
             <ul class="plain">
-              <li>Original bytes and digest preserved</li>
-              <li>Deterministic TXT/VTT/SRT parsing</li>
-              <li>No invented speakers or timestamps</li>
+              <li>Original file bytes and digests preserved</li>
+              <li>Notes and links use append-only revisions</li>
+              <li>No invented source facts or relationships</li>
               <li>No AI/provider submission in #415</li>
             </ul>
           </article>
         </div>
 
-        <div class="code" role="img" aria-label="Evidence package state machine">PACKAGE  draft → uploading → staged → validating → ready
+        <div class="grid-2">
+          <article class="panel">
+            <h3>Interview Package</h3>
+            <p>Event-scoped sources and owner entries: recording, supplied transcript, document, image, external link, and note. The package can stand alone.</p>
+          </article>
+          <article class="panel">
+            <h3>Interview Material</h3>
+            <p>Reusable Loop/Round preparation with append-only revisions. Package upload never edits it; link or revision requires an explicit second decision and receipt.</p>
+          </article>
+        </div>
+
+        <figure class="diagram">
+          <img src="interview-package-ui-mockup-desktop.png" alt="Responsive Interview Package mockup with package sources on the left and a visibly separate Related Interview Material panel on the right.">
+          <figcaption>
+            <span>Proposed package workspace. All displayed content is synthetic.</span>
+            <a href="interview-package-ui-mockup.html">Open interactive HTML mockup</a>
+          </figcaption>
+        </figure>
+
+        <div class="code" role="img" aria-label="Interview Package state machine">PACKAGE  draft → uploading → staged → validating → ready
                               │          ├──────→ partial
                               │          └──────→ failed
                               └─────────────────→ expired
@@ -887,7 +906,8 @@ DELETE   ready / partial / failed → deleting → deleted</div>
             <tbody>
               <tr><td>Browser → Worker</td><td>Manifest creation plus resumable upload; owner comes from Access</td><td>Typed validation, expiry, cancellation, or byte-position recovery</td></tr>
               <tr><td>Worker → R2</td><td>Quarantine, validation, promotion, range read, governed delete</td><td>Missing object, checksum mismatch, rejected signature, partial delete</td></tr>
-              <tr><td>Worker → D1</td><td>Package, asset, transcript revision, assignment, session, and receipt state</td><td>Conflict, stale revision, inconsistent reconciliation state</td></tr>
+              <tr><td>Worker → D1</td><td>Package, source/entry revisions, assignment/material links, session, and receipt state</td><td>Conflict, stale revision, inconsistent reconciliation state</td></tr>
+              <tr><td>Package → Interview Material</td><td>Exact link or source-selected revision proposal through a separate command</td><td>Unlinked, cancelled, or stale proposal without changing current material</td></tr>
               <tr><td>Owner → assignment</td><td>Explicit Loop/Round selection or unassigned inbox</td><td>Missing/stale target without losing uploaded evidence</td></tr>
             </tbody>
           </table>
@@ -923,15 +943,15 @@ DELETE   ready / partial / failed → deleting → deleted</div>
           <div>
             <p class="section-label">Issue #417 · Loop operations</p>
             <h2>How do I actually add a Loop?</h2>
-            <p class="section-intro">Today, the long-lived Loop Recorder task is the supported mutation path. The target is an ordinary Add Loop screen backed by one deterministic domain command. AI is neither required nor embedded.</p>
+            <p class="section-intro">Today, the website has no Add Loop path and no recorder task/thread should be assumed to exist. The interim path begins by creating and registering a dedicated coordinator task from the canonical prompt. The target is an ordinary Add Loop screen backed by one deterministic domain command.</p>
           </div>
         </div>
 
         <div class="now-target">
           <article class="state-card current">
             <span class="badge">Current path</span>
-            <h3>Use the Loop Recorder</h3>
-            <p>Provide company, role, job-description text or source, location and opened date when known, stages and dates, statuses, and explicit unknowns.</p>
+            <h3>Create the recorder task first</h3>
+            <p>Start a dedicated coordinator task from the canonical Loop Recorder prompt, register it, then provide company, role, source, dates, stages, statuses, and explicit unknowns.</p>
           </article>
           <article class="state-card target">
             <span class="badge">Website path</span>
@@ -948,10 +968,10 @@ DELETE   ready / partial / failed → deleting → deleted</div>
           <div><span class="kicker">05 · Receive</span><strong>Stable receipt</strong><p>Exact retries return the same result; conflicts preserve the form.</p></div>
         </div>
 
-        <div class="code" role="img" aria-label="Three adapters calling one Loop command">Manual website form ─┐
-Loop Recorder ───────┼──▶ create_loop command ──▶ Loop + Role Brief revision 1
-Future AI proposal ──┘             │
-                                   └─────────────▶ receipt / typed conflict
+        <div class="code" role="img" aria-label="Three adapters calling one Loop command">Manual website form ───────────┐
+Registered recorder task ────────┼──▶ create_loop command ──▶ Loop + Role Brief revision 1
+Future AI proposal ──────────────┘             │
+                                               └─────────────▶ receipt / typed conflict
 
 Business invariants live in create_loop, not in any adapter.</div>
 
@@ -966,7 +986,7 @@ Business invariants live in create_loop, not in any adapter.</div>
           </article>
           <article class="panel">
             <h3>Separate adapters</h3>
-            <p>The website and Loop Recorder authenticate differently but reuse one command. Neither can impersonate the other.</p>
+            <p>The website and a registered recorder task authenticate differently but reuse one command. Neither can impersonate the other.</p>
           </article>
         </div>
 
@@ -1047,7 +1067,7 @@ Business invariants live in create_loop, not in any adapter.</div>
               <tr><td>Today / Banks</td><td>Ground selected owner-private records</td><td>Only existing deterministic commands</td></tr>
               <tr><td>Practice / Review</td><td>Summarize selected attempts and feedback</td><td>Scoped proposals after privacy review</td></tr>
               <tr><td>Loops</td><td>Explain selected Loop facts and source conflicts</td><td>After #417 exposes <code>create_loop</code> and revisions</td></tr>
-              <tr><td>Interview evidence</td><td>None until private-provider policy is approved</td><td>After #415 plus separate explicit authorization</td></tr>
+              <tr><td>Interview Package sources</td><td>None until private-provider policy is approved</td><td>After #415 plus separate explicit authorization</td></tr>
             </tbody>
           </table>
         </div>
@@ -1100,7 +1120,7 @@ Business invariants live in create_loop, not in any adapter.</div>
         </div>
 
         <figure class="diagram">
-          <img src="capability-boundaries.png" alt="Three independent lanes for private evidence, Loop operations, and the site-wide assistant above shared foundations. A banner says evidence and Loop features work with AI disabled.">
+          <img src="capability-boundaries.png" alt="Three independent lanes for private Interview Packages, Loop operations, and the site-wide assistant above shared foundations. A banner says package and Loop features work with AI disabled.">
           <figcaption>
             <span>Capability boundary overview. There are no feature-dependency arrows between #415, #417, and #418.</span>
             <a href="capability-boundaries.drawio">Editable draw.io source</a>
@@ -1109,12 +1129,12 @@ Business invariants live in create_loop, not in any adapter.</div>
 
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Foundation</th><th>#415 Evidence</th><th>#417 Loops</th><th>#418 Assistant</th></tr></thead>
+            <thead><tr><th>Foundation</th><th>#415 Packages</th><th>#417 Loops</th><th>#418 Assistant</th></tr></thead>
             <tbody>
               <tr><td>Cloudflare Access</td><td>Derives owner scope</td><td>Derives owner scope</td><td>Derives owner scope and context</td></tr>
-              <tr><td>D1</td><td>Packages, assets, transcript revisions, links, receipts</td><td>Loop, Role Brief, stages, receipts</td><td>Conversations, context receipts, proposals, approvals</td></tr>
-              <tr><td>R2</td><td>Owns private source bytes</td><td>No source-media ownership</td><td>No direct authority; adapter-mediated selected content only</td></tr>
-              <tr><td>Commands</td><td>Assign, correct metadata, authorize download, delete</td><td>Create and revise Loop</td><td>Calls one allowlisted command after exact approval</td></tr>
+              <tr><td>D1</td><td>Packages, source/entry revisions, assignment/material links, receipts</td><td>Loop, Role Brief, stages, receipts</td><td>Conversations, context receipts, proposals, approvals</td></tr>
+              <tr><td>R2</td><td>Owns private file-source bytes</td><td>No source-media ownership</td><td>No direct authority; adapter-mediated selected content only</td></tr>
+              <tr><td>Commands</td><td>Assign/delete package, revise entry, link/prepare material</td><td>Create and revise Loop</td><td>Calls one allowlisted command after exact approval</td></tr>
               <tr><td>Failure mode</td><td>Manual upload/recovery remains deterministic</td><td>Manual Add Loop remains deterministic</td><td>Manual website remains available during outage</td></tr>
             </tbody>
           </table>
@@ -1123,8 +1143,8 @@ Business invariants live in create_loop, not in any adapter.</div>
         <div class="issues">
           <article class="issue-card evidence">
             <span class="issue-label">#415 · Independent release</span>
-            <h3>Upload private interview evidence</h3>
-            <p>Can ship against existing Loops plus an unassigned inbox. Does not wait for Loop creation or AI.</p>
+            <h3>Add private Interview Packages</h3>
+            <p>Package ingest can ship against existing Loops plus an unassigned inbox. Material linking is explicit and does not wait for AI.</p>
             <p><a href="https://github.com/Vinosaamaa/interview-arc/issues/415">Open GitHub issue</a> · <a href="interview-evidence-upload.md">Read detailed design</a></p>
           </article>
           <article class="issue-card loop">
@@ -1158,17 +1178,17 @@ Business invariants live in create_loop, not in any adapter.</div>
           <article class="decision" style="--accent: var(--loop)">
             <span class="kicker">Track B · #417</span>
             <h3>Deterministic Add Loop</h3>
-            <p>Extract the shared command, retain Loop Recorder compatibility, add the website adapter and form, then verify atomicity, authorization, accessibility, and E2E recovery.</p>
+            <p>Extract the shared command, support a registered recorder-task adapter, add the website adapter and form, then verify atomicity, authorization, accessibility, and E2E recovery.</p>
           </article>
           <article class="decision" style="--accent: var(--evidence)">
             <span class="kicker">Track A · #415</span>
-            <h3>Evidence package path</h3>
-            <p>Implement manifest, quarantine upload, validation, D1/R2 reconciliation, assignment/unassigned inbox, reading, revision, and governed deletion. Decide limits and retention before release.</p>
+            <h3>Interview Package path</h3>
+            <p>Implement mixed-source manifest, quarantine upload, link/note revisions, assignment/unassigned inbox, reading, material linkage, recovery, and governed deletion.</p>
           </article>
           <article class="decision" style="--accent: var(--ai)">
             <span class="kicker">Track C · #418</span>
             <h3>Site-wide assistant</h3>
-            <p>Start with shared shell and read-only published grounding, prove a second workspace, then add proposal/approval around existing commands. Private evidence comes only after separate policy approval.</p>
+            <p>Start with shared shell and read-only published grounding, prove a second workspace, then add proposal/approval around existing commands. Private package sources come only after separate policy approval.</p>
           </article>
         </div>
 
@@ -1176,9 +1196,9 @@ Business invariants live in create_loop, not in any adapter.</div>
           <article class="panel">
             <h3>Decisions for #415</h3>
             <ul class="plain">
-              <li>Audio and transcript format/size allowlists</li>
+              <li>Audio, transcript, document, image, and URL allowlists</li>
               <li>Retention, download, export, and tombstones</li>
-              <li>Scanning requirement and transcript-body storage threshold</li>
+              <li>Scanning, representation storage, and material-authoring release boundary</li>
             </ul>
           </article>
           <article class="panel">
