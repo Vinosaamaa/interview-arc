@@ -50,7 +50,7 @@ test("Today is a Session workbench and Courses keeps four distinct rooms", async
   assert.match(workspace, /id="learn-overview-title"/);
   assert.match(workspace, /id="learn-homework-title"/);
   assert.match(workspace, /id="learn-course-statistics-title"/);
-  assert.match(workspace, /Return to current lesson/);
+  assert.doesNotMatch(workspace, /Return to current lesson/);
   assert.match(workspace, /BLUEPRINT CARD · NOT WRITTEN YET/);
   assert.match(workspace, /Enrolled · Blueprint r/);
   assert.match(workspace, /Open Lesson contents/);
@@ -83,7 +83,6 @@ test("Learn uses the approved 316 plus 1200 two-panel frame", async () => {
   const styles = await readFile(stylesUrl, "utf8");
   const stageIndex = workspace.indexOf("className=\"learn-lesson-stage\"");
   const cardIndex = workspace.indexOf("<PlannedLessonCard");
-  const navIndex = workspace.indexOf("<LessonNavigator");
 
   assert.match(styles, /\.active-workspace-learn \.page-content \{[^}]*max-width:\s*none[^}]*padding:\s*0 24px 80px/s);
   assert.match(styles, /\.learn-frame \{[^}]*max-width:\s*1536px[^}]*width:\s*100%/s);
@@ -100,11 +99,9 @@ test("Learn uses the approved 316 plus 1200 two-panel frame", async () => {
   assert.doesNotMatch(styles, /\.learn-today-summary \{[^}]*100vh/s);
   assert.match(styles, /\.learn-lesson-stage \{[^}]*align-content:\s*start/s);
   assert.match(styles, /\.learn-lesson-stage \{[^}]*grid-auto-rows:\s*max-content/s);
-  assert.match(styles, /\.learn-lesson-nav \{[^}]*align-items:\s*center/s);
-  assert.match(styles, /\.learn-lesson-nav button \{[^}]*flex:\s*0 0 auto/s);
-  assert.match(styles, /\.learn-lesson-nav button \{[^}]*height:\s*auto/s);
-  assert.doesNotMatch(styles, /\.learn-lesson-nav button \{[^}]*flex:\s*1/s);
-  assert.ok(stageIndex >= 0 && cardIndex > stageIndex && navIndex > cardIndex);
+  assert.doesNotMatch(workspace, /LessonNavigator|aria-label="Adjacent lessons"/);
+  assert.doesNotMatch(styles, /\.learn-lesson-nav/);
+  assert.ok(stageIndex >= 0 && cardIndex > stageIndex);
 });
 
 test("only Today renders the live Session timer", async () => {

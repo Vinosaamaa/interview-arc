@@ -399,41 +399,14 @@ function WrittenLesson({ payload, lesson }: { payload: LearnPayload; lesson: Lea
   </div>;
 }
 
-function LessonNavigator({
-  payload,
-  course,
-  selectedLessonId,
-  onSelect,
-}: {
-  payload: LearnPayload;
-  course: LearningCourseProjection;
-  selectedLessonId: string;
-  onSelect: (lessonId: string) => void;
-}) {
-  const path = courseModulePath(payload, course);
-  const currentId = course.enrollment?.currentLessonId;
-  const { previous, next } = adjacentCourseLessons(path, selectedLessonId);
-  return <nav className="learn-lesson-nav" aria-label="Adjacent lessons">
-    {currentId && currentId !== selectedLessonId && <button type="button" onClick={() => onSelect(currentId)}>Return to current lesson</button>}
-    <button type="button" disabled={!previous} onClick={() => previous && onSelect(previous.lessonId)}>
-      Previous{previous ? ` · ${previous.title}` : ""}
-    </button>
-    <button type="button" disabled={!next} onClick={() => next && onSelect(next.lessonId)}>
-      Next{next ? ` · ${next.title}` : ""}
-    </button>
-  </nav>;
-}
-
 function LessonReader({
   payload,
   course,
   selectedLessonId,
-  onSelect,
 }: {
   payload: LearnPayload;
   course: LearningCourseProjection;
   selectedLessonId: string;
-  onSelect: (lessonId: string) => void;
 }) {
   const located = locateCourseLesson(payload, course, selectedLessonId);
   if (!located) {
@@ -447,7 +420,6 @@ function LessonReader({
     {located.snapshot
       ? <WrittenLesson payload={payload} lesson={located.snapshot} />
       : <PlannedLessonCard course={course} lesson={located.lesson} moduleTitle={located.module.title} />}
-    <LessonNavigator payload={payload} course={course} selectedLessonId={selectedLessonId} onSelect={onSelect} />
   </div>;
 }
 
@@ -600,7 +572,7 @@ function CourseWorkspace({
         <div className="learn-course-reader-pane">
           {inspectingOther && activeSession && <aside className="learn-session-chip"><p>A Session is {activeSession.session.state} on another Lesson.</p><button type="button" onClick={() => onSelectLesson(activeSession.session.lessonId)}>Return to the Session lesson</button></aside>}
           {sessionForSelected && !inspectingOther && <aside className="learn-session-chip"><p>A Session is {sessionForSelected.session.state} on this Lesson. Open Today to control its timer.</p></aside>}
-          <LessonReader payload={payload} course={course} selectedLessonId={selectedLessonId} onSelect={onSelectLesson} />
+          <LessonReader payload={payload} course={course} selectedLessonId={selectedLessonId} />
         </div>
       </div>
     </>}

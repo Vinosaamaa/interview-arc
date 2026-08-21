@@ -46,7 +46,8 @@ becoming an unrelated full-width card.
 
 Lessons has no permanent third column and no permanent reader toolbar. A small
 **Contents** disclosure lives inside written Lesson cards and opens a list of
-links to real Lesson headings.
+links to real Lesson headings. The ordered Module path is the only control for
+switching Lessons; the reader has no duplicate Previous/Next footer pager.
 
 ## Today
 
