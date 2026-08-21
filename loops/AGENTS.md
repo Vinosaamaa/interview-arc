@@ -22,6 +22,14 @@ authorization literal, one stable operation ID, and the exact current revision.
 An exact retry reuses the operation ID and identical payload. After a conflict,
 reread authoritative state before issuing a new operation.
 
+Interview Packages are a separate authenticated-website aggregate governed by
+`../docs/contracts/interview-packages.md`. The Loop Recorder does not ingest,
+upload, download, export, retain, or delete package files. Package assignment
+never changes Loop state. A package may link an exact material revision, and
+the website may confirm one explicitly owner-authored selected-source proposal
+through its narrow `website_owner` adapter; this does not transfer Loop
+Recorder authority or authorize AI.
+
 ## What To Record
 
 Record only owner-authorized hiring-process facts:

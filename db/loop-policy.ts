@@ -243,23 +243,29 @@ export const loopInterviewMaterialSnapshotSchema = z.object({
   }
 });
 
-const loopInterviewMaterialWriteBaseSchema = z.object({
+const loopInterviewMaterialWritePayloadSchema = z.object({
   operationId: loopStableIdSchema,
-  authorization: z.literal("loop_recorder"),
   expectedLoopRevision: z.number().int().positive(),
   expectedRoleBriefRevision: z.number().int().positive(),
   material: loopInterviewMaterialSnapshotSchema,
 });
 
-export const createLoopInterviewMaterialSchema = loopInterviewMaterialWriteBaseSchema.strict()
+const createLoopInterviewMaterialWithAuthority = (authority: "loop_recorder" | "website_owner") => (
+  loopInterviewMaterialWritePayloadSchema.extend({ authorization: z.literal(authority) }).strict()
   .refine((input) => input.material.provenance.roleBriefRevision === input.expectedRoleBriefRevision, {
     path: ["material", "provenance", "roleBriefRevision"],
     message: "Material provenance must pin the expected Role Brief revision.",
-  });
+  })
+);
 
-export const reviseLoopInterviewMaterialSchema = loopInterviewMaterialWriteBaseSchema.extend({
+export const createLoopInterviewMaterialSchema = createLoopInterviewMaterialWithAuthority("loop_recorder");
+
+export const websiteCreateLoopInterviewMaterialSchema = createLoopInterviewMaterialWithAuthority("website_owner");
+
+const reviseLoopInterviewMaterialWithAuthority = (authority: "loop_recorder" | "website_owner") => loopInterviewMaterialWritePayloadSchema.extend({
   materialId: loopStableIdSchema,
   expectedRevision: z.number().int().positive(),
+  authorization: z.literal(authority),
 }).strict().superRefine((input, context) => {
   if (input.materialId !== input.material.materialId) {
     context.addIssue({
@@ -276,6 +282,10 @@ export const reviseLoopInterviewMaterialSchema = loopInterviewMaterialWriteBaseS
     });
   }
 });
+
+export const reviseLoopInterviewMaterialSchema = reviseLoopInterviewMaterialWithAuthority("loop_recorder");
+
+export const websiteReviseLoopInterviewMaterialSchema = reviseLoopInterviewMaterialWithAuthority("website_owner");
 
 export const queryLoopInterviewMaterialsSchema = z.object({
   loopId: loopStableIdSchema.optional(),
@@ -503,6 +513,8 @@ export type LoopRoleBriefDisplaySnapshot = z.infer<typeof loopRoleBriefDisplaySn
 export type LoopInterviewMaterialSnapshot = z.infer<typeof loopInterviewMaterialSnapshotSchema>;
 export type CreateLoopInterviewMaterialInput = z.infer<typeof createLoopInterviewMaterialSchema>;
 export type ReviseLoopInterviewMaterialInput = z.infer<typeof reviseLoopInterviewMaterialSchema>;
+export type WebsiteCreateLoopInterviewMaterialInput = z.infer<typeof websiteCreateLoopInterviewMaterialSchema>;
+export type WebsiteReviseLoopInterviewMaterialInput = z.infer<typeof websiteReviseLoopInterviewMaterialSchema>;
 export type CreateLoopInput = z.infer<typeof createLoopSchema>;
 export type CreateLoopCommandInput = z.infer<typeof createLoopCommandSchema>;
 export type WebsiteCreateLoopInput = z.infer<typeof websiteCreateLoopSchema>;

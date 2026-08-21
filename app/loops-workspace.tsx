@@ -22,6 +22,7 @@ import type { ComposerLoopPracticePrefill } from "./activity-composer-loop-bindi
 import InterviewPageHero from "./interview-page-hero";
 import { isAbortError, parseLoopPayloadResponse } from "./loop-payload";
 import LoopCreateDialog from "./loop-create-dialog";
+import InterviewPackageDialog from "./interview-package-dialog";
 
 type Specialty = LoopSpecialty;
 type MemoryConfidence = "exact" | "reconstructed";
@@ -435,6 +436,7 @@ export function LoopsWorkspace({
   const [loopSwitcherOpen, setLoopSwitcherOpen] = useState(false);
   const [sourceDialog, setSourceDialog] = useState<{ loop: LoopProjection; opener: HTMLButtonElement } | null>(null);
   const [createDialogOpener, setCreateDialogOpener] = useState<HTMLButtonElement | null>(null);
+  const [packageDialogOpener, setPackageDialogOpener] = useState<HTMLButtonElement | null>(null);
   const [pendingCreatedLoopId, setPendingCreatedLoopId] = useState("");
   const closeSourceDialog = useCallback(() => setSourceDialog(null), []);
   const loops = useMemo(() => payload?.loops ?? [], [payload?.loops]);
@@ -463,7 +465,7 @@ export function LoopsWorkspace({
   if (loading && !payload) return <section className="loops-state" aria-live="polite"><span className="loops-loader" /><strong>Reading owner-private Loops…</strong></section>;
   if (error && !payload) return <section className="loops-state error" role="alert"><strong>Loops could not be loaded.</strong><span>{error}</span><button type="button" onClick={() => void reload()}>Try again</button></section>;
   if (requestedLoopMissing) return <section className="loops-state error" role="alert"><strong>That Loop is unavailable.</strong><span>The saved link does not match a Loop in the current owner-scoped result.</span>{loops[0] ? <button type="button" onClick={() => setSelectedLoopId(loops[0].loop.loopId)}>Open the current Loop</button> : null}</section>;
-  if (!selectedLoop) return <><section className="loops-empty" data-loop-workspace-root><div><h1>Your first Loop starts with a real role.</h1><p>Create the company-and-role record here. Add only the job source, dates, and stages you actually know.</p><button type="button" className="loop-create-primary" onClick={(event) => setCreateDialogOpener(event.currentTarget)}>Add Loop</button></div><aside><strong>{payload?.migrationInbox.length ?? 0} standalone Target Profiles await a decision</strong><p>Nothing is guessed or deleted.</p></aside></section>{createDialogOpener ? <LoopCreateDialog opener={createDialogOpener} onClose={() => setCreateDialogOpener(null)} onCreated={(receipt) => { setPendingCreatedLoopId(receipt.loopId); setCreateDialogOpener(null); reload(); }} /> : null}</>;
+  if (!selectedLoop) return <><section className="loops-empty" data-loop-workspace-root><div><h1>Your first Loop starts with a real role.</h1><p>Create the company-and-role record here. Add only the job source, dates, and stages you actually know.</p><div className="loop-workspace-buttons"><button type="button" className="loop-create-primary" onClick={(event) => setCreateDialogOpener(event.currentTarget)}>Add Loop</button><button type="button" className="loop-package-primary" onClick={(event) => setPackageDialogOpener(event.currentTarget)}>Interview packages</button></div></div><aside><strong>{payload?.migrationInbox.length ?? 0} standalone Target Profiles await a decision</strong><p>Nothing is guessed or deleted.</p></aside></section>{createDialogOpener ? <LoopCreateDialog opener={createDialogOpener} onClose={() => setCreateDialogOpener(null)} onCreated={(receipt) => { setPendingCreatedLoopId(receipt.loopId); setCreateDialogOpener(null); reload(); }} /> : null}{packageDialogOpener ? <InterviewPackageDialog opener={packageDialogOpener} loops={[]} onClose={() => setPackageDialogOpener(null)} /> : null}</>;
 
   const completedStages = selectedLoop.loop.stages.filter((stage) => stage.status === "completed").length;
   const linkedPractices = selectedLoop.activityHistory.length;
@@ -473,14 +475,14 @@ export function LoopsWorkspace({
       { value: completedStages, label: "completed stage" },
       { value: linkedPractices, label: "linked practices" },
     ]} />
-    <div className="loop-workspace-actions"><p>One company and role per Loop. New facts become later revisions.</p><button type="button" className="loop-create-primary" onClick={(event) => setCreateDialogOpener(event.currentTarget)}>Add Loop</button></div>
+    <div className="loop-workspace-actions"><p>One company and role per Loop. Interview Packages hold private event sources without reclassifying them as practice.</p><div className="loop-workspace-buttons"><button type="button" className="loop-package-primary" onClick={(event) => setPackageDialogOpener(event.currentTarget)}>Interview packages</button><button type="button" className="loop-create-primary" onClick={(event) => setCreateDialogOpener(event.currentTarget)}>Add Loop</button></div></div>
     <section className={`loop-identity-switcher ${loopSwitcherOpen ? "open" : ""}`}>
       <button type="button" className="loop-current-identity" aria-expanded={loopSwitcherOpen} aria-controls="loop-switcher-list" onClick={() => setLoopSwitcherOpen((current) => !current)}><span><i className={`loop-status ${selectedLoop.loop.status}`}>{sentenceId(selectedLoop.loop.status)}</i><strong>{selectedLoop.loop.company} · {selectedLoop.loop.roleTitle}</strong><small>{[selectedLoop.loop.jobReference, selectedLoop.loop.location, selectedLoop.roleBrief.targetLevel].filter(Boolean).join(" · ") || "Company-and-role hiring process"}</small></span><b>Switch Loop</b><svg className="loop-disclosure" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" /></svg></button>
       <div className="loop-switcher-list" id="loop-switcher-list" inert={!loopSwitcherOpen} aria-hidden={!loopSwitcherOpen}><div>{loops.filter((loop) => loop.loop.loopId !== selectedLoop.loop.loopId).map((loop) => <button type="button" onClick={() => { setPendingCreatedLoopId(""); setSelectedLoopId(loop.loop.loopId); setLoopSwitcherOpen(false); }} key={loop.loop.loopId}><strong>{loop.loop.company}</strong><span>{loop.loop.roleTitle}</span><small>{sentenceId(loop.loop.status)}</small></button>)}</div>{loops.length <= 1 ? <p>No other Loop is recorded.</p> : null}<label><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} /> Include archived Loops</label></div>
     </section>
     <div className="loop-support-band"><RoleBriefPanel loop={selectedLoop} onOpenSource={(opener) => setSourceDialog({ loop: selectedLoop, opener })} /><PreparationLedger loop={selectedLoop} onOpenActivity={onOpenActivity} onAddPractice={onAddPractice} /></div>
     <StageChronology loop={selectedLoop} />
-  </section>{sourceDialog ? <JobDescriptionDialog loop={sourceDialog.loop} opener={sourceDialog.opener} onClose={closeSourceDialog} /> : null}{createDialogOpener ? <LoopCreateDialog opener={createDialogOpener} onClose={() => setCreateDialogOpener(null)} onCreated={(receipt) => { setPendingCreatedLoopId(receipt.loopId); setCreateDialogOpener(null); reload(); }} /> : null}</>;
+  </section>{sourceDialog ? <JobDescriptionDialog loop={sourceDialog.loop} opener={sourceDialog.opener} onClose={closeSourceDialog} /> : null}{createDialogOpener ? <LoopCreateDialog opener={createDialogOpener} onClose={() => setCreateDialogOpener(null)} onCreated={(receipt) => { setPendingCreatedLoopId(receipt.loopId); setCreateDialogOpener(null); reload(); }} /> : null}{packageDialogOpener ? <InterviewPackageDialog opener={packageDialogOpener} initialLoopId={selectedLoop.loop.loopId} loops={loops.map((item) => ({ loopId: item.loop.loopId, company: item.loop.company, roleTitle: item.loop.roleTitle, revision: item.loop.revision, roleBriefRevision: item.roleBrief.revision, stages: item.loop.stages.map((stage) => ({ stageId: stage.stageId, label: stage.label, status: stage.status })), materials: item.interviewMaterials.map((material) => ({ materialId: material.materialId, revision: material.revision, stageId: material.stageId, label: material.label, summary: material.summary, sections: material.sections })) }))} onClose={() => setPackageDialogOpener(null)} /> : null}</>;
 }
 
 export function LoopJourneyFactsPanel() {

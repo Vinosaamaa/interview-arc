@@ -162,8 +162,12 @@ exports are ignored convenience copies, not publication.
   Loop/Round interview-material revisions, planned bindings, and automatically
   projected completed activity history. Keep interview material visibly
   separate from Career Materials, the Role Brief, and the raw JD. The website
-  reads these records; after website creation, only the durable Loop Recorder
-  revises a Loop-owned Role Brief or creates/revises interview material.
+  reads these records. Follow `../contracts/interview-packages.md` for the
+  separate private event-source register. Package upload never changes a Loop,
+  Role Brief, practice record, or material. Direct website material authoring
+  is limited to an owner-authored, explicitly selected-source package proposal
+  with a second exact confirmation through `website_owner`; every other
+  material create/revise path remains owned by the durable Loop Recorder.
 - Activity detail should lead with summary, outcome, approach, lessons, and feedback; keep full transcript or code expandable.
 - Treat activity detail as a case file: pinned notes first, then facts, review
   date, summary/solution, review, transcript/code, and references. A linked

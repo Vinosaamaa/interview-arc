@@ -18,15 +18,21 @@ import {
   loopSnapshotSchema,
   queryLoopInterviewMaterialsSchema,
   reviseLoopInterviewMaterialSchema,
+  websiteCreateLoopInterviewMaterialSchema,
+  websiteReviseLoopInterviewMaterialSchema,
   type CreateLoopInterviewMaterialInput,
   type LoopInterviewMaterialSnapshot,
   type ReviseLoopInterviewMaterialInput,
+  type WebsiteCreateLoopInterviewMaterialInput,
+  type WebsiteReviseLoopInterviewMaterialInput,
 } from "./loop-policy";
 
 export {
   createLoopInterviewMaterialSchema,
   queryLoopInterviewMaterialsSchema,
   reviseLoopInterviewMaterialSchema,
+  websiteCreateLoopInterviewMaterialSchema,
+  websiteReviseLoopInterviewMaterialSchema,
 } from "./loop-policy";
 
 export class LoopMaterialError extends Error {
@@ -54,15 +60,16 @@ const normalizedProse = (value: string) => value.toLowerCase().replace(/\s+/g, "
 
 function assertMaterialIsSynthesis(material: LoopInterviewMaterialSnapshot, rawJobDescription: string) {
   const source = normalizedProse(rawJobDescription);
-  const candidateFragments = material.sections.flatMap((section) => [
-    ...(section.body ? [section.body] : []),
-    ...section.bullets,
-  ]).map(normalizedProse);
-  if (candidateFragments.some((fragment) => fragment.length >= 240 && source.includes(fragment))) {
-    throw new LoopMaterialError(
-      "loop_material_raw_jd_copy",
-      "Interview material must synthesize the source instead of copying a long raw job-description passage.",
-    );
+  for (const section of material.sections) {
+    for (const value of section.body ? [section.body, ...section.bullets] : section.bullets) {
+      const fragment = normalizedProse(value);
+      if (fragment.length >= 240 && source.includes(fragment)) {
+        throw new LoopMaterialError(
+          "loop_material_raw_jd_copy",
+          "Interview material must synthesize the source instead of copying a long raw job-description passage.",
+        );
+      }
+    }
   }
 }
 
@@ -138,7 +145,7 @@ async function validateMaterialContext(
   }
   const loop = loopSnapshotSchema.parse(loopRevisionRows[0].snapshot);
   const roleBrief = loopRoleBriefInputSchema.parse(roleBriefRows[0].privateSnapshot);
-  assertMaterialIsSynthesis(input.material, roleBrief.source.jdText);
+  assertMaterialIsSynthesis(input.material, "jdText" in roleBrief.source ? roleBrief.source.jdText : "");
   if (input.material.stageId) {
     const stage = loop.stages.find((candidate) => candidate.stageId === input.material.stageId);
     if (!stage) {
@@ -172,15 +179,14 @@ async function validateMaterialContext(
   });
 }
 
-export async function createLoopInterviewMaterial(
+async function prepareCreateLoopInterviewMaterialCommand(
   ownerId: string,
-  inputValue: unknown,
+  input: CreateLoopInterviewMaterialInput | WebsiteCreateLoopInterviewMaterialInput,
   nowMs = Date.now(),
 ) {
-  const input = createLoopInterviewMaterialSchema.parse(inputValue) as CreateLoopInterviewMaterialInput;
   const fingerprint = await requestFingerprint(input);
   const replay = await replayMaterialOperation(ownerId, input.operationId, fingerprint);
-  if (replay) return replay;
+  if (replay) return { kind: "replay" as const, replay };
   await validateMaterialContext(ownerId, input);
   const db = getDb();
   const scopeKey = bindingKey(input.material.stageId);
@@ -206,44 +212,56 @@ export async function createLoopInterviewMaterial(
       AND ${interviewLoops.currentRoleBriefRevision} = ${input.expectedRoleBriefRevision}
       AND ${interviewLoops.state} = 'active'
   )`;
+  const statements = [
+    d1TransactionalInvariantGuard(db, absent),
+    db.insert(loopInterviewMaterialRevisions).values({
+      ownerId,
+      materialId: input.material.materialId,
+      revision: 1,
+      operationId: input.operationId,
+      requestFingerprint: fingerprint,
+      snapshot: input.material,
+      createdAt: nowMs,
+    }),
+    db.insert(loopInterviewMaterials).values({
+      ownerId,
+      materialId: input.material.materialId,
+      loopId: input.material.loopId,
+      stageId: input.material.stageId ?? null,
+      bindingKey: scopeKey,
+      kind: input.material.kind,
+      currentRevision: 1,
+      state: input.material.state,
+      label: input.material.label,
+      createdAt: nowMs,
+      updatedAt: nowMs,
+    }),
+    db.insert(loopInterviewMaterialOperations).values({
+      ownerId,
+      operationId: input.operationId,
+      materialId: input.material.materialId,
+      action: "create",
+      requestFingerprint: fingerprint,
+      materialRevision: 1,
+      receipt,
+      createdAt: nowMs,
+    }),
+  ] as const;
+  return { kind: "pending" as const, fingerprint, receipt, scopeKey, statements };
+}
+
+async function createLoopInterviewMaterialCommand(
+  ownerId: string,
+  input: CreateLoopInterviewMaterialInput | WebsiteCreateLoopInterviewMaterialInput,
+  nowMs = Date.now(),
+) {
+  const prepared = await prepareCreateLoopInterviewMaterialCommand(ownerId, input, nowMs);
+  if (prepared.kind === "replay") return prepared.replay;
+  const db = getDb();
   try {
-    await db.batch([
-      d1TransactionalInvariantGuard(db, absent),
-      db.insert(loopInterviewMaterialRevisions).values({
-        ownerId,
-        materialId: input.material.materialId,
-        revision: 1,
-        operationId: input.operationId,
-        requestFingerprint: fingerprint,
-        snapshot: input.material,
-        createdAt: nowMs,
-      }),
-      db.insert(loopInterviewMaterials).values({
-        ownerId,
-        materialId: input.material.materialId,
-        loopId: input.material.loopId,
-        stageId: input.material.stageId ?? null,
-        bindingKey: scopeKey,
-        kind: input.material.kind,
-        currentRevision: 1,
-        state: input.material.state,
-        label: input.material.label,
-        createdAt: nowMs,
-        updatedAt: nowMs,
-      }),
-      db.insert(loopInterviewMaterialOperations).values({
-        ownerId,
-        operationId: input.operationId,
-        materialId: input.material.materialId,
-        action: "create",
-        requestFingerprint: fingerprint,
-        materialRevision: 1,
-        receipt,
-        createdAt: nowMs,
-      }),
-    ]);
+    await db.batch([...prepared.statements]);
   } catch {
-    const racedReplay = await replayMaterialOperation(ownerId, input.operationId, fingerprint);
+    const racedReplay = await replayMaterialOperation(ownerId, input.operationId, prepared.fingerprint);
     if (racedReplay) return racedReplay;
     const existing = await db.select({
       materialId: loopInterviewMaterials.materialId,
@@ -255,7 +273,7 @@ export async function createLoopInterviewMaterial(
     if (existing.some((row) => row.materialId === input.material.materialId)) {
       throw new LoopMaterialError("loop_material_already_exists", "That interview material already exists; revise it instead.");
     }
-    if (existing.some((row) => row.bindingKey === scopeKey)) {
+    if (existing.some((row) => row.bindingKey === prepared.scopeKey)) {
       throw new LoopMaterialError(
         "loop_material_scope_conflict",
         "This Loop or Round already has interview prep material; revise the existing record instead of duplicating it.",
@@ -266,18 +284,41 @@ export async function createLoopInterviewMaterial(
       "The Loop or material changed while saving; reread both before retrying.",
     );
   }
-  return { ...receipt, duplicate: false };
+  return { ...prepared.receipt, duplicate: false };
 }
 
-export async function reviseLoopInterviewMaterial(
+export function createLoopInterviewMaterial(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
+  return createLoopInterviewMaterialCommand(
+    ownerId,
+    createLoopInterviewMaterialSchema.parse(inputValue) as CreateLoopInterviewMaterialInput,
+    nowMs,
+  );
+}
+
+export function createLoopInterviewMaterialFromWebsite(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
+  return createLoopInterviewMaterialCommand(
+    ownerId,
+    websiteCreateLoopInterviewMaterialSchema.parse(inputValue) as WebsiteCreateLoopInterviewMaterialInput,
+    nowMs,
+  );
+}
+
+export function prepareCreateLoopInterviewMaterialFromWebsite(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
+  return prepareCreateLoopInterviewMaterialCommand(
+    ownerId,
+    websiteCreateLoopInterviewMaterialSchema.parse(inputValue) as WebsiteCreateLoopInterviewMaterialInput,
+    nowMs,
+  );
+}
+
+async function prepareReviseLoopInterviewMaterialCommand(
   ownerId: string,
-  inputValue: unknown,
+  input: ReviseLoopInterviewMaterialInput | WebsiteReviseLoopInterviewMaterialInput,
   nowMs = Date.now(),
 ) {
-  const input = reviseLoopInterviewMaterialSchema.parse(inputValue) as ReviseLoopInterviewMaterialInput;
   const fingerprint = await requestFingerprint(input);
   const replay = await replayMaterialOperation(ownerId, input.operationId, fingerprint);
-  if (replay) return replay;
+  if (replay) return { kind: "replay" as const, replay };
   const db = getDb();
   const currentRows = await db.select().from(loopInterviewMaterials).where(and(
     eq(loopInterviewMaterials.ownerId, ownerId),
@@ -318,41 +359,53 @@ export async function reviseLoopInterviewMaterial(
       AND ${interviewLoops.currentRoleBriefRevision} = ${input.expectedRoleBriefRevision}
       AND ${interviewLoops.state} = 'active'
   )`;
+  const statements = [
+    d1TransactionalInvariantGuard(db, unchanged),
+    db.insert(loopInterviewMaterialRevisions).values({
+      ownerId,
+      materialId: input.materialId,
+      revision,
+      operationId: input.operationId,
+      requestFingerprint: fingerprint,
+      snapshot: input.material,
+      createdAt: nowMs,
+    }),
+    db.update(loopInterviewMaterials).set({
+      currentRevision: revision,
+      state: input.material.state,
+      label: input.material.label,
+      updatedAt: nowMs,
+    }).where(and(
+      eq(loopInterviewMaterials.ownerId, ownerId),
+      eq(loopInterviewMaterials.materialId, input.materialId),
+      eq(loopInterviewMaterials.currentRevision, input.expectedRevision),
+    )),
+    db.insert(loopInterviewMaterialOperations).values({
+      ownerId,
+      operationId: input.operationId,
+      materialId: input.materialId,
+      action: "revise",
+      requestFingerprint: fingerprint,
+      materialRevision: revision,
+      receipt,
+      createdAt: nowMs,
+    }),
+  ] as const;
+  return { kind: "pending" as const, fingerprint, receipt, statements };
+}
+
+async function reviseLoopInterviewMaterialCommand(
+  ownerId: string,
+  input: ReviseLoopInterviewMaterialInput | WebsiteReviseLoopInterviewMaterialInput,
+  nowMs = Date.now(),
+) {
+  const prepared = await prepareReviseLoopInterviewMaterialCommand(ownerId, input, nowMs);
+  if (prepared.kind === "replay") return prepared.replay;
+  const db = getDb();
   try {
-    await db.batch([
-      d1TransactionalInvariantGuard(db, unchanged),
-      db.insert(loopInterviewMaterialRevisions).values({
-        ownerId,
-        materialId: input.materialId,
-        revision,
-        operationId: input.operationId,
-        requestFingerprint: fingerprint,
-        snapshot: input.material,
-        createdAt: nowMs,
-      }),
-      db.update(loopInterviewMaterials).set({
-        currentRevision: revision,
-        state: input.material.state,
-        label: input.material.label,
-        updatedAt: nowMs,
-      }).where(and(
-        eq(loopInterviewMaterials.ownerId, ownerId),
-        eq(loopInterviewMaterials.materialId, input.materialId),
-        eq(loopInterviewMaterials.currentRevision, input.expectedRevision),
-      )),
-      db.insert(loopInterviewMaterialOperations).values({
-        ownerId,
-        operationId: input.operationId,
-        materialId: input.materialId,
-        action: "revise",
-        requestFingerprint: fingerprint,
-        materialRevision: revision,
-        receipt,
-        createdAt: nowMs,
-      }),
-    ]);
+    await db.batch([...prepared.statements]);
   } catch {
-    const racedReplay = await replayMaterialOperation(ownerId, input.operationId, fingerprint);
+    const racedReplay = await replayMaterialOperation(ownerId, input.operationId, prepared.fingerprint);
     if (racedReplay) return racedReplay;
     const raced = await db.select({ revision: loopInterviewMaterials.currentRevision }).from(loopInterviewMaterials).where(and(
       eq(loopInterviewMaterials.ownerId, ownerId),
@@ -367,7 +420,31 @@ export async function reviseLoopInterviewMaterial(
       "The Loop or material changed while saving; reread both before retrying.",
     );
   }
-  return { ...receipt, duplicate: false };
+  return { ...prepared.receipt, duplicate: false };
+}
+
+export function reviseLoopInterviewMaterial(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
+  return reviseLoopInterviewMaterialCommand(
+    ownerId,
+    reviseLoopInterviewMaterialSchema.parse(inputValue) as ReviseLoopInterviewMaterialInput,
+    nowMs,
+  );
+}
+
+export function reviseLoopInterviewMaterialFromWebsite(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
+  return reviseLoopInterviewMaterialCommand(
+    ownerId,
+    websiteReviseLoopInterviewMaterialSchema.parse(inputValue) as WebsiteReviseLoopInterviewMaterialInput,
+    nowMs,
+  );
+}
+
+export function prepareReviseLoopInterviewMaterialFromWebsite(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
+  return prepareReviseLoopInterviewMaterialCommand(
+    ownerId,
+    websiteReviseLoopInterviewMaterialSchema.parse(inputValue) as WebsiteReviseLoopInterviewMaterialInput,
+    nowMs,
+  );
 }
 
 const materialSelection = {

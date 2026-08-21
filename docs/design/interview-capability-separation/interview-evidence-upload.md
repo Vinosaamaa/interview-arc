@@ -77,30 +77,29 @@ The browser's `clientRef` exists only within the draft manifest. Server-generate
 
 Arbitrary executable archives are not part of the initial allowlist. Code is represented by an explicit link, a safe text/document format, or a later reviewed source type rather than by silently accepting every file extension.
 
-## Proposed D1 authority
+## D1 authority
 
 | Entity | Responsibility |
 | --- | --- |
-| `loop_interview_packages` | Package state, assignment, interview time, timezone, manifest digest |
-| `loop_interview_sources` | Source kind, safe filename/label, MIME, bytes, SHA-256, private object locator, validation state |
-| `loop_transcript_revisions` | Supplied source and parsed representation with immutable provenance |
-| `loop_package_entry_revisions` | Append-only owner-note and external-link label/metadata revisions |
-| `loop_package_assignment_links` | Exact Loop/Round assignment and reassignment history |
-| `loop_package_material_links` | Exact material revision link, selected source digests, proposed-revision state, and receipt |
-| `upload_sessions` | Resumable parts, expiry, expected checksum/size, completion state |
-| `interview_package_command_receipts` | Idempotent finalize, assign, revise-entry, link-material, prepare-material-revision, download-authorize, and delete results |
+| `interview_packages` | Package state, assignment, interview time, timezone, consent, retention, manifest digest |
+| `interview_package_sources` | Source kind, safe label, MIME, bytes, SHA-256, private object locator, validation state |
+| `interview_package_entry_revisions` | Append-only owner-note and external-link snapshots |
+| `interview_package_assignments` | Exact Loop/Round assignment and reassignment history |
+| `interview_package_material_links` | Exact material revision link and selected-source provenance |
+| `interview_package_material_proposals` | Owner-reviewed proposal snapshot, base revisions, selected source digests, and state |
+| `interview_package_upload_sessions` and `interview_package_upload_parts` | Resumable multipart checkpoint, expiry, expected bytes, part digests, and R2 receipt; successful completion compacts per-part rows |
+| `interview_package_operations` | Idempotent command fingerprints and receipts |
 
-Long transcript bodies and large document representations remain in D1 only if measured payload limits prove safe. Otherwise private R2 may hold the exact body while D1 retains authoritative metadata, digest, origin, and revision. This storage choice is measured during implementation; it is not delegated to AI.
+Exact file bytes remain in private R2. D1 keeps metadata, digests, and the
+bounded deterministic cue projection for supplied transcripts up to 512 KiB.
+The full transcript source remains immutable in R2.
 
-## Proposed private R2 lifecycle
+## Private R2 lifecycle
 
 ```text
-quarantine/{opaque-upload-object}
-        │ signature + size + checksum + owner-session validation
-        ▼
-source/{opaque-owner-partition}/{opaque-source-object}
-        │ exact readback agrees with D1
-        ▼
+multipart upload → interview-packages/{opaque SHA-256 partition}/asset
+       │ exact bytes + signature + streaming checksum + metadata readback
+       ▼
 READY
 ```
 
@@ -149,20 +148,15 @@ unlinked → linked(revision N)
 - Deleting a package must show linked material provenance affected by deletion. It does not silently delete or rewrite an already-created material revision.
 - AI-generated synthesis remains outside issue #415. A later #418 adapter may propose material changes only after a separate privacy/provider decision and the same exact review contract.
 
-## HTTP interface sketch
+## HTTP interface
 
 | Interface | Responsibility |
 | --- | --- |
-| `POST /api/interview-packages` | Create draft manifest/upload session |
+| `POST /api/interview-packages` | Dispatch typed create, assign, entry, source, finalize, material, and delete commands |
 | `PUT /api/interview-packages/{packageId}/sources/{sourceId}` | Stream or resume one file source |
-| `POST /api/interview-packages/{packageId}/entries` | Add a versioned owner note or external link |
-| `POST /api/interview-packages/{packageId}/finalize` | Validate and reconcile package |
-| `POST /api/interview-packages/{packageId}/assign` | Assign/reassign exact Loop/Round |
-| `POST /api/interview-packages/{packageId}/material-link` | Link or unlink one exact material revision |
-| `POST /api/interview-packages/{packageId}/material-revision-proposals` | Prepare a separate proposal from explicitly selected source digests |
-| `GET /api/interview-packages/{packageId}` | Owner-authorized package reader |
+| `GET /api/interview-packages` | Owner-authorized register, exact package read, or JSON manifest export |
 | `GET /api/interview-packages/sources/{sourceId}/content` | Range-capable authorized media/text/document read |
-| `DELETE /api/interview-packages/{packageId}` | Separately confirmed governed deletion |
+| `POST /api/interview-packages` with `action: "delete"` | Separately confirmed governed deletion |
 
 Every mutation accepts an idempotency key and an optimistic-concurrency token. Owner scope comes from Cloudflare Access, never request JSON.
 
@@ -222,14 +216,25 @@ The standalone responsive mockup is [`interview-package-ui-mockup.html`](intervi
 | UX | Keyboard, screen reader, mobile, 200%/400% zoom, progress, recovery, large manifests, reduced motion |
 | Privacy | Captured-log and public-artifact scan with representative private fixtures generated only in temporary test state |
 
-## Decisions before release
+## Release decisions
 
-- Default retention and owner-visible expiry by source type.
-- Maximum files, entries, total bytes, per-file bytes, and recording duration.
-- Initial audio, transcript, document, and image format allowlists; whether PDF active content is sanitized or rejected.
-- Whether an antivirus/content-scanning provider is required before readiness.
-- D1-versus-private-R2 thresholds for transcript and document representations.
-- External-link scheme allowlist, fetch policy, and safe preview behavior.
-- Download/export behavior and audit scope.
-- Tombstone retention after governed deletion.
-- Whether deterministic material revision authoring is available directly in the website at first release or only through the existing owner-authorized specialist command; package linking still ships independently.
+- 5 MiB multipart parts; sessions expire after 24 hours.
+- 20 files, 50 entries, and 2 GiB total file bytes per package.
+- Per-file limits: audio 1 GiB, transcript 512 KiB, document 50 MiB,
+  image 25 MiB.
+- Audio: MP3, M4A/MP4, WAV, WebM, Ogg. Transcript: UTF-8 TXT, VTT,
+  SRT. Document: PDF, UTF-8 TXT, Markdown. Image: PNG, JPEG, WebP.
+- SVG, HTML, archives, and unsupported/mislabeled bytes are rejected. PDF is
+  download-only. The initial release adds no external antivirus provider.
+- Supplied transcript bytes stay in R2; their bounded deterministic cue
+  projection stays in D1. Other document bodies are not copied into D1.
+- Links must be credential-free HTTPS and are never fetched or preview-crawled.
+- Ready sources remain until explicit deletion. Export is a JSON manifest plus
+  individual owner-authorized downloads.
+- Governed deletion removes private bytes/content, leaves a package tombstone,
+  and preserves material-provenance receipts.
+- The website ships deterministic owner-authored material proposals with a
+  second explicit confirmation. AI synthesis remains outside #415.
+
+The canonical runtime rules are in
+[`docs/contracts/interview-packages.md`](../../contracts/interview-packages.md).
