@@ -7,7 +7,7 @@ status: released
 title: Correct Learn frame hierarchy and unify workspace hero metrics
 repository: interview-arc
 capabilityIds: ["arc-learn-workspace","website-navigation"]
-createdAt: 2026-08-20
+createdAt: 2026-08-21T04:27:18Z
 reconstructed: false
 confidence: verified
 unknowns: []
