@@ -24,12 +24,12 @@ amends: []
 supersedes: []
 learningRefs: []
 diagrams: [{"title":"Trust-gated Loop authoring and private evidence flow","sourcePath":"docs/design/loop-ai-authoring/loop-ai-authoring-architecture.drawio","renderedPath":"docs/design/loop-ai-authoring/loop-ai-authoring-architecture.png","summary":"Manual forms, AI requests, and private interview packages cross authenticated validation and an explicit owner trust gate before deterministic Loop, D1, or R2 mutations.","evidenceRefs":["issue:415","docs/design/loop-ai-authoring/loop-ai-authoring-architecture.drawio"]}]
-sources: [{"label":"Arc issue #415","url":"https://github.com/Vinosaamaa/interview-arc/issues/415","kind":"issue"},{"label":"Loops MVP issue #252","url":"https://github.com/Vinosaamaa/interview-arc/issues/252","kind":"issue"},{"label":"Owner-private practice records issue #319","url":"https://github.com/Vinosaamaa/interview-arc/issues/319","kind":"issue"}]
-verification: {"state":"verified","evidenceRefs":["issue:415","docs/design/loop-ai-authoring/loop-ai-authoring-architecture.drawio"]}
+sources: [{"label":"Arc issue #415","url":"https://github.com/Vinosaamaa/interview-arc/issues/415","kind":"issue"},{"label":"Draft pull request #416","url":"https://github.com/Vinosaamaa/interview-arc/pull/416","kind":"pull-request"},{"label":"Loops MVP issue #252","url":"https://github.com/Vinosaamaa/interview-arc/issues/252","kind":"issue"},{"label":"Owner-private practice records issue #319","url":"https://github.com/Vinosaamaa/interview-arc/issues/319","kind":"issue"}]
+verification: {"state":"verified","evidenceRefs":["issue:415","pull-request:416","docs/design/loop-ai-authoring/loop-ai-authoring-architecture.drawio"]}
 visibility: public-safe
 publicationEligibility: eligible
 issue: 415
-pr: null
+pr: 416
 release: null
 run: null
 ---
