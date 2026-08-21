@@ -30,6 +30,7 @@ import {
 } from "./learn-workspace-model";
 
 import HeroQuote from "./hero-quote";
+import WorkspaceHeroMetrics from "./workspace-hero-metrics";
 
 import "./learn-workspace.css";
 
@@ -173,14 +174,14 @@ function LearnHero({ destination, payload }: { destination: LearnDestination; pa
   const facts = payload?.workspace.facts ?? {};
   const metrics = destination === "analytics"
     ? [
-      ["Recorded", formatDuration(factualCount(payload?.analytics.overall.recordedSeconds))],
-      ["Learning days", factualCount(payload?.analytics.overall.activeLearningDays)],
-      ["Sessions", factualCount(payload?.analytics.overall.completedSessionCount)],
+      { label: "Recorded", value: formatDuration(factualCount(payload?.analytics.overall.recordedSeconds)) },
+      { label: "Learning days", value: factualCount(payload?.analytics.overall.activeLearningDays) },
+      { label: "Sessions", value: factualCount(payload?.analytics.overall.completedSessionCount) },
     ]
     : [
-      ["Active courses", factualCount(facts.activeCourseCount)],
-      ["Lessons complete", factualCount(facts.completedLessonCount)],
-      ["Checkpoint evidence", factualCount(facts.demonstratedCheckpointCount)],
+      { label: "Active courses", value: factualCount(facts.activeCourseCount) },
+      { label: "Lessons complete", value: factualCount(facts.completedLessonCount) },
+      { label: "Checkpoint evidence", value: factualCount(facts.demonstratedCheckpointCount) },
     ];
   return <header key={destination} className={`learn-frame learn-hero learn-hero-${destination}`}>
     <div className="learn-hero-copy">
@@ -192,7 +193,7 @@ function LearnHero({ destination, payload }: { destination: LearnDestination; pa
     <div className="learn-animal-sketch"><LearnAnimalSketch destination={destination} /></div>
     <span className="learn-hero-pulse" aria-hidden="true" />
     <span className="learn-hero-light-band" aria-hidden="true" />
-    <dl className="learn-hero-metrics">{metrics.map(([label, value]) => <div key={String(label)}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+    <WorkspaceHeroMetrics className="learn-hero-metrics" metrics={metrics} />
   </header>;
 }
 

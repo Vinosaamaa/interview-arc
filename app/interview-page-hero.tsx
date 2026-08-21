@@ -1,13 +1,9 @@
 import type { ReactNode } from "react";
 
 import HeroQuote from "./hero-quote";
+import WorkspaceHeroMetrics, { type WorkspaceHeroMetric } from "./workspace-hero-metrics";
 
 export type InterviewPageTone = "today" | "loops" | "reviews" | "past" | "banks" | "journey" | "materials";
-
-type HeroMetric = {
-  value: ReactNode;
-  label: string;
-};
 
 type InterviewPageHeroProps = {
   tone: InterviewPageTone;
@@ -15,7 +11,7 @@ type InterviewPageHeroProps = {
   title: ReactNode;
   quote: ReactNode;
   description?: ReactNode;
-  metrics?: HeroMetric[];
+  metrics?: WorkspaceHeroMetric[];
   footer?: ReactNode;
 };
 
@@ -38,8 +34,8 @@ export default function InterviewPageHero({ tone, eyebrow, title, quote, descrip
       <span className="page-hero-pulse" aria-hidden="true" />
       <span className="page-hero-light-band" aria-hidden="true" />
     </div>
-    <div className={`page-hero-summary ${footer ? "interactive" : ""}`}>
-      {footer ?? metrics?.map((metric, index) => <div className="page-hero-metric" key={`${metric.label}-${index}`}><strong>{metric.value}</strong><span>{metric.label}</span></div>)}
-    </div>
+    {footer
+      ? <div className="page-hero-summary interactive">{footer}</div>
+      : <WorkspaceHeroMetrics className="page-hero-summary" metrics={metrics ?? []} />}
   </header>;
 }

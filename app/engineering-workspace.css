@@ -314,9 +314,6 @@
   .engineering-destination .engineering-hero-copy h1 { max-width: 100%; font-size: clamp(1.85rem, 6.6vw, 2.7rem); line-height: 1.28; letter-spacing: .01em; overflow-wrap: anywhere; }
   .engineering-destination .engineering-hero-lede { max-width: 100%; font-size: .8rem; }
   .engineering-destination .engineering-hero-sketch { right: -70px; top: 42px; width: 60%; opacity: .2; }
-  .engineering-destination .engineering-hero dl > div { padding-inline: 14px; grid-template-columns: 1fr; gap: 2px; }
-  .engineering-destination .engineering-hero dt { font-size: .62rem; }
-  .engineering-destination .engineering-hero dd { font-size: .95rem; }
   .engineering-actions { align-items: flex-start; flex-direction: column; }
   .engineering-statistics { grid-template-columns: 1fr; }
   .engineering-stat-panel, .engineering-stat-receipts { min-height: 560px; height: auto; grid-column: auto; }
@@ -563,6 +560,9 @@
 .engineering-destination-statistics { --engineering-accent: #49a6a8; --engineering-accent-soft: #e7f5f3; }
 
 .engineering-hero {
+  --workspace-hero-metric-accent: var(--engineering-accent);
+  --workspace-hero-metric-divider: color-mix(in srgb, var(--engineering-accent) 48%, transparent);
+  --workspace-hero-metric-label: #3f5751;
   position: relative;
   width: 100%;
   height: 350px;
@@ -591,12 +591,6 @@
 @keyframes engineering-hero-draw { to { stroke-dashoffset: 0; } }
 @keyframes engineering-hero-pulse { 0% { opacity: 0; transform: scale(.45); box-shadow: 0 0 0 0 color-mix(in srgb, var(--engineering-accent) 32%, transparent); } 38% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 13px color-mix(in srgb, var(--engineering-accent) 0%, transparent); } 100% { opacity: .78; transform: scale(.76); box-shadow: none; } }
 @keyframes engineering-hero-sweep { 0%, 15% { opacity: 0; transform: translateX(-250%) skewX(-12deg); } 24% { opacity: .82; } 46% { opacity: .7; } 58%, 100% { opacity: 0; transform: translateX(480%) skewX(-12deg); } }
-.engineering-hero dl { position: absolute; z-index: 3; left: 0; right: 0; bottom: 0; height: 64px; margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); background: rgba(255,255,255,.68); backdrop-filter: blur(8px); }
-.engineering-hero dl > div { min-width: 0; padding: 10px clamp(20px, 3vw, 44px); border-right: 1px solid color-mix(in srgb, var(--engineering-accent) 24%, #d5ded9); display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; }
-.engineering-hero dl > div:last-child { border-right: 0; }
-.engineering-hero dt { color: #61736d; font-size: .72rem; }
-.engineering-hero dd { margin: 0; color: var(--engineering-accent); font: 820 1.16rem var(--font-geist-mono); }
-
 .engineering-destination .engineering-workspace {
   width: 100%;
   max-width: 1764px;
