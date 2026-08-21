@@ -29,6 +29,18 @@ export const INTERVIEW_PACKAGE_SOURCE_LIMITS: Readonly<Record<InterviewPackageSo
 const boundedText = (max: number) => z.string().normalize().trim().min(1).max(max);
 const optionalText = (max: number) => z.string().normalize().trim().min(1).max(max).optional();
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
+const commandEnvelope = {
+  schemaVersion: z.literal(INTERVIEW_PACKAGE_SCHEMA_VERSION),
+  operationId: loopStableIdSchema,
+};
+const packageCommandEnvelope = {
+  ...commandEnvelope,
+  packageId: loopStableIdSchema,
+};
+const revisionedPackageCommandEnvelope = {
+  ...packageCommandEnvelope,
+  expectedRevision: z.number().int().positive(),
+};
 
 function validTimeZone(value: string) {
   try {
@@ -47,8 +59,7 @@ export const interviewPackageAssignmentSchema = z.object({
 }).strict();
 
 export const createInterviewPackageSchema = z.object({
-  schemaVersion: z.literal(INTERVIEW_PACKAGE_SCHEMA_VERSION),
-  operationId: loopStableIdSchema,
+  ...commandEnvelope,
   interviewAt: z.number().int().positive().optional(),
   timeZone: boundedText(100).refine(validTimeZone, "Use a valid IANA time zone.").optional(),
   assignment: interviewPackageAssignmentSchema.optional(),
@@ -64,18 +75,12 @@ export const createInterviewPackageSchema = z.object({
 });
 
 export const assignInterviewPackageSchema = z.object({
-  schemaVersion: z.literal(INTERVIEW_PACKAGE_SCHEMA_VERSION),
-  operationId: loopStableIdSchema,
-  packageId: loopStableIdSchema,
-  expectedRevision: z.number().int().positive(),
+  ...revisionedPackageCommandEnvelope,
   assignment: interviewPackageAssignmentSchema.nullable(),
 }).strict();
 
 export const declareInterviewPackageSourceSchema = z.object({
-  schemaVersion: z.literal(INTERVIEW_PACKAGE_SCHEMA_VERSION),
-  operationId: loopStableIdSchema,
-  packageId: loopStableIdSchema,
-  expectedRevision: z.number().int().positive(),
+  ...revisionedPackageCommandEnvelope,
   kind: interviewPackageSourceKindSchema,
   label: boundedText(240),
   mediaType: boundedText(120).transform((value) => value.toLowerCase()),
@@ -112,28 +117,19 @@ const noteSnapshotSchema = z.object({
 export const interviewPackageEntrySnapshotSchema = z.discriminatedUnion("kind", [linkSnapshotSchema, noteSnapshotSchema]);
 
 export const addInterviewPackageEntrySchema = z.object({
-  schemaVersion: z.literal(INTERVIEW_PACKAGE_SCHEMA_VERSION),
-  operationId: loopStableIdSchema,
-  packageId: loopStableIdSchema,
-  expectedRevision: z.number().int().positive(),
+  ...revisionedPackageCommandEnvelope,
   entry: interviewPackageEntrySnapshotSchema,
 }).strict();
 
 export const reviseInterviewPackageEntrySchema = z.object({
-  schemaVersion: z.literal(INTERVIEW_PACKAGE_SCHEMA_VERSION),
-  operationId: loopStableIdSchema,
-  packageId: loopStableIdSchema,
-  expectedRevision: z.number().int().positive(),
+  ...revisionedPackageCommandEnvelope,
   entryId: loopStableIdSchema,
   expectedEntryRevision: z.number().int().positive(),
   entry: interviewPackageEntrySnapshotSchema,
 }).strict();
 
 export const finalizeInterviewPackageSchema = z.object({
-  schemaVersion: z.literal(INTERVIEW_PACKAGE_SCHEMA_VERSION),
-  operationId: loopStableIdSchema,
-  packageId: loopStableIdSchema,
-  expectedRevision: z.number().int().positive(),
+  ...revisionedPackageCommandEnvelope,
   includedSourceIds: z.array(loopStableIdSchema).max(INTERVIEW_PACKAGE_MAX_FILES),
   includedEntryIds: z.array(loopStableIdSchema).max(INTERVIEW_PACKAGE_MAX_ENTRIES),
   finalizeSubset: z.boolean(),
@@ -150,10 +146,7 @@ export const finalizeInterviewPackageSchema = z.object({
 });
 
 export const linkInterviewPackageMaterialSchema = z.object({
-  schemaVersion: z.literal(INTERVIEW_PACKAGE_SCHEMA_VERSION),
-  operationId: loopStableIdSchema,
-  packageId: loopStableIdSchema,
-  expectedRevision: z.number().int().positive(),
+  ...revisionedPackageCommandEnvelope,
   materialId: loopStableIdSchema.nullable(),
   materialRevision: z.number().int().positive().nullable(),
 }).strict().refine((input) => Boolean(input.materialId) === Boolean(input.materialRevision), {
@@ -162,10 +155,7 @@ export const linkInterviewPackageMaterialSchema = z.object({
 });
 
 export const prepareInterviewPackageMaterialProposalSchema = z.object({
-  schemaVersion: z.literal(INTERVIEW_PACKAGE_SCHEMA_VERSION),
-  operationId: loopStableIdSchema,
-  packageId: loopStableIdSchema,
-  expectedRevision: z.number().int().positive(),
+  ...revisionedPackageCommandEnvelope,
   baseMaterialRevision: z.number().int().positive().nullable(),
   baseLoopRevision: z.number().int().positive(),
   baseRoleBriefRevision: z.number().int().positive(),
@@ -181,32 +171,22 @@ export const prepareInterviewPackageMaterialProposalSchema = z.object({
 });
 
 export const confirmInterviewPackageMaterialProposalSchema = z.object({
-  schemaVersion: z.literal(INTERVIEW_PACKAGE_SCHEMA_VERSION),
-  operationId: loopStableIdSchema,
-  packageId: loopStableIdSchema,
-  expectedRevision: z.number().int().positive(),
+  ...revisionedPackageCommandEnvelope,
   proposalId: loopStableIdSchema,
 }).strict();
 
 export const cancelInterviewPackageUploadSchema = z.object({
-  schemaVersion: z.literal(INTERVIEW_PACKAGE_SCHEMA_VERSION),
-  operationId: loopStableIdSchema,
-  packageId: loopStableIdSchema,
+  ...packageCommandEnvelope,
   sourceId: loopStableIdSchema,
 }).strict();
 
 export const completeInterviewPackageUploadSchema = z.object({
-  schemaVersion: z.literal(INTERVIEW_PACKAGE_SCHEMA_VERSION),
-  operationId: loopStableIdSchema,
-  packageId: loopStableIdSchema,
+  ...packageCommandEnvelope,
   sourceId: loopStableIdSchema,
 }).strict();
 
 export const deleteInterviewPackageSchema = z.object({
-  schemaVersion: z.literal(INTERVIEW_PACKAGE_SCHEMA_VERSION),
-  operationId: loopStableIdSchema,
-  packageId: loopStableIdSchema,
-  expectedRevision: z.number().int().positive(),
+  ...revisionedPackageCommandEnvelope,
   confirmation: z.literal("delete_interview_package"),
 }).strict();
 

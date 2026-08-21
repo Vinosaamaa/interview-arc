@@ -10,6 +10,7 @@ import {
   prepareInterviewPackageMaterialProposalSchema,
 } from "../db/interview-package-policy.ts";
 import {
+  createSuppliedInterviewTranscriptParser,
   interviewPackageObjectLocator,
   interviewPackageSignatureMatches,
   parseSuppliedInterviewTranscript,
@@ -84,6 +85,19 @@ test("supplied VTT is parsed deterministically with immutable timing provenance"
   assert.throws(() => parseSuppliedInterviewTranscript("text/vtt", "not a vtt"), (error) => error.code === "interview_package_signature_mismatch");
 });
 
+test("supplied transcript parsing preserves cues across arbitrary stream boundaries", () => {
+  const parser = createSuppliedInterviewTranscriptParser("text/vtt");
+  for (const chunk of ["\uFEFFWEB", "VTT\r\n\r", "\n00:00:01.000 --> ", "00:00:03.000\r\nHel", "lo\r\nworld\r", "\n"]) {
+    parser.push(chunk);
+  }
+  assert.deepEqual(parser.finish(), {
+    schemaVersion: 1,
+    format: "vtt",
+    cueCount: 1,
+    cues: [{ sequence: 1, timing: "00:00:01.000 --> 00:00:03.000", text: "Hello\nworld" }],
+  });
+});
+
 test("private object locators are opaque and owner-partitioned", async () => {
   const first = await interviewPackageObjectLocator("owner-a", packageId, "source-private");
   const exact = await interviewPackageObjectLocator("owner-a", packageId, "source-private");
@@ -128,12 +142,14 @@ test("website material confirmation is a narrow authority adapter", () => {
   }).success, true);
 });
 
-test("website routes keep private authority server-side and expose recovery UI", async () => {
-  const [route, uploadRoute, readerRoute, dialog, migration] = await Promise.all([
+test("website routes keep private authority server-side and expose bounded recovery UI", async () => {
+  const [route, uploadRoute, readerRoute, dialog, storage, packages, migration] = await Promise.all([
     readFile(new URL("../app/api/interview-packages/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/interview-packages/[packageId]/sources/[sourceId]/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/interview-packages/sources/[sourceId]/content/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/interview-package-dialog.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../db/interview-package-storage.ts", import.meta.url), "utf8"),
+    readFile(new URL("../db/interview-packages.ts", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0049_interview_packages.sql", import.meta.url), "utf8"),
   ]);
   for (const source of [route, uploadRoute, readerRoute]) assert.match(source, /resolveOwnerId\(request\)/);
@@ -145,9 +161,15 @@ test("website routes keep private authority server-side and expose recovery UI",
   assert.match(dialog, /Finalize \{selected\.sources\.some/);
   assert.match(dialog, /Resume upload/);
   assert.match(dialog, /Revise /);
+  assert.match(dialog, /packageId=/);
+  assert.match(dialog, /Show 100 more blocks/);
   assert.match(dialog, /No material relationship/);
   assert.match(dialog, /does not synthesize it with AI/);
   assert.match(migration, /interview_package_upload_parts/);
   assert.match(migration, /interview_package_material_proposals/);
   assert.match(migration, /interview_package_operations/);
+  assert.match(storage, /returning\(\{ sessionId:/);
+  assert.match(storage, /delete\(interviewPackageUploadParts\)/);
+  assert.match(packages, /inArray\(interviewPackageSources\.packageId, packageIds\)/);
+  assert.match(packages, /materialPrepared\.statements/);
 });

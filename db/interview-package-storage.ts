@@ -5,10 +5,10 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { d1TransactionalInvariantGuard } from "./d1-transactional-guard.ts";
 import { getDb } from "./index.ts";
 import {
+  createSuppliedInterviewTranscriptParser,
   InterviewPackageContentError,
   interviewPackageObjectLocator,
   interviewPackageSignatureMatches,
-  parseSuppliedInterviewTranscript,
 } from "./interview-package-content-policy.ts";
 import {
   cancelInterviewPackageUploadSchema,
@@ -48,7 +48,8 @@ function storageFailure(message: string) {
   return new InterviewPackageError("interview_package_storage_unavailable", message, true);
 }
 
-export { interviewPackageObjectLocator, interviewPackageSignatureMatches, parseSuppliedInterviewTranscript } from "./interview-package-content-policy.ts";
+export { interviewPackageObjectLocator, interviewPackageSignatureMatches };
+export { parseSuppliedInterviewTranscript } from "./interview-package-content-policy.ts";
 
 export async function declareInterviewPackageSource(
   ownerId: string,
@@ -65,18 +66,16 @@ export async function declareInterviewPackageSource(
     throw new InterviewPackageError("interview_package_revision_conflict", "The package changed; reread it before adding this file.");
   }
   const db = getDb();
-  const [countRows, sizeRows] = await Promise.all([
-    db.select({ count: sql<number>`count(*)` }).from(interviewPackageSources).where(and(
-      eq(interviewPackageSources.ownerId, ownerId), eq(interviewPackageSources.packageId, input.packageId), sql`${interviewPackageSources.state} <> 'deleted'`,
-    )),
-    db.select({ bytes: sql<number>`coalesce(sum(${interviewPackageSources.sizeBytes}),0)` }).from(interviewPackageSources).where(and(
-      eq(interviewPackageSources.ownerId, ownerId), eq(interviewPackageSources.packageId, input.packageId), sql`${interviewPackageSources.state} <> 'deleted'`,
-    )),
-  ]);
-  if (Number(countRows[0]?.count ?? 0) >= INTERVIEW_PACKAGE_MAX_FILES) {
+  const aggregateRows = await db.select({
+    count: sql<number>`count(*)`,
+    bytes: sql<number>`coalesce(sum(${interviewPackageSources.sizeBytes}),0)`,
+  }).from(interviewPackageSources).where(and(
+    eq(interviewPackageSources.ownerId, ownerId), eq(interviewPackageSources.packageId, input.packageId), sql`${interviewPackageSources.state} <> 'deleted'`,
+  ));
+  if (Number(aggregateRows[0]?.count ?? 0) >= INTERVIEW_PACKAGE_MAX_FILES) {
     throw new InterviewPackageError("interview_package_file_limit", "One package can contain at most 20 file sources.");
   }
-  if (Number(sizeRows[0]?.bytes ?? 0) + input.sizeBytes > INTERVIEW_PACKAGE_MAX_TOTAL_BYTES) {
+  if (Number(aggregateRows[0]?.bytes ?? 0) + input.sizeBytes > INTERVIEW_PACKAGE_MAX_TOTAL_BYTES) {
     throw new InterviewPackageError("interview_package_size_limit", "The package would exceed its 2 GB total file limit.");
   }
   const sourceId = await deriveInterviewPackageId("source", ownerId, input.operationId);
@@ -225,38 +224,44 @@ async function inspectStoredObject(
   const reader = object.body.getReader();
   const prefix = new Uint8Array(64);
   let prefixLength = 0;
-  const transcriptChunks: Uint8Array[] = [];
+  const decoder = kind === "transcript" || (kind === "document" && mediaType !== "application/pdf")
+    ? new TextDecoder("utf-8", { fatal: true })
+    : null;
+  const transcriptParser = kind === "transcript" ? createSuppliedInterviewTranscriptParser(mediaType) : null;
+  let textSample = "";
   let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    hash.update(value);
-    if (prefixLength < prefix.length) {
-      const amount = Math.min(prefix.length - prefixLength, value.byteLength);
-      prefix.set(value.slice(0, amount), prefixLength);
-      prefixLength += amount;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      hash.update(value);
+      if (prefixLength < prefix.length) {
+        const amount = Math.min(prefix.length - prefixLength, value.byteLength);
+        prefix.set(value.subarray(0, amount), prefixLength);
+        prefixLength += amount;
+      }
+      if (decoder) {
+        const decoded = decoder.decode(value, { stream: true });
+        transcriptParser?.push(decoded);
+        if (textSample.length < 2_000) textSample += decoded.slice(0, 2_000 - textSample.length);
+      }
     }
-    if (kind === "transcript" || (kind === "document" && mediaType !== "application/pdf")) transcriptChunks.push(value);
+    const tail = decoder?.decode() ?? "";
+    transcriptParser?.push(tail);
+    if (textSample.length < 2_000) textSample += tail.slice(0, 2_000 - textSample.length);
+  } catch {
+    throw new InterviewPackageError("interview_package_encoding_mismatch", "The supplied text source is not valid UTF-8.");
   }
   if (total !== expectedBytes) throw storageFailure("The stored source byte count changed during verification.");
-  let text: string | undefined;
-  if (transcriptChunks.length) {
-    const bytes = new Uint8Array(total);
-    let offset = 0;
-    for (const chunk of transcriptChunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-    try { text = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch {
-      throw new InterviewPackageError("interview_package_encoding_mismatch", "The supplied text source is not valid UTF-8.");
-    }
-  }
-  if (!interviewPackageSignatureMatches(kind, mediaType, prefix.slice(0, prefixLength), text)) {
+  if (!interviewPackageSignatureMatches(kind, mediaType, prefix.subarray(0, prefixLength), decoder ? textSample : undefined)) {
     throw new InterviewPackageError("interview_package_signature_mismatch", "The stored bytes do not match the declared safe file format.");
   }
   return {
     contentHash: hash.digest("hex"),
-    transcriptRepresentation: kind === "transcript" ? (() => {
+    transcriptRepresentation: transcriptParser ? (() => {
       try {
-        return parseSuppliedInterviewTranscript(mediaType, text ?? "");
+        return transcriptParser.finish();
       } catch (error) {
         if (error instanceof InterviewPackageContentError) {
           throw new InterviewPackageError(error.code, error.message);
@@ -295,11 +300,23 @@ export async function completeInterviewPackageUpload(
       || parts.slice(0, -1).some((part) => part.byteCount !== INTERVIEW_PACKAGE_PART_BYTES)) {
     throw new InterviewPackageError("interview_package_upload_incomplete", "Upload every contiguous 5 MB part before completing this source.");
   }
-  await getDb().update(interviewPackageUploadSessions).set({ status: "completing", updatedAt: nowMs }).where(and(
-    eq(interviewPackageUploadSessions.ownerId, ownerId), eq(interviewPackageUploadSessions.sessionId, session.sessionId), eq(interviewPackageUploadSessions.status, "open"),
-  ));
+  let existingHead: R2Object | null;
   try {
-    const existingHead = await bucket.head(session.privateLocator);
+    existingHead = await bucket.head(session.privateLocator);
+  } catch {
+    throw storageFailure("The private source completion state is temporarily unavailable.");
+  }
+  if (session.status === "open") {
+    const claimed = await getDb().update(interviewPackageUploadSessions).set({ status: "completing", updatedAt: nowMs }).where(and(
+      eq(interviewPackageUploadSessions.ownerId, ownerId), eq(interviewPackageUploadSessions.sessionId, session.sessionId), eq(interviewPackageUploadSessions.status, "open"),
+    )).returning({ sessionId: interviewPackageUploadSessions.sessionId });
+    if (claimed.length !== 1) {
+      throw new InterviewPackageError("interview_package_completion_in_progress", "Another request is completing this source. Retry the exact completion.", true);
+    }
+  } else if (!existingHead || existingHead.size !== session.expectedBytes) {
+    throw new InterviewPackageError("interview_package_completion_in_progress", "This source is still completing. Retry the exact completion.", true);
+  }
+  try {
     if (!existingHead || existingHead.size !== session.expectedBytes) {
       await bucket.resumeMultipartUpload(session.privateLocator, session.r2UploadId).complete(parts.map((part) => ({ partNumber: part.partNumber, etag: part.etag })));
     }
@@ -334,6 +351,9 @@ export async function completeInterviewPackageUpload(
       )),
       db.update(interviewPackageUploadSessions).set({ status: "completed", updatedAt: nowMs }).where(and(
         eq(interviewPackageUploadSessions.ownerId, ownerId), eq(interviewPackageUploadSessions.sessionId, session.sessionId), eq(interviewPackageUploadSessions.status, "completing"),
+      )),
+      db.delete(interviewPackageUploadParts).where(and(
+        eq(interviewPackageUploadParts.ownerId, ownerId), eq(interviewPackageUploadParts.sessionId, session.sessionId),
       )),
       db.update(interviewPackages).set({ revision: packageRevision, status: "draft", manifestDigest: null, updatedAt: nowMs }).where(and(
         eq(interviewPackages.ownerId, ownerId), eq(interviewPackages.packageId, input.packageId), eq(interviewPackages.revision, current.revision),
@@ -560,17 +580,14 @@ export async function deleteInterviewPackage(
   ]);
   try {
     for (const upload of uploads) {
-      const head = await bucket.head(upload.privateLocator);
-      if (head) await bucket.delete(upload.privateLocator);
-      else if (upload.status === "open" || upload.status === "completing") {
+      if (upload.status === "open" || upload.status === "completing") {
         try { await bucket.resumeMultipartUpload(upload.privateLocator, upload.r2UploadId).abort(); } catch { /* A missing multipart is already absent. */ }
       }
     }
-    for (const source of sources) {
-      if (!source.privateLocator) continue;
-      const head = await bucket.head(source.privateLocator);
-      if (head) await bucket.delete(source.privateLocator);
-      if (await bucket.head(source.privateLocator)) throw storageFailure("A private source remained after deletion.");
+    const locators = new Set(sources.map((source) => source.privateLocator).filter((locator): locator is string => Boolean(locator)));
+    for (const locator of locators) {
+      await bucket.delete(locator);
+      if (await bucket.head(locator)) throw storageFailure("A private source remained after deletion.");
     }
   } catch (error) {
     if (error instanceof InterviewPackageError) throw error;

@@ -87,7 +87,7 @@ Arbitrary executable archives are not part of the initial allowlist. Code is rep
 | `interview_package_assignments` | Exact Loop/Round assignment and reassignment history |
 | `interview_package_material_links` | Exact material revision link and selected-source provenance |
 | `interview_package_material_proposals` | Owner-reviewed proposal snapshot, base revisions, selected source digests, and state |
-| `interview_package_upload_sessions` and `interview_package_upload_parts` | Resumable multipart checkpoint, expiry, expected bytes, part digests, and R2 receipt |
+| `interview_package_upload_sessions` and `interview_package_upload_parts` | Resumable multipart checkpoint, expiry, expected bytes, part digests, and R2 receipt; successful completion compacts per-part rows |
 | `interview_package_operations` | Idempotent command fingerprints and receipts |
 
 Exact file bytes remain in private R2. D1 keeps metadata, digests, and the

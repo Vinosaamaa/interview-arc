@@ -42,29 +42,55 @@ export function interviewPackageSignatureMatches(kind: InterviewPackageSourceKin
   return false;
 }
 
-export function parseSuppliedInterviewTranscript(mediaType: string, text: string) {
-  const normalized = text.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
-  const lines = normalized.split("\n");
+export function createSuppliedInterviewTranscriptParser(mediaType: string) {
   const format = mediaType === "text/vtt" ? "vtt" : mediaType === "application/x-subrip" ? "srt" : "plain";
-  if (format === "vtt" && lines[0]?.trim() !== "WEBVTT") {
-    throw new InterviewPackageContentError("interview_package_signature_mismatch", "The supplied transcript does not match its declared format.");
-  }
   const cues: Array<{ sequence: number; timing?: string; text: string }> = [];
   let timing: string | undefined;
   let content: string[] = [];
+  let pending = "";
+  let firstLine = true;
   const flush = () => {
     const value = content.join("\n").trim();
     if (value) cues.push({ sequence: cues.length + 1, ...(timing ? { timing } : {}), text: value });
     timing = undefined;
     content = [];
   };
-  for (const raw of lines) {
-    const line = raw.trimEnd();
-    if (!line.trim()) { flush(); continue; }
-    if (line.includes("-->")) { timing = line.trim(); continue; }
-    if ((format === "vtt" && line.trim() === "WEBVTT") || (format === "srt" && /^\d+$/.test(line.trim()) && content.length === 0)) continue;
+  const line = (rawValue: string) => {
+    const raw = firstLine ? rawValue.replace(/^\uFEFF/, "") : rawValue;
+    const value = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+    if (firstLine) {
+      firstLine = false;
+      if (format === "vtt" && value.trim() !== "WEBVTT") {
+        throw new InterviewPackageContentError("interview_package_signature_mismatch", "The supplied transcript does not match its declared format.");
+      }
+    }
+    const line = value.trimEnd();
+    if (!line.trim()) { flush(); return; }
+    if (line.includes("-->")) { timing = line.trim(); return; }
+    if ((format === "vtt" && line.trim() === "WEBVTT") || (format === "srt" && /^\d+$/.test(line.trim()) && content.length === 0)) return;
     content.push(line);
-  }
-  flush();
-  return { schemaVersion: 1, format, cueCount: cues.length, cues };
+  };
+  return {
+    push(chunk: string) {
+      pending += chunk;
+      let newline = pending.indexOf("\n");
+      while (newline >= 0) {
+        line(pending.slice(0, newline));
+        pending = pending.slice(newline + 1);
+        newline = pending.indexOf("\n");
+      }
+    },
+    finish() {
+      if (pending || firstLine) line(pending);
+      pending = "";
+      flush();
+      return { schemaVersion: 1 as const, format, cueCount: cues.length, cues };
+    },
+  };
+}
+
+export function parseSuppliedInterviewTranscript(mediaType: string, text: string) {
+  const parser = createSuppliedInterviewTranscriptParser(mediaType);
+  parser.push(text);
+  return parser.finish();
 }

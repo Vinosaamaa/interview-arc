@@ -106,6 +106,23 @@ function packageTitle(record: PackageRecord, loops: InterviewPackageLoopOption[]
   return loop ? `${loop.company} · ${loop.roleTitle}` : "Unassigned interview";
 }
 
+function TranscriptReader({ transcript }: { transcript: NonNullable<PackageSource["transcriptRepresentation"]> }) {
+  const [open, setOpen] = useState(false);
+  const [visible, setVisible] = useState(100);
+  const cues = open ? transcript.cues.slice(0, visible) : [];
+  return <details onToggle={(event) => {
+    const nextOpen = event.currentTarget.open;
+    setOpen(nextOpen);
+    if (!nextOpen) setVisible(100);
+  }}>
+    <summary>{transcript.cueCount} transcript blocks</summary>
+    {open ? <div className="package-transcript">
+      {cues.map((cue) => <p key={cue.sequence}>{cue.timing ? <time>{cue.timing}</time> : null}{cue.text}</p>)}
+      {visible < transcript.cues.length ? <button type="button" className="secondary" onClick={() => setVisible((current) => current + 100)}>Show 100 more blocks</button> : null}
+    </div> : null}
+  </details>;
+}
+
 export default function InterviewPackageDialog({
   opener,
   loops,
@@ -144,13 +161,24 @@ export default function InterviewPackageDialog({
   const selectedLoop = loops.find((loop) => loop.loopId === (selected?.assignment?.loopId ?? loopId));
 
   const load = useCallback(async (preferredId?: string) => {
-    const response = await fetch("/api/interview-packages", { cache: "no-store" });
+    const exact = Boolean(preferredId);
+    let response = await fetch(exact ? `/api/interview-packages?packageId=${encodeURIComponent(preferredId!)}` : "/api/interview-packages", { cache: "no-store" });
     const body = await response.json() as { packages?: PackageRecord[]; error?: string };
     if (!response.ok) throw new Error(body.error ?? "Interview Packages are unavailable.");
-    const next = body.packages ?? [];
+    let next = body.packages ?? [];
+    let updatedExact = false;
+    if (exact && next.length === 0) {
+      response = await fetch("/api/interview-packages", { cache: "no-store" });
+      const register = await response.json() as { packages?: PackageRecord[]; error?: string };
+      if (!response.ok) throw new Error(register.error ?? "Interview Packages are unavailable.");
+      next = register.packages ?? [];
+    } else if (exact) {
+      setRecords((current) => [next[0], ...current.filter((record) => record.packageId !== next[0].packageId)]);
+      updatedExact = true;
+    }
     const nextId = preferredId ?? selectedIdRef.current ?? next[0]?.packageId ?? "";
     const nextRecord = next.find((record) => record.packageId === nextId) ?? next[0];
-    setRecords(next);
+    if (!updatedExact) setRecords(next);
     selectedIdRef.current = nextRecord?.packageId ?? "";
     setSelectedId(selectedIdRef.current);
     setLoopId(nextRecord?.assignment?.loopId ?? initialLoopId ?? "");
@@ -393,7 +421,7 @@ export default function InterviewPackageDialog({
       {notice ? <div className="package-message" role="status">{notice}</div> : null}
       {busy ? <div className="package-busy" role="status"><span />{busy}</div> : null}
       <div className="package-dialog-body">
-        <aside className="package-register"><header><strong>Event register</strong><span>{records.length} saved</span></header>{loading ? <p>Reading private packages…</p> : records.map((record) => <button type="button" className={record.packageId === selected?.packageId ? "active" : ""} onClick={() => selectRecord(record)} key={record.packageId}><span>{packageTitle(record, loops)}</span><small>{record.status} · {record.sources.length + record.entries.length} sources</small></button>)}<section><strong>New package</strong><label>Loop or inbox<select value={newLoopId} onChange={(event) => { setNewLoopId(event.target.value); setNewStageId(""); }}><option value="">Unassigned inbox</option>{loops.map((loop) => <option value={loop.loopId} key={loop.loopId}>{loop.company} · {loop.roleTitle}</option>)}</select></label>{newLoopId ? <label>Round<select value={newStageId} onChange={(event) => setNewStageId(event.target.value)}><option value="">Loop-wide</option>{loops.find((loop) => loop.loopId === newLoopId)?.stages.map((stage) => <option value={stage.stageId} key={stage.stageId}>{stage.label}</option>)}</select></label> : null}<label>Interview time<input type="datetime-local" value={interviewLocal} onChange={(event) => setInterviewLocal(event.target.value)} /></label><label className="package-consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /> I affirm I am permitted to store and process these sources.</label><button type="button" disabled={!consent || Boolean(busy)} onClick={() => void createPackage()}>Create package</button></section></aside>
+        <aside className="package-register"><header><strong>Event register</strong><span>{records.length} saved</span></header>{loading ? <p>Reading private packages…</p> : records.map((record) => <button type="button" disabled={Boolean(busy)} className={record.packageId === selected?.packageId ? "active" : ""} onClick={() => selectRecord(record)} key={record.packageId}><span>{packageTitle(record, loops)}</span><small>{record.status} · {record.sources.length + record.entries.length} sources</small></button>)}<section><strong>New package</strong><label>Loop or inbox<select value={newLoopId} onChange={(event) => { setNewLoopId(event.target.value); setNewStageId(""); }}><option value="">Unassigned inbox</option>{loops.map((loop) => <option value={loop.loopId} key={loop.loopId}>{loop.company} · {loop.roleTitle}</option>)}</select></label>{newLoopId ? <label>Round<select value={newStageId} onChange={(event) => setNewStageId(event.target.value)}><option value="">Loop-wide</option>{loops.find((loop) => loop.loopId === newLoopId)?.stages.map((stage) => <option value={stage.stageId} key={stage.stageId}>{stage.label}</option>)}</select></label> : null}<label>Interview time<input type="datetime-local" value={interviewLocal} onChange={(event) => setInterviewLocal(event.target.value)} /></label><label className="package-consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /> I affirm I am permitted to store and process these sources.</label><button type="button" disabled={!consent || Boolean(busy)} onClick={() => void createPackage()}>Create package</button></section></aside>
         <main className="package-sheet">{selected ? <>
           <section className="package-event"><div><span>EVENT</span><h3>{packageTitle(selected, loops)}</h3><p>{selected.interviewAt ? new Date(selected.interviewAt).toLocaleString() : "Interview time not recorded"} · Revision {selected.revision}</p></div><i className={`package-state ${selected.status}`}>{selected.status}</i><div className="package-assignment"><select value={loopId} onChange={(event) => { setLoopId(event.target.value); setStageId(""); }}><option value="">Unassigned inbox</option>{loops.map((loop) => <option value={loop.loopId} key={loop.loopId}>{loop.company} · {loop.roleTitle}</option>)}</select>{loopId ? <select value={stageId} onChange={(event) => setStageId(event.target.value)}><option value="">Loop-wide</option>{loops.find((loop) => loop.loopId === loopId)?.stages.map((stage) => <option value={stage.stageId} key={stage.stageId}>{stage.label}</option>)}</select> : null}<button type="button" onClick={() => void assign()} disabled={Boolean(busy)}>Save assignment</button></div></section>
           <section className="package-sources">
@@ -407,7 +435,7 @@ export default function InterviewPackageDialog({
                   {source.state === "ready" ? <a href={`/api/interview-packages/sources/${encodeURIComponent(source.sourceId)}/content`} target="_blank" rel="noreferrer">{source.kind === "audio" ? "Play / download" : "Open source"}</a> : null}
                   {source.state === "uploading" ? <div className="package-source-actions"><label className="package-file-action secondary"><input type="file" accept={source.mediaType} onChange={(event) => { const file = event.target.files?.[0]; if (file) void resumeUpload(source, file); event.currentTarget.value = ""; }} />Resume upload</label><button type="button" className="package-inline-danger" disabled={Boolean(busy)} onClick={() => void cancelUpload(source)}>Cancel upload</button></div> : null}
                   {source.kind === "audio" && source.state === "ready" ? <audio controls preload="metadata" src={`/api/interview-packages/sources/${encodeURIComponent(source.sourceId)}/content`} /> : null}
-                  {source.transcriptRepresentation ? <details><summary>{source.transcriptRepresentation.cueCount} transcript blocks</summary><div className="package-transcript">{source.transcriptRepresentation.cues.map((cue) => <p key={cue.sequence}>{cue.timing ? <time>{cue.timing}</time> : null}{cue.text}</p>)}</div></details> : null}
+                  {source.transcriptRepresentation ? <TranscriptReader transcript={source.transcriptRepresentation} /> : null}
                 </article>;
               })}
               {selected.entries.map((entry) => <article key={entry.entryId}><div className={`package-source-mark ${entry.kind}`} aria-hidden="true">{entry.kind === "note" ? "N" : "↗"}</div><div><strong>{entry.snapshot.label}</strong><span>{entry.kind} · revision {entry.revision}</span>{entry.snapshot.kind === "note" ? <p>{entry.snapshot.body}</p> : <a href={entry.snapshot.url} target="_blank" rel="noreferrer">{entry.snapshot.url}</a>}</div><button type="button" className="package-revise-entry" disabled={Boolean(busy)} onClick={() => editEntry(entry)}>Revise {entry.kind}</button></article>)}

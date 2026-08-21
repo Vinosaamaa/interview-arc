@@ -39,7 +39,9 @@ One package permits at most 20 file sources, 50 note/link entries, and 2 GiB
 of file bytes. Browser uploads use contiguous 5 MiB multipart parts. D1 owns
 the server checkpoint; the owner can reselect the same exact file and resume
 from the recorded byte boundary for 24 hours. Completed source bytes are
-retained until governed package deletion.
+retained until governed package deletion. Per-part checkpoint rows exist only
+while an upload is unfinished; successful completion atomically compacts them
+after the immutable source receipt is saved.
 
 The Worker validates the declared allowlist, exact byte count, file signature,
 UTF-8 encoding where applicable, streaming SHA-256, R2 metadata, and exact R2
@@ -67,6 +69,9 @@ and never provides a cross-owner content oracle.
 
 - Package queries return only owner-authorized display projections. They never
   expose R2 keys, multipart upload IDs, raw owner IDs, or other owners' state.
+  Register children and upload progress are loaded with bounded set-based D1
+  projections; an exact-package refresh avoids rereading the full register
+  after each mutation.
 - Source reads reauthorize D1 ownership, verify locator namespace, size, and
   ETag, support one HTTP byte range, and set private/no-store and `nosniff`
   headers. PDF and generic documents download as attachments.
@@ -94,6 +99,8 @@ cookies, or credentials.
   existing object before replaying completion.
 - D1 batches use invariant guards so a stale package/source/session cannot
   produce a partial authoritative receipt.
+- A confirmed owner-authored material revision, proposal receipt, material
+  link, and package revision commit in one guarded D1 batch.
 - Cancellation and deletion reconcile R2 before committing the D1 receipt and
   are safe to retry with the exact operation ID.
 - There is no automatic transcription, AI analysis, publication, provider

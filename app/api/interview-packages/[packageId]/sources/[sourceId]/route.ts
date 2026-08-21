@@ -19,22 +19,20 @@ async function boundedPart(request: Request) {
   if (length > MAX_PART_BYTES) throw new InterviewPackageError("interview_package_part_too_large", "An upload part cannot exceed 5 MB.");
   if (!request.body) throw new InterviewPackageError("interview_package_part_invalid", "A non-empty upload part is required.");
   const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
+  const bytes = new Uint8Array(length > 0 ? length : MAX_PART_BYTES);
   let total = 0;
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    total += value.byteLength;
-    if (total > MAX_PART_BYTES) {
+    if (total + value.byteLength > MAX_PART_BYTES || total + value.byteLength > bytes.byteLength) {
       await reader.cancel();
       throw new InterviewPackageError("interview_package_part_too_large", "An upload part cannot exceed 5 MB.");
     }
-    chunks.push(value);
+    bytes.set(value, total);
+    total += value.byteLength;
   }
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-  return bytes;
+  if (total === 0) throw new InterviewPackageError("interview_package_part_invalid", "A non-empty upload part is required.");
+  return bytes.subarray(0, total);
 }
 
 export async function PUT(request: Request, context: { params: Promise<{ packageId: string; sourceId: string }> }) {

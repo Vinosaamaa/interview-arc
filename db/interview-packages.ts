@@ -13,8 +13,8 @@ import {
   reviseInterviewPackageEntrySchema,
 } from "./interview-package-policy.ts";
 import {
-  createLoopInterviewMaterialFromWebsite,
-  reviseLoopInterviewMaterialFromWebsite,
+  prepareCreateLoopInterviewMaterialFromWebsite,
+  prepareReviseLoopInterviewMaterialFromWebsite,
 } from "./loop-materials.ts";
 import {
   interviewLoopRevisions,
@@ -402,49 +402,102 @@ export async function queryInterviewPackages(ownerId: string, input: { packageId
     input.loopId ? eq(interviewPackages.loopId, input.loopId) : undefined,
     input.includeDeleted ? undefined : sql`${interviewPackages.status} <> 'deleted'`,
   )).orderBy(desc(interviewPackages.updatedAt)).limit(101);
-  const items = await Promise.all(packages.slice(0, 100).map(async (record) => {
-    const [sources, entries, uploads, materialLinks, proposals] = await Promise.all([
-      db.select().from(interviewPackageSources).where(and(
-        eq(interviewPackageSources.ownerId, ownerId), eq(interviewPackageSources.packageId, record.packageId), sql`${interviewPackageSources.state} <> 'deleted'`,
-      )).orderBy(asc(interviewPackageSources.createdAt)),
-      db.select({
-        entryId: interviewPackageEntries.entryId,
-        kind: interviewPackageEntries.kind,
-        state: interviewPackageEntries.state,
-        revision: interviewPackageEntryRevisions.revision,
-        snapshot: interviewPackageEntryRevisions.snapshot,
-        contentHash: interviewPackageEntryRevisions.contentHash,
-        createdAt: interviewPackageEntries.createdAt,
-        updatedAt: interviewPackageEntries.updatedAt,
-      }).from(interviewPackageEntries).innerJoin(interviewPackageEntryRevisions, and(
-        eq(interviewPackageEntryRevisions.ownerId, interviewPackageEntries.ownerId),
-        eq(interviewPackageEntryRevisions.entryId, interviewPackageEntries.entryId),
-        eq(interviewPackageEntryRevisions.revision, interviewPackageEntries.currentRevision),
-      )).where(and(
-        eq(interviewPackageEntries.ownerId, ownerId), eq(interviewPackageEntries.packageId, record.packageId), eq(interviewPackageEntries.state, "active"),
-      )).orderBy(asc(interviewPackageEntries.createdAt)),
-      db.select({ sourceId: interviewPackageUploadSessions.sourceId, status: interviewPackageUploadSessions.status, expectedBytes: interviewPackageUploadSessions.expectedBytes, expiresAt: interviewPackageUploadSessions.expiresAt })
-        .from(interviewPackageUploadSessions).where(and(
-          eq(interviewPackageUploadSessions.ownerId, ownerId), eq(interviewPackageUploadSessions.packageId, record.packageId),
-        )),
-      db.select().from(interviewPackageMaterialLinks).where(and(
-        eq(interviewPackageMaterialLinks.ownerId, ownerId), eq(interviewPackageMaterialLinks.packageId, record.packageId),
-      )).limit(1),
-      db.select({ proposalId: interviewPackageMaterialProposals.proposalId, status: interviewPackageMaterialProposals.status, materialId: interviewPackageMaterialProposals.materialId, baseMaterialRevision: interviewPackageMaterialProposals.baseMaterialRevision, baseLoopRevision: interviewPackageMaterialProposals.baseLoopRevision, baseRoleBriefRevision: interviewPackageMaterialProposals.baseRoleBriefRevision, sourceDigests: interviewPackageMaterialProposals.sourceDigests, proposedSnapshot: interviewPackageMaterialProposals.proposedSnapshot, confirmedMaterialRevision: interviewPackageMaterialProposals.confirmedMaterialRevision, createdAt: interviewPackageMaterialProposals.createdAt, updatedAt: interviewPackageMaterialProposals.updatedAt })
-        .from(interviewPackageMaterialProposals).where(and(
-          eq(interviewPackageMaterialProposals.ownerId, ownerId), eq(interviewPackageMaterialProposals.packageId, record.packageId),
-        )).orderBy(desc(interviewPackageMaterialProposals.createdAt)).limit(20),
-    ]);
-    const progressRows = await Promise.all(uploads.map(async (upload) => {
-      const parts = await db.select({ bytes: sql<number>`coalesce(sum(${interviewPackageUploadParts.byteCount}),0)` }).from(interviewPackageUploadParts).where(and(
-        eq(interviewPackageUploadParts.ownerId, ownerId),
-        eq(interviewPackageUploadParts.sessionId, (await db.select({ sessionId: interviewPackageUploadSessions.sessionId }).from(interviewPackageUploadSessions).where(and(
-          eq(interviewPackageUploadSessions.ownerId, ownerId), eq(interviewPackageUploadSessions.sourceId, upload.sourceId),
-        )).limit(1))[0]?.sessionId ?? ""),
-      ));
-      return { ...upload, uploadedBytes: Number(parts[0]?.bytes ?? 0) };
-    }));
-    const link = materialLinks[0];
+  const selectedPackages = packages.slice(0, 100);
+  const packageIds = selectedPackages.map((record) => record.packageId);
+  if (!packageIds.length) return { packages: [], truncated: false };
+  const proposalSelection = {
+    packageId: interviewPackageMaterialProposals.packageId,
+    proposalId: interviewPackageMaterialProposals.proposalId,
+    status: interviewPackageMaterialProposals.status,
+    materialId: interviewPackageMaterialProposals.materialId,
+    baseMaterialRevision: interviewPackageMaterialProposals.baseMaterialRevision,
+    baseLoopRevision: interviewPackageMaterialProposals.baseLoopRevision,
+    baseRoleBriefRevision: interviewPackageMaterialProposals.baseRoleBriefRevision,
+    sourceDigests: interviewPackageMaterialProposals.sourceDigests,
+    proposedSnapshot: interviewPackageMaterialProposals.proposedSnapshot,
+    confirmedMaterialRevision: interviewPackageMaterialProposals.confirmedMaterialRevision,
+    createdAt: interviewPackageMaterialProposals.createdAt,
+    updatedAt: interviewPackageMaterialProposals.updatedAt,
+  };
+  const rankedProposals = db.select({
+    ...proposalSelection,
+    packageRank: sql<number>`row_number() over (partition by ${interviewPackageMaterialProposals.packageId} order by ${interviewPackageMaterialProposals.createdAt} desc)`.as("package_rank"),
+  }).from(interviewPackageMaterialProposals).where(and(
+    eq(interviewPackageMaterialProposals.ownerId, ownerId), inArray(interviewPackageMaterialProposals.packageId, packageIds),
+  )).as("ranked_interview_package_proposals");
+  const [sources, entries, uploads, materialLinks, proposals] = await Promise.all([
+    db.select().from(interviewPackageSources).where(and(
+      eq(interviewPackageSources.ownerId, ownerId), inArray(interviewPackageSources.packageId, packageIds), sql`${interviewPackageSources.state} <> 'deleted'`,
+    )).orderBy(asc(interviewPackageSources.createdAt)),
+    db.select({
+      packageId: interviewPackageEntries.packageId,
+      entryId: interviewPackageEntries.entryId,
+      kind: interviewPackageEntries.kind,
+      state: interviewPackageEntries.state,
+      revision: interviewPackageEntryRevisions.revision,
+      snapshot: interviewPackageEntryRevisions.snapshot,
+      contentHash: interviewPackageEntryRevisions.contentHash,
+      createdAt: interviewPackageEntries.createdAt,
+      updatedAt: interviewPackageEntries.updatedAt,
+    }).from(interviewPackageEntries).innerJoin(interviewPackageEntryRevisions, and(
+      eq(interviewPackageEntryRevisions.ownerId, interviewPackageEntries.ownerId),
+      eq(interviewPackageEntryRevisions.entryId, interviewPackageEntries.entryId),
+      eq(interviewPackageEntryRevisions.revision, interviewPackageEntries.currentRevision),
+    )).where(and(
+      eq(interviewPackageEntries.ownerId, ownerId), inArray(interviewPackageEntries.packageId, packageIds), eq(interviewPackageEntries.state, "active"),
+    )).orderBy(asc(interviewPackageEntries.createdAt)),
+    db.select({
+      packageId: interviewPackageUploadSessions.packageId,
+      sessionId: interviewPackageUploadSessions.sessionId,
+      sourceId: interviewPackageUploadSessions.sourceId,
+      status: interviewPackageUploadSessions.status,
+      expectedBytes: interviewPackageUploadSessions.expectedBytes,
+      expiresAt: interviewPackageUploadSessions.expiresAt,
+    }).from(interviewPackageUploadSessions).where(and(
+      eq(interviewPackageUploadSessions.ownerId, ownerId), inArray(interviewPackageUploadSessions.packageId, packageIds),
+    )),
+    db.select().from(interviewPackageMaterialLinks).where(and(
+      eq(interviewPackageMaterialLinks.ownerId, ownerId), inArray(interviewPackageMaterialLinks.packageId, packageIds),
+    )),
+    db.select({
+      packageId: rankedProposals.packageId,
+      proposalId: rankedProposals.proposalId,
+      status: rankedProposals.status,
+      materialId: rankedProposals.materialId,
+      baseMaterialRevision: rankedProposals.baseMaterialRevision,
+      baseLoopRevision: rankedProposals.baseLoopRevision,
+      baseRoleBriefRevision: rankedProposals.baseRoleBriefRevision,
+      sourceDigests: rankedProposals.sourceDigests,
+      proposedSnapshot: rankedProposals.proposedSnapshot,
+      confirmedMaterialRevision: rankedProposals.confirmedMaterialRevision,
+      createdAt: rankedProposals.createdAt,
+      updatedAt: rankedProposals.updatedAt,
+    }).from(rankedProposals).where(sql`${rankedProposals.packageRank} <= 20`).orderBy(desc(rankedProposals.createdAt)),
+  ]);
+  const sessionIds = uploads.map((upload) => upload.sessionId);
+  const progress = sessionIds.length ? await db.select({
+    sessionId: interviewPackageUploadParts.sessionId,
+    bytes: sql<number>`coalesce(sum(${interviewPackageUploadParts.byteCount}),0)`,
+  }).from(interviewPackageUploadParts).where(and(
+    eq(interviewPackageUploadParts.ownerId, ownerId), inArray(interviewPackageUploadParts.sessionId, sessionIds),
+  )).groupBy(interviewPackageUploadParts.sessionId) : [];
+  const progressBySession = new Map(progress.map((row) => [row.sessionId, Number(row.bytes)]));
+  const byPackage = <T extends { packageId: string }>(rows: T[]) => {
+    const grouped = new Map<string, T[]>();
+    rows.forEach((row) => {
+      const existing = grouped.get(row.packageId);
+      if (existing) existing.push(row);
+      else grouped.set(row.packageId, [row]);
+    });
+    return grouped;
+  };
+  const sourcesByPackage = byPackage(sources);
+  const entriesByPackage = byPackage(entries);
+  const uploadsByPackage = byPackage(uploads);
+  const linksByPackage = new Map(materialLinks.map((link) => [link.packageId, link]));
+  const proposalsByPackage = byPackage(proposals);
+  const items = selectedPackages.map((record) => {
+    const link = linksByPackage.get(record.packageId);
     return {
       packageId: record.packageId,
       revision: record.revision,
@@ -457,9 +510,15 @@ export async function queryInterviewPackages(ownerId: string, input: { packageId
       consentAffirmedAt: record.consentAffirmedAt ?? undefined,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
-      sources: sources.map(sourceDisplay),
-      entries,
-      uploads: progressRows,
+      sources: (sourcesByPackage.get(record.packageId) ?? []).map(sourceDisplay),
+      entries: entriesByPackage.get(record.packageId) ?? [],
+      uploads: (uploadsByPackage.get(record.packageId) ?? []).map((upload) => ({
+        sourceId: upload.sourceId,
+        status: upload.status,
+        expectedBytes: upload.expectedBytes,
+        expiresAt: upload.expiresAt,
+        uploadedBytes: upload.status === "completed" ? upload.expectedBytes : (progressBySession.get(upload.sessionId) ?? 0),
+      })),
       materialLink: link ? {
         state: link.state,
         linkRevision: link.linkRevision,
@@ -469,9 +528,9 @@ export async function queryInterviewPackages(ownerId: string, input: { packageId
         sourceDigests: link.sourceDigests,
         updatedAt: link.updatedAt,
       } : null,
-      proposals,
+      proposals: proposalsByPackage.get(record.packageId) ?? [],
     };
-  }));
+  });
   return { packages: items, truncated: packages.length > 100 };
 }
 
@@ -732,15 +791,15 @@ export async function confirmInterviewPackageMaterialProposal(ownerId: string, i
     return markStale("A selected source changed after review; prepare a new proposal.");
   }
   const materialOperationId = await deriveInterviewPackageId("material", ownerId, input.proposalId);
-  const materialReceipt = proposal.baseMaterialRevision === null
-    ? await createLoopInterviewMaterialFromWebsite(ownerId, {
+  const materialPrepared = proposal.baseMaterialRevision === null
+    ? await prepareCreateLoopInterviewMaterialFromWebsite(ownerId, {
       operationId: materialOperationId,
       authorization: "website_owner",
       expectedLoopRevision: proposal.baseLoopRevision,
       expectedRoleBriefRevision: proposal.baseRoleBriefRevision,
       material: proposedMaterial,
     }, nowMs)
-    : await reviseLoopInterviewMaterialFromWebsite(ownerId, {
+    : await prepareReviseLoopInterviewMaterialFromWebsite(ownerId, {
       operationId: materialOperationId,
       authorization: "website_owner",
       expectedLoopRevision: proposal.baseLoopRevision,
@@ -749,6 +808,7 @@ export async function confirmInterviewPackageMaterialProposal(ownerId: string, i
       expectedRevision: proposal.baseMaterialRevision,
       material: proposedMaterial,
     }, nowMs);
+  const materialReceipt = materialPrepared.kind === "replay" ? materialPrepared.replay : materialPrepared.receipt;
   const confirmedMaterialRevision = Number((materialReceipt as unknown as { materialRevision: number }).materialRevision);
   const existingLink = await getDb().select().from(interviewPackageMaterialLinks).where(and(
     eq(interviewPackageMaterialLinks.ownerId, ownerId), eq(interviewPackageMaterialLinks.packageId, input.packageId),
@@ -774,6 +834,7 @@ export async function confirmInterviewPackageMaterialProposal(ownerId: string, i
   try {
     await db.batch([
       d1TransactionalInvariantGuard(db, unchanged),
+      ...(materialPrepared.kind === "pending" ? materialPrepared.statements : []),
       db.update(interviewPackageMaterialProposals).set({ status: "confirmed", confirmedMaterialRevision, updatedAt: nowMs }).where(and(
         eq(interviewPackageMaterialProposals.ownerId, ownerId), eq(interviewPackageMaterialProposals.proposalId, input.proposalId), eq(interviewPackageMaterialProposals.status, "proposed"),
       )),
@@ -793,7 +854,7 @@ export async function confirmInterviewPackageMaterialProposal(ownerId: string, i
   } catch {
     const racedReplay = await replayOperation(ownerId, input.operationId, requestFingerprint);
     if (racedReplay) return racedReplay;
-    throw new InterviewPackageError("interview_package_proposal_commit_conflict", "The material revision was saved, but the package link needs the exact confirmation retry.", true);
+    throw new InterviewPackageError("interview_package_proposal_commit_conflict", "The material proposal changed while confirmation was committing; reread it before retrying.", true);
   }
   return { ...receipt, duplicate: false };
 }
