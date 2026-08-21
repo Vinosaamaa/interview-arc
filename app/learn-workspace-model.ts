@@ -275,6 +275,16 @@ export function selectActiveLearningSession(payload: LearnPayload, lessonId?: st
     ?? null;
 }
 
+export function selectStartedLearningSession(payload: LearnPayload, lessonId?: string) {
+  const candidates = payload.sessions.filter((projection) => (
+    (projection.session.state === "running" || projection.session.state === "paused")
+    && (!lessonId || projection.session.lessonId === lessonId)
+  ));
+  return candidates.find((projection) => projection.session.state === "running")
+    ?? candidates.find((projection) => projection.session.state === "paused")
+    ?? null;
+}
+
 export function learningHistory(payload: LearnPayload) {
   return payload.sessions.filter((projection) => projection.session.state === "completed")
     .sort((left, right) => (right.session.completedAt ?? 0) - (left.session.completedAt ?? 0));
