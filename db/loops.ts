@@ -24,6 +24,7 @@ import {
 } from "./schema";
 import {
   bindPlannedActivitySchema,
+  addLoopRoundCommandSchema,
   captureLoopPacketSchema,
   createLoopCommandSchema,
   createLoopSchema,
@@ -45,6 +46,7 @@ import {
   targetProfileMigrationSchema,
   type CaptureLoopPacketInput,
   type BindPlannedActivityInput,
+  type AddLoopRoundCommandInput,
   type CreateLoopInput,
   type CreateLoopCommandInput,
   type DisplaySafeLoopRoleBriefRevision,
@@ -61,6 +63,7 @@ import {
 } from "./loop-policy";
 
 export {
+  addLoopRoundCommandSchema,
   bindPlannedActivitySchema,
   loopActivityContextRequestSchema,
   createLoopSchema,
@@ -293,6 +296,91 @@ export async function createLoopCommand(ownerId: string, inputValue: unknown, no
 export async function createLoop(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
   const input = createLoopSchema.parse(inputValue) as CreateLoopInput;
   return createLoopCommand(ownerId, input, nowMs);
+}
+
+export async function addLoopRoundCommand(ownerId: string, inputValue: unknown, nowMs = Date.now()) {
+  const input = addLoopRoundCommandSchema.parse(inputValue) as AddLoopRoundCommandInput;
+  const db = getDb();
+  const requestFingerprint = await fingerprint(input);
+  const replay = await replayOperation(ownerId, input.operationId, requestFingerprint);
+  if (replay) return replay;
+
+  const rows = await db.select().from(interviewLoops).where(and(
+    eq(interviewLoops.ownerId, ownerId),
+    eq(interviewLoops.loopId, input.loopId),
+  )).limit(1);
+  const current = rows[0];
+  if (!current) throw new LoopError("loop_not_found", "That owner-private Loop is unavailable.");
+  if (current.currentRevision !== input.expectedLoopRevision) {
+    throw new LoopError("loop_revision_conflict", "The Loop changed; reread it before adding the Round.");
+  }
+  const revisionRows = await db.select().from(interviewLoopRevisions).where(and(
+    eq(interviewLoopRevisions.ownerId, ownerId),
+    eq(interviewLoopRevisions.loopId, input.loopId),
+    eq(interviewLoopRevisions.revision, input.expectedLoopRevision),
+  )).limit(1);
+  const prior = revisionRows[0] ? loopSnapshotSchema.parse(revisionRows[0].snapshot) : null;
+  if (!prior) throw new LoopError("loop_revision_not_found", "That Loop revision is unavailable.");
+  const canonicalLabel = input.stage.label.normalize("NFKC").toLocaleLowerCase("en-US");
+  if (prior.stages.some((stage) => stage.label.normalize("NFKC").toLocaleLowerCase("en-US") === canonicalLabel)) {
+    throw new LoopError("loop_round_label_conflict", "That Round label already exists in this Loop.");
+  }
+  const nextOrder = prior.stages.reduce((highest, stage) => Math.max(highest, stage.order), -1) + 1;
+  const snapshot = loopSnapshotSchema.parse({
+    ...prior,
+    stages: [...prior.stages, { ...input.stage, order: nextOrder }],
+  });
+  const revision = input.expectedLoopRevision + 1;
+  const receipt = {
+    status: "round_added" as const,
+    loopId: input.loopId,
+    stageId: input.stage.stageId,
+    loopRevision: revision,
+    roleBriefRevision: current.currentRoleBriefRevision,
+  };
+  const unchanged = sql`EXISTS (
+    SELECT 1 FROM ${interviewLoops}
+    WHERE ${interviewLoops.ownerId} = ${ownerId}
+      AND ${interviewLoops.loopId} = ${input.loopId}
+      AND ${interviewLoops.currentRevision} = ${input.expectedLoopRevision}
+  )`;
+  try {
+    await db.batch([
+      d1TransactionalInvariantGuard(db, unchanged),
+      db.insert(interviewLoopRevisions).values({
+        ownerId, loopId: input.loopId, revision, operationId: input.operationId,
+        requestFingerprint, snapshot, createdAt: nowMs,
+      }),
+      db.update(interviewLoops).set({ currentRevision: revision, updatedAt: nowMs }).where(and(
+        eq(interviewLoops.ownerId, ownerId),
+        eq(interviewLoops.loopId, input.loopId),
+        eq(interviewLoops.currentRevision, input.expectedLoopRevision),
+      )),
+      db.insert(interviewLoopOperations).values({
+        ownerId, operationId: input.operationId, loopId: input.loopId, action: "revise",
+        requestFingerprint, loopRevision: revision, roleBriefRevision: current.currentRoleBriefRevision,
+        receipt, createdAt: nowMs,
+      }),
+      d1TransactionalInvariantGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${interviewLoops}
+        WHERE ${interviewLoops.ownerId} = ${ownerId}
+          AND ${interviewLoops.loopId} = ${input.loopId}
+          AND ${interviewLoops.currentRevision} = ${revision}
+      )`),
+    ]);
+  } catch (error) {
+    const racedReplay = await replayOperation(ownerId, input.operationId, requestFingerprint);
+    if (racedReplay) return racedReplay;
+    const raced = await db.select({ revision: interviewLoops.currentRevision }).from(interviewLoops).where(and(
+      eq(interviewLoops.ownerId, ownerId), eq(interviewLoops.loopId, input.loopId),
+    )).limit(1);
+    if (!raced[0]) throw new LoopError("loop_not_found", "That owner-private Loop is unavailable.");
+    if (raced[0].revision !== input.expectedLoopRevision) {
+      throw new LoopError("loop_revision_conflict", "The Loop changed; reread it before adding the Round.");
+    }
+    throw error;
+  }
+  return { ...receipt, duplicate: false };
 }
 
 export async function reviseLoop(ownerId: string, inputValue: unknown, nowMs = Date.now()) {

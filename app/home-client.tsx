@@ -1124,6 +1124,8 @@ function DiagramFigure({ src, alt }: { src: string; alt: string }) {
       <button type="button" onClick={() => setExpanded((current) => !current)} aria-label={expanded ? "Exit full-screen diagram" : "View diagram full screen"} title={expanded ? "Exit full screen" : "Full screen"}>{expanded ? "↙" : "↗"}</button>
     </span></span>
     <span className="architecture-diagram-viewport">
+      {/* Exact authored diagram geometry and interactive zoom require the original asset dimensions. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt={alt} style={{ width: `${zoom * 100}%` }} />
     </span>
     <small>Zoom, then scroll or use a trackpad to inspect the architecture.</small>
@@ -1157,6 +1159,8 @@ function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
   if (/\/diagrams\/|\.svg(?:$|\?)/i.test(imageSrc)) {
     return <DiagramFigure src={imageSrc} alt={alt ?? "Architecture diagram"} />;
   }
+  // Markdown image sources are authored content and are not compatible with a fixed optimizer allowlist.
+  // eslint-disable-next-line @next/next/no-img-element
   return <img src={imageSrc} alt={alt ?? ""} />;
 }
 
@@ -2379,6 +2383,9 @@ export default function HomeClient({ content, today, engineering, initialLocatio
     };
     window.addEventListener("keydown", closeReader);
     return () => window.removeEventListener("keydown", closeReader);
+  // closeReaderPanel is intentionally a hoisted render-local dispatcher; the
+  // explicit reader-state dependencies below keep this Escape listener fresh.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bankNestedEntry, journeyNestedEntry, journeyNestedProblem, libraryNestedProblem, loopNestedEntry, loopNestedProblem, masterPaneOpen, nestedReaderFocus, reviewNestedEntry, reviewNestedProblem, selectedEntry, selectedProblem, setMasterPaneOpen]);
 
   useEffect(() => {
@@ -7330,7 +7337,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
             <details className={`topbar-tools ${pipWindow && !pipWindow.closed ? "active" : ""}`}>
               <summary aria-label="Timer, export, and connect" title="Timer, export, and connect"><Icon name="link" /></summary>
               <div className="topbar-tools-menu" role="menu">
-                <button type="button" role="menuitem" className={pipWindow && !pipWindow.closed ? "active" : ""} disabled={!pipSupported} title={pipSupported ? undefined : "Pop out timer needs Chrome or Edge"} aria-pressed={Boolean(pipWindow && !pipWindow.closed)} onClick={(event) => { void openNowWindow(); event.currentTarget.closest("details")?.removeAttribute("open"); }}>{pipWindow && !pipWindow.closed ? "Close timer" : "Pop out timer"}</button>
+                <button type="button" role="menuitemcheckbox" className={pipWindow && !pipWindow.closed ? "active" : ""} disabled={!pipSupported} title={pipSupported ? undefined : "Pop out timer needs Chrome or Edge"} aria-checked={Boolean(pipWindow && !pipWindow.closed)} onClick={(event) => { void openNowWindow(); event.currentTarget.closest("details")?.removeAttribute("open"); }}>{pipWindow && !pipWindow.closed ? "Close timer" : "Pop out timer"}</button>
                 <button type="button" role="menuitem" onClick={(event) => { setIntegrationOpen(true); event.currentTarget.closest("details")?.removeAttribute("open"); }}>Connect</button>
                 <button type="button" role="menuitem" onClick={(event) => { void exportDraft(); event.currentTarget.closest("details")?.removeAttribute("open"); }}>Export today</button>
               </div>

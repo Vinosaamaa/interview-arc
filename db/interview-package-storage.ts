@@ -509,7 +509,7 @@ export async function serveInterviewPackageSource(ownerId: string, sourceId: str
     if (!object?.body) throw storageFailure("The private source body is unavailable.");
     const headers = new Headers({
       "content-type": source.mediaType,
-      "content-disposition": `${source.kind === "audio" || source.kind === "image" || source.kind === "transcript" ? "inline" : "attachment"}; filename="${safeDownloadName(source.label, source.mediaType)}"`,
+      "content-disposition": `${source.kind === "audio" || source.kind === "image" || source.kind === "transcript" || source.mediaType === "application/pdf" || source.mediaType.startsWith("text/") ? "inline" : "attachment"}; filename="${safeDownloadName(source.label, source.mediaType)}"`,
       "content-length": String(parsedRange ? parsedRange.end - parsedRange.start + 1 : source.sizeBytes),
       "accept-ranges": "bytes",
       "cache-control": "private, no-store",

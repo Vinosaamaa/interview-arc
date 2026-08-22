@@ -53,6 +53,7 @@ test("source allowlists reject active content, oversized files, and kind confusi
   };
   assert.equal(declareInterviewPackageSourceSchema.safeParse({ ...base, kind: "audio", mediaType: "audio/mp4" }).success, true);
   assert.equal(declareInterviewPackageSourceSchema.safeParse({ ...base, kind: "transcript", mediaType: "text/vtt" }).success, true);
+  assert.equal(declareInterviewPackageSourceSchema.safeParse({ ...base, kind: "transcript", mediaType: "text/markdown" }).success, true);
   assert.equal(declareInterviewPackageSourceSchema.safeParse({ ...base, kind: "document", mediaType: "text/html" }).success, false);
   assert.equal(declareInterviewPackageSourceSchema.safeParse({ ...base, kind: "image", mediaType: "image/svg+xml" }).success, false);
   assert.equal(declareInterviewPackageSourceSchema.safeParse({ ...base, kind: "image", mediaType: "image/png", sizeBytes: 26 * 1024 * 1024 }).success, false);

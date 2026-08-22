@@ -22,7 +22,7 @@ import type { ComposerLoopPracticePrefill } from "./activity-composer-loop-bindi
 import InterviewPageHero from "./interview-page-hero";
 import { isAbortError, parseLoopPayloadResponse } from "./loop-payload";
 import LoopCreateDialog from "./loop-create-dialog";
-import InterviewPackageDialog from "./interview-package-dialog";
+import RoundResources from "./round-resources";
 
 type Specialty = LoopSpecialty;
 type MemoryConfidence = "exact" | "reconstructed";
@@ -385,9 +385,12 @@ function QuestionCard({ question, index, stageId, expanded, onToggle }: {
   </article>;
 }
 
-function StageRecord({ stage, materials }: {
+function StageRecord({ stage, materials, loopId, loopRevision, roleBriefRevision }: {
   stage: LoopStage;
   materials: LoopInterviewMaterial[];
+  loopId: string;
+  loopRevision: number;
+  roleBriefRevision: number;
 }) {
   const [openQuestionId, setOpenQuestionId] = useState(stage.debrief?.questions[0]?.memoryId ?? "");
   const debrief = stage.debrief;
@@ -401,26 +404,53 @@ function StageRecord({ stage, materials }: {
       <header className="loop-stage-record-header">
         <div><span>{[stage.groupLabel, sentenceId(stage.status)].filter(Boolean).join(" · ")}</span><h2>{stage.label}</h2></div>
         {hasMetadata ? <dl>{datedAt || stage.status === "completed" ? <div><dt>Date</dt><dd>{formatDate(datedAt)}</dd></div> : null}{stage.format ? <div><dt>Format</dt><dd>{stage.format}</dd></div> : null}{stage.interviewers?.length ? <div><dt>Interviewers</dt><dd>{stage.interviewers.join(" · ")}</dd></div> : null}{stage.outcome ? <div><dt>Outcome</dt><dd>{sentenceId(stage.outcome)}</dd></div> : null}</dl> : null}
-        {(debrief || materials.length) ? <button type="button" className="loop-stage-toggle" aria-expanded={stageOpen} aria-controls={`loop-stage-${stage.stageId}-body`} onClick={() => setStageOpen((current) => !current)}><span>{stageOpen ? "Collapse" : "Expand"}</span><svg className="loop-disclosure" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" /></svg></button> : null}
+        <button type="button" className="loop-stage-toggle" aria-expanded={stageOpen} aria-controls={`loop-stage-${stage.stageId}-body`} onClick={() => setStageOpen((current) => !current)}><span>{stageOpen ? "Collapse" : "Expand"}</span><svg className="loop-disclosure" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" /></svg></button>
       </header>
-      {debrief ? <div className={`loop-stage-body-shell ${stageOpen ? "open" : "closed"}`} id={`loop-stage-${stage.stageId}-body`} inert={!stageOpen} aria-hidden={!stageOpen}><div className="loop-stage-record-body">
+      <div className={`loop-stage-body-shell ${stageOpen ? "open" : "closed"}`} id={`loop-stage-${stage.stageId}-body`} inert={!stageOpen} aria-hidden={!stageOpen}><div className="loop-stage-record-body">
+        <RoundResources loopId={loopId} stageId={stage.stageId} loopRevision={loopRevision} roleBriefRevision={roleBriefRevision} enabled={stageOpen} />
         {materials.map((material) => <InterviewMaterial material={material} key={material.materialId} />)}
-        {debrief.questions.length ? <section className="loop-stage-questions" aria-labelledby={`loop-stage-${stage.stageId}-questions`}><h3 className="sr-only" id={`loop-stage-${stage.stageId}-questions`}>Questions asked</h3><div>{debrief.questions.map((question, index) => <QuestionCard question={question} index={index} stageId={stage.stageId} expanded={openQuestionId === question.memoryId} onToggle={() => setOpenQuestionId((current) => current === question.memoryId ? "" : question.memoryId)} key={question.memoryId} />)}</div></section> : null}
+        {debrief?.questions.length ? <section className="loop-stage-questions" aria-labelledby={`loop-stage-${stage.stageId}-questions`}><h3 className="sr-only" id={`loop-stage-${stage.stageId}-questions`}>Questions asked</h3><div>{debrief.questions.map((question, index) => <QuestionCard question={question} index={index} stageId={stage.stageId} expanded={openQuestionId === question.memoryId} onToggle={() => setOpenQuestionId((current) => current === question.memoryId ? "" : question.memoryId)} key={question.memoryId} />)}</div></section> : null}
         {stage.outcome ? <p className="loop-stage-result"><span>Stage result</span><strong>{sentenceId(stage.outcome)}</strong></p> : null}
-      </div></div> : materials.length ? <div className={`loop-stage-body-shell ${stageOpen ? "open" : "closed"}`} id={`loop-stage-${stage.stageId}-body`} inert={!stageOpen} aria-hidden={!stageOpen}><div className="loop-stage-record-body materials-only">{materials.map((material) => <InterviewMaterial material={material} key={material.materialId} />)}</div></div> : null}
+      </div></div>
     </article>
   </li>;
 }
 
-function StageChronology({ loop }: { loop: LoopProjection }) {
+function AddRound({ loop, onAdded }: { loop: LoopProjection; onAdded: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [label, setLabel] = useState("");
+  const [status, setStatus] = useState<"planned" | "scheduled">("planned");
+  const [scheduledOn, setScheduledOn] = useState("");
+  const [format, setFormat] = useState("");
+  const [operationId] = useState(() => crypto.randomUUID());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function submit() {
+    if (!label.trim()) { setError("Enter the Round name."); return; }
+    if (status === "scheduled" && !scheduledOn) { setError("Enter the scheduled date."); return; }
+    setBusy(true); setError("");
+    try {
+      const response = await fetch("/api/loops/rounds", {
+        method: "POST",
+        headers: { "content-type": "application/json", "idempotency-key": operationId },
+        body: JSON.stringify({ schemaVersion: 1, operationId, loopId: loop.loop.loopId, expectedLoopRevision: loop.loop.revision, label: label.trim(), status, ...(scheduledOn ? { scheduledOn } : {}), ...(format.trim() ? { format: format.trim() } : {}) }),
+      });
+      const body = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "The Round could not be added.");
+      onAdded();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The Round could not be added.");
+    } finally { setBusy(false); }
+  }
+  return <li className="loop-stage-terminal open add-round"><span aria-hidden="true">+</span><div><button type="button" className="loop-add-round-trigger" aria-expanded={open} onClick={() => setOpen((current) => !current)}>{open ? "Cancel" : "Add another Round"}</button>{open ? <div className="loop-add-round-form"><label><span>Round name</span><input value={label} onChange={(event) => setLabel(event.target.value)} maxLength={240} placeholder="Hiring manager interview" autoFocus /></label><div><label><span>Status</span><select value={status} onChange={(event) => { const next = event.target.value as "planned" | "scheduled"; setStatus(next); if (next === "planned") setScheduledOn(""); }}><option value="planned">Planned</option><option value="scheduled">Scheduled</option></select></label><label><span>Date</span><input type="date" value={scheduledOn} disabled={status !== "scheduled"} onChange={(event) => setScheduledOn(event.target.value)} /></label><label><span>Format <small>Optional</small></span><input value={format} onChange={(event) => setFormat(event.target.value)} maxLength={240} placeholder="Video · 45 min" /></label></div>{error ? <p role="alert">{error}</p> : null}<button type="button" disabled={busy} onClick={() => void submit()}>{busy ? "Adding Round…" : "Add Round"}</button></div> : null}</div></li>;
+}
+
+function StageChronology({ loop, onRoundAdded }: { loop: LoopProjection; onRoundAdded: () => void }) {
   const stages = loopStageRecords(loop.loop.stages);
   const materialIndex = useMemo(() => indexStageMaterials(loop.interviewMaterials), [loop.interviewMaterials]);
-  if (!stages.length) {
-    const loopWideMaterials = stageMaterials(materialIndex, "");
-    return <div className="loop-no-stages"><strong>No stages recorded yet.</strong><span>The Loop Recorder can add the real hiring stages without forcing a template.</span>{loopWideMaterials.map((material) => <InterviewMaterial material={material} key={material.materialId} />)}</div>;
-  }
+  const loopWideMaterials = stages.length ? [] : stageMaterials(materialIndex, "");
   const terminal = loop.loop.outcome ?? (loop.loop.status === "completed" ? "closed" : "open");
-  return <ol className={`loop-stage-chronology outcome-${terminal}`} aria-label="Interview stage chronology">{stages.map((stage, index) => <StageRecord stage={stage} materials={stageMaterials(materialIndex, stage.stageId, index === 0)} key={stage.stageId} />)}<li className={`loop-stage-terminal ${terminal}`}><span aria-hidden="true">{terminal === "rejected" || terminal === "withdrawn" || terminal === "closed" ? "×" : ""}</span><strong>{terminal === "open" ? "To be continued" : sentenceId(terminal)}</strong></li></ol>;
+  return <ol className={`loop-stage-chronology outcome-${terminal}`} aria-label="Interview stage chronology">{!stages.length ? <li className="loop-no-stages"><strong>No Rounds recorded yet.</strong><span>Add the first known Round below. Nothing is inferred from a standard hiring template.</span>{loopWideMaterials.map((material) => <InterviewMaterial material={material} key={material.materialId} />)}</li> : stages.map((stage, index) => <StageRecord stage={stage} materials={stageMaterials(materialIndex, stage.stageId, index === 0)} loopId={loop.loop.loopId} loopRevision={loop.loop.revision} roleBriefRevision={loop.roleBrief.revision} key={stage.stageId} />)}{terminal === "open" ? <AddRound loop={loop} onAdded={onRoundAdded} /> : <li className={`loop-stage-terminal ${terminal}`}><span aria-hidden="true">×</span><strong>{sentenceId(terminal)}</strong></li>}</ol>;
 }
 
 export function LoopsWorkspace({
@@ -434,9 +464,9 @@ export function LoopsWorkspace({
   const { payload, error, loading, reload } = useLoopPayload(includeArchived);
   const [selectedLoopId, setSelectedLoopId] = useState(() => (typeof window === "undefined" ? "" : readLoopWorkspaceState(window.location.href)?.loopId ?? ""));
   const [loopSwitcherOpen, setLoopSwitcherOpen] = useState(false);
+  const [showLoopComposer, setShowLoopComposer] = useState(false);
   const [sourceDialog, setSourceDialog] = useState<{ loop: LoopProjection; opener: HTMLButtonElement } | null>(null);
   const [createDialogOpener, setCreateDialogOpener] = useState<HTMLButtonElement | null>(null);
-  const [packageDialogOpener, setPackageDialogOpener] = useState<HTMLButtonElement | null>(null);
   const [pendingCreatedLoopId, setPendingCreatedLoopId] = useState("");
   const closeSourceDialog = useCallback(() => setSourceDialog(null), []);
   const loops = useMemo(() => payload?.loops ?? [], [payload?.loops]);
@@ -465,7 +495,7 @@ export function LoopsWorkspace({
   if (loading && !payload) return <section className="loops-state" aria-live="polite"><span className="loops-loader" /><strong>Reading owner-private Loops…</strong></section>;
   if (error && !payload) return <section className="loops-state error" role="alert"><strong>Loops could not be loaded.</strong><span>{error}</span><button type="button" onClick={() => void reload()}>Try again</button></section>;
   if (requestedLoopMissing) return <section className="loops-state error" role="alert"><strong>That Loop is unavailable.</strong><span>The saved link does not match a Loop in the current owner-scoped result.</span>{loops[0] ? <button type="button" onClick={() => setSelectedLoopId(loops[0].loop.loopId)}>Open the current Loop</button> : null}</section>;
-  if (!selectedLoop) return <><section className="loops-empty" data-loop-workspace-root><div><h1>Your first Loop starts with a real role.</h1><p>Create the company-and-role record here. Add only the job source, dates, and stages you actually know.</p><div className="loop-workspace-buttons"><button type="button" className="loop-create-primary" onClick={(event) => setCreateDialogOpener(event.currentTarget)}>Add Loop</button><button type="button" className="loop-package-primary" onClick={(event) => setPackageDialogOpener(event.currentTarget)}>Interview packages</button></div></div><aside><strong>{payload?.migrationInbox.length ?? 0} standalone Target Profiles await a decision</strong><p>Nothing is guessed or deleted.</p></aside></section>{createDialogOpener ? <LoopCreateDialog opener={createDialogOpener} onClose={() => setCreateDialogOpener(null)} onCreated={(receipt) => { setPendingCreatedLoopId(receipt.loopId); setCreateDialogOpener(null); reload(); }} /> : null}{packageDialogOpener ? <InterviewPackageDialog opener={packageDialogOpener} loops={[]} onClose={() => setPackageDialogOpener(null)} /> : null}</>;
+  if (!selectedLoop) return <><section className="loops-empty" data-loop-workspace-root><div><h1>Your first Loop starts with a real role.</h1><p>Create the company-and-role record here. Add only the job source, dates, and stages you actually know.</p><div className="loop-workspace-buttons"><button type="button" className="loop-create-primary" onClick={(event) => setCreateDialogOpener(event.currentTarget)}>Add Loop</button></div></div><aside><strong>{payload?.migrationInbox.length ?? 0} standalone Target Profiles await a decision</strong><p>Nothing is guessed or deleted.</p></aside></section>{createDialogOpener ? <LoopCreateDialog opener={createDialogOpener} onClose={() => setCreateDialogOpener(null)} onCreated={(receipt) => { setPendingCreatedLoopId(receipt.loopId); setCreateDialogOpener(null); reload(); }} /> : null}</>;
 
   const completedStages = selectedLoop.loop.stages.filter((stage) => stage.status === "completed").length;
   const linkedPractices = selectedLoop.activityHistory.length;
@@ -475,14 +505,13 @@ export function LoopsWorkspace({
       { value: completedStages, label: "completed stage" },
       { value: linkedPractices, label: "linked practices" },
     ]} />
-    <div className="loop-workspace-actions"><p>One company and role per Loop. Interview Packages hold private event sources without reclassifying them as practice.</p><div className="loop-workspace-buttons"><button type="button" className="loop-package-primary" onClick={(event) => setPackageDialogOpener(event.currentTarget)}>Interview packages</button><button type="button" className="loop-create-primary" onClick={(event) => setCreateDialogOpener(event.currentTarget)}>Add Loop</button></div></div>
     <section className={`loop-identity-switcher ${loopSwitcherOpen ? "open" : ""}`}>
       <button type="button" className="loop-current-identity" aria-expanded={loopSwitcherOpen} aria-controls="loop-switcher-list" onClick={() => setLoopSwitcherOpen((current) => !current)}><span><i className={`loop-status ${selectedLoop.loop.status}`}>{sentenceId(selectedLoop.loop.status)}</i><strong>{selectedLoop.loop.company} · {selectedLoop.loop.roleTitle}</strong><small>{[selectedLoop.loop.jobReference, selectedLoop.loop.location, selectedLoop.roleBrief.targetLevel].filter(Boolean).join(" · ") || "Company-and-role hiring process"}</small></span><b>Switch Loop</b><svg className="loop-disclosure" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" /></svg></button>
-      <div className="loop-switcher-list" id="loop-switcher-list" inert={!loopSwitcherOpen} aria-hidden={!loopSwitcherOpen}><div>{loops.filter((loop) => loop.loop.loopId !== selectedLoop.loop.loopId).map((loop) => <button type="button" onClick={() => { setPendingCreatedLoopId(""); setSelectedLoopId(loop.loop.loopId); setLoopSwitcherOpen(false); }} key={loop.loop.loopId}><strong>{loop.loop.company}</strong><span>{loop.loop.roleTitle}</span><small>{sentenceId(loop.loop.status)}</small></button>)}</div>{loops.length <= 1 ? <p>No other Loop is recorded.</p> : null}<label><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} /> Include archived Loops</label></div>
+      <div className="loop-switcher-list" id="loop-switcher-list" inert={!loopSwitcherOpen} aria-hidden={!loopSwitcherOpen}><div className="loop-switcher-options">{loops.filter((loop) => loop.loop.loopId !== selectedLoop.loop.loopId).map((loop) => <button type="button" onClick={() => { setPendingCreatedLoopId(""); setSelectedLoopId(loop.loop.loopId); setLoopSwitcherOpen(false); setShowLoopComposer(false); }} key={loop.loop.loopId}><strong>{loop.loop.company}</strong><span>{loop.loop.roleTitle}</span><small>{sentenceId(loop.loop.status)}</small></button>)}<button type="button" className="loop-switcher-add" aria-expanded={showLoopComposer} onClick={() => setShowLoopComposer((current) => !current)}><strong>+ Add another Loop</strong><span>Different company or role</span><small>Full hiring record</small></button></div>{loops.length <= 1 ? <p>No other Loop is recorded.</p> : null}{showLoopComposer ? <LoopCreateDialog inline opener={null} onClose={() => setShowLoopComposer(false)} onCreated={(receipt) => { setPendingCreatedLoopId(receipt.loopId); setShowLoopComposer(false); setLoopSwitcherOpen(false); reload(); }} /> : null}<label><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} /> Include archived Loops</label></div>
     </section>
     <div className="loop-support-band"><RoleBriefPanel loop={selectedLoop} onOpenSource={(opener) => setSourceDialog({ loop: selectedLoop, opener })} /><PreparationLedger loop={selectedLoop} onOpenActivity={onOpenActivity} onAddPractice={onAddPractice} /></div>
-    <StageChronology loop={selectedLoop} />
-  </section>{sourceDialog ? <JobDescriptionDialog loop={sourceDialog.loop} opener={sourceDialog.opener} onClose={closeSourceDialog} /> : null}{createDialogOpener ? <LoopCreateDialog opener={createDialogOpener} onClose={() => setCreateDialogOpener(null)} onCreated={(receipt) => { setPendingCreatedLoopId(receipt.loopId); setCreateDialogOpener(null); reload(); }} /> : null}{packageDialogOpener ? <InterviewPackageDialog opener={packageDialogOpener} initialLoopId={selectedLoop.loop.loopId} loops={loops.map((item) => ({ loopId: item.loop.loopId, company: item.loop.company, roleTitle: item.loop.roleTitle, revision: item.loop.revision, roleBriefRevision: item.roleBrief.revision, stages: item.loop.stages.map((stage) => ({ stageId: stage.stageId, label: stage.label, status: stage.status })), materials: item.interviewMaterials.map((material) => ({ materialId: material.materialId, revision: material.revision, stageId: material.stageId, label: material.label, summary: material.summary, sections: material.sections })) }))} onClose={() => setPackageDialogOpener(null)} /> : null}</>;
+    <StageChronology loop={selectedLoop} onRoundAdded={reload} />
+  </section>{sourceDialog ? <JobDescriptionDialog loop={sourceDialog.loop} opener={sourceDialog.opener} onClose={closeSourceDialog} /> : null}</>;
 }
 
 export function LoopJourneyFactsPanel() {

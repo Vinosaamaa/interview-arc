@@ -408,6 +408,38 @@ export const websiteCreateLoopSchema = z.object({
   });
 });
 
+export const websiteAddLoopRoundSchema = z.object({
+  schemaVersion: z.literal(1),
+  operationId: loopStableIdSchema,
+  loopId: loopStableIdSchema,
+  expectedLoopRevision: z.number().int().positive(),
+  label: boundedText(240),
+  status: z.enum(["planned", "scheduled"]),
+  scheduledOn: websiteDateSchema.optional(),
+  format: websiteOptionalText(240),
+}).strict().superRefine((input, context) => {
+  if (input.status === "scheduled" && !input.scheduledOn) {
+    context.addIssue({ code: "custom", path: ["scheduledOn"], message: "A scheduled Round needs its known date." });
+  }
+  if (input.status === "planned" && input.scheduledOn) {
+    context.addIssue({ code: "custom", path: ["scheduledOn"], message: "Choose Scheduled before adding a Round date." });
+  }
+});
+
+export const addLoopRoundCommandSchema = z.object({
+  operationId: loopStableIdSchema,
+  loopId: loopStableIdSchema,
+  expectedLoopRevision: z.number().int().positive(),
+  authorization: z.literal("website_owner"),
+  stage: z.object({
+    stageId: loopStableIdSchema,
+    label: boundedText(240),
+    status: z.enum(["planned", "scheduled"]),
+    scheduledAt: z.number().int().positive().optional(),
+    format: optionalText(240),
+  }).strict(),
+}).strict();
+
 export const reviseLoopSchema = z.object({
   operationId: loopStableIdSchema,
   loopId: loopStableIdSchema,
@@ -518,6 +550,8 @@ export type WebsiteReviseLoopInterviewMaterialInput = z.infer<typeof websiteRevi
 export type CreateLoopInput = z.infer<typeof createLoopSchema>;
 export type CreateLoopCommandInput = z.infer<typeof createLoopCommandSchema>;
 export type WebsiteCreateLoopInput = z.infer<typeof websiteCreateLoopSchema>;
+export type WebsiteAddLoopRoundInput = z.infer<typeof websiteAddLoopRoundSchema>;
+export type AddLoopRoundCommandInput = z.infer<typeof addLoopRoundCommandSchema>;
 export type ReviseLoopInput = z.infer<typeof reviseLoopSchema>;
 export type ReviseLoopRoleBriefInput = z.infer<typeof reviseLoopRoleBriefSchema>;
 export type DisplaySafeLoopRoleBriefRevision = z.infer<typeof displaySafeLoopRoleBriefRevisionSchema>;

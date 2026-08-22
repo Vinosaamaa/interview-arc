@@ -3,11 +3,13 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
+  addLoopRoundCommandSchema,
   createLoopCommandSchema,
   createLoopSchema,
+  websiteAddLoopRoundSchema,
   websiteCreateLoopSchema,
 } from "../db/loop-policy.ts";
-import { buildWebsiteLoopCommand } from "../db/loop-website.ts";
+import { buildWebsiteAddRoundCommand, buildWebsiteLoopCommand } from "../db/loop-website.ts";
 
 const urlOnlyDraft = {
   schemaVersion: 1,
@@ -81,11 +83,37 @@ test("website Loop adapter derives stable stage identities and exact initial pro
   assert.equal(command.roleBrief.source.jdText, "Build reliable platform services.");
 });
 
+test("website Add Round derives stable identity while leaving order server-owned", async () => {
+  const draft = {
+    schemaVersion: 1,
+    operationId: "round-add-5af003ff-bbc2-491e-8cd5-091213d14dc0",
+    loopId: "loop-example",
+    expectedLoopRevision: 4,
+    label: "System design",
+    status: "scheduled",
+    scheduledOn: "2026-08-28",
+    format: "Video · 60 min",
+  };
+  assert.equal(websiteAddLoopRoundSchema.safeParse(draft).success, true);
+  const command = await buildWebsiteAddRoundCommand("owner-a", draft);
+  const exactRetry = await buildWebsiteAddRoundCommand("owner-a", draft);
+  assert.deepEqual(command, exactRetry);
+  assert.match(command.stage.stageId, /^stage-[a-f0-9]{32}$/);
+  assert.equal(command.stage.scheduledAt, Date.parse("2026-08-28T12:00:00.000Z"));
+  assert.equal("order" in command.stage, false);
+  assert.equal(command.authorization, "website_owner");
+  assert.equal(addLoopRoundCommandSchema.safeParse(command).success, true);
+  assert.equal(websiteAddLoopRoundSchema.safeParse({ ...draft, status: "planned" }).success, false);
+  assert.equal(websiteAddLoopRoundSchema.safeParse({ ...draft, scheduledOn: undefined }).success, false);
+});
+
 test("Loops route and UI keep website authorization server-side", async () => {
-  const [route, dialog, workspace] = await Promise.all([
+  const [route, roundRoute, dialog, workspace, resources] = await Promise.all([
     readFile(new URL("../app/api/loops/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/loops/rounds/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/loop-create-dialog.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/loops-workspace.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/round-resources.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(route, /resolveOwnerId\(request\)/);
   assert.match(route, /readBoundedJson\(request, 160_000\)/);
@@ -95,5 +123,14 @@ test("Loops route and UI keep website authorization server-side", async () => {
   assert.doesNotMatch(dialog, /authorization/);
   assert.match(dialog, /No AI or provider call/);
   assert.match(dialog, /aria-current=\{index === step \? "step"/);
-  assert.match(workspace, />Add Loop</);
+  assert.match(dialog, /inline \? "Add another Loop"/);
+  assert.match(roundRoute, /addLoopRoundFromWebsite\(ownerId, body\)/);
+  assert.match(roundRoute, /request\.headers\.get\("idempotency-key"\)/);
+  assert.match(workspace, /"Add another Round"/);
+  assert.match(workspace, /<LoopCreateDialog inline/);
+  assert.doesNotMatch(workspace, /InterviewPackageDialog/);
+  assert.match(resources, /title="Recording & Transcript"/);
+  assert.match(resources, /title="Resources"/);
+  assert.match(resources, /onDrop=/);
+  assert.match(resources, />Resume</);
 });
