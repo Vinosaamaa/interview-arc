@@ -76,7 +76,9 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const packageId = url.searchParams.get("packageId")?.trim() || undefined;
     const loopId = url.searchParams.get("loopId")?.trim() || undefined;
-    const result = await queryInterviewPackages(ownerId, { packageId, loopId });
+    const stageId = url.searchParams.get("stageId")?.trim() || undefined;
+    if (stageId && !loopId) return Response.json({ error: "Round filtering requires one Loop." }, { status: 400, headers: PRIVATE_HEADERS });
+    const result = await queryInterviewPackages(ownerId, { packageId, loopId, stageId });
     if (url.searchParams.get("format") === "export") {
       if (!packageId || result.packages.length !== 1) {
         return Response.json({ error: "Choose one available Interview Package to export." }, { status: 404, headers: PRIVATE_HEADERS });

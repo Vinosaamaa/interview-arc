@@ -43,10 +43,15 @@ Loop, stage, date, outcome, interviewer feedback, Role Brief revision, or
 interview-material content.
 
 The owner-authenticated Loops website may create a new Loop and Role Brief
-revision 1 through the same deterministic command Module. Its adapter derives
+revision 1 through the same deterministic command Module. In an existing Loop,
+it may also append one planned or scheduled Round through the narrow
+`website_owner` Add Round command. Its adapter derives
 owner scope from verified Cloudflare Access, accepts no authorization or owner
 field from the browser, and records `website_owner` as the command authority.
-It cannot revise an existing Loop or Role Brief. Missing location, opened date,
+The Add Round command derives the stable Round ID, computes ordering from the
+authoritative current revision, rejects duplicate labels, and commits the new
+Loop revision and idempotent receipt atomically. It cannot change existing
+Rounds or revise a Role Brief. Missing location, opened date,
 stages, and job-description text remain explicit unknowns. A URL-only job source
 is a reference, not permission to crawl or fabricate the posting text.
 
@@ -124,6 +129,13 @@ round self-assessment or interviewer-feedback cards. Legacy round-level
 `selfAssessment`, `interviewerFeedback`, and `nextStep` fields remain parseable
 for immutable historical revisions but are not foregrounded in the current UI.
 Never infer format, interviewers, assessment, feedback, or stage outcome.
+
+The website presents these identities in their owning context: **Add another
+Loop** lives inside Switch Loop and uses the complete Loop composer, while
+**Add another Round** is the endpoint of the current Loop timeline. Every
+expanded Round exposes its exact Recording & Transcript shelf and Resources
+shelf inline; the normal Loop workflow does not require a separate package
+register or modal.
 
 Legacy remembered prompts and answers remain readable and independently
 labelled `exact` or `reconstructed`; new UI and Loop Recorder guidance do not

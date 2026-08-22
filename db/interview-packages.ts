@@ -394,12 +394,13 @@ function sourceDisplay(row: typeof interviewPackageSources.$inferSelect) {
   };
 }
 
-export async function queryInterviewPackages(ownerId: string, input: { packageId?: string; loopId?: string; includeDeleted?: boolean } = {}) {
+export async function queryInterviewPackages(ownerId: string, input: { packageId?: string; loopId?: string; stageId?: string; includeDeleted?: boolean } = {}) {
   const db = getDb();
   const packages = await db.select().from(interviewPackages).where(and(
     eq(interviewPackages.ownerId, ownerId),
     input.packageId ? eq(interviewPackages.packageId, input.packageId) : undefined,
     input.loopId ? eq(interviewPackages.loopId, input.loopId) : undefined,
+    input.stageId ? eq(interviewPackages.stageId, input.stageId) : undefined,
     input.includeDeleted ? undefined : sql`${interviewPackages.status} <> 'deleted'`,
   )).orderBy(desc(interviewPackages.updatedAt)).limit(101);
   const selectedPackages = packages.slice(0, 100);

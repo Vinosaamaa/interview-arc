@@ -53,6 +53,7 @@ test("source allowlists reject active content, oversized files, and kind confusi
   };
   assert.equal(declareInterviewPackageSourceSchema.safeParse({ ...base, kind: "audio", mediaType: "audio/mp4" }).success, true);
   assert.equal(declareInterviewPackageSourceSchema.safeParse({ ...base, kind: "transcript", mediaType: "text/vtt" }).success, true);
+  assert.equal(declareInterviewPackageSourceSchema.safeParse({ ...base, kind: "transcript", mediaType: "text/markdown" }).success, true);
   assert.equal(declareInterviewPackageSourceSchema.safeParse({ ...base, kind: "document", mediaType: "text/html" }).success, false);
   assert.equal(declareInterviewPackageSourceSchema.safeParse({ ...base, kind: "image", mediaType: "image/svg+xml" }).success, false);
   assert.equal(declareInterviewPackageSourceSchema.safeParse({ ...base, kind: "image", mediaType: "image/png", sizeBytes: 26 * 1024 * 1024 }).success, false);
@@ -143,17 +144,19 @@ test("website material confirmation is a narrow authority adapter", () => {
 });
 
 test("website routes keep private authority server-side and expose bounded recovery UI", async () => {
-  const [route, uploadRoute, readerRoute, dialog, storage, packages, migration] = await Promise.all([
+  const [route, uploadRoute, readerRoute, dialog, roundResources, storage, packages, migration] = await Promise.all([
     readFile(new URL("../app/api/interview-packages/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/interview-packages/[packageId]/sources/[sourceId]/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/interview-packages/sources/[sourceId]/content/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/interview-package-dialog.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/round-resources.tsx", import.meta.url), "utf8"),
     readFile(new URL("../db/interview-package-storage.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/interview-packages.ts", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0049_interview_packages.sql", import.meta.url), "utf8"),
   ]);
   for (const source of [route, uploadRoute, readerRoute]) assert.match(source, /resolveOwnerId\(request\)/);
   assert.match(route, /idempotency-key/);
+  assert.match(route, /queryInterviewPackages\(ownerId, \{ packageId, loopId, stageId \}\)/);
   assert.match(uploadRoute, /boundedPart/);
   assert.match(readerRoute, /serveInterviewPackageSource/);
   assert.doesNotMatch(dialog, /ownerId|privateLocator|r2UploadId/);
@@ -171,5 +174,8 @@ test("website routes keep private authority server-side and expose bounded recov
   assert.match(storage, /returning\(\{ sessionId:/);
   assert.match(storage, /delete\(interviewPackageUploadParts\)/);
   assert.match(packages, /inArray\(interviewPackageSources\.packageId, packageIds\)/);
+  assert.match(packages, /input\.stageId \? eq\(interviewPackages\.stageId, input\.stageId\)/);
   assert.match(packages, /materialPrepared\.statements/);
+  assert.ok(roundResources.indexOf('/\\.vtt\$/i.test(file.name)') < roundResources.indexOf('if (file.type) return file.type'));
+  assert.ok(roundResources.indexOf('/\\.srt\$/i.test(file.name)') < roundResources.indexOf('if (file.type) return file.type'));
 });

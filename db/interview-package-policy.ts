@@ -14,7 +14,7 @@ export type InterviewPackageSourceKind = z.infer<typeof interviewPackageSourceKi
 
 export const INTERVIEW_PACKAGE_MEDIA_TYPES: Readonly<Record<InterviewPackageSourceKind, ReadonlySet<string>>> = {
   audio: new Set(["audio/mpeg", "audio/mp4", "audio/wav", "audio/webm", "audio/ogg"]),
-  transcript: new Set(["text/plain", "text/vtt", "application/x-subrip"]),
+  transcript: new Set(["text/plain", "text/vtt", "application/x-subrip", "text/markdown"]),
   document: new Set(["application/pdf", "text/plain", "text/markdown"]),
   image: new Set(["image/png", "image/jpeg", "image/webp"]),
 };

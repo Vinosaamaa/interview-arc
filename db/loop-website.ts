@@ -1,5 +1,7 @@
 import {
+  websiteAddLoopRoundSchema,
   websiteCreateLoopSchema,
+  type WebsiteAddLoopRoundInput,
   type WebsiteCreateLoopInput,
 } from "./loop-policy.ts";
 
@@ -99,5 +101,37 @@ export async function createLoopFromWebsite(
   const { createLoopCommand } = await import("./loops.ts");
   const result = await createLoopCommand(ownerId, command, nowMs);
   const input = websiteCreateLoopSchema.parse(inputValue);
+  return { ...result, receiptId: input.operationId };
+}
+
+export async function buildWebsiteAddRoundCommand(
+  ownerId: string,
+  inputValue: unknown,
+) {
+  const input = websiteAddLoopRoundSchema.parse(inputValue);
+  return {
+    operationId: input.operationId,
+    loopId: input.loopId,
+    expectedLoopRevision: input.expectedLoopRevision,
+    authorization: "website_owner",
+    stage: {
+      stageId: `stage-${await stableServerId(ownerId, input.operationId, "round")}`,
+      label: input.label,
+      status: input.status,
+      ...(input.scheduledOn ? { scheduledAt: calendarDateAtNoonUtc(input.scheduledOn) } : {}),
+      ...(input.format ? { format: input.format } : {}),
+    },
+  } as const;
+}
+
+export async function addLoopRoundFromWebsite(
+  ownerId: string,
+  inputValue: unknown,
+  nowMs = Date.now(),
+) {
+  const command = await buildWebsiteAddRoundCommand(ownerId, inputValue);
+  const { addLoopRoundCommand } = await import("./loops.ts");
+  const result = await addLoopRoundCommand(ownerId, command, nowMs);
+  const input = websiteAddLoopRoundSchema.parse(inputValue) as WebsiteAddLoopRoundInput;
   return { ...result, receiptId: input.operationId };
 }
