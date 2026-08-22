@@ -15,7 +15,7 @@ modules: ["web:loops-workspace","HTTP:loops","HTTP:interview-packages","D1:loop-
 interfaces: ["app/loops-workspace.tsx","app/loop-create-dialog.tsx","app/round-resources.tsx","app/api/loops/rounds/route.ts","app/api/interview-packages/route.ts","docs/contracts/interview-loops.md","docs/contracts/interview-packages.md"]
 seams: ["Loop switcher to complete Loop creation","Loop timeline to optimistic Round revision","expanded Round to exact assigned private package","browser file selection to resumable private object storage"]
 adapters: ["app/loop-create-dialog.tsx","app/round-resources.tsx","db/loop-website.ts"]
-relatedRecords: ["feature-retrospective-interview-packages@1","feature-retrospective-website-loop-creation@1"]
+relatedRecords: []
 decisions: []
 incidents: []
 features: ["feature-retrospective-interview-packages@1","feature-retrospective-website-loop-creation@1"]
