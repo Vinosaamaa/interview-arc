@@ -45,11 +45,11 @@ function sourceKind(file: File, zone: ResourceZone): PackageSource["kind"] {
 }
 
 function mediaTypeForFile(file: File, kind: PackageSource["kind"]) {
-  if (file.type) return file.type;
   if (/\.vtt$/i.test(file.name)) return "text/vtt";
   if (/\.srt$/i.test(file.name)) return "application/x-subrip";
   if (/\.md$/i.test(file.name)) return "text/markdown";
   if (/\.pdf$/i.test(file.name)) return "application/pdf";
+  if (file.type) return file.type;
   return kind === "transcript" ? "text/plain" : "application/octet-stream";
 }
 
@@ -144,7 +144,7 @@ export default function RoundResources({
   const [pendingPreview, setPendingPreview] = useState<{ name: string; url: string; type: string } | null>(null);
 
   const load = useCallback(async (packageId?: string) => {
-    const response = await fetch(packageId ? `/api/interview-packages?packageId=${encodeURIComponent(packageId)}` : `/api/interview-packages?loopId=${encodeURIComponent(loopId)}`, { cache: "no-store" });
+    const response = await fetch(packageId ? `/api/interview-packages?packageId=${encodeURIComponent(packageId)}` : `/api/interview-packages?loopId=${encodeURIComponent(loopId)}&stageId=${encodeURIComponent(stageId)}`, { cache: "no-store" });
     const body = await response.json() as { packages?: PackageRecord[]; error?: string };
     if (!response.ok) throw new Error(body.error ?? "Round resources are unavailable.");
     const exact = (body.packages ?? []).find((candidate) => candidate.assignment?.loopId === loopId && candidate.assignment.stageId === stageId && candidate.status !== "deleted") ?? null;
@@ -178,6 +178,34 @@ export default function RoundResources({
     return created;
   }, [consent, load, loopId, loopRevision, record, roleBriefRevision, stageId]);
 
+  const transferSource = useCallback(async ({
+    packageId,
+    sourceId,
+    file,
+    firstPartIndex,
+    statusLabel,
+  }: {
+    packageId: string;
+    sourceId: string;
+    file: File;
+    firstPartIndex: number;
+    statusLabel: string;
+  }) => {
+    const partCount = Math.ceil(file.size / PART_BYTES);
+    for (let index = firstPartIndex; index < partCount; index += 1) {
+      setBusy(`${statusLabel} · ${index + 1}/${partCount}`);
+      const chunk = file.slice(index * PART_BYTES, Math.min(file.size, (index + 1) * PART_BYTES));
+      const response = await fetch(`/api/interview-packages/${encodeURIComponent(packageId)}/sources/${encodeURIComponent(sourceId)}`, {
+        method: "PUT",
+        headers: { "content-type": "application/octet-stream", "idempotency-key": `${sourceId}_part_${index + 1}`, "x-part-number": String(index + 1) },
+        body: chunk,
+      });
+      const body = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? `Upload part ${index + 1} failed.`);
+    }
+    await packageCommand("complete_source", { schemaVersion: 1, operationId: `${sourceId}_complete`, packageId, sourceId });
+  }, []);
+
   const uploadFile = useCallback(async (file: File, zone: ResourceZone) => {
     if (!accepted(file, zone)) {
       setError(zone === "recording" ? "Use a supported audio or transcript file." : "Use a PDF, image, TXT, or Markdown file.");
@@ -204,19 +232,7 @@ export default function RoundResources({
         sizeBytes: file.size,
       });
       const sourceId = String(declared.sourceId);
-      const partCount = Math.ceil(file.size / PART_BYTES);
-      for (let index = 0; index < partCount; index += 1) {
-        setBusy(`Uploading ${file.name} · ${index + 1}/${partCount}`);
-        const chunk = file.slice(index * PART_BYTES, Math.min(file.size, (index + 1) * PART_BYTES));
-        const response = await fetch(`/api/interview-packages/${encodeURIComponent(current.packageId)}/sources/${encodeURIComponent(sourceId)}`, {
-          method: "PUT",
-          headers: { "content-type": "application/octet-stream", "idempotency-key": `${sourceId}_part_${index + 1}`, "x-part-number": String(index + 1) },
-          body: chunk,
-        });
-        const body = await response.json() as { error?: string };
-        if (!response.ok) throw new Error(body.error ?? `Upload part ${index + 1} failed.`);
-      }
-      await packageCommand("complete_source", { schemaVersion: 1, operationId: `${sourceId}_complete`, packageId: current.packageId, sourceId });
+      await transferSource({ packageId: current.packageId, sourceId, file, firstPartIndex: 0, statusLabel: `Uploading ${file.name}` });
       await load(current.packageId);
       setNotice(`${file.name} is stored privately and ready in this Round.`);
       setPendingPreview(null);
@@ -226,7 +242,7 @@ export default function RoundResources({
     } finally {
       setBusy("");
     }
-  }, [ensurePackage, load]);
+  }, [ensurePackage, load, transferSource]);
 
   const resumeFile = useCallback(async (source: PackageSource, file: File, zone: ResourceZone) => {
     if (!record) return;
@@ -243,26 +259,14 @@ export default function RoundResources({
     }
     setBusy(`Resuming ${source.label}`); setError(""); setNotice("");
     try {
-      const partCount = Math.ceil(file.size / PART_BYTES);
       const firstPartIndex = Math.floor(upload.uploadedBytes / PART_BYTES);
-      for (let index = firstPartIndex; index < partCount; index += 1) {
-        setBusy(`Resuming ${source.label} · ${index + 1}/${partCount}`);
-        const chunk = file.slice(index * PART_BYTES, Math.min(file.size, (index + 1) * PART_BYTES));
-        const response = await fetch(`/api/interview-packages/${encodeURIComponent(record.packageId)}/sources/${encodeURIComponent(source.sourceId)}`, {
-          method: "PUT",
-          headers: { "content-type": "application/octet-stream", "idempotency-key": `${source.sourceId}_part_${index + 1}`, "x-part-number": String(index + 1) },
-          body: chunk,
-        });
-        const body = await response.json() as { error?: string };
-        if (!response.ok) throw new Error(body.error ?? `Upload part ${index + 1} failed.`);
-      }
-      await packageCommand("complete_source", { schemaVersion: 1, operationId: `${source.sourceId}_complete`, packageId: record.packageId, sourceId: source.sourceId });
+      await transferSource({ packageId: record.packageId, sourceId: source.sourceId, file, firstPartIndex, statusLabel: `Resuming ${source.label}` });
       await load(record.packageId);
       setNotice(`${source.label} resumed and passed private storage verification.`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The upload could not be resumed.");
     } finally { setBusy(""); }
-  }, [load, record]);
+  }, [load, record, transferSource]);
 
   const recordingSources = useMemo(() => record?.sources.filter((source) => source.state !== "deleted" && (source.kind === "audio" || source.kind === "transcript")) ?? [], [record]);
   const resourceSources = useMemo(() => record?.sources.filter((source) => source.state !== "deleted" && (source.kind === "document" || source.kind === "image")) ?? [], [record]);

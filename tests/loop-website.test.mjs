@@ -108,12 +108,13 @@ test("website Add Round derives stable identity while leaving order server-owned
 });
 
 test("Loops route and UI keep website authorization server-side", async () => {
-  const [route, roundRoute, dialog, workspace, resources] = await Promise.all([
+  const [route, roundRoute, dialog, workspace, resources, loopsDb] = await Promise.all([
     readFile(new URL("../app/api/loops/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/loops/rounds/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/loop-create-dialog.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/loops-workspace.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/round-resources.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../db/loops.ts", import.meta.url), "utf8"),
   ]);
   assert.match(route, /resolveOwnerId\(request\)/);
   assert.match(route, /readBoundedJson\(request, 160_000\)/);
@@ -127,10 +128,14 @@ test("Loops route and UI keep website authorization server-side", async () => {
   assert.match(roundRoute, /addLoopRoundFromWebsite\(ownerId, body\)/);
   assert.match(roundRoute, /request\.headers\.get\("idempotency-key"\)/);
   assert.match(workspace, /"Add another Round"/);
+  assert.match(workspace, /setOperationId\(crypto\.randomUUID\(\)\)/);
   assert.match(workspace, /<LoopCreateDialog inline/);
   assert.doesNotMatch(workspace, /InterviewPackageDialog/);
   assert.match(resources, /title="Recording & Transcript"/);
   assert.match(resources, /title="Resources"/);
   assert.match(resources, /onDrop=/);
   assert.match(resources, />Resume</);
+  assert.match(resources, /const transferSource = useCallback/);
+  assert.match(dialog, /function StageEditor/);
+  assert.match(loopsDb, /function commitLoopSnapshotRevision/);
 });

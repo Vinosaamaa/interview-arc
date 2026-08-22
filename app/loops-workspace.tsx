@@ -422,7 +422,7 @@ function AddRound({ loop, onAdded }: { loop: LoopProjection; onAdded: () => void
   const [status, setStatus] = useState<"planned" | "scheduled">("planned");
   const [scheduledOn, setScheduledOn] = useState("");
   const [format, setFormat] = useState("");
-  const [operationId] = useState(() => crypto.randomUUID());
+  const [operationId, setOperationId] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function submit() {
@@ -437,6 +437,8 @@ function AddRound({ loop, onAdded }: { loop: LoopProjection; onAdded: () => void
       });
       const body = await response.json() as { error?: string };
       if (!response.ok) throw new Error(body.error ?? "The Round could not be added.");
+      setOperationId(crypto.randomUUID());
+      setLabel(""); setStatus("planned"); setScheduledOn(""); setFormat(""); setOpen(false);
       onAdded();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The Round could not be added.");
