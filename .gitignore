@@ -47,6 +47,7 @@ next-env.d.ts
 # local Python and model caches
 /.venv/
 /.cache/
+/browser-profiles/
 __pycache__/
 *.py[cod]
 

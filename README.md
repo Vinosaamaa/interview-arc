@@ -70,7 +70,8 @@ revisions; the Learning Specialist owns tutoring curriculum and evidence;
 Resume & Cover Letter owns administrative Career Materials; and the three
 practice specialists remain coaching owners.
 
-The outer workspace instructions route a task to the right guide even when every task starts from the same Interview Prep folder. The user does not need separate projects or worktrees.
+This repository's `AGENTS.md` routes each task to the owning guide. The user
+does not need a separate project or worktree for each long-lived specialist.
 
 Use the owner-private handoff in
 `docs/contracts/owner-private-practice-records.md`:
@@ -128,10 +129,10 @@ Dated Past attempts place a full, seekable player after the specialist prompt
 and immediately before the matching written answer without exposing a public
 object URL. Local files may be removed after upload and verification.
 
-In the current local umbrella workspace, run transcription from this repository with:
+Run transcription from this repository with:
 
 ```bash
-../.venv/bin/python scripts/transcribe_audio.py path/to/answer.m4a \
+./.venv/bin/python scripts/transcribe_audio.py path/to/answer.m4a \
   --topic tiktok-feed \
   --prompt "Design TikTok's For You feed" \
   --no-copy
@@ -140,9 +141,9 @@ In the current local umbrella workspace, run transcription from this repository 
 Use `--no-copy`, treat generated text as transient review input, and upload the
 source with
 `node scripts/upload-practice-audio.mjs <activity_id> <path> --turn <user_turn_id> --label "Recorded answer"`; the
-authenticated specialist environment supplies `INTERVIEW_ARC_MCP_TOKEN`. A
-standalone clone may instead create `.venv/` in this repository and run the
-same transcription script with `./.venv/bin/python`.
+authenticated specialist environment supplies `INTERVIEW_ARC_MCP_TOKEN`.
+Create `.venv/` in this repository from `requirements-transcription.txt` when
+the local environment is absent.
 
 ## Website Development
 

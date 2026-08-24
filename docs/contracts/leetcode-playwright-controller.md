@@ -13,7 +13,7 @@ result controls and does not publish practice data.
 ## Fixed identity
 
 - Application: `/Applications/Google Chrome.app`
-- Profile: `browser-profiles/leetcode-submitter` beside the repository
+- Profile: `browser-profiles/leetcode-submitter` at the repository root
 - Controller state: `.interview-arc-controller/` inside that dedicated profile
 - CDP endpoint: `http://127.0.0.1:9223`
 - Client: Playwright `chromium.connectOverCDP`

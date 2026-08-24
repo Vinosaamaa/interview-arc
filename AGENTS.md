@@ -11,6 +11,22 @@ execution-ledger requirements.
 
 Do not create or change a thread Goal unless the user explicitly asks.
 
+## Issue Worktrees
+
+Create every issue-owned worktree under
+`$HOME/Projects/interview-prep-support/worktrees` using
+`arc-<issue>-<slug>`, `live-<issue>-<slug>`, or
+`voice-<issue>-<slug>` for the owning repository. Before creating or resuming
+work, inspect `git worktree list --porcelain`, reuse the issue's registered
+worktree, and honor any Git lock reason. Never create a duplicate or use a
+primary/shared checkout for issue implementation.
+
+The owner removes the worktree only after verifying the exact tested PR head,
+merge, released `main`, cleanliness, and absence of unpublished work. Use
+`git worktree remove <exact-path>` without `--force`; never recursively delete
+a registered worktree. Coordinator implementation follows
+[`docs/agents/coordinator-fastlane.md`](docs/agents/coordinator-fastlane.md).
+
 ## Task Routing
 
 Read only the guide chain that owns the request:
@@ -34,8 +50,8 @@ contradictions. Put shared behavior at the narrowest shared scope and keep
 specialist-only behavior only in that specialist's guide; never duplicate
 specialist runtime instructions at the repository root.
 
-The user may keep every specialist as a long-lived Codex task inside the same
-outer project. The Loop Recorder and Resume & Cover Letter Specialist are
+The user may keep every specialist as a long-lived Codex task for this product.
+The Loop Recorder and Resume & Cover Letter Specialist are
 administrative tasks outside practice. Tasks share files, not unrecorded
 conversation. First-time task creation and durable specialist registration follow
 `docs/agents/task-startup-prompts.md`.
@@ -82,6 +98,17 @@ Interview Arc, and perform its design-plan and self-critique passes.
 - Follow `docs/contracts/owner-private-practice-records.md`. New personal
   attempts, transcripts, reviews, answers, profiles, journals, recordings, and
   diagrams stay in owner-scoped D1/private R2 and never enter Git.
+
+## Managed Browser Profiles
+
+- LeetCode automation uses only `browser-profiles/leetcode-submitter` at the
+  repository root and CDP port `9223`.
+- System-design canvas automation uses only
+  `browser-profiles/system-design-canvas` at the repository root.
+- General website automation uses the global Chrome Playwright profile and CDP
+  port `9224`; it never reuses either specialist profile.
+- Profiles are single-writer. Reuse the existing profile or wait; never copy,
+  suffix, inspect, or publish its credentials or login databases.
 
 ## Source Control And Verification
 
