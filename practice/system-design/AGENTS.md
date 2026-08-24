@@ -397,17 +397,17 @@ Use this decision process:
 - When the complete Codex conversation is available, include both what the user said and what the coach said in the canonical session file.
 - Review the answer's structure like an interviewer, then teach improvements like an instructor.
 
-Local tooling is already available in the outer workspace:
+Local tooling is repository-scoped:
 
-- Python environment: `../.venv/` from the repository root.
+- Python environment: `.venv/` at the repository root.
 - Transcription helper: `scripts/transcribe_audio.py`.
 - Default model: `small.en`.
-- Existing model cache: `../.cache/faster-whisper/` from the repository root.
+- Existing model cache: `.cache/faster-whisper/` at the repository root.
 
 Run transcription from the repository root:
 
 ```bash
-../.venv/bin/python scripts/transcribe_audio.py path/to/answer.m4a \
+./.venv/bin/python scripts/transcribe_audio.py path/to/answer.m4a \
   --topic <topic> \
   --prompt "<prompt>" \
   --session-type system_design \
