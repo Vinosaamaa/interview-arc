@@ -968,7 +968,7 @@ test("Loops source dialog keeps a stable close callback for its focus and scroll
   assert.equal(onClose.initializer.expression?.getText(file), "closeSourceDialog");
 });
 
-test("Loops presents one chronological record without the detached dashboard", async () => {
+test("Loops presents one chronological record with complete question and solution memories", async () => {
   const [source, css, redesignCss] = await Promise.all([
     load("../app/loops-workspace.tsx"),
     load("../app/globals.css"),
@@ -989,8 +989,21 @@ test("Loops presents one chronological record without the detached dashboard", a
   assert.equal(hasJsxClass(file, "loop-debrief"), false);
   assert.equal(stringLiterals(file).has("Reconstructed answer"), false);
   assert.equal(stringLiterals(file).has("Activity history"), false);
-  assert.doesNotMatch(functionNamed(file, "QuestionCard").getText(file), /answerMemory/);
-  assert.doesNotMatch(functionNamed(file, "StageRecord").getText(file), /selfAssessment|interviewerFeedback|nextStep/);
+  const questionCard = functionNamed(file, "QuestionCard").getText(file);
+  assert.match(questionCard, /question\.promptMemory/);
+  assert.match(questionCard, /question\.answerMemory/);
+  assert.match(questionCard, /<pre className="loop-memory-code" tabIndex=\{0\}><code>\{promptMemory\}<\/code><\/pre>/);
+  assert.match(questionCard, /<pre className="loop-memory-code" tabIndex=\{0\}><code>\{answerMemory\}<\/code><\/pre>/);
+  assert.match(questionCard, /question\.promptConfidence/);
+  assert.match(questionCard, /question\.answerConfidence/);
+  assert.match(questionCard, /No remembered question was recorded\./);
+  assert.match(questionCard, /No remembered solution was recorded\./);
+  assert.match(questionCard, /Confidence not recorded/);
+  assert.doesNotMatch(questionCard, /<button|\bRun\b/);
+  const stageRecord = functionNamed(file, "StageRecord").getText(file);
+  assert.match(stageRecord, /debrief\.questions\.map/);
+  assert.match(stageRecord, /debrief\.selfAssessment/);
+  assert.match(stageRecord, /debrief\.nextStep/);
 
   assert.ok(cssRules(rules, ".loop-support-band").some((rule) => rule.declarations["grid-template-columns"] === "minmax(250px, .7fr) minmax(0, 1.3fr)"));
   assert.equal(cssRules(rules, ".loop-preparation-columns")[0]?.declarations["grid-template-columns"], "repeat(3, minmax(0, 1fr))");
@@ -1000,8 +1013,14 @@ test("Loops presents one chronological record without the detached dashboard", a
   assert.equal(cssRules(rules, ".loop-stage-record-header > div")[0]?.declarations["min-width"], "0");
   assert.equal(cssRules(rules, ".loop-stage-record-header h2")[0]?.declarations["overflow-wrap"], "anywhere");
   assert.equal(cssRules(rules, ".loop-stage-record-body")[0]?.declarations["font-size"], "max(14px, .84rem)");
+  assert.equal(cssRules(rules, ".loop-memory-grid")[0]?.declarations["grid-template-columns"], "repeat(2, minmax(0, 1fr))");
+  assert.equal(cssRules(rules, ".loop-memory-pane")[0]?.declarations["min-width"], "0");
+  assert.equal(cssRules(rules, ".loop-memory-code")[0]?.declarations["max-width"], "100%");
+  assert.equal(cssRules(rules, ".loop-memory-code")[0]?.declarations.overflow, "auto");
+  assert.equal(cssRules(rules, ".loop-memory-code")[0]?.declarations["white-space"], "pre");
   assert.equal(cssRules(rules, ".loop-support-band", "max-width: 900px").at(-1)?.declarations["grid-template-columns"], "1fr");
   assert.equal(cssRules(rules, ".loop-preparation-columns", "max-width: 680px").at(-1)?.declarations["grid-template-columns"], "1fr");
+  assert.equal(cssRules(rules, ".loop-memory-grid", "max-width: 900px").at(-1)?.declarations["grid-template-columns"], "1fr");
 });
 
 test("all seven Interview pages use the exact shared hero geometry and semantic accents", async () => {
