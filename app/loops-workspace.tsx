@@ -448,8 +448,9 @@ function StageRecord({ stage, materials, loopId, loopRevision, roleBriefRevision
           const memory = resolveQuestionMemory(materials, question, index);
           return <QuestionCard question={question} index={index} promptMemory={memory.prompt} answerMemory={memory.answer} key={question.memoryId} />;
         })}</div></section> : null}
-        {debrief?.selfAssessment || debrief?.nextStep ? <div className="loop-stage-debrief-notes">
+        {debrief?.selfAssessment || debrief?.interviewerFeedback || debrief?.nextStep ? <div className="loop-stage-debrief-notes">
           {debrief.selfAssessment ? <section className="loop-stage-self-assessment"><h3>Round self-assessment</h3><p>{debrief.selfAssessment}</p></section> : null}
+          {debrief.interviewerFeedback ? <section className="loop-stage-feedback"><h3>Interviewer feedback</h3><p>{debrief.interviewerFeedback}</p></section> : null}
           {debrief.nextStep ? <section className="loop-stage-next"><h3>Next step</h3><p>{debrief.nextStep}</p></section> : null}
         </div> : null}
         {stage.outcome ? <p className="loop-stage-result"><span>Stage result</span><strong>{sentenceId(stage.outcome)}</strong></p> : null}

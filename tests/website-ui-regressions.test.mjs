@@ -1019,6 +1019,9 @@ test("Loops presents one chronological record with complete question and solutio
   assert.match(stageRecord, /promptMemory=\{memory\.prompt\}/);
   assert.match(stageRecord, /answerMemory=\{memory\.answer\}/);
   assert.match(stageRecord, /debrief\.selfAssessment/);
+  assert.match(stageRecord, /debrief\?\.interviewerFeedback/);
+  assert.match(stageRecord, /debrief\.interviewerFeedback \? <section className="loop-stage-feedback">/);
+  assert.match(stageRecord, /<h3>Interviewer feedback<\/h3><p>\{debrief\.interviewerFeedback\}<\/p>/);
   assert.match(stageRecord, /debrief\.nextStep/);
 
   assert.ok(cssRules(rules, ".loop-support-band").some((rule) => rule.declarations["grid-template-columns"] === "minmax(250px, .7fr) minmax(0, 1.3fr)"));
@@ -1034,6 +1037,7 @@ test("Loops presents one chronological record with complete question and solutio
   assert.equal(cssRules(rules, ".loop-memory-code")[0]?.declarations["max-width"], "100%");
   assert.equal(cssRules(rules, ".loop-memory-code")[0]?.declarations.overflow, "auto");
   assert.equal(cssRules(rules, ".loop-memory-code")[0]?.declarations["white-space"], "pre");
+  assert.equal(cssRules(rules, ".loop-stage-debrief-notes")[0]?.declarations["grid-template-columns"], "repeat(3, minmax(0, 1fr))");
   assert.equal(cssRules(rules, ".loop-support-band", "max-width: 900px").at(-1)?.declarations["grid-template-columns"], "1fr");
   assert.equal(cssRules(rules, ".loop-preparation-columns", "max-width: 680px").at(-1)?.declarations["grid-template-columns"], "1fr");
   assert.equal(cssRules(rules, ".loop-memory-grid", "max-width: 900px").at(-1)?.declarations["grid-template-columns"], "1fr");
