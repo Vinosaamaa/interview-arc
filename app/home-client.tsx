@@ -61,6 +61,7 @@ import { careerHeatLevel, type CareerJob, type CareerSummary, type JobStatus } f
 import { useLiveState, useReadOnlyLiveState } from "./live-sync";
 import { emptyJournal } from "./current-day";
 import { ArrivalRitual, AtmosphereField, type AtmosphereMode } from "./arrival-ritual";
+import CodeBlock from "./code-block";
 import ReaderRenderDiagnosticsPanel from "./reader-render-diagnostics-panel";
 import {
   recordNavigationDiagnostic,
@@ -1066,30 +1067,6 @@ function StandaloneActivityCard({ children, title, onRemove, removeDisabled = fa
       <button className={`icon-action danger ${removeDisabled ? "action-locked" : ""}`} onClick={onRemove} aria-disabled={removeDisabled} aria-label={`Remove ${title}`} title={removeDisabled ? "Started activities stay in your history" : "Remove untouched activity"}><Icon name="close" /></button>
     </article>
   );
-}
-
-const CODE_KEYWORDS = new Set([
-  "abstract", "async", "await", "boolean", "break", "case", "catch", "class", "const", "continue", "def", "do", "else", "enum", "extends", "false", "final", "finally", "float", "for", "from", "if", "implements", "import", "in", "instanceof", "int", "interface", "let", "list", "long", "map", "new", "none", "null", "private", "protected", "public", "raise", "return", "self", "static", "string", "super", "switch", "this", "throw", "true", "try", "var", "void", "while", "yield",
-]);
-
-function highlightedCode(code: string) {
-  const tokenPattern = /(\/\/.*$|#.*$|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b\d+(?:\.\d+)?\b|\b[A-Za-z_$][\w$]*\b)/gm;
-  return code.split(tokenPattern).filter(Boolean).map((token, index) => {
-    const kind = token.startsWith("//") || token.startsWith("#")
-      ? "comment"
-      : token.startsWith('"') || token.startsWith("'")
-        ? "string"
-        : /^\d/.test(token)
-          ? "number"
-          : CODE_KEYWORDS.has(token.toLowerCase())
-            ? "keyword"
-            : "plain";
-    return kind === "plain" ? token : <span className={`syntax-${kind}`} key={`${index}-${token.slice(0, 8)}`}>{token}</span>;
-  });
-}
-
-function CodeBlock({ language, code }: { language: string; code: string }) {
-  return <figure className="code-stage"><figcaption><span>{language || "code"}</span><button type="button" onClick={() => void navigator.clipboard.writeText(code)}>Copy</button></figcaption><pre><code>{highlightedCode(code.replace(/\n$/, ""))}</code></pre></figure>;
 }
 
 function DiagramFigure({ src, alt }: { src: string; alt: string }) {

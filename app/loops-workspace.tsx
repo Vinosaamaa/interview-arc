@@ -23,6 +23,7 @@ import InterviewPageHero from "./interview-page-hero";
 import { isAbortError, parseLoopPayloadResponse } from "./loop-payload";
 import LoopCreateDialog from "./loop-create-dialog";
 import RoundResources from "./round-resources";
+import CodeBlock from "./code-block";
 
 type Specialty = LoopSpecialty;
 type MemoryConfidence = "exact" | "reconstructed";
@@ -356,31 +357,64 @@ function RoleBriefPanel({ loop, onOpenSource }: {
 function InterviewMaterial({ material }: { material: LoopInterviewMaterial }) {
   const [open, setOpen] = useState(false);
   const bodyId = `loop-material-${material.materialId}`;
+  const sections = material.sections.filter((section) => !/^question-\d+-(?:prompt|solution)$/.test(section.sectionId));
+  const consumedQuestionSections = sections.length !== material.sections.length;
+  if (!sections.length && (consumedQuestionSections || !material.summary?.trim())) return null;
   return <article className={`loop-stage-card loop-stage-material ${material.stageId ? "stage-bound" : "legacy-wide"} ${open ? "open" : "closed"}`}>
     <button type="button" className="loop-material-trigger" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen((current) => !current)}><span><strong>{material.label}</strong><small>{material.stageId ? "Stage material" : "Legacy Loop-wide material"} · revision {material.revision}</small></span><svg className="loop-disclosure" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" /></svg></button>
-    <div className={`loop-material-body-shell ${open ? "open" : "closed"}`} id={bodyId} inert={!open} aria-hidden={!open}><div className="loop-material-body">{material.summary ? <p>{material.summary}</p> : null}{material.sections.map((section) => <section key={section.sectionId}><h4>{section.title}</h4>{section.body ? <p>{section.body}</p> : null}{section.bullets.length ? <ul>{section.bullets.map((bullet, index) => <li key={`${section.sectionId}-${index}`}>{bullet}</li>)}</ul> : null}</section>)}<footer>{material.provenance.sourceLabel} · Prepared {formatDate(material.provenance.preparedAt)}</footer></div></div>
+    <div className={`loop-material-body-shell ${open ? "open" : "closed"}`} id={bodyId} inert={!open} aria-hidden={!open}><div className="loop-material-body">{material.summary ? <p>{material.summary}</p> : null}{sections.map((section) => <section key={section.sectionId}><h4>{section.title}</h4>{section.body ? <p>{section.body}</p> : null}{section.bullets.length ? <ul>{section.bullets.map((bullet, index) => <li key={`${section.sectionId}-${index}`}>{bullet}</li>)}</ul> : null}</section>)}<footer>{material.provenance.sourceLabel} · Prepared {formatDate(material.provenance.preparedAt)}</footer></div></div>
   </article>;
 }
 
-function QuestionCard({ question, index, stageId, expanded, onToggle }: {
+function materialSectionText(materials: LoopInterviewMaterial[], sectionId: string) {
+  const sections = materials
+    .flatMap((material) => material.sections.map((section) => ({ revision: material.revision, section })))
+    .filter((entry) => entry.section.sectionId === sectionId)
+    .sort((left, right) => right.revision - left.revision);
+  for (const { section } of sections) {
+    const blocks = [
+      ...(section.body?.trim() ? [section.body] : []),
+      ...(section.bullets.length ? [section.bullets.map((bullet) => `- ${bullet}`).join("\n")] : []),
+    ];
+    const text = blocks.join("\n\n");
+    if (text.trim()) return text;
+  }
+  return undefined;
+}
+
+function resolveQuestionMemory(materials: LoopInterviewMaterial[], question: LoopQuestion, index: number) {
+  const sectionPrefix = `question-${index + 1}`;
+  return {
+    prompt: materialSectionText(materials, `${sectionPrefix}-prompt`) ?? question.promptMemory,
+    answer: materialSectionText(materials, `${sectionPrefix}-solution`) ?? question.answerMemory,
+  };
+}
+
+function QuestionCard({ question, index, promptMemory: resolvedPromptMemory, answerMemory: resolvedAnswerMemory }: {
   question: LoopQuestion;
   index: number;
-  stageId: string;
-  expanded: boolean;
-  onToggle: () => void;
+  promptMemory?: string;
+  answerMemory?: string;
 }) {
-  const title = question.promptMemory ?? sentenceId(question.canonicalQuestionId ?? question.memoryId);
   const review = question.ownerReview;
   const assessment = review?.assessment ? sentenceId(review.assessment) : "Not assessed";
-  const bodyId = `loop-question-${stageId}-${question.memoryId}`;
-  return <article className={`loop-stage-card loop-question-card ${expanded ? "expanded" : "compact"}`}>
-    <button type="button" className="loop-question-trigger" aria-expanded={expanded} aria-controls={bodyId} onClick={onToggle}>
-      <span className="loop-question-number">{String(index + 1).padStart(2, "0")}</span><strong>{title}</strong><i className={review?.assessment ?? "unassessed"}>{assessment}</i><svg className="loop-disclosure" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" /></svg>
-    </button>
-    <div className="loop-question-body" id={bodyId} inert={!expanded} aria-hidden={!expanded}>
+  const promptMemory = resolvedPromptMemory?.trim() ? resolvedPromptMemory : "No remembered question was recorded.";
+  const answerMemory = resolvedAnswerMemory?.trim() ? resolvedAnswerMemory : "No remembered solution was recorded.";
+  const questionLabel = question.canonicalQuestionId ? sentenceId(question.canonicalQuestionId) : `${specialtyLabel(question.specialty)} question`;
+  return <article className="loop-stage-card loop-question-card">
+    <header className="loop-question-header">
+      <span className="loop-question-number">{String(index + 1).padStart(2, "0")}</span><div><strong>{questionLabel}</strong><small>{specialtyLabel(question.specialty)} debrief memory</small></div><i className={review?.assessment ?? "unassessed"}>{assessment}</i>
+    </header>
+    <div className="loop-question-body">
+      <div className="loop-memory-grid">
+        <CodeBlock language="text" title="Question" code={promptMemory} meta={<span className={`memory-confidence ${question.promptConfidence}`}>{sentenceId(question.promptConfidence)}</span>} />
+        <CodeBlock language="java" title="Solution" code={answerMemory} meta={question.answerConfidence ? <span className={`memory-confidence ${question.answerConfidence}`}>{sentenceId(question.answerConfidence)}</span> : <span className="memory-confidence missing">Confidence not recorded</span>} />
+      </div>
+      <div className="loop-question-notes">
       <section><h3>Question context</h3><p>{question.canonicalQuestionId ? `Linked to ${sentenceId(question.canonicalQuestionId)} in ${specialtyLabel(question.specialty)}.` : `Owner-recorded ${specialtyLabel(question.specialty)} interview question.`}</p>{question.canonicalQuestionId ? <a href={`?view=banks&specialty=${encodeURIComponent(question.specialty)}&problem=${encodeURIComponent(question.canonicalQuestionId)}`}>Open in Banks</a> : null}</section>
       <section><h3>My approach</h3><p>{review?.approach ?? "No approach note was recorded for this question."}</p></section>
       <section><h3>My review</h3><p>{review?.summary ?? "No owner review was recorded for this question."}</p></section>
+      </div>
     </div>
   </article>;
 }
@@ -392,7 +426,6 @@ function StageRecord({ stage, materials, loopId, loopRevision, roleBriefRevision
   loopRevision: number;
   roleBriefRevision: number;
 }) {
-  const [openQuestionId, setOpenQuestionId] = useState(stage.debrief?.questions[0]?.memoryId ?? "");
   const debrief = stage.debrief;
   const datedAt = stageDate(stage);
   const hasMetadata = Boolean(datedAt || stage.status === "completed" || stage.format || stage.interviewers?.length || stage.outcome);
@@ -409,7 +442,15 @@ function StageRecord({ stage, materials, loopId, loopRevision, roleBriefRevision
       <div className={`loop-stage-body-shell ${stageOpen ? "open" : "closed"}`} id={`loop-stage-${stage.stageId}-body`} inert={!stageOpen} aria-hidden={!stageOpen}><div className="loop-stage-record-body">
         <RoundResources loopId={loopId} stageId={stage.stageId} loopRevision={loopRevision} roleBriefRevision={roleBriefRevision} enabled={stageOpen} />
         {materials.map((material) => <InterviewMaterial material={material} key={material.materialId} />)}
-        {debrief?.questions.length ? <section className="loop-stage-questions" aria-labelledby={`loop-stage-${stage.stageId}-questions`}><h3 className="sr-only" id={`loop-stage-${stage.stageId}-questions`}>Questions asked</h3><div>{debrief.questions.map((question, index) => <QuestionCard question={question} index={index} stageId={stage.stageId} expanded={openQuestionId === question.memoryId} onToggle={() => setOpenQuestionId((current) => current === question.memoryId ? "" : question.memoryId)} key={question.memoryId} />)}</div></section> : null}
+        {debrief?.questions.length ? <section className="loop-stage-questions" aria-labelledby={`loop-stage-${stage.stageId}-questions`}><h3 className="sr-only" id={`loop-stage-${stage.stageId}-questions`}>Questions asked</h3><div>{debrief.questions.map((question, index) => {
+          const memory = resolveQuestionMemory(materials, question, index);
+          return <QuestionCard question={question} index={index} promptMemory={memory.prompt} answerMemory={memory.answer} key={question.memoryId} />;
+        })}</div></section> : null}
+        {debrief?.selfAssessment || debrief?.interviewerFeedback || debrief?.nextStep ? <div className="loop-stage-debrief-notes">
+          {debrief.selfAssessment ? <section className="loop-stage-self-assessment"><h3>Round self-assessment</h3><p>{debrief.selfAssessment}</p></section> : null}
+          {debrief.interviewerFeedback ? <section className="loop-stage-feedback"><h3>Interviewer feedback</h3><p>{debrief.interviewerFeedback}</p></section> : null}
+          {debrief.nextStep ? <section className="loop-stage-next"><h3>Next step</h3><p>{debrief.nextStep}</p></section> : null}
+        </div> : null}
         {stage.outcome ? <p className="loop-stage-result"><span>Stage result</span><strong>{sentenceId(stage.outcome)}</strong></p> : null}
       </div></div>
     </article>

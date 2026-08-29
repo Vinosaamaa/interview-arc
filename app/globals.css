@@ -886,15 +886,28 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
 .diagram-viewer-shell .architecture-diagram-viewport { min-height: 0; max-height: none; flex: 1; padding: 20px; }
 .diagram-viewer-shell .architecture-diagram > small { flex: 0 0 auto; }
 .code-stage { margin: 1.15em 0; border: 1px solid #263429; border-radius: 10px; background: #172019; overflow: hidden; }
-.code-stage > figcaption { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #344638; color: #cbd8ce; font-family: var(--font-geist-mono); font-size: .74rem; text-transform: uppercase; letter-spacing: .08em; }
-.code-stage > figcaption button { padding: 4px 8px; border: 1px solid #53685a; border-radius: 5px; background: transparent; color: #eef5f0; cursor: pointer; }
-.code-stage > pre { max-height: 720px; margin: 0; border-radius: 0; overflow: auto; }
+.code-stage > figcaption { min-height: 42px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid #344638; color: #cbd8ce; font-family: var(--font-geist-mono); font-size: .74rem; text-transform: uppercase; letter-spacing: .08em; }
+.code-stage-heading { min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+.code-stage-heading strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.code-stage-heading small { color: #8fa399; font: inherit; font-size: .62rem; }
+.code-stage-caption-meta { min-width: 0; }
+.code-stage-actions { display: flex; gap: 6px; }
+.code-stage > figcaption button { min-height: 30px; padding: 4px 8px; border: 1px solid #53685a; border-radius: 5px; background: transparent; color: #eef5f0; cursor: pointer; }
+.code-stage > figcaption button:hover { border-color: #8db5a3; background: #22332a; }
+.code-stage > figcaption button:focus-visible, .code-stage > pre:focus-visible { outline: 2px solid #9ce0c5; outline-offset: 2px; }
+.code-stage > pre { width: 100%; max-width: 100%; max-height: 720px; margin: 0; padding: 18px; border-radius: 0; background: transparent; color: #f2f7f3; font-family: var(--font-geist-mono); font-size: .86rem; line-height: 1.65; overflow: auto; overscroll-behavior: contain; white-space: pre; tab-size: 2; }
 .code-stage > pre,
 .code-stage > pre code { color: #f2f7f3; }
 .code-stage .syntax-keyword { color: #8ee4c2; font-weight: 720; }
 .code-stage .syntax-string { color: #f2cf79; }
 .code-stage .syntax-number { color: #f3a6b8; }
 .code-stage .syntax-comment { color: #adc1b3; font-style: italic; }
+.code-stage-placeholder { min-height: 260px; border: 1px solid #263429; border-radius: 10px; background: #172019; }
+.code-stage-backdrop { position: fixed; inset: 0; z-index: 1500; padding: clamp(10px, 3vw, 32px); background: rgba(6, 18, 14, .86); backdrop-filter: blur(10px); display: grid; place-items: center; }
+.code-stage-dialog { width: min(1500px, 100%); height: min(94dvh, 1050px); min-width: 0; }
+.code-stage-dialog .code-stage { width: 100%; height: 100%; margin: 0; display: flex; flex-direction: column; box-shadow: 0 32px 96px rgb(0 0 0 / 42%); }
+.code-stage-dialog .code-stage > figcaption { flex: 0 0 auto; }
+.code-stage-dialog .code-stage > pre { min-height: 0; max-height: none; flex: 1; }
 .language-code-tabs { margin: 1.2em 0; }
 .language-code-tabs > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 8px; }
 .language-code-tabs > header h3 { margin: 0; }
