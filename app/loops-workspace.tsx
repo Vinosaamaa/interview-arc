@@ -362,14 +362,40 @@ function InterviewMaterial({ material }: { material: LoopInterviewMaterial }) {
   </article>;
 }
 
-function QuestionCard({ question, index }: {
+function materialSectionText(materials: LoopInterviewMaterial[], sectionId: string) {
+  const sections = materials
+    .flatMap((material) => material.sections.map((section) => ({ revision: material.revision, section })))
+    .filter((entry) => entry.section.sectionId === sectionId)
+    .sort((left, right) => right.revision - left.revision);
+  for (const { section } of sections) {
+    const blocks = [
+      ...(section.body?.trim() ? [section.body] : []),
+      ...(section.bullets.length ? [section.bullets.map((bullet) => `- ${bullet}`).join("\n")] : []),
+    ];
+    const text = blocks.join("\n\n");
+    if (text.trim()) return text;
+  }
+  return undefined;
+}
+
+function resolveQuestionMemory(materials: LoopInterviewMaterial[], question: LoopQuestion, index: number) {
+  const sectionPrefix = `question-${index + 1}`;
+  return {
+    prompt: materialSectionText(materials, `${sectionPrefix}-prompt`) ?? question.promptMemory,
+    answer: materialSectionText(materials, `${sectionPrefix}-solution`) ?? question.answerMemory,
+  };
+}
+
+function QuestionCard({ question, index, promptMemory: resolvedPromptMemory, answerMemory: resolvedAnswerMemory }: {
   question: LoopQuestion;
   index: number;
+  promptMemory?: string;
+  answerMemory?: string;
 }) {
   const review = question.ownerReview;
   const assessment = review?.assessment ? sentenceId(review.assessment) : "Not assessed";
-  const promptMemory = question.promptMemory?.trim() ? question.promptMemory : "No remembered question was recorded.";
-  const answerMemory = question.answerMemory?.trim() ? question.answerMemory : "No remembered solution was recorded.";
+  const promptMemory = resolvedPromptMemory?.trim() ? resolvedPromptMemory : "No remembered question was recorded.";
+  const answerMemory = resolvedAnswerMemory?.trim() ? resolvedAnswerMemory : "No remembered solution was recorded.";
   const questionLabel = question.canonicalQuestionId ? sentenceId(question.canonicalQuestionId) : `${specialtyLabel(question.specialty)} question`;
   return <article className="loop-stage-card loop-question-card">
     <header className="loop-question-header">
@@ -418,7 +444,10 @@ function StageRecord({ stage, materials, loopId, loopRevision, roleBriefRevision
       <div className={`loop-stage-body-shell ${stageOpen ? "open" : "closed"}`} id={`loop-stage-${stage.stageId}-body`} inert={!stageOpen} aria-hidden={!stageOpen}><div className="loop-stage-record-body">
         <RoundResources loopId={loopId} stageId={stage.stageId} loopRevision={loopRevision} roleBriefRevision={roleBriefRevision} enabled={stageOpen} />
         {materials.map((material) => <InterviewMaterial material={material} key={material.materialId} />)}
-        {debrief?.questions.length ? <section className="loop-stage-questions" aria-labelledby={`loop-stage-${stage.stageId}-questions`}><h3 className="sr-only" id={`loop-stage-${stage.stageId}-questions`}>Questions asked</h3><div>{debrief.questions.map((question, index) => <QuestionCard question={question} index={index} key={question.memoryId} />)}</div></section> : null}
+        {debrief?.questions.length ? <section className="loop-stage-questions" aria-labelledby={`loop-stage-${stage.stageId}-questions`}><h3 className="sr-only" id={`loop-stage-${stage.stageId}-questions`}>Questions asked</h3><div>{debrief.questions.map((question, index) => {
+          const memory = resolveQuestionMemory(materials, question, index);
+          return <QuestionCard question={question} index={index} promptMemory={memory.prompt} answerMemory={memory.answer} key={question.memoryId} />;
+        })}</div></section> : null}
         {debrief?.selfAssessment || debrief?.nextStep ? <div className="loop-stage-debrief-notes">
           {debrief.selfAssessment ? <section className="loop-stage-self-assessment"><h3>Round self-assessment</h3><p>{debrief.selfAssessment}</p></section> : null}
           {debrief.nextStep ? <section className="loop-stage-next"><h3>Next step</h3><p>{debrief.nextStep}</p></section> : null}

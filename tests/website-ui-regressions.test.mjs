@@ -989,9 +989,22 @@ test("Loops presents one chronological record with complete question and solutio
   assert.equal(hasJsxClass(file, "loop-debrief"), false);
   assert.equal(stringLiterals(file).has("Reconstructed answer"), false);
   assert.equal(stringLiterals(file).has("Activity history"), false);
+  const materialSectionText = functionNamed(file, "materialSectionText").getText(file);
+  assert.match(materialSectionText, /entry\.section\.sectionId === sectionId/);
+  assert.match(materialSectionText, /right\.revision - left\.revision/);
+  assert.match(materialSectionText, /section\.body/);
+  assert.match(materialSectionText, /section\.bullets\.map/);
+  assert.match(materialSectionText, /join\("\\n"\)/);
+  assert.match(materialSectionText, /blocks\.join\("\\n\\n"\)/);
+  const resolveQuestionMemory = functionNamed(file, "resolveQuestionMemory").getText(file);
+  assert.match(resolveQuestionMemory, /question-\$\{index \+ 1\}/);
+  assert.match(resolveQuestionMemory, /\$\{sectionPrefix\}-prompt/);
+  assert.match(resolveQuestionMemory, /\$\{sectionPrefix\}-solution/);
+  assert.match(resolveQuestionMemory, /materialSectionText\(materials,[\s\S]+\) \?\? question\.promptMemory/);
+  assert.match(resolveQuestionMemory, /materialSectionText\(materials,[\s\S]+\) \?\? question\.answerMemory/);
   const questionCard = functionNamed(file, "QuestionCard").getText(file);
-  assert.match(questionCard, /question\.promptMemory/);
-  assert.match(questionCard, /question\.answerMemory/);
+  assert.match(questionCard, /resolvedPromptMemory/);
+  assert.match(questionCard, /resolvedAnswerMemory/);
   assert.match(questionCard, /<pre className="loop-memory-code" tabIndex=\{0\}><code>\{promptMemory\}<\/code><\/pre>/);
   assert.match(questionCard, /<pre className="loop-memory-code" tabIndex=\{0\}><code>\{answerMemory\}<\/code><\/pre>/);
   assert.match(questionCard, /question\.promptConfidence/);
@@ -1002,6 +1015,9 @@ test("Loops presents one chronological record with complete question and solutio
   assert.doesNotMatch(questionCard, /<button|\bRun\b/);
   const stageRecord = functionNamed(file, "StageRecord").getText(file);
   assert.match(stageRecord, /debrief\.questions\.map/);
+  assert.match(stageRecord, /resolveQuestionMemory\(materials, question, index\)/);
+  assert.match(stageRecord, /promptMemory=\{memory\.prompt\}/);
+  assert.match(stageRecord, /answerMemory=\{memory\.answer\}/);
   assert.match(stageRecord, /debrief\.selfAssessment/);
   assert.match(stageRecord, /debrief\.nextStep/);
 
