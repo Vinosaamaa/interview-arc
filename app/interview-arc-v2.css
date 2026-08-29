@@ -1471,8 +1471,8 @@ body:has(.reader-workspace) .ambient-rain-drop span { animation-play-state: paus
 .answer-player audio { width: 100%; min-width: 0; max-width: 100%; }
 
 .code-stage { margin: 18px 0; border: 1px solid #293b31; border-radius: 12px; background: #111b15; overflow: hidden; box-shadow: 0 12px 30px rgba(17,34,27,.13); }
-.code-stage figcaption { height: 38px; padding: 0 13px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2b3c32; background: #17231b; color: #b8c8bd; font-family: var(--font-geist-mono); font-size: .68rem; text-transform: uppercase; }
-.code-stage figcaption button { border: 0; background: transparent; color: #a8c9be; cursor: pointer; }
+.code-stage figcaption { min-height: 42px; height: auto; padding: 6px 13px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; border-bottom: 1px solid #2b3c32; background: #17231b; color: #b8c8bd; font-family: var(--font-geist-mono); font-size: .68rem; text-transform: uppercase; }
+.code-stage figcaption button { background: transparent; color: #a8c9be; cursor: pointer; }
 .code-stage pre { margin: 0 !important; border-radius: 0 !important; background: transparent !important; }
 .syntax-keyword { color: #f0a5c5; font-weight: 650; }
 .syntax-string { color: #cce681; }

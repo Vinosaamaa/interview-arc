@@ -969,12 +969,15 @@ test("Loops source dialog keeps a stable close callback for its focus and scroll
 });
 
 test("Loops presents one chronological record with complete question and solution memories", async () => {
-  const [source, css, redesignCss] = await Promise.all([
+  const [source, sharedCodeSource, homeSource, css, redesignCss] = await Promise.all([
     load("../app/loops-workspace.tsx"),
+    load("../app/code-block.tsx"),
+    load("../app/home-client.tsx"),
     load("../app/globals.css"),
     load("../app/loops-redesign.css"),
   ]);
   const file = parseTsx(source);
+  const sharedCodeFile = parseTsx(sharedCodeSource);
   const rules = parseCss(`${css}\n${redesignCss}`);
   assert.ok(hasJsxClass(file, "loop-support-band"));
   assert.ok(hasJsxClass(file, "loop-preparation-columns"));
@@ -989,6 +992,13 @@ test("Loops presents one chronological record with complete question and solutio
   assert.equal(hasJsxClass(file, "loop-debrief"), false);
   assert.equal(stringLiterals(file).has("Reconstructed answer"), false);
   assert.equal(stringLiterals(file).has("Activity history"), false);
+  const interviewMaterial = functionNamed(file, "InterviewMaterial").getText(file);
+  assert.match(interviewMaterial, /material\.sections\.filter/);
+  assert.match(interviewMaterial, /question-\\d\+-\(\?:prompt\|solution\)/);
+  assert.match(interviewMaterial, /consumedQuestionSections/);
+  assert.match(interviewMaterial, /if \(!sections\.length && \(consumedQuestionSections \|\| !material\.summary\?\.trim\(\)\)\) return null/);
+  assert.match(interviewMaterial, /sections\.map/);
+  assert.doesNotMatch(interviewMaterial, /material\.sections\.map/);
   const materialSectionText = functionNamed(file, "materialSectionText").getText(file);
   assert.match(materialSectionText, /entry\.section\.sectionId === sectionId/);
   assert.match(materialSectionText, /right\.revision - left\.revision/);
@@ -1005,14 +1015,33 @@ test("Loops presents one chronological record with complete question and solutio
   const questionCard = functionNamed(file, "QuestionCard").getText(file);
   assert.match(questionCard, /resolvedPromptMemory/);
   assert.match(questionCard, /resolvedAnswerMemory/);
-  assert.match(questionCard, /<pre className="loop-memory-code" tabIndex=\{0\}><code>\{promptMemory\}<\/code><\/pre>/);
-  assert.match(questionCard, /<pre className="loop-memory-code" tabIndex=\{0\}><code>\{answerMemory\}<\/code><\/pre>/);
+  assert.equal((questionCard.match(/<CodeBlock/g) ?? []).length, 2);
+  assert.match(questionCard, /<CodeBlock language="text" title="Question" code=\{promptMemory\}/);
+  assert.match(questionCard, /<CodeBlock language="java" title="Solution" code=\{answerMemory\}/);
   assert.match(questionCard, /question\.promptConfidence/);
   assert.match(questionCard, /question\.answerConfidence/);
   assert.match(questionCard, /No remembered question was recorded\./);
   assert.match(questionCard, /No remembered solution was recorded\./);
   assert.match(questionCard, /Confidence not recorded/);
-  assert.doesNotMatch(questionCard, /<button|\bRun\b/);
+  assert.doesNotMatch(questionCard, /\bRun\b/);
+  assert.match(homeSource, /import CodeBlock from "\.\/code-block"/);
+  assert.equal(functionNamed(parseTsx(homeSource), "CodeBlock"), undefined);
+  const codeBlock = functionNamed(sharedCodeFile, "CodeBlock").getText(sharedCodeFile);
+  assert.match(codeBlock, /navigator\.clipboard\.writeText\(code\)/);
+  assert.match(codeBlock, /createPortal/);
+  assert.match(codeBlock, /acquireDocumentScrollLock/);
+  assert.match(codeBlock, /event\.key === "Escape"/);
+  assert.match(codeBlock, /event\.target === event\.currentTarget/);
+  assert.match(codeBlock, /aria-modal="true"/);
+  assert.match(codeBlock, /button:not\(\[disabled\]\).*\[tabindex\]:not\(\[tabindex="-1"\]\)/);
+  assert.match(codeBlock, /filter\(\(element\) => !element\.hidden && element\.getAttribute\("aria-hidden"\) !== "true"\)/);
+  assert.match(codeBlock, /closeRef\.current\?\.focus\(\)/);
+  assert.match(codeBlock, /expandRef\.current\?\.focus\(\)/);
+  assert.match(codeBlock, /Copy \$\{displayTitle\}/);
+  assert.match(codeBlock, /Expand \$\{displayTitle\}/);
+  assert.match(codeBlock, /Close full-screen \$\{displayTitle\}/);
+  assert.match(codeBlock, /highlightedCode\(code, language\)/);
+  assert.doesNotMatch(codeBlock, /code\.replace/);
   const stageRecord = functionNamed(file, "StageRecord").getText(file);
   assert.match(stageRecord, /debrief\.questions\.map/);
   assert.match(stageRecord, /resolveQuestionMemory\(materials, question, index\)/);
@@ -1033,14 +1062,19 @@ test("Loops presents one chronological record with complete question and solutio
   assert.equal(cssRules(rules, ".loop-stage-record-header h2")[0]?.declarations["overflow-wrap"], "anywhere");
   assert.equal(cssRules(rules, ".loop-stage-record-body")[0]?.declarations["font-size"], "max(14px, .84rem)");
   assert.equal(cssRules(rules, ".loop-memory-grid")[0]?.declarations["grid-template-columns"], "repeat(2, minmax(0, 1fr))");
-  assert.equal(cssRules(rules, ".loop-memory-pane")[0]?.declarations["min-width"], "0");
-  assert.equal(cssRules(rules, ".loop-memory-code")[0]?.declarations["max-width"], "100%");
-  assert.equal(cssRules(rules, ".loop-memory-code")[0]?.declarations.overflow, "auto");
-  assert.equal(cssRules(rules, ".loop-memory-code")[0]?.declarations["white-space"], "pre");
+  assert.equal(cssRules(rules, ".loop-memory-grid > .code-stage")[0]?.declarations["min-width"], "0");
+  assert.equal(cssRules(rules, ".code-stage > pre")[0]?.declarations["max-width"], "100%");
+  assert.equal(cssRules(rules, ".code-stage > pre")[0]?.declarations.overflow, "auto");
+  assert.equal(cssRules(rules, ".code-stage > pre")[0]?.declarations["white-space"], "pre");
+  assert.equal(cssRules(rules, ".code-stage-backdrop")[0]?.declarations.position, "fixed");
+  assert.equal(cssRules(rules, ".code-stage-dialog")[0]?.declarations["min-width"], "0");
+  assert.equal(cssRules(rules, ".code-stage-dialog .code-stage > pre")[0]?.declarations["max-height"], "none");
+  assert.equal(cssRules(rules, ".code-stage > figcaption button:focus-visible")[0]?.declarations.outline, "2px solid #9ce0c5");
   assert.equal(cssRules(rules, ".loop-stage-debrief-notes")[0]?.declarations["grid-template-columns"], "repeat(3, minmax(0, 1fr))");
   assert.equal(cssRules(rules, ".loop-support-band", "max-width: 900px").at(-1)?.declarations["grid-template-columns"], "1fr");
   assert.equal(cssRules(rules, ".loop-preparation-columns", "max-width: 680px").at(-1)?.declarations["grid-template-columns"], "1fr");
   assert.equal(cssRules(rules, ".loop-memory-grid", "max-width: 900px").at(-1)?.declarations["grid-template-columns"], "1fr");
+  assert.equal(cssRules(rules, ".code-stage-dialog", "max-width: 700px").at(-1)?.declarations.height, "calc(100dvh - 16px)");
 });
 
 test("all seven Interview pages use the exact shared hero geometry and semantic accents", async () => {

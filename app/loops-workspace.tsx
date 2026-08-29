@@ -23,6 +23,7 @@ import InterviewPageHero from "./interview-page-hero";
 import { isAbortError, parseLoopPayloadResponse } from "./loop-payload";
 import LoopCreateDialog from "./loop-create-dialog";
 import RoundResources from "./round-resources";
+import CodeBlock from "./code-block";
 
 type Specialty = LoopSpecialty;
 type MemoryConfidence = "exact" | "reconstructed";
@@ -356,9 +357,12 @@ function RoleBriefPanel({ loop, onOpenSource }: {
 function InterviewMaterial({ material }: { material: LoopInterviewMaterial }) {
   const [open, setOpen] = useState(false);
   const bodyId = `loop-material-${material.materialId}`;
+  const sections = material.sections.filter((section) => !/^question-\d+-(?:prompt|solution)$/.test(section.sectionId));
+  const consumedQuestionSections = sections.length !== material.sections.length;
+  if (!sections.length && (consumedQuestionSections || !material.summary?.trim())) return null;
   return <article className={`loop-stage-card loop-stage-material ${material.stageId ? "stage-bound" : "legacy-wide"} ${open ? "open" : "closed"}`}>
     <button type="button" className="loop-material-trigger" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen((current) => !current)}><span><strong>{material.label}</strong><small>{material.stageId ? "Stage material" : "Legacy Loop-wide material"} · revision {material.revision}</small></span><svg className="loop-disclosure" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" /></svg></button>
-    <div className={`loop-material-body-shell ${open ? "open" : "closed"}`} id={bodyId} inert={!open} aria-hidden={!open}><div className="loop-material-body">{material.summary ? <p>{material.summary}</p> : null}{material.sections.map((section) => <section key={section.sectionId}><h4>{section.title}</h4>{section.body ? <p>{section.body}</p> : null}{section.bullets.length ? <ul>{section.bullets.map((bullet, index) => <li key={`${section.sectionId}-${index}`}>{bullet}</li>)}</ul> : null}</section>)}<footer>{material.provenance.sourceLabel} · Prepared {formatDate(material.provenance.preparedAt)}</footer></div></div>
+    <div className={`loop-material-body-shell ${open ? "open" : "closed"}`} id={bodyId} inert={!open} aria-hidden={!open}><div className="loop-material-body">{material.summary ? <p>{material.summary}</p> : null}{sections.map((section) => <section key={section.sectionId}><h4>{section.title}</h4>{section.body ? <p>{section.body}</p> : null}{section.bullets.length ? <ul>{section.bullets.map((bullet, index) => <li key={`${section.sectionId}-${index}`}>{bullet}</li>)}</ul> : null}</section>)}<footer>{material.provenance.sourceLabel} · Prepared {formatDate(material.provenance.preparedAt)}</footer></div></div>
   </article>;
 }
 
@@ -403,14 +407,8 @@ function QuestionCard({ question, index, promptMemory: resolvedPromptMemory, ans
     </header>
     <div className="loop-question-body">
       <div className="loop-memory-grid">
-        <section className="loop-memory-pane question" aria-label={`Question ${index + 1} prompt memory`}>
-          <header><h3>Question</h3><span className={`memory-confidence ${question.promptConfidence}`}>{sentenceId(question.promptConfidence)}</span></header>
-          <pre className="loop-memory-code" tabIndex={0}><code>{promptMemory}</code></pre>
-        </section>
-        <section className="loop-memory-pane solution" aria-label={`Question ${index + 1} solution memory`}>
-          <header><h3>Solution</h3>{question.answerConfidence ? <span className={`memory-confidence ${question.answerConfidence}`}>{sentenceId(question.answerConfidence)}</span> : <span className="memory-confidence missing">Confidence not recorded</span>}</header>
-          <pre className="loop-memory-code" tabIndex={0}><code>{answerMemory}</code></pre>
-        </section>
+        <CodeBlock language="text" title="Question" code={promptMemory} meta={<span className={`memory-confidence ${question.promptConfidence}`}>{sentenceId(question.promptConfidence)}</span>} />
+        <CodeBlock language="java" title="Solution" code={answerMemory} meta={question.answerConfidence ? <span className={`memory-confidence ${question.answerConfidence}`}>{sentenceId(question.answerConfidence)}</span> : <span className="memory-confidence missing">Confidence not recorded</span>} />
       </div>
       <div className="loop-question-notes">
       <section><h3>Question context</h3><p>{question.canonicalQuestionId ? `Linked to ${sentenceId(question.canonicalQuestionId)} in ${specialtyLabel(question.specialty)}.` : `Owner-recorded ${specialtyLabel(question.specialty)} interview question.`}</p>{question.canonicalQuestionId ? <a href={`?view=banks&specialty=${encodeURIComponent(question.specialty)}&problem=${encodeURIComponent(question.canonicalQuestionId)}`}>Open in Banks</a> : null}</section>
