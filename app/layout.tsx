@@ -10,6 +10,7 @@ import "./loops-redesign.css";
 import "./engineering-workspace.css";
 import "./workspace-atmosphere.css";
 import "./workspace-hero-metrics.css";
+import "./workspace-responsive.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

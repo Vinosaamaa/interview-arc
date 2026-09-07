@@ -1,0 +1,154 @@
+/* Responsive workspace geometry. Keep this after the shared visual layers. */
+.engineering-record-panel { container-type: inline-size; }
+.engineering-reader-header {
+  padding: clamp(20px, 5cqi, 40px);
+}
+.engineering-reader-header h1 {
+  max-width: none;
+  font-size: clamp(1.65rem, 5.5cqi, 3rem);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+/* The header must keep its full text height inside a flex panel. */
+.engineering-stat-panel { container-type: inline-size; overflow-y: auto; }
+.engineering-stat-panel > * { flex-shrink: 0; }
+.engineering-stat-panel .engineering-chronology { flex: none; overflow: visible; }
+.engineering-stat-panel > header { flex: 0 0 auto; }
+.engineering-stat-landscape > header h2 { font-size: clamp(1.75rem, 6cqi, 2.5rem); }
+.engineering-stat-landscape-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+}
+.engineering-stat-landscape-grid > section { min-width: 0; }
+
+@media (max-width: 1600px) {
+  .engineering-destination .engineering-workspace,
+  .engineering-destination .engineering-workspace.evidence-closed {
+    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  }
+  .engineering-destination .engineering-evidence-panel {
+    position: absolute;
+    z-index: 8;
+    inset: 0 0 0 auto;
+    width: min(360px, 100%);
+    max-height: 100%;
+  }
+  .engineering-workspace.evidence-closed .engineering-evidence-panel { display: none; }
+  .engineering-contents-nav .engineering-reader-panel-actions { display: flex; align-items: center; }
+  .engineering-reader-panel-actions button:last-child,
+  .engineering-panel-close { display: inline-flex; }
+  .engineering-statistics {
+    height: auto;
+    min-height: 0;
+    grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr);
+    align-items: start;
+  }
+  .engineering-stat-panel { height: 680px; min-height: 0; }
+  .engineering-stat-receipts { grid-column: 1 / -1; height: 680px; min-height: 0; }
+}
+
+@media (max-width: 1100px) {
+  .active-workspace-engineering .engineering-destination .engineering-workspace {
+    display: block;
+    height: max(480px, calc(100dvh - 90px));
+  }
+  .engineering-workspace.mobile-reader-open .engineering-index-panel,
+  .engineering-workspace:not(.mobile-reader-open) .engineering-record-panel { display: none; }
+  .engineering-workspace.mobile-reader-open .engineering-record-panel { display: block; }
+  .engineering-destination .engineering-reader-panel-actions button:first-child { display: inline-flex; }
+  .engineering-contents-nav { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .engineering-contents-nav .engineering-reader-panel-actions { padding-left: 0; margin-left: 0; border-left: 0; justify-content: flex-start; }
+  .engineering-destination .engineering-statistics { grid-template-columns: minmax(0, 1fr); }
+  .engineering-stat-receipts { grid-column: auto; }
+}
+
+/* Compact windows scroll to the results, then scroll within a stable pane.
+   Wide, tall desktop windows retain the existing viewport-fitted composition. */
+@media (max-width: 1280px), (max-height: 820px) {
+  html:has(.review-queue-workspace, .banks-page.bounded-list),
+  body:has(.review-queue-workspace, .banks-page.bounded-list) {
+    height: auto;
+    min-height: 100%;
+    overflow: auto;
+  }
+  .app-shell:has(.review-queue-workspace, .banks-page.bounded-list) {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+  .main-column:has(.review-queue-workspace, .banks-page.bounded-list) {
+    height: auto;
+    min-height: 100dvh;
+    display: block;
+  }
+  .page-content:has(> .review-queue-workspace, > .banks-page.bounded-list) {
+    height: auto;
+    min-height: 0;
+    padding-bottom: 32px;
+    overflow: visible;
+  }
+  .page-content > .review-queue-workspace,
+  .review-queue-base, .review-queue-container, .review-queue-page {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+  .review-queue-page { grid-template-rows: auto auto auto 480px auto; }
+  .review-queue-sheet { height: 480px; min-height: 0; max-height: none; }
+  .banks-page.bounded-list { height: auto; min-height: 0; display: block; }
+  .banks-page.bounded-list > .interview-page-hero { margin-bottom: 20px; }
+  .banks-page.bounded-list .bank-master-detail,
+  .banks-page.bounded-list .bank-master-pane { height: auto; min-height: 0; display: block; }
+  .banks-page.bounded-list .problem-bank-list {
+    height: 480px;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+/* Reuse the existing compact navigation before the sidebar squeezes the reader. */
+@media (min-width: 981px) and (max-width: 1100px) {
+  .app-shell { --sidebar-size: 0px; --sidebar-half: 0px; display: block; }
+  .sidebar { display: none; }
+  .topbar-brand { display: grid; }
+  .mobile-interview-nav {
+    position: fixed;
+    inset: auto 10px max(9px, env(safe-area-inset-bottom));
+    min-height: 58px;
+    padding: 6px;
+    border: 1px solid rgba(222,239,233,.2);
+    border-radius: 16px;
+    background: rgba(12,53,49,.96);
+    box-shadow: 0 15px 45px rgba(10,37,33,.28);
+    backdrop-filter: blur(16px);
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 3px;
+    z-index: 70;
+  }
+  .mobile-interview-nav button { min-width: 0; width: 100%; border: 0; border-radius: 10px; background: transparent; color: #9db9b1; font-size: .68rem; font-weight: 720; cursor: pointer; }
+  .mobile-interview-nav button.active { background: var(--signal); color: #183a31; }
+  .mobile-learn-nav { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .mobile-engineering-nav { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+@media (max-width: 1100px) {
+  .page-content:has(> .review-queue-workspace, > .banks-page.bounded-list) { padding-bottom: 94px; }
+}
+@media (max-width: 420px) {
+  .page-content:has(> .review-queue-workspace, > .banks-page.bounded-list) { padding-bottom: 140px; }
+}
+
+/* Give workspace names their own row before phone-width controls collide. */
+@media (max-width: 600px) {
+  .app-shell .topbar {
+    min-height: 92px;
+    padding-block: 6px;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "context actions" "switch switch";
+    grid-template-rows: 36px 40px;
+    gap: 4px 12px;
+  }
+  .app-shell .topbar > .topbar-workspace-switch { width: 100%; }
+}
