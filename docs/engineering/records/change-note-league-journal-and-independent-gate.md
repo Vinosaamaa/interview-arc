@@ -1,8 +1,8 @@
 ---
 schemaVersion: 1
-id: "change-note-league-journal-and-independent-gate"
+id: change-note-league-journal-and-independent-gate
 revision: 1
-type: "change-note"
+type: change-note
 status: "released"
 title: "Include League records and validate Engineering metadata independently"
 repository: "interview-arc"
