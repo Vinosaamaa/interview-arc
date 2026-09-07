@@ -1,8 +1,8 @@
 ---
 schemaVersion: 1
-id: "change-note-compact-workspace-geometry"
+id: change-note-compact-workspace-geometry
 revision: 1
-type: "change-note"
+type: change-note
 status: "released"
 title: "Keep compact workspace results and Engineering readers usable"
 repository: "interview-arc"
@@ -39,7 +39,7 @@ Short and narrow windows squeezed Reviews and Banks into the remaining viewport 
 
 ## Change
 
-Reviews and Banks use 480-pixel results panes with normal page scrolling at widths up to 1280 pixels or heights up to 820 pixels. Outside that condition their existing desktop geometry remains intact. Engineering moves evidence behind the existing Evidence control at 1600 pixels, reuses the existing Index interaction at 1100 pixels, and sizes titles to their reader container. Statistics headers keep their text height, columns adapt to available width, and compact panels retain a bounded scrolling surface. Compact navigation clears the final Review actions. Ambient rain, palette, and contrast are unchanged.
+Reviews and Banks use 480-pixel results panes with normal page scrolling at widths up to 1280 pixels or heights up to 820 pixels. Outside that condition their existing desktop geometry remains intact. Engineering moves evidence behind the existing Evidence control at 1600 pixels, reuses the existing Index interaction at 1100 pixels, and sizes titles to their reader container. Statistics headers keep their text height, columns adapt to available width, and compact panels retain a bounded scrolling surface. Compact navigation clears the final Review actions; below 600 pixels, workspace tabs use their own toolbar row to keep every label visible. Ambient rain, palette, and contrast are unchanged.
 
 ## Verification and delivery
 
