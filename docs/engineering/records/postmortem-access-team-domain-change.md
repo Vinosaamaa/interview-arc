@@ -34,6 +34,8 @@ run: null
 ---
 # Restore login after an Access team domain change
 
+Restored website login by aligning the Google callback and trusted Worker issuer with the current Cloudflare Access team domain, while preserving token validation and access policies.
+
 ## Impact and cause
 
 Google rejected login with `redirect_uri_mismatch` after the live Access team domain diverged from the registered callback. Updating the Google callback allowed sign-in to complete, but the website then returned `Unauthorized`: its deployed `TEAM_DOMAIN` still named the former issuer. The existing exact issuer check correctly rejected that mismatch. The checked-in deployment configuration also retained the former domain.
