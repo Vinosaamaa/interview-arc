@@ -3,7 +3,7 @@ schemaVersion: 1
 id: postmortem-access-team-domain-change
 revision: 1
 type: postmortem
-status: accepted
+status: closed
 title: Restore login after an Access team domain change
 repository: interview-arc
 capabilityIds: ["website-access-authentication"]
