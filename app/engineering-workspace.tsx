@@ -501,7 +501,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   const [selectedReceiptRepositories, setSelectedReceiptRepositories] = useState<string[]>([]);
   const [selectedRef, setSelectedRef] = useState(index.records[0]?.ref ?? "");
   const [mobileReaderOpen, setMobileReaderOpen] = useState(true);
-  const [narrowWorkbench, setNarrowWorkbench] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 1320px)").matches);
+  const [narrowWorkbench, setNarrowWorkbench] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 1600px)").matches);
   const [evidenceOpen, setEvidenceOpen] = useState(true);
   const [contentsSection, setContentsSection] = useState<EngineeringContentsSection>("overview");
   const [memoryReady, setMemoryReady] = useState(false);
@@ -542,9 +542,9 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
       setSelectedReceiptClassifications(memory.receiptClassifications ?? []);
       setSelectedReceiptRepositories(memory.receiptRepositories ?? []);
       if (index.records.some((record) => record.ref === memory.selectedRef)) setSelectedRef(memory.selectedRef!);
-      const narrowReader = window.matchMedia("(max-width: 760px)").matches;
+      const narrowReader = window.matchMedia("(max-width: 1100px)").matches;
       setMobileReaderOpen(rememberedLayer === "receipts" ? false : narrowReader ? true : memory.mobileReaderOpen ?? false);
-      const narrow = window.matchMedia("(max-width: 1320px)").matches;
+      const narrow = window.matchMedia("(max-width: 1600px)").matches;
       setNarrowWorkbench(narrow);
       setEvidenceOpen(narrow ? false : memory.evidenceOpen ?? true);
       setContentsSection(memory.contentsSection ?? "overview");
@@ -555,7 +555,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   }, [index.records]);
 
   useEffect(() => {
-    const media = window.matchMedia("(max-width: 1320px)");
+    const media = window.matchMedia("(max-width: 1600px)");
     const syncEvidenceLayout = () => {
       setNarrowWorkbench(media.matches);
       if (media.matches) setEvidenceOpen(false);

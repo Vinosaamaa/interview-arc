@@ -766,7 +766,7 @@ test("Engineering Journal is a persistent three-panel evidence workbench", async
   assert.match(styles, /gap:\s*20px/);
   assert.match(styles, /height:\s*calc\(100dvh - 90px\)/);
   assert.match(styles, /\.engineering-destination \.engineering-record-panel,[\s\S]*?\.engineering-destination \.engineering-evidence-panel \{ overflow-y: auto;/);
-  assert.match(source, /matchMedia\("\(max-width: 1320px\)"\)/);
+  assert.match(source, /matchMedia\("\(max-width: 1600px\)"\)/);
   assert.match(source, /addEventListener\("change", syncEvidenceLayout\)/);
   assert.match(source, /typeof parsed\.evidenceOpen === "boolean" \? parsed\.evidenceOpen : undefined/);
   assert.match(styles, /\.engineering-search \.sr-only/);
