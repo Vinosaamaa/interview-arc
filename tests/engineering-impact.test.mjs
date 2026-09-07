@@ -885,9 +885,16 @@ ${checks.none}`;
   );
 });
 
-test("PR title and body edits rerun the required validation workflow", () => {
-  const workflow = readFileSync(new URL("../.github/workflows/deploy.yml", import.meta.url), "utf8");
-  assert.match(workflow, /pull_request:\n\s+types: \[opened, synchronize, reopened, edited\]/);
+test("PR metadata edits rerun the independent gate without rebuilding", () => {
+  const workflow = readFileSync(new URL("../.github/workflows/engineering-impact.yml", import.meta.url), "utf8");
+  const deployment = readFileSync(new URL("../.github/workflows/deploy.yml", import.meta.url), "utf8");
+  assert.match(workflow, /types: \[opened, synchronize, reopened, edited, ready_for_review\]/);
+  assert.match(workflow, /name: Engineering impact/);
+  assert.match(workflow, /fetch-depth: 0/);
+  assert.match(workflow, /GH_TOKEN: \$\{\{ github.token \}\}/);
+  assert.match(workflow, /run: node scripts\/validate-engineering-impact\.mjs/);
+  assert.match(deployment, /types: \[opened, synchronize, reopened\]/);
+  assert.doesNotMatch(deployment, /validate-engineering-impact/);
 });
 
 test("forward receipts bind to the exact repository, title, and authorship mode", () => {

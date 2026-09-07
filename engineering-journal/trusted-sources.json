@@ -23,6 +23,14 @@
       "receiptPath": "docs/engineering/changes",
       "remoteUrl": "https://github.com/Vinosaamaa/interview-arc-live.git",
       "commit": "6ccb5ab9c8ca8c0306eea15eb35e1b9287220515"
+    },
+    {
+      "repository": "league-of-orchestrator",
+      "owner": "Vinosaamaa",
+      "canonicalPath": "docs/engineering/records",
+      "receiptPath": "docs/engineering/changes",
+      "remoteUrl": "https://github.com/Vinosaamaa/league-of-orchestrator.git",
+      "commit": "8e49f3fd51547789c1f061b4a1c71e68eead0bd1"
     }
   ]
 }

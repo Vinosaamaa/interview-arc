@@ -1,0 +1,32 @@
+name: Engineering impact
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: engineering-impact-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  engineering-impact:
+    name: Engineering impact
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test Engineering impact policy
+        run: node --test tests/engineering-impact.test.mjs
+      - name: Validate Engineering impact and PR receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/validate-engineering-impact.mjs
