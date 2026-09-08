@@ -114,6 +114,7 @@ body:has(.review-queue-workspace, .banks-page.bounded-list) { overflow: visible;
   display: grid;
   grid-template-rows: auto minmax(480px, 1fr);
 }
+.banks-page:not(.has-open-solution) .problem-bank-list { min-height: 480px; }
 .banks-page.bounded-list .problem-bank-list {
   height: auto;
   min-height: 480px;

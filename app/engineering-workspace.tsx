@@ -622,7 +622,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
 
   const displayEvidence = narrowWorkbench ? evidenceOpen : true;
 
-  return <div className={`engineering-destination engineering-destination-${view}`}><EngineeringDestinationHero index={index} view={view} /><section className={`engineering-workspace ${mobileReaderOpen ? "mobile-reader-open" : ""} ${displayEvidence ? "evidence-open" : "evidence-closed"}`}>
+  return <div className={`engineering-destination engineering-destination-${view}`}><EngineeringDestinationHero index={index} view={view} /><section className={`engineering-workspace ${mobileReaderOpen && selected ? "mobile-reader-open" : ""} ${displayEvidence ? "evidence-open" : "evidence-closed"}`}>
     <aside className="engineering-index-panel engineering-records" aria-label={`${ENGINEERING_VIEW_TITLES[view]} ${showReceipts ? "pull-request receipts" : "rich records"}`}>
       <header><div><h1>{ENGINEERING_VIEW_TITLES[view]}</h1><p>{showReceipts ? `${receipts.length} of ${index.receiptStatistics.totalReceipts} pull-request receipts` : `${records.length} factual ${records.length === 1 ? "record" : "records"}`}</p></div></header>
       {view === "journal" ? <div className="engineering-journal-layers" role="group" aria-label="Journal evidence layer">
