@@ -357,3 +357,61 @@ body:has(.review-queue-workspace, .banks-page.bounded-list) { overflow: visible;
     .loops-reader-workspace.has-open-reader)::before { top: 92px; }
   .case-title-row h2 { font-size: 32px; line-height: 1.15; overflow-wrap: anywhere; }
 }
+
+/* A long code line must size its own scroller, never the document grid. */
+.layered-reader { grid-template-columns: minmax(0, 1fr); }
+.layered-reader > *, .code-stage, .code-stage > pre { min-width: 0; }
+.code-stage.code-wrapped > pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.code-stage.code-wrapped > pre code { white-space: inherit; overflow-wrap: inherit; }
+
+@media (max-width: 600px) {
+  /* The active document owns the phone screen. Closing restores page chrome. */
+  .app-shell:has(.reader-workspace) .topbar,
+  .app-shell:has(.reader-workspace) .mobile-interview-nav { visibility: hidden; pointer-events: none; }
+  .app-shell:has(.reader-workspace) .reader-workspace {
+    /* Override every origin's master/nested width, including persisted index state. */
+    inset: var(--mobile-reader-top, 0px) 0 auto !important;
+    width: 100% !important;
+    max-width: none;
+    height: var(--mobile-reader-height, 100dvh) !important;
+    transform: none !important;
+    z-index: 100;
+    border-radius: 0;
+    background: #fffefb;
+  }
+  .app-shell .workspace-reader { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .app-shell .focused-attempt-pane { border: 0; border-radius: 0; }
+  .app-shell .reader-chrome {
+    min-height: 56px;
+    padding: max(6px, env(safe-area-inset-top)) 8px 6px;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .app-shell .reader-chrome :is(.icon-action, .reader-close, .master-pane-toggle),
+  .app-shell .reader-outline > summary { min-width: 44px; width: 44px; min-height: 44px; height: 44px; }
+  .app-shell .reader-chrome :is(.reader-close, .master-pane-toggle),
+  .app-shell .reader-outline > summary { color: #173d37; background: #e8f1ee; border-color: #9bb8af; }
+  .app-shell .reader-attempt-navigation { height: 44px; }
+  .app-shell .reader-attempt-navigation button { width: 36px; height: 44px; }
+  .app-shell .reader-attempt-navigation span { min-width: 32px; font-size: 12px; }
+  .app-shell .reader-chrome-leading, .app-shell .reader-chrome-actions { gap: 4px; }
+  .app-shell .workspace-reader-scroll.case-document {
+    padding: 20px 16px max(32px, env(safe-area-inset-bottom));
+    min-width: 0;
+    overscroll-behavior-y: contain;
+  }
+  .app-shell .workspace-reader-scroll :is(.layered-reader, .reader-group, .reader-subsection, .markdown-body, .language-code-tabs, .preferred-implementation-tabs) { min-width: 0; max-width: 100%; }
+  .app-shell .workspace-reader-scroll .reader-group { padding: 0; }
+  .app-shell .workspace-reader-scroll .reader-group > div { padding: 0 12px 12px; }
+  .app-shell .workspace-reader-scroll .reader-subsection { padding: 16px 0; }
+  .app-shell .workspace-reader-scroll .markdown-body { font-size: 16px; line-height: 1.65; }
+  .app-shell .workspace-reader-scroll .markdown-body :not(pre) > code { white-space: normal; overflow-wrap: anywhere; }
+  .app-shell .workspace-reader-scroll .markdown-body table { display: block; max-width: 100%; overflow-x: auto; }
+  .code-stage > figcaption { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 8px; }
+  .code-stage-actions { flex-wrap: wrap; }
+  .code-stage > figcaption button { min-height: 44px; padding: 8px 12px; font-size: 12px; }
+  .code-stage > pre { font-size: 15px; line-height: 1.65; padding: 12px; overscroll-behavior-x: contain; overscroll-behavior-y: auto; }
+  .code-stage-backdrop { padding: 0; top: var(--mobile-reader-top, 0px); bottom: auto; height: var(--mobile-reader-height, 100dvh); }
+  .code-stage-dialog { height: 100%; width: 100%; }
+  .code-stage-dialog .code-stage { border-radius: 0; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+}

@@ -1035,8 +1035,8 @@ test("Loops presents one chronological record with complete question and solutio
   assert.match(codeBlock, /aria-modal="true"/);
   assert.match(codeBlock, /button:not\(\[disabled\]\).*\[tabindex\]:not\(\[tabindex="-1"\]\)/);
   assert.match(codeBlock, /filter\(\(element\) => !element\.hidden && element\.getAttribute\("aria-hidden"\) !== "true"\)/);
-  assert.match(codeBlock, /closeRef\.current\?\.focus\(\)/);
-  assert.match(codeBlock, /expandRef\.current\?\.focus\(\)/);
+  assert.match(codeBlock, /closeRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(codeBlock, /expandRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
   assert.match(codeBlock, /Copy \$\{displayTitle\}/);
   assert.match(codeBlock, /Expand \$\{displayTitle\}/);
   assert.match(codeBlock, /Close full-screen \$\{displayTitle\}/);

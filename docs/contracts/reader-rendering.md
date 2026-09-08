@@ -82,6 +82,12 @@ canonical knowledge evolves through Solution Profile revisions.
 - Plain code must have explicit high-contrast foreground color. Keywords,
   strings, numbers, and comments must each have readable colors; never rely on
   the surrounding document color to inherit correctly onto a dark surface.
+- Long code lines scroll inside the code block, never widen the reader grid.
+  Wrap is an optional presentation control; Copy preserves the original source.
+- On phones, prose uses 16px type and code uses at least 15px. The focused reader
+  fills the visible viewport, including changes from browser bars, with its own
+  toolbar and no competing application dock. Closing restores the originating
+  page position. Expanding and closing code preserves the reader position.
 
 ## System-Design Diagrams
 
