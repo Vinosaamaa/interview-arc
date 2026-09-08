@@ -259,3 +259,101 @@ body:has(.review-queue-workspace, .banks-page.bounded-list) { overflow: visible;
 .architecture-diagram:not(.expanded) .architecture-diagram-viewport {
   overscroll-behavior-y: auto;
 }
+
+/* Phone controls need their own space; tablet and desktop geometry stays intact. */
+@media (max-width: 600px) {
+  .app-shell .mobile-interview-nav {
+    display: flex;
+    flex-wrap: wrap;
+    min-height: 0;
+    gap: 4px;
+  }
+  .app-shell .mobile-interview-nav button {
+    flex: 1 0 calc(25% - 4px);
+    width: auto;
+    min-height: 44px;
+    padding: 6px 4px;
+    font-size: 12px;
+    line-height: 1.2;
+    white-space: normal;
+  }
+  .app-shell .mobile-engineering-nav button { flex-basis: calc(33.333% - 4px); }
+  .app-shell .page-content,
+  .app-shell .page-content:has(> .review-queue-workspace, > .banks-page.bounded-list) {
+    padding-bottom: calc(132px + env(safe-area-inset-bottom));
+  }
+  .modal-backdrop, .letter-backdrop { z-index: 100; }
+  .composer, .composer.activity-composer-dialog {
+    max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+  .multi-activity-composer .type-selector { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .multi-activity-composer .type-selector button { min-width: 0; padding-inline: 6px; font-size: 12px; }
+  .app-shell .control-menu > .control-popover,
+  .review-expanded-controls > div {
+    position: fixed;
+    inset: 110px 16px auto;
+    width: auto;
+    max-height: calc(100dvh - 250px - env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea {
+    font-size: 16px;
+  }
+
+  /* Artwork moves out of the reading measure instead of drawing behind copy. */
+  .page-hero-art, .page-hero-pulse, .engineering-hero-sketch,
+  .learn-animal-sketch, .learn-hero-pulse { display: none; }
+  .workspace-hero-metrics { padding-inline: 14px; }
+  .workspace-hero-metrics > div + div { padding-left: 10px; }
+  .workspace-hero-metrics dt { font-size: 12px; line-height: 1.15; }
+  .workspace-hero-metrics dd { font-size: 18px; white-space: normal; overflow-wrap: anywhere; }
+
+  .hero-bank-totals > button {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 22px;
+    grid-template-rows: auto auto;
+    gap: 0 4px;
+    padding: 4px 8px;
+    align-content: center;
+  }
+  .hero-bank-totals > button > strong { font-size: 18px; line-height: 1; }
+  .hero-bank-totals > button > span {
+    grid-column: 1;
+    font-size: 12px;
+    line-height: 1.1;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  .hero-bank-totals > button > i {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    position: static;
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    align-self: center;
+  }
+  .learn-empty-layout .learn-empty-index { min-height: 0; }
+  .engineering-destination .engineering-facts { grid-template-columns: minmax(0, 1fr); }
+  .review-row-meta {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 8px 12px;
+  }
+  .review-row-meta > span { width: auto; }
+  .review-row-meta .review-outcome-chip { width: auto !important; min-width: 140px; }
+  .review-row-copy p { font-size: 14px; }
+  .app-shell .reader-workspace,
+  .app-shell .library-page.has-open-entry .past-master-detail,
+  .app-shell .banks-page.has-open-solution .bank-master-detail {
+    inset: 92px 0 calc(118px + env(safe-area-inset-bottom));
+    height: auto;
+  }
+  .app-shell :is(.library-page.has-open-entry, .banks-page.has-open-solution,
+    .journey-page.has-open-reader, .review-queue-workspace.has-open-reader,
+    .loops-reader-workspace.has-open-reader)::before { top: 92px; }
+  .case-title-row h2 { font-size: 32px; line-height: 1.15; overflow-wrap: anywhere; }
+}

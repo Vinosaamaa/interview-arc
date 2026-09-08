@@ -4,7 +4,9 @@ Overrides `design-system/interview-arc/MASTER.md` for chrome shared by Interview
 
 ## One bar
 
-The application bar is exactly **50px** (`40px` controls). Grid: `minmax(0,1fr) auto minmax(0,1fr)` → `context | switch | actions`. Vertical center everything. Do not grow it, stack a second chrome row, or hide the centered switch.
+Above 600px, the application bar is exactly **50px** (`40px` controls). Grid: `minmax(0,1fr) auto minmax(0,1fr)` → `context | switch | actions`. Vertical center everything. Keep the centered switch.
+
+At **≤600px**, the existing phone bar is **92px**: context and actions above the full-width workspace switch. Fixed readers start below that bar and end above the bottom dock. Dialogs sit above both navigation layers; filter popovers fit between them. Text inputs use at least 16px to avoid focus zoom on iOS.
 
 | Slot | Always | Rules |
 |------|--------|--------|
@@ -28,6 +30,10 @@ One `40px` link-icon control on every workspace. Menu: **Pop out timer**, **Conn
 
 `.mobile-interview-nav` is the only local nav. Tabs **evenly fill** the dock (`repeat(N, minmax(0,1fr))`, `width:100%`). Do not share Interview’s 7-column grid with fewer tabs.
 
+At **≤600px**, tabs wrap into readable rows: Interview 4 + 3, Engineering 3 + 3, Learn 4. Each row fills the dock. Targets are at least 44px tall, with labels at least 12px. Reserve outer-page clearance for the two-row dock and device safe area. Tablet and desktop geometry stays unchanged.
+
+Phone hero artwork is omitted where it competes with text. Keep the 350px hero and 50px summary band; labels may wrap, and Bank selectors reserve a separate column for their add control. Reviews and Banks retain their 580px minimum results height and normal outer-page scroll chaining. Empty Learn indexes do not reserve a large blank results area.
+
 | Workspace | N | Tabs |
 |-----------|---|------|
 | Interview | 7 | Today, Loops, Reviews, Past, Banks, Journey, Materials |
@@ -44,7 +50,7 @@ Rain is CSS falling streaks (`.ambient-rain-drop`): teal 2px trails with a splas
 
 1. Add one switcher segment and one `.active-workspace-*` token set (`docs/engineering/records/adr-workspace-atmosphere-token-boundary.md`).
 2. One full-width current-workspace nameplate, then numbered local nav (`01` …) for that workspace only. Destination accents on hero, selected nav, focus, and quiet panel tints only.
-3. Reuse this 50px bar, centered switch, icon tools, and even dock. Destination pages use the `350px` top-panel primitive in MASTER (eyebrow, display statement, quote, supporting copy, summary band). The lower summary band is one shared component across Interview, Learn, and Engineering: exact `50px`, three equal segments, editorial value first, compact label second, and short vertical separators. Workspace and destination accents change through tokens, never through different geometry or type hierarchy. Problem Banks keeps its documented interactive-selector exception while preserving the same height and value/label hierarchy.
+3. Reuse this responsive bar, centered switch, icon tools, and even dock. Destination pages use the `350px` top-panel primitive in MASTER (eyebrow, display statement, quote, supporting copy, summary band). The lower summary band is one shared component across Interview, Learn, and Engineering: exact `50px`, three equal segments, editorial value first, compact label second, and short vertical separators. Workspace and destination accents change through tokens, never through different geometry or type hierarchy. Problem Banks keeps its documented interactive-selector exception while preserving the same height and value/label hierarchy.
 4. Gutters show the workspace canvas; major panes are opaque `--workspace-paper`.
 
 ## Do not
