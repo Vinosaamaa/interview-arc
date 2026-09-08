@@ -3,7 +3,7 @@ schemaVersion: 1
 id: change-note-iphone-workspace-ui
 revision: 1
 type: change-note
-status: "proposed"
+status: "released"
 title: "Make phone workspace navigation, dialogs, and readers usable"
 repository: "interview-arc"
 capabilityIds: ["website-navigation","engineering-workspace"]
