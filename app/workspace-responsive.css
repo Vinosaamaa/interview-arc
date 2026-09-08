@@ -97,7 +97,12 @@
   color: #fff;
   line-height: 1;
 }
-.engineering-destination .engineering-panel-close:hover { filter: brightness(.92); }
+.engineering-destination .engineering-panel-close:is(:hover, :focus-visible, :active) {
+  border-color: var(--engineering-accent);
+  background: var(--engineering-accent);
+  color: #fff;
+  filter: brightness(.92);
+}
 @media (prefers-reduced-motion: reduce) {
   .engineering-destination .engineering-workspace :is(.engineering-index-panel, .engineering-evidence-panel) {
     transition: none;
@@ -241,4 +246,16 @@ body:has(.review-queue-workspace, .banks-page.bounded-list) { overflow: visible;
     gap: 4px 12px;
   }
   .app-shell .topbar > .topbar-workspace-switch { width: 100%; }
+}
+
+/* Embedded panes hand vertical wheel/touch scrolling back to their page at
+   either boundary. Full-screen readers and dialogs retain their own locks. */
+.review-queue-sheet,
+.banks-page:not(.has-open-solution) .problem-bank-list,
+.engineering-destination :is(.engineering-record-panel, .engineering-index-panel, .engineering-evidence-panel, .engineering-record-list, .engineering-receipt-list),
+.loop-preparation-list,
+.loop-switcher-options,
+.code-stage:not(.fullscreen) > pre,
+.architecture-diagram:not(.expanded) .architecture-diagram-viewport {
+  overscroll-behavior-y: auto;
 }
