@@ -47,7 +47,7 @@
   .engineering-stat-receipts { grid-column: 1 / -1; height: 680px; min-height: 0; }
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1600px) {
   .active-workspace-engineering .engineering-destination .engineering-workspace {
     display: block;
     height: max(480px, calc(100dvh - 90px));
@@ -56,56 +56,94 @@
   .engineering-workspace:not(.mobile-reader-open) .engineering-record-panel { display: none; }
   .engineering-workspace.mobile-reader-open .engineering-record-panel { display: block; }
   .engineering-destination .engineering-reader-panel-actions button:first-child { display: inline-flex; }
-  .engineering-contents-nav { grid-template-columns: minmax(0, 1fr); gap: 6px; }
-  .engineering-contents-nav .engineering-reader-panel-actions { padding-left: 0; margin-left: 0; border-left: 0; justify-content: flex-start; }
-  .engineering-destination .engineering-statistics { grid-template-columns: minmax(0, 1fr); }
-  .engineering-stat-receipts { grid-column: auto; }
 }
 
-/* Compact windows scroll to the results, then scroll within a stable pane.
-   Wide, tall desktop windows retain the existing viewport-fitted composition. */
-@media (max-width: 1280px), (max-height: 820px) {
-  html:has(.review-queue-workspace, .banks-page.bounded-list),
-  body:has(.review-queue-workspace, .banks-page.bounded-list) {
-    height: auto;
-    min-height: 100%;
-    overflow: auto;
-  }
-  .app-shell:has(.review-queue-workspace, .banks-page.bounded-list) {
-    height: auto;
-    min-height: 100dvh;
-    overflow: visible;
-  }
-  .main-column:has(.review-queue-workspace, .banks-page.bounded-list) {
-    height: auto;
-    min-height: 100dvh;
-    display: block;
-  }
-  .page-content:has(> .review-queue-workspace, > .banks-page.bounded-list) {
-    height: auto;
-    min-height: 0;
-    padding-bottom: 32px;
-    overflow: visible;
-  }
-  .page-content > .review-queue-workspace,
-  .review-queue-base, .review-queue-container, .review-queue-page {
-    height: auto;
-    min-height: 0;
-    overflow: visible;
-  }
-  .review-queue-page { grid-template-rows: auto auto auto 480px auto; }
-  .review-queue-sheet { height: 480px; min-height: 0; max-height: none; }
-  .banks-page.bounded-list { height: auto; min-height: 0; display: block; }
-  .banks-page.bounded-list > .interview-page-hero { margin-bottom: 20px; }
-  .banks-page.bounded-list .bank-master-detail,
-  .banks-page.bounded-list .bank-master-pane { height: auto; min-height: 0; display: block; }
-  .banks-page.bounded-list .problem-bank-list {
-    height: 480px;
-    min-height: 0;
-    max-height: none;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
+/* Results keep a usable minimum at every viewport size. The page grows when
+   the hero, controls and results no longer fit; tall windows retain spare space. */
+html:has(.review-queue-workspace, .banks-page.bounded-list),
+body:has(.review-queue-workspace, .banks-page.bounded-list) {
+  height: auto;
+  min-height: 100%;
+  overflow: auto;
+}
+body:has(.review-queue-workspace, .banks-page.bounded-list) { overflow: visible; }
+.app-shell:has(.review-queue-workspace, .banks-page.bounded-list) {
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+}
+.main-column:has(.review-queue-workspace, .banks-page.bounded-list) {
+  height: auto;
+  min-height: 100dvh;
+  display: block;
+}
+.page-content:has(> .review-queue-workspace, > .banks-page.bounded-list) {
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+}
+.page-content:has(> .review-queue-workspace) { padding-bottom: 22px; }
+.page-content:has(> .banks-page.bounded-list) { padding-bottom: 42px; }
+.page-content > .review-queue-workspace,
+.review-queue-base, .review-queue-container, .review-queue-page {
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+}
+.review-queue-page {
+  min-height: calc(100dvh - 97px);
+  grid-template-rows: auto auto auto minmax(480px, 1fr) auto;
+}
+.review-queue-sheet { height: auto; min-height: 480px; max-height: none; contain: size; }
+.banks-page.bounded-list {
+  height: auto;
+  min-height: calc(100dvh - 117px);
+  display: grid;
+  grid-template-rows: auto 20px minmax(0, 1fr);
+}
+.banks-page.bounded-list > .interview-page-hero { grid-row: 1; margin: 0; }
+.banks-page.bounded-list .bank-master-detail {
+  height: auto;
+  min-height: 0;
+  grid-row: 3;
+  align-items: stretch;
+}
+.banks-page.bounded-list .bank-master-pane {
+  height: auto;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(480px, 1fr);
+}
+.banks-page:not(.has-open-solution) .problem-bank-list { min-height: 480px; }
+.banks-page.bounded-list .problem-bank-list {
+  height: auto;
+  min-height: 480px;
+  max-height: none;
+  contain: size;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Filters own their intrinsic width instead of overflowing a fractional track. */
+.review-queue-controls { grid-template-columns: minmax(0, 1fr) auto; }
+
+@container (max-width: 820px) {
+  .review-queue-controls { grid-template-columns: minmax(0, 1fr); }
+  .review-filter-rail { flex-wrap: wrap; overflow: visible; }
+  .review-filter-rail > button { padding-inline: 8px; }
+}
+
+/* Tabs can scroll within their row while panel controls stay visible. */
+.engineering-contents-nav { grid-template-columns: minmax(0, 1fr) auto; }
+.engineering-contents-nav > div:first-child > button { flex-shrink: 0; }
+@media (max-width: 600px) {
+  .engineering-contents-nav { padding-inline: 8px; gap: 4px; }
+  .engineering-contents-nav .engineering-reader-panel-actions { margin-left: 0; padding-left: 4px; gap: 2px; }
+  .engineering-contents-nav button { padding-inline: 8px; }
+}
+@media (max-width: 1100px) {
+  .engineering-destination .engineering-statistics { grid-template-columns: minmax(0, 1fr); }
+  .engineering-stat-receipts { grid-column: auto; }
 }
 
 /* Reuse the existing compact navigation before the sidebar squeezes the reader. */
