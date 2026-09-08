@@ -542,7 +542,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
       setSelectedReceiptClassifications(memory.receiptClassifications ?? []);
       setSelectedReceiptRepositories(memory.receiptRepositories ?? []);
       if (index.records.some((record) => record.ref === memory.selectedRef)) setSelectedRef(memory.selectedRef!);
-      const narrowReader = window.matchMedia("(max-width: 1100px)").matches;
+      const narrowReader = window.matchMedia("(max-width: 1600px)").matches;
       setMobileReaderOpen(rememberedLayer === "receipts" ? false : narrowReader ? true : memory.mobileReaderOpen ?? false);
       const narrow = window.matchMedia("(max-width: 1600px)").matches;
       setNarrowWorkbench(narrow);
@@ -558,11 +558,14 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
     const media = window.matchMedia("(max-width: 1600px)");
     const syncEvidenceLayout = () => {
       setNarrowWorkbench(media.matches);
-      if (media.matches) setEvidenceOpen(false);
+      if (media.matches) {
+        setEvidenceOpen(false);
+        setMobileReaderOpen(view !== "journal" || journalLayer !== "receipts");
+      }
     };
     media.addEventListener("change", syncEvidenceLayout);
     return () => media.removeEventListener("change", syncEvidenceLayout);
-  }, []);
+  }, [journalLayer, view]);
 
   useLayoutEffect(() => {
     if (!memoryReady || !recordListRef.current) return;
