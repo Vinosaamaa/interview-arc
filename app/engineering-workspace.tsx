@@ -345,7 +345,7 @@ function EngineeringPanelClose({ onClose }: { onClose: () => void }) {
   return <button type="button" className="engineering-panel-close" onClick={onClose} aria-label="Close evidence">Close</button>;
 }
 
-function EngineeringEvidencePanel({ record, index, onSelect, onClose }: { record: EngineeringJournalRecord; index: EngineeringJournalIndex; onSelect: (ref: string) => void; onClose: () => void }) {
+function EngineeringEvidencePanel({ record, index, onSelect, onClose, hidden }: { record: EngineeringJournalRecord; index: EngineeringJournalIndex; onSelect: (ref: string) => void; onClose: () => void; hidden: boolean }) {
   const corrections = [...record.amendedBy, ...record.supersededBy];
   const outgoing = [...record.amends, ...record.supersedes, ...record.relatedRecords, ...record.decisions, ...record.incidents, ...record.features];
   const backlinks = index.backlinks[record.ref] ?? [];
@@ -354,7 +354,7 @@ function EngineeringEvidencePanel({ record, index, onSelect, onClose }: { record
   const relatedReceipts = (index.receiptBacklinks[record.ref] ?? [])
     .map((ref) => receiptByRef.get(ref))
     .filter((receipt): receipt is EngineeringPullRequestReceipt => Boolean(receipt));
-  return <aside className="engineering-evidence-panel" aria-label="Evidence and lineage">
+  return <aside className="engineering-evidence-panel" aria-label="Evidence and lineage" inert={hidden} aria-hidden={hidden}>
     <header><div><span>Evidence desk</span><h2>Exact evidence</h2></div><EngineeringPanelClose onClose={onClose} /></header>
     <dl className="engineering-evidence-ledger">
       <div><dt>Record ref</dt><dd><code>{record.ref}</code><CopyControl value={record.ref} label="record reference" /></dd></div>
@@ -378,8 +378,8 @@ function EngineeringEvidencePanel({ record, index, onSelect, onClose }: { record
   </aside>;
 }
 
-function EngineeringEmptyEvidencePanel({ view, onClose }: { view: EngineeringView; onClose: () => void }) {
-  return <aside className="engineering-evidence-panel engineering-evidence-empty" aria-label="Exact evidence">
+function EngineeringEmptyEvidencePanel({ view, onClose, hidden }: { view: EngineeringView; onClose: () => void; hidden: boolean }) {
+  return <aside className="engineering-evidence-panel engineering-evidence-empty" aria-label="Exact evidence" inert={hidden} aria-hidden={hidden}>
     <header><div><span>Evidence desk</span><h2>Exact evidence</h2></div><EngineeringPanelClose onClose={onClose} /></header>
     <div className="engineering-evidence-empty-copy" role="status">
       <strong>No eligible record selected.</strong>
@@ -612,6 +612,10 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
     setEvidenceOpen(false);
     requestAnimationFrame(() => workbenchRef.current?.querySelector<HTMLButtonElement>('.engineering-index-close')?.focus());
   };
+  const closeEvidence = () => {
+    setEvidenceOpen(false);
+    requestAnimationFrame(() => workbenchRef.current?.querySelector<HTMLButtonElement>('.engineering-reader-panel-actions button:last-child')?.focus());
+  };
   const toggleEvidence = () => {
     setMobileReaderOpen(true);
     setEvidenceOpen((open) => !open);
@@ -641,9 +645,11 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   const displayEvidence = narrowWorkbench ? evidenceOpen : true;
 
   return <div className={`engineering-destination engineering-destination-${view}`}><EngineeringDestinationHero index={index} view={view} /><section ref={workbenchRef} className={`engineering-workspace ${mobileReaderOpen ? "index-closed" : "index-open"} ${displayEvidence ? "evidence-open" : "evidence-closed"}`} onKeyDown={(event) => {
-    if (event.key === "Escape" && narrowWorkbench && !mobileReaderOpen) { event.preventDefault(); closeIndex(); }
+    if (event.key !== "Escape" || !narrowWorkbench) return;
+    if (!mobileReaderOpen) { event.preventDefault(); closeIndex(); }
+    else if (evidenceOpen) { event.preventDefault(); closeEvidence(); }
   }}>
-    <aside id="engineering-index" className="engineering-index-panel engineering-records" aria-label={`${ENGINEERING_VIEW_TITLES[view]} ${showReceipts ? "pull-request receipts" : "rich records"}`}>
+    <aside id="engineering-index" inert={narrowWorkbench && mobileReaderOpen} aria-hidden={narrowWorkbench && mobileReaderOpen} className="engineering-index-panel engineering-records" aria-label={`${ENGINEERING_VIEW_TITLES[view]} ${showReceipts ? "pull-request receipts" : "rich records"}`}>
       <header><div><h1>{ENGINEERING_VIEW_TITLES[view]}</h1><p>{showReceipts ? `${receipts.length} of ${index.receiptStatistics.totalReceipts} pull-request receipts` : `${records.length} factual ${records.length === 1 ? "record" : "records"}`}</p></div><button type="button" className="engineering-panel-close engineering-index-close" onClick={closeIndex} aria-label="Close index">Close</button></header>
       {view === "journal" ? <div className="engineering-journal-layers" role="group" aria-label="Journal evidence layer">
         <button type="button" aria-pressed={journalLayer === "records"} onClick={() => chooseJournalLayer("records")}><span>Rich records</span><strong>{index.statistics.totalRecords}</strong></button>
@@ -687,6 +693,6 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
       </div>}
     </aside>
     {selected ? <RecordReader record={selected} onToggleIndex={toggleIndex} indexOpen={!mobileReaderOpen} onToggleEvidence={toggleEvidence} evidenceOpen={evidenceOpen} contentsSection={contentsSection} onContentsSectionChange={setContentsSection} /> : <div className="engineering-reader engineering-record-panel engineering-reader-empty"><button type="button" className="engineering-panel-toggle" onClick={toggleIndex} aria-expanded={!mobileReaderOpen} aria-controls="engineering-index">Open index</button><EmptyEngineeringView view={view} /></div>}
-    {selected ? <EngineeringEvidencePanel record={selected} index={index} onSelect={openRelation} onClose={() => setEvidenceOpen(false)} /> : <EngineeringEmptyEvidencePanel view={view} onClose={() => setEvidenceOpen(false)} />}
+    {selected ? <EngineeringEvidencePanel record={selected} index={index} onSelect={openRelation} onClose={closeEvidence} hidden={!displayEvidence} /> : <EngineeringEmptyEvidencePanel view={view} onClose={closeEvidence} hidden={!displayEvidence} />}
   </section></div>;
 }

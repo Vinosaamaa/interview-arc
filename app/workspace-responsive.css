@@ -33,7 +33,13 @@
     width: min(360px, 100%);
     max-height: 100%;
   }
-  .engineering-workspace.evidence-closed .engineering-evidence-panel { display: none; }
+  .engineering-destination .engineering-workspace .engineering-evidence-panel { display: block; }
+  .engineering-destination .engineering-workspace.evidence-closed .engineering-evidence-panel {
+    transform: translateX(100%);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
   .engineering-contents-nav .engineering-reader-panel-actions { display: flex; align-items: center; }
   .engineering-reader-panel-actions button:last-child,
   .engineering-panel-close { display: inline-flex; }
@@ -51,6 +57,7 @@
   .active-workspace-engineering .engineering-destination .engineering-workspace {
     display: block;
     height: max(480px, calc(100dvh - 90px));
+    overflow: hidden;
   }
   .engineering-destination .engineering-workspace .engineering-record-panel { display: block; }
   .engineering-destination .engineering-index-panel {
@@ -61,16 +68,46 @@
     max-height: 100%;
     box-shadow: 0 18px 48px rgba(8, 31, 29, .18);
   }
-  .engineering-destination .engineering-workspace.index-closed .engineering-index-panel { display: none; }
+  .engineering-destination .engineering-workspace .engineering-index-panel { display: grid; }
+  .engineering-destination .engineering-workspace.index-closed .engineering-index-panel {
+    transform: translateX(-100%);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .engineering-destination .engineering-workspace :is(.engineering-index-panel, .engineering-evidence-panel) {
+    transition: transform 200ms ease, opacity 200ms ease, visibility 0s;
+  }
+  .engineering-destination .engineering-workspace.index-closed .engineering-index-panel,
+  .engineering-destination .engineering-workspace.evidence-closed .engineering-evidence-panel {
+    transition-delay: 0s, 0s, 200ms;
+  }
   .engineering-destination .engineering-reader-panel-actions button:first-child { display: inline-flex; }
+}
+
+.engineering-destination .engineering-panel-close,
+.engineering-index-panel > header .engineering-index-close {
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 8px 14px;
+  border: 1px solid var(--engineering-accent);
+  border-radius: 8px;
+  background: var(--engineering-accent);
+  color: #fff;
+  line-height: 1;
+}
+.engineering-destination .engineering-panel-close:hover { filter: brightness(.92); }
+@media (prefers-reduced-motion: reduce) {
+  .engineering-destination .engineering-workspace :is(.engineering-index-panel, .engineering-evidence-panel) {
+    transition: none;
+  }
 }
 
 .engineering-index-panel > header .engineering-index-close {
   width: auto;
   height: auto;
   flex-shrink: 0;
-  padding: 6px 12px;
-  border-radius: 999px;
 }
 
 /* Results keep a usable minimum at every viewport size. The page grows when
