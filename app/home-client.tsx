@@ -62,6 +62,7 @@ import { useLiveState, useReadOnlyLiveState } from "./live-sync";
 import { emptyJournal } from "./current-day";
 import { ArrivalRitual, AtmosphereField, type AtmosphereMode } from "./arrival-ritual";
 import CodeBlock from "./code-block";
+import { useMobileReaderViewport } from "./use-mobile-reader-viewport";
 import ReaderRenderDiagnosticsPanel from "./reader-render-diagnostics-panel";
 import {
   recordNavigationDiagnostic,
@@ -1509,7 +1510,7 @@ function transcriptBodyWithoutCodeAttempts(source: string, attempts: LeetCodeCod
 
 function CodeAttemptBody({ attempt }: { attempt: LeetCodeCodeAttempt }) {
   return <div className="code-attempt-body">
-    <pre><code>{attempt.code}</code></pre>
+    <CodeBlock language={attempt.language} code={attempt.code} />
     <p><strong>{attempt.observedCorrectness.replaceAll("_", " ")}</strong> · {attempt.finalDeclaration}</p>
     {attempt.complexity && <div className="code-attempt-complexity">{attempt.complexity.time && <span>Time: {attempt.complexity.time}</span>}{attempt.complexity.space && <span>Space: {attempt.complexity.space}</span>}</div>}
     {attempt.concreteFindings.length > 0 && <ul>{attempt.concreteFindings.map((finding) => <li key={finding}>{finding}</li>)}</ul>}
@@ -2351,6 +2352,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
     if (!documentScrollLocked) return;
     return acquireDocumentScrollLock();
   }, [documentScrollLocked]);
+  useMobileReaderViewport(arrivalState === "entered" && documentScrollLocked);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => setPipSupported("documentPictureInPicture" in window));

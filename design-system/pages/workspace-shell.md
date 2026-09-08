@@ -6,7 +6,7 @@ Overrides `design-system/interview-arc/MASTER.md` for chrome shared by Interview
 
 Above 600px, the application bar is exactly **50px** (`40px` controls). Grid: `minmax(0,1fr) auto minmax(0,1fr)` → `context | switch | actions`. Vertical center everything. Keep the centered switch.
 
-At **≤600px**, the existing phone bar is **92px**: context and actions above the full-width workspace switch. Fixed readers start below that bar and end above the bottom dock. Dialogs sit above both navigation layers; filter popovers fit between them. Text inputs use at least 16px to avoid focus zoom on iOS.
+At **≤600px**, the phone bar is **92px**: context and actions above the full-width workspace switch. An open practice or solution reader fills the visible viewport and hides the application bar and bottom dock. Its own toolbar remains available; closing restores the originating page and scroll position. Dialogs sit above the reader; page filter popovers fit between the navigation layers. Text inputs use at least 16px to avoid focus zoom on iOS.
 
 | Slot | Always | Rules |
 |------|--------|--------|

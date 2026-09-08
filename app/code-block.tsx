@@ -33,6 +33,8 @@ export default function CodeBlock({ language, code, title, meta }: {
   meta?: ReactNode;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [wrapped, setWrapped] = useState(false);
+  const [placeholderStyle, setPlaceholderStyle] = useState({ height: 260, margin: "0px" });
   const expandRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -48,12 +50,12 @@ export default function CodeBlock({ language, code, title, meta }: {
       if (!restoreFocusRef.current) return;
       const focusFrame = window.requestAnimationFrame(() => {
         restoreFocusRef.current = false;
-        expandRef.current?.focus();
+        expandRef.current?.focus({ preventScroll: true });
       });
       return () => window.cancelAnimationFrame(focusFrame);
     }
     const releaseScrollLock = acquireDocumentScrollLock();
-    const frame = window.requestAnimationFrame(() => closeRef.current?.focus());
+    const frame = window.requestAnimationFrame(() => closeRef.current?.focus({ preventScroll: true }));
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -79,22 +81,27 @@ export default function CodeBlock({ language, code, title, meta }: {
     };
   }, [closeFullscreen, expanded]);
 
-  const stage = (fullscreen: boolean) => <figure className={`code-stage ${fullscreen ? "fullscreen" : ""}`} role="group" aria-label={`${displayTitle} viewer`}>
+  const stage = (fullscreen: boolean) => <figure className={`code-stage ${fullscreen ? "fullscreen" : ""} ${wrapped ? "code-wrapped" : ""}`} role="group" aria-label={`${displayTitle} viewer`}>
     <figcaption>
       <span className="code-stage-heading"><strong>{displayTitle}</strong>{title ? <small>{language || "code"}</small> : null}</span>
       {meta ? <span className="code-stage-caption-meta">{meta}</span> : null}
       <span className="code-stage-actions">
+        <button type="button" onClick={() => setWrapped(value => !value)} aria-pressed={wrapped} aria-label={`Wrap ${displayTitle} lines`}>Wrap</button>
         <button type="button" onClick={() => void navigator.clipboard.writeText(code)} aria-label={`Copy ${displayTitle}`}>Copy</button>
-        <button type="button" ref={fullscreen ? closeRef : expandRef} onClick={fullscreen ? closeFullscreen : () => setExpanded(true)} aria-label={fullscreen ? `Close full-screen ${displayTitle}` : `Expand ${displayTitle}`}>{fullscreen ? "Close" : "Expand"}</button>
+        <button type="button" ref={fullscreen ? closeRef : expandRef} onClick={fullscreen ? closeFullscreen : (event) => {
+          const figure = event.currentTarget.closest("figure");
+          if (figure) setPlaceholderStyle({ height: figure.getBoundingClientRect().height, margin: getComputedStyle(figure).margin });
+          setExpanded(true);
+        }} aria-label={fullscreen ? `Close full-screen ${displayTitle}` : `Expand ${displayTitle}`}>{fullscreen ? "Close" : "Expand"}</button>
       </span>
     </figcaption>
-    <pre tabIndex={0}><code>{highlightedCode(code, language)}</code></pre>
+    <pre tabIndex={0} aria-label={`${displayTitle} code`}><code>{highlightedCode(code, language)}</code></pre>
   </figure>;
 
   if (!expanded || typeof document === "undefined") return stage(false);
 
   return <>
-    <div className="code-stage-placeholder" aria-hidden="true" />
+    <div className="code-stage-placeholder" style={{ ...placeholderStyle, minHeight: 0 }} aria-hidden="true" />
     {createPortal(<div className="code-stage-backdrop" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget) closeFullscreen();
     }}>

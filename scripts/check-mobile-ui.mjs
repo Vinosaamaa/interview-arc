@@ -107,8 +107,8 @@ try {
   await visit("view=past");
   await page.getByRole("button", { name: "Read Explain a bounded cache and its eviction policy", exact: true }).click();
   const reader = await box(page.locator(".past-master-detail"));
-  const readerDock = await box(page.locator(".mobile-interview-nav:visible"));
-  assert.ok(reader.y >= 92 && reader.bottom <= readerDock.y, "Reader must fit between phone header and navigation");
+  assert.equal(await page.locator(".mobile-interview-nav").isVisible(), false);
+  assert.ok(Math.abs(reader.y) <= 1 && Math.abs(reader.height - 956) <= 1, "Phone reader must fill the visible viewport");
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 440, "Reader document overflow");
   await page.screenshot({ path: join(output, "past-reader.png") });
   assert.deepEqual(errors, [], "No hydration or runtime errors after populated reader navigation");
