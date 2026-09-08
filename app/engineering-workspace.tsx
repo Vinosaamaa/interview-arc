@@ -252,14 +252,16 @@ function ReceiptTimeline({
 
 function RecordReader({
   record,
-  onBack,
+  onToggleIndex,
+  indexOpen,
   onToggleEvidence,
   evidenceOpen,
   contentsSection,
   onContentsSectionChange,
 }: {
   record: EngineeringJournalRecord;
-  onBack: () => void;
+  onToggleIndex: () => void;
+  indexOpen: boolean;
   onToggleEvidence: () => void;
   evidenceOpen: boolean;
   contentsSection: EngineeringContentsSection;
@@ -283,7 +285,7 @@ function RecordReader({
     <nav className="engineering-contents-nav" aria-label="Record contents">
       <div>{contents.map(([id, label]) => <button type="button" key={id} className={contentsSection === id ? "active" : ""} aria-current={contentsSection === id ? "location" : undefined} onClick={() => visit(id)}>{label}</button>)}</div>
       <div className="engineering-reader-panel-actions" role="group" aria-label="Workbench panels">
-        <button type="button" className="engineering-panel-toggle" onClick={onBack} aria-label="Open index">
+        <button type="button" className="engineering-panel-toggle" onClick={onToggleIndex} aria-expanded={indexOpen} aria-controls="engineering-index" aria-label={indexOpen ? "Hide index" : "Open index"}>
           <EngineeringIcon name="index" />
           <span>Index</span>
         </button>
@@ -505,6 +507,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
   const [evidenceOpen, setEvidenceOpen] = useState(true);
   const [contentsSection, setContentsSection] = useState<EngineeringContentsSection>("overview");
   const [memoryReady, setMemoryReady] = useState(false);
+  const workbenchRef = useRef<HTMLElement>(null);
   const recordListRef = useRef<HTMLDivElement>(null);
   const indexScrollTopRef = useRef(0);
   const scrollPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -599,10 +602,25 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
     }, 160);
   };
 
+  const closeIndex = () => {
+    setMobileReaderOpen(true);
+    requestAnimationFrame(() => workbenchRef.current?.querySelector<HTMLButtonElement>('[aria-controls="engineering-index"]')?.focus());
+  };
+  const toggleIndex = () => {
+    if (!mobileReaderOpen) { closeIndex(); return; }
+    setMobileReaderOpen(false);
+    setEvidenceOpen(false);
+    requestAnimationFrame(() => workbenchRef.current?.querySelector<HTMLButtonElement>('.engineering-index-close')?.focus());
+  };
+  const toggleEvidence = () => {
+    setMobileReaderOpen(true);
+    setEvidenceOpen((open) => !open);
+  };
+
   if (view === "statistics") return <div className="engineering-destination engineering-destination-statistics"><EngineeringDestinationHero index={index} view={view} /><EngineeringStatistics index={index} /></div>;
   const activeSelectedRef = records.some((record) => record.ref === selectedRef) ? selectedRef : records[0]?.ref;
   const selected = index.records.find((record) => record.ref === activeSelectedRef) ?? null;
-  const select = (ref: string) => { setSelectedRef(ref); setContentsSection("overview"); setMobileReaderOpen(true); };
+  const select = (ref: string) => { setSelectedRef(ref); setContentsSection("overview"); closeIndex(); };
   const openRelation = (ref: string) => {
     setJournalLayer("records");
     setQuery("");
@@ -622,9 +640,11 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
 
   const displayEvidence = narrowWorkbench ? evidenceOpen : true;
 
-  return <div className={`engineering-destination engineering-destination-${view}`}><EngineeringDestinationHero index={index} view={view} /><section className={`engineering-workspace ${mobileReaderOpen && selected ? "mobile-reader-open" : ""} ${displayEvidence ? "evidence-open" : "evidence-closed"}`}>
-    <aside className="engineering-index-panel engineering-records" aria-label={`${ENGINEERING_VIEW_TITLES[view]} ${showReceipts ? "pull-request receipts" : "rich records"}`}>
-      <header><div><h1>{ENGINEERING_VIEW_TITLES[view]}</h1><p>{showReceipts ? `${receipts.length} of ${index.receiptStatistics.totalReceipts} pull-request receipts` : `${records.length} factual ${records.length === 1 ? "record" : "records"}`}</p></div></header>
+  return <div className={`engineering-destination engineering-destination-${view}`}><EngineeringDestinationHero index={index} view={view} /><section ref={workbenchRef} className={`engineering-workspace ${mobileReaderOpen ? "index-closed" : "index-open"} ${displayEvidence ? "evidence-open" : "evidence-closed"}`} onKeyDown={(event) => {
+    if (event.key === "Escape" && narrowWorkbench && !mobileReaderOpen) { event.preventDefault(); closeIndex(); }
+  }}>
+    <aside id="engineering-index" className="engineering-index-panel engineering-records" aria-label={`${ENGINEERING_VIEW_TITLES[view]} ${showReceipts ? "pull-request receipts" : "rich records"}`}>
+      <header><div><h1>{ENGINEERING_VIEW_TITLES[view]}</h1><p>{showReceipts ? `${receipts.length} of ${index.receiptStatistics.totalReceipts} pull-request receipts` : `${records.length} factual ${records.length === 1 ? "record" : "records"}`}</p></div><button type="button" className="engineering-panel-close engineering-index-close" onClick={closeIndex} aria-label="Close index">Close</button></header>
       {view === "journal" ? <div className="engineering-journal-layers" role="group" aria-label="Journal evidence layer">
         <button type="button" aria-pressed={journalLayer === "records"} onClick={() => chooseJournalLayer("records")}><span>Rich records</span><strong>{index.statistics.totalRecords}</strong></button>
         <button type="button" aria-pressed={journalLayer === "receipts"} onClick={() => chooseJournalLayer("receipts")}><span>All merged PRs</span><strong>{index.receiptStatistics.totalReceipts}</strong></button>
@@ -666,7 +686,7 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
         {records.length === 0 ? <EmptyEngineeringView view={view} /> : null}
       </div>}
     </aside>
-    {selected ? <RecordReader record={selected} onBack={() => setMobileReaderOpen(false)} onToggleEvidence={() => setEvidenceOpen((open) => !open)} evidenceOpen={evidenceOpen} contentsSection={contentsSection} onContentsSectionChange={setContentsSection} /> : <div className="engineering-reader engineering-record-panel engineering-reader-empty"><EmptyEngineeringView view={view} /></div>}
+    {selected ? <RecordReader record={selected} onToggleIndex={toggleIndex} indexOpen={!mobileReaderOpen} onToggleEvidence={toggleEvidence} evidenceOpen={evidenceOpen} contentsSection={contentsSection} onContentsSectionChange={setContentsSection} /> : <div className="engineering-reader engineering-record-panel engineering-reader-empty"><button type="button" className="engineering-panel-toggle" onClick={toggleIndex} aria-expanded={!mobileReaderOpen} aria-controls="engineering-index">Open index</button><EmptyEngineeringView view={view} /></div>}
     {selected ? <EngineeringEvidencePanel record={selected} index={index} onSelect={openRelation} onClose={() => setEvidenceOpen(false)} /> : <EngineeringEmptyEvidencePanel view={view} onClose={() => setEvidenceOpen(false)} />}
   </section></div>;
 }

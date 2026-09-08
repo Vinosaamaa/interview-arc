@@ -52,10 +52,25 @@
     display: block;
     height: max(480px, calc(100dvh - 90px));
   }
-  .engineering-workspace.mobile-reader-open .engineering-index-panel,
-  .engineering-workspace:not(.mobile-reader-open) .engineering-record-panel { display: none; }
-  .engineering-workspace.mobile-reader-open .engineering-record-panel { display: block; }
+  .engineering-destination .engineering-workspace .engineering-record-panel { display: block; }
+  .engineering-destination .engineering-index-panel {
+    position: absolute;
+    z-index: 8;
+    inset: 0 auto 0 0;
+    width: min(360px, 100%);
+    max-height: 100%;
+    box-shadow: 0 18px 48px rgba(8, 31, 29, .18);
+  }
+  .engineering-destination .engineering-workspace.index-closed .engineering-index-panel { display: none; }
   .engineering-destination .engineering-reader-panel-actions button:first-child { display: inline-flex; }
+}
+
+.engineering-index-panel > header .engineering-index-close {
+  width: auto;
+  height: auto;
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
 }
 
 /* Results keep a usable minimum at every viewport size. The page grows when
