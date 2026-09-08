@@ -279,7 +279,12 @@ function RecordReader({
   ];
   const visit = (section: EngineeringContentsSection) => {
     onContentsSectionChange(section);
-    readerRef.current?.querySelector<HTMLElement>(`[data-engineering-section="${section}"]`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+    const reader = readerRef.current;
+    const target = reader?.querySelector<HTMLElement>(`[data-engineering-section="${section}"]`);
+    if (!reader || !target) return;
+    const toolbarHeight = reader.querySelector<HTMLElement>(".engineering-contents-nav")?.getBoundingClientRect().height ?? 0;
+    const top = section === "overview" ? 0 : target.getBoundingClientRect().top - reader.getBoundingClientRect().top + reader.scrollTop - reader.clientTop - toolbarHeight;
+    reader.scrollTo({ top: Math.max(0, top), behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
   };
   return <article ref={readerRef} className="engineering-reader engineering-record-panel" aria-labelledby="engineering-record-title">
     <nav className="engineering-contents-nav" aria-label="Record contents">
@@ -570,6 +575,18 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
     return () => media.removeEventListener("change", syncEvidenceLayout);
   }, [journalLayer, view]);
 
+  useEffect(() => {
+    if (!narrowWorkbench || view === "statistics" || (mobileReaderOpen && !evidenceOpen)) return;
+    const dismissOutside = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || target.closest('.engineering-index-panel, .engineering-evidence-panel, .engineering-reader-panel-actions, [aria-controls="engineering-index"]')) return;
+      setMobileReaderOpen(true);
+      setEvidenceOpen(false);
+    };
+    document.addEventListener("pointerdown", dismissOutside, true);
+    return () => document.removeEventListener("pointerdown", dismissOutside, true);
+  }, [evidenceOpen, mobileReaderOpen, narrowWorkbench, view]);
+
   useLayoutEffect(() => {
     if (!memoryReady || !recordListRef.current) return;
     recordListRef.current.scrollTop = indexScrollTopRef.current;
@@ -604,17 +621,17 @@ export default function EngineeringWorkspace({ index, view, onNavigateView }: { 
 
   const closeIndex = () => {
     setMobileReaderOpen(true);
-    requestAnimationFrame(() => workbenchRef.current?.querySelector<HTMLButtonElement>('[aria-controls="engineering-index"]')?.focus());
+    requestAnimationFrame(() => workbenchRef.current?.querySelector<HTMLButtonElement>('[aria-controls="engineering-index"]')?.focus({ preventScroll: true }));
   };
   const toggleIndex = () => {
     if (!mobileReaderOpen) { closeIndex(); return; }
     setMobileReaderOpen(false);
     setEvidenceOpen(false);
-    requestAnimationFrame(() => workbenchRef.current?.querySelector<HTMLButtonElement>('.engineering-index-close')?.focus());
+    requestAnimationFrame(() => workbenchRef.current?.querySelector<HTMLButtonElement>('.engineering-index-close')?.focus({ preventScroll: true }));
   };
   const closeEvidence = () => {
     setEvidenceOpen(false);
-    requestAnimationFrame(() => workbenchRef.current?.querySelector<HTMLButtonElement>('.engineering-reader-panel-actions button:last-child')?.focus());
+    requestAnimationFrame(() => workbenchRef.current?.querySelector<HTMLButtonElement>('.engineering-reader-panel-actions button:last-child')?.focus({ preventScroll: true }));
   };
   const toggleEvidence = () => {
     setMobileReaderOpen(true);
