@@ -34,6 +34,8 @@ run: null
 ---
 # Keep populated mobile readers within the visible screen
 
+Constrain populated phone readers to the visible screen, preserve the originating page position, and make long code readable without clipping surrounding prose.
+
 ## Impact and cause
 
 The initial mobile audit exercised destination pages and a short attempt, but did not cover populated nested solutions with long code. Owner screenshots showed clipped prose, a right gutter, and application navigation competing with the reader.
