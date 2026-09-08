@@ -1906,9 +1906,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
       [surface]: typeof next === "function" ? next(current[surface]) : next,
     }));
   }, [activeListSurface]);
-  const [workspaceUiMemory] = useState(() =>
-    readSessionJson<WorkspaceUiMemory>("interview-arc-workspace-ui-v1", {})
-  );
+  const [workspaceUiMemoryReady, setWorkspaceUiMemoryReady] = useState(false);
   const [readerClosing, setReaderClosing] = useState(false);
   const [listRestoring, setListRestoring] = useState<ListSurface | null>(null);
   const [lifecycleDialog, setLifecycleDialog] = useState<LifecycleDialog>(null);
@@ -1917,20 +1915,20 @@ export default function HomeClient({ content, today, engineering, initialLocatio
   const [freshDayConfirmOpen, setFreshDayConfirmOpen] = useState(false);
   const [requiredResultIds, setRequiredResultIds] = useState<string[]>([]);
   const [lastModeIntent, setLastModeIntent] = useState<{ activityId: string; interactionModeId: string } | null>(null);
-  const [libraryTypeFilters, setLibraryTypeFilters] = useState<ActivityType[]>(workspaceUiMemory.libraryTypeFilters ?? []);
-  const [libraryAttentionFilters, setLibraryAttentionFilters] = useState<LibraryAttentionFilter[]>(workspaceUiMemory.libraryAttentionFilters ?? []);
-  const [libraryModeFilters, setLibraryModeFilters] = useState<LibraryModeFilter[]>(workspaceUiMemory.libraryModeFilters ?? []);
-  const [librarySearch, setLibrarySearch] = useState(workspaceUiMemory.librarySearch ?? "");
-  const [libraryStarFilter, setLibraryStarFilter] = useState(workspaceUiMemory.libraryStarFilter ?? false);
-  const [bankTypeFilters, setBankTypeFilters] = useState<ActivityType[]>(workspaceUiMemory.bankTypeFilters ?? []);
-  const [bankAttentionFilters, setBankAttentionFilters] = useState<BankAttentionFilter[]>(workspaceUiMemory.bankAttentionFilters ?? []);
-  const [bankLevelFilters, setBankLevelFilters] = useState<Array<"easy" | "medium" | "hard">>(workspaceUiMemory.bankLevelFilters ?? []);
-  const [bankSortKey, setBankSortKey] = useState<"frequency" | "recent" | "acceptance">(workspaceUiMemory.bankSortKey ?? "frequency");
-  const [bankSortDir, setBankSortDir] = useState<"asc" | "desc">(workspaceUiMemory.bankSortDir ?? "asc");
-  const [bankSearch, setBankSearch] = useState(workspaceUiMemory.bankSearch ?? "");
-  const [bankTagFilters, setBankTagFilters] = useState<string[]>(workspaceUiMemory.bankTagFilters ?? []);
-  const [bankStarFilter, setBankStarFilter] = useState<"all" | "starred">(workspaceUiMemory.bankStarFilter ?? "all");
-  const [bankTopicsExpanded, setBankTopicsExpanded] = useState(workspaceUiMemory.bankTopicsExpanded ?? false);
+  const [libraryTypeFilters, setLibraryTypeFilters] = useState<ActivityType[]>([]);
+  const [libraryAttentionFilters, setLibraryAttentionFilters] = useState<LibraryAttentionFilter[]>([]);
+  const [libraryModeFilters, setLibraryModeFilters] = useState<LibraryModeFilter[]>([]);
+  const [librarySearch, setLibrarySearch] = useState("");
+  const [libraryStarFilter, setLibraryStarFilter] = useState(false);
+  const [bankTypeFilters, setBankTypeFilters] = useState<ActivityType[]>([]);
+  const [bankAttentionFilters, setBankAttentionFilters] = useState<BankAttentionFilter[]>([]);
+  const [bankLevelFilters, setBankLevelFilters] = useState<Array<"easy" | "medium" | "hard">>([]);
+  const [bankSortKey, setBankSortKey] = useState<"frequency" | "recent" | "acceptance">("frequency");
+  const [bankSortDir, setBankSortDir] = useState<"asc" | "desc">("asc");
+  const [bankSearch, setBankSearch] = useState("");
+  const [bankTagFilters, setBankTagFilters] = useState<string[]>([]);
+  const [bankStarFilter, setBankStarFilter] = useState<"all" | "starred">("all");
+  const [bankTopicsExpanded, setBankTopicsExpanded] = useState(false);
   const [bankVisibleCount, setBankVisibleCount] = useState(BANK_INITIAL_VISIBLE_COUNT);
   const [expandedBankDesk, setExpandedBankDesk] = useState<ActivityType | null>(null);
   const composerSpecialtyViewsRef = useRef<ComposerSpecialtyViews>(createComposerSpecialtyViews());
@@ -2249,6 +2247,31 @@ export default function HomeClient({ content, today, engineering, initialLocatio
   }, [learnDestination, viewMemoryReady]);
 
   useEffect(() => {
+    // Match the server on the first render, then restore preferences behind
+    // the arrival screen. Do not overwrite storage with defaults meanwhile.
+    const frame = window.requestAnimationFrame(() => {
+      const memory = readSessionJson<WorkspaceUiMemory>("interview-arc-workspace-ui-v1", {});
+      setLibraryTypeFilters(memory.libraryTypeFilters ?? []);
+      setLibraryAttentionFilters(memory.libraryAttentionFilters ?? []);
+      setLibraryModeFilters(memory.libraryModeFilters ?? []);
+      setLibrarySearch(memory.librarySearch ?? "");
+      setLibraryStarFilter(memory.libraryStarFilter ?? false);
+      setBankTypeFilters(memory.bankTypeFilters ?? []);
+      setBankAttentionFilters(memory.bankAttentionFilters ?? []);
+      setBankLevelFilters(memory.bankLevelFilters ?? []);
+      setBankSortKey(memory.bankSortKey ?? "frequency");
+      setBankSortDir(memory.bankSortDir ?? "asc");
+      setBankSearch(memory.bankSearch ?? "");
+      setBankTagFilters(memory.bankTagFilters ?? []);
+      setBankStarFilter(memory.bankStarFilter ?? "all");
+      setBankTopicsExpanded(memory.bankTopicsExpanded ?? false);
+      setWorkspaceUiMemoryReady(true);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    if (!workspaceUiMemoryReady) return;
     const memory: WorkspaceUiMemory = {
       libraryTypeFilters,
       libraryAttentionFilters,
@@ -2267,6 +2290,7 @@ export default function HomeClient({ content, today, engineering, initialLocatio
     };
     window.sessionStorage.setItem("interview-arc-workspace-ui-v1", JSON.stringify(memory));
   }, [
+    workspaceUiMemoryReady,
     bankAttentionFilters,
     bankLevelFilters,
     bankSearch,
