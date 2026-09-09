@@ -13,7 +13,8 @@ result controls and does not publish practice data.
 ## Fixed identity
 
 - Application: `/Applications/Google Chrome.app`
-- Profile: `browser-profiles/leetcode-submitter` at the repository root
+- Profile: ignored `browser-profiles/leetcode-submitter` inside the canonical
+  primary repository, shared by all its linked Git worktrees
 - Controller state: `.interview-arc-controller/` inside that dedicated profile
 - CDP endpoint: `http://127.0.0.1:9223`
 - Client: Playwright `chromium.connectOverCDP`
@@ -30,6 +31,48 @@ receipt. Do not use `~/Library/Caches` or another home-directory path: the
 specialist sandbox may read those locations without permission to create the
 lock. If the fixed profile itself is unwritable, fail before browser action with
 `controller_state_unwritable` and report the profile-local directory.
+
+Git's common `.git` directory identifies that primary checkout, independent of
+the invocation directory, worktree placement, and repository symlink. Missing
+metadata, bare repositories, and separate Git-directory layouts fail with
+`controller_repository_unresolved`; the controller never guesses another owner.
+The profile parent, profile, controller-state directory, and receipt directory
+must be real directories, not symlinks. Invalid paths fail before local writes.
+
+### Existing-profile adoption
+
+Every CLI command, including read-only `receipt`, checks the exact historical
+parent-based profile locations for the canonical checkout and invoking
+worktree. If either legacy location exists, return
+`controller_profile_migration_required` before creating a directory, lock,
+receipt, or browser connection. Coexisting new and old profiles remain blocked.
+The controller does not scan other profiles, read login data, move files,
+replace profiles, stop Chrome, or automatically choose a fresh identity.
+
+Adoption is a separate coordinator-owned release step with explicit owner
+authorization. Inventory the exact existing dedicated profile and its controller
+receipts, establish that its browser and controller owners are stopped, and
+preserve the entire profile together with pending and terminal receipts when
+relocating it into the canonical repository. Never move an active profile,
+overwrite an existing destination, merge two profile identities, or delete
+pending evidence. If the original owner or another historical worktree profile
+is ambiguous, preserve it and resolve ownership first. Do not run old controller
+versions after adoption: their parent-based path rule can recreate a legacy
+profile. Other worktrees must use this corrected controller before practice.
+
+After adoption, exact `receipt` recovery works from the preserved files without
+browser access. A pending receipt still forbids resubmission. Old preflight
+receipts cannot authorize submission: preflight now includes the canonical
+profile path as well as browser and problem identity. Run `ensure` and an
+explicitly authorized `navigate` to establish fresh preflight before practice.
+
+The fixed endpoint must expose its exact profile and port through
+`Browser.getBrowserCommandLine`. A mismatch or unavailable verification fails
+before any tab inspection/action and releases the controller connection. New
+dedicated launches include `--enable-automation` so Chrome exposes that read;
+an older launch without it requires coordinator-owned offline readiness, never
+automatic restart or fallback. PR tests do not establish live authenticated
+readiness; post-merge adoption and real `ensure` remain separate receipts.
 
 ## Mandatory specialist route
 
