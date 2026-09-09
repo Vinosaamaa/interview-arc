@@ -1012,6 +1012,7 @@ test("receipt CLI recovery reads durable state without acquiring or connecting t
       ["receipt", "--invocation-id", request.invocationId],
       {
         statePaths,
+        assertProfileReady: async () => {},
         acquireController: async () => assert.fail("receipt must not acquire the browser"),
         withLock: async () => assert.fail("receipt must not acquire the controller lock"),
       },
@@ -1101,6 +1102,7 @@ test("ensure preserves problem preflight while navigate records the verified ide
     {
       version: 1,
       browserId: "browser-123",
+      profilePath: FIXED_CONFIG.profilePath,
       identity,
       recordedAt: "2026-08-03T00:00:00.000Z",
     },

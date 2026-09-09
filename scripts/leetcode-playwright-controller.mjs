@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { execFile as execFileCallback } from "node:child_process";
+import { execFile as execFileCallback, execFileSync } from "node:child_process";
+import { lstatSync, realpathSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import {
   mkdir,
@@ -21,11 +22,6 @@ const execFile = promisify(execFileCallback);
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.dirname(scriptDirectory);
-const repositoryParent = path.dirname(repositoryRoot);
-const outerWorkspace = path.basename(repositoryParent) === ".worktrees"
-  ? path.dirname(repositoryParent)
-  : repositoryParent;
-const fixedProfilePath = path.join(outerWorkspace, "browser-profiles", "leetcode-submitter");
 
 export function controllerStatePathsForProfile(profilePath) {
   const stateDirectory = path.join(profilePath, ".interview-arc-controller");
@@ -36,11 +32,6 @@ export function controllerStatePathsForProfile(profilePath) {
     receiptDirectory: path.join(stateDirectory, "receipts"),
   });
 }
-
-const controllerState = controllerStatePathsForProfile(fixedProfilePath);
-const localStateDirectory = controllerState.stateDirectory;
-const preflightReceiptPath = controllerState.preflightReceiptPath;
-const controllerLockPath = controllerState.controllerLockPath;
 
 export const PLAYWRIGHT_BOOTSTRAP_COMMAND =
   "npm exec --yes pnpm@9.15.9 -- install --frozen-lockfile";
@@ -59,11 +50,92 @@ export class ControllerError extends Error {
   }
 }
 
+export function resolveControllerRepository(checkoutRoot) {
+  try {
+    const commonDirectory = realpathSync(path.resolve(checkoutRoot, execFileSync("git", [
+      "rev-parse", "--git-common-dir",
+    ], { cwd: checkoutRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim()));
+    // Linked worktrees share the primary checkout's .git directory. A bare or
+    // separately stored Git directory cannot establish this fixed profile owner.
+    if (path.basename(commonDirectory) !== ".git") throw new Error("Unsupported Git directory layout");
+    const canonicalRoot = path.dirname(commonDirectory);
+    const topLevel = realpathSync(execFileSync("git", ["rev-parse", "--show-toplevel"], {
+      cwd: canonicalRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    }).trim());
+    if (topLevel !== canonicalRoot) throw new Error("Canonical checkout is unavailable");
+    const legacyParent = (root) => path.basename(path.dirname(root)) === ".worktrees"
+      ? path.dirname(path.dirname(root)) : path.dirname(root);
+    const profilePath = path.join(canonicalRoot, "browser-profiles", "leetcode-submitter");
+    return Object.freeze({
+      canonicalRoot,
+      profilePath,
+      // Preserve identities created by either the primary checkout or this
+      // linked checkout under the old parent-based rule. Never scan profiles.
+      legacyProfilePaths: [...new Set([canonicalRoot, realpathSync(checkoutRoot)]
+        .map((root) => path.join(legacyParent(root), "browser-profiles", "leetcode-submitter")))]
+        .filter((candidate) => candidate !== profilePath),
+    });
+  } catch {
+    throw new ControllerError(
+      "controller_repository_unresolved",
+      "The controller requires a primary Git checkout with a .git directory or one of its linked worktrees. Restore that checkout before running the controller.",
+    );
+  }
+}
+
+let repositoryLocation;
+try {
+  repositoryLocation = resolveControllerRepository(repositoryRoot);
+} catch (error) {
+  // Keep CLI errors structured without creating state in a guessed directory.
+  repositoryLocation = { error, profilePath: null };
+}
+const fixedProfilePath = repositoryLocation.profilePath;
+const controllerState = fixedProfilePath ? controllerStatePathsForProfile(fixedProfilePath) : {};
+const localStateDirectory = controllerState.stateDirectory;
+const preflightReceiptPath = controllerState.preflightReceiptPath;
+const controllerLockPath = controllerState.controllerLockPath;
+
+function existingPath(candidate) {
+  try {
+    return lstatSync(candidate);
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+export function assertControllerProfileReady(location = repositoryLocation) {
+  if (location.error) throw location.error;
+  const legacyProfiles = location.legacyProfilePaths.filter(existingPath);
+  if (legacyProfiles.length) {
+    throw new ControllerError(
+      "controller_profile_migration_required",
+      "A legacy controller profile is still present. The coordinator must preserve it and complete explicit offline adoption before any controller command; do not create a replacement profile or retry a submission.",
+      { profilePath: location.profilePath, legacyProfilePaths: legacyProfiles },
+    );
+  }
+  const statePaths = controllerStatePathsForProfile(location.profilePath);
+  for (const candidate of [
+    path.dirname(location.profilePath), location.profilePath,
+    statePaths.stateDirectory, statePaths.receiptDirectory,
+  ]) {
+    const entry = existingPath(candidate);
+    if (entry && (!entry.isDirectory() || entry.isSymbolicLink())) {
+      throw new ControllerError(
+        "controller_profile_path_invalid",
+        "The dedicated profile, its parent, and its controller state must be real directories inside the canonical repository, not links or files.",
+        { profilePath: location.profilePath },
+      );
+    }
+  }
+}
+
 export function toControllerStateError(error, stateDirectory = localStateDirectory) {
   if (!["EACCES", "EPERM", "EROFS"].includes(error?.code)) return error;
   return new ControllerError(
     "controller_state_unwritable",
-    "The controller cannot write state inside the dedicated Chrome profile. Verify that the Interview Prep workspace is writable, then run ensure again.",
+    "The controller cannot write state inside the dedicated Chrome profile. Verify that the canonical Interview Arc repository is writable, then run ensure again.",
     { stateDirectory, cause: error.message },
   );
 }
@@ -1442,6 +1514,7 @@ async function launchFixedChrome(configuration) {
     `--remote-debugging-address=${configuration.cdpAddress}`,
     `--remote-debugging-port=${configuration.cdpPort}`,
     `--user-data-dir=${configuration.profilePath}`,
+    "--enable-automation",
     "--no-first-run",
     "--no-default-browser-check",
     "https://leetcode.com/problemset/",
@@ -1495,7 +1568,10 @@ async function validateFixedBrowserIdentity(browser) {
     return { profileVerification: "verified" };
   } catch (error) {
     if (error instanceof ControllerError) throw error;
-    return { profileVerification: "unavailable", reason: error.message };
+    throw new ControllerError(
+      "browser_identity_unverified",
+      "The fixed endpoint's dedicated profile could not be verified. The coordinator must restore a verifiable dedicated browser before any tab action.",
+    );
   } finally {
     await session?.detach?.();
   }
@@ -1537,6 +1613,7 @@ export function preflightReceiptForRequest(request, current, recordedAt = new Da
   if (request.command !== "navigate") return null;
   return {
     version: 1,
+    profilePath: fixedProfilePath,
     browserId: current.browserId,
     identity: request.identity,
     recordedAt,
@@ -1560,6 +1637,7 @@ async function verifyPreflightReceipt(identity) {
     !current.live
     || !current.browserId
     || current.browserId !== receipt.browserId
+    || receipt.profilePath !== fixedProfilePath
     || receipt.identity?.slug !== identity.slug
   ) {
     throw new ControllerError(
@@ -1618,6 +1696,7 @@ export async function runCli(argv, dependencies = {}) {
   let request;
   try {
     request = parseCli(argv);
+    await (dependencies.assertProfileReady ?? assertControllerProfileReady)();
   } catch (error) {
     return controllerFailureEnvelope(error);
   }
@@ -1663,8 +1742,13 @@ export async function runCli(argv, dependencies = {}) {
   }
 }
 
-const invokedAsScript = process.argv[1]
-  && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+let invokedAsScript = false;
+try {
+  invokedAsScript = Boolean(process.argv[1])
+    && realpathSync(path.resolve(process.argv[1])) === fileURLToPath(import.meta.url);
+} catch {
+  // Importers may use stdin (argv[1] === "-") or a non-file entrypoint.
+}
 if (invokedAsScript) {
   const envelope = await runCli(process.argv.slice(2));
   const output = `${JSON.stringify(envelope, null, 2)}\n`;

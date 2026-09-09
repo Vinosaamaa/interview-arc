@@ -10,6 +10,8 @@ const eslintConfig = defineConfig([
     // Generated Worker output, caches, and vendored agent tooling are not app sources.
     ".wrangler/**",
     ".cache/**",
+    "browser-profiles/**",
+    ".worktrees/**",
     ".agents/skills/impeccable/**",
     // Default ignores of eslint-config-next:
     ".next/**",
