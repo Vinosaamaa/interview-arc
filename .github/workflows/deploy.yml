@@ -165,7 +165,7 @@ jobs:
           fi
 
   publish:
-    if: github.event_name != 'pull_request'
+    if: always() && needs.validate.result == 'success' && github.event_name != 'pull_request'
     needs: validate
     runs-on: ubuntu-latest
     environment: production
