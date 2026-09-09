@@ -1,11 +1,8 @@
-import HomeClient from "./home-client";
-import { loadContentIndex } from "../db/content";
+import HomeBootstrap from "./home-bootstrap";
 import { dateInTimeZone } from "./current-day";
-import engineeringJournal from "../engineering-journal/generated/index.json";
-import type { EngineeringJournalIndex } from "../engineering-journal/index";
 
-// Content now lives in D1 (mirrored from Git by scripts/import-content.mjs), so
-// render dynamically per request instead of baking content in at build time.
+// Keep login entry cheap: private D1 content is fetched after the shell loads,
+// and the interactive dashboard / Git journal are browser chunks, not SSR props.
 export const dynamic = "force-dynamic";
 
 type PageProps = {
@@ -18,11 +15,8 @@ function firstParam(value: string | string[] | undefined) {
 
 export default async function Page({ searchParams }: PageProps) {
   const route = await searchParams;
-  const content = await loadContentIndex();
-  return <HomeClient
-    content={content}
+  return <HomeBootstrap
     today={dateInTimeZone(new Date())}
-    engineering={engineeringJournal as EngineeringJournalIndex}
     initialLocation={{
       workspace: firstParam(route?.workspace),
       view: firstParam(route?.view),

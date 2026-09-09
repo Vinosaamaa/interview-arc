@@ -129,6 +129,12 @@ optional field mandatory.
 
 ## Verification
 
+At phone widths (≤600px), practice and solution readers are a direct document:
+no nested card borders, rounded panels, or accumulating horizontal padding.
+Conversation labels and metadata must not overlap. Keep the transcript, code,
+and every ordered section intact; this is shared presentation only. Desktop
+retains its existing layered reading layout.
+
 Reader changes require:
 
 - `pnpm lint`;

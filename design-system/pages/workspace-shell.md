@@ -6,7 +6,7 @@ Overrides `design-system/interview-arc/MASTER.md` for chrome shared by Interview
 
 Above 600px, the application bar is exactly **50px** (`40px` controls). Grid: `minmax(0,1fr) auto minmax(0,1fr)` → `context | switch | actions`. Vertical center everything. Keep the centered switch.
 
-At **≤600px**, the phone bar is **92px**: context and actions above the full-width workspace switch. An open practice or solution reader fills the visible viewport and hides the application bar and bottom dock. Its own toolbar remains available; closing restores the originating page and scroll position. Dialogs sit above the reader; page filter popovers fit between the navigation layers. Text inputs use at least 16px to avoid focus zoom on iOS.
+At **≤600px**, the phone bar is **56px**: home mark, workspace switch, and atmosphere/tools controls share one row. An open practice or solution reader fills the visible viewport and hides the application bar and bottom dock. Its own toolbar remains available; closing restores the originating page and scroll position. Dialogs sit above the reader; page filter popovers fit between the navigation layers. Text inputs use at least 16px to avoid focus zoom on iOS.
 
 | Slot | Always | Rules |
 |------|--------|--------|
@@ -16,7 +16,7 @@ At **≤600px**, the phone bar is **92px**: context and actions above the full-w
 
 At **≤980px**: hide the sidebar. Put the canonical favicon (`/favicon.svg`) on the context row. Local destinations move to the bottom dock. Do not squeeze the destination rail to 190px or 82px, and do not leave a leftover 64–74px icon strip above the bar.
 
-At **≤480px**: hide the music dock; keep atmosphere + tools at `36px`.
+At **≤600px**: hide the music dock; keep atmosphere + tools at `36px` wide and `44px` tall.
 
 ## Sidebar (desktop)
 
@@ -30,7 +30,7 @@ One `40px` link-icon control on every workspace. Menu: **Pop out timer**, **Conn
 
 `.mobile-interview-nav` is the only local nav. Tabs **evenly fill** the dock (`repeat(N, minmax(0,1fr))`, `width:100%`). Do not share Interview’s 7-column grid with fewer tabs.
 
-At **≤600px**, tabs wrap into readable rows: Interview 4 + 3, Engineering 3 + 3, Learn 4. Each row fills the dock. Targets are at least 44px tall, with labels at least 12px. Reserve outer-page clearance for the two-row dock and device safe area. Tablet and desktop geometry stays unchanged.
+At **≤600px**, every workspace keeps its tabs on one horizontal row. The row scrolls sideways when necessary; labels never wrap. Targets are at least 44px tall, with labels at least 12px. Reserve outer-page clearance for the single-row dock and device safe area. Filter and action rails in Reviews, Banks, Past, and Journey also stay on one horizontal row. Tablet and desktop geometry stays unchanged.
 
 Phone hero artwork is omitted where it competes with text. Keep the 350px hero and 50px summary band; labels may wrap, and Bank selectors reserve a separate column for their add control. Reviews and Banks retain their 580px minimum results height and normal outer-page scroll chaining. Empty Learn indexes do not reserve a large blank results area.
 
