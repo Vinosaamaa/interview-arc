@@ -17,5 +17,6 @@ test("four isolated Workers can enter and the next waits for a released slot", {
     assert.equal(entered, true);
   } finally {
     await Promise.all(releases.map((release) => release()));
+    if (fifth) await (await fifth)();
   }
 });
