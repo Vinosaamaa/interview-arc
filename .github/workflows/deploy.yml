@@ -14,7 +14,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: cloudflare-${{ github.ref }}
+  group: cloudflare-${{ github.ref }}-${{ github.event.pull_request.draft && 'draft' || 'active' }}
   cancel-in-progress: true
 
 jobs:
