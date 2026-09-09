@@ -1,7 +1,7 @@
 # Controller profile location did not follow its repository contract
 
-- Owning issue: #447
-- Change: the issue-linked controller-profile PR
+- Owning issue: [#447](https://github.com/Vinosaamaa/interview-arc/issues/447)
+- Change: [PR #448](https://github.com/Vinosaamaa/interview-arc/pull/448)
 - Status: source repair; live adoption and release verification pending
 
 ## Impact and detection
