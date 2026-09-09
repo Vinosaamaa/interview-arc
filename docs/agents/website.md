@@ -244,8 +244,12 @@ exports are ignored convenience copies, not publication.
   inspect submissions, or submit code.
 - Do not introduce code execution, LeetCode scraping, or embedded ChatGPT.
 - Use semantic HTML and accessible labels. Support mobile widths and `prefers-reduced-motion`.
-- Run `pnpm lint` and `pnpm test` after relevant code changes. For database or
-  import changes, also run the local D1 migration and content-import commands.
+- Run `pnpm lint` and focused tests locally; `pnpm test:fast` covers source,
+  unit, and contract checks without rebuilding. Build once when verifying
+  bundled behavior, then reuse it with `pnpm test:prepared` for the relevant
+  tests. Required hosted CI owns the complete suite; do not repeat it locally
+  without a concrete failure reason. For database or import changes, also run
+  the local D1 migration and content-import commands.
 - Pull requests validate without production credentials. After merge to `main`,
   the GitHub workflow validates first, then applies pending production
   migrations and refreshes the content projection. It deploys the Worker only
