@@ -52,9 +52,9 @@ export class ControllerError extends Error {
 
 export function resolveControllerRepository(checkoutRoot) {
   try {
-    const commonDirectory = realpathSync(execFileSync("git", [
-      "rev-parse", "--path-format=absolute", "--git-common-dir",
-    ], { cwd: checkoutRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim());
+    const commonDirectory = realpathSync(path.resolve(checkoutRoot, execFileSync("git", [
+      "rev-parse", "--git-common-dir",
+    ], { cwd: checkoutRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim()));
     // Linked worktrees share the primary checkout's .git directory. A bare or
     // separately stored Git directory cannot establish this fixed profile owner.
     if (path.basename(commonDirectory) !== ".git") throw new Error("Unsupported Git directory layout");
