@@ -11,6 +11,7 @@ import "./engineering-workspace.css";
 import "./workspace-atmosphere.css";
 import "./workspace-hero-metrics.css";
 import "./workspace-responsive.css";
+import "./mobile-workspace.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

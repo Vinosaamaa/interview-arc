@@ -28,6 +28,7 @@ function BotanicalArtwork({ tone }: { tone: InterviewPageTone }) {
 
 export default function InterviewPageHero({ tone, eyebrow, title, quote, description, metrics, footer }: InterviewPageHeroProps) {
   return <header className={`interview-page-hero tone-${tone}`}>
+    <div className="phone-page-heading"><h1>{{ today: "Today", loops: "Loops", reviews: "Reviews", past: "Past", banks: "Problem bank", journey: "Journey", materials: "Career materials" }[tone]}</h1><p>{{ today: "Your current practice, ready when you are.", loops: "Prepare for the conversation ahead.", reviews: "A short second pass. Make it stick.", past: "Your practice, ready to revisit.", banks: "Choose something worth practicing.", journey: "Small sessions. Lasting progress.", materials: "Your story, clearly told." }[tone]}</p></div>
     <div className="page-hero-narrative">
       <div className="page-hero-copy"><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><HeroQuote className="page-hero-quote">{quote}</HeroQuote>{description ? <p className="page-hero-lede">{description}</p> : null}</div>
       <div className="page-hero-art" aria-hidden="true"><BotanicalArtwork tone={tone} /></div>

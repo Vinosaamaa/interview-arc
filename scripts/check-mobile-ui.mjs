@@ -32,15 +32,16 @@ try {
     const r = e.getBoundingClientRect();
     return { x: r.x, y: r.y, right: r.right, bottom: r.bottom, width: r.width, height: r.height, client: e.clientWidth, scroll: e.scrollWidth };
   });
-  for (const [workspace, view, query] of routes) {
+  for (const [workspace, view, query] of process.env.UI_INTERACTIONS_ONLY ? [] : routes) {
     await visit(query);
     assert.ok(await page.locator(`.active-workspace-${workspace}`).count(), query);
     assert.equal(await page.locator(".sidebar").isVisible(), false);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 440, `${query}: document overflow`);
-    const nav = page.locator(".mobile-interview-nav:visible");
+    const nav = page.locator(".phone-navigation:visible");
     const sizes = await nav.locator("button").evaluateAll(elements => elements.map(e => ({
       top: e.getBoundingClientRect().top, height: e.getBoundingClientRect().height, width: e.clientWidth, scroll: e.scrollWidth, font: parseFloat(getComputedStyle(e).fontSize),
     })));
+    assert.equal(sizes.length, workspace === "learn" ? 4 : 5, `${query}: primary destinations and More`);
     assert.ok(sizes.every(s => Math.abs(s.top - sizes[0].top) <= 1), `${query}: navigation wrapped`);
     const chrome = await page.locator(".topbar-context, .topbar-workspace-switch, .topbar-actions").evaluateAll(es => es.map(e => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, middle: (r.top + r.bottom) / 2 }; }));
     assert.ok(chrome.every(r => Math.abs(r.middle - chrome[0].middle) <= 1), "Top bar must stay on one row");
@@ -49,7 +50,7 @@ try {
     if (view === "reviews") assert.ok((await box(page.locator(".review-queue-sheet"))).height >= 580);
     if (view === "banks") {
       assert.ok((await box(page.locator(".problem-bank-list"))).height >= 580);
-      const labels = await page.locator(".hero-bank-totals > button > span").evaluateAll(es => es.map(e => ({ width: e.clientWidth, scroll: e.scrollWidth })));
+      const labels = await page.locator(".hero-bank-totals > button > span:visible").evaluateAll(es => es.map(e => ({ width: e.clientWidth, scroll: e.scrollWidth })));
       assert.ok(labels.every(e => e.scroll <= e.width + 1), "Bank total labels clipped");
     }
     await page.screenshot({ path: join(output, `${workspace}-${view}.png`) });
@@ -59,6 +60,15 @@ try {
   }
 
   await visit("view=today");
+  await page.getByRole("button", { name: "More", exact: true }).click();
+  const more = page.locator(".phone-sheet[open]");
+  assert.ok(await more.getByRole("button", { name: "Journey", exact: false }).isVisible());
+  await page.mouse.click(4, 100);
+  assert.equal(await more.count(), 0, "Outside click dismisses More");
+  await page.getByRole("button", { name: "More", exact: true }).click();
+  await page.keyboard.press("Escape");
+  assert.equal(await more.count(), 0, "Escape dismisses More");
+  assert.equal(await page.evaluate(() => document.activeElement?.textContent), "More", "Focus returns to opener");
   await page.getByRole("button", { name: "Add activities", exact: true }).click();
   const add = page.locator(".activity-selection-footer .primary-action");
   await add.scrollIntoViewIfNeeded();
@@ -72,7 +82,7 @@ try {
   await visit("view=banks");
   await page.getByLabel(/^Problem filters/).click();
   const filter = await box(page.locator("details[open] > .control-popover"));
-  const dock = await box(page.locator(".mobile-interview-nav:visible"));
+  const dock = await box(page.locator(".phone-navigation:visible"));
   assert.ok(filter.x >= 0 && filter.right <= 440 && filter.y >= 56 && filter.bottom < dock.y, "Filter menu must fit above the dock");
   await page.screenshot({ path: join(output, "bank-filters.png") });
 
@@ -82,7 +92,7 @@ try {
   assert.ok(await page.getByRole("button", { name: /Collapse/ }).isVisible(), "Expanded bank topics survive refresh without hydration failure");
 
   await visit("workspace=engineering&engineering=journal");
-  await page.evaluate(() => window.scrollTo(0, 360));
+  await page.locator(".engineering-contents-nav").evaluate(e => window.scrollTo(0, window.scrollY + e.getBoundingClientRect().top - 90));
   for (const panel of ["index", "evidence"]) {
     const start = await page.evaluate(() => window.scrollY);
     await page.getByRole("button", { name: `Open ${panel}`, exact: true }).click();
@@ -111,7 +121,7 @@ try {
   await visit("view=past");
   await page.getByRole("button", { name: "Read Explain a bounded cache and its eviction policy", exact: true }).click();
   const reader = await box(page.locator(".past-master-detail"));
-  assert.equal(await page.locator(".mobile-interview-nav").isVisible(), false);
+  assert.equal(await page.locator(".phone-navigation").isVisible(), false);
   assert.ok(Math.abs(reader.y) <= 1 && Math.abs(reader.height - 956) <= 1, "Phone reader must fill the visible viewport");
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 440, "Reader document overflow");
   await page.screenshot({ path: join(output, "past-reader.png") });

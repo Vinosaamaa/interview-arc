@@ -9,7 +9,9 @@ attempt or solution. It separates durable content from the shared reader:
 3. The shared React reader in `app/home-client.tsx` renders normalized D1
    content at runtime.
 4. Shared reader styling lives in `app/globals.css` and
-   `app/interview-arc-v2.css`.
+   `app/interview-arc-v2.css`; responsive containment lives in
+   `app/workspace-responsive.css`, with phone composition owned by
+   `app/mobile-workspace.css`.
 
 The immutable D1 revision is durable content. The page layout, typography, code
 presentation, diagram controls, responsive behavior, highlights, notes, and
@@ -84,7 +86,7 @@ canonical knowledge evolves through Solution Profile revisions.
   the surrounding document color to inherit correctly onto a dark surface.
 - Long code lines scroll inside the code block, never widen the reader grid.
   Wrap is an optional presentation control; Copy preserves the original source.
-- On phones, prose uses 16px type and code uses at least 15px. The focused reader
+- On phones, prose uses 17px type and code uses at least 15px. The focused reader
   fills the visible viewport, including changes from browser bars, with its own
   toolbar and no competing application dock. Closing restores the originating
   page position. Expanding and closing code preserves the reader position.
@@ -138,7 +140,8 @@ retains its existing layered reading layout.
 Reader changes require:
 
 - `pnpm lint`;
-- `pnpm test`;
+- focused reader regressions locally and the complete suite in required CI;
+- one local build for changes to bundled UI resources;
 - local browser checks on coding and system-design readers;
 - direct interaction checks for zoom persistence, reset, enlarged view, Escape,
   and background scroll restoration when diagram behavior changes;
