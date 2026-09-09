@@ -149,8 +149,12 @@ readiness check. Dependency bootstrap is forbidden on the interactive
 `playwright_import_failed` with this exact `recoveryCommand` and performs no
 browser navigation or submission.
 
-The `login`, `login-complete`, `ensure`, `navigate`, `editorial`, `submit`, and `retry` commands require GUI and
-loopback-CDP authority. A Codex `exec_command` invocation uses
+`login` requires GUI launch and local process/port inspection authority;
+`login-complete` requires local process/port inspection and controller-state
+write authority. Neither command connects to CDP.
+
+The `ensure`, `navigate`, `editorial`, `submit`, and `retry` commands require GUI
+and loopback-CDP authority. A Codex `exec_command` invocation uses
 `sandbox_permissions: "require_escalated"` from its first attempt, with the
 narrow reusable command prefix
 `["node", "scripts/leetcode-playwright-controller.mjs"]`. Do not probe the
