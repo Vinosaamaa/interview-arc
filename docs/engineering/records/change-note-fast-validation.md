@@ -43,7 +43,10 @@ Worker tests. Main repeated PR validation, and publishing rebuilt the Worker.
 
 The test runner executes at most four files concurrently. Worker integrations
 retain private temporary persistence and dynamically allocated HTTP ports, use
-ephemeral inspector ports, and share four bounded machine-wide slots.
+ephemeral inspector ports, and share four bounded machine-wide slots. Hosted
+integrations use four independent runners and run serially within each group,
+avoiding the shared-runner startup failure observed under parallel Worker load.
+The required validation gate waits for all groups and the build/source checks.
 `test:fast` omits Worker integrations and the built-bundle assertion for quick
 local iteration; `test:prepared` runs the entire suite against a current build;
 `test` still builds once and runs all tests. Lint caches unchanged files.
