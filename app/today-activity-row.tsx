@@ -17,7 +17,7 @@ export default function TodayActivityRow({ title, mark, metadata, details, contr
   return <article className="today-activity-row">
     {mark}
     <div className="today-activity-copy"><strong title={title}>{title}</strong><small>{metadata}</small></div>
-    <div className="today-activity-controls">{controls}</div>
+    <div className="today-activity-controls">{!open && controls}</div>
     <button type="button" className="today-activity-more" aria-label={`More actions for ${title}`} aria-haspopup="dialog" aria-expanded={open}
       onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setOpen(true); }}><MobileNavIcon label="More" /></button>
     {open && <MobileSheet title={title} open onClose={close} maxWidth={null}>

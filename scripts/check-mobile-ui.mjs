@@ -128,7 +128,7 @@ try {
     state.outcomes ??= {};
     state.timers[id] = { accumulatedSeconds: 2400, startedAt: start, runningSince: null, completed: true, completedAt: start + 2400000, revision: 1 };
     state.outcomes[id] = "solved_after_reviewing_approach";
-    state.reviews = { [id]: { reviewKey: "mobile-fixture-review", activityId: id, questionId: null, specialty: "system_design", status: "due", reason: "approach_review", dueDate: "2026-09-02", intervalDays: 1, stage: 0, reviewCount: 0 } };
+    state.reviews = { ...state.reviews, [id]: { reviewKey: "mobile-fixture-review", activityId: id, questionId: null, specialty: "system_design", status: "due", reason: "approach_review", dueDate: "2026-09-02", intervalDays: 1, stage: 0, reviewCount: 0 } };
     await route.fulfill({ json: state });
   });
   await visit("view=past");
@@ -173,7 +173,9 @@ try {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Today document overflow");
     await session.locator(".today-activity-more").first().click();
     assert.ok(await page.locator(".phone-sheet[open]").isVisible(), `Activity details inaccessible at ${width}`);
+    assert.equal(await session.locator(".today-activity-controls").first().locator(":scope > *").count(), 0, "Open sheet duplicates row controls");
     await page.locator(".phone-sheet-close").click();
+    assert.ok(await session.locator(".today-activity-controls").first().locator(":scope > *").count() > 0, "Closing sheet must restore row controls");
     await page.screenshot({ path: join(output, `today-session-${width}.png`) });
   }
   console.log("PASS atmosphere persistence, review sheets, picker and Today rows");
