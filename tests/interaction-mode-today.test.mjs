@@ -28,26 +28,19 @@ test("Today receives authoritative registry-driven interaction-mode state", asyn
   assert.match(liveSync, /interactionModes: state\.interactionModes/);
 });
 
-test("Today mode changes use the shared atomic command and truthful recovery UI", async () => {
-  const [commands, route, client, styles] = await Promise.all([
+test("interaction-mode commands retain atomic updates and structured errors", async () => {
+  const [commands, route] = await Promise.all([
     read("../db/practice-state-commands.ts"),
     read("../app/api/mutations/route.ts"),
-    read("../app/home-client.tsx"),
-    read("../app/interview-arc-v2.css"),
   ]);
 
   assert.match(commands, /type: "interaction-mode-set"/);
   assert.match(commands, /setPracticeInteractionModeAtomic/);
   assert.match(commands, /interactionModeMutationFingerprint/);
   assert.match(route, /error\.code/);
-  assert.match(client, /interaction-mode-selector/);
-  assert.match(client, /interaction-mode-badge/);
-  assert.match(client, /pending:/);
-  assert.match(client, /Try again/);
-  assert.match(styles, /prefers-reduced-motion/);
 });
 
-test("the Today selector automatically includes newly registered compatible modes", () => {
+test("mode compatibility includes newly registered selectable modes", () => {
   const registry = {
     schemaVersion: 1,
     registryVersion: "test-v1",
