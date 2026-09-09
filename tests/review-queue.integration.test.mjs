@@ -144,7 +144,7 @@ test("concurrent Review Queue planning is atomic, replay-safe, and owner-isolate
         ('owner-race','system_design:race','source-race','race','system_design','due','failed','2026-08-09',4,0,0,1,1),
         ('owner-other','system_design:race','source-race','race','system_design','due','failed','2026-08-09',4,0,0,1,1);
     `]);
-    worker = spawn(wrangler, ["dev", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
+    worker = spawn(wrangler, ["dev", "--inspector-port", "0", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
       cwd: project,
       stdio: "ignore",
     });

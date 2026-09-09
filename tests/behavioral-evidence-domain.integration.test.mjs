@@ -122,7 +122,7 @@ test("owner-private evidence and claim state survive reconnect into bounded beha
         ('owner-behavioral-evidence','activity-behavioral-1','turn-behavioral-owner-1','behavioral','user','I personally designed the retry boundary for the project.','codex',1,1786291200000,1786291200000),
         ('other-behavioral-evidence','activity-behavioral-other','turn-behavioral-other-1','behavioral','user','I owned a different project decision.','codex',1,1786291201000,1786291201000);
     `]);
-    worker = spawn(wrangler, ["dev", "--local", "--test-scheduled", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
+    worker = spawn(wrangler, ["dev", "--inspector-port", "0", "--local", "--test-scheduled", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
       cwd: project,
       stdio: ["ignore", "pipe", "pipe"],
     });

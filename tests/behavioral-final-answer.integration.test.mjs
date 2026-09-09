@@ -379,7 +379,7 @@ test("behavioral finalization stores immutable exact snapshots through MCP", { t
         (owner_id,id,status,opened_pacific_date,opened_at,closed_at,updated_at)
       VALUES ('owner-final-answer','workbench-final-answer','open','2026-08-10',1786363000000,NULL,1786364110000);
     `]);
-    worker = spawn(wrangler, ["dev", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
+    worker = spawn(wrangler, ["dev", "--inspector-port", "0", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
       cwd: project,
       stdio: ["ignore", "ignore", "ignore"],
     });

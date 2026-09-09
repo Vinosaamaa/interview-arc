@@ -432,7 +432,7 @@ test("undated get_publication_queue returns a deterministic, exact, owner-scoped
     await writeFile(seedPath, fixtureSql(primaryTokenHash, otherTokenHash), "utf8");
     await run(wrangler, ["d1", "migrations", "apply", "DB", "--local", "--persist-to", persistence, "--config", config]);
     await run(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--file", seedPath]);
-    worker = spawn(wrangler, ["dev", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
+    worker = spawn(wrangler, ["dev", "--inspector-port", "0", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
       cwd: project,
       stdio: ["ignore", "pipe", "pipe"],
     });

@@ -1,16 +1,14 @@
 name: Validate and publish Cloudflare
 
-# Pull requests are validated against a local D1 database. After a merge to
-# main, the production D1 projection is refreshed only after validation passes.
-# Content/documentation-only merges skip the Worker build and deployment.
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
   issues: read
   pull-requests: read
@@ -20,49 +18,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
+  plan:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     outputs:
+      tree: ${{ steps.tree.outputs.sha }}
+      reuse_run: ${{ steps.reuse.outputs.run_id }}
       deploy_worker: ${{ steps.changes.outputs.deploy_worker }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Restore exact Engineering source cache
-        uses: actions/cache@v4
+      - name: Identify the exact source tree
+        id: tree
+        run: echo "sha=$(git rev-parse HEAD^{tree})" >> "$GITHUB_OUTPUT"
+      - name: Reuse successful PR validation for identical main
+        if: github.event_name == 'push'
+        id: reuse
+        uses: actions/github-script@v7
+        env:
+          SOURCE_TREE: ${{ steps.tree.outputs.sha }}
         with:
-          path: .cache/engineering-journal
-          key: engineering-journal-${{ runner.os }}-${{ hashFiles('engineering-journal/trusted-sources.json') }}
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Validate local D1 migrations and content import
-        run: |
-          pnpm db:migrate:local
-          pnpm content:import:local
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Build and test
-        run: pnpm test
-
+          script: |
+            const find = require('./scripts/find-validated-build.cjs');
+            try {
+              const run = await find({ github, context, tree: process.env.SOURCE_TREE });
+              core.setOutput('run_id', run);
+              core.info(run ? `Reusing validated source tree from run ${run}` : 'No identical validated tree; running full validation.');
+            } catch (error) {
+              core.warning(`Validation reuse unavailable; running full validation: ${error.message}`);
+            }
       - name: Classify the main-branch change
         id: changes
         shell: bash
@@ -71,7 +56,6 @@ jobs:
             echo "deploy_worker=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
           deploy_worker=false
           while IFS= read -r file; do
             case "$file" in
@@ -81,6 +65,104 @@ jobs:
             esac
           done < <(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}")
           echo "deploy_worker=$deploy_worker" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.reuse_run == ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore exact Engineering source cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/engineering-journal
+          key: engineering-journal-${{ runner.os }}-${{ hashFiles('engineering-journal/trusted-sources.json') }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Validate local D1 migrations and content import
+        run: |
+          pnpm db:migrate:local
+          pnpm content:import:local
+      - name: Restore lint cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/eslint
+          key: eslint-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-${{ github.sha }}
+          restore-keys: |
+            eslint-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-
+      - name: Lint
+        run: pnpm lint
+      - name: Build once and run source and bundle checks
+        run: |
+          pnpm build
+          pnpm test:fast
+          node --experimental-strip-types --test tests/rendered-html.test.mjs
+      - name: Package the validated Worker
+        run: tar -cf validated-worker.tar dist .cache/eslint
+      - name: Retain the validated Worker
+        uses: actions/upload-artifact@v4
+        with:
+          name: validated-worker-${{ needs.plan.outputs.tree }}
+          path: validated-worker.tar
+          retention-days: 7
+          if-no-files-found: error
+
+  integration:
+    needs: plan
+    if: needs.plan.outputs.reuse_run == ''
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run isolated Worker integration group
+        run: node scripts/run-tests.mjs --integration --shard=${{ matrix.shard }}/4
+
+  validate:
+    if: always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+    needs: [plan, build, integration]
+    runs-on: ubuntu-latest
+    outputs:
+      tree: ${{ needs.plan.outputs.tree }}
+      artifact_run: ${{ needs.plan.outputs.reuse_run || github.run_id }}
+      deploy_worker: ${{ needs.plan.outputs.deploy_worker }}
+    steps:
+      - name: Require every validation group or an identical validated tree
+        env:
+          PLAN_RESULT: ${{ needs.plan.result }}
+          REUSE_RUN: ${{ needs.plan.outputs.reuse_run }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          INTEGRATION_RESULT: ${{ needs.integration.result }}
+        run: |
+          test "$PLAN_RESULT" = success
+          if [[ -z "$REUSE_RUN" ]]; then
+            test "$BUILD_RESULT" = success
+            test "$INTEGRATION_RESULT" = success
+          fi
 
   publish:
     if: github.event_name != 'pull_request'
@@ -92,12 +174,6 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Restore exact Engineering source cache
-        uses: actions/cache@v4
-        with:
-          path: .cache/engineering-journal
-          key: engineering-journal-${{ runner.os }}-${{ hashFiles('engineering-journal/trusted-sources.json') }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -128,13 +204,28 @@ jobs:
       - name: Refresh the production content projection
         run: pnpm content:import:remote
 
-      - name: Build Worker
+      - name: Download the validated Worker
         if: needs.validate.outputs.deploy_worker == 'true'
-        run: pnpm build
+        uses: actions/download-artifact@v4
+        with:
+          name: validated-worker-${{ needs.validate.outputs.tree }}
+          run-id: ${{ needs.validate.outputs.artifact_run }}
+          github-token: ${{ github.token }}
+
+      - name: Restore the validated Worker
+        if: needs.validate.outputs.deploy_worker == 'true'
+        run: tar -xf validated-worker.tar
+
+      - name: Seed the main-branch lint cache from validated files
+        if: needs.validate.outputs.deploy_worker == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/eslint
+          key: eslint-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-${{ github.sha }}
 
       - name: Deploy Worker
         if: needs.validate.outputs.deploy_worker == 'true'
-        run: pnpm exec wrangler deploy
+        run: pnpm exec wrangler deploy --config dist/server/wrangler.json
 
       - name: Deploy Codex and Chrome bridge
         if: needs.validate.outputs.deploy_worker == 'true'

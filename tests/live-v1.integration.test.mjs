@@ -171,7 +171,7 @@ before(async () => {
     VALUES
       ('owner-live','terminal-pending-capture','activity-terminal','terminal-pending-turn','terminal-pending-clip','system_design','pending','${"1".repeat(64)}',4500,NULL,NULL,NULL,NULL,4500,4500);
   `]);
-  worker = spawn(wrangler, ["dev", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
+  worker = spawn(wrangler, ["dev", "--inspector-port", "0", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
     cwd: project,
     stdio: ["ignore", "pipe", "pipe"],
   });
