@@ -21,7 +21,8 @@ const paths: Record<string, string> = {
 };
 
 export function MobileNavIcon({ label }: { label: string }) {
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d={paths[label] ?? "M4 4h7l1 2 1-2h7v15h-7l-1 2-1-2H4z M12 6v15"} /></svg>;
+  if (label === "More") return <svg viewBox="0 0 24 24" aria-hidden="true">{[4, 12, 20].map(cx => <circle key={cx} cx={cx} cy="12" r="1.5" fill="currentColor" strokeWidth="0" />)}</svg>;
+  return <svg viewBox="0 0 24 24" aria-hidden="true" strokeLinecap="round" strokeLinejoin="round"><path d={paths[label] ?? "M4 4h7l1 2 1-2h7v15h-7l-1 2-1-2H4z M12 6v15"} /></svg>;
 }
 
 function DestinationButton({ item, selected, onSelect }: { item: Destination; selected: string; onSelect?: () => void }) {
