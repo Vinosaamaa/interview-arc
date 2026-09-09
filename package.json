@@ -15,7 +15,7 @@
     "test": "pnpm run build && pnpm test:prepared",
     "test:prepared": "node scripts/run-tests.mjs",
     "test:fast": "node scripts/run-tests.mjs --fast",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --cache --cache-location .cache/eslint",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --cache --cache-strategy content --cache-location .cache/eslint",
     "privacy:practice-content:check": "node scripts/validate-owner-private-content-boundary.mjs",
     "mcp:config:check": "node scripts/validate-mcp-tool-allowlist.mjs",
     "mcp:config:sync-outer": "node scripts/validate-mcp-tool-allowlist.mjs --sync-outer",

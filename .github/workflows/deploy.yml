@@ -107,7 +107,7 @@ jobs:
 
       - name: Package the validated Worker
         if: steps.reuse.outputs.run_id == ''
-        run: tar -cf validated-worker.tar dist
+        run: tar -cf validated-worker.tar dist .cache/eslint
 
       - name: Retain the validated Worker
         if: steps.reuse.outputs.run_id == ''
@@ -188,6 +188,13 @@ jobs:
       - name: Restore the validated Worker
         if: needs.validate.outputs.deploy_worker == 'true'
         run: tar -xf validated-worker.tar
+
+      - name: Seed the main-branch lint cache from validated files
+        if: needs.validate.outputs.deploy_worker == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/eslint
+          key: eslint-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-${{ github.sha }}
 
       - name: Deploy Worker
         if: needs.validate.outputs.deploy_worker == 'true'
