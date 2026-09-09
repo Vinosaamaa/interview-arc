@@ -235,17 +235,28 @@ body:has(.review-queue-workspace, .banks-page.bounded-list) { overflow: visible;
   .page-content:has(> .review-queue-workspace, > .banks-page.bounded-list) { padding-bottom: 140px; }
 }
 
-/* Give workspace names their own row before phone-width controls collide. */
+.home-bootstrap { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; text-align: center; }
+.home-bootstrap h1, .home-bootstrap p { margin: 0; }
+
+/* Phone chrome stays on one compact row; larger layouts are unchanged. */
 @media (max-width: 600px) {
   .app-shell .topbar {
-    min-height: 92px;
-    padding-block: 6px;
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas: "context actions" "switch switch";
-    grid-template-rows: 36px 40px;
-    gap: 4px 12px;
+    min-height: 56px;
+    padding: 4px 6px;
+    grid-template-columns: 36px minmax(0, 1fr) 74px;
+    grid-template-areas: "context switch actions";
+    grid-template-rows: 44px;
+    gap: 4px;
   }
   .app-shell .topbar > .topbar-workspace-switch { width: 100%; }
+  .app-shell .topbar-workspace-switch { grid-template-columns: auto auto auto; padding: 2px; gap: 1px; }
+  .app-shell .topbar-workspace-switch button { min-width: 0; padding-inline: 5px; font-size: 12px; white-space: nowrap; }
+  .app-shell .topbar-brand { width: 36px; height: 44px; }
+  .app-shell .topbar-brand .brand-mark { width: 30px; height: 30px; }
+  .app-shell .topbar-actions { gap: 2px; }
+  .app-shell .topbar-actions .music-dock { display: none; }
+  .app-shell .topbar-actions > .atmosphere-toggle,
+  .app-shell .topbar-tools > summary { width: 36px; height: 44px; min-width: 36px; }
 }
 
 /* Embedded panes hand vertical wheel/touch scrolling back to their page at
@@ -264,24 +275,53 @@ body:has(.review-queue-workspace, .banks-page.bounded-list) { overflow: visible;
 @media (max-width: 600px) {
   .app-shell .mobile-interview-nav {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     min-height: 0;
     gap: 4px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
   }
   .app-shell .mobile-interview-nav button {
-    flex: 1 0 calc(25% - 4px);
+    flex: 1 0 auto;
     width: auto;
     min-height: 44px;
-    padding: 6px 4px;
+    padding: 6px 10px;
     font-size: 12px;
     line-height: 1.2;
-    white-space: normal;
+    white-space: nowrap;
   }
-  .app-shell .mobile-engineering-nav button { flex-basis: calc(33.333% - 4px); }
   .app-shell .page-content,
   .app-shell .page-content:has(> .review-queue-workspace, > .banks-page.bounded-list) {
-    padding-bottom: calc(132px + env(safe-area-inset-bottom));
+    padding-bottom: calc(84px + env(safe-area-inset-bottom));
   }
+  .app-shell :is(.review-filter-rail, .primary-bank-controls, .journey-controls) {
+    display: flex;
+    flex-wrap: nowrap;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    align-items: center;
+    justify-content: flex-start;
+    overscroll-behavior-x: contain;
+  }
+  .app-shell :is(.review-filter-rail, .primary-bank-controls, .journey-controls) > * { flex-shrink: 0; }
+  .app-shell .primary-bank-controls .filter-row { display: flex; flex-wrap: nowrap; }
+  .app-shell :is(.review-filter-rail, .primary-bank-controls, .journey-controls) button { white-space: nowrap; }
+  .app-shell .primary-bank-controls .bank-icon-tools { display: flex; flex-wrap: nowrap; margin-left: auto; }
+  .app-shell .problem-bank-entry { grid-template-columns: 28px minmax(0, 1fr); padding: 12px; gap: 8px; content-visibility: visible; contain-intrinsic-size: none; }
+  .app-shell .problem-bank-entry > .type-mark { grid-column: 1; grid-row: 1; }
+  .app-shell .problem-bank-copy { grid-column: 2; grid-row: 1; min-width: 0; }
+  .app-shell :is(.problem-title, .log-entry-copy > strong, .review-row-copy > strong) { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app-shell .problem-bank-copy > a { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app-shell .bank-entry-meta { grid-column: 1 / -1; grid-row: 2; display: flex; gap: 8px; white-space: nowrap; overflow: hidden; }
+  .app-shell .bank-entry-meta > span { flex-shrink: 0; }
+  .app-shell .bank-entry-meta > small:not(.content-tags) { display: none; }
+  .app-shell .bank-entry-meta .content-tags { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .app-shell .bank-entry-actions { grid-column: 1 / -1; grid-row: 3; display: flex; flex-wrap: nowrap; justify-content: flex-end; gap: 8px; }
+  .app-shell .log-entry { display: grid; grid-template-columns: minmax(0, 1fr); height: auto; }
+  .app-shell .log-entry .log-entry-open { min-height: 0; height: auto; grid-template-columns: 28px minmax(0, 1fr); padding: 12px; }
+  .app-shell .log-entry .log-entry-actions { display: flex; flex-wrap: nowrap; justify-content: flex-end; padding: 0 12px 12px; margin: 0; gap: 8px; }
+  .app-shell :is(.bank-entry-actions, .log-entry-actions) > * { flex: 0 0 44px; width: 44px; height: 44px; }
   .modal-backdrop, .letter-backdrop { z-index: 100; }
   .composer, .composer.activity-composer-dialog {
     max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
@@ -291,9 +331,9 @@ body:has(.review-queue-workspace, .banks-page.bounded-list) { overflow: visible;
   .app-shell .control-menu > .control-popover,
   .review-expanded-controls > div {
     position: fixed;
-    inset: 110px 16px auto;
+    inset: 64px 12px auto;
     width: auto;
-    max-height: calc(100dvh - 250px - env(safe-area-inset-bottom));
+    max-height: calc(100dvh - 150px - env(safe-area-inset-bottom));
     overflow-y: auto;
   }
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea {
@@ -339,7 +379,7 @@ body:has(.review-queue-workspace, .banks-page.bounded-list) { overflow: visible;
   .review-row-meta {
     grid-column: 1 / -1;
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: flex-start;
     gap: 8px 12px;
   }
@@ -385,7 +425,7 @@ body:has(.review-queue-workspace, .banks-page.bounded-list) { overflow: visible;
     min-height: 56px;
     padding: max(6px, env(safe-area-inset-top)) 8px 6px;
     gap: 4px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
   .app-shell .reader-chrome :is(.icon-action, .reader-close, .master-pane-toggle),
   .app-shell .reader-outline > summary { min-width: 44px; width: 44px; min-height: 44px; height: 44px; }
@@ -396,19 +436,33 @@ body:has(.review-queue-workspace, .banks-page.bounded-list) { overflow: visible;
   .app-shell .reader-attempt-navigation span { min-width: 32px; font-size: 12px; }
   .app-shell .reader-chrome-leading, .app-shell .reader-chrome-actions { gap: 4px; }
   .app-shell .workspace-reader-scroll.case-document {
-    padding: 20px 16px max(32px, env(safe-area-inset-bottom));
+    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     min-width: 0;
     overscroll-behavior-y: contain;
   }
   .app-shell .workspace-reader-scroll :is(.layered-reader, .reader-group, .reader-subsection, .markdown-body, .language-code-tabs, .preferred-implementation-tabs) { min-width: 0; max-width: 100%; }
-  .app-shell .workspace-reader-scroll .reader-group { padding: 0; }
-  .app-shell .workspace-reader-scroll .reader-group > div { padding: 0 12px 12px; }
+  .app-shell .workspace-reader-scroll .layered-reader { gap: 0; }
+  .app-shell .workspace-reader-scroll .reader-group { padding: 0; border: 0; border-radius: 0; background: transparent; }
+  .app-shell .workspace-reader-scroll .reader-group > div { padding: 0; border: 0; }
+  .app-shell .workspace-reader-scroll .reader-group > summary {
+    height: auto;
+    min-height: 56px;
+    padding: 8px 0;
+    grid-template-columns: minmax(0, 1fr) 32px;
+    gap: 4px 8px;
+  }
+  .app-shell .workspace-reader-scroll .reader-group > summary small { grid-column: 1; grid-row: 2; text-align: left; }
+  .app-shell .workspace-reader-scroll .reader-group > summary::after { grid-column: 2; grid-row: 1 / 3; }
+  .app-shell .workspace-reader-scroll .case-transcript { margin: 0; padding: 0 !important; border: 0; }
+  .app-shell .workspace-reader-scroll .transcript-thread { padding: 0; gap: 0; border: 0; }
+  .app-shell .workspace-reader-scroll .transcript-turn article { padding: 16px 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+  .app-shell .workspace-reader-scroll .practice-response-stages { padding: 0; }
   .app-shell .workspace-reader-scroll .reader-subsection { padding: 16px 0; }
   .app-shell .workspace-reader-scroll .markdown-body { font-size: 16px; line-height: 1.65; }
   .app-shell .workspace-reader-scroll .markdown-body :not(pre) > code { white-space: normal; overflow-wrap: anywhere; }
   .app-shell .workspace-reader-scroll .markdown-body table { display: block; max-width: 100%; overflow-x: auto; }
   .code-stage > figcaption { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 8px; }
-  .code-stage-actions { flex-wrap: wrap; }
+  .code-stage-actions { flex-wrap: nowrap; overflow-x: auto; }
   .code-stage > figcaption button { min-height: 44px; padding: 8px 12px; font-size: 12px; }
   .code-stage > pre { font-size: 15px; line-height: 1.65; padding: 12px; overscroll-behavior-x: contain; overscroll-behavior-y: auto; }
   .code-stage-backdrop { padding: 0; top: var(--mobile-reader-top, 0px); bottom: auto; height: var(--mobile-reader-height, 100dvh); }

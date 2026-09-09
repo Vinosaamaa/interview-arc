@@ -18,6 +18,14 @@ try {
   page.setDefaultTimeout(12_000);
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
+  await page.route(/\/api\/practice-record\?/, async route => {
+    const activityId = new URL(route.request().url()).searchParams.get("activityId");
+    await route.fulfill({ json: { turns: ["specialist", "user", "specialist"].map((speaker, index) => ({
+      activityId, turnId: `turn-${index}`, specialty: "leetcode", speaker, source: "codex", sequence: index + 1,
+      occurredAt: Date.parse("2026-09-01T17:00:00Z") + index * 60000, updatedAt: 0,
+      body: `Synthetic conversation ${index + 1}. ` + "Explain how each input changes the result, then check the boundary cases. ".repeat(8),
+    })), notes: [], audioClips: [], deliveryAnalyses: [], codeAttempts: [], interactionModeTransitions: [], practiceAssets: [], practiceRecord: null } });
+  });
   await page.addInitScript(() => { Object.defineProperty(navigator, "clipboard", { value: { writeText: async text => { window.__copiedCode = text; } } }); });
   await page.route(/\/api\/(state|timer-state)(\?|$)/, async route => {
     const response = await route.fetch();
@@ -94,6 +102,15 @@ try {
       if (origin !== "banks") {
         await page.waitForSelector(".case-document:not(.solution-profile-document)");
         await settle(); await geometry(440, 800);
+        const conversation = page.locator(".conversation-group");
+        await conversation.locator("summary").click();
+        await conversation.scrollIntoViewIfNeeded();
+        const layers = await page.locator(".workspace-reader-scroll, .conversation-group, .conversation-group > div, .case-transcript, .transcript-thread, .transcript-turn article").evaluateAll(es => es.map(e => {
+          const s = getComputedStyle(e); return { name: e.className, padding: parseFloat(s.paddingLeft) + parseFloat(s.paddingRight), border: parseFloat(s.borderLeftWidth) + parseFloat(s.borderRightWidth) };
+        }));
+        assert.ok(layers.every(s => s.padding === 0 && s.border === 0), JSON.stringify(layers));
+        const labels = await conversation.locator("summary > span, summary > small").evaluateAll(es => es.map(e => { const r = e.getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; }));
+        assert.ok(labels[0].bottom <= labels[1].top, "Conversation title and metadata must not overlap");
         await page.screenshot({ path: `${output}/${origin}-${specialty}-attempt.png` });
       }
       console.log(`PASS ${origin}/${specialty}: prose, code, copy, wrap, expand, resize, nested close`);
@@ -115,6 +132,7 @@ try {
   console.log("PASS desktop and phone breakpoint transitions; background lock released");
   await page.goto(`${base}/?view=past`, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: /Begin today/ }).click();
+  await settle();
   const open = page.locator(".log-entry-open").first();
   await open.scrollIntoViewIfNeeded();
   const originScroll = await page.evaluate(() => window.scrollY);

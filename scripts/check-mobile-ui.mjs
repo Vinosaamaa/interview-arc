@@ -39,8 +39,12 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 440, `${query}: document overflow`);
     const nav = page.locator(".mobile-interview-nav:visible");
     const sizes = await nav.locator("button").evaluateAll(elements => elements.map(e => ({
-      height: e.getBoundingClientRect().height, width: e.clientWidth, scroll: e.scrollWidth, font: parseFloat(getComputedStyle(e).fontSize),
+      top: e.getBoundingClientRect().top, height: e.getBoundingClientRect().height, width: e.clientWidth, scroll: e.scrollWidth, font: parseFloat(getComputedStyle(e).fontSize),
     })));
+    assert.ok(sizes.every(s => Math.abs(s.top - sizes[0].top) <= 1), `${query}: navigation wrapped`);
+    const chrome = await page.locator(".topbar-context, .topbar-workspace-switch, .topbar-actions").evaluateAll(es => es.map(e => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, middle: (r.top + r.bottom) / 2 }; }));
+    assert.ok(chrome.every(r => Math.abs(r.middle - chrome[0].middle) <= 1), "Top bar must stay on one row");
+    assert.ok(chrome[0].right <= chrome[1].left && chrome[1].right <= chrome[2].left, "Top-bar controls overlap");
     assert.ok(sizes.every(s => s.height >= 44 && s.font >= 12 && s.scroll <= s.width + 1), `${query}: navigation target or label clipped`);
     if (view === "reviews") assert.ok((await box(page.locator(".review-queue-sheet"))).height >= 580);
     if (view === "banks") {
@@ -69,7 +73,7 @@ try {
   await page.getByLabel(/^Problem filters/).click();
   const filter = await box(page.locator("details[open] > .control-popover"));
   const dock = await box(page.locator(".mobile-interview-nav:visible"));
-  assert.ok(filter.x >= 0 && filter.right <= 440 && filter.y >= 92 && filter.bottom < dock.y, "Filter menu must fit above the dock");
+  assert.ok(filter.x >= 0 && filter.right <= 440 && filter.y >= 56 && filter.bottom < dock.y, "Filter menu must fit above the dock");
   await page.screenshot({ path: join(output, "bank-filters.png") });
 
   await visit("view=banks");
