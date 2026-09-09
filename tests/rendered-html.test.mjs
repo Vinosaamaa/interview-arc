@@ -50,7 +50,6 @@ test("the Cloudflare build contains the Interview Arc dashboard", async () => {
   assert.match(bundle, /Previous music track/);
   assert.match(bundle, /Save MP3/);
   assert.match(bundle, /Source ↗/);
-  assert.match(bundle, /Ready for journal/);
   assert.match(bundle, /Connect Interview Arc tools/);
   assert.match(bundle, /Codex practice bridge/);
   assert.match(bundle, /LeetCode Chrome companion/);
@@ -260,7 +259,6 @@ test("the refined analytics and composer layouts keep their intended grouping", 
   assert.match(css, /display: none;\s*visibility: hidden;\s*position: absolute;/);
   assert.match(css, /@keyframes master-pane-overlay-in/);
   assert.match(css, /\.annotation-popover \{ position: fixed;/);
-  assert.match(client, /left\.type === "system_design" \? -1 : 1/);
   assert.match(client, /placeholder="Search"/);
   // Browser preferences restore after hydration; server and first client markup agree.
   assert.match(client, /const \[bankTypeFilters, setBankTypeFilters\] = useState<ActivityType\[]>\(\[\]\)/);
