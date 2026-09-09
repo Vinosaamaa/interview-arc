@@ -60,6 +60,14 @@ try {
   }
 
   await visit("view=today");
+  await page.locator(".topbar-tools > summary").click();
+  await page.getByRole("menuitemradio", { name: "Atmosphere: Rain", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "Atmosphere: Off", exact: true }).click();
+  assert.equal(await page.evaluate(() => localStorage.getItem("interview-arc-atmosphere-v1")), "off");
+  await visit("view=today");
+  await page.locator(".topbar-tools > summary").click();
+  assert.equal(await page.getByRole("menuitemradio", { name: "Atmosphere: Off", exact: true }).getAttribute("aria-checked"), "true");
+  await page.locator(".topbar-tools > summary").click();
   await page.getByRole("button", { name: "More", exact: true }).click();
   const more = page.locator(".phone-sheet[open]");
   assert.ok(await more.getByRole("button", { name: "Journey", exact: false }).isVisible());
@@ -77,6 +85,10 @@ try {
     return hit === e || e.contains(hit);
   }), "Activity footer is obscured by navigation");
   assert.ok(await page.locator(".activity-picker-search input").evaluate(e => parseFloat(getComputedStyle(e).fontSize) >= 16), "iOS input zoom threshold");
+  const questionList = await box(page.locator(".activity-composer-dialog .bank-results"));
+  const selection = await box(page.locator(".activity-selection-footer"));
+  assert.ok(selection.y >= questionList.bottom - 1, "Selection footer overlaps questions");
+  assert.ok(await page.locator(".activity-composer-dialog .bank-results").evaluate(e => e.scrollHeight > e.clientHeight), "Question list has no bounded scrolling area");
   await page.screenshot({ path: join(output, "activity-dialog.png") });
 
   await visit("view=banks");
@@ -116,6 +128,7 @@ try {
     state.outcomes ??= {};
     state.timers[id] = { accumulatedSeconds: 2400, startedAt: start, runningSince: null, completed: true, completedAt: start + 2400000, revision: 1 };
     state.outcomes[id] = "solved_after_reviewing_approach";
+    state.reviews = { [id]: { reviewKey: "mobile-fixture-review", activityId: id, questionId: null, specialty: "system_design", status: "due", reason: "approach_review", dueDate: "2026-09-02", intervalDays: 1, stage: 0, reviewCount: 0 } };
     await route.fulfill({ json: state });
   });
   await visit("view=past");
@@ -127,6 +140,43 @@ try {
   await page.screenshot({ path: join(output, "past-reader.png") });
   assert.deepEqual(errors, [], "No hydration or runtime errors after populated reader navigation");
   console.log("PASS populated reader bounds");
+
+  // The same native sheet must not inherit the Reviews timeline's rotated h2.
+  await visit("view=reviews");
+  await page.locator(".phone-row-more").first().click();
+  assert.ok(await page.locator(".phone-sheet[open] > .phone-sheet-content > header h2").evaluate(e => {
+    const s = getComputedStyle(e);
+    return s.writingMode === "horizontal-tb" && s.transform === "none" && e.getBoundingClientRect().height < 200;
+  }), "Review action title is rotated or oversized");
+  assert.equal(await page.locator(".phone-sheet[open]").evaluate(e => e.parentElement === document.body), true);
+  await page.locator(".phone-sheet-close").click();
+  const selectionHeight = (await box(page.locator(".review-selection-folio"))).height;
+  assert.ok(selectionHeight < 120, "Review selection footer keeps empty desktop rows");
+
+  await visit("view=today");
+  await page.getByRole("button", { name: /Add another session/ }).click();
+  await page.getByLabel("Coding count", { exact: true }).fill("1");
+  await page.getByLabel("System design count", { exact: true }).fill("1");
+  await page.getByLabel("Behavioral count", { exact: true }).fill("0");
+  await page.getByRole("button", { name: /^Add session \d+$/ }).click();
+  for (const width of [375, 440, 1000, 1920]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const session = page.locator(".compact-session").first();
+    await session.scrollIntoViewIfNeeded();
+    assert.ok(await session.evaluate(e => {
+      const aligned = parent => {
+        const boxes = [...parent.children].filter(child => getComputedStyle(child).display !== "none").map(child => child.getBoundingClientRect());
+        return boxes.every(r => Math.abs(r.y + r.height / 2 - boxes[0].y - boxes[0].height / 2) < 2);
+      };
+      return aligned(e.querySelector(".session-sheet-header")) && aligned(e.querySelector(".today-activity-row"));
+    }), `Today header or activity controls wrapped at ${width}`);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Today document overflow");
+    await session.locator(".today-activity-more").first().click();
+    assert.ok(await page.locator(".phone-sheet[open]").isVisible(), `Activity details inaccessible at ${width}`);
+    await page.locator(".phone-sheet-close").click();
+    await page.screenshot({ path: join(output, `today-session-${width}.png`) });
+  }
+  console.log("PASS atmosphere persistence, review sheets, picker and Today rows");
 } finally {
   await browser.close();
 }

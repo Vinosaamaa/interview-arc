@@ -9,7 +9,7 @@ const engine = process.env.UI_BROWSER === "chromium" ? chromium : webkit;
 const browser = await engine.launch({ headless: true, ...(process.env.UI_BROWSER_PATH ? { executablePath: process.env.UI_BROWSER_PATH } : {}) });
 const output = `.cache/mobile-readers-${process.env.UI_BROWSER ?? "webkit"}`;
 await mkdir(output, { recursive: true });
-const code = 'public class Solution {\n    // Long lines stay inside this code viewer.\n    public String evaluateExpressionWithSubstitutions(String expression, String[] evaluationVariables, int[] evaluationValues) {\n        return "a deliberately long value extending well beyond the narrow phone screen";\n    }\n}';
+const code = 'public class Solution {\n' + Array.from({ length: 100 }, (_, i) => `    // Line ${i}: ${"preserve long code and both scroll axes; ".repeat(4)}`).join('\n') + '\n}';
 const specialties = ["leetcode", "system_design", "behavioral"];
 const questions = specialties.map(specialty => ({ specialty, questionId: `mobile-${specialty}`, title: `Mobile ${specialty} reader fixture`, prompt: "Synthetic reader fixture.", source: "owner", tags: [], topics: [], companyTags: [], companySignals: [], metadataReferences: [], priority: 0, problemNumber: null, difficulty: "hard", url: null, acceptanceRate: null, metadataCapturedAt: null }));
 
@@ -58,7 +58,8 @@ try {
     assert.ok(Math.abs(g.x) <= 1 && Math.abs(g.y) <= 1 && Math.abs(g.width - width) <= 1 && Math.abs(g.height - height) <= 1, JSON.stringify(g));
     assert.equal(await page.locator(".topbar").isVisible(), false);
     assert.equal(await page.locator(".mobile-interview-nav").isVisible(), false);
-    const overflow = await page.locator(".workspace-reader-scroll .reader-group,.workspace-reader-scroll .markdown-body").evaluateAll(es => es.filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.className));
+    // Code may use the prose gutter, but nothing may extend beyond the screen.
+    const overflow = await page.locator(".workspace-reader-scroll .reader-group,.workspace-reader-scroll .markdown-body,.workspace-reader-scroll .code-stage").evaluateAll(es => es.filter(e => e.getBoundingClientRect().left < -1 || e.getBoundingClientRect().left + e.scrollWidth > innerWidth + 1).map(e => e.className));
     assert.deepEqual(overflow, [], "Prose must not overflow or be clipped");
   };
   for (const specialty of process.env.UI_SCROLL_ONLY ? [] : specialties) {
@@ -79,13 +80,20 @@ try {
       assert.ok(contrast.every(ratio => ratio >= 4.5), `Code contrast: ${contrast}`);
       await pre.evaluate(e => { e.scrollLeft = e.scrollWidth; });
       assert.ok(await pre.evaluate(e => e.scrollLeft > 0), "Long code is horizontally reachable");
+      await pre.evaluate(e => { e.scrollTop = 100; });
+      assert.ok(await pre.evaluate(e => e.scrollTop > 0), "Inline long code is vertically reachable");
       await page.getByRole("button", { name: "Wrap java lines", exact: true }).click();
       assert.ok(await pre.evaluate(e => e.scrollWidth <= e.clientWidth + 1), "Wrapped code fits the viewer");
       await page.getByRole("button", { name: "Copy java", exact: true }).click();
       assert.equal(await page.evaluate(() => window.__copiedCode), `${code}\n`);
+      await page.getByRole("button", { name: "Wrap java lines", exact: true }).click();
       const readerScroll = await page.locator(".workspace-reader-scroll").evaluate(e => e.scrollTop);
       await page.getByRole("button", { name: "Expand java", exact: true }).click();
       await page.getByRole("dialog", { name: "java full-screen viewer" }).waitFor();
+      const fullCode = page.locator(".code-stage.fullscreen > pre");
+      await fullCode.evaluate(e => { e.scrollTop = 100; e.scrollLeft = 100; });
+      assert.ok(await fullCode.evaluate(e => e.scrollTop > 0 && e.scrollLeft > 0), "Expanded long code must scroll on both axes");
+      assert.ok(await page.locator(".code-stage-dialog").evaluate(e => e.getBoundingClientRect().bottom <= innerHeight + 1), "Expanded dialog grows beyond the viewport");
       await page.screenshot({ path: `${output}/${origin}-${specialty}-code.png` });
       await page.getByRole("button", { name: "Close full-screen java", exact: true }).click();
       await settle();
@@ -108,7 +116,8 @@ try {
         const layers = await page.locator(".workspace-reader-scroll, .conversation-group, .conversation-group > div, .case-transcript, .transcript-thread, .transcript-turn article").evaluateAll(es => es.map(e => {
           const s = getComputedStyle(e); return { name: e.className, padding: parseFloat(s.paddingLeft) + parseFloat(s.paddingRight), border: parseFloat(s.borderLeftWidth) + parseFloat(s.borderRightWidth) };
         }));
-        assert.ok(layers.every(s => s.padding === 0 && s.border === 0), JSON.stringify(layers));
+        assert.ok(layers[0].padding <= 36 && layers[0].border === 0, "Only one outer prose gutter is allowed");
+        assert.ok(layers.slice(1).every(s => s.padding === 0 && s.border === 0), JSON.stringify(layers));
         const labels = await conversation.locator("summary > span, summary > small").evaluateAll(es => es.map(e => { const r = e.getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; }));
         assert.ok(labels[0].bottom <= labels[1].top, "Conversation title and metadata must not overlap");
         await page.screenshot({ path: `${output}/${origin}-${specialty}-attempt.png` });
@@ -128,12 +137,13 @@ try {
   await page.setViewportSize({ width: 440, height: 800 }); await settle(); await geometry(440, 800);
   await page.getByRole("button", { name: "Close solution profile", exact: true }).click();
   assert.notEqual(await page.evaluate(() => document.body.style.position), "fixed");
-  assert.equal(await page.locator(".mobile-interview-nav").isVisible(), true);
+  assert.equal(await page.locator(".phone-navigation").isVisible(), true);
   console.log("PASS desktop and phone breakpoint transitions; background lock released");
   await page.goto(`${base}/?view=past`, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: /Begin today/ }).click();
   await settle();
-  const open = page.locator(".log-entry-open").first();
+  const open = page.locator(".log-entry-open").last();
+  await page.evaluate(() => window.scrollTo(0, 150));
   await open.scrollIntoViewIfNeeded();
   const originScroll = await page.evaluate(() => window.scrollY);
   assert.ok(originScroll > 0, "Exercise an already-scrolled originating page");
