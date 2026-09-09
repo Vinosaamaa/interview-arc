@@ -23,12 +23,12 @@ capabilities: ["arc-connected-practice"]
 amends: []
 supersedes: []
 learningRefs: []
-sources: [{"label":"Manual login issue #450","url":"https://github.com/Vinosaamaa/interview-arc/issues/450","kind":"issue"}]
+sources: [{"label":"Manual login issue #450","url":"https://github.com/Vinosaamaa/interview-arc/issues/450","kind":"issue"},{"label":"Manual login PR #451","url":"https://github.com/Vinosaamaa/interview-arc/pull/451","kind":"pull-request"}]
 verification: {"state":"verified","evidenceRefs":["tests/leetcode-controller-manual-login.test.mjs", "tests/leetcode-playwright-controller.test.mjs"]}
 visibility: public-safe
 publicationEligibility: eligible
 issue: 450
-pr: null
+pr: 451
 release: null
 run: null
 ---
