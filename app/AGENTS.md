@@ -49,5 +49,7 @@ Before editing website code, read `../docs/agents/website.md` and the shared con
 - Preserve the vinext/Cloudflare Worker architecture, `wrangler.jsonc`, D1
   migrations, and root hosting configuration. The OpenAI Sites configuration
   is legacy and must not be removed without explicit user direction.
-- Verify website changes with `pnpm test` and `pnpm lint`; validate migrations
-  and content import against local D1 when those paths change.
+- Verify website changes with focused tests (or `pnpm test:fast`) and
+  `pnpm lint`; reuse a current build with `pnpm test:prepared` when needed.
+  Let required hosted CI run the complete suite. Validate migrations and
+  content import against local D1 when those paths change.

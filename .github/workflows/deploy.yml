@@ -14,7 +14,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: cloudflare-${{ github.ref }}
+  group: cloudflare-${{ github.ref }}-${{ github.event.pull_request.draft && 'draft' || 'active' }}
   cancel-in-progress: true
 
 jobs:
@@ -165,7 +165,7 @@ jobs:
           fi
 
   publish:
-    if: github.event_name != 'pull_request'
+    if: always() && needs.validate.result == 'success' && github.event_name != 'pull_request'
     needs: validate
     runs-on: ubuntu-latest
     environment: production
@@ -187,23 +187,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Preflight owner-scoped Loop identity uniqueness
-        shell: bash
-        run: |
-          duplicate_groups="$(
-            pnpm exec wrangler d1 execute DB --remote --json --command \
-              "SELECT COUNT(*) AS duplicate_groups FROM (SELECT owner_id, lower(trim(company)) AS company_key, lower(trim(role_title)) AS role_key, COUNT(*) AS row_count FROM interview_loops GROUP BY owner_id, company_key, role_key HAVING row_count > 1);" |
-              node -e 'let body=""; process.stdin.on("data", chunk => body += chunk); process.stdin.on("end", () => { const rows = JSON.parse(body); process.stdout.write(String(rows[0].results[0].duplicate_groups)); });'
-          )"
-          echo "loop_identity_preflight phase=duplicate_audit duplicate_groups=${duplicate_groups}"
-          test "$duplicate_groups" = "0"
-
-      - name: Apply production D1 migrations
-        run: pnpm db:migrate:remote
-
-      - name: Refresh the production content projection
-        run: pnpm content:import:remote
-
       - name: Download the validated Worker
         if: needs.validate.outputs.deploy_worker == 'true'
         uses: actions/download-artifact@v4
@@ -222,6 +205,23 @@ jobs:
         with:
           path: .cache/eslint
           key: eslint-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-${{ github.sha }}
+
+      - name: Preflight owner-scoped Loop identity uniqueness
+        shell: bash
+        run: |
+          duplicate_groups="$(
+            pnpm exec wrangler d1 execute DB --remote --json --command \
+              "SELECT COUNT(*) AS duplicate_groups FROM (SELECT owner_id, lower(trim(company)) AS company_key, lower(trim(role_title)) AS role_key, COUNT(*) AS row_count FROM interview_loops GROUP BY owner_id, company_key, role_key HAVING row_count > 1);" |
+              node -e 'let body=""; process.stdin.on("data", chunk => body += chunk); process.stdin.on("end", () => { const rows = JSON.parse(body); process.stdout.write(String(rows[0].results[0].duplicate_groups)); });'
+          )"
+          echo "loop_identity_preflight phase=duplicate_audit duplicate_groups=${duplicate_groups}"
+          test "$duplicate_groups" = "0"
+
+      - name: Apply production D1 migrations
+        run: pnpm db:migrate:remote
+
+      - name: Refresh the production content projection
+        run: pnpm content:import:remote
 
       - name: Deploy Worker
         if: needs.validate.outputs.deploy_worker == 'true'
