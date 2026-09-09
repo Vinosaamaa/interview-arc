@@ -32,7 +32,7 @@ pr: 448
 release: null
 run: null
 ---
-# Controller profile location did not follow its repository contract
+# Keep the LeetCode controller profile inside its canonical repository
 
 - Owning issue: [#447](https://github.com/Vinosaamaa/interview-arc/issues/447)
 - Change: [PR #448](https://github.com/Vinosaamaa/interview-arc/pull/448)
