@@ -123,7 +123,7 @@ test("local MCP persists exact specialist writes through durable receipts and re
       VALUES
         ('owner-specialist-write','leetcode','recovery-question','Recovery profile',1,'["array"]','{"summary":"Unchanged by Code Attempt recovery.","sections":[{"title":"Approach, correctness, complexity, edge cases, alternatives, and common mistakes","body":"Problem framing and constraints. Best algorithm. Correctness invariant. Time and space complexity. Edge cases. Alternative. Common mistake. Reference implementation.\\n\\u0060\\u0060\\u0060java\\nclass Solution {}\\n\\u0060\\u0060\\u0060"}],"references":[{"title":"Recovery reference","url":"https://leetcode.com/problems/recovery-question/"}],"tags":["array"]}',190);
     `]);
-    worker = spawn(wrangler, ["dev", "--local", "--test-scheduled", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
+    worker = spawn(wrangler, ["dev", "--inspector-port", "0", "--local", "--test-scheduled", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
       cwd: project,
       stdio: ["ignore", "pipe", "pipe"],
     });

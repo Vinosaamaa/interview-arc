@@ -190,7 +190,7 @@ test("an authenticated staged DOCX/PDF pair becomes one immutable current resume
         ('${sha256(ownerToken)}','owner-resume-ingest','Resume ingest integration',1,NULL,NULL),
         ('${sha256(otherToken)}','owner-resume-other','Other resume integration',1,NULL,NULL);
     `]);
-    worker = spawn(wrangler, ["dev", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
+    worker = spawn(wrangler, ["dev", "--inspector-port", "0", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
       cwd: project,
       stdio: ["ignore", "pipe", "pipe"],
     });

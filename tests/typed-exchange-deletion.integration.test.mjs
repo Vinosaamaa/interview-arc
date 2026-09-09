@@ -199,7 +199,7 @@ test("typed exchange deletion is exact, atomic, owner-scoped, and identity-idemp
     const baseUrl = `http://127.0.0.1:${port}`;
     await run(wrangler, ["d1", "migrations", "apply", "DB", "--local", "--persist-to", persistence, "--config", config]);
     await run(wrangler, ["d1", "execute", "DB", "--local", "--persist-to", persistence, "--config", config, "--command", fixtureSql(sha256(ownerToken), sha256(otherToken))]);
-    worker = spawn(wrangler, ["dev", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
+    worker = spawn(wrangler, ["dev", "--inspector-port", "0", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
       cwd: project,
       stdio: ["ignore", "pipe", "pipe"],
     });

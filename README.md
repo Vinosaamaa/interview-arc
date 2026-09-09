@@ -1,5 +1,20 @@
 # Interview Arc
 
+### Fast local verification
+
+- `pnpm test:fast` runs source/unit/contract tests with up to four concurrent files; no build or local Worker startup.
+- `pnpm test:prepared` runs the complete suite against an existing current build; it does not rebuild.
+- `pnpm test:prepared tests/review-queue.integration.test.mjs` runs a focused test file.
+- `pnpm test` builds once, then runs every test. CI owns this complete check.
+- `pnpm lint` caches unchanged files locally. Do not reuse a prepared build after changing application sources.
+
+Worker integration tests retain private temporary databases and independent
+HTTP/inspector ports. Four machine-wide slots bound resource use. A successful
+PR build is retained for seven days; main reuses its validation and deployment
+artifact only for an identical Git source tree from this repository's successful
+PR workflow. Otherwise main validates normally. Publishing never rebuilds the
+validated website Worker.
+
 Interview Arc is a personal interview-preparation journal. It plans daily work,
 times attempts, and turns practice into durable owner-private records.
 

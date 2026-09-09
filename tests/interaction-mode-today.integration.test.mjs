@@ -125,7 +125,7 @@ test("Today reads and mutates owner-scoped interaction modes through the authori
         n + 1
       FROM seq CROSS JOIN owners;
     `]);
-    worker = spawn(wrangler, ["dev", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], { cwd: project, stdio: "ignore" });
+    worker = spawn(wrangler, ["dev", "--inspector-port", "0", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], { cwd: project, stdio: "ignore" });
     await waitForWorker(baseUrl, worker);
 
     const initial = await state(baseUrl, "owner-mode");

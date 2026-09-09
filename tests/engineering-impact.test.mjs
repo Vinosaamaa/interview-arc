@@ -893,7 +893,7 @@ test("PR metadata edits rerun the independent gate without rebuilding", () => {
   assert.match(workflow, /fetch-depth: 0/);
   assert.match(workflow, /GH_TOKEN: \$\{\{ github.token \}\}/);
   assert.match(workflow, /run: node scripts\/validate-engineering-impact\.mjs/);
-  assert.match(deployment, /types: \[opened, synchronize, reopened\]/);
+  assert.match(deployment, /types: \[opened, synchronize, reopened, ready_for_review\]/);
   assert.doesNotMatch(deployment, /validate-engineering-impact/);
 });
 

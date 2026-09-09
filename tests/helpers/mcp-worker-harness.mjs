@@ -55,6 +55,8 @@ export function sanitizeMcpWorkerDiagnostic(value, sensitivePaths = []) {
 export function startMcpWorker({ wrangler, config, persistence, project, port }) {
   const child = spawn(wrangler, [
     "dev",
+    "--inspector-port",
+    "0",
     "--local",
     "--persist-to",
     persistence,

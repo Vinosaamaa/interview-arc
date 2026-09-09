@@ -118,7 +118,7 @@ test("Today deletion and all-session projection remain owner-scoped and revision
       VALUES
         ('owner-today','standalone','live-history','lease.acquire','${"0".repeat(64)}','{"protocolVersion":1}',5);
     `]);
-    worker = spawn(wrangler, ["dev", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
+    worker = spawn(wrangler, ["dev", "--inspector-port", "0", "--local", "--persist-to", persistence, "--config", config, "--ip", "127.0.0.1", "--port", String(port)], {
       cwd: project,
       stdio: "ignore",
     });

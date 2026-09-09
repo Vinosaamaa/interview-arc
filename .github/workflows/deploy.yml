@@ -5,12 +5,13 @@ name: Validate and publish Cloudflare
 # Content/documentation-only merges skip the Worker build and deployment.
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
   issues: read
   pull-requests: read
@@ -21,47 +22,101 @@ concurrency:
 
 jobs:
   validate:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     outputs:
       deploy_worker: ${{ steps.changes.outputs.deploy_worker }}
+      tree: ${{ steps.tree.outputs.sha }}
+      artifact_run: ${{ steps.reuse.outputs.run_id || github.run_id }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Identify the exact source tree
+        id: tree
+        run: echo "sha=$(git rev-parse HEAD^{tree})" >> "$GITHUB_OUTPUT"
+
+      - name: Reuse successful PR validation for identical main
+        if: github.event_name == 'push'
+        id: reuse
+        uses: actions/github-script@v7
+        env:
+          SOURCE_TREE: ${{ steps.tree.outputs.sha }}
+        with:
+          script: |
+            const find = require('./scripts/find-validated-build.cjs');
+            try {
+              const run = await find({ github, context, tree: process.env.SOURCE_TREE });
+              core.setOutput('run_id', run);
+              core.info(run ? `Reusing validated source tree from run ${run}` : 'No identical validated tree; running full validation.');
+            } catch (error) {
+              core.warning(`Validation reuse unavailable; running full validation: ${error.message}`);
+            }
+
       - name: Restore exact Engineering source cache
+        if: steps.reuse.outputs.run_id == ''
         uses: actions/cache@v4
         with:
           path: .cache/engineering-journal
           key: engineering-journal-${{ runner.os }}-${{ hashFiles('engineering-journal/trusted-sources.json') }}
 
       - uses: pnpm/action-setup@v4
+        if: steps.reuse.outputs.run_id == ''
         with:
           version: 9
 
       - uses: actions/setup-node@v4
+        if: steps.reuse.outputs.run_id == ''
         with:
           node-version: 22
           cache: pnpm
 
       - uses: actions/setup-java@v4
+        if: steps.reuse.outputs.run_id == ''
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Install dependencies
+        if: steps.reuse.outputs.run_id == ''
         run: pnpm install --frozen-lockfile
 
       - name: Validate local D1 migrations and content import
+        if: steps.reuse.outputs.run_id == ''
         run: |
           pnpm db:migrate:local
           pnpm content:import:local
 
+      - name: Restore lint cache
+        if: steps.reuse.outputs.run_id == ''
+        uses: actions/cache@v4
+        with:
+          path: .cache/eslint
+          key: eslint-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-${{ github.sha }}
+          restore-keys: |
+            eslint-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-
+
       - name: Lint
+        if: steps.reuse.outputs.run_id == ''
         run: pnpm lint
 
       - name: Build and test
+        if: steps.reuse.outputs.run_id == ''
         run: pnpm test
+
+      - name: Package the validated Worker
+        if: steps.reuse.outputs.run_id == ''
+        run: tar -cf validated-worker.tar dist
+
+      - name: Retain the validated Worker
+        if: steps.reuse.outputs.run_id == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: validated-worker-${{ steps.tree.outputs.sha }}
+          path: validated-worker.tar
+          retention-days: 7
+          if-no-files-found: error
 
       - name: Classify the main-branch change
         id: changes
@@ -93,12 +148,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Restore exact Engineering source cache
-        uses: actions/cache@v4
-        with:
-          path: .cache/engineering-journal
-          key: engineering-journal-${{ runner.os }}-${{ hashFiles('engineering-journal/trusted-sources.json') }}
-
       - uses: pnpm/action-setup@v4
         with:
           version: 9
@@ -128,13 +177,21 @@ jobs:
       - name: Refresh the production content projection
         run: pnpm content:import:remote
 
-      - name: Build Worker
+      - name: Download the validated Worker
         if: needs.validate.outputs.deploy_worker == 'true'
-        run: pnpm build
+        uses: actions/download-artifact@v4
+        with:
+          name: validated-worker-${{ needs.validate.outputs.tree }}
+          run-id: ${{ needs.validate.outputs.artifact_run }}
+          github-token: ${{ github.token }}
+
+      - name: Restore the validated Worker
+        if: needs.validate.outputs.deploy_worker == 'true'
+        run: tar -xf validated-worker.tar
 
       - name: Deploy Worker
         if: needs.validate.outputs.deploy_worker == 'true'
-        run: pnpm exec wrangler deploy
+        run: pnpm exec wrangler deploy --config dist/server/wrangler.json
 
       - name: Deploy Codex and Chrome bridge
         if: needs.validate.outputs.deploy_worker == 'true'
