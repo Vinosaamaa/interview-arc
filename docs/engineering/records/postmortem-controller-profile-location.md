@@ -3,7 +3,7 @@ schemaVersion: 1
 id: postmortem-controller-profile-location
 revision: 1
 type: postmortem
-status: proposed
+status: closed
 title: Keep the LeetCode controller profile inside its canonical repository
 repository: interview-arc
 capabilityIds: ["arc-connected-practice"]
@@ -36,7 +36,7 @@ run: null
 
 - Owning issue: [#447](https://github.com/Vinosaamaa/interview-arc/issues/447)
 - Change: [PR #448](https://github.com/Vinosaamaa/interview-arc/pull/448)
-- Status: source repair; live adoption and release verification pending
+- Analysis record complete; live adoption and release verification pending
 
 ## Impact and detection
 
