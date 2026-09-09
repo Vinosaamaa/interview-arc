@@ -139,6 +139,7 @@ test("controller state stays under the authorized profile and reports permission
     stateDirectory: "/workspace/browser-profile/.interview-arc-controller",
     preflightReceiptPath: "/workspace/browser-profile/.interview-arc-controller/preflight.json",
     controllerLockPath: "/workspace/browser-profile/.interview-arc-controller/controller.lock",
+    manualLoginPath: "/workspace/browser-profile/.interview-arc-controller/manual-login.json",
     receiptDirectory: "/workspace/browser-profile/.interview-arc-controller/receipts",
   });
 
