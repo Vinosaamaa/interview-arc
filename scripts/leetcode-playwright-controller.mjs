@@ -9,7 +9,6 @@ import {
   readFile,
   readdir,
   rename,
-  stat,
   unlink,
   writeFile,
 } from "node:fs/promises";
@@ -29,6 +28,7 @@ export function controllerStatePathsForProfile(profilePath) {
     stateDirectory,
     preflightReceiptPath: path.join(stateDirectory, "preflight.json"),
     controllerLockPath: path.join(stateDirectory, "controller.lock"),
+    manualLoginPath: path.join(stateDirectory, "manual-login.json"),
     receiptDirectory: path.join(stateDirectory, "receipts"),
   });
 }
@@ -94,7 +94,6 @@ const fixedProfilePath = repositoryLocation.profilePath;
 const controllerState = fixedProfilePath ? controllerStatePathsForProfile(fixedProfilePath) : {};
 const localStateDirectory = controllerState.stateDirectory;
 const preflightReceiptPath = controllerState.preflightReceiptPath;
-const controllerLockPath = controllerState.controllerLockPath;
 
 function existingPath(candidate) {
   try {
@@ -482,7 +481,7 @@ export function parseCli(argv) {
     invocationFlag,
     possibleInvocationId,
   ] = normalizedArgv;
-  if (command === "ensure" && normalizedArgv.length === 1) {
+  if (["ensure", "login", "login-complete"].includes(command) && normalizedArgv.length === 1) {
     return { command, identity: null, javaFile: null };
   }
   if (
@@ -528,7 +527,7 @@ export function parseCli(argv) {
   }
   throw new ControllerError(
     "cli_usage",
-    "Supported commands are ensure, navigate, editorial, submit, retry, and receipt.",
+    "Supported commands are ensure, login, login-complete, navigate, editorial, submit, retry, and receipt.",
   );
 }
 
@@ -1522,6 +1521,149 @@ async function launchFixedChrome(configuration) {
   return { frontmostBundleId };
 }
 
+export const MANUAL_LOGIN_URL = "https://leetcode.com/accounts/login/";
+
+export function manualLoginLaunchArguments(configuration = FIXED_CONFIG) {
+  return ["-na", configuration.chromeApplication, "--args",
+    `--user-data-dir=${configuration.profilePath}`,
+    "--no-first-run", "--no-default-browser-check", MANUAL_LOGIN_URL];
+}
+
+function manualLoginError(code, message) {
+  return new ControllerError(code, message);
+}
+
+// ps flattens argv, so accept only an exact, delimited profile argument. A
+// partial/ambiguous match is a blocker, never evidence that the profile is free.
+export function dedicatedProfileProcesses(output, configuration = FIXED_CONFIG) {
+  const matches = [];
+  const executable = `${configuration.chromeApplication}/Contents/MacOS/Google Chrome`;
+  for (const line of output.split("\n").filter((value) => value.trim())) {
+    const row = line.match(/^\s*(\d+)\s+(\d+)\s+(\w{3}\s+\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\d{4})\s+(.*)$/);
+    if (!row) throw manualLoginError("browser_process_unverified", "Browser ownership inspection could not be parsed.");
+    const [, pid, parentPid, startedAt, command] = row;
+    if (!command.includes(configuration.profilePath)) continue;
+    const profileArguments = [...command.matchAll(/(?:^|\s)--user-data-dir(?:=|\s+)(.*?)(?=\s+--[a-z]|$)/g)];
+    const profile = profileArguments[0]?.[1]?.replace(/^"(.*)"$/, "$1");
+    const isHelper = /(?:^|\s)--type(?:=|\s)/.test(command);
+    const executablePath = command.split(" --")[0];
+    const helperPrefix = `${configuration.chromeApplication}/Contents/Frameworks/Google Chrome Framework.framework/Versions/`;
+    const helperSuffix = executablePath.slice(helperPrefix.length);
+    const verifiedHelper = executablePath.startsWith(helperPrefix)
+      && /^[^/]+\/Helpers\/(Google Chrome Helper(?: \([A-Za-z]+\))?)\.app\/Contents\/MacOS\/\1$/.test(helperSuffix);
+    if (profileArguments.length !== 1 || profile !== configuration.profilePath
+      || (isHelper ? !verifiedHelper : executablePath !== executable)) {
+      throw manualLoginError("browser_process_unverified", "A possible dedicated-profile owner is ambiguous. Preserve it and resolve ownership before switching modes.");
+    }
+    matches.push({ pid: Number(pid), parentPid: Number(parentPid), startedAt, role: isHelper ? "helper" : "main",
+      automated: /(?:^|\s)--(?:enable-automation|remote-debugging[^\s=]*)(?:=|\s|$)/.test(command) });
+  }
+  const byPid = new Map(matches.map((entry) => [entry.pid, entry]));
+  for (const entry of matches.filter((candidate) => candidate.role === "helper")) {
+    const visited = new Set([entry.pid]);
+    let parent = byPid.get(entry.parentPid);
+    while (parent?.role === "helper" && !visited.has(parent.pid)) {
+      visited.add(parent.pid);
+      parent = byPid.get(parent.parentPid);
+    }
+    if (!parent || parent.role !== "main") {
+      throw manualLoginError("browser_process_unverified", "A dedicated-profile helper has no verified main-process ancestry. Preserve it and wait for the dedicated process tree to exit.");
+    }
+  }
+  return matches;
+}
+
+async function inspectDedicatedProcesses() {
+  try {
+    const { stdout } = await execFile("ps", ["-ww", "-axo", "pid=,ppid=,lstart=,command="], { maxBuffer: 8 * 1024 * 1024 });
+    return dedicatedProfileProcesses(stdout);
+  } catch (error) {
+    if (error instanceof ControllerError) throw error;
+    throw manualLoginError("browser_process_unverified", "Cannot establish exclusive dedicated-profile ownership. No browser transition was attempted.");
+  }
+}
+
+async function assertDebuggingPortClosed() {
+  try {
+    await execFile("lsof", ["-nP", `-iTCP:${FIXED_CONFIG.cdpPort}`, "-sTCP:LISTEN", "-t"]);
+  } catch (error) {
+    if (error.code === 1 && !error.stdout?.trim() && !error.stderr?.trim()) return;
+    throw manualLoginError("browser_process_unverified", "Cannot verify that the dedicated debugging port is closed.");
+  }
+  throw manualLoginError("debugging_port_in_use", "The dedicated debugging port still has a listener. Preserve that process and resolve its ownership before switching modes.");
+}
+
+async function readManualLogin(statePaths) {
+  const entry = existingPath(statePaths.manualLoginPath);
+  if (!entry) return null;
+  try {
+    if (!entry.isFile() || entry.isSymbolicLink()) throw new Error("Invalid marker");
+    const marker = JSON.parse(await readFile(statePaths.manualLoginPath, "utf8"));
+    if (marker.version !== 1 || marker.profilePath !== path.dirname(statePaths.stateDirectory)
+      || !["starting", "manual"].includes(marker.phase)) throw new Error("Invalid marker");
+    return marker;
+  } catch {
+    throw manualLoginError("manual_login_state_invalid", "Manual-login state is unreadable. Preserve it; coordinator recovery is required before automation.");
+  }
+}
+
+export async function runManualLoginCommand(command, statePaths = controllerState, dependencies = {}) {
+  const inspect = dependencies.inspectProcesses ?? inspectDedicatedProcesses;
+  const assertPortClosed = dependencies.assertPortClosed ?? assertDebuggingPortClosed;
+  const marker = await readManualLogin(statePaths);
+  if (command === "login" && marker) {
+    throw manualLoginError("manual_login_active", "Manual login is already reserved. Finish sign-in, type chrome://quit only in the dedicated LeetCode browser address bar, then run login-complete.");
+  }
+  if (command === "login-complete" && !marker) {
+    throw manualLoginError("manual_login_not_started", "There is no manual-login phase to complete.");
+  }
+  if ((await inspect()).length) {
+    throw manualLoginError("dedicated_browser_running", "Type chrome://quit only in the dedicated LeetCode browser address bar and wait for its process to exit before switching modes. Do not use a global Quit Chrome action.");
+  }
+  await assertPortClosed();
+  if (command === "login-complete") {
+    await unlink(statePaths.preflightReceiptPath).catch((error) => { if (error.code !== "ENOENT") throw error; });
+    await unlink(statePaths.manualLoginPath);
+    return { ok: true, mode: "automation-allowed", authenticated: "unverified",
+      nextStep: "Run ensure, then an explicitly authorized navigate to establish fresh preflight." };
+  }
+  await mkdir(statePaths.stateDirectory, { recursive: true });
+  const reservation = { version: 1, phase: "starting", profilePath: path.dirname(statePaths.stateDirectory),
+    generation: randomUUID(), recordedAt: new Date().toISOString(), browser: null };
+  const handle = await open(statePaths.manualLoginPath, "wx", 0o600);
+  try {
+    await handle.writeFile(`${JSON.stringify(reservation)}\n`);
+    await handle.datasync();
+  } finally { await handle.close(); }
+  // Any launch or identity failure leaves the reservation intact and blocks CDP.
+  try {
+    await (dependencies.launchManual ?? (() => execFile("open", manualLoginLaunchArguments())))();
+  } catch {
+    throw manualLoginError("manual_login_launch_failed", "Manual Chrome launch failed. The manual reservation remains active; do not reset the profile. After its process is closed, use login-complete.");
+  }
+  const wait = dependencies.wait ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  let owners = [];
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    owners = await inspect();
+    if (owners.length) break;
+    await wait(100);
+  }
+  const confirmed = await inspect();
+  await assertPortClosed();
+  const initialMain = owners.filter((entry) => entry.role === "main");
+  const confirmedMain = confirmed.filter((entry) => entry.role === "main");
+  if (initialMain.length !== 1 || confirmedMain.length !== 1 || owners.some((entry) => entry.automated)
+    || confirmed.some((entry) => entry.automated) || initialMain[0].pid !== confirmedMain[0].pid
+    || initialMain[0].startedAt !== confirmedMain[0].startedAt) {
+    throw manualLoginError("manual_login_identity_unverified", "Manual browser PID/start identity could not be verified. The reservation remains active; no browser was stopped or automated.");
+  }
+  const temporaryPath = `${statePaths.manualLoginPath}.${randomUUID()}.tmp`;
+  await writeFile(temporaryPath, `${JSON.stringify({ ...reservation, phase: "manual", browser: confirmedMain[0] })}\n`, { mode: 0o600 });
+  await rename(temporaryPath, statePaths.manualLoginPath);
+  return { ok: true, mode: "manual", authenticated: "unverified", browser: confirmedMain[0],
+    nextStep: "Sign in yourself on the LeetCode page. Type chrome://quit only in that dedicated browser address bar, wait for its process to exit, then run login-complete. Do not use a global Quit Chrome action." };
+}
+
 async function restoreActiveApp(launchContext) {
   const bundleId = launchContext?.frontmostBundleId;
   if (bundleId) await execFile("open", ["-b", bundleId]);
@@ -1647,13 +1789,14 @@ async function verifyPreflightReceipt(identity) {
   }
 }
 
-async function withControllerLock(operation) {
+export async function withControllerLock(operation, { statePaths = controllerState, waitTimeoutMs = 15_000 } = {}) {
+  const { stateDirectory, controllerLockPath } = statePaths;
   try {
-    await mkdir(localStateDirectory, { recursive: true });
+    await mkdir(stateDirectory, { recursive: true });
   } catch (error) {
     throw toControllerStateError(error);
   }
-  const deadline = Date.now() + 15_000;
+  const deadline = Date.now() + waitTimeoutMs;
   let lockHandle;
   while (!lockHandle) {
     try {
@@ -1661,16 +1804,6 @@ async function withControllerLock(operation) {
       await lockHandle.writeFile(`${JSON.stringify({ pid: process.pid, acquiredAt: new Date().toISOString() })}\n`);
     } catch (error) {
       if (error.code !== "EEXIST") throw toControllerStateError(error);
-      try {
-        const lockAgeMs = Date.now() - (await stat(controllerLockPath)).mtimeMs;
-        if (lockAgeMs > 120_000) {
-          await unlink(controllerLockPath);
-          continue;
-        }
-      } catch (inspectionError) {
-        if (inspectionError.code !== "ENOENT") throw inspectionError;
-        continue;
-      }
       if (Date.now() >= deadline) {
         throw new ControllerError(
           "controller_busy",
@@ -1709,34 +1842,42 @@ export async function runCli(argv, dependencies = {}) {
     }
   }
 
-  const withLock = dependencies.withLock ?? withControllerLock;
+  const withLock = dependencies.withLock ?? ((operation) => withControllerLock(operation, { statePaths }));
   try {
-    return await withLock(() => executeWithDurableReceipt(request, async () => {
-      const runtime = dependencies.runtime ?? createRuntimeDependencies();
-      const result = await runControllerCommand(request, {
-        acquireController: dependencies.acquireController
-          ?? ((options) => ensureBrowserController(runtime, options)),
-        readFileUtf8: dependencies.readFileUtf8
-          ?? ((javaFile) => readFile(javaFile, "utf8")),
-        verifyPreflight: dependencies.verifyPreflight ?? verifyPreflightReceipt,
-        commandTimeoutMs: dependencies.commandTimeoutMs,
-      });
-      if (request.command === "navigate") {
-        const current = await probeFixedCdp();
-        await writePreflightReceipt(preflightReceiptForRequest(request, current));
+    return await withLock(async () => {
+      if (["login", "login-complete"].includes(request.command)) {
+        return runManualLoginCommand(request.command, statePaths, dependencies.manualLogin);
       }
-      return {
-        ...result,
-        diagnostics: {
-          ...(result.diagnostics ?? {}),
-          totalUserVisibleCommandMs: performance.now() - commandStartedAt,
-        },
-      };
-    }, {
-      statePaths,
-      now: dependencies.now,
-      receiptPolicy: dependencies.receiptPolicy,
-    }));
+      if (await readManualLogin(statePaths)) {
+        throw manualLoginError("manual_login_active", "Automation is disabled during manual login. Type chrome://quit only in the dedicated LeetCode browser address bar, then explicitly run login-complete.");
+      }
+      return executeWithDurableReceipt(request, async () => {
+        const runtime = dependencies.runtime ?? createRuntimeDependencies();
+        const result = await runControllerCommand(request, {
+          acquireController: dependencies.acquireController
+            ?? ((options) => ensureBrowserController(runtime, options)),
+          readFileUtf8: dependencies.readFileUtf8
+            ?? ((javaFile) => readFile(javaFile, "utf8")),
+          verifyPreflight: dependencies.verifyPreflight ?? verifyPreflightReceipt,
+          commandTimeoutMs: dependencies.commandTimeoutMs,
+        });
+        if (request.command === "navigate") {
+          const current = await probeFixedCdp();
+          await writePreflightReceipt(preflightReceiptForRequest(request, current));
+        }
+        return {
+          ...result,
+          diagnostics: {
+            ...(result.diagnostics ?? {}),
+            totalUserVisibleCommandMs: performance.now() - commandStartedAt,
+          },
+        };
+      }, {
+        statePaths,
+        now: dependencies.now,
+        receiptPolicy: dependencies.receiptPolicy,
+      });
+    });
   } catch (error) {
     return controllerFailureEnvelope(error, request.invocationId ?? null);
   }

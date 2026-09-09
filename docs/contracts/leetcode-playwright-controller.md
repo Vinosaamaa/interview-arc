@@ -74,6 +74,61 @@ an older launch without it requires coordinator-owned offline readiness, never
 automatic restart or fallback. PR tests do not establish live authenticated
 readiness; post-merge adoption and real `ensure` remain separate receipts.
 
+### Manual sign-in
+
+Google may reject sign-in from browsers controlled through software automation
+([Google account help](https://support.google.com/accounts/answer/7675428)).
+The controller provides an explicit manual phase for the existing dedicated
+profile. This mode is not a verification bypass and does not guarantee Google
+or LeetCode acceptance. A ChromeSync login screen is not proof of LeetCode
+authentication; start on the official LeetCode sign-in page.
+
+Before switching, every participating task must use this manual-mode-aware
+controller. Older scripts, including versions before issue #450, do not honor
+the manual marker and must not be run against this profile during sign-in.
+The coordinator first establishes that other controller owners have stopped.
+
+1. The user types `chrome://quit` only in the dedicated LeetCode browser's
+   address bar, then waits for its entire process tree to exit. Closing all
+   windows alone can leave Chrome running on macOS; Chromium's
+   [native quit handling](https://chromium.googlesource.com/chromium/src/+/HEAD/chrome/browser/browser_process_platform_part_mac.mm)
+   handles this URL as an application exit. Never use it in Work Chrome or use
+   a global Quit Chrome action. If the dedicated process persists, stop and ask
+   its coordinator for separately authorized, exact-process recovery.
+2. Run `node scripts/leetcode-playwright-controller.mjs login`. It refuses a
+   live or ambiguous profile owner or a listener on the dedicated debugging
+   port. It reserves `manual-login.json` under the existing controller lock,
+   then opens the same profile at `https://leetcode.com/accounts/login/`
+   without automation or remote-debugging arguments. It verifies the exact
+   main PID and process-start identity across two snapshots, permits only
+   verified same-profile helper descendants, and confirms no debugging
+   listener. The command makes no Playwright or CDP connection.
+3. The user completes credentials and verification challenges manually. No
+   controller command reads or enters credentials. `ensure`, `navigate`,
+   `editorial`, `submit`, and `retry` fail before browser access or receipt
+   reservation while the marker exists. Exact read-only `receipt` recovery
+   remains available.
+4. After finishing, type `chrome://quit` only in that dedicated browser's
+   address bar and wait for all its processes to exit. Explicitly run
+   `node scripts/leetcode-playwright-controller.mjs login-complete`. It refuses
+   remaining owners/listeners, invalidates the old preflight, and removes only
+   the manual marker. It neither restarts Chrome nor claims authentication.
+   Pending and terminal submission receipts remain unchanged.
+5. Run `ensure` separately, then an explicitly authorized `navigate` for fresh
+   problem preflight. Normal automation again uses the fixed debugging endpoint
+   and automation flag. Provider acceptance after this transition is still
+   unverified until the user observes it.
+
+Launch or identity failure leaves the manual reservation intact. Once the
+dedicated process has exited, `login-complete` can release an interrupted
+starting phase. Corrupt or linked markers fail closed and need explicit
+coordinator recovery; never delete them or reset the profile as a retry.
+Controller locks are never stolen based on age. A crashed command may leave a
+lock requiring coordinator verification that the exact owner has exited and
+explicit recovery before another command. All mode switches use the same
+single-writer lock. These checks assume the existing trusted local filesystem
+and no concurrent out-of-band profile mutation.
+
 ## Mandatory specialist route
 
 Run only these commands from the repository root. This is the complete
@@ -94,8 +149,12 @@ readiness check. Dependency bootstrap is forbidden on the interactive
 `playwright_import_failed` with this exact `recoveryCommand` and performs no
 browser navigation or submission.
 
-The `ensure`, `navigate`, `editorial`, `submit`, and `retry` commands require GUI and
-loopback-CDP authority. A Codex `exec_command` invocation uses
+`login` requires GUI launch and local process/port inspection authority;
+`login-complete` requires local process/port inspection and controller-state
+write authority. Neither command connects to CDP.
+
+The `ensure`, `navigate`, `editorial`, `submit`, and `retry` commands require GUI
+and loopback-CDP authority. A Codex `exec_command` invocation uses
 `sandbox_permissions: "require_escalated"` from its first attempt, with the
 narrow reusable command prefix
 `["node", "scripts/leetcode-playwright-controller.mjs"]`. Do not probe the
